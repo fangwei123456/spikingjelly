@@ -1,9 +1,13 @@
-def f1(a, b, c):
-    print(a,b,c)
 
-def f2(d, f, *args):
-    print(d)
-    f1(d, *args)
+class A:
+    def __init__(self, f, *args):
+        self.f = f
+        self.args = args
+    def g(self, a, b):
+        self.f(a, b, *self.args)
 
+def fun(a,b,c,d,e):
+    print(a,b,c,d,e)
 
-f2(1, f1, 2,3)
+aa = A(fun,9,8,7)
+aa.g(2,4)
