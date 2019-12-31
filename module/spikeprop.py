@@ -38,11 +38,11 @@ class SpikePropLayer(nn.Module):
         super(SpikePropLayer, self).__init__()
         self.in_num = in_num
         self.out_num = out_num
-        self.fc = nn.Linear(in_num, out_num, bias=False)
+        self.weight = nn.Parameter(torch.rand(size=[out_num, in_num]))
         self.T = T
-        self.t_sequence = torch.arange(start=0, end=T).repeat([in_spike.shape[1], 1])  # shape=[in_num, T]
+        self.t_sequence = torch.arange(start=0, end=T).repeat([in_spike.shape[1], 1]).float()  # shape=[in_num, T]
 
-    def forward(self, in_spike, kernel_function, grad_kernel_function, *args):
+    def forward(self, in_spike, v_threshold, kernel_function, grad_kernel_function, *args):
         '''
         :param in_spike:输入[batch_size, in_num]，是in_num个神经元的脉冲发放时间
 
@@ -52,83 +52,69 @@ class SpikePropLayer(nn.Module):
         device = in_spike.device
         if self.t_sequence.device != device:
             self.t_sequence = self.t_sequence.to(device)
+        '''
+                create time_sequence with shape=[batch_size, in_num, T]
+                t_sequence = [
+                [0, 1, 2, ..., T-1],
+                [0, 1, 2, ..., T-1],
+                ...................,
+                [0, 1, 2, ..., T-1]
+                ]
+                time_sequence[?][i] = [
+                0 - t_spike[?][i], 1 - t_spike[?][i], ..., T - 1 - t_spike[?][i]
+                ]
+
+
+        '''
         time_sequence = (self.t_sequence - in_spike.unsqueeze(2)).float()  # [batch_size, in_num, T]
 
         v_input = kernel_function(time_sequence, *args)  # [batch_size, in_num, T]
-        membrane_voltage = self.fc(v_input.permute(0, 2, 1)).permute(0, 2, 1)  # [batch_size, T, out_num] -> [batch_size, out_num, T]
+        membrane_voltage = v_input.permute(0, 2, 1).matmul(self.weight.t()).permute(0, 2, 1)  # [batch_size, T, out_num] -> [batch_size, out_num, T]
 
+        return VoltageToSpike.apply(membrane_voltage, self.weight, time_sequence, v_input, v_threshold, self.T, kernel_function, grad_kernel_function, *args)
 
 class VoltageToSpike(torch.autograd.Function):
     '''
+    输入膜电位电压，输出脉冲发放时间
     脉冲定义为膜电位电压首次到达阈值的时刻，只允许一次脉冲发放
     '''
     @staticmethod
-    def forward(ctx, weight, in_spike, v_threshold, T, kernel_function, grad_kernel_cuntion, *args):
+    def forward(ctx, membrane_voltage, weight, time_sequence, v_input, v_threshold, T, kernel_function, grad_kernel_funtion, *args):
         '''
-        :param ctx:
-        :param weight: shape=[out_num, in_num]
-        :param in_spike: shape=[batch_size, in_num]
-        :param v_threshold: a float num
-        :param T: stimulation time
-        :param kernel_function: kernel function for calculating membrane voltage
-        kernel_function is defined as
-        def f(t, *args)
-        :param grad_kernel_function: gradient of kernel_function
-        :param args: agrs for kernel_function
-        :return: out_spike, shape=[batch_size, out_num]
-        '''
-        '''
-        create time_sequence with shape=[batch_size, in_num, T]
-        t_sequence = [
-        [0, 1, 2, ..., T-1],
-        [0, 1, 2, ..., T-1],
-        ...................,
-        [0, 1, 2, ..., T-1]
-        ]
-        time_sequence[?][i] = [
-        0 - t_spike[?][i], 1 - t_spike[?][i], ..., T - 1 - t_spike[?][i]
-        ]
-
+        输入膜电位membrane_voltage shape=[batch_size, out_num, T]
+        输出脉冲发放时刻out_spike shape=[batch_size, out_num]
 
         '''
-        batch_size = in_spike.shape[0]
-        in_num = in_spike.shape[1]
-        out_num = weight.shape[0]
-
-        device = weight.device
-        t_sequence = torch.arange(start=0, end=T).repeat([in_spike.shape[1], 1]).to(device)  # shape=[in_num, T]
-        time_sequence = (t_sequence - in_spike.unsqueeze(2)).float()  # [batch_size, in_num, T]
-
-        v_input = kernel_function(time_sequence, *args)  # [batch_size, in_num, T]
-        membrane_voltage = v_input.permute(0, 2, 1).matmul(weight.t()).permute(0, 2, 1)  # [batch_size, T, out_num] -> [batch_size, out_num, T]
-
+        device = membrane_voltage.device
         out_spike = -torch.ones(size=membrane_voltage.shape[0:2], device=device)
         # todo cuda backend
         # find the first time that membrane_voltage >= v_threshold
         for i in range(membrane_voltage.shape[0]):
             for j in range(membrane_voltage.shape[1]):
                 for k in range(membrane_voltage.shape[2]):
+                    '''
+                    找到电压首次过阈值的时刻
+                    无法用argmin之类的操作完成，因为当存在多个最小值时，argmin返回的最小位置是不确定的
+                    '''
                     if membrane_voltage[i][j][k] >= v_threshold:
                         out_spike[i][j] = k
                         break
         out_spike[out_spike < 0] = T
+        # 对于不发放脉冲的神经元，把脉冲发放时间设置成T
         # spike time is T means that no spike because t_sequence - T < 0 holds forever
 
-        t_sequence_spkie = torch.zeros(size=[batch_size, in_num, out_num], device=device)  # 脉冲发放时刻的输入
-        X1_spike = torch.zeros(size=[batch_size, in_num, out_num], device=device)  # 脉冲发放时刻的输入层电压
+        # 下面的计算是为了反向传播做准备
         dX1_dt = torch.zeros(size=[batch_size, in_num, out_num], device=device)  # dX1_dt[:, :, i]是out_spike[:, i]时刻输入层神经元电压对时间的导数
 
 
         for b in range(batch_size):
             for i in range(out_num):
-                t_sequence_spkie[b, :, i] = time_sequence[b, :, out_spike[b, i].int()]
-                X1_spike[b, :, i] = v_input[b, :, out_spike[b, i].int()]
-                dX1_dt[b, :, i] = grad_kernel_cuntion(t_sequence_spkie[b, :, i], *args)
+                if out_spike[b, i].int() != T:
+                    dX1_dt[b, :, i] = grad_kernel_funtion(time_sequence[b, :, out_spike[b, i].int()], *args)
 
         dY1_dt_0 = (out_spike != T).float()
 
-        ctx.save_for_backward(t_sequence_spkie, X1_spike, dX1_dt, dY1_dt_0, weight)
-
+        ctx.save_for_backward(out_spike, dX1_dt, dY1_dt_0, weight, torch.tensor(data=[args.__len__()], dtype=int))
 
         return out_spike  # shape=[batch_size, out_num]
 
@@ -150,7 +136,8 @@ class VoltageToSpike(torch.autograd.Function):
         '''
 
 
-        t_sequence_spkie, X1_spike, dX1_dt, dY1_dt_0, weight = ctx.saved_tensors
+        out_spike, dX1_dt, dY1_dt_0, weight, args_len = ctx.saved_tensors
+        args_len = args_len[0].item()
         '''
         使用以下符号
         输入脉冲S1, [batch_size, in_num]
@@ -166,10 +153,7 @@ class VoltageToSpike(torch.autograd.Function):
         dX1_dt shape=[batch_size, in_num, out_num]
         dX1_dt[:, :, i]是out_spike[:, i]时刻输入层神经元电压对时间的导数
         '''
-        batch_size = t_sequence_spkie.shape[0]
-        in_num = t_sequence_spkie.shape[1]
-        out_num = t_sequence_spkie.shape[2]
-        dY1_dt = torch.zeros(size=[batch_size, out_num], device=grad_output.device)
+        dY1_dt = torch.zeros_like(out_spike)
 
         for i in range(out_num):
             '''
@@ -187,6 +171,17 @@ class VoltageToSpike(torch.autograd.Function):
         dS2_dY1 = -1 / dY1_dt * dY1_dt_0  # [batch_size, out_num]
         dL_W1 = torch.zeros_like(weight)  # [out_num, in_num]
         dL_dY1 = dS2_dY1 * grad_output  # [batch_size, out_num]
+        grad_membrane_voltage = torch.zeros(size=[batch_size, out_num, T])
+        for b in range(batch_size):
+            for i in range(out_num):
+                if out_spike[b, i].int() != T:
+                    grad_membrane_voltage[b, i, out_spike[b, i].int()] = dL_dY1[b, i]
+        ret = []
+        ret.append(grad_membrane_voltage)
+        for i in range(7 + args_len):
+            ret.append(None)
+        return tuple(ret)
+        #---------------------------------------------------------------------
         dL_dS1 = torch.zeros(size=[batch_size, in_num], device=grad_output.device)
         '''
         Y1 = X1.matmul(W1.t())  
@@ -236,11 +231,15 @@ if __name__ == "__main__":
     T = 100
     tau = 15.0
     tau_s = 15.0 / 4
-    in_spike = torch.randint(low=0, high=T, size=[batch_size, in_num])
-    W = torch.rand(size=[out_num, in_num])
-    W.requires_grad_(True)
+    in_spike = torch.randint(low=0, high=T, size=[batch_size, in_num]).float()
+    sp = SpikePropLayer(in_num, out_num, T)
+    optimizer = torch.optim.SGD(sp.parameters(), lr=1e-3)
+    while 1:
+        optimizer.zero_grad()
+        loss = -sp(in_spike, 0.1, psp_kernel, grad_psp_kernel, tau, tau_s).sum()
+        print(loss.item())
+        loss.backward()
+        optimizer.step()
 
-    y = SpikeToSpike.apply(W, in_spike, 0.2, T, psp_kernel, grad_psp_kernel, tau, tau_s)
-    print(y)
-    y.sum().backward()
+
 
