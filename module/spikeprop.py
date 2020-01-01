@@ -195,34 +195,25 @@ if __name__ == "__main__":
     enc_neuron_num = 12
     class_num = 3
     print('数据数', data_num, '特征数', feature_num, '类别数', class_num)
-    x_data = torch.from_numpy(csv_data[:, 0: feature_num]).float().cuda()
-    y_data = torch.from_numpy(csv_data[:, feature_num]).int().cuda()
+    x_data = torch.from_numpy(csv_data[:, 0: feature_num]).float()
+    y_data = torch.from_numpy(csv_data[:, feature_num]).int()
     x_train_min = x_data.min(0)[0]
     x_train_max = x_data.max(0)[0]
-    # data_num个特征，需要data_num个编码器
-    enc_layer = []
-    for i in range(feature_num):
-        enc_layer.append(GaussianEncoder(x_train_min[i], x_train_max[i], enc_neuron_num, x_data.device))
-    t_spike = torch.zeros(size=[data_num, feature_num, enc_neuron_num], dtype=torch.float).cuda()
-    # 生成脉冲
-    for m in range(data_num):  # 编码过程非常慢
-        print('脉冲编码样本', m)
-        for i in range(feature_num):
-            t_spike[m][i] = enc_layer[i].encode(x_data[m][i], T)[0]  # [1, enc_neuron_num]的tensor
-    t_spike = t_spike.view(data_num, -1)
+    encoder = GaussianEncoder(x_train_min, x_train_max, enc_neuron_num)
+    t_spike = encoder.encode(x_data).view(data_num, -1)
 
+    sp1 = SpikePropLayer(feature_num * enc_neuron_num, 32, T, 0.1, kernel_function.exp_decay_kernel, kernel_function.grad_exp_decay_kernel, tau, tau_s).cuda().train()
+    sp2 = SpikePropLayer(32, 16, T, 0.1, kernel_function.exp_decay_kernel, kernel_function.grad_exp_decay_kernel, tau, tau_s).cuda().train()
 
-    sp = SpikePropLayer(feature_num * enc_neuron_num, 16, T, 0.01, kernel_function.exp_decay_kernel, kernel_function.grad_exp_decay_kernel, tau, tau_s).cuda().train()
     tp = Tempotron(16, class_num, T, kernel_function.exp_decay_kernel, tau, tau_s).cuda().train()
-    optimizer = torch.optim.SGD([{'params': sp.parameters()}, {'params': tp.parameters()}], lr=1e-6)
+    optimizer = torch.optim.SGD([{'params': sp1.parameters()}, {'params': sp2.parameters()}, {'params': tp.parameters()}], lr=1e-3)
     while 1:
         optimizer.zero_grad()
         batch_i = np.random.randint(low=0, high=data_num, size=[batch_size])
-        v_max = tp(sp(t_spike[batch_i]))
-        y_r = F.one_hot(y_data[batch_i].long(), num_classes=class_num).float()
+        v_max = tp(sp2(sp1(t_spike[batch_i].cuda())))
+        y_r = F.one_hot(y_data[batch_i].long(), num_classes=class_num).float().cuda()
         wrong_id = ((v_max >= 1.0).float() != y_r).float()
         loss = torch.sum(torch.pow((v_max - 1) * wrong_id, 2))
-        print(sp.fc.weight.grad)
         print(loss.item())
         loss.backward()
         optimizer.step()
