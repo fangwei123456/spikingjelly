@@ -7,39 +7,33 @@ Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded net
 '''
 
 class GaussianEncoder:
-    def __init__(self, x_min, x_max, neuron_num, device='cpu'):
-        self.x_min = x_min  # 要编码的数据的最小值
+    def __init__(self, x_min, x_max, neuron_num):
+        '''
+        :param x_min: shape=[M]，M个特征的最小值
+        :param x_max: shape=[M]，M个特征的最大值
+        :param neuron_num: 编码每个特征使用的神经元数量
+        '''
+        self.x_min = x_min
         self.x_max = x_max
-        self.neuron_num = neuron_num  # 编码使用的神经元数量
-        self.mu = torch.zeros(size=[neuron_num], dtype=torch.float, device=device)
+        self.neuron_num = neuron_num
+        self.mu = torch.zeros(size=[x_min.shape[0], neuron_num], dtype=torch.float)
         self.sigma = 1 / 1.5 * (x_max - x_min) / (neuron_num - 2)
         for i in range(neuron_num):
-            self.mu[i] = x_min + (2 * i - 3) / 2 * (x_max - x_min) / (neuron_num - 2)
+            self.mu[:, i] = x_min + (2 * i - 3) / 2 * (x_max - x_min) / (neuron_num - 2)
 
 
     def encode(self, x, max_spike_time=10, discard_late=False, T=500):
-        """
-        x是shape=[N]的tensor，M个神经元，x中的每个值都被编码成neuron_num个神经元的脉冲发放时间，也就是一个[neuron_num]的tensor
-        因此，x的编码结果为shape=[N, neuron_num]的tensor，第j行表示的是x_j的编码结果
-        记第i个高斯函数为f_i，则高斯函数作用后结果应该为
-        f_0(x_0), f_1(x_0), ...
-        f_0(x_1), f_1(x_1),...
-        """
-        ret = x.repeat([self.neuron_num, 1])  # [neuron_num, N]
-        """
-        [x0, x1, x2, ...
-         x0, x1, x2, ...]
-        """
+        '''
+        :param x: 要编码的数据，shape=[N, M]
+        :param max_spike_time: 最大脉冲发放时间，所有数据都会被编码到[0, max_spike_time]范围内的脉冲发放时间
+        :param discard_late: 如果为True，则认为脉冲发放时间大于max_spike_time*9/10的不会导致激活，设置成仿真周期，表示不发放脉冲
+        :param T: 仿真周期
+        :return: 编码后的数据，shape=[N, M, neuron_num]
+        '''
+        ret = torch.zeros(size=[x.shape[0], x.shape[1], self.neuron_num])
         for i in range(self.neuron_num):
-            ret[i] = torch.exp(-torch.pow(ret[i] - self.mu[i], 2) / 2 / (self.sigma**2))
-        """
-        [f_0(x0), f_0(x1), ...
-         f_1(x0), f_1(x1), ...]
-        接下来进行取整，函数值从[1,0]对应脉冲发放时间[0, max_spike_time]，计算时会取整
-        discard_late==True则认为脉冲发放时间大于max_spike_time*9/10的不会导致激活，设置成仿真周期，表示不发放脉冲
-        """
+            ret[:, :, i] = torch.exp(-torch.pow(x - self.mu[:, i], 2) / 2 / (self.sigma**2))
         ret = -max_spike_time * ret + max_spike_time
-        ret = torch.round(ret)
         if discard_late:
             ret[ret > max_spike_time * 9 / 10] = T
-        return ret.t()  # x的编码结果为shape=[N, neuron_num]的tensor，第j行表示的是x_j的编码结果。返回的dtype=float32
+        return ret.round()
