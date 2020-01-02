@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from encoding.gaussian_tuning_curve import GaussianEncoder
 import numpy as np
 from module.tempotron import Tempotron
