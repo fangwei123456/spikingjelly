@@ -2,12 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+
 '''
 Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
 Yang J, Yang W, Wu W. A remark on the error-backpropagation learning algorithm for spiking neural networks[J]. Applied Mathematics Letters, 2012, 25(8): 1118-1120.
 '''
-
-
 
 
 class SpikePropLayer(nn.Module):
@@ -16,6 +15,7 @@ class SpikePropLayer(nn.Module):
     输入[batch_size, in_num]，是in_num个神经元的脉冲发放时间
     输出[batch_size, out_num]，是out_num个神经元的脉冲发放时间
     '''
+
     def __init__(self, in_num, out_num, T, v_threshold, kernel_function, grad_kernel_function, *args):
         super(SpikePropLayer, self).__init__()
         self.in_num = in_num
@@ -56,13 +56,16 @@ class SpikePropLayer(nn.Module):
         v_input = self.kernel_function(time_sequence, *self.args)  # [batch_size, in_num, T]
         membrane_voltage = self.fc(v_input.permute(0, 2, 1)).permute(0, 2, 1)  # [batch_size, T, out_num] -> [batch_size, out_num, T]
 
-        return VoltageToSpike.apply(membrane_voltage, self.fc.weight.detach(), time_sequence, self.v_threshold, self.kernel_function, self.grad_kernel_function, *self.args)
+        return VoltageToSpike.apply(membrane_voltage, self.fc.weight.detach(), time_sequence.detach(), self.v_threshold,
+                                    self.kernel_function, self.grad_kernel_function, *self.args)
 
-class VoltageToSpike(torch.autograd.Function):
+
+class VoltageToSpike (torch.autograd.Function):
     '''
     输入膜电位电压，输出脉冲发放时间
     脉冲定义为膜电位电压首次到达阈值的时刻，只允许一次脉冲发放
     '''
+
     @staticmethod
     def forward(ctx, membrane_voltage, weight, time_sequence, v_threshold, kernel_function, grad_kernel_function, *args):
         '''
@@ -89,7 +92,6 @@ class VoltageToSpike(torch.autograd.Function):
                         out_spike[i][j] = k
                         break
 
-
         '''
         下面的计算是为了反向传播做准备
         使用以下符号
@@ -101,12 +103,10 @@ class VoltageToSpike(torch.autograd.Function):
         dX1_dt = torch.zeros(size=[batch_size, in_num, out_num], device=device)
         # dX1_dt[:, :, i]是out_spike[:, i]时刻输入层神经元电压对时间的导数
 
-
         for b in range(batch_size):
             for i in range(out_num):
                 if out_spike[b, i].int() != T:
                     dX1_dt[b, :, i] = grad_kernel_function(time_sequence[b, :, out_spike[b, i].int()], *args)
-
 
         ctx.save_for_backward(out_spike, dX1_dt, weight, torch.tensor(data=[args.__len__(), T], dtype=int))
         return out_spike  # shape=[batch_size, out_num]
@@ -144,7 +144,7 @@ class VoltageToSpike(torch.autograd.Function):
         由于out_num个输出神经元的脉冲发放时间并不相同，因此输出层神经元i在脉冲发放时刻t_i的电压Y1[:, i, t_i]对时间的导数
         应该为X1[:, :, t_i]对时间的导数，再矩阵乘W1[i].t()
         X1[:, :, t_i]对时间的导数为t_i时刻核函数对时间的导数
-        
+
         dX1_dt shape=[batch_size, in_num, out_num]
         dX1_dt[:, :, i]是out_spike[:, i]时刻输入层神经元电压对时间的导数
         '''
@@ -159,7 +159,7 @@ class VoltageToSpike(torch.autograd.Function):
 
         '''
         接下来计算d(S2) / d(Y1)，它应该就是-1 / dY1_dt
-        通过乘dY1_dt_0，防止-1/0出现nan的情况
+        通过乘(dY1_dt != 0).float()，防止-1/0出现nan的情况
         grad_output shape=[batch_size, out_num]
         grad_output = d(Loss) / d(S2)
         '''
@@ -170,7 +170,7 @@ class VoltageToSpike(torch.autograd.Function):
             for i in range(out_num):
                 if out_spike[b, i].int() != T:
                     grad_membrane_voltage[b, i, out_spike[b, i].int()] = dL_dY1[b, i]
-                    # 仅在脉冲方法时刻有导数，其他时刻都0
+                    # 仅在脉冲发放时刻有导数，其他时刻都0
         ret = []
         ret.append(grad_membrane_voltage)
         for i in range(5 + args_len):
@@ -182,6 +182,7 @@ from encoding.gaussian_tuning_curve import GaussianEncoder
 import numpy as np
 from module.tempotron import Tempotron
 import module.postsynaptic_potential_kernel_function as kernel_function
+
 if __name__ == "__main__":
 
     batch_size = 4
@@ -202,11 +203,14 @@ if __name__ == "__main__":
     encoder = GaussianEncoder(x_train_min, x_train_max, enc_neuron_num)
     t_spike = encoder.encode(x_data).view(data_num, -1)
 
-    sp1 = SpikePropLayer(feature_num * enc_neuron_num, 32, T, 0.1, kernel_function.exp_decay_kernel, kernel_function.grad_exp_decay_kernel, tau, tau_s).cuda().train()
-    sp2 = SpikePropLayer(32, 16, T, 0.1, kernel_function.exp_decay_kernel, kernel_function.grad_exp_decay_kernel, tau, tau_s).cuda().train()
+    sp1 = SpikePropLayer(feature_num * enc_neuron_num, 32, T, 0.1, kernel_function.exp_decay_kernel,
+                         kernel_function.grad_exp_decay_kernel, tau, tau_s).cuda().train()
+    sp2 = SpikePropLayer(32, 16, T, 0.1, kernel_function.exp_decay_kernel, kernel_function.grad_exp_decay_kernel, tau,
+                         tau_s).cuda().train()
 
     tp = Tempotron(16, class_num, T, kernel_function.exp_decay_kernel, tau, tau_s).cuda().train()
-    optimizer = torch.optim.SGD([{'params': sp1.parameters()}, {'params': sp2.parameters()}, {'params': tp.parameters()}], lr=1e-3)
+    optimizer = torch.optim.SGD(
+        [{'params': sp1.parameters()}, {'params': sp2.parameters()}, {'params': tp.parameters()}], lr=1e-3)
     while 1:
         optimizer.zero_grad()
         batch_i = np.random.randint(low=0, high=data_num, size=[batch_size])
