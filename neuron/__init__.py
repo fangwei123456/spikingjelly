@@ -4,11 +4,13 @@ import torch.nn.functional as F
 
 
 class BaseNode(nn.Module):
-    def __init__(self, shape, v_threshold, v_reset=0.0, device='cpu'):
+    def __init__(self, shape, r, v_threshold, v_reset=0.0, device='cpu'):
         '''
         时钟驱动（逐步仿真）的神经元基本模型
-        这些神经元都是在t时刻接收电压增量dv作为输入，之后self.v += dv，然后根据神经元自身的属性，决定是否发放脉冲
+        这些神经元都是在t时刻接收电流i作为输入，与膜电阻r相乘，得到dv=i * r
+        之后self.v += dv，然后根据神经元自身的属性，决定是否发放脉冲
         :param shape: 任意
+        :param r: 膜电阻，可以是一个float，也可以是tensor
         :param v_threshold: 阈值电压，可以是一个float，也可以是tensor
         :param v_reset: 重置电压，可以是一个float，也可以是tensor
         注意，更新过程中会确保电压不低于v_reset
@@ -16,6 +18,15 @@ class BaseNode(nn.Module):
         '''
         super().__init__()
         self.shape = shape
+
+        assert isinstance(r, float) or isinstance(r, torch.Tensor)
+
+        if isinstance(r, torch.Tensor):
+            assert r.shape == shape
+            self.r = r.to(device)
+        else:
+            self.r = r
+
 
         assert isinstance(v_threshold, float) or isinstance(v_threshold, torch.Tensor)
 
@@ -35,18 +46,12 @@ class BaseNode(nn.Module):
         self.v = torch.ones(size=shape, dtype=torch.float, device=device) * v_reset
 
     def __str__(self):
-        ret = []
-        ret.append('shape')
-        ret.append(self.shape)
-        ret.append('v_threshold')
-        ret.append(self.v_threshold)
-        ret.append('v_reset')
-        ret.append(self.v_reset)
-        return 'shape ' + str(self.shape) + '\nv_threshold ' + str(self.v_threshold) + '\nv_reset ' + str(self.v_reset)
 
-    def forward(self, dv):
+        return 'shape ' + str(self.shape) + '\nr ' + str(self.r) + '\nv_threshold ' + str(self.v_threshold) + '\nv_reset ' + str(self.v_reset)
+
+    def forward(self, i):
         '''
-        :param dv: shape与self.shape相同的电压增量，叠加到self.v上
+        :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
         :return:out_spike: shape与self.shape相同，输出脉冲
         '''
         raise NotImplementedError
@@ -61,7 +66,7 @@ class IFNode(BaseNode):
     电压一旦达到阈值v_threshold则放出脉冲，同时电压归位到重置电压v_reset
 
     测试代码
-    if_node = neuron.IFNode([1], 1.0)
+    if_node = neuron.IFNode([1], r=1.0, v_threshold=1.0)
     v = []
     for i in range(1000):
         if_node(0.01)
@@ -71,15 +76,15 @@ class IFNode(BaseNode):
     pyplot.show()
     '''
 
-    def __init__(self, shape, v_threshold, v_reset=0.0, device='cpu'):
-        super().__init__(shape, v_threshold, v_reset, device)
+    def __init__(self, shape, r, v_threshold, v_reset=0.0, device='cpu'):
+        super().__init__(shape, r, v_threshold, v_reset, device)
 
-    def forward(self, dv):
+    def forward(self, i):
         '''
-        :param dv: shape与self.shape相同的电压增量，叠加到self.v上
+        :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
         :return:out_spike: shape与self.shape相同，输出脉冲
         '''
-        self.v += dv
+        self.v += self.r * i
         self.v[self.v < self.v_reset] = self.v_reset
         out_spike = (self.v >= self.v_threshold)
 
@@ -95,39 +100,39 @@ class LIFNode(BaseNode):
     '''
     LIF神经元模型
     电压一旦达到阈值v_threshold则放出脉冲，同时电压归位到重置电压v_reset
-    电压在不为v_reset时，会指数衰减，衰减速度由tau决定
-    delta_v = -(self.v - self.v_reset) / self.tau
-    self.v += (dv + delta_v)
+    电压在不为v_reset时，会指数衰减
+    delta_v = -(self.v - self.v_reset)
+    self.v += (dv + delta_v) / self.tau
 
     测试代码
-    lif_node = neuron.LIFNode([1], v_threshold=1.0, tau=25)
+    lif_node = neuron.LIFNode([1], r=9.0, v_threshold=1.0, tau=20.0)
     v = []
 
-    for i in range(100):
-        if i < 20:
+    for i in range(1000):
+        if i < 500:
             lif_node(0.1)
         else:
             lif_node(0)
         v.append(lif_node.v.item())
-        print(v[-1])
 
     pyplot.plot(v)
     pyplot.show()
+
     '''
 
-    def __init__(self, shape, v_threshold, v_reset=0.0, tau=1.0, device='cpu'):
-        super().__init__(shape, v_threshold, v_reset, device)
+    def __init__(self, shape, r, v_threshold, v_reset=0.0, tau=1.0, device='cpu'):
+        super().__init__(shape, r, v_threshold, v_reset, device)
         self.tau = tau
 
-    def forward(self, dv):
+    def forward(self, i):
         '''
-        :param dv: shape与self.shape相同的电压增量，叠加到self.v上
+        :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
         :return:out_spike: shape与self.shape相同，输出脉冲
         '''
 
-        delta_v = -(self.v - self.v_reset) / self.tau
+        delta_v = -(self.v - self.v_reset)
 
-        self.v += (dv + delta_v)
+        self.v += (self.r * i + delta_v) / self.tau
         self.v[self.v < self.v_reset] = self.v_reset
 
         out_spike = (self.v >= self.v_threshold)
@@ -140,4 +145,5 @@ class LIFNode(BaseNode):
 
     def __str__(self):
         return super().__str__() + '\ntau ' + str(self.tau)
+
 
