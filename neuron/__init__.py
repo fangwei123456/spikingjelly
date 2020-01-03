@@ -101,8 +101,8 @@ class LIFNode(BaseNode):
     LIF神经元模型
     电压一旦达到阈值v_threshold则放出脉冲，同时电压归位到重置电压v_reset
     电压在不为v_reset时，会指数衰减
-    delta_v = -(self.v - self.v_reset)
-    self.v += (dv + delta_v) / self.tau
+    v_decay = -(self.v - self.v_reset)
+    self.v += (self.r * i + v_decay) / self.tau
 
     测试代码
     lif_node = neuron.LIFNode([1], r=9.0, v_threshold=1.0, tau=20.0)
@@ -130,9 +130,8 @@ class LIFNode(BaseNode):
         :return:out_spike: shape与self.shape相同，输出脉冲
         '''
 
-        delta_v = -(self.v - self.v_reset)
-
-        self.v += (self.r * i + delta_v) / self.tau
+        v_decay = -(self.v - self.v_reset)
+        self.v += (self.r * i + v_decay) / self.tau
         self.v[self.v < self.v_reset] = self.v_reset
 
         out_spike = (self.v >= self.v_threshold)
