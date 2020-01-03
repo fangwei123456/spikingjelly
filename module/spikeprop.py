@@ -60,7 +60,7 @@ class SpikePropLayer(nn.Module):
                                     self.kernel_function, self.grad_kernel_function, *self.args)
 
 
-class VoltageToSpike (torch.autograd.Function):
+class VoltageToSpike(torch.autograd.Function):
     '''
     输入膜电位电压，输出脉冲发放时间
     脉冲定义为膜电位电压首次到达阈值的时刻，只允许一次脉冲发放
