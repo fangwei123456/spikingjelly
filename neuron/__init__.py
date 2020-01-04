@@ -19,6 +19,7 @@ class BaseNode(nn.Module):
         super().__init__()
         self.shape = shape
 
+
         assert isinstance(r, float) or isinstance(r, torch.Tensor)
 
         if isinstance(r, torch.Tensor):
