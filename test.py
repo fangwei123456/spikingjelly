@@ -13,8 +13,8 @@ if __name__ == "__main__":
     sim.append(neuron.IFNode(shape=[1], r=0.5, v_threshold=1.0))
     sim.append(tf.SpikeCurrent(amplitude=0.4))
     sim.append(neuron.IFNode(shape=[1], r=2.0, v_threshold=1.0))
-    sim.append(tf.ExpDecayCurrent(tau=5.0, amplitude=1.0))
-    sim.append(neuron.LIFNode(shape=[1], r=5.0, v_threshold=1.0, tau=10.0))
+    sim.append(tf.ExpDecayCurrent(tau=5.0, amplitude=0.05))
+    sim.append(neuron.LIFNode(shape=[1], r=5.0, v_threshold=1.0))
     v = []
     v.extend(([], [], []))
     for i in range(1000):

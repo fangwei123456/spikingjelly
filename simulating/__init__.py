@@ -74,7 +74,7 @@ class Simulator:
     def step(self, input_data):
         '''
         输入数据input_data，仿真一步
-        :param input_data:
+        :param input_data: 输入数据
         :return: 输出值
         '''
         if self.simulated_steps < self.module_list.__len__():
