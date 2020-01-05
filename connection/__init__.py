@@ -17,7 +17,7 @@ class BaseConnection(nn.Module):
 
 
 class Linear(BaseConnection):
-    def __init__(self, in_num, out_num, device):
+    def __init__(self, in_num, out_num, device='cpu'):
         '''
         线性全连接层，输入是[batch_size, *, in_num]，输出是[batch_size, *, out_num]
         :param in_num: 输入数量
