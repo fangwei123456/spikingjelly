@@ -13,7 +13,22 @@ class BaseConnection(nn.Module):
     def forward(self, x):
         raise NotImplementedError
 
-
+class ConstantDelay(BaseConnection):
+    def __init__(self, delay_time=1):
+        '''
+        具有固定延迟delay_time的突触，t时刻的输入，在t+1+delay_time时刻才能输出
+        :param delay_time: int，表示延迟时长
+        '''
+        super().__init__()
+        assert isinstance(delay_time, int) and delay_time > 0
+        self.delay_time = delay_time
+        self.queue = []
+    def forward(self, x):
+        self.queue.append(x)
+        if self.queue.__len__() > self.delay_time:
+            return self.queue.pop()
+        else:
+            return torch.zeros_like(x)
 
 
 class Linear(BaseConnection):
@@ -29,6 +44,7 @@ class Linear(BaseConnection):
 
     def forward(self, x):
         return torch.matmul(x, self.w.t())
+
 
 
 
