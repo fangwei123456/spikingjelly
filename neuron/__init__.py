@@ -9,7 +9,7 @@ class BaseNode(nn.Module):
         时钟驱动（逐步仿真）的神经元基本模型
         这些神经元都是在t时刻接收电流i作为输入，与膜电阻r相乘，得到dv=i * r
         之后self.v += dv，然后根据神经元自身的属性，决定是否发放脉冲
-        :param shape: 任意
+        :param shape: 输出的shape
         :param r: 膜电阻，可以是一个float，也可以是tensor
         :param v_threshold: 阈值电压，可以是一个float，也可以是tensor
         :param v_reset: 重置电压，可以是一个float，也可以是tensor

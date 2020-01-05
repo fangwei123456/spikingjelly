@@ -9,7 +9,7 @@ class Simulator:
     测试代码如下
     sim = simulating.Simulator()
     sim.append(encoding.ConstantEncoder(shape=[1]))
-    sim.append(tf.SpikeCurrent(amplitude=1.0))
+    sim.append(tf.SpikeCurrent(amplitude=0.01))
     sim.append(neuron.IFNode(shape=[1], r=0.5, v_threshold=1.0))
     sim.append(tf.SpikeCurrent(amplitude=0.4))
     sim.append(neuron.IFNode(shape=[1], r=2.0, v_threshold=1.0))
@@ -67,7 +67,7 @@ class Simulator:
         '''
         self.module_list.append(new_module)
         self.pipeline.append(None)
-        self.simulated_steps = 0  # 添加新module后，之前的仿真运行就不算数了
+
 
 
     def step(self, input_data):
@@ -78,20 +78,15 @@ class Simulator:
         '''
         self.pipeline[0] = input_data
 
-        if self.simulated_steps < self.module_list.__len__():
-            '''
-            x[simulated_steps+1] = module[simulated_steps](x[simulated_steps])
-            x[simulated_steps] = module[simulated_steps-1](x[simulated_steps-1])
-            ...
-            x[1] = module[0](x[0])
-            '''
-            for i in range(self.simulated_steps + 1, 0, -1):
-                self.pipeline[i] = self.module_list[i - 1](self.pipeline[i - 1])
-            self.simulated_steps += 1
-            if self.simulated_steps == self.module_list.__len__():
-                return self.pipeline[-1]
-            else:
-                return None
+        # 首次运行时跑满pipeline
+        # x[0] -> module[0] -> x[1] -> module[1] -> ... -> x[n-1] -> module[n-1] -> x[n]
+        if self.simulated_steps == 0:
+            for i in range(self.module_list.__len__()):
+                # i = 0, 1, ..., n-1
+                for j in range(i + 1, 0, -1):
+                    # j = i+1, i, ..., 1
+                    self.pipeline[j] = self.module_list[j - 1](self.pipeline[j - 1])
+
         else:
             for i in range(self.module_list.__len__(), 0, -1):
                 '''
@@ -101,7 +96,8 @@ class Simulator:
                 x[1] = module[0](x[0])
                 '''
                 self.pipeline[i] = self.module_list[i - 1](self.pipeline[i - 1])
-            self.simulated_steps += 1
-            return self.pipeline[-1]
+
+        self.simulated_steps += 1
+        return self.pipeline[-1]
 
 
