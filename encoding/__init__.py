@@ -22,9 +22,10 @@ class ConstantEncoder(BaseEncoder):
     def __init__(self, shape, device='cpu'):
         super().__init__(shape, device)
 
-    def forward(self, k):
+    def forward(self, mask):
         '''
-        :param k: float
-        :return: 元素均为k的tensor
+        :param mask: 与输出相同shape的bool类型的tensor
+        :return: mask
         '''
-        return k * torch.ones(size=self.shape, dtype=torch.float, device=self.device)
+        assert mask.dtype == torch.bool
+        return mask
