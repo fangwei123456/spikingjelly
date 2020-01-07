@@ -18,6 +18,7 @@ class BaseNode(nn.Module):
         '''
         super().__init__()
         self.shape = shape
+        self.device = device
 
 
         assert isinstance(r, float) or isinstance(r, torch.Tensor)
@@ -59,7 +60,7 @@ class BaseNode(nn.Module):
 
     def reset(self):
         # 对于存在除了v以外其他状态量的神经元，应该重写此函数
-        self.v = self.v_reset
+        self.v = torch.ones(size=self.shape, dtype=torch.float, device=self.device) * self.v_reset
 
 
 class IFNode(BaseNode):

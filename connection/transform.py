@@ -2,7 +2,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class SpikeCurrent(nn.Module):
+class BaseTransformer(nn.Module):
+    def __init__(self, stateful=False):
+        '''
+        脉冲-电流转换器的基类
+        '''
+        super().__init__()
+    def forward(self, in_spike):
+        raise NotImplementedError
+    def reset(self):
+        pass
+
+class SpikeCurrent(BaseTransformer):
     def __init__(self, amplitude=1):
         '''
         无记忆
@@ -15,7 +26,7 @@ class SpikeCurrent(nn.Module):
     def forward(self, in_spike):
         return in_spike.float() * self.amplitude
 
-class ExpDecayCurrent(nn.Module):
+class ExpDecayCurrent(BaseTransformer):
     def __init__(self, tau, amplitude=1):
         '''
         有记忆
@@ -34,6 +45,8 @@ class ExpDecayCurrent(nn.Module):
         self.i += i_decay * (1 - in_spike_float) + self.amplitude * in_spike_float
         return self.i
 
+    def reset(self):
+        self.i = 0
 
 
 
