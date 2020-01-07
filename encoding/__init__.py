@@ -77,7 +77,30 @@ class LatencyEncoder(BaseEncoder):
         if self.index == self.max_spike_time:
             self.index = 0
 
-        return torch.index_select(self.out_spike, self.out_spike.dim() - 1, torch.tensor([index]).long())
+        return torch.index_select(self.out_spike, self.out_spike.dim() - 1, torch.tensor([index], device=self.device).long())
+
+class PoissonEncoder(BaseEncoder):
+    def __init__(self):
+        '''
+        泊松频率编码，输出脉冲可以看作是泊松流，发放脉冲的概率即为刺激强度，要求刺激强度已经被归一化到[0, 1]
+
+        示例代码
+    pe = encoding.PoissonEncoder()
+    x = torch.rand(size=[8])
+    print(x)
+    for i in range(10):
+        print(pe(x))
+        '''
+        super().__init__()
+    def forward(self, x):
+        '''
+        :param x: 要编码的数据，任意形状的tensor，要求x的数据范围必须在[0, 1]
+        '''
+        out_spike = torch.rand_like(x).le(x)
+        # torch.rand_like(x)生成与x相同shape的介于[0, 1]之间的随机数， 这个随机数小于等于x中对应位置的元素，则发放脉冲
+        return out_spike
+
+
 
 
 class GaussianTuningCurveEncoder(BaseEncoder):
