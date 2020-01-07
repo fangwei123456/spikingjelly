@@ -9,6 +9,11 @@ import connection.transform as tf
 from matplotlib import pyplot
 
 if __name__ == "__main__":
+
+
+
+
+
     sim = simulating.Simulator()
     sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
                                    connection.Linear(2, 1),
@@ -24,7 +29,7 @@ if __name__ == "__main__":
     w_list0 = []
     w_list1 = []
 
-    for i in range(300):
+    for i in range(150):
         if i < 100:
             in_spike = torch.ones(size=[2], dtype=torch.bool)
         else:

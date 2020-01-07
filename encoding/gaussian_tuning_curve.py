@@ -2,13 +2,15 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-'''
-Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
-'''
+
 
 class GaussianEncoder:
     def __init__(self, x_min, x_max, neuron_num):
         '''
+        Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
+
+        高斯调谐曲线编码，待编码向量是M维tensor，也就是有M个特征。
+        1个M维tensor会被编码成shape=[M, neuron_num]的tensor，表示M * neuron_num个脉冲发放时间
         :param x_min: shape=[M]，M个特征的最小值
         :param x_max: shape=[M]，M个特征的最大值
         :param neuron_num: 编码每个特征使用的神经元数量
