@@ -13,6 +13,10 @@ class BaseConnection(nn.Module):
     def forward(self, x):
         raise NotImplementedError
 
+    def reset(self):
+        pass
+
+
 class ConstantDelay(BaseConnection):
     def __init__(self, delay_time=1):
         '''
@@ -29,7 +33,8 @@ class ConstantDelay(BaseConnection):
             return self.queue.pop()
         else:
             return torch.zeros_like(x)
-
+    def reset(self):
+        self.queue.clear()
 
 class Linear(BaseConnection):
     def __init__(self, in_num, out_num, device='cpu'):
@@ -40,7 +45,7 @@ class Linear(BaseConnection):
         :param device: 数据所在设备
         '''
         super().__init__()
-        self.w = torch.rand(size=[out_num, in_num], device=device)
+        self.w = torch.rand(size=[out_num, in_num], device=device) / 128
 
     def forward(self, x):
         return torch.matmul(x, self.w.t())

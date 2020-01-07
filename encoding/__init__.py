@@ -17,6 +17,9 @@ class BaseEncoder(nn.Module):
         # 对于某些编码器（例如GaussianTuningCurveEncoder），编码一次x，需要经过多步仿真才能将数据输出，这种情况下则用step来获取每一步的数据
         raise NotImplementedError
 
+    def reset(self):
+        pass
+
 
 class ConstantEncoder(BaseEncoder):
     # 将输入简单转化为脉冲，输入中大于0的位置输出1，其他位置输出0
@@ -28,7 +31,6 @@ class ConstantEncoder(BaseEncoder):
         :param x: tensor
         :return: x.bool()
         '''
-        assert list(x.shape) == self.shape
         return x.bool()
 
 class LatencyEncoder(BaseEncoder):
@@ -78,6 +80,11 @@ class LatencyEncoder(BaseEncoder):
             self.index = 0
 
         return torch.index_select(self.out_spike, self.out_spike.dim() - 1, torch.tensor([index], device=self.device).long())
+
+    def reset(self):
+        self.spike_time = 0
+        self.out_spike = 0
+        self.index = 0
 
 class PoissonEncoder(BaseEncoder):
     def __init__(self):
@@ -174,7 +181,10 @@ class GaussianTuningCurveEncoder(BaseEncoder):
 
         return self.out_spike[:, :, :, index]
 
-
+    def reset(self):
+        self.spike_time = 0
+        self.out_spike = 0
+        self.index = 0
 
 
 

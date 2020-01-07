@@ -8,7 +8,7 @@ class Simulator:
 
     测试代码如下
     sim = simulating.Simulator()
-    sim.append(encoding.ConstantEncoder(shape=[1]))
+    sim.append(encoding.ConstantEncoder())
     sim.append(tf.SpikeCurrent(amplitude=0.01))
     sim.append(neuron.IFNode(shape=[1], r=0.5, v_threshold=1.0))
     sim.append(tf.SpikeCurrent(amplitude=0.4))
@@ -100,4 +100,14 @@ class Simulator:
         self.simulated_steps += 1
         return self.pipeline[-1]
 
+    def reset(self):
+        '''
+        重置仿真器到开始仿真前的状态，已经添加的module并不会被清除
+        '''
+        self.simulated_steps = 0
 
+        for i in range(self.pipeline.__len__()):
+            self.pipeline[i] = None
+
+        for i in range(self.module_list.__len__()):
+            self.module_list[i].reset()
