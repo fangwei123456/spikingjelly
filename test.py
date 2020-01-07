@@ -10,9 +10,16 @@ from matplotlib import pyplot
 
 if __name__ == "__main__":
 
+    x = torch.rand(size=[3, 2])
+    max_spike_time = 20
+    le = encoding.LatencyEncoder(max_spike_time)
 
-
-
+    le(x)
+    print(x)
+    print(le.spike_time)
+    for i in range(max_spike_time):
+        print(le.step())
+    exit(0)
 
     sim = simulating.Simulator()
     sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
