@@ -58,6 +58,7 @@ class BaseNode(nn.Module):
         raise NotImplementedError
 
     def reset(self):
+        # 对于存在除了v以外其他状态量的神经元，应该重写此函数
         self.v = self.v_reset
 
 
