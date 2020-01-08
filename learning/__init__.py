@@ -25,8 +25,8 @@ class STDPModule(nn.Module):
     w_list0 = []
     w_list1 = []
 
-    for i in range(300):
-        if i < 100:
+    for i in range(600):
+        if i < 400:
             in_spike = torch.ones(size=[2], dtype=torch.bool)
         else:
             in_spike = torch.zeros(size=[2], dtype=torch.bool)
@@ -118,5 +118,13 @@ class STDPModule(nn.Module):
         self.trace_b += - self.trace_b / self.tau_b + out_spike.float()
         self.update_param(False)
         return out_spike
+
+    def reset(self):
+        for i in range(self.module_list.__len__()):
+            self.module_list[i].reset()
+        self.trace_a = 0
+        self.trace_b = 0
+
+
 
 

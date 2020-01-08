@@ -81,15 +81,18 @@ class IFNode(BaseNode):
 
     def __init__(self, shape, r, v_threshold, v_reset=0.0, device='cpu'):
         super().__init__(shape, r, v_threshold, v_reset, device)
-
+        self.next_out_spike = torch.zeros(size=shape, dtype=torch.bool, device=device)
     def forward(self, i):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
         :return:out_spike: shape与self.shape相同，输出脉冲
         '''
-        out_spike = (self.v >= self.v_threshold)
+        out_spike = self.next_out_spike
 
         self.v += self.r * i
+        self.next_out_spike = (self.v >= self.v_threshold)
+        self.v[self.next_out_spike] = self.v_threshold
+
         self.v[self.v < self.v_reset] = self.v_reset
 
         if isinstance(self.v_reset, torch.Tensor):
@@ -127,17 +130,22 @@ class LIFNode(BaseNode):
     def __init__(self, shape, r, v_threshold, v_reset=0.0, tau=1.0, device='cpu'):
         super().__init__(shape, r, v_threshold, v_reset, device)
         self.tau = tau
+        self.next_out_spike = torch.zeros(size=shape, dtype=torch.bool, device=device)
+
 
     def forward(self, i):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
         :return:out_spike: shape与self.shape相同，输出脉冲
         '''
-        out_spike = (self.v >= self.v_threshold)
+        out_spike = self.next_out_spike
 
         v_decay = -(self.v - self.v_reset)
         self.v += (self.r * i + v_decay) / self.tau
+        self.next_out_spike = (self.v >= self.v_threshold)
+        self.v[self.next_out_spike] = self.v_threshold
         self.v[self.v < self.v_reset] = self.v_reset
+
 
         if isinstance(self.v_reset, torch.Tensor):
             self.v[out_spike] = self.v_reset[out_spike]
