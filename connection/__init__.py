@@ -55,5 +55,3 @@ class Linear(BaseConnection):
 
 
 
-
-

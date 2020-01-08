@@ -18,8 +18,11 @@ class Simulator:
     v = []
     v.extend(([], [], []))
     for i in range(1000):
+        if i < 800:
+            output_data = sim.step(torch.ones(size=[1], dtype=torch.bool))
+        else:
+            output_data = sim.step(torch.zeros(size=[1], dtype=torch.bool))
 
-        output_data = sim.step(torch.ones(size=[1], dtype=torch.bool))
 
         #print(i, sim.pipeline)
         for j in range(3):
