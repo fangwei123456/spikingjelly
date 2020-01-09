@@ -30,8 +30,8 @@ class ExpDecayCurrent(BaseTransformer):
     def __init__(self, tau, amplitude=1):
         '''
         有记忆
-        若当前时刻到达一个脉冲，则电流增加amplitude；否则电流按指数衰减
-        :param tau: 衰减的时间常数，越大则衰减越快
+        若当前时刻到达一个脉冲，则电流变为amplitude；否则电流按指数衰减
+        :param tau: 衰减的时间常数，越小则衰减越快
         :param amplitude: 电流的大小
         '''
         super().__init__()
