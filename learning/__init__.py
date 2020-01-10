@@ -9,17 +9,17 @@ import simulating
 class STDPModule(nn.Module):
 
     def __init__(self, tf_module, connection_module, neuron_module,
-                 tau_a, tau_b, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
+                 tau_pre, tau_post, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
         '''
         由tf_module，connection_module，neuron_module构成的STDP学习的基本单元
         利用迹的方式实现STDP学习，更新connection_module中的参数
-        pre脉冲到达时，权重增加trace_a * f_w(w) * learning_rate
-        post脉冲到达时，权重减少trace_b * f_w(w) * learning_rate
+        pre脉冲到达时，权重增加trace_pre * f_w(w) * learning_rate
+        post脉冲到达时，权重减少trace_post * f_w(w) * learning_rate
         :param tf_module: connection.transform中的脉冲-电流转换器
         :param connection_module: 突触
         :param neuron_module: 神经元
-        :param tau_a: pre脉冲的迹的时间常数
-        :param tau_b: post脉冲的迹的时间常数
+        :param tau_pre: pre脉冲的迹的时间常数
+        :param tau_post: post脉冲的迹的时间常数
         :param learning_rate: 学习率
         :param f_w: 权值函数，输入是权重w，输出是权重更新量delta_w
 
@@ -28,38 +28,38 @@ class STDPModule(nn.Module):
     sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
                                    connection.Linear(2, 1),
                                    neuron.IFNode(shape=[1], r=1.0, v_threshold=1.0),
-                                   tau_a=10.0,
-                                   tau_b=10.0,
+                                   tau_pre=10.0,
+                                   tau_post=10.0,
                                    learning_rate=1e-3
                                    ))
 
-    in_spike_list0 = []
-    in_spike_list1 = []
-    out_spike_list = []
+    pre_spike_list0 = []
+    pre_spike_list1 = []
+    post_spike_list = []
     w_list0 = []
     w_list1 = []
 
     for i in range(600):
         if i < 400:
-            in_spike = torch.ones(size=[2], dtype=torch.bool)
+            pre_spike = torch.ones(size=[2], dtype=torch.bool)
         else:
-            in_spike = torch.zeros(size=[2], dtype=torch.bool)
-            in_spike[1] = True
+            pre_spike = torch.zeros(size=[2], dtype=torch.bool)
+            pre_spike[1] = True
 
-        out_spike = sim.step(in_spike)
-        in_spike_list0.append(in_spike[0].float().item())
-        in_spike_list1.append(in_spike[1].float().item())
+        post_spike = sim.step(pre_spike)
+        pre_spike_list0.append(pre_spike[0].float().item())
+        pre_spike_list1.append(pre_spike[1].float().item())
 
-        out_spike_list.append(out_spike.float().item())
+        post_spike_list.append(post_spike.float().item())
 
         w_list0.append(sim.module_list[-1].module_list[2].w[:, 0].item())
         w_list1.append(sim.module_list[-1].module_list[2].w[:, 1].item())
 
-    pyplot.plot(in_spike_list0, c='r', label='in_spike[0]')
-    pyplot.plot(in_spike_list1, c='g', label='in_spike[1]')
+    pyplot.plot(pre_spike_list0, c='r', label='pre_spike[0]')
+    pyplot.plot(pre_spike_list1, c='g', label='pre_spike[1]')
     pyplot.legend()
     pyplot.show()
-    pyplot.plot(out_spike_list, label='out_spike')
+    pyplot.plot(post_spike_list, label='post_spike')
     pyplot.legend()
     pyplot.show()
     pyplot.plot(w_list0, c='r', label='w[0]')
@@ -81,11 +81,11 @@ class STDPModule(nn.Module):
         因此通过添加ConstantDelay的方式来实现
         '''
 
-        self.tau_a = tau_a
-        self.tau_b = tau_b
+        self.tau_pre = tau_pre
+        self.tau_post = tau_post
         self.learning_rate = learning_rate
-        self.trace_a = 0
-        self.trace_b = 0
+        self.trace_pre = 0
+        self.trace_post = 0
         self.f_w = f_w
 
     def update_param(self, pre=True):
@@ -93,53 +93,53 @@ class STDPModule(nn.Module):
             '''
             connection.Linear的更新规则
             w.shape = [out_num, in_num]
-            trace_a.shape = [batch_size, *, in_num]
-            trace_b.shape = [batch_size, *, out_num]
+            trace_pre.shape = [batch_size, *, in_num]
+            trace_post.shape = [batch_size, *, out_num]
             '''
             if pre:
                 self.module_list[2].w += self.learning_rate * self.f_w(self.module_list[2].w) \
-                                         * self.trace_a.view(-1, self.module_list[2].w.shape[1]).mean(0)
+                                         * self.trace_pre.view(-1, self.module_list[2].w.shape[1]).mean(0)
             else:
                 self.module_list[2].w = (self.module_list[2].w.t() -
                                          self.learning_rate * self.f_w(self.module_list[2].w).t() *
-                                         self.trace_b.view(-1, self.module_list[2].w.shape[0]).mean(0)).t()
+                                         self.trace_post.view(-1, self.module_list[2].w.shape[0]).mean(0)).t()
 
         else:
             raise NotImplementedError
 
-    def forward(self, in_spike):
+    def forward(self, pre_spike):
         '''
-        :param in_spike: 输入脉冲
+        :param pre_spike: 输入脉冲
         :return:
         '''
-        self.trace_a += - self.trace_a / self.tau_a + in_spike.float()
+        self.trace_pre += - self.trace_pre / self.tau_pre + pre_spike.float()
         self.update_param(True)
 
-        out_spike = self.module_list(in_spike)
+        post_spike = self.module_list(pre_spike)
 
-        self.trace_b += - self.trace_b / self.tau_b + out_spike.float()
+        self.trace_post += - self.trace_post / self.tau_post + post_spike.float()
         self.update_param(False)
-        return out_spike
+        return post_spike
 
     def reset(self):
         for i in range(self.module_list.__len__()):
             self.module_list[i].reset()
-        self.trace_a = 0
-        self.trace_b = 0
+        self.trace_pre = 0
+        self.trace_post = 0
 
 
 
 
 class STDPUpdater:
-    def __init__(self, tau_a, tau_b, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
+    def __init__(self, tau_pre, tau_post, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
         '''
         利用迹的方式实现STDP学习
-        pre脉冲到达时，权重增加trace_a * f_w(w) * learning_rate
-        post脉冲到达时，权重减少trace_b * f_w(w) * learning_rate
+        pre脉冲到达时，权重增加trace_pre * f_w(w) * learning_rate
+        post脉冲到达时，权重减少trace_post * f_w(w) * learning_rate
         :param tf_module: connection.transform中的脉冲-电流转换器
         :param neuron_module: 神经元
-        :param tau_a: pre脉冲的迹的时间常数
-        :param tau_b: post脉冲的迹的时间常数
+        :param tau_pre: pre脉冲的迹的时间常数
+        :param tau_post: post脉冲的迹的时间常数
         :param learning_rate: 学习率
         :param f_w: 权值函数，输入是权重w，输出是权重更新量delta_w
 
@@ -151,32 +151,32 @@ if __name__ == "__main__":
     sim = simulating.Simulator()
     sim.append(tf.SpikeCurrent(amplitude=0.5))
     sim.append(connection.Linear(2, 1))
-    sim.append(neuron.LIFNode(shape=[1], r=1.0, v_threshold=1.0, tau=100.0))
+    sim.append(neuron.LIFNode(shape=[1], r=10.0, v_threshold=1.0, tau=100.0))
 
-    updater = learning.STDPUpdater(tau_a=10.0,
-                                   tau_b=10.0,
+    updater = learning.STDPUpdater(tau_pre=10.0,
+                                   tau_post=10.0,
                                    learning_rate=1e-3,
                                    f_w=f_w)
 
-    out_spike_list = []
+    post_spike_list = []
     w_list0 = []
     w_list1 = []
     for i in range(500):
         if i < 400:
-            in_spike = torch.ones(size=[2], dtype=torch.bool)
+            pre_spike = torch.ones(size=[2], dtype=torch.bool)
         else:
-            in_spike = torch.zeros(size=[2], dtype=torch.bool)
+            pre_spike = torch.zeros(size=[2], dtype=torch.bool)
 
-        out_spike = sim.step(in_spike)
+        post_spike = sim.step(pre_spike)
 
-        updater.update(sim.module_list[1], in_spike, out_spike)
+        updater.update(sim.module_list[1], pre_spike, post_spike)
 
-        out_spike_list.append(out_spike.float().item())
+        post_spike_list.append(post_spike.float().item())
 
         w_list0.append(sim.module_list[1].w[:, 0].item())
         w_list1.append(sim.module_list[1].w[:, 1].item())
 
-    pyplot.plot(out_spike_list, label='out_spike')
+    pyplot.plot(post_spike_list, label='post_spike')
     pyplot.legend()
     pyplot.show()
     pyplot.plot(w_list0, c='r', label='w[0]')
@@ -184,34 +184,43 @@ if __name__ == "__main__":
     pyplot.legend()
     pyplot.show()
         '''
-        self.tau_a = tau_a
-        self.tau_b = tau_b
+        self.tau_pre = tau_pre
+        self.tau_post = tau_post
         self.learning_rate = learning_rate
-        self.trace_a = 0
-        self.trace_b = 0
+        self.trace_pre = 0
+        self.trace_post = 0
         self.f_w = f_w
 
 
     def reset(self):
-        self.trace_a = 0
-        self.trace_b = 0
+        self.trace_pre = 0
+        self.trace_post = 0
 
-    def update(self, connection_module, in_spike, out_spike):
+    def update(self, connection_module, pre_spike, post_spike, inverse=False):
         '''
         指定突触的前后脉冲，进行STDP学习
         :param connection_module: 突触
-        :param in_spike: 输入脉冲
-        :param out_spike: 输出脉冲
+        :param pre_spike: 输入脉冲
+        :param post_spike: 输出脉冲
+        :param inverse: 为True则进行Anti-STDP
         '''
 
-        self.trace_a += - self.trace_a / self.tau_a + in_spike.float()
-        self.trace_b += - self.trace_b / self.tau_b + out_spike.float()
+        self.trace_pre += - self.trace_pre / self.tau_pre + pre_spike.float()
+        self.trace_post += - self.trace_post / self.tau_post + post_spike.float()
 
         if isinstance(connection_module, connection.Linear):
-            connection_module.w += self.learning_rate * self.f_w(connection_module.w) \
-                                   * self.trace_a.view(-1, connection_module.w.shape[1]).mean(0)
-            connection_module.w = (connection_module.w.t() -
-                                   self.learning_rate * self.f_w(connection_module.w).t() *
-                                   self.trace_b.view(-1, connection_module.w.shape[0]).mean(0)).t()
+            if inverse:
+                connection_module.w -= self.learning_rate * self.f_w(connection_module.w) \
+                                       * self.trace_pre.view(-1, connection_module.w.shape[1]).mean(0)
+                connection_module.w = (connection_module.w.t() +
+                                       self.learning_rate * self.f_w(connection_module.w).t() *
+                                       self.trace_post.view(-1, connection_module.w.shape[0]).mean(0)).t()
+            else:
+                connection_module.w += self.learning_rate * self.f_w(connection_module.w) \
+                                       * self.trace_pre.view(-1, connection_module.w.shape[1]).mean(0)
+                connection_module.w = (connection_module.w.t() -
+                                       self.learning_rate * self.f_w(connection_module.w).t() *
+                                       self.trace_post.view(-1, connection_module.w.shape[0]).mean(0)).t()
+
         else:
             raise NotImplementedError
