@@ -6,7 +6,6 @@ class BaseEncoder(nn.Module):
     def __init__(self):
         '''
         所有编码器的基类
-        :param device: 数据所在的设备
         '''
         super().__init__()
 
@@ -32,6 +31,41 @@ class ConstantEncoder(BaseEncoder):
         :return: x.bool()
         '''
         return x.bool()
+
+class PeriodicEncoder(BaseEncoder):
+    def __init__(self, out_spike):
+        '''
+        给定out_spike后，周期性的输出out_spike的编码器
+        :param out_spike: shape=[T, *]，PeriodicEncoder会不断的输出out_spike[0], out_spike[1], ..., out_spike[T-1], out_spike[0]...
+        '''
+        super().__init__()
+        assert out_spike.dtype == torch.bool
+        self.out_spike = out_spike
+        self.T = out_spike.shape[0]
+        self.index = 0
+
+    def forward(self, x):
+        # 使用step代替forward函数，可以替代STDPModule中的neuron_module，来指导连接权重的学习
+        return self.step()
+
+    def step(self):
+        index = self.index
+        self.index += 1
+        if self.index == self.T:
+            self.index = 0
+        return self.out_spike[index]
+
+    def set_out_spike(self, out_spike):
+        assert out_spike.dtype == torch.bool
+        self.out_spike = out_spike
+        self.T = out_spike.shape[0]
+        self.index = 0
+
+    def reset(self):
+        self.index = 0
+
+
+
 
 class LatencyEncoder(BaseEncoder):
     def __init__(self, max_spike_time, device='cpu'):
