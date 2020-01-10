@@ -158,3 +158,4 @@ class LIFNode(BaseNode):
         return super().__str__() + '\ntau ' + str(self.tau)
 
 
+
