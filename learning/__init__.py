@@ -11,6 +11,8 @@ class STDPModule(nn.Module):
     def __init__(self, tf_module, connection_module, neuron_module,
                  tau_pre, tau_post, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
         '''
+        Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
+
         由tf_module，connection_module，neuron_module构成的STDP学习的基本单元
         利用迹的方式实现STDP学习，更新connection_module中的参数
         pre脉冲到达时，权重增加trace_pre * f_w(w) * learning_rate
@@ -21,7 +23,7 @@ class STDPModule(nn.Module):
         :param tau_pre: pre脉冲的迹的时间常数
         :param tau_post: post脉冲的迹的时间常数
         :param learning_rate: 学习率
-        :param f_w: 权值函数，输入是权重w，输出是权重更新量delta_w
+        :param f_w: 权值函数，输入是权重w
 
         示例代码
     sim = simulating.Simulator()
@@ -96,16 +98,22 @@ class STDPModule(nn.Module):
             trace_pre.shape = [batch_size, *, in_num]
             trace_post.shape = [batch_size, *, out_num]
             '''
+            dw = 0
             if pre:
-                self.module_list[2].w += self.learning_rate * self.f_w(self.module_list[2].w) \
-                                         * self.trace_pre.view(-1, self.module_list[2].w.shape[1]).mean(0)
+                if isinstance(self.trace_post, torch.Tensor):
+                    dw = - (self.learning_rate * self.f_w(self.module_list[2].w).t() *
+                          self.trace_post.view(-1, self.module_list[2].w.shape[0]).mean(0)).t()
+
             else:
-                self.module_list[2].w = (self.module_list[2].w.t() -
-                                         self.learning_rate * self.f_w(self.module_list[2].w).t() *
-                                         self.trace_post.view(-1, self.module_list[2].w.shape[0]).mean(0)).t()
+                if isinstance(self.trace_pre, torch.Tensor):
+                    dw = self.learning_rate * self.f_w(self.module_list[2].w) \
+                                             * self.trace_pre.view(-1, self.module_list[2].w.shape[1]).mean(0)
+
 
         else:
             raise NotImplementedError
+
+        self.module_list[2].w += dw
 
     def forward(self, pre_spike):
         '''
@@ -221,6 +229,50 @@ if __name__ == "__main__":
                 connection_module.w = (connection_module.w.t() -
                                        self.learning_rate * self.f_w(connection_module.w).t() *
                                        self.trace_post.view(-1, connection_module.w.shape[0]).mean(0)).t()
+
+        else:
+            raise NotImplementedError
+
+
+class STDPFitter(STDPUpdater):
+    def __init__(self, tau_pre, tau_post, tau_target, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
+        super().__init__(tau_pre, tau_post, learning_rate, f_w)
+        self.tau_target = tau_target
+        self.trace_target = 0
+
+    def reset(self):
+        super().reset()
+        self.trace_target = 0
+
+    def update(self, connection_module, pre_spike, post_spike, target_spike, inverse=False):
+        '''
+        指定突触的前后脉冲，进行STDP学习
+        :param connection_module: 突触
+        :param pre_spike: 输入脉冲
+        :param post_spike: 输出脉冲
+        :param inverse: 为True则进行Anti-STDP
+        '''
+
+        self.trace_pre += - self.trace_pre / self.tau_pre + pre_spike.float()
+        self.trace_post += - self.trace_post / self.tau_post + post_spike.float()
+        self.trace_target += - self.trace_target / self.tau_target + target_spike.float()
+
+
+        if isinstance(connection_module, connection.Linear):
+            if inverse:
+                connection_module.w -= self.learning_rate * self.f_w(connection_module.w) \
+                                       * self.trace_pre.view(-1, connection_module.w.shape[1]).mean(0)
+                connection_module.w = (connection_module.w.t() +
+                                       self.learning_rate * self.f_w(connection_module.w).t() *
+                                       (self.trace_target.view(-1, connection_module.w.shape[0]).mean(0)
+                                        - self.trace_post.view(-1, connection_module.w.shape[0]).mean(0))).t()
+            else:
+                connection_module.w += self.learning_rate * self.f_w(connection_module.w) \
+                                       * self.trace_pre.view(-1, connection_module.w.shape[1]).mean(0)
+                connection_module.w = (connection_module.w.t() -
+                                       self.learning_rate * self.f_w(connection_module.w).t() *
+                                       (self.trace_target.view(-1, connection_module.w.shape[0]).mean(0)
+                                        - self.trace_post.view(-1, connection_module.w.shape[0]).mean(0))).t()
 
         else:
             raise NotImplementedError
