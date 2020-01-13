@@ -74,6 +74,7 @@ class LatencyEncoder(BaseEncoder):
         脉冲发放时间t_i与刺激强度x_i满足
         t_i = (t_max - 1) - ln(alpha * x_i + 1)
         alpha满足(t_max - 1) - ln(alpha * 1 + 1) = 0
+        这导致此编码器很容易发生溢出，因为alpha = math.exp(max_spike_time - 1) - 1，当max_spike_time较大时alpha极大
         :param max_spike_time: 最晚脉冲发放时间
         :param device: 数据所在设备
 
