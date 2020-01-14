@@ -68,14 +68,19 @@ class PeriodicEncoder(BaseEncoder):
 
 
 class LatencyEncoder(BaseEncoder):
-    def __init__(self, max_spike_time, device='cpu'):
+    def __init__(self, max_spike_time, type='linear', device='cpu'):
         '''
         延迟编码，刺激强度越大，脉冲发放越早。要求刺激强度已经被归一化到[0, 1]
         脉冲发放时间t_i与刺激强度x_i满足
-        t_i = (t_max - 1) - ln(alpha * x_i + 1)
-        alpha满足(t_max - 1) - ln(alpha * 1 + 1) = 0
-        这导致此编码器很容易发生溢出，因为alpha = math.exp(max_spike_time - 1) - 1，当max_spike_time较大时alpha极大
+        type='linear'
+             t_i = (t_max - 1) * (1 - x_i)
+
+        type='log'
+            t_i = (t_max - 1) - ln(alpha * x_i + 1)
+            alpha满足(t_max - 1) - ln(alpha * 1 + 1) = 0
+            这导致此编码器很容易发生溢出，因为alpha = math.exp(max_spike_time - 1) - 1，当max_spike_time较大时alpha极大
         :param max_spike_time: 最晚脉冲发放时间
+        :param type: 'linear'或'log'
         :param device: 数据所在设备
 
         示例代码
@@ -94,7 +99,12 @@ class LatencyEncoder(BaseEncoder):
         assert isinstance(max_spike_time, int) and max_spike_time > 1
 
         self.max_spike_time = max_spike_time
-        self.alpha = math.exp(max_spike_time - 1) - 1
+        if type == 'log':
+            self.alpha = math.exp(max_spike_time - 1) - 1
+        elif type != 'linear':
+            raise NotImplementedError
+
+        self.type = type
 
         self.spike_time = 0
         self.out_spike = 0
@@ -104,9 +114,14 @@ class LatencyEncoder(BaseEncoder):
         '''
         :param x: 要编码的数据，任意形状的tensor，要求x的数据范围必须在[0, 1]
         '''
-        self.spike_time = (self.max_spike_time - 1 - torch.log(self.alpha * x + 1)).round().long()
+        if self.type == 'log':
+            self.spike_time = (self.max_spike_time - 1 - torch.log(self.alpha * x + 1)).round().long()
+        else:
+            self.spike_time = (self.max_spike_time - 1) * (1 - x).round().long()
+
         self.out_spike = F.one_hot(self.spike_time,
-                                   num_classes=self.max_spike_time).bool()  # [batch_size, M, tuning_curve_num, max_spike_time]
+                                       num_classes=self.max_spike_time).bool()  # [batch_size, M, tuning_curve_num, max_spike_time]
+
 
     def step(self):
         index = self.index
