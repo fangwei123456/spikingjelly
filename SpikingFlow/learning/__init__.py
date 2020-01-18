@@ -11,12 +11,6 @@ class STDPModule(nn.Module):
     def __init__(self, tf_module, connection_module, neuron_module,
                  tau_pre, tau_post, learning_rate, f_w=lambda x: torch.abs(x) + 1e-6):
         '''
-        Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
-
-        由tf_module，connection_module，neuron_module构成的STDP学习的基本单元
-        利用迹的方式实现STDP学习，更新connection_module中的参数
-        pre脉冲到达时，权重增加trace_pre * f_w(w) * learning_rate
-        post脉冲到达时，权重减少trace_post * f_w(w) * learning_rate
         :param tf_module: connection.transform中的脉冲-电流转换器
         :param connection_module: 突触
         :param neuron_module: 神经元
@@ -25,8 +19,16 @@ class STDPModule(nn.Module):
         :param learning_rate: 学习率
         :param f_w: 权值函数，输入是权重w
 
+        Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
+
+        由tf_module，connection_module，neuron_module构成的STDP学习的基本单元
+        利用迹的方式实现STDP学习，更新connection_module中的参数
+        pre脉冲到达时，权重增加trace_pre * f_w(w) * learning_rate
+        post脉冲到达时，权重减少trace_post * f_w(w) * learning_rate
         示例代码
+
         .. code-block:: python
+
         sim = simulating.Simulator()
         sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
                                        connection.Linear(2, 1),
