@@ -9,6 +9,12 @@ Welcome to SpikingFlow's documentation!
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
+   connection
+   encoding
+   event_driven
+   learning
+   modules
+   neuron
 
 
 
