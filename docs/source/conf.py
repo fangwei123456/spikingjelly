@@ -1,4 +1,4 @@
-# sphinx-apidoc -o  ./source ../SpikingFlow
+# sphinx-apidoc -o  ./docs/source ./SpikingFlow
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
