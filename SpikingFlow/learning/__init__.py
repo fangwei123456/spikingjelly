@@ -22,55 +22,59 @@ class STDPModule(nn.Module):
         Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
 
         由tf_module，connection_module，neuron_module构成的STDP学习的基本单元
+
         利用迹的方式实现STDP学习，更新connection_module中的参数
+
         pre脉冲到达时，权重增加trace_pre * f_w(w) * learning_rate
+
         post脉冲到达时，权重减少trace_post * f_w(w) * learning_rate
+
         示例代码
 
         .. code-block:: python
 
-        sim = simulating.Simulator()
-        sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
-                                       connection.Linear(2, 1),
-                                       neuron.IFNode(shape=[1], r=1.0, v_threshold=1.0),
-                                       tau_pre=10.0,
-                                       tau_post=10.0,
-                                       learning_rate=1e-3
-                                       ))
+            sim = simulating.Simulator()
+            sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
+                                           connection.Linear(2, 1),
+                                           neuron.IFNode(shape=[1], r=1.0, v_threshold=1.0),
+                                           tau_pre=10.0,
+                                           tau_post=10.0,
+                                           learning_rate=1e-3
+                                           ))
 
-        pre_spike_list0 = []
-        pre_spike_list1 = []
-        post_spike_list = []
-        w_list0 = []
-        w_list1 = []
+            pre_spike_list0 = []
+            pre_spike_list1 = []
+            post_spike_list = []
+            w_list0 = []
+            w_list1 = []
 
-        for i in range(600):
-            if i < 400:
-                pre_spike = torch.ones(size=[2], dtype=torch.bool)
-            else:
-                pre_spike = torch.zeros(size=[2], dtype=torch.bool)
-                pre_spike[1] = True
+            for i in range(600):
+                if i < 400:
+                    pre_spike = torch.ones(size=[2], dtype=torch.bool)
+                else:
+                    pre_spike = torch.zeros(size=[2], dtype=torch.bool)
+                    pre_spike[1] = True
 
-            post_spike = sim.step(pre_spike)
-            pre_spike_list0.append(pre_spike[0].float().item())
-            pre_spike_list1.append(pre_spike[1].float().item())
+                post_spike = sim.step(pre_spike)
+                pre_spike_list0.append(pre_spike[0].float().item())
+                pre_spike_list1.append(pre_spike[1].float().item())
 
-            post_spike_list.append(post_spike.float().item())
+                post_spike_list.append(post_spike.float().item())
 
-            w_list0.append(sim.module_list[-1].module_list[2].w[:, 0].item())
-            w_list1.append(sim.module_list[-1].module_list[2].w[:, 1].item())
+                w_list0.append(sim.module_list[-1].module_list[2].w[:, 0].item())
+                w_list1.append(sim.module_list[-1].module_list[2].w[:, 1].item())
 
-        pyplot.plot(pre_spike_list0, c='r', label='pre_spike[0]')
-        pyplot.plot(pre_spike_list1, c='g', label='pre_spike[1]')
-        pyplot.legend()
-        pyplot.show()
-        pyplot.plot(post_spike_list, label='post_spike')
-        pyplot.legend()
-        pyplot.show()
-        pyplot.plot(w_list0, c='r', label='w[0]')
-        pyplot.plot(w_list1, c='g', label='w[1]')
-        pyplot.legend()
-        pyplot.show()
+            pyplot.plot(pre_spike_list0, c='r', label='pre_spike[0]')
+            pyplot.plot(pre_spike_list1, c='g', label='pre_spike[1]')
+            pyplot.legend()
+            pyplot.show()
+            pyplot.plot(post_spike_list, label='post_spike')
+            pyplot.legend()
+            pyplot.show()
+            pyplot.plot(w_list0, c='r', label='w[0]')
+            pyplot.plot(w_list1, c='g', label='w[1]')
+            pyplot.legend()
+            pyplot.show()
         '''
         super().__init__()
 
