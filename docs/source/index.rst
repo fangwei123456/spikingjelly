@@ -3,17 +3,9 @@
 
 .. toctree::
    :maxdepth: 2
-
-   connection
-   encoding
-   event_driven
-   learning
    modules
-   neuron
 
-
-
-Indices and tables
+索引
 ==================
 
 * :ref:`genindex`
