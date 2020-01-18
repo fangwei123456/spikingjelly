@@ -64,3 +64,4 @@ html_theme = 'alabaster'
 html_static_path = ['_static']
 
 autodoc_mock_imports = ['torch', 'numpy']
+master_doc = 'index'
