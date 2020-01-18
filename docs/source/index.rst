@@ -1,9 +1,4 @@
-.. SpikingFlow documentation master file, created by
-   sphinx-quickstart on Sat Jan 18 17:18:07 2020.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
-Welcome to SpikingFlow's documentation!
+欢迎来到SpikingFlow的文档
 =======================================
 
 .. toctree::
