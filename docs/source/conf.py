@@ -15,6 +15,7 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../SpikingFlow/'))
 print('sys.path', sys.path)
+os.listdir(sys.path[0])
 # -- Project information -----------------------------------------------------
 
 project = 'SpikingFlow'
