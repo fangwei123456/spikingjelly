@@ -26,6 +26,7 @@ class STDPModule(nn.Module):
         :param f_w: 权值函数，输入是权重w
 
         示例代码
+        .. code-block:: python
         sim = simulating.Simulator()
         sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.2),
                                        connection.Linear(2, 1),
