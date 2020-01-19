@@ -6,15 +6,19 @@ import torch.nn.functional as F
 class BaseNode(nn.Module):
     def __init__(self, shape, r, v_threshold, v_reset=0.0, device='cpu'):
         '''
-        时钟驱动（逐步仿真）的神经元基本模型
-        这些神经元都是在t时刻接收电流i作为输入，与膜电阻r相乘，得到dv=i * r
-        之后self.v += dv，然后根据神经元自身的属性，决定是否发放脉冲
-        :param shape: 输出的shape
-        :param r: 膜电阻，可以是一个float，也可以是tensor
+        :param shape: 输出的shape，可以看作是神经元的数量
+        :param r: 膜电阻，可以是一个float，表示所有神经元的膜电阻均为这个float。也可以是形状为shape的tensor，
+        这样就指定了每个神经元的膜电阻
         :param v_threshold: 阈值电压，可以是一个float，也可以是tensor
-        :param v_reset: 重置电压，可以是一个float，也可以是tensor
-        注意，更新过程中会确保电压不低于v_reset
+        :param v_reset: 重置电压，可以是一个float，也可以是tensor。
+        注意，更新过程中会确保电压不低于v_reset，因而电压低于v_reset时会被截断为v_reset
         :param device: 数据所在的设备
+
+        时钟驱动（逐步仿真）的神经元基本模型
+
+        这些神经元都是在t时刻接收电流i作为输入，与膜电阻r相乘，得到dv=i * r
+
+        之后self.v += dv，然后根据神经元自身的属性，决定是否发放脉冲
         '''
         super().__init__()
         self.shape = shape
@@ -48,6 +52,11 @@ class BaseNode(nn.Module):
         self.v = torch.ones(size=shape, dtype=torch.float, device=device) * v_reset
 
     def __str__(self):
+        '''
+        :return: 字符串，内容为'shape ' + str(self.shape) + '\nr ' + str(self.r) + '\nv_threshold ' + str(self.v_threshold) + '\nv_reset ' + str(self.v_reset)
+
+        子类可以重写这个函数，实现对新增成员变量的打印
+        '''
 
         return 'shape ' + str(self.shape) + '\nr ' + str(self.r) + '\nv_threshold ' + str(self.v_threshold) + '\nv_reset ' + str(self.v_reset)
 
@@ -55,11 +64,19 @@ class BaseNode(nn.Module):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
         :return:out_spike: shape与self.shape相同，输出脉冲
+
+        接受电流输入，更新膜电位的电压，并输出脉冲（如果过阈值）
         '''
         raise NotImplementedError
 
     def reset(self):
-        # 对于存在除了v以外其他状态量的神经元，应该重写此函数
+        '''
+        :return: None
+
+        将所有状态变量全部设置为初始值，作为基类即为将膜电位v设置为v_reset
+
+        对于子类，如果存在除了v以外其他状态量的神经元，应该重写此函数
+        '''
         self.v = torch.ones(size=self.shape, dtype=torch.float, device=self.device) * self.v_reset
 
 
