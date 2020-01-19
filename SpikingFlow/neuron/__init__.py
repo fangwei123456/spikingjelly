@@ -7,10 +7,11 @@ class BaseNode(nn.Module):
     def __init__(self, shape, r, v_threshold, v_reset=0.0, device='cpu'):
         '''
         :param shape: 输出的shape，可以看作是神经元的数量
-        :param r: 膜电阻，可以是一个float，表示所有神经元的膜电阻均为这个float。也可以是形状为shape的tensor，这样就指定了每个神经元的膜电阻
+        :param r: 膜电阻，可以是一个float，表示所有神经元的膜电阻均为这个float。
+                 也可以是形状为shape的tensor，这样就指定了每个神经元的膜电阻
         :param v_threshold: 阈值电压，可以是一个float，也可以是tensor
         :param v_reset: 重置电压，可以是一个float，也可以是tensor。
-        注意，更新过程中会确保电压不低于v_reset，因而电压低于v_reset时会被截断为v_reset
+                        注意，更新过程中会确保电压不低于v_reset，因而电压低于v_reset时会被截断为v_reset
         :param device: 数据所在的设备
 
         时钟驱动（逐步仿真）的神经元基本模型
