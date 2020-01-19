@@ -10,19 +10,38 @@ class BaseEncoder(nn.Module):
         super().__init__()
 
     def forward(self, x):
+        '''
+        :param x: 要编码的数据
+        :return: 编码后的脉冲，或者是None
+
+        将x编码为脉冲。少数编码器（例如ConstantEncoder）可以将x编码成时长为1个dt的脉冲，在这种情况下，本函数返回编码后的脉冲
+
+        多数编码器（例如PeriodicEncoder），都是把x编码成时长为多个dt的脉冲，因此编码一次后，需要调用多次step()函数才能将脉冲全部发放完毕
+        '''
         raise NotImplementedError
 
     def step(self):
-        # 对于某些编码器（例如GaussianTuningCurveEncoder），编码一次x，需要经过多步仿真才能将数据输出，这种情况下则用step来获取每一步的数据
+        '''
+        :return: 1个dt的脉冲
+
+        多数编码器（例如PeriodicEncoder），编码一次x，需要经过多步仿真才能将数据输出，这种情况下则用step来获取每一步的数据
+        '''
         raise NotImplementedError
 
     def reset(self):
+        '''
+        :return: None
+
+        将编码器的所有状态变量设置为初始状态。对于有状态的编码器，需要重写这个函数。
+        '''
         pass
 
 
 class ConstantEncoder(BaseEncoder):
-    # 将输入简单转化为脉冲，输入中大于0的位置输出1，其他位置输出0
     def __init__(self):
+        '''
+        将输入简单转化为脉冲，输入中大于0的位置输出1，其他位置输出0
+        '''
         super().__init__()
 
     def forward(self, x: torch.Tensor):
