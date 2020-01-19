@@ -162,6 +162,7 @@ class LIFNode(BaseNode):
         LIF神经元模型，可以看作是带漏电的积分器
 
         电压在不为v_reset时，会指数衰减
+
         .. code-block:: python
             v_decay = -(self.v - self.v_reset)
             self.v += (self.r * i + v_decay) / self.tau
@@ -170,6 +171,7 @@ class LIFNode(BaseNode):
 
 
         测试代码
+
         .. code-block:: python
             lif_node = neuron.LIFNode([1], r=9.0, v_threshold=1.0, tau=20.0)
             v = []
