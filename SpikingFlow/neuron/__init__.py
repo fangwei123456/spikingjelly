@@ -127,7 +127,7 @@ class IFNode(BaseNode):
     def forward(self, i):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
-        :return:out_spike: shape与self.shape相同，输出脉冲
+        :return: out_spike: shape与self.shape相同，输出脉冲
         '''
         out_spike = self.next_out_spike
 
@@ -194,7 +194,7 @@ class LIFNode(BaseNode):
     def forward(self, i):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
-        :return:out_spike: shape与self.shape相同，输出脉冲
+        :return: out_spike: shape与self.shape相同，输出脉冲
         '''
         out_spike = self.next_out_spike
 
