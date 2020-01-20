@@ -130,15 +130,15 @@ class LatencyEncoder(BaseEncoder):
 
         type='log'
             .. math::
-                t_i = (t_max - 1) - ln(\alpha * x_i + 1)
+                t_i = (t_{max+ - 1) - ln(\\alpha * x_i + 1)
             \alpha满足
             .. math::
-                (t_{max} - 1) - ln(\alpha * 1 + 1) = 0
+                (t_{max} - 1) - ln(\\alpha * 1 + 1) = 0
             这导致此编码器很容易发生溢出，因为
             .. math::
-                \alpha = math.exp(t_{max} - 1) - 1
+                \\alpha = math.exp(t_{max} - 1) - 1
 
-            当max_spike_time较大时:math: '\alpha' 极大
+            当max_spike_time较大时 :math: '\\alpha' 极大
 
         示例代码
 
