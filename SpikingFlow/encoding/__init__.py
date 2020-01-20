@@ -116,13 +116,13 @@ class PeriodicEncoder(BaseEncoder):
 class LatencyEncoder(BaseEncoder):
     def __init__(self, max_spike_time, function_type='linear', device='cpu'):
         '''
-        :param max_spike_time: 最晚脉冲发放时间
+        :param max_spike_time: 最晚（最大）脉冲发放时间
         :param function_type: 'linear'或'log'
         :param device: 数据所在设备
 
         延迟编码，刺激强度越大，脉冲发放越早。要求刺激强度已经被归一化到[0, 1]
 
-        脉冲发放时间t_i与刺激强度x_i满足
+        脉冲发放时间 :math:`t_i` 与刺激强度 :math:`x_i` 满足
 
         type='linear'
             .. math::
@@ -130,15 +130,18 @@ class LatencyEncoder(BaseEncoder):
 
         type='log'
             .. math::
-                t_i = (t_{max+ - 1) - ln(\\alpha * x_i + 1)
-            \alpha满足
-            .. math::
-                (t_{max} - 1) - ln(\\alpha * 1 + 1) = 0
-            这导致此编码器很容易发生溢出，因为
-            .. math::
-                \\alpha = math.exp(t_{max} - 1) - 1
+                t_i = (t_{max} - 1) - ln(\alpha * x_i + 1)
 
-            当max_spike_time较大时 :math: '\\alpha' 极大
+        :math:'\alpha' 满足
+
+        .. math::
+            (t_{max} - 1) - ln(\alpha * 1 + 1) = 0
+        这导致此编码器很容易发生溢出，因为
+
+        .. math::
+            \alpha = math.exp(t_{max} - 1) - 1
+
+        当 :math: `t_{max}` 较大时 :math:`\alpha` 极大
 
         示例代码
 
