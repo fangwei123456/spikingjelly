@@ -70,11 +70,10 @@ class Linear(BaseConnection):
 
         线性全连接层，输入是[batch_size, *, in_num]，输出是[batch_size, *, out_num]
 
-        连接权重矩阵为 :math:`W`
+        连接权重矩阵为 :math:`W`，输入为 :math:`x`，输出为 :math:`y`，则
 
         .. math::
             y = xW^T
-
         '''
         super().__init__()
         self.w = torch.rand(size=[out_num, in_num], device=device) / 128
@@ -83,10 +82,6 @@ class Linear(BaseConnection):
         '''
         :param x: 输入电流，shape=[batch_size, *, in_num]
         :return: 输出电流，shape=[batch_size, *, out_num]
-
-        .. math::
-            y = xW^T
-
         '''
         return torch.matmul(x, self.w.t())
 
