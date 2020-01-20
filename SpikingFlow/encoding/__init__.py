@@ -141,7 +141,7 @@ class LatencyEncoder(BaseEncoder):
         .. math::
             \alpha = math.exp(t_{max} - 1) - 1
 
-        当 :math:`t_{max}` 较大时 :math:`{\alpha}` 极大
+        当 :math:`t_{max}` 较大时 :math:`\{alpha}` 极大
 
         示例代码
 
