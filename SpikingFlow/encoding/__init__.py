@@ -132,7 +132,7 @@ class LatencyEncoder(BaseEncoder):
             .. math::
                 t_i = (t_{max} - 1) - ln(alpha * x_i + 1)
 
-        :math:'alpha' 满足
+         :math:`alpha` 满足
 
         .. math::
             (t_{max} - 1) - ln(alpha * 1 + 1) = 0
