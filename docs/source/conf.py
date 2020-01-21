@@ -19,8 +19,8 @@ print('list dir', os.listdir(sys.path[0]))
 # -- Project information -----------------------------------------------------
 
 project = 'SpikingFlow'
-copyright = '2020, 北京大学 信息科学技术学院 数字媒体所 媒体学习组'
-author = '北京大学 信息科学技术学院 数字媒体所 媒体学习组'
+copyright = '2020, PKU MLG'
+author = 'PKU MLG'
 
 # The full version, including alpha/beta/rc tags
 release = '0.1'
