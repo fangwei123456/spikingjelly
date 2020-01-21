@@ -15,6 +15,8 @@ class Simulator:
 
         启动仿真后 应该按照如下顺序计算
 
+        X[0] = input_data
+
         x[n] = module[n-1](x[n-1])
 
         x[n-1] = module[n-2](x[n-2])
