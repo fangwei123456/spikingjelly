@@ -66,6 +66,7 @@ html_static_path = ['_static']
 
 autodoc_mock_imports = ['torch', 'numpy']
 autoclass_content = 'both'
+autodoc_member_order = 'bysource'
 
 
 master_doc = 'index'

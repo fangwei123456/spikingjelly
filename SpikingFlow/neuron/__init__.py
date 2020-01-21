@@ -112,6 +112,7 @@ class IFNode(BaseNode):
         测试代码
 
         .. code-block:: python
+
             if_node = neuron.IFNode([1], r=1.0, v_threshold=1.0)
             v = []
             for i in range(1000):
@@ -164,6 +165,7 @@ class LIFNode(BaseNode):
         电压在不为v_reset时，会指数衰减
 
         .. code-block:: python
+
             v_decay = -(self.v - self.v_reset)
             self.v += (self.r * i + v_decay) / self.tau
 
@@ -173,6 +175,7 @@ class LIFNode(BaseNode):
         测试代码
 
         .. code-block:: python
+
             lif_node = neuron.LIFNode([1], r=9.0, v_threshold=1.0, tau=20.0)
             v = []
 

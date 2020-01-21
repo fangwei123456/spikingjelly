@@ -29,6 +29,7 @@ class Simulator:
         测试代码
 
         .. code-block:: python
+
             sim = simulating.Simulator()
             sim.append(encoding.ConstantEncoder())
             sim.append(tf.SpikeCurrent(amplitude=0.01))
