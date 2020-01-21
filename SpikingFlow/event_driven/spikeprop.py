@@ -3,19 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-'''
-Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
-Yang J, Yang W, Wu W. A remark on the error-backpropagation learning algorithm for spiking neural networks[J]. Applied Mathematics Letters, 2012, 25(8): 1118-1120.
-'''
-
 
 class SpikePropLayer(nn.Module):
-    '''
-    一层SpikePropLayer
-    输入[batch_size, in_num]，是in_num个神经元的脉冲发放时间
-    输出[batch_size, out_num]，是out_num个神经元的脉冲发放时间
-    '''
-
     def __init__(self, in_num, out_num, T, v_threshold, kernel_function, grad_kernel_function, *args):
         '''
         :param in_num: 输入数量
@@ -25,6 +14,20 @@ class SpikePropLayer(nn.Module):
         :param kernel_function:  :math:`v(t)` 函数
         :param grad_kernel_function:  :math:`v'(t)` 函数，即为 :math:`v(t)` 函数的导数，反向传播时要用到
         :param args: :math:`v(t)` 函数的输入参数
+
+        Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
+
+        一层SpikePropLayer
+
+        输入[batch_size, in_num]，是in_num个神经元的脉冲发放时间
+
+        输出[batch_size, out_num]，是out_num个神经元的脉冲发放时间
+
+        SpikeProp使用了线性化的假设来解决脉冲响应模型在脉冲发放时刻导数的问题
+
+        Yang J, Yang W, Wu W. A remark on the error-backpropagation learning algorithm for spiking neural networks[J]. Applied Mathematics Letters, 2012, 25(8): 1118-1120.
+
+        Yang J等证明了这一假设是正确的，但我认为整个证明是有问题的
         '''
         super(SpikePropLayer, self).__init__()
         self.in_num = in_num
@@ -89,22 +92,18 @@ class VoltageToSpike(torch.autograd.Function):
         for i in range(membrane_voltage.shape[0]):
             for j in range(membrane_voltage.shape[1]):
                 for k in range(membrane_voltage.shape[2]):
-                    '''
-                    找到电压首次过阈值的时刻
-                    无法用argmin之类的操作完成，因为当存在多个最小值时，argmin返回的最小位置是不确定的
-                    '''
+                    # 找到电压首次过阈值的时刻
+                    # 无法用argmin之类的操作完成，因为当存在多个最小值时，argmin返回的最小位置是不确定的
                     if membrane_voltage[i][j][k] >= v_threshold:
                         out_spike[i][j] = k
                         break
 
-        '''
-        下面的计算是为了反向传播做准备
-        使用以下符号
-        输入脉冲S1, [batch_size, in_num]
-        经过核函数作用，得到电压X1, [batch_size, in_num, T]
-        经过权重W1, [out_num, in_num], 作用，得到电压Y1, [batch_size, out_num, T]
-        由电压Y1产生脉冲S2, [batch_size, out_num]
-        '''
+        # 下面的计算是为了反向传播做准备
+        # 使用以下符号
+        # 输入脉冲S1, [batch_size, in_num]
+        # 经过核函数作用，得到电压X1, [batch_size, in_num, T]
+        # 经过权重W1, [out_num, in_num], 作用，得到电压Y1, [batch_size, out_num, T]
+        # 由电压Y1产生脉冲S2, [batch_size, out_num]
         dX1_dt = torch.zeros(size=[batch_size, in_num, out_num], device=device)
         # dX1_dt[:, :, i]是out_spike[:, i]时刻输入层神经元电压对时间的导数
 
