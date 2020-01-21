@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import math
 '''
 这个py文件包含各种 :math:`v(t)` 函数
+
+ :math:`v(t)` 函数要求函数参数为(t, ...)的形式
 '''
 def exp_decay_kernel(t, tau=15.0, tau_s=15.0 / 4):
     t_ = F.relu(t)
