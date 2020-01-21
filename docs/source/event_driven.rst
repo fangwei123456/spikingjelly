@@ -4,6 +4,14 @@ event\_driven package
 Submodules
 ----------
 
+event\_driven.gaussian\_tuning\_curve module
+--------------------------------------------
+
+.. automodule:: event_driven.gaussian_tuning_curve
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 event\_driven.postsynaptic\_potential\_kernel\_function module
 --------------------------------------------------------------
 
