@@ -53,7 +53,7 @@ class Tempotron(nn.Module):
     def forward(self, t_spike):
         '''
         :param t_spike: 脉冲发放时刻
-        :return:
+        :return: out_num个神经元在仿真时长内的最大电压
         '''
 
 
