@@ -146,6 +146,7 @@ class LatencyEncoder(BaseEncoder):
         示例代码
 
         .. code-block:: python
+
             x = torch.rand(size=[3, 2])
             max_spike_time = 20
             le = encoding.LatencyEncoder(max_spike_time)
@@ -223,6 +224,7 @@ class PoissonEncoder(BaseEncoder):
         示例代码
 
         .. code-block:: python
+
             pe = encoding.PoissonEncoder()
             x = torch.rand(size=[8])
             print(x)
@@ -268,6 +270,7 @@ class GaussianTuningCurveEncoder(BaseEncoder):
         示例代码
 
         .. code-block:: python
+
             x = torch.rand(size=[3, 2])
             tuning_curve_num = 10
             max_spike_time = 20
