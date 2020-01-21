@@ -84,9 +84,6 @@ class Tempotron(nn.Module):
 
         return max_membrane_voltage
 
-if __name__ == "__main__":
-    exit(0)
-
 
 
 
