@@ -139,7 +139,7 @@ class LatencyEncoder(BaseEncoder):
         这导致此编码器很容易发生溢出，因为
 
         .. math::
-            alpha = math.exp(t_{max} - 1) - 1
+            alpha = exp(t_{max} - 1) - 1
 
         当 :math:`t_{max}` 较大时 :math:`alpha` 极大
 
