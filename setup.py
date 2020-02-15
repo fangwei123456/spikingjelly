@@ -1,11 +1,11 @@
 import setuptools
 
-with open("../README.md", "r", encoding="utf-8") as fh:
+with open("./README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
     name="SpikingFlow",
-    version="0.1",
+    version="0.2.2",
     author="PKU MLG",
     author_email="fangwei123456@pku.edu.cn",
     description="A Spiking Neural Networks simulator built on PyTorch.",
