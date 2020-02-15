@@ -9,12 +9,15 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 
    modules
 
-索引
+目录
 ==================
+* :doc:`快速上手教程 <./quickstart>`
 
 * :ref:`genindex`
 * :ref:`modindex`
 * :ref:`search`
+
+
 
 项目信息
 =======================================
