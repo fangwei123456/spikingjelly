@@ -4,6 +4,8 @@
 安装SpikingFlow
 ---------------
 
+注意，SpikingFlow是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingFlow
+
 从pip安装
 
 .. code-block:: bash
