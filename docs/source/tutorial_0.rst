@@ -91,7 +91,7 @@ LIF神经元仿真
 .. math::
     \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
 
-其中 :math:`tau_{m}` 是细胞膜的时间常数， :math:`V(t)` 是膜电位， :math:`V_{reset}` 是静息电压， :math:`R_{m}` 是膜电\
+其中 :math:`\tau_{m}` 是细胞膜的时间常数， :math:`V(t)` 是膜电位， :math:`V_{reset}` 是静息电压， :math:`R_{m}` 是膜电\
 阻， :math:`I(t)` 是输入电流
 
 SpikingFlow是时间驱动（time-driven）的框架，即将微分方程视为差分方程，通过逐步仿真来进行计算。例如LIF神经元，\
