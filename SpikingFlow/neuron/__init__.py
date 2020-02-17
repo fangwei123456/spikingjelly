@@ -107,6 +107,9 @@ class IFNode(BaseNode):
 
         IF神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减
 
+        .. math::
+            \frac{\mathrm{d}V(t)}{\mathrm{d}t} = R_{m}I(t)
+
         电压一旦达到阈值v_threshold则下一个时刻放出脉冲，同时电压归位到重置电压v_reset
 
         测试代码
@@ -161,6 +164,9 @@ class LIFNode(BaseNode):
         :param device: 数据所在的设备
 
         LIF神经元模型，可以看作是带漏电的积分器
+
+        .. math::
+            \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
 
         电压在不为v_reset时，会指数衰减
 
