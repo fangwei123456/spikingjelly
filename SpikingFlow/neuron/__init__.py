@@ -135,16 +135,17 @@ class IFNode(BaseNode):
         '''
         out_spike = self.next_out_spike
 
+        # 将上一个dt内过阈值的神经元重置
+        if isinstance(self.v_reset, torch.Tensor):
+            self.v[out_spike] = self.v_reset[out_spike]
+        else:
+            self.v[out_spike] = self.v_reset
         self.v += self.r * i
         self.next_out_spike = (self.v >= self.v_threshold)
         self.v[self.next_out_spike] = self.v_threshold
 
         self.v[self.v < self.v_reset] = self.v_reset
 
-        if isinstance(self.v_reset, torch.Tensor):
-            self.v[out_spike] = self.v_reset[out_spike]
-        else:
-            self.v[out_spike] = self.v_reset
         return out_spike
 
 
@@ -205,16 +206,17 @@ class LIFNode(BaseNode):
         '''
         out_spike = self.next_out_spike
 
+        # 将上一个dt内过阈值的神经元重置
+        if isinstance(self.v_reset, torch.Tensor):
+            self.v[out_spike] = self.v_reset[out_spike]
+        else:
+            self.v[out_spike] = self.v_reset
+
         v_decay = -(self.v - self.v_reset)
         self.v += (self.r * i + v_decay) / self.tau
         self.next_out_spike = (self.v >= self.v_threshold)
         self.v[self.next_out_spike] = self.v_threshold
         self.v[self.v < self.v_reset] = self.v_reset
-
-        if isinstance(self.v_reset, torch.Tensor):
-            self.v[out_spike] = self.v_reset[out_spike]
-        else:
-            self.v[out_spike] = self.v_reset
 
         return out_spike
 

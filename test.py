@@ -11,13 +11,13 @@ v_list = []
 # 新建一个空list，保存神经元的输出脉冲
 spike_list = []
 
-T = 1000
-# 运行1000次
+T = 200
+# 运行200次
 for t in range(T):
-    # 前500次，输入电流都是0.12
-    if t < 500:
+    # 前150次，输入电流都是0.12
+    if t < 150:
         spike_list.append(lif_node(0.12).float().item())
-    # 后500次，不输入，也就是输入0
+    # 后50次，不输入，也就是输入0
     else:
         spike_list.append(lif_node(0).float().item())
 
@@ -38,3 +38,7 @@ pyplot.xlabel('t')
 pyplot.ylabel('spike')
 pyplot.legend()
 pyplot.show()
+
+print('t', 'v', 'spike')
+for t in range(T):
+    print(t, v_list[t], spike_list[t])
