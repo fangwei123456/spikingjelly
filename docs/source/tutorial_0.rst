@@ -23,13 +23,13 @@ LIF神经元仿真
     # 新建一个空list，保存神经元的输出脉冲
     spike_list = []
 
-    T = 1000
-    # 运行1000次
+    T = 200
+    # 运行200次
     for t in range(T):
-        # 前500次，输入电流都是0.12
-        if t < 500:
-            spike_list.append(lif_node(0.12).float().item())
-        # 后500次，不输入，也就是输入0
+        # 前150次，输入电流都是0.1
+        if t < 150:
+            spike_list.append(lif_node(0.1).float().item())
+        # 后50次，不输入，也就是输入0
         else:
             spike_list.append(lif_node(0).float().item())
 
@@ -51,6 +51,10 @@ LIF神经元仿真
     pyplot.legend()
     pyplot.show()
 
+    print('t', 'v', 'spike')
+    for t in range(T):
+        print(t, v_list[t], spike_list[t])
+
 运行后得到的电压和脉冲如下
 
 .. image:: ./_static/tutorials/1.png
@@ -68,8 +72,8 @@ LIF神经元仿真
 
     ...
     for t in range(T):
-        # 前500次，输入电流都是0.12
-        if t < 500:
+        # 前150次，输入电流都是0.12
+        if t < 150:
             spike_list.append(lif_node(0.12).float().item())
     ...
 
@@ -77,7 +81,7 @@ LIF神经元仿真
 
 .. image:: ./_static/tutorials/2.png
 
-可以发现，LIF神经元已经开始大量发放脉冲了
+可以发现，LIF神经元已经开始发放脉冲了
 
 定义新的神经元
 -------------
@@ -89,3 +93,37 @@ LIF神经元仿真
 
 其中 :math:`tau_{m}` 是细胞膜的时间常数， :math:`V(t)` 是膜电位， :math:`V_{reset}` 是静息电压， :math:`R_{m}` 是膜电\
 阻， :math:`I(t)` 是输入电流
+
+SpikingFlow是时间驱动（time-driven）的框架，即将微分方程视为差分方程，通过逐步仿真来进行计算。例如LIF神经元，\
+代码位于SpikingFlow.neuron.LIFNode，参考它的实现：
+
+.. code-block:: python
+
+    def forward(self, i):
+        '''
+        :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
+        :return: out_spike: shape与self.shape相同，输出脉冲
+        '''
+        out_spike = self.next_out_spike
+
+        # 将上一个dt内过阈值的神经元重置
+        if isinstance(self.v_reset, torch.Tensor):
+            self.v[out_spike] = self.v_reset[out_spike]
+        else:
+            self.v[out_spike] = self.v_reset
+
+        v_decay = -(self.v - self.v_reset)
+        self.v += (self.r * i + v_decay) / self.tau
+        self.next_out_spike = (self.v >= self.v_threshold)
+        self.v[self.next_out_spike] = self.v_threshold
+        self.v[self.v < self.v_reset] = self.v_reset
+
+        return out_spike
+
+从代码中可以发现，t-dt时刻电压没有达到阈值，t时刻电压达到了阈值，则到t+dt时刻才会放出脉冲。这是为了方便查看波形图，如果不这样\
+设计，若t-dt时刻电压为0.1，v_threshold=1.0，v_reset=0.0, t时刻增加了0.9，直接在t时刻发放脉冲，则从波形图上看，电压从0.1直接\
+跳变到了0.0，不利于进行数据分析
+
+此外，“脉冲”被定义为“torch.bool”类型的变量。SNN中的神经元，输出的应该是脉冲而不是电压之类的其他值
+
+如果想自行实现其他类型的神经元，只需要继承SpikingFlow.neuron.BaseNode，并实现__init__()和forward()函数即可
