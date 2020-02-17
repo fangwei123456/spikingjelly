@@ -2,6 +2,6 @@ SpikingFlow
 ===========
 
 .. toctree::
-   :maxdepth: 3
+   :maxdepth: 4
 
    SpikingFlow
