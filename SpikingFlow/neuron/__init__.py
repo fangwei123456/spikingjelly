@@ -35,7 +35,6 @@ class BaseNode(nn.Module):
         self.shape = shape
         self.device = device
 
-
         assert isinstance(r, float) or isinstance(r, torch.Tensor)
 
         if isinstance(r, torch.Tensor):
@@ -43,7 +42,6 @@ class BaseNode(nn.Module):
             self.r = r.to(device)
         else:
             self.r = r
-
 
         assert isinstance(v_threshold, float) or isinstance(v_threshold, torch.Tensor)
 
@@ -71,7 +69,8 @@ class BaseNode(nn.Module):
         子类可以重写这个函数，实现对新增成员变量的打印
         '''
 
-        return 'shape ' + str(self.shape) + '\nr ' + str(self.r) + '\nv_threshold ' + str(self.v_threshold) + '\nv_reset ' + str(self.v_reset)
+        return 'shape ' + str(self.shape) + '\nr ' + str(self.r) + '\nv_threshold ' + str(
+            self.v_threshold) + '\nv_reset ' + str(self.v_reset)
 
     def forward(self, i):
         '''
@@ -108,7 +107,7 @@ class IFNode(BaseNode):
         IF神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减
 
         .. math::
-            \frac{\mathrm{d}V(t)}{\mathrm{d}t} = R_{m}I(t)
+            \frac{\\mathrm{d}V(t)}{\\mathrm{d} t} = R_{m}I(t)
 
         电压一旦达到阈值v_threshold则下一个时刻放出脉冲，同时电压归位到重置电压v_reset
 
@@ -128,6 +127,7 @@ class IFNode(BaseNode):
         '''
         super().__init__(shape, r, v_threshold, v_reset, device)
         self.next_out_spike = torch.zeros(size=shape, dtype=torch.bool, device=device)
+
     def forward(self, i):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
@@ -148,7 +148,6 @@ class IFNode(BaseNode):
         return out_spike
 
 
-
 class LIFNode(BaseNode):
     def __init__(self, shape, r, v_threshold, v_reset=0.0, tau=1.0, device='cpu'):
         '''
@@ -166,7 +165,7 @@ class LIFNode(BaseNode):
         LIF神经元模型，可以看作是带漏电的积分器
 
         .. math::
-            \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
+            \\tau_{m} \frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
 
         电压在不为v_reset时，会指数衰减
 
@@ -199,7 +198,6 @@ class LIFNode(BaseNode):
         self.tau = tau
         self.next_out_spike = torch.zeros(size=shape, dtype=torch.bool, device=device)
 
-
     def forward(self, i):
         '''
         :param i: 当前时刻的输入电流，可以是一个float，也可以是tensor
@@ -213,7 +211,6 @@ class LIFNode(BaseNode):
         self.v[self.next_out_spike] = self.v_threshold
         self.v[self.v < self.v_reset] = self.v_reset
 
-
         if isinstance(self.v_reset, torch.Tensor):
             self.v[out_spike] = self.v_reset[out_spike]
         else:
@@ -226,6 +223,3 @@ class LIFNode(BaseNode):
         :return: None
         '''
         return super().__str__() + '\ntau ' + str(self.tau)
-
-
-
