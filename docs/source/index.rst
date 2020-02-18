@@ -8,6 +8,8 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 
 注意，SpikingFlow是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingFlow
 
+推荐从GitHub下载源代码，因为pip上的版本通常更新慢，bug可能比较多
+
 从pip安装
 
 .. code-block:: bash
@@ -24,7 +26,8 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 -------------------------
 
 * :doc:`神经元 <./tutorial_0>`
-
+* :doc:`编码器 <./tutorial_1>`
+* :doc:`仿真器 <./tutorial_2>`
 
 模块文档
 -------------------------
