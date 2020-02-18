@@ -239,7 +239,7 @@ class PoissonEncoder(BaseEncoder):
         将输入数据x编码为脉冲，脉冲发放的概率即为对应位置元素的值
         '''
         out_spike = torch.rand_like(x).le(x)
-        # torch.rand_like(x)生成与x相同shape的介于[0, 1]之间的随机数， 这个随机数小于等于x中对应位置的元素，则发放脉冲
+        # torch.rand_like(x)生成与x相同shape的介于[0, 1)之间的随机数， 这个随机数小于等于x中对应位置的元素，则发放脉冲
         return out_spike
 
 
