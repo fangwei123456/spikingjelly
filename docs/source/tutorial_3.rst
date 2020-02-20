@@ -29,14 +29,14 @@ SpikingFlow中，神经元的输出都是torch.bool类型的脉冲，而输入�
 .. code-block:: python
 
         def forward(self, in_spike):
-        '''
-        :param in_spike: 输入脉冲
-        :return: 输出电流
-        '''
-        in_spike_float = in_spike.float()
-        i_decay = -self.i / self.tau
-        self.i += i_decay * (1 - in_spike_float) + self.amplitude * in_spike_float
-        return self.i
+            '''
+            :param in_spike: 输入脉冲
+            :return: 输出电流
+            '''
+            in_spike_float = in_spike.float()
+            i_decay = -self.i / self.tau
+            self.i += i_decay * (1 - in_spike_float) + self.amplitude * in_spike_float
+            return self.i
 
 ExpDecayCurrent可以看作是一个能够瞬间充满电的电容器，有脉冲作为输入时，则直接充满电；无输入时则自行放电。这种特性，使得\
 ExpDecayCurrent与SpikeCurrent相比，具有了“记忆”，因而它需要额外定义一个重置状态的函数：
@@ -44,11 +44,11 @@ ExpDecayCurrent与SpikeCurrent相比，具有了“记忆”，因而它需要�
 .. code-block:: python
 
         def reset(self):
-        '''
-        :return: None
-        重置所有状态变量为初始值，对于ExpDecayCurrent而言，直接将电流设置为0即可
-        '''
-        self.i = 0
+            '''
+            :return: None
+            重置所有状态变量为初始值，对于ExpDecayCurrent而言，直接将电流设置为0即可
+            '''
+            self.i = 0
 
 定义新的脉冲电流转换器
 ---------------------
