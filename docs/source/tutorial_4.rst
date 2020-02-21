@@ -47,16 +47,16 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \frac{\mathrm{d} y_{i}}{\mathrm{d} t} = - \frac{y_{i}}{\tau_{y}} + \sum_{t_{i} ^ {f}} \delta (t - t_{i} ^ {f})
 
 其中 :math:`t_{j} ^ {f}, t_{i} ^ {f}` 是pre神经元j后post神经元i的脉冲发放时刻， :math:`\delta(t)` 是脉冲函数，\
-只在 :math:`t=0`处为1，其他时刻均为0
+只在 :math:`t=0` 处为1，其他时刻均为0
 
-当pre神经元j的脉冲 :math:`t_{j} ^ {f}`到达时，突触权重减少；当post神经元i的脉冲 :math:`t_{i} ^ {f}`到达时，突触权重增加：
+当pre神经元j的脉冲 :math:`t_{j} ^ {f}` 到达时，突触权重减少；当post神经元i的脉冲 :math:`t_{i} ^ {f}` 到达时，突触权重增加：
 
 .. math::
 
     \Delta w_{ij}^{-}(t_{j} ^ {f}) = - F_{-}(w_ij) y_i(t_{j} ^ {f})
     \Delta w_{ij}^{+}(t_{i} ^ {f}) = - F_{+}(w_ij) x_j(t_{i} ^ {f})
 
-其中 :math:`F_{+}(w_ij), F_{-}(w_ij)`是突触权重 :math:`w_ij`的函数，控制权重的增量
+其中 :math:`F_{+}(w_ij), F_{-}(w_ij)` 是突触权重 :math:`w_ij` 的函数，控制权重的增量
 
 
 
