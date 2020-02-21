@@ -39,6 +39,8 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 
    modules
 
+   tutorial
+
 文档索引
 -------------------------
 
