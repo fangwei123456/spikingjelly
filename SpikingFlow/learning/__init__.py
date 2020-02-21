@@ -1,10 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import neuron
-import encoding
-import connection
-import simulating
+import SpikingFlow.connection as connection
+
 
 class STDPModule(nn.Module):
 
@@ -96,15 +94,16 @@ class STDPModule(nn.Module):
         self.f_w = f_w
 
     def update_param(self, pre=True):
-        if isinstance(self.module_list[2], connection.Linear):
+
+        if type(self.module_list[2]) == connection.Linear:
             dw = 0
             if pre:
-                if isinstance(self.trace_post, torch.Tensor):
+                if type(self.trace_post) == torch.Tensor:
                     dw = - (self.learning_rate * self.f_w(self.module_list[2].w).t() *
                           self.trace_post.view(-1, self.module_list[2].w.shape[0]).mean(0)).t()
 
             else:
-                if isinstance(self.trace_pre, torch.Tensor):
+                if type(self.trace_post) == torch.Tensor:
                     dw = self.learning_rate * self.f_w(self.module_list[2].w) \
                                              * self.trace_pre.view(-1, self.module_list[2].w.shape[1]).mean(0)
 
