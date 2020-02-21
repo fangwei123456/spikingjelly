@@ -53,12 +53,12 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 .. math::
 
-    \Delta w_{ij}^{-}(t_{j} ^ {f}) = - F_{-}(w_ij) y_i(t_{j} ^ {f})
-    \Delta w_{ij}^{+}(t_{i} ^ {f}) = - F_{+}(w_ij) x_j(t_{i} ^ {f})
+    \Delta w_{ij}^{-}(t_{j} ^ {f}) = - F_{-}(w_{ij}) y_i(t_{j} ^ {f})
 
-其中 :math:`F_{+}(w_ij), F_{-}(w_ij)` 是突触权重 :math:`w_ij` 的函数，控制权重的增量
+    \Delta w_{ij}^{+}(t_{i} ^ {f}) = - F_{+}(w_{ij}) x_j(t_{i} ^ {f})
+
+其中 :math:`F_{+}(w_{ij}), F_{-}(w_{ij})` 是突触权重 :math:`w_{ij}` 的函数，控制权重的增量
 
 
 
-.. [#] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike\
-timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
+.. [#] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spiketiming[J]. Biological cybernetics, 2008, 98(6): 459-478.
