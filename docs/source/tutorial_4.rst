@@ -13,7 +13,7 @@ SNN一般为事件驱动模型（例如SpikeProp和Tempotron，在SpikingFlow.ev
 焦于生物可解释性的学习算法，例如STDP
 
 STDP(Spike Timing Dependent Plasticity)
-----
+--------------------------------------
 
 STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现的一种突触可塑性机制。实验发现，突触的连接强度受到突触连接\
 的前（pre）后（post）神经元脉冲活动的影响
@@ -142,7 +142,8 @@ neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习�
     pyplot.show()
 
 这段代码中，突触的输入是2个脉冲，而输出是1个脉冲，在前100步仿真中，pre_spike[0]和pre_spike[1]都每隔1个仿真步长发放1次脉冲，
-而在后100步仿真，pre_spike[0]停止发放，pre_spike[1]持续发放，如下图所示：
+而在后100步仿真，pre_spike[0]停止发放，pre_spike[1]持续发放，如下图所示（需要说明的是，脉冲是以pyplot柱状图的形式\
+画出，当柱状图的横轴，也就是时间太长时，而图像的宽度又不够大，一些“落单”的脉冲在图像上会无法画出，因为宽度小于一个像素点）：
 
 .. image:: ./_static/tutorials/5.png
 
@@ -157,6 +158,99 @@ neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习�
 
 .. image:: ./_static/tutorials/8.png
 
+更灵活的STDPUpdater
+------------------
 
+在SpikingFlow.learning.STDPModule中将脉冲电流转换器、突触、神经元这3个模块封装为1个，简化了使用，但封装也带来了灵活性的缺失。\
+SpikingFlow.learning.STDPUpdater则提供了一种更为灵活的使用方式，可以手动地设置突触和其对应的前后脉冲，即便“前后脉冲”并不\
+是真正的突触连接的前后神经元的脉冲，也可以被用来“远程更新”突触的权重
+
+示例代码如下，与STDPModule的示例类似：
+
+.. code-block:: python
+
+    import SpikingFlow.simulating as simulating
+    import SpikingFlow.learning as learning
+    import SpikingFlow.connection as connection
+    import SpikingFlow.connection.transform as tf
+    import SpikingFlow.neuron as neuron
+    import torch
+    from matplotlib import pyplot
+
+    # 定义权值函数f_w
+    def f_w(x: torch.Tensor):
+        x_abs = x.abs()
+        return x_abs / (x_abs.sum() + 1e-6)
+
+    # 新建一个仿真器
+    sim = simulating.Simulator()
+
+    # 放入脉冲电流转换器、突触、LIF神经元
+    sim.append(tf.SpikeCurrent(amplitude=0.5))
+    sim.append(connection.Linear(2, 1))
+    sim.append(neuron.LIFNode(shape=[1], r=10.0, v_threshold=1.0, tau=100.0))
+
+    # 新建一个STDPUpdater
+    updater = learning.STDPUpdater(tau_pre=50.0,
+                                   tau_post=100.0,
+                                   learning_rate=1e-1,
+                                   f_w=f_w)
+
+    # 新建list，保存pre脉冲、post脉冲、突触权重w_00, w_01
+    pre_spike_list0 = []
+    pre_spike_list1 = []
+    post_spike_list = []
+    w_list0 = []
+    w_list1 = []
+
+    T = 500
+    for t in range(T):
+        if t < 250:
+            if t % 2 == 0:
+                pre_spike = torch.ones(size=[2], dtype=torch.bool)
+            else:
+                pre_spike = torch.randint(low=0, high=2, size=[2]).bool()
+        else:
+            pre_spike = torch.zeros(size=[2], dtype=torch.bool)
+            if t % 2 == 0:
+                pre_spike[1] = True
+
+
+
+
+        pre_spike_list0.append(pre_spike[0].float().item())
+        pre_spike_list1.append(pre_spike[1].float().item())
+
+        post_spike = sim.step(pre_spike)
+
+        updater.update(sim.module_list[1], pre_spike, post_spike)
+
+        post_spike_list.append(post_spike.float().item())
+
+        w_list0.append(sim.module_list[1].w[:, 0].item())
+        w_list1.append(sim.module_list[1].w[:, 1].item())
+
+    pyplot.figure(figsize=(8, 16))
+    pyplot.subplot(4, 1, 1)
+    pyplot.bar(torch.arange(0, T).tolist(), pre_spike_list0, width=0.1, label='pre_spike[0]')
+    pyplot.legend()
+
+    pyplot.subplot(4, 1, 2)
+    pyplot.bar(torch.arange(0, T).tolist(), pre_spike_list1, width=0.1, label='pre_spike[1]')
+    pyplot.legend()
+
+    pyplot.subplot(4, 1, 3)
+    pyplot.bar(torch.arange(0, T).tolist(), post_spike_list, width=0.1, label='post_spike')
+    pyplot.legend()
+
+    pyplot.subplot(4, 1, 4)
+    pyplot.plot(w_list0, c='r', label='w[0]')
+    pyplot.plot(w_list1, c='g', label='w[1]')
+    pyplot.legend()
+    pyplot.show()
+
+运行结果如下：
+
+.. image:: ./_static/tutorials/9.png
 
 .. [#f1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spiketiming[J]. Biological cybernetics, 2008, 98(6): 459-478.
