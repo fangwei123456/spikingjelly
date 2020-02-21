@@ -37,7 +37,7 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 .. toctree::
    :maxdepth: 4
 
-    modules
+   modules
 
 文档索引
 -------------------------
