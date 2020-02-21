@@ -25,11 +25,11 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 快速上手教程
 -------------------------
 
-* :doc:`神经元 <./tutorial_0>`
-* :doc:`编码器 <./tutorial_1>`
-* :doc:`仿真器（编写中...） <./tutorial_2>`
-* :doc:`突触连接 <./tutorial_3>`
-* :doc:`学习规则 <./tutorial_4>`
+* :doc:`神经元 <./tutorial.0>`
+* :doc:`编码器 <./tutorial.1>`
+* :doc:`仿真器（编写中...） <./tutorial.2>`
+* :doc:`突触连接 <./tutorial.3>`
+* :doc:`学习规则 <./tutorial.4>`
 
 模块文档
 -------------------------
@@ -37,7 +37,8 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 .. toctree::
    :maxdepth: 3
 
-    SpikingFlow
+    module
+
     tutorial
 
 文档索引
