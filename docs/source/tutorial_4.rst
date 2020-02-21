@@ -28,6 +28,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 .. math::
     \begin{align}
+    x =
     \left\{ \begin{aligned}
     & V = V(t) + f(t)\\
     & S(t + 1) = g(V) = \Theta(V - V_{threshold}) \\
