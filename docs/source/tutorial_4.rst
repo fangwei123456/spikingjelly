@@ -36,6 +36,11 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \end{align}
 
 一般认为，突触连接权重的改变，是在脉冲发放的瞬间完成。不过，上图中的公式并不适合代码去实现，因为它需要分别记录前后神经元的脉冲\
-发放时间。使用 Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike\
-timing[J]. Biological cybernetics, 2008, 98(6): 459-478. 提供的迹的方式来实现STDP更为优雅
+发放时间。使用[Ref1]_提供的基于双脉冲的迹的方式来实现STDP更为优雅
 
+
+
+
+
+.. [Ref1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike\
+timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
