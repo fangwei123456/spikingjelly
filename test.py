@@ -6,63 +6,73 @@ import SpikingFlow.neuron as neuron
 import torch
 from matplotlib import pyplot
 
+# 定义权值函数f_w
+def f_w(x: torch.Tensor):
+    x_abs = x.abs()
+    return x_abs / (x_abs.sum() + 1e-6)
+
 # 新建一个仿真器
 sim = simulating.Simulator()
 
-# 添加各个模块。为了更明显的观察到脉冲，我们使用IF神经元，而且把膜电阻设置的很大
-# 突触的pre是2个输入，而post是1个输出，连接权重是shape=[1, 2]的tensor
-sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.5),
-                               connection.Linear(2, 1),
-                               neuron.IFNode(shape=[1], r=50.0, v_threshold=1.0),
-                               tau_pre=10.0,
-                               tau_post=10.0,
-                               learning_rate=1e-3
-                               ))
-# 新建list，分别保存pre的2个输入脉冲、post的1个输出脉冲，以及对应的连接权重
+# 放入脉冲电流转换器、突触、LIF神经元
+sim.append(tf.SpikeCurrent(amplitude=0.5))
+sim.append(connection.Linear(2, 1))
+sim.append(neuron.LIFNode(shape=[1], r=10.0, v_threshold=1.0, tau=100.0))
+
+# 新建一个STDPUpdater
+updater = learning.STDPUpdater(tau_pre=50.0,
+                               tau_post=100.0,
+                               learning_rate=1e-1,
+                               f_w=f_w)
+
+# 新建list，保存pre脉冲、post脉冲、突触权重w_00, w_01
 pre_spike_list0 = []
 pre_spike_list1 = []
 post_spike_list = []
 w_list0 = []
 w_list1 = []
-T = 200
 
+T = 500
 for t in range(T):
-    if t < 100:
-        # 前100步仿真，pre_spike[0]和pre_spike[1]都是发放一次1再发放一次0
+    if t < 250:
         if t % 2 == 0:
             pre_spike = torch.ones(size=[2], dtype=torch.bool)
         else:
-            pre_spike = torch.zeros(size=[2], dtype=torch.bool)
+            pre_spike = torch.randint(low=0, high=2, size=[2]).bool()
     else:
-        # 后100步仿真，pre_spike[0]一直为0，而pre_spike[1]一直为1
         pre_spike = torch.zeros(size=[2], dtype=torch.bool)
-        pre_spike[1] = True
+        if t % 2 == 0:
+            pre_spike[1] = True
 
-    post_spike = sim.step(pre_spike)
+
+
+
     pre_spike_list0.append(pre_spike[0].float().item())
     pre_spike_list1.append(pre_spike[1].float().item())
 
+    post_spike = sim.step(pre_spike)
+
+    updater.update(sim.module_list[1], pre_spike, post_spike)
+
     post_spike_list.append(post_spike.float().item())
 
-    w_list0.append(sim.module_list[-1].module_list[2].w[:, 0].item())
-    w_list1.append(sim.module_list[-1].module_list[2].w[:, 1].item())
+    w_list0.append(sim.module_list[1].w[:, 0].item())
+    w_list1.append(sim.module_list[1].w[:, 1].item())
 
-# 画出pre_spike[0]
+pyplot.figure(figsize=(8, 16))
+pyplot.subplot(4, 1, 1)
 pyplot.bar(torch.arange(0, T).tolist(), pre_spike_list0, width=0.1, label='pre_spike[0]')
 pyplot.legend()
-pyplot.show()
 
-# 画出pre_spike[1]
+pyplot.subplot(4, 1, 2)
 pyplot.bar(torch.arange(0, T).tolist(), pre_spike_list1, width=0.1, label='pre_spike[1]')
 pyplot.legend()
-pyplot.show()
 
-# 画出post_spike
+pyplot.subplot(4, 1, 3)
 pyplot.bar(torch.arange(0, T).tolist(), post_spike_list, width=0.1, label='post_spike')
 pyplot.legend()
-pyplot.show()
 
-# 画出2个输入与1个输出的连接权重w_0和w_1
+pyplot.subplot(4, 1, 4)
 pyplot.plot(w_list0, c='r', label='w[0]')
 pyplot.plot(w_list1, c='g', label='w[1]')
 pyplot.legend()
