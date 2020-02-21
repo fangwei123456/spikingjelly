@@ -253,4 +253,19 @@ SpikingFlow.learning.STDPUpdater则提供了一种更为灵活的使用方式，
 
 .. image:: ./_static/tutorials/9.png
 
+定义新的学习规则
+---------------
+定义新的学习规则，可以参考STDPModule和STDPUpdater的代码。需要注意的是，对于每一种突触类型，都应该实现一个对应的参数更新方式，\
+例如STDPUpdater的如下代码：
+
+.. code-block:: python
+
+    def update(self, connection_module, pre_spike, post_spike, inverse=False):
+    ...
+    if isinstance(connection_module, connection.Linear):
+        ...
+    ...
+
+上述代码是针对SpikingFlow.connection.Linear进行的特定实现。
+
 .. [#f1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spiketiming[J]. Biological cybernetics, 2008, 98(6): 459-478.
