@@ -36,7 +36,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \end{align}
 
 一般认为，突触连接权重的改变，是在脉冲发放的瞬间完成。不过，上图中的公式并不适合代码去实现，因为它需要分别记录前后神经元的脉冲\
-发放时间。使用 [#]_ 提供的基于双脉冲的迹的方式来实现STDP更为优雅
+发放时间。使用 [#f1]_ 提供的基于双脉冲的迹的方式来实现STDP更为优雅
 
 对于突触的pre神经元j后post神经元i，分别使用一个名为迹（trace）的变量 :math:`x_{j}, y_{i}`，迹由类似于LIF神经元的膜电位的微分\
 方程来描述：
@@ -59,6 +59,104 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 其中 :math:`F_{+}(w_{ij}), F_{-}(w_{ij})` 是突触权重 :math:`w_{ij}` 的函数，控制权重的增量
 
+[#f1]_ 中给出了这种方式的示意图：
+
+.. image:: ./_static/tutorials/4.png
+
+SpikingFlow.learning.STDPModule是使用迹的方式实现的一个STDP学习模块。STDPModule会将脉冲电流转换器tf_module、\
+突触connection_module、神经元neuron_module三者打包成一个模块，将输入到tf_module的脉冲，作为pre神经元的脉冲；\
+neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习规则，来更新connection_module的权重
+
+示例代码如下：
+
+.. code-block:: python
+
+    import SpikingFlow.simulating as simulating
+    import SpikingFlow.learning as learning
+    import SpikingFlow.connection as connection
+    import SpikingFlow.connection.transform as tf
+    import SpikingFlow.neuron as neuron
+    import torch
+    from matplotlib import pyplot
+
+    # 新建一个仿真器
+    sim = simulating.Simulator()
+
+    # 添加各个模块。为了更明显的观察到脉冲，我们使用IF神经元，而且把膜电阻设置的很大
+    # 突触的pre是2个输入，而post是1个输出，连接权重是shape=[1, 2]的tensor
+    sim.append(learning.STDPModule(tf.SpikeCurrent(amplitude=0.5),
+                                   connection.Linear(2, 1),
+                                   neuron.IFNode(shape=[1], r=50.0, v_threshold=1.0),
+                                   tau_pre=10.0,
+                                   tau_post=10.0,
+                                   learning_rate=1e-3
+                                   ))
+    # 新建list，分别保存pre的2个输入脉冲、post的1个输出脉冲，以及对应的连接权重
+    pre_spike_list0 = []
+    pre_spike_list1 = []
+    post_spike_list = []
+    w_list0 = []
+    w_list1 = []
+    T = 200
+
+    for t in range(T):
+        if t < 100:
+            # 前100步仿真，pre_spike[0]和pre_spike[1]都是发放一次1再发放一次0
+            if t % 2 == 0:
+                pre_spike = torch.ones(size=[2], dtype=torch.bool)
+            else:
+                pre_spike = torch.zeros(size=[2], dtype=torch.bool)
+        else:
+            # 后100步仿真，pre_spike[0]一直为0，而pre_spike[1]一直为1
+            pre_spike = torch.zeros(size=[2], dtype=torch.bool)
+            pre_spike[1] = True
+
+        post_spike = sim.step(pre_spike)
+        pre_spike_list0.append(pre_spike[0].float().item())
+        pre_spike_list1.append(pre_spike[1].float().item())
+
+        post_spike_list.append(post_spike.float().item())
+
+        w_list0.append(sim.module_list[-1].module_list[2].w[:, 0].item())
+        w_list1.append(sim.module_list[-1].module_list[2].w[:, 1].item())
+
+    # 画出pre_spike[0]
+    pyplot.bar(torch.arange(0, T).tolist(), pre_spike_list0, width=0.1, label='pre_spike[0]')
+    pyplot.legend()
+    pyplot.show()
+
+    # 画出pre_spike[1]
+    pyplot.bar(torch.arange(0, T).tolist(), pre_spike_list1, width=0.1, label='pre_spike[1]')
+    pyplot.legend()
+    pyplot.show()
+
+    # 画出post_spike
+    pyplot.bar(torch.arange(0, T).tolist(), post_spike_list, width=0.1, label='post_spike')
+    pyplot.legend()
+    pyplot.show()
+
+    # 画出2个输入与1个输出的连接权重w_0和w_1
+    pyplot.plot(w_list0, c='r', label='w[0]')
+    pyplot.plot(w_list1, c='g', label='w[1]')
+    pyplot.legend()
+    pyplot.show()
+
+这段代码中，突触的输入是2个脉冲，而输出是1个脉冲，在前100步仿真中，pre_spike[0]和pre_spike[1]都每隔1个仿真步长发放1次脉冲，
+而在后100步仿真，pre_spike[0]停止发放，pre_spike[1]持续发放，如下图所示：
+
+.. image:: ./_static/tutorials/5.png
+
+.. image:: ./_static/tutorials/6.png
+
+引发的post神经元的脉冲如下图：
+
+.. image:: ./_static/tutorials/7.png
+
+在前100步， :math:`w_{00}, w_{01}` 均增大；而后100步，由于我们人为设定pre_spike[0]停止发放，pre_spike[1]持续\
+发放，故:math:`w_{00}` 减小，:math:`w_{01}` 增大：
+
+.. image:: ./_static/tutorials/8.png
 
 
-.. [#] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spiketiming[J]. Biological cybernetics, 2008, 98(6): 459-478.
+
+.. [#f1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spiketiming[J]. Biological cybernetics, 2008, 98(6): 459-478.
