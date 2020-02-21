@@ -36,7 +36,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \end{align}
 
 一般认为，突触连接权重的改变，是在脉冲发放的瞬间完成。不过，上图中的公式并不适合代码去实现，因为它需要分别记录前后神经元的脉冲\
-发放时间。使用 [Ref1]_ 提供的基于双脉冲的迹的方式来实现STDP更为优雅
+发放时间。使用 [1]_ 提供的基于双脉冲的迹的方式来实现STDP更为优雅
 
 对于突触的pre神经元j后post神经元i，分别使用一个名为迹（trace）的变量 :math:`x_{j}, y{i}`，迹由类似于LIF神经元的膜电位的微分\
 方程来描述：
@@ -44,10 +44,12 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 .. math::
     \frac{\mathrm{d} x_{j}}{\mathrm{d} t} = - \frac{x_{j}}{\tau_{x}} + \sum_{t_{j} ^ {f}} \delta (t - t_{j} ^ {f})
 
+    \frac{\mathrm{d} y_{i}}{\mathrm{d} t} = - \frac{y_{i}}{\tau_{x}} + \sum_{t_{i} ^ {f}} \delta (t - t_{i} ^ {f})
+
+其中 :math:`t_{j} ^ {f}, t_{i} ^ {f}`是pre神经元j后post神经元i的脉冲发放时刻， :math:`\delta(t)` 是脉冲函数， 只在\
+ :math:`t=0`处为1，其他时刻均为0
 
 
 
-
-
-.. [Ref1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike\
+.. [1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spike\
 timing[J]. Biological cybernetics, 2008, 98(6): 459-478.
