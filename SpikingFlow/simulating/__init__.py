@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Simulator:
-    def __init__(self):
+    def __init__(self, fast=True):
         '''
+        :param fast: 是否快速仿真（仿真的第一时刻就给出输出）
+
         仿真器，内含多个module组成的list
 
         当前时刻启动仿真前，数据和模型如下
@@ -61,6 +63,7 @@ class Simulator:
         self.module_list = []  # 保存各个module
         self.pipeline = []  # 保存各个module在当前时刻的输出
         self.simulated_steps = 0  # 已经运行仿真的步数
+        self.fast = fast # 是否快速仿真
         self.pipeline.append(None)
 
 
@@ -89,9 +92,9 @@ class Simulator:
         '''
         self.pipeline[0] = input_data
 
-        # 首次运行时跑满pipeline
+        # 快速仿真开启时，首次运行时跑满pipeline
         # x[0] -> module[0] -> x[1] -> module[1] -> ... -> x[n-1] -> module[n-1] -> x[n]
-        if self.simulated_steps == 0:
+        if self.simulated_steps == 0 and self.fast:
             for i in range(self.module_list.__len__()):
                 # i = 0, 1, ..., n-1
                 for j in range(i + 1, 0, -1):
@@ -104,7 +107,10 @@ class Simulator:
                 #  x[n-1] = module[n-2](x[n-2])
                 #  ...
                 #  x[1] = module[0](x[0])
-                self.pipeline[i] = self.module_list[i - 1](self.pipeline[i - 1])
+                if self.pipeline[i - 1] is not None:
+                    self.pipeline[i] = self.module_list[i - 1](self.pipeline[i - 1])
+                else:
+                    self.pipeline[i] = None
 
         self.simulated_steps += 1
         return self.pipeline[-1]
