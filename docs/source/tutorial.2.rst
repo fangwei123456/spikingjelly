@@ -8,7 +8,7 @@
 所谓“仿真器”，即为将多个模块囊括其中，并统一运行的工具。实现STDP等学习功能，需要在仿真器层面进行操作。因此，如果想要实现其他\
 类型的学习功能，需要对仿真器的实现过程有一定的了解。
 
-采取时间驱动（time-driven）的模型均是由若干个module顺序连接而成，前一个module的输出作为后一个的输入。设输入为  :math:`x_0`, 第i个module :math:`M_i` 的输出为 :math:`x_i` ，仿真的数据流可以简单地描述为 
+采取时间驱动（time-driven）的模型均是由若干个module顺序连接而成，前一个module的输出作为后一个的输入。设输入为  :math:`x_0`, 第i个module :math:`M_i` 的输出为 :math:`x_{i+1}` ，仿真的数据流可以简单地描述为 
 
 .. math::
     x_0 \stackrel{M_0}{\longrightarrow} x_1 \stackrel{M_1}{\longrightarrow} \dots \stackrel{M_{n-1}}{\longrightarrow} x_n
