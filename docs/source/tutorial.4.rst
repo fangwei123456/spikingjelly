@@ -30,8 +30,8 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \begin{align}
     \Delta w=
     \left\{ \begin{aligned}
-    & A e^{\frac{-(t_{pre} - t_{post})}{\tau}}, t_{pre} - t_{post} \leq 0, A > 0\\
-    & B e^{\frac{-(t_{pre} - t_{post})}{\tau}}, t_{pre} - t_{post} \geq 0, B < 0
+    & A e^{\frac{t_{pre} - t_{post}}{\tau}}, t_{pre} - t_{post} \leq 0, A > 0\\
+    & B e^{-\frac{t_{pre} - t_{post}}{\tau}}, t_{pre} - t_{post} \geq 0, B < 0
     \end{aligned} \right.
     \end{align}
 
