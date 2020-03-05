@@ -27,7 +27,7 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 
 * :doc:`神经元 <./tutorial.0>`
 * :doc:`编码器 <./tutorial.1>`
-* :doc:`仿真器（编写中...） <./tutorial.2>`
+* :doc:`仿真器 <./tutorial.2>`
 * :doc:`突触连接 <./tutorial.3>`
 * :doc:`学习规则 <./tutorial.4>`
 
