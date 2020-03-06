@@ -12,17 +12,41 @@ import readline
 class Net(nn.Module):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
-        # 网络结构，简单的双层全连接网络，每一层之后都是LIF神经元
+        # 网络结构，卷积-卷积-最大池化堆叠，最后接一个全连接层
+        self.conv = nn.Sequential(
+            nn.Conv2d(3, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.MaxPool2d(2, 2),
+            nn.BatchNorm2d(256),
+            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 16 * 16
+
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.MaxPool2d(2, 2),
+            nn.BatchNorm2d(256),
+            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
+
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.MaxPool2d(2, 2),
+            nn.BatchNorm2d(256),
+            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
+
+        )
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(28 * 28, 14 * 14, bias=False),
-            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-            nn.Linear(14 * 14, 10, bias=False),
+            nn.Linear(256 * 4 * 4, 10, bias=False),
             softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
-        )
+                                )
 
     def forward(self, x):
-        return self.fc(x)
+        return self.fc(self.conv(x))
 
     def reset_(self):
         for item in self.modules():
@@ -30,7 +54,7 @@ class Net(nn.Module):
                 item.reset()
 def main():
     device = input('输入运行的设备，例如“CPU”或“cuda:0”  ')
-    dataset_dir = input('输入保存MNIST数据集的位置，例如“./”  ')
+    dataset_dir = input('输入保存CIFAR10数据集的位置，例如“./”  ')
     batch_size = int(input('输入batch_size，例如“64”  '))
     learning_rate = float(input('输入学习率，例如“1e-3”  '))
     T = int(input('输入仿真时长，例如“50”  '))
@@ -42,7 +66,7 @@ def main():
 
     # 初始化数据加载器
     train_data_loader = torch.utils.data.DataLoader(
-        dataset=torchvision.datasets.MNIST(
+        dataset=torchvision.datasets.CIFAR10(
             root=dataset_dir,
             train=True,
             transform=torchvision.transforms.ToTensor(),
@@ -51,7 +75,7 @@ def main():
         shuffle=True,
         drop_last=True)
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=torchvision.datasets.MNIST(
+        dataset=torchvision.datasets.CIFAR10(
             root=dataset_dir,
             train=False,
             transform=torchvision.transforms.ToTensor(),
@@ -71,7 +95,7 @@ def main():
 
         for img, label in train_data_loader:
             optimizer.zero_grad()
-            # 将MNIST图像编码为脉冲数据
+            # 将图像编码为脉冲数据
             in_spikes = encoder(img.to(device)).float()
 
             # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor

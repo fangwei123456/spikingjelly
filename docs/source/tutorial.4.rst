@@ -1,5 +1,6 @@
-学习规则
+学习规则 SpikingFlow.learning
 =======================================
+本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 本节教程主要关注SpikingFlow.learning，包括如何使用已有学习规则、如何定义新的学习规则
 
