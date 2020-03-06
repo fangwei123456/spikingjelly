@@ -1,5 +1,6 @@
-编码器
+编码器 SpikingFlow.encoding
 =======================================
+本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 本节教程主要关注SpikingFlow.encoding，包括如何使用已有编码器、如何定义新的编码器
 
