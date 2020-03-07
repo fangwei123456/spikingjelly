@@ -2,7 +2,7 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注SpikingFlow.learning，包括如何使用已有学习规则、如何定义新的学习规则。
+本节教程主要关注 ``SpikingFlow.learning``，包括如何使用已有学习规则、如何定义新的学习规则。
 
 学习规则是什么
 -------------
@@ -10,8 +10,8 @@
 
 在SNN中，发放脉冲这一过程通常使用阶跃函数去描述，这是一个不可微分的过程；SNN比较注重生物可解释性，生物神经系统中似乎并没有使\
 用反向传播这种训练成千上万次才能达到较好结果的“低效率”方法。在SNN中如何使用反向传播算法也是一个研究热点，使用反向传播算法的\
-SNN一般为事件驱动模型（例如SpikeProp和Tempotron，在SpikingFlow.event_driven中可以找到），而SpikingFlow.learning中更多的聚\
-焦于生物可解释性的学习算法，例如STDP。
+SNN一般为事件驱动模型（例如SpikeProp和Tempotron，在 ``SpikingFlow.event_driven`` 中可以找到），\
+而 ``SpikingFlow.learning`` 中更多的聚焦于生物可解释性的学习算法，例如STDP。
 
 STDP(Spike Timing Dependent Plasticity)
 --------------------------------------
@@ -64,9 +64,9 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 .. image:: ./_static/tutorials/4.png
 
-SpikingFlow.learning.STDPModule是使用迹的方式实现的一个STDP学习模块。STDPModule会将脉冲电流转换器tf_module、\
-突触connection_module、神经元neuron_module三者打包成一个模块，将输入到tf_module的脉冲，作为pre神经元的脉冲；\
-neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习规则，来更新connection_module的权重。
+``SpikingFlow.learning.STDPModule`` 是使用迹的方式实现的一个STDP学习模块。``STDPModule`` 会将脉冲电流转换器 ``tf_module``、\
+突触 ``connection_module``、神经元 ``neuron_module`` 三者打包成一个模块，将输入到 ``tf_module`` 的脉冲，作为pre神经元的脉冲；\
+``neuron_module`` 输出的脉冲，作为post神经元的脉冲，利用STDP学习规则，来更新 ``connection_module`` 的权重。
 
 示例代码如下：
 
@@ -142,9 +142,10 @@ neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习�
     pyplot.legend()
     pyplot.show()
 
-这段代码中，突触的输入是2个脉冲，而输出是1个脉冲，在前100步仿真中，pre_spike[0]和pre_spike[1]都每隔1个仿真步长发放1次脉冲，
-而在后100步仿真，pre_spike[0]停止发放，pre_spike[1]持续发放，如下图所示（需要说明的是，脉冲是以pyplot柱状图的形式\
-画出，当柱状图的横轴，也就是时间太长时，而图像的宽度又不够大，一些“落单”的脉冲在图像上会无法画出，因为宽度小于一个像素点）：
+这段代码中，突触的输入是2个脉冲，而输出是1个脉冲，在前100步仿真中，``pre_spike[0]`` 和 ``pre_spike[1]`` 都每隔1个仿真步长\
+发放1次脉冲，而在后100步仿真，``pre_spike[0]`` 停止发放，``pre_spike[1]`` 持续发放，如下图所示（需要说明的是，脉冲是\
+以pyplot柱状图的形式画出，当柱状图的横轴，也就是时间太长时，而图像的宽度又不够大，一些“落单”的脉冲在图像上会无法画出，因为宽\
+度小于一个像素点）：
 
 .. image:: ./_static/tutorials/5.png
 
@@ -154,7 +155,7 @@ neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习�
 
 .. image:: ./_static/tutorials/7.png
 
-在前100步， :math:`w_{00}, w_{01}` 均增大；而后100步，由于我们人为设定pre_spike[0]停止发放，pre_spike[1]持续\
+在前100步， :math:`w_{00}, w_{01}` 均增大；而后100步，由于我们人为设定 ``pre_spike[0]`` 停止发放，``pre_spike[1]`` 持续\
 发放，故 :math:`w_{00}` 减小，:math:`w_{01}` 增大：
 
 .. image:: ./_static/tutorials/8.png
@@ -162,11 +163,11 @@ neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习�
 更灵活的STDPUpdater
 ------------------
 
-在SpikingFlow.learning.STDPModule中将脉冲电流转换器、突触、神经元这3个模块封装为1个，简化了使用，但封装也带来了灵活性的缺失。\
-SpikingFlow.learning.STDPUpdater则提供了一种更为灵活的使用方式，可以手动地设置突触和其对应的前后脉冲，即便“前后脉冲”并不\
-是真正的突触连接的前后神经元的脉冲，也可以被用来“远程更新”突触的权重。
+在 ``SpikingFlow.learning.STDPModule`` 中将脉冲电流转换器、突触、神经元这3个模块封装为1个，简化了使用，但封装也带来了灵\
+活性的缺失。``SpikingFlow.learning.STDPUpdater`` 则提供了一种更为灵活的使用方式，可以手动地设置突触和其对应的前后脉冲，即\
+便“前后脉冲”并不是真正的突触连接的前后神经元的脉冲，也可以被用来“远程更新”突触的权重。
 
-示例代码如下，与STDPModule的示例类似：
+示例代码如下，与 ``STDPModule`` 的示例类似：
 
 .. code-block:: python
 
@@ -256,8 +257,8 @@ SpikingFlow.learning.STDPUpdater则提供了一种更为灵活的使用方式，
 
 定义新的学习规则
 ---------------
-定义新的学习规则，可以参考STDPModule和STDPUpdater的代码。需要注意的是，对于每一种突触类型，都应该实现一个对应的参数更新方式，\
-例如STDPUpdater的如下代码：
+定义新的学习规则，可以参考 ``STDPModule`` 和 ``STDPUpdater`` 的代码。需要注意的是，对于每一种突触类型，都应该实现一个对应的\
+参数更新方式，例如 ``STDPUpdater`` 的如下代码：
 
 .. code-block:: python
 
@@ -267,6 +268,6 @@ SpikingFlow.learning.STDPUpdater则提供了一种更为灵活的使用方式，
         ...
     ...
 
-上述代码是针对SpikingFlow.connection.Linear进行的特定实现。
+上述代码是针对 ``SpikingFlow.connection.Linear`` 进行的特定实现。
 
 .. [#f1] Morrison A, Diesmann M, Gerstner W. Phenomenological models of synaptic plasticity based on spiketiming[J]. Biological cybernetics, 2008, 98(6): 459-478.
