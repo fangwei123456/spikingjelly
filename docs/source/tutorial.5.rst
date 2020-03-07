@@ -35,7 +35,7 @@ SNN之于RNN
 .. math::
     \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + X(t)
 
-:math:`S(t)` 是神经元发放的脉冲，:math:`g(x)=\Theta(x)`是阶跃函数，或者按RNN的习惯称为门控函数，输出仅为0或1，可以表示脉冲\
+:math:`S(t)` 是神经元发放的脉冲，:math:`g(x)=\Theta(x)` 是阶跃函数，或者按RNN的习惯称为门控函数，输出仅为0或1，可以表示脉冲\
 的发放过程，定义为
 
 .. math::
