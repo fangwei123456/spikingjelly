@@ -2,22 +2,22 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注SpikingFlow.learning，包括如何使用已有学习规则、如何定义新的学习规则
+本节教程主要关注SpikingFlow.learning，包括如何使用已有学习规则、如何定义新的学习规则。
 
 学习规则是什么
 -------------
-“学习”在ANN中或许更多地被称作是“训练”。ANN中基于梯度的反向传播优化算法，就是应用最为广泛的学习规则
+“学习”在ANN中或许更多地被称作是“训练”。ANN中基于梯度的反向传播优化算法，就是应用最为广泛的学习规则。
 
 在SNN中，发放脉冲这一过程通常使用阶跃函数去描述，这是一个不可微分的过程；SNN比较注重生物可解释性，生物神经系统中似乎并没有使\
 用反向传播这种训练成千上万次才能达到较好结果的“低效率”方法。在SNN中如何使用反向传播算法也是一个研究热点，使用反向传播算法的\
 SNN一般为事件驱动模型（例如SpikeProp和Tempotron，在SpikingFlow.event_driven中可以找到），而SpikingFlow.learning中更多的聚\
-焦于生物可解释性的学习算法，例如STDP
+焦于生物可解释性的学习算法，例如STDP。
 
 STDP(Spike Timing Dependent Plasticity)
 --------------------------------------
 
 STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现的一种突触可塑性机制。实验发现，突触的连接强度受到突触连接\
-的前（pre）后（post）神经元脉冲活动的影响
+的前（pre）后（post）神经元脉冲活动的影响。
 
 如果pre神经元先发放脉冲，post神经元后发放脉冲，则突触强度增大；反之，如果post神经元先发放脉冲，pre神经元后发放脉冲，则突触强度\
 减小。生物实验数据如下图所示，横轴是pre神经元和post神经元释放的一对脉冲的时间差，也就是 :math:`t_{post} - t_{pre}`，纵轴表示\
@@ -37,7 +37,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \end{align}
 
 一般认为，突触连接权重的改变，是在脉冲发放的瞬间完成。不过，上图中的公式并不适合代码去实现，因为它需要分别记录前后神经元的脉冲\
-发放时间。使用 [#f1]_ 提供的基于双脉冲的迹的方式来实现STDP更为优雅
+发放时间。使用 [#f1]_ 提供的基于双脉冲的迹的方式来实现STDP更为优雅。
 
 对于突触的pre神经元j后post神经元i，分别使用一个名为迹（trace）的变量 :math:`x_{j}, y_{i}`，迹由类似于LIF神经元的膜电位的微分\
 方程来描述：
@@ -48,7 +48,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
     \frac{\mathrm{d} y_{i}}{\mathrm{d} t} = - \frac{y_{i}}{\tau_{y}} + \sum_{t_{i} ^ {f}} \delta (t - t_{i} ^ {f})
 
 其中 :math:`t_{j} ^ {f}, t_{i} ^ {f}` 是pre神经元j后post神经元i的脉冲发放时刻， :math:`\delta(t)` 是脉冲函数，\
-只在 :math:`t=0` 处为1，其他时刻均为0
+只在 :math:`t=0` 处为1，其他时刻均为0。
 
 当pre神经元j的脉冲 :math:`t_{j} ^ {f}` 到达时，突触权重减少；当post神经元i的脉冲 :math:`t_{i} ^ {f}` 到达时，突触权重增加：
 
@@ -58,7 +58,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
     \Delta w_{ij}^{+}(t_{i} ^ {f}) = - F_{+}(w_{ij}) x_j(t_{i} ^ {f})
 
-其中 :math:`F_{+}(w_{ij}), F_{-}(w_{ij})` 是突触权重 :math:`w_{ij}` 的函数，控制权重的增量
+其中 :math:`F_{+}(w_{ij}), F_{-}(w_{ij})` 是突触权重 :math:`w_{ij}` 的函数，控制权重的增量。
 
 [#f1]_ 中给出了这种方式的示意图：
 
@@ -66,7 +66,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 SpikingFlow.learning.STDPModule是使用迹的方式实现的一个STDP学习模块。STDPModule会将脉冲电流转换器tf_module、\
 突触connection_module、神经元neuron_module三者打包成一个模块，将输入到tf_module的脉冲，作为pre神经元的脉冲；\
-neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习规则，来更新connection_module的权重
+neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习规则，来更新connection_module的权重。
 
 示例代码如下：
 
@@ -164,7 +164,7 @@ neuron_module输出的脉冲，作为post神经元的脉冲，利用STDP学习�
 
 在SpikingFlow.learning.STDPModule中将脉冲电流转换器、突触、神经元这3个模块封装为1个，简化了使用，但封装也带来了灵活性的缺失。\
 SpikingFlow.learning.STDPUpdater则提供了一种更为灵活的使用方式，可以手动地设置突触和其对应的前后脉冲，即便“前后脉冲”并不\
-是真正的突触连接的前后神经元的脉冲，也可以被用来“远程更新”突触的权重
+是真正的突触连接的前后神经元的脉冲，也可以被用来“远程更新”突触的权重。
 
 示例代码如下，与STDPModule的示例类似：
 
