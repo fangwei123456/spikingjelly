@@ -2,7 +2,7 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注SpikingFlow.neuron，包括如何使用已有神经元、如何定义新的神经元。
+本节教程主要关注 ``SpikingFlow.neuron``，包括如何使用已有神经元、如何定义新的神经元。
 
 LIF神经元仿真
 ------------
@@ -97,7 +97,7 @@ LIF神经元仿真
 阻， :math:`I(t)` 是输入电流
 
 SpikingFlow是时间驱动（time-driven）的框架，即将微分方程视为差分方程，通过逐步仿真来进行计算。例如LIF神经元，\
-代码位于SpikingFlow.neuron.LIFNode，参考它的实现：
+代码位于 ``SpikingFlow.neuron.LIFNode``，参考它的实现：
 
 .. code-block:: python
 
@@ -128,4 +128,5 @@ SpikingFlow是时间驱动（time-driven）的框架，即将微分方程视为�
 
 此外，“脉冲”被定义为“torch.bool”类型的变量。SNN中的神经元，输出的应该是脉冲而不是电压之类的其他值。
 
-如果想自行实现其他类型的神经元，只需要继承SpikingFlow.neuron.BaseNode，并实现__init__(),forward(),reset()函数即可。
+如果想自行实现其他类型的神经元，只需要继承 ``SpikingFlow.neuron.BaseNode``，并实现 ``__init__()``,``forward()``,\
+``reset()``函数即可。
