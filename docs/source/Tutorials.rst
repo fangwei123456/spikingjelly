@@ -9,6 +9,7 @@
    tutorial.2
    tutorial.3
    tutorial.4
+   tutorial.5
 
 .. automodule:: 快速上手教程
    :members:
