@@ -128,4 +128,5 @@ SpikingFlow是时间驱动（time-driven）的框架，即将微分方程视为�
 
 此外，“脉冲”被定义为“torch.bool”类型的变量。SNN中的神经元，输出的应该是脉冲而不是电压之类的其他值。
 
-如果想自行实现其他类型的神经元，只需要继承 ``SpikingFlow.neuron.BaseNode``，并实现 ``__init__()``, ``forward()``, ``reset()`` 函数即可。
+如果想自行实现其他类型的神经元，只需要继承 ``SpikingFlow.neuron.BaseNode``，并实\
+现 ``__init__()``, ``forward()``, ``reset()`` 函数即可。
