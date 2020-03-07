@@ -1,5 +1,6 @@
-突触连接
+突触连接 SpikingFlow.connection
 =======================================
+本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 本节教程主要关注SpikingFlow.connection，包括如何使用已有突触连接、如何定义新的突触连接
 

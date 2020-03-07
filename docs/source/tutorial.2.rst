@@ -1,7 +1,8 @@
-仿真器
+仿真器 SpikingFlow.simulating
 =======================================
+本教程作者： `Yanqi-Chen <https://github.com/Yanqi-Chen>`_
 
-本节教程主要关注SpikingFlow.simulating，包括如何使用仿真器
+本节教程主要关注 ``SpikingFlow.simulating``，包括如何使用仿真器
 
 仿真原理
 ------------
