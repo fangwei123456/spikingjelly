@@ -1,5 +1,6 @@
-神经元
+神经元 SpikingFlow.neuron
 =======================================
+本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 本节教程主要关注SpikingFlow.neuron，包括如何使用已有神经元、如何定义新的神经元
 

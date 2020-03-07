@@ -12,6 +12,7 @@ Subpackages
    SpikingFlow.learning
    SpikingFlow.neuron
    SpikingFlow.simulating
+   SpikingFlow.softbp
 
 Module contents
 ---------------
