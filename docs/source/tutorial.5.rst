@@ -4,6 +4,17 @@
 
 本节教程主要关注 ``SpikingFlow.softbp``，介绍软反向传播的概念、可微分SNN神经元的使用方式。
 
+我们的这一方法的灵感，来源于使用CNN压缩图像中的量化过程的解决方法：
+
+Mentzer F, Agustsson E, Tschannen M, et al. Conditional probability models for deep image \
+compression[C]//Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2018: 4394-4402.
+
+但这一方法其实已经被提出了，参见
+
+Wu Y, Deng L, Li G, et al. Spatio-temporal backpropagation for \
+training high-performance spiking neural networks[J]. Frontiers in neuroscience, 2018, 12: 331.
+
+
 SNN之于RNN
 ----------
 可以将SNN中的神经元看作是一种RNN，它的输入是电压增量（或者是电流，但为了方便，在 ``SpikingFlow.softbp`` 中用电压增量），\
@@ -50,6 +61,21 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 状态转移方程：
 
 .. image:: ./_static/tutorials/10.png
+
+如果想使用其他的近似门控函数，只需要继承你想使用的 ``SpikingFlow.softbp`` 中的神经元，并重写 ``pulse_soft(x)`` 函数。默认\
+的近似门控函数定义如下：
+
+.. code-block:: python
+
+    @staticmethod
+    def pulse_soft(x):
+        '''
+        :param x: 输入，tensor
+        :return: :math:`\\sigma(x)`
+
+        此函数即为 :math:`\\sigma(x)`。默认是用sigmoid函数。如果想使用其他函数，继承后重写pulse_soft()函数即可
+        '''
+        return torch.sigmoid(x)
 
 硬前向传播与软反向传播，在PyTorch中很容易实现，参考 ``SpikingFlow.softbp.BaseNode`` 中的 ``spiking``：
 
