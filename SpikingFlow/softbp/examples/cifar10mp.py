@@ -13,6 +13,7 @@ class Net(softbp.ModelPipeline):
     def __init__(self, gpu_list, tau=100.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
         # 网络结构，卷积-卷积-最大池化堆叠，最后接一个全连接层
+
         self.append(
             nn.Sequential(
                 nn.Conv2d(3, 256, kernel_size=3, padding=1),

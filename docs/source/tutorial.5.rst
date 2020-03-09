@@ -437,6 +437,123 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 
 .. image:: ./_static/tutorials/5-4.png
 
+模型流水线
+----------
+如前所述，在包含SNN神经元的网络中引入CNN后，显存的消耗量剧增。有时一个网络太大，以至于单个GPU无法放下。在这种情况下，我们可以\
+将一个网络分割到多个GPU存放，充分利用多GPU闲置显存的优势。但使用这一方法，数据需要在多个GPU之间来回复制，在一定程度上会降低\
+训练速度。
 
+``SpikingFlow.softbp.ModelPipeline`` 是一个基于流水线多GPU串行并行的基类，使用者只需要继承 ``ModelPipeline``，然后调\
+用 ``append(nn_module, gpu_id)``，就可以将 ``nn_module`` 添加到流水线中，并且 ``nn_module`` 会被运行在 ``gpu_id`` 上。\
+在调用模型进行计算时， ``forward(x, split_sizes)`` 中的 ``split_sizes`` 指的是输入数据 ``x`` 会在维度0上被拆分成\
+每 ``spilit_size`` 一组，得到[x0, x1, ...]，这些数据会被串行的送入 ``module_list`` 中保存的各个模块进行计算。
+
+我们将之前的CIFAR10代码更改为多GPU流水线形式，修改后的代码位于 ``SpikingFlow.softbp.examples.cifar10.py``。它的内容\
+与 ``SpikingFlow.softbp.examples.cifar10.py`` 基本类似，我们只看主要的改动部分。
+
+模型的定义，直接继承了 ``ModelPipeline``。将模型拆成了5个部分，由于越靠前的层，输入的尺寸越大，越消耗显存，因此前面的少部分层\
+会直接被单独分割出，而后面的很多层则放到了一起。需要注意的是，每次训练后仍然要重置LIF神经元的电压，因此要额外写一个重置函
+\数 ``reset_()``：
+
+.. code-block:: python
+
+    class Net(softbp.ModelPipeline):
+        def __init__(self, gpu_list, tau=100.0, v_threshold=1.0, v_reset=0.0):
+            super().__init__()
+            # 网络结构，卷积-卷积-最大池化堆叠，最后接一个全连接层
+
+            self.append(
+                nn.Sequential(
+                    nn.Conv2d(3, 256, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(256)
+                ),
+                gpu_list[0]
+            )
+
+            self.append(
+                nn.Sequential(
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                ),
+                gpu_list[1]
+            )
+
+            self.append(
+                nn.Sequential(
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.MaxPool2d(2, 2),
+                    nn.BatchNorm2d(256)
+                ),
+                gpu_list[2]
+            )
+
+            self.append(
+                nn.Sequential(
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 16 * 16
+                ),
+                gpu_list[3]
+            )
+
+            self.append(
+                nn.Sequential(
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(256),
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.MaxPool2d(2, 2),
+                    nn.BatchNorm2d(256),
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.BatchNorm2d(256),
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                    nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                    nn.MaxPool2d(2, 2),
+                    nn.BatchNorm2d(256),
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
+                    nn.Flatten(),
+                    nn.Linear(256 * 4 * 4, 10, bias=False),
+                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                ),
+                gpu_list[4]
+            )
+
+        def reset_(self):
+            for item in self.modules():
+                if hasattr(item, 'reset'):
+                    item.reset()
+
+运行这份代码，由于分割的第0部分和第3部分占用的显存较小，因此将它们全部放在 ``0`` 号GPU上，而其他部分则各独占一个GPU：
+
+.. code-block:: bash
+
+    (pytorch-env) wfang@pami:~/SpikingFlow$ python ./SpikingFlow/softbp/examples/cifar10mp.py
+    输入使用的5个gpu，例如“0,1,2,0,3”  0,1,2,0,3
+    输入保存CIFAR10数据集的位置，例如“./”  ./tempdir
+    输入batch_size，例如“64”  64
+    输入split_sizes，例如“16”  4
+    输入学习率，例如“1e-3”  1e-3
+    输入仿真时长，例如“50”  50
+    输入LIF神经元的时间常数tau，例如“100.0”  100.0
+    输入训练轮数，即遍历训练集的次数，例如“100”  100
+    输入保存tensorboard日志文件的位置，例如“./”  ./tempdir
+
+稳定运行后，查看各个GPU显存的占用：
+
+.. code-block:: bash
+
+    +-----------------------------------------------------------------------------+
+    | Processes:                                                       GPU Memory |
+    |  GPU       PID   Type   Process name                             Usage      |
+    |=============================================================================|
+    |    0      4465      C   python                                      5950MiB |
+    |    1      4465      C   python                                      9849MiB |
+    |    2      4465      C   python                                      9138MiB |
+    |    3      4465      C   python                                      8936MiB |
+    +-----------------------------------------------------------------------------+
+
+对于模型的不同分割方法会造成不同的显存占用情况。建议首先做一个简单的分割，然后用很小的 ``batch_size`` 和 ``split_sizes`` 去\
+运行，再检查各个GPU显存的负载是否均衡，根据负载情况来重新调整分割。
+
+分割后的模型， ``batch_size=64, split_size=4``，根据tensorboard的记录显示，在Tesla K80上30分钟训练了116次；使用其他相同\
+的参数，令 ``batch_size=64, split_size=2``，得到
 
 
