@@ -115,18 +115,18 @@ def main():
     for _ in range(train_epoch):
 
         for img, label in train_data_loader:
+
             label = label.to(net.gpu_list[-1])
             optimizer.zero_grad()
             # 将图像编码为脉冲数据
-            in_spikes = encoder(img).float()
 
             # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
             # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
             for t in range(T):
                 if t == 0:
-                    out_spikes_counter = net(in_spikes, split_sizes)
+                    out_spikes_counter = net(encoder(img).float(), split_sizes)
                 else:
-                    out_spikes_counter += net(in_spikes, split_sizes)
+                    out_spikes_counter += net(encoder(img).float(), split_sizes)
 
             # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
             out_spikes_counter_frequency = out_spikes_counter / T
@@ -153,12 +153,11 @@ def main():
             for img, label in test_data_loader:
                 label = label.to(net.gpu_list[-1])
 
-                in_spikes = encoder(img).float()
                 for t in range(T):
                     if t == 0:
-                        out_spikes_counter = net(in_spikes, split_sizes)
+                        out_spikes_counter = net(encoder(img).float(), split_sizes)
                     else:
-                        out_spikes_counter += net(in_spikes, split_sizes)
+                        out_spikes_counter += net(encoder(img).float(), split_sizes)
 
                 correct_sum += (out_spikes_counter.max(1)[1] == label).float().sum().item()
                 test_sum += label.numel()

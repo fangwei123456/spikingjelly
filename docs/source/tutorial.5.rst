@@ -193,17 +193,17 @@ MNIST分类
         for _ in range(train_epoch):
 
             for img, label in train_data_loader:
+                img = img.to(device)
                 optimizer.zero_grad()
                 # 将MNIST图像编码为脉冲数据
-                in_spikes = encoder(img.to(device)).float()
 
                 # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
                 # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
                 for t in range(T):
                     if t == 0:
-                        out_spikes_counter = net(in_spikes)
+                        out_spikes_counter = net(encoder(img).float())
                     else:
-                        out_spikes_counter += net(in_spikes)
+                        out_spikes_counter += net(encoder(img).float())
 
                 # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
                 out_spikes_counter_frequency = out_spikes_counter / T
@@ -228,13 +228,12 @@ MNIST分类
                 test_sum = 0
                 correct_sum = 0
                 for img, label in test_data_loader:
-
-                    in_spikes = encoder(img.to(device)).float()
+                    img = img.to(device)
                     for t in range(T):
                         if t == 0:
-                            out_spikes_counter = net(in_spikes)
+                            out_spikes_counter = net(encoder(img).float())
                         else:
-                            out_spikes_counter += net(in_spikes)
+                            out_spikes_counter += net(encoder(img).float())
 
                     correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
                     test_sum += label.numel()
@@ -281,17 +280,6 @@ CIFAR10分类
 CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需要更改一下网络结构和数据集。
 
 .. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
-    import torchvision
-    import sys
-    sys.path.append('.')
-    import SpikingFlow.softbp as softbp
-    import SpikingFlow.encoding as encoding
-    from torch.utils.tensorboard import SummaryWriter
-    import readline
 
     class Net(nn.Module):
         def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
@@ -367,68 +355,8 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
             batch_size=batch_size,
             shuffle=True,
             drop_last=False)
+         # 后面的代码与MNIST分类相同，不再展示
 
-        # 初始化网络
-        net = Net(tau=tau).to(device)
-        # 使用Adam优化器
-        optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-        # 使用泊松编码器
-        encoder = encoding.PoissonEncoder()
-        train_times = 0
-        for _ in range(train_epoch):
-
-            for img, label in train_data_loader:
-                optimizer.zero_grad()
-                # 将图像编码为脉冲数据
-                in_spikes = encoder(img.to(device)).float()
-
-                # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
-                # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
-                for t in range(T):
-                    if t == 0:
-                        out_spikes_counter = net(in_spikes)
-                    else:
-                        out_spikes_counter += net(in_spikes)
-
-                # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
-                out_spikes_counter_frequency = out_spikes_counter / T
-
-                # 损失函数为输出层神经元的脉冲发放频率，与真实类别的交叉熵
-                # 这样的损失函数会使，当类别i输入时，输出层中第i个神经元的脉冲发放频率趋近1，而其他神经元的脉冲发放频率趋近0
-                loss = F.cross_entropy(out_spikes_counter_frequency, label.to(device))
-                loss.backward()
-                optimizer.step()
-                # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
-                net.reset_()
-
-                # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
-                correct_rate = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
-                writer.add_scalar('train_correct_rate', correct_rate, train_times)
-                if train_times % 1024 == 0:
-                    print('train_times', train_times, 'train_correct_rate', correct_rate)
-                train_times += 1
-
-            with torch.no_grad():
-                # 每遍历一次全部数据集，就在测试集上测试一次
-                test_sum = 0
-                correct_sum = 0
-                for img, label in test_data_loader:
-
-                    in_spikes = encoder(img.to(device)).float()
-                    for t in range(T):
-                        if t == 0:
-                            out_spikes_counter = net(in_spikes)
-                        else:
-                            out_spikes_counter += net(in_spikes)
-
-                    correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
-                    test_sum += label.numel()
-                    net.reset_()
-
-                writer.add_scalar('test_correct_rate', correct_sum / test_sum, train_times)
-
-    if __name__ == '__main__':
-        main()
 
 这份代码位于 ``SpikingFlow.softbp.examples.cifar10.py``，运行方法与之前的MNIST的代码相同。需要注意的是，由于CNN的引入，CNN层\
 后也跟有LIF神经元，CNN层的输出是一个高维矩阵，因此其后的LIF神经元数量众多，导致这个模型极端消耗显存。在大约 ``batch_size=32``\
@@ -446,7 +374,7 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 ``SpikingFlow.softbp.ModelPipeline`` 是一个基于流水线多GPU串行并行的基类，使用者只需要继承 ``ModelPipeline``，然后调\
 用 ``append(nn_module, gpu_id)``，就可以将 ``nn_module`` 添加到流水线中，并且 ``nn_module`` 会被运行在 ``gpu_id`` 上。\
 在调用模型进行计算时， ``forward(x, split_sizes)`` 中的 ``split_sizes`` 指的是输入数据 ``x`` 会在维度0上被拆分成\
-每 ``spilit_size`` 一组，得到[x0, x1, ...]，这些数据会被串行的送入 ``module_list`` 中保存的各个模块进行计算。
+每 ``spilit_size`` 一组，得到 ``[x[0], x[1], ...]``，这些数据会被串行的送入 ``module_list`` 中保存的各个模块进行计算。
 
 我们将之前的CIFAR10代码更改为多GPU流水线形式，修改后的代码位于 ``SpikingFlow.softbp.examples.cifar10.py``。它的内容\
 与 ``SpikingFlow.softbp.examples.cifar10.py`` 基本类似，我们只看主要的改动部分。
@@ -554,6 +482,21 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 运行，再检查各个GPU显存的负载是否均衡，根据负载情况来重新调整分割。
 
 分割后的模型， ``batch_size=64, split_size=4``，根据tensorboard的记录显示，在Tesla K80上30分钟训练了116次；使用其他相同\
-的参数，令 ``batch_size=64, split_size=2``，得到
+的参数，令 ``batch_size=64, split_size=2``，30分钟训练了62次；令 ``batch_size=32, split_size=8``，30分钟训练335次；不使用\
+模型流水线、完全在同一个GPU上运行的 ``SpikingFlow.softbp.examples.cifar10.py``， ``batch_size=16``，30分钟训练759次。对比如\
+下表所示:
 
 
++---------------+------------+------------+---------------------+
+| *.py          | batch_size | split_size | images/minute       |
++===============+============+============+=====================+
+|               | 64         | 4          |        247          |
+|               |------------+------------+---------------------+
+| cifar10mp.py  | 64         | 2          |        132          |
+|               |------------+------------+---------------------+
+|               | 32         | 8          |        357          |
++---------------+------------+------------+---------------------+
+| cifar10.py    | 16         | \\         |        404          |
++---------------+------------+------------+---------------------+
+
+可以发现，参数的选择对于训练速度至关重要。合适的参数，例如 ``batch_size=32, split_size=8``，训练速度已经非常接近单卡运行了。
