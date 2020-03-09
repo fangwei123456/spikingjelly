@@ -87,17 +87,17 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 .. code-block:: python
 
         def spiking(self):
-        if self.training:
-            spike_hard = (self.v >= self.v_threshold).float()
-            spike_soft = self.pulse_soft(self.v - self.v_threshold)
-            v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-            v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
-            self.v = v_soft + (v_hard - v_soft).detach_()
-            return spike_soft + (spike_hard - spike_soft).detach_()
-        else:
-            spike_hard = (self.v >= self.v_threshold).float()
-            self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-            return spike_hard
+            if self.training:
+                spike_hard = (self.v >= self.v_threshold).float()
+                spike_soft = self.pulse_soft(self.v - self.v_threshold)
+                v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
+                v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
+                self.v = v_soft + (v_hard - v_soft).detach_()
+                return spike_soft + (spike_hard - spike_soft).detach_()
+            else:
+                spike_hard = (self.v >= self.v_threshold).float()
+                self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
+                return spike_hard
 
 前向传播时，该函数返回 ``spike_soft + spike_hard - spike_soft`` 即 ``spike_hard``，但计算图却是按照函数返回 ``spike_soft``\
 建立的，因为 ``(spike_hard - spike_soft).detach_()`` 使得 ``spike_hard - spike_soft`` 被从计算图中剔除，因此反向传播时按\
