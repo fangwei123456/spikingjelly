@@ -30,6 +30,8 @@ class ModelPipeline(nn.Module):
     def forward(self, x, split_sizes):
         '''
         :param x: 输入数据
+        :param split_sizes: 输入数据x会在维度0上被拆分成每spilit_size一组，得到[x0, x1, ...]，这些数据会被串行的送入\
+        module_list中的各个模块进行计算
         :return: 输出数据
 
         输入数据x会在维度0上被拆分成每spilit_size一组，得到[x0, x1, ...]。用m表示module_list，数据在流水线中的执行示意图为：
@@ -50,6 +52,7 @@ class ModelPipeline(nn.Module):
 
         '''
 
+        assert x.shape[0] % split_sizes == 0, print('x.shape[0]不能被split_sizes整除！')
         x = list(x.split(split_sizes, dim=0))
         x_pos = []  # x_pos[i]记录x[i]应该通过哪个module
 
