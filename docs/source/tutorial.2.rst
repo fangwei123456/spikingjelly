@@ -41,17 +41,18 @@
 ------------
 然而，很多时候我们希望模型在仿真的第一时间就给出输出，而不是慢慢等信号依次传递到最后一个模块才输出结果。为此，我们增加了一个快速仿真选项。仿真器初始化时 **默认开启** 快速仿真，可以手动设置关闭。
 
-开启快速仿真时，首个仿真时间步内将跑满整个模型，之后的时间步仿真器的行为不变。
+若开启快速仿真，则在仿真器首次运行时，会运行n步而不是1步，并认为这n步的输入都是input_data
 
 .. code-block:: python
 
     ...
     # 快速仿真开启时，首次运行时跑满pipeline
-    # x[0] -> module[0] -> x[1] -> module[1] -> ... -> x[n-1] -> module[n-1] -> x[n]
+    # x[0] -> module[0] -> x[1]
+    # x[1] -> module[1] -> x[2]
+    # ...
+    # x[n-1] -> module[n-1] -> x[n]
     if self.simulated_steps == 0 and self.fast:
         for i in range(self.module_list.__len__()):
             # i = 0, 1, ..., n-1
-            for j in range(i + 1, 0, -1):
-                # j = i+1, i, ..., 1
-                self.pipeline[j] = self.module_list[j - 1](self.pipeline[j - 1])
+            self.pipeline[i + 1] = self.module_list[i](self.pipeline[i])
     ...

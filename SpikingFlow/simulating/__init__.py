@@ -5,7 +5,9 @@ import torch.nn.functional as F
 class Simulator:
     def __init__(self, fast=True):
         '''
-        :param fast: 是否快速仿真（仿真的第一时刻就给出输出）
+        :param fast: 是否快速仿真（仿真的第一时刻就给出输出）。因为module_list长度为n时，t=0时刻的输入在t=n时刻才流经\
+        module[n-1]并输出，也就是需要仿真器运行n步后才能得到输出。实际使用时可能不太方便，因此若开启快速仿真，则在仿真器首次\
+        运行时，会运行n步而不是1步，并认为这n步的输入都是input_data
 
         仿真器，内含多个module组成的list
 
@@ -15,7 +17,7 @@ class Simulator:
 
         pipeline = [ x[0], x[1], ..., x[n-2], x[n-1], x[n] ]
 
-        启动仿真后 应该按照如下顺序计算
+        启动仿真后，应该按照如下顺序计算
 
         X[0] = input_data
 
@@ -63,7 +65,7 @@ class Simulator:
         self.module_list = []  # 保存各个module
         self.pipeline = []  # 保存各个module在当前时刻的输出
         self.simulated_steps = 0  # 已经运行仿真的步数
-        self.fast = fast # 是否快速仿真
+        self.fast = fast  # 是否快速仿真
         self.pipeline.append(None)
 
 
@@ -93,13 +95,14 @@ class Simulator:
         self.pipeline[0] = input_data
 
         # 快速仿真开启时，首次运行时跑满pipeline
-        # x[0] -> module[0] -> x[1] -> module[1] -> ... -> x[n-1] -> module[n-1] -> x[n]
+        # x[0] -> module[0] -> x[1]
+        # x[1] -> module[1] -> x[2]
+        # ...
+        # x[n-1] -> module[n-1] -> x[n]
         if self.simulated_steps == 0 and self.fast:
             for i in range(self.module_list.__len__()):
                 # i = 0, 1, ..., n-1
-                for j in range(i + 1, 0, -1):
-                    # j = i+1, i, ..., 1
-                    self.pipeline[j] = self.module_list[j - 1](self.pipeline[j - 1])
+                self.pipeline[i + 1] = self.module_list[i](self.pipeline[i])
 
         else:
             for i in range(self.module_list.__len__(), 0, -1):
