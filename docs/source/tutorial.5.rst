@@ -404,7 +404,7 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
     x1 = m2(x1)
     x2 = m3(x2)
 
-但由于PyTorch优秀的特性，上面的3行代码实际上是并行执行的，因为这3个在CUDA上的计算使用各自的数据，互不影响的。
+但由于PyTorch优秀的特性，上面的3行代码实际上是并行执行的，因为这3个在CUDA上的计算使用各自的数据，互不影响。
 
 我们将之前的CIFAR10代码更改为多GPU流水线形式，修改后的代码位于 ``SpikingFlow.softbp.examples.cifar10.py``。它的内容\
 与 ``SpikingFlow.softbp.examples.cifar10.py`` 基本类似，我们只看主要的改动部分。
