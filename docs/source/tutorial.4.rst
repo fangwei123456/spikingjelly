@@ -23,7 +23,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 减小。生物实验数据如下图所示，横轴是pre神经元和post神经元释放的一对脉冲的时间差，也就是 :math:`t_{post} - t_{pre}`，纵轴表示\
 突触强度变化的百分比：
 
-.. image:: ./_static/tutorials/3.png
+.. image:: ./_static/tutorials/4-1.png
 
 这种突触强度和前后脉冲发放时间的关系，可以用以下公式进行拟合：
 
@@ -62,7 +62,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 [#f1]_ 中给出了这种方式的示意图：
 
-.. image:: ./_static/tutorials/4.png
+.. image:: ./_static/tutorials/4-2.png
 
 ``SpikingFlow.learning.STDPModule`` 是使用迹的方式实现的一个STDP学习模块。``STDPModule`` 会将脉冲电流转换器 ``tf_module``、\
 突触 ``connection_module``、神经元 ``neuron_module`` 三者打包成一个模块，将输入到 ``tf_module`` 的脉冲，作为pre神经元的脉冲；\
@@ -147,18 +147,18 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 以pyplot柱状图的形式画出，当柱状图的横轴，也就是时间太长时，而图像的宽度又不够大，一些“落单”的脉冲在图像上会无法画出，因为宽\
 度小于一个像素点）：
 
-.. image:: ./_static/tutorials/5.png
+.. image:: ./_static/tutorials/4-3.png
 
-.. image:: ./_static/tutorials/6.png
+.. image:: ./_static/tutorials/4-4.png
 
 引发的post神经元的脉冲如下图：
 
-.. image:: ./_static/tutorials/7.png
+.. image:: ./_static/tutorials/4-5.png
 
 在前100步， :math:`w_{00}, w_{01}` 均增大；而后100步，由于我们人为设定 ``pre_spike[0]`` 停止发放，``pre_spike[1]`` 持续\
 发放，故 :math:`w_{00}` 减小，:math:`w_{01}` 增大：
 
-.. image:: ./_static/tutorials/8.png
+.. image:: ./_static/tutorials/4-6.png
 
 更灵活的STDPUpdater
 ------------------
@@ -253,7 +253,7 @@ STDP(Spike Timing Dependent Plasticity)学习规则是在生物实验中发现�
 
 运行结果如下：
 
-.. image:: ./_static/tutorials/9.png
+.. image:: ./_static/tutorials/4-7.png
 
 定义新的学习规则
 ---------------

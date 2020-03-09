@@ -65,7 +65,7 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 函数 :math:`V(t) = H(t) \cdot (1 - S(t)) + V_{reset} \cdot S(t)` 也会随之改变。下图显示了不同的 :math:`\alpha` 以及电压\
 状态转移方程：
 
-.. image:: ./_static/tutorials/10.png
+.. image:: ./_static/tutorials/5-1.png
 
 如果想使用其他的近似门控函数，只需要继承你想使用的 ``SpikingFlow.softbp`` 中的神经元，并重写 ``pulse_soft(x)`` 函数。默认\
 的近似门控函数定义如下：
@@ -266,11 +266,11 @@ MNIST分类
 
 我们的这个模型，在Tesla K80上训练一个半小时，tensorboard记录的数据如下所示：
 
-.. image:: ./_static/tutorials/11.png
+.. image:: ./_static/tutorials/5-2.png
 
 这个模型最终能够达到98%的测试集正确率，如下图所示，注意下图中的“epoch”表示训练次数，而代码中的“epoch”表示遍历一次训练集：
 
-.. image:: ./_static/tutorials/12.png
+.. image:: ./_static/tutorials/5-3.png
 
 如果使用训练集增强的方法，例如给训练集图片加上一些随机噪声、仿射变换等，则训练好的网络泛化能力会进一步提升，最高能达到99%以上\
 的测试集正确率。
@@ -435,7 +435,7 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 ，仿真时长 ``T=50`` 的情况下，这个模型几乎要消耗 ``12G`` 的显存。训练这样庞大模型，Tesla K80的算力显得捉襟见肘。我们在TITAN RTX\
 上训练大约60小时，网络才能收敛，测试集正确率大约为80%。使用训练集增强的方法，同样可以提高泛化能力。
 
-.. image:: ./_static/tutorials/13.png
+.. image:: ./_static/tutorials/5-4.png
 
 
 
