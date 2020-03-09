@@ -70,17 +70,17 @@ def main():
     for _ in range(train_epoch):
 
         for img, label in train_data_loader:
+            img = img.to(device)
             optimizer.zero_grad()
             # 将MNIST图像编码为脉冲数据
-            in_spikes = encoder(img.to(device)).float()
 
             # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
             # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
             for t in range(T):
                 if t == 0:
-                    out_spikes_counter = net(in_spikes)
+                    out_spikes_counter = net(encoder(img).float())
                 else:
-                    out_spikes_counter += net(in_spikes)
+                    out_spikes_counter += net(encoder(img).float())
 
             # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
             out_spikes_counter_frequency = out_spikes_counter / T
@@ -105,13 +105,12 @@ def main():
             test_sum = 0
             correct_sum = 0
             for img, label in test_data_loader:
-
-                in_spikes = encoder(img.to(device)).float()
+                img = img.to(device)
                 for t in range(T):
                     if t == 0:
-                        out_spikes_counter = net(in_spikes)
+                        out_spikes_counter = net(encoder(img).float())
                     else:
-                        out_spikes_counter += net(in_spikes)
+                        out_spikes_counter += net(encoder(img).float())
 
                 correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
                 test_sum += label.numel()
