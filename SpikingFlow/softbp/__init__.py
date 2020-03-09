@@ -2,6 +2,70 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class ModelPipeline(nn.Module):
+    def __init__(self):
+        '''
+        用于解决显存不足的模型流水线。将一个模型分散到各个GPU上，流水线式的进行训练。设计思路与仿真器非常类似。
+
+        运行时建议先取一个很小的batch_size，然后观察各个GPU的显存占用，并调整每个module_list中包含的模型比例。
+        '''
+        super().__init__()
+        self.module_list = nn.ModuleList()
+        self.gpu_list = []
+
+
+    def append(self, nn_module, gpu_id):
+        '''
+        :param nn_module: 新添加的module
+        :param gpu_id:  该模型所在的GPU，不需要带“cuda:”的前缀。例如“2”
+        :return: None
+
+        将nn_module添加到流水线中，nn_module会运行在设备gpu_id上。添加的nn_module会按照它们的添加顺序运行。例如首先添加了\
+        fc1，又添加了fc2，则实际运行是按照input_data->fc1->fc2->output_data的顺序运行。
+        '''
+        self.module_list.append(nn_module.to('cuda:' + gpu_id))
+        self.gpu_list.append('cuda:' + gpu_id)
+
+
+    def forward(self, x, split_sizes):
+        '''
+        :param x: 输入数据
+        :return: 输出数据
+
+        输入数据x会在维度0上被拆分成每spilit_size一组，得到[x0, x1, ...]。用m表示module_list，数据在流水线中的执行示意图为：
+
+        x0, x1, x2  |m0|    |m1|    |m2|    |m3|
+
+        x0, x1      |m0| x2 |m1|    |m2|    |m3|
+
+        x0          |m0| x1 |m1| x2 |m2|    |m3|
+
+                    |m0| x0 |m1| x1 |m2| x2 |m3|
+
+                    |m0|    |m1| x0 |m2| x1 |m3| x2
+
+                    |m0|    |m1|    |m2| x0 |m3| x1, x2
+
+                    |m0|    |m1|    |m2|    |m3| x0, x1, x2
+
+        '''
+
+        x = list(x.split(split_sizes, dim=0))
+        x_pos = []  # x_pos[i]记录x[i]应该通过哪个module
+
+        for i in range(x.__len__()):
+            x_pos.append(i + 1 - x.__len__())
+
+        while True:
+            for i in range(x_pos.__len__() - 1, -1, -1):
+                if 0 <= x_pos[i] <= self.gpu_list.__len__() - 1:
+                    x[i] = self.module_list[x_pos[i]](x[i].to(self.gpu_list[x_pos[i]]))
+                x_pos[i] += 1
+            if x_pos[0] == self.gpu_list.__len__():
+                break
+
+        return torch.cat(x, dim=0)
+
 class BaseNode(nn.Module):
     def __init__(self, v_threshold, v_reset):
         '''

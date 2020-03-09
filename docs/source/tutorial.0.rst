@@ -58,7 +58,7 @@ LIF神经元仿真
 
 运行后得到的电压和脉冲如下：
 
-.. image:: ./_static/tutorials/1.png
+.. image:: ./_static/tutorials/1-1.png
 
 你会发现，LIF神经元在有恒定输入电流时，电压会不断增大，但增速越来越慢。
 
@@ -81,7 +81,7 @@ LIF神经元仿真
 运行后得到的电压和脉冲如下（需要说明的是，脉冲是以pyplot柱状图的形式\
 画出，当柱状图的横轴，也就是时间太长时，而图像的宽度又不够大，一些“落单”的脉冲在图像上会无法画出，因为宽度小于一个像素点）：
 
-.. image:: ./_static/tutorials/2.png
+.. image:: ./_static/tutorials/1-2.png
 
 可以发现，LIF神经元已经开始发放脉冲了：
 

@@ -16,20 +16,32 @@ class Net(softbp.ModelPipeline):
         self.append(
             nn.Sequential(
                 nn.Conv2d(3, 256, kernel_size=3, padding=1),
-                nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                nn.BatchNorm2d(256)
             ),
             gpu_list[0]
         )
 
         self.append(
             nn.Sequential(
-                nn.Conv2d(256, 256, kernel_size=3, padding=1),
-                nn.MaxPool2d(2, 2),
-                nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 16 * 16
+                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
             ),
             gpu_list[1]
+        )
+
+        self.append(
+            nn.Sequential(
+                nn.Conv2d(256, 256, kernel_size=3, padding=1),
+                nn.MaxPool2d(2, 2),
+                nn.BatchNorm2d(256)
+            ),
+            gpu_list[2]
+        )
+
+        self.append(
+            nn.Sequential(
+                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 16 * 16
+            ),
+            gpu_list[3]
         )
 
         self.append(
@@ -40,13 +52,7 @@ class Net(softbp.ModelPipeline):
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.MaxPool2d(2, 2),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 8 * 8
-            ),
-            gpu_list[2]
-        )
-
-        self.append(
-            nn.Sequential(
+                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.BatchNorm2d(256),
                 softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
@@ -58,16 +64,18 @@ class Net(softbp.ModelPipeline):
                 nn.Linear(256 * 4 * 4, 10, bias=False),
                 softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
             ),
-            gpu_list[3]
+            gpu_list[4]
         )
+
     def reset_(self):
         for item in self.modules():
             if hasattr(item, 'reset'):
                 item.reset()
 def main():
-    gpu_list = input('输入使用的4个gpu，例如“0,1,2,3”  ').split(',')
+    gpu_list = input('输入使用的5个gpu，例如“0,1,2,0,3”  ').split(',')
     dataset_dir = input('输入保存CIFAR10数据集的位置，例如“./”  ')
     batch_size = int(input('输入batch_size，例如“64”  '))
+    split_sizes = int(input('输入split_sizes，例如“16”  '))
     learning_rate = float(input('输入学习率，例如“1e-3”  '))
     T = int(input('输入仿真时长，例如“50”  '))
     tau = float(input('输入LIF神经元的时间常数tau，例如“100.0”  '))
@@ -115,9 +123,9 @@ def main():
             # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
             for t in range(T):
                 if t == 0:
-                    out_spikes_counter = net(in_spikes)
+                    out_spikes_counter = net(in_spikes, split_sizes)
                 else:
-                    out_spikes_counter += net(in_spikes)
+                    out_spikes_counter += net(in_spikes, split_sizes)
 
             # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
             out_spikes_counter_frequency = out_spikes_counter / T
@@ -147,9 +155,9 @@ def main():
                 in_spikes = encoder(img).float()
                 for t in range(T):
                     if t == 0:
-                        out_spikes_counter = net(in_spikes)
+                        out_spikes_counter = net(in_spikes, split_sizes)
                     else:
-                        out_spikes_counter += net(in_spikes)
+                        out_spikes_counter += net(in_spikes, split_sizes)
 
                 correct_sum += (out_spikes_counter.max(1)[1] == label).float().sum().item()
                 test_sum += label.numel()
