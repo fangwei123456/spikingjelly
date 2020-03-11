@@ -48,7 +48,7 @@ class ModelPipeline(nn.Module):
                 if j - 1 == 0:
                     pipeline[j] = self.module_list[j - 1](pipeline[j - 1])
                 else:
-                    pipeline[j] = self.module_list[j - 1](pipeline[j - 1].to(self.gpu_list[j]))
+                    pipeline[j] = self.module_list[j - 1](pipeline[j - 1].to(self.gpu_list[j - 1]))
 
         # 假设m中有5个模型，m[0] m[1] m[2] m[3] m[4]，则代码执行顺序为
         #
