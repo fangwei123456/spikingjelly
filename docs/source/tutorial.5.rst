@@ -539,3 +539,30 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 +---------------+------------+------------+---------------------+
 
 可以发现，参数的选择对于训练速度至关重要。合适的参数，例如 ``batch_size=64, split_size=32``，训练速度已经明显超过单卡运行了。
+
+持续恒定输入的更快方法
+---------------------
+上文的代码中，我们使用泊松编码器 ``encoding.PoissonEncoder()``，它以概率来生成脉冲，因此在不同时刻，这一编码器的输出是不同的。\
+如果我们使用恒定输入，则每次前向传播时，不需要再重新启动一次流水线，而是可以启动一次流水线并一直运行，达到更快的速度、更小的\
+显存占用。对于持续 ``T`` 的恒定输入 ``x``，可以直接调用 ``ModelPipeline.constant_forward(self, x, T, reduce)`` 进行计算。
+
+我们将之前的代码进行更改，去掉编码器部分，将图像数据直接送入SNN。在这种情况下，我们可以认为SNN的第一个卷积层起到了“编码器”的作\
+用：它接收图像作为输入，并输出脉冲。这种能够参与训练的编码器，通常能够起到比泊松编码器更好的编码效果，最终网络的分类性能也会有\
+一定的提升。更改后的代码位于 ``SpikingFlow.softbp.examples.cifar10cmp.py``，代码的更改非常简单，主要体现在：
+
+.. code-block:: python
+
+    class Net(softbp.ModelPipeline):
+        ...
+        # 使用父类的constant_forward来覆盖父类的forward
+        def forward(self, x, T):
+            return self.constant_forward(x, T, True)
+        ...
+
+    def main():
+        ...
+        # 直接将图像送入网络，不需要编码器
+        out_spikes_counter_frequency = net(img, T) / T
+        ...
+
+

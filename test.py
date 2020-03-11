@@ -80,7 +80,6 @@ def main():
     gpu_list = input('输入使用的5个gpu，例如“0,1,2,0,3”  ').split(',')
     dataset_dir = input('输入保存CIFAR10数据集的位置，例如“./”  ')
     batch_size = int(input('输入batch_size，例如“64”  '))
-    split_sizes = int(input('输入split_sizes，例如“16”  '))
     learning_rate = float(input('输入学习率，例如“1e-3”  '))
     T = int(input('输入仿真时长，例如“50”  '))
     tau = float(input('输入LIF神经元的时间常数tau，例如“100.0”  '))
