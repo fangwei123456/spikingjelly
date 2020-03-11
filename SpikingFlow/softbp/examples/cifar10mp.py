@@ -83,7 +83,7 @@ def main():
     train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”  '))
     log_dir = input('输入保存tensorboard日志文件的位置，例如“./”  ')
 
-    writer = SummaryWriter(log_dir)
+    writer = SummaryWriter(log_dir + '/' + sys.argv[0])
 
     # 初始化数据加载器
     train_data_loader = torch.utils.data.DataLoader(

@@ -43,13 +43,6 @@ class ModelPipeline(nn.Module):
         pipeline[0] = x.to(self.gpu_list[0])
 
         # 跑满pipeline
-        for i in range(0, self.gpu_list.__len__()):
-            for j in range(i, 0, -1):
-                if j - 1 == 0:
-                    pipeline[j] = self.module_list[j - 1](pipeline[j - 1])
-                else:
-                    pipeline[j] = self.module_list[j - 1](pipeline[j - 1].to(self.gpu_list[j - 1]))
-
         # 假设m中有5个模型，m[0] m[1] m[2] m[3] m[4]，则代码执行顺序为
         #
         # p[ 1 ] = m[ 0 ](p[ 0 ])
@@ -65,6 +58,13 @@ class ModelPipeline(nn.Module):
         # p[ 3 ] = m[ 2 ](p[ 2 ])
         # p[ 2 ] = m[ 1 ](p[ 1 ])
         # p[ 1 ] = m[ 0 ](p[ 0 ])
+
+        for i in range(0, self.gpu_list.__len__()):
+            for j in range(i, 0, -1):
+                if j - 1 == 0:
+                    pipeline[j] = self.module_list[j - 1](pipeline[j - 1])
+                else:
+                    pipeline[j] = self.module_list[j - 1](pipeline[j - 1].to(self.gpu_list[j - 1]))
 
         t = 0  # 记录从流水线输出的总数量
         while True:
@@ -84,15 +84,14 @@ class ModelPipeline(nn.Module):
                             ret.append(self.module_list[i - 1](pipeline[i - 1].to(self.gpu_list[i - 1])))
                     t += 1
                     if t == T:
+                        if reduce == False:
+                            return torch.cat(ret, dim=0)
                         return ret
 
                 else:
                     pipeline[i] = self.module_list[i - 1](pipeline[i - 1].to(self.gpu_list[i - 1]))
 
-
-
-
-def forward(self, x, split_sizes):
+    def forward(self, x, split_sizes):
         '''
         :param x: 输入数据
         :param split_sizes: 输入数据x会在维度0上被拆分成每split_size一组，得到[x0, x1, ...]，这些数据会被串行的送入\
@@ -147,6 +146,7 @@ def forward(self, x, split_sizes):
                 break
 
         return torch.cat(x, dim=0)
+
 
 class BaseNode(nn.Module):
     def __init__(self, v_threshold, v_reset):
