@@ -566,3 +566,6 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
         ...
 
 
+设置 ``batch_size=32``，模型在显卡上的分布与之前相同，30分钟训练715次；\
+去掉编码器但不使用 ``ModelPipeline.constant_forward(self, x, T, reduce)``， ``batch_size=64, split_size=32``，30分钟\
+训练276次。可以发现，去掉编码器后网络的训练速度会变慢；使用这一方法能够起到一倍以上的加速。
