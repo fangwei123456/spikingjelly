@@ -20,7 +20,7 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 
 .. code-block:: bash
 
-    git clone https://github.com/fangwei123456/SpikingFlow
+    git clone https://github.com/fangwei123456/SpikingFlow.git
 
 快速上手教程
 -------------------------
