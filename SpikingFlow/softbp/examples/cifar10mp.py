@@ -118,7 +118,6 @@ def main():
 
             label = label.to(net.gpu_list[-1])
             optimizer.zero_grad()
-            # 将图像编码为脉冲数据
 
             # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
             # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数

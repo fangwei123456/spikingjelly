@@ -373,7 +373,7 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 ``SpikingFlow.softbp.ModelPipeline`` 是一个基于流水线多GPU串行并行的基类，使用者只需要继承 ``ModelPipeline``，然后调\
 用 ``append(nn_module, gpu_id)``，就可以将 ``nn_module`` 添加到流水线中，并且 ``nn_module`` 会被运行在 ``gpu_id`` 上。\
 在调用模型进行计算时， ``forward(x, split_sizes)`` 中的 ``split_sizes`` 指的是输入数据 ``x`` 会在维度0上被拆分成\
-每 ``spilit_size`` 一组，得到 ``[x[0], x[1], ...]``，这些数据会被串行的送入 ``module_list`` 中保存的各个模块进行计算。
+每 ``split_size`` 一组，得到 ``[x[0], x[1], ...]``，这些数据会被串行的送入 ``module_list`` 中保存的各个模块进行计算。
 
 例如将模型分成4部分，因而 ``module_list`` 中有4个子模型；将输入分割为3部分，则每次调用 ``forward(x, split_sizes)`` ，函数内部的\
 计算过程如下：
