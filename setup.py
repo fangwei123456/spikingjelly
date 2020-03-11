@@ -1,3 +1,7 @@
+'''
+python setup.py sdist bdist_wheel
+python -m twine upload dist/*
+'''
 import setuptools
 
 with open("./README.md", "r", encoding="utf-8") as fh:
@@ -5,7 +9,7 @@ with open("./README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="SpikingFlow",
-    version="0.2.2",
+    version="0.2.3",
     author="PKU MLG",
     author_email="fangwei123456@pku.edu.cn",
     description="A Spiking Neural Networks simulator built on PyTorch.",
