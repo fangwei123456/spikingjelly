@@ -29,7 +29,7 @@ class Net(nn.Module):
             if hasattr(item, 'reset'):
                 item.reset()
 def main():
-    device = input('输入运行的设备，例如“CPU”或“cuda:0”  ')
+    device = input('输入运行的设备，例如“cpu”或“cuda:0”  ')
     dataset_dir = input('输入保存MNIST数据集的位置，例如“./”  ')
     batch_size = int(input('输入batch_size，例如“64”  '))
     learning_rate = float(input('输入学习率，例如“1e-3”  '))
