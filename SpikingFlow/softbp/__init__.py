@@ -189,6 +189,7 @@ class BaseNode(nn.Module):
         '''
         return torch.sigmoid(x)
 
+
     def spiking(self):
         '''
         :return: 神经元的输出脉冲
@@ -269,6 +270,7 @@ class LIFNode(BaseNode):
     def forward(self, dv: torch.Tensor):
         self.v += (dv + -(self.v - self.v_reset)) / self.tau
         return self.spiking()
+
 
 
 
