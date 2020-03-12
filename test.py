@@ -8,7 +8,10 @@ import SpikingFlow.softbp as softbp
 import SpikingFlow.encoding as encoding
 from torch.utils.tensorboard import SummaryWriter
 import readline
-# 运行时T=16
+
+
+
+
 class Net(softbp.ModelPipeline):
     def __init__(self, gpu_list, tau=100.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
