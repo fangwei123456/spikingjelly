@@ -191,7 +191,7 @@ MNIST分类
         encoder = encoding.PoissonEncoder()
         train_times = 0
         for _ in range(train_epoch):
-
+            net.train()
             for img, label in train_data_loader:
                 img = img.to(device)
                 optimizer.zero_grad()
@@ -222,6 +222,7 @@ MNIST分类
                     print('train_times', train_times, 'train_correct_rate', correct_rate)
                 train_times += 1
 
+            net.eval()
             with torch.no_grad():
                 # 每遍历一次全部数据集，就在测试集上测试一次
                 test_sum = 0
