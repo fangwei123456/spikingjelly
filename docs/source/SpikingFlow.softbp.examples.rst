@@ -12,6 +12,30 @@ SpikingFlow.softbp.examples.cifar10 module
    :undoc-members:
    :show-inheritance:
 
+SpikingFlow.softbp.examples.cifar10cmp module
+---------------------------------------------
+
+.. automodule:: SpikingFlow.softbp.examples.cifar10cmp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+SpikingFlow.softbp.examples.cifar10mp module
+--------------------------------------------
+
+.. automodule:: SpikingFlow.softbp.examples.cifar10mp
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+SpikingFlow.softbp.examples.cifar10oll module
+---------------------------------------------
+
+.. automodule:: SpikingFlow.softbp.examples.cifar10oll
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 SpikingFlow.softbp.examples.mnist module
 ----------------------------------------
 

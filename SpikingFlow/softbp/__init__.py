@@ -1,7 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import softbp.soft_pulse_function as soft_pulse_function
+import SpikingFlow.softbp.soft_pulse_function as soft_pulse_function
+
 class ModelPipeline(nn.Module):
     def __init__(self):
         '''
