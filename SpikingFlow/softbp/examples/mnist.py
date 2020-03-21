@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import torchvision
 import sys
 sys.path.append('.')
-import SpikingFlow.softbp as softbp
+import SpikingFlow.softbp.neuron as neuron
 import SpikingFlow.encoding as encoding
 from torch.utils.tensorboard import SummaryWriter
 import readline
@@ -16,9 +16,9 @@ class Net(nn.Module):
         self.fc = nn.Sequential(
             nn.Flatten(),
             nn.Linear(28 * 28, 14 * 14, bias=False),
-            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
             nn.Linear(14 * 14, 10, bias=False),
-            softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
         )
 
     def forward(self, x):

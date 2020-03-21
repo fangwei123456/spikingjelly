@@ -5,6 +5,7 @@ import torchvision
 import sys
 sys.path.append('.')
 import SpikingFlow.softbp as softbp
+import SpikingFlow.softbp.neuron as neuron
 from torch.utils.tensorboard import SummaryWriter
 import readline
 
@@ -23,7 +24,7 @@ class Net(softbp.ModelPipeline):
 
         self.append(
             nn.Sequential(
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
             ),
             gpu_list[1]
         )
@@ -39,7 +40,7 @@ class Net(softbp.ModelPipeline):
 
         self.append(
             nn.Sequential(
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 16 * 16
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 16 * 16
             ),
             gpu_list[3]
         )
@@ -48,21 +49,21 @@ class Net(softbp.ModelPipeline):
             nn.Sequential(
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.MaxPool2d(2, 2),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.MaxPool2d(2, 2),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
                 nn.Flatten(),
                 nn.Linear(256 * 4 * 4, 10, bias=False),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
             ),
             gpu_list[4]
         )
