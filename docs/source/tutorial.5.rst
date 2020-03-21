@@ -4,6 +4,9 @@
 
 本节教程主要关注 ``SpikingFlow.softbp``，介绍软反向传播的概念、可微分SNN神经元的使用方式。
 
+需要注意的是，``SpikingFlow.softbp.neuron`` 与 ``SpikingFlow.neuron`` 中的神经元不能混用，因为后者在实现时，并没有考虑\
+反向传播。
+
 我们的这一方法的灵感，来源于使用CNN压缩图像中的量化过程的解决方法：
 
 Mentzer F, Agustsson E, Tschannen M, et al. Conditional probability models for deep image \
@@ -67,7 +70,7 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 
 .. image:: ./_static/tutorials/5-1.png
 
-如果想使用其他的近似门控函数，只需要继承你想使用的 ``SpikingFlow.softbp`` 中的神经元，并重写 ``pulse_soft(x)`` 函数。默认\
+如果想使用其他的近似门控函数，只需要继承你想使用的 ``SpikingFlow.softbp.neuron`` 中的神经元，并重写 ``pulse_soft(x)`` 函数。默认\
 的近似门控函数，使用 ``SpikingFlow.softbp.soft_pulse_function`` 提供的sigmoid函数：
 
 .. code-block:: python
@@ -143,19 +146,19 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 
 作为激活函数的SNN神经元
 ----------------------
-解决了SNN的微分问题后，我们的SNN神经元可以像激活函数那样，嵌入到使用PyTorch搭建的任意网络中去了。在 ``SpikingFlow.softbp`` 中\
+解决了SNN的微分问题后，我们的SNN神经元可以像激活函数那样，嵌入到使用PyTorch搭建的任意网络中去了。在 ``SpikingFlow.softbp.neuron`` 中\
 已经实现了IF神经元和LIF神经元，可以很方便地搭建各种网络，例如一个简单的全连接网络：\
 
 .. code-block:: python
 
     net = nn.Sequential(
             nn.Linear(100, 10, bias=False),
-            softbp.LIFNode(tau=100.0, v_threshold=1.0, v_reset=5.0)
+            neuron.LIFNode(tau=100.0, v_threshold=1.0, v_reset=5.0)
             )
 
 MNIST分类
 --------
-现在我们使用 ``SpikingFlow.softbp`` 中的LIF神经元，搭建一个双层全连接网络，对MNIST数据集进行分类：
+现在我们使用 ``SpikingFlow.softbp.neuron`` 中的LIF神经元，搭建一个双层全连接网络，对MNIST数据集进行分类：
 
 .. code-block:: python
 
@@ -165,7 +168,7 @@ MNIST分类
     import torchvision
     import sys
     sys.path.append('.')
-    import SpikingFlow.softbp as softbp
+    import SpikingFlow.softbp.neuron as neuron
     import SpikingFlow.encoding as encoding
     from torch.utils.tensorboard import SummaryWriter
     import readline
@@ -177,9 +180,9 @@ MNIST分类
             self.fc = nn.Sequential(
                 nn.Flatten(),
                 nn.Linear(28 * 28, 14 * 14, bias=False),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                 nn.Linear(14 * 14, 10, bias=False),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
             )
 
         def forward(self, x):
@@ -327,33 +330,33 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
             self.conv = nn.Sequential(
                 nn.Conv2d(3, 256, kernel_size=3, padding=1),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.MaxPool2d(2, 2),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 16 * 16
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 16 * 16
 
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.MaxPool2d(2, 2),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
 
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                 nn.Conv2d(256, 256, kernel_size=3, padding=1),
                 nn.MaxPool2d(2, 2),
                 nn.BatchNorm2d(256),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
 
             )
             self.fc = nn.Sequential(
                 nn.Flatten(),
                 nn.Linear(256 * 4 * 4, 10, bias=False),
-                softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
                                     )
 
         def forward(self, x):
@@ -469,7 +472,7 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 
             self.append(
                 nn.Sequential(
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
                 ),
                 gpu_list[1]
             )
@@ -485,7 +488,7 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
 
             self.append(
                 nn.Sequential(
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 16 * 16
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)  # 16 * 16
                 ),
                 gpu_list[3]
             )
@@ -494,21 +497,21 @@ CIFAR10分类任务，训练的代码与进行MNIST分类几乎相同，只需�
                 nn.Sequential(
                     nn.Conv2d(256, 256, kernel_size=3, padding=1),
                     nn.BatchNorm2d(256),
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                     nn.Conv2d(256, 256, kernel_size=3, padding=1),
                     nn.MaxPool2d(2, 2),
                     nn.BatchNorm2d(256),
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 8 * 8
                     nn.Conv2d(256, 256, kernel_size=3, padding=1),
                     nn.BatchNorm2d(256),
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
                     nn.Conv2d(256, 256, kernel_size=3, padding=1),
                     nn.MaxPool2d(2, 2),
                     nn.BatchNorm2d(256),
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),  # 4 * 4
                     nn.Flatten(),
                     nn.Linear(256 * 4 * 4, 10, bias=False),
-                    softbp.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+                    neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
                 ),
                 gpu_list[4]
             )
