@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import softbp.soft_pulse_function as soft_pulse_function
 class ModelPipeline(nn.Module):
     def __init__(self):
         '''
@@ -185,10 +185,9 @@ class BaseNode(nn.Module):
         :param x: 输入，tensor
         :return: :math:`\\sigma(x)`
 
-        此函数即为 :math:`\\sigma(x)`。默认是用sigmoid函数。如果想使用其他函数，继承后重写pulse_soft()函数即可
+        默认是前向阶跃函数，反向用sigmoid函数。如果想使用其他函数，继承后重写pulse_soft()函数即可
         '''
-        return torch.sigmoid(x)
-
+        return soft_pulse_function.sigmoid(x)
 
     def spiking(self):
         '''
@@ -198,17 +197,9 @@ class BaseNode(nn.Module):
 
         前向传播使用 :math:`\\Theta(x)`，反向传播时按前向传播为 ``self.pulse_soft()`` 来计算梯度的脉冲发放函数
         '''
-        if self.training:
-            spike_hard = (self.v >= self.v_threshold).float()
-            spike_soft = self.pulse_soft(self.v - self.v_threshold)
-            v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-            v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
-            self.v = v_soft + (v_hard - v_soft).detach_()
-            return spike_soft + (spike_hard - spike_soft).detach_()
-        else:
-            spike_hard = (self.v >= self.v_threshold).float()
-            self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-            return spike_hard
+        spike = self.pulse_soft(self.v - self.v_reset)
+        self.v = self.v * (1 - spike) + self.v_reset * spike
+        return spike
 
     def forward(self, dv: torch.Tensor):
         '''
@@ -272,5 +263,26 @@ class LIFNode(BaseNode):
         return self.spiking()
 
 
+
+
+class PLIFNode(BaseNode):
+    def __init__(self, v_threshold=1.0, v_reset=0.0):
+        '''
+        :param v_threshold: 神经元的阈值电压
+        :param v_reset: 神经元的重置电压
+
+        Parametric LIF神经元模型，时间常数tau可学习的LIF神经元。对于同一层神经元，它们的tau是共享的
+
+        .. math::
+            \\tau_{m} \\frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
+
+        电压在不为v_reset时，会指数衰减
+        '''
+        super().__init__(v_threshold, v_reset)
+        self.tau = nn.Parameter(torch.ones(size=[1]) / 2)
+
+    def forward(self, dv: torch.Tensor):
+        self.v += (dv + -(self.v - self.v_reset)) * self.tau
+        return self.spiking()
 
 
