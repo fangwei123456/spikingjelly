@@ -5,4 +5,3 @@ SpikingFlow
    :maxdepth: 4
 
    SpikingFlow
-   Tutorials
