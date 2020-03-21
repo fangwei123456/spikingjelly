@@ -133,8 +133,6 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
         :return: 神经元的输出脉冲
 
         根据当前神经元的电压、阈值、重置电压，计算输出脉冲，并更新神经元的电压
-
-        前向传播使用 :math:`\\Theta(x)`，反向传播时按前向传播为 ``self.pulse_soft()`` 来计算梯度的脉冲发放函数
         '''
         spike = self.pulse_soft(self.v - self.v_reset)
         self.v = self.v * (1 - spike) + self.v_reset * spike
