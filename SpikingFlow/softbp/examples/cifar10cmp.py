@@ -5,10 +5,9 @@ import torchvision
 import sys
 sys.path.append('.')
 import SpikingFlow.softbp as softbp
-import SpikingFlow.encoding as encoding
 from torch.utils.tensorboard import SummaryWriter
 import readline
-# 运行时T=16
+
 class Net(softbp.ModelPipeline):
     def __init__(self, gpu_list, tau=100.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
@@ -112,8 +111,7 @@ def main():
     net = Net(gpu_list=gpu_list, tau=tau)
     # 使用Adam优化器
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-    # 使用泊松编码器
-    encoder = encoding.PoissonEncoder()
+
     train_times = 0
     for _ in range(train_epoch):
         net.train()
