@@ -142,7 +142,8 @@ def main():
             correct_rate = (out_spikes_counter_frequency.max(1)[1] == label).float().mean().item()
             writer.add_scalar('train_correct_rate', correct_rate, train_times)
             if train_times % 1024 == 0:
-                print('train_times', train_times, 'train_correct_rate', correct_rate)
+                print(gpu_list, dataset_dir, batch_size, split_sizes, learning_rate, T, tau, train_epoch, log_dir)
+                print(sys.argv, 'train_times', train_times, 'train_correct_rate', correct_rate)
             train_times += 1
         net.eval()
         with torch.no_grad():
