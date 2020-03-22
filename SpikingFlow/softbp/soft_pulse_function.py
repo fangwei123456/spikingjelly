@@ -27,7 +27,7 @@ def bilinear_leaky_relu(x, a=1, b=0.01, c=0.5):
     :param a: -c <= x <= c 时反向传播的梯度
     :param b: x > c 或 x < -c 时反向传播的梯度
     :param c: 决定梯度区间的参数
-    :return: 前向传播时候，返回 (x >= 0).float()
+    :return: 与输入相同shape的输出
 
     双线性的近似脉冲发放函数。前向为
 
@@ -55,7 +55,7 @@ def sigmoid(x, alpha=1.0):
     '''
     :param x: 输入数据
     :param alpha: 控制反向传播时梯度的平滑程度的参数
-    :return: 前向传播时候，返回 (x >= 0).float()
+    :return: 与输入相同shape的输出
 
     反向传播时使用sigmoid的梯度的脉冲发放函数。前向为
 
@@ -93,7 +93,7 @@ def sign_swish(x, beta=5.0):
     '''
     :param x: 输入数据
     :param beta: 控制反向传播的参数
-    :return: 前向传播时候，返回 (x >= 0).float()
+    :return: 与输入相同shape的输出
 
     Darabi, Sajad, et al. "BNN+: Improved binary network training." arXiv preprint arXiv:1812.11800 (2018).
 
