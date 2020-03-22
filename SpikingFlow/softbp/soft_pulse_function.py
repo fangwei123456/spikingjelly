@@ -49,7 +49,7 @@ def bilinear_leaky_relu(x, a=1, b=0.01, c=0.5):
         \\end{cases}
 
     '''
-    return BilinearLeakyReLU.apply(a, b, c)
+    return BilinearLeakyReLU.apply(x, a, b, c)
 
 def sigmoid(x, alpha=1.0):
     '''
