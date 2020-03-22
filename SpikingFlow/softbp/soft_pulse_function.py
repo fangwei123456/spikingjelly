@@ -5,22 +5,21 @@ import torch.nn.functional as F
 class BilinearLeakyReLU(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, a=1, b=0.01, c=0.5):
-        ctx.save_for_backward(x)
-        ctx.a = a
-        ctx.b = b
-        ctx.c = c
-        return (x >= 0).float()
+        piecewise0 = (x < -c).float()
+        piecewise2 = (x > c).float()
+        piecewise1 = torch.ones_like(x) - piecewise0 - piecewise2
+
+        ctx.save_for_backward(piecewise0 * b + piecewise1 * a + piecewise2 * b)
+
+        return (b * x + b * c - a * c) * piecewise0 + (a * x) * piecewise1 + (b * x - b * c + a * c) * piecewise2
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            x = ctx.saved_tensors[0]
-            grad_x = (ctx.b * (x > ctx.c).float() + ctx.b * (x < -ctx.c).float() \
-                     + ctx.a * (x >= -ctx.c).float() * (x <= ctx.c).float()) * grad_output
+            grad_x = grad_output * ctx.saved_tensors[0]
 
         return grad_x, None, None, None
-
 
 def bilinear_leaky_relu(x, a=1, b=0.01, c=0.5):
     '''
@@ -30,13 +29,14 @@ def bilinear_leaky_relu(x, a=1, b=0.01, c=0.5):
     :param c: 决定梯度区间的参数
     :return: 前向传播时候，返回 (x >= 0).float()
 
-    双线性的脉冲发放函数。前向为
+    双线性的近似脉冲发放函数。前向为
 
     .. math::
         g(x) =
         \\begin{cases}
-        1, & x \\geq 0 \\\\
-        0, & x < 0
+        bx + bc - ac, & x < -c \\\\
+        ax, & -c \\leq x \\leq c \\\\
+        bx - bc + ac, & x > c \\\\
         \\end{cases}
 
     反向为
@@ -51,23 +51,6 @@ def bilinear_leaky_relu(x, a=1, b=0.01, c=0.5):
     '''
     return BilinearLeakyReLU.apply(a, b, c)
 
-class Sigmoid(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x, alpha=1.0):
-        ctx.save_for_backward(x)
-        ctx.alpha = alpha
-        return (x >= 0).float()
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            s_x = torch.sigmoid(ctx.alpha * ctx.saved_tensors[0])
-            grad_x = ctx.alpha * (1 - s_x) * s_x * grad_output
-
-        return grad_x, None
-
-
 def sigmoid(x, alpha=1.0):
     '''
     :param x: 输入数据
@@ -77,37 +60,34 @@ def sigmoid(x, alpha=1.0):
     反向传播时使用sigmoid的梯度的脉冲发放函数。前向为
 
     .. math::
-        g(x) =
-        \\begin{cases}
-        1, & x \\geq 0 \\\\
-        0, & x < 0
-        \\end{cases}
+        g(x) = \\mathrm{sigmoid}(\\alpha x)
 
     反向为
 
     .. math::
         g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
     '''
-    return Sigmoid.apply(x, alpha)
+    return torch.sigmoid_(alpha * x)
 
 class SignSwish(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, beta=1.0):
-        ctx.save_for_backward(x)
+        beta_x = beta * x
+        s_beta_x = torch.sigmoid(beta_x)
+
+        ctx.save_for_backward(beta_x)
         ctx.beta = beta
-        return (x >= 0).float()
+        return 2 * s_beta_x * (1 + beta_x * (1 - s_beta_x)) - 1
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            x = ctx.saved_tensors[0]
-            grad_x = ctx.beta * (2 - ctx.beta * x * torch.tanh(ctx.beta * x / 2)) / (1 + torch.cosh(ctx.beta * x)) \
+            beta_x = ctx.saved_tensors[0]
+            grad_x = ctx.beta * (2 - beta_x * torch.tanh(beta_x / 2)) / (1 + torch.cosh(beta_x)) \
                      * grad_output
 
         return grad_x, None
-
-
 
 def sign_swish(x, beta=5.0):
     '''
@@ -115,14 +95,12 @@ def sign_swish(x, beta=5.0):
     :param beta: 控制反向传播的参数
     :return: 前向传播时候，返回 (x >= 0).float()
 
+    Darabi, Sajad, et al. "BNN+: Improved binary network training." arXiv preprint arXiv:1812.11800 (2018).
+
     反向传播时使用swish的梯度的脉冲发放函数。前向为
 
     .. math::
-        g(x) =
-        \\begin{cases}
-        1, & x \\geq 0 \\\\
-        0, & x < 0
-        \\end{cases}
+        g(x) = 2 * \\mathrm{sigmoid}(\\beta x) * (1 + \\beta x (1 - \\mathrm{sigmoid}(\\beta x))) - 1
 
     反向为
 

@@ -51,9 +51,19 @@ class BaseNode(nn.Module):
 
         根据当前神经元的电压、阈值、重置电压，计算输出脉冲，并更新神经元的电压
         '''
-        spike = self.pulse_soft(self.v - self.v_reset)
-        self.v = self.v * (1 - spike) + self.v_reset * spike
-        return spike
+
+        if self.training:
+            spike_hard = (self.v >= self.v_threshold).float()
+            spike_soft = self.pulse_soft(self.v - self.v_threshold)
+            v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
+            v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
+            self.v = v_soft + (v_hard - v_soft).detach_()
+            return spike_soft + (spike_hard - spike_soft).detach_()
+        else:
+            spike_hard = (self.v >= self.v_threshold).float()
+            self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
+            return spike_hard
+
 
     def forward(self, dv: torch.Tensor):
         '''
@@ -113,7 +123,7 @@ class LIFNode(BaseNode):
         self.tau = tau
 
     def forward(self, dv: torch.Tensor):
-        self.v += (dv + -(self.v - self.v_reset)) / self.tau
+        self.v += (dv -(self.v - self.v_reset)) / self.tau
         return self.spiking()
 
 
@@ -136,5 +146,5 @@ class PLIFNode(BaseNode):
         self.tau = nn.Parameter(torch.ones(size=[1]) / 2)
 
     def forward(self, dv: torch.Tensor):
-        self.v += (dv + -(self.v - self.v_reset)) * self.tau
+        self.v += (dv -(self.v - self.v_reset)) * self.tau
         return self.spiking()
