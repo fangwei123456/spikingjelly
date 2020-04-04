@@ -7,12 +7,10 @@
 需要注意的是，``SpikingFlow.softbp.neuron`` 与 ``SpikingFlow.neuron`` 中的神经元不能混用，因为后者在实现时，并没有考虑\
 反向传播。
 
-我们的这一方法的灵感，来源于使用CNN压缩图像中的量化过程的解决方法：
+软反向传播的灵感，来源于以下两篇文章:
 
 Mentzer F, Agustsson E, Tschannen M, et al. Conditional probability models for deep image \
 compression[C]//Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2018: 4394-4402.
-
-但这一方法其实已经被提出了，参见
 
 Wu Y, Deng L, Li G, et al. Spatio-temporal backpropagation for \
 training high-performance spiking neural networks[J]. Frontiers in neuroscience, 2018, 12: 331.
