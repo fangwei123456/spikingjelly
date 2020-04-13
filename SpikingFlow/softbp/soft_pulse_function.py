@@ -60,7 +60,7 @@ def sigmoid(x, alpha=1.0):
     反向传播时使用sigmoid的梯度的脉冲发放函数。前向为
 
     .. math::
-        g(x) = \\mathrm{sigmoid}(\\alpha x)
+        g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
 
     反向为
 

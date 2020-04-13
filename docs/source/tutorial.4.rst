@@ -9,9 +9,11 @@
 “学习”在ANN中或许更多地被称作是“训练”。ANN中基于梯度的反向传播优化算法，就是应用最为广泛的学习规则。
 
 在SNN中，发放脉冲这一过程通常使用阶跃函数去描述，这是一个不可微分的过程；SNN比较注重生物可解释性，生物神经系统中似乎并没有使\
-用反向传播这种训练成千上万次才能达到较好结果的“低效率”方法。在SNN中如何使用反向传播算法也是一个研究热点，使用反向传播算法的\
-SNN一般为事件驱动模型（例如SpikeProp和Tempotron，在 ``SpikingFlow.event_driven`` 中可以找到），\
-而 ``SpikingFlow.learning`` 中更多的聚焦于生物可解释性的学习算法，例如STDP。
+用反向传播这种训练成千上万次才能达到较好结果的“低效率”方法。在SNN中如何使用反向传播算法也是一个研究热点。\
+使用反向传播算法的SNN一般为事件驱动模型（例如SpikeProp和Tempotron，在 ``SpikingFlow.event_driven`` 中可以找到），但也有一些\
+算法会使用时间驱动模型，可见于 ``SpikingFlow.softbp``。``SpikingFlow.learning`` 中更多的聚焦于生物可解释性的学习算法，例如STDP。
+
+
 
 STDP(Spike Timing Dependent Plasticity)
 --------------------------------------

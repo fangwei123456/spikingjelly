@@ -123,7 +123,7 @@ class LIFNode(BaseNode):
         self.tau = tau
 
     def forward(self, dv: torch.Tensor):
-        self.v += (dv -(self.v - self.v_reset)) / self.tau
+        self.v += (dv - (self.v - self.v_reset)) / self.tau
         return self.spiking()
 
 
@@ -146,5 +146,6 @@ class PLIFNode(BaseNode):
         self.tau = nn.Parameter(torch.ones(size=[1]) / 2)
 
     def forward(self, dv: torch.Tensor):
-        self.v += (dv -(self.v - self.v_reset)) * self.tau
+        self.v += (dv - (self.v - self.v_reset)) * self.tau
         return self.spiking()
+
