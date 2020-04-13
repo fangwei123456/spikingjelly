@@ -5,8 +5,3 @@ V(t)函数的定义在postsynaptic_potential_kernel_function.py中。
 ## Tempotron
 >Gütig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based decisions[J]. Nature neuroscience, 2006, 9(3): 420.
 
-## SpikeProp
->Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
-
-
-
