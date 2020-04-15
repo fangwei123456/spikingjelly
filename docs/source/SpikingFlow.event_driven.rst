@@ -4,34 +4,18 @@ SpikingFlow.event\_driven package
 Submodules
 ----------
 
-SpikingFlow.event\_driven.gaussian\_tuning\_curve module
---------------------------------------------------------
+SpikingFlow.event\_driven.encoding module
+-----------------------------------------
 
-.. automodule:: SpikingFlow.event_driven.gaussian_tuning_curve
+.. automodule:: SpikingFlow.event_driven.encoding
    :members:
    :undoc-members:
    :show-inheritance:
 
-SpikingFlow.event\_driven.postsynaptic\_potential\_kernel\_function module
---------------------------------------------------------------------------
+SpikingFlow.event\_driven.neuron module
+---------------------------------------
 
-.. automodule:: SpikingFlow.event_driven.postsynaptic_potential_kernel_function
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-SpikingFlow.event\_driven.spikeprop module
-------------------------------------------
-
-.. automodule:: SpikingFlow.event_driven.spikeprop
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-SpikingFlow.event\_driven.tempotron module
-------------------------------------------
-
-.. automodule:: SpikingFlow.event_driven.tempotron
+.. automodule:: SpikingFlow.event_driven.neuron
    :members:
    :undoc-members:
    :show-inheritance:
