@@ -4,8 +4,7 @@
 
 本节教程主要关注 ``SpikingFlow.softbp``，介绍软反向传播的概念、可微分SNN神经元的使用方式。
 
-需要注意的是，``SpikingFlow.softbp.neuron`` 与 ``SpikingFlow.neuron`` 中的神经元不能混用，因为后者在实现时，并没有考虑\
-反向传播。
+需要注意的是，``SpikingFlow.softbp`` 是一个相对独立的包，与其他的 ``SpikingFlow.*`` 中的神经元、突触等组件不能混用。
 
 软反向传播的灵感，来源于以下两篇文章:
 

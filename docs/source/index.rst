@@ -22,8 +22,18 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 
     git clone https://github.com/fangwei123456/SpikingFlow.git
 
+
 快速上手教程
 -------------------------
+
+``SpikingFlow.softbp`` 使用时间驱动仿真SNN，使用反向传播、梯度下降来学习。
+
+``SpikingFlow.event_driven`` 是使用事件驱动仿真SNN，使用反向传播、梯度下降来学习。
+
+而其他的 ``SpikingFlow.*`` 是使用事件驱动仿真SNN，使用生物可解释性的方法（例如STDP）来学习。
+
+因此，``SpikingFlow.softbp`` 和 ``SpikingFlow.event_driven`` 以及其他的 ``SpikingFlow.*`` 包，三者是平行关系，互不交叉。例\
+如使用者对 ``SpikingFlow.softbp`` 感兴趣，他只需要阅读 ``SpikingFlow.softbp`` 相关的教程或源代码就可以上手。
 
 * :doc:`神经元 SpikingFlow.neuron<./tutorial.0>`
 * :doc:`编码器 SpikingFlow.encoding<./tutorial.1>`
@@ -31,6 +41,7 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 * :doc:`突触连接 SpikingFlow.connection<./tutorial.3>`
 * :doc:`学习规则 SpikingFlow.learning<./tutorial.4>`
 * :doc:`软反向传播 SpikingFlow.softbp <./tutorial.5>`
+* :doc:`事件驱动（施工中，未完成） SpikingFlow.event_driven <./tutorial.6>`
 
 模块文档
 -------------------------
