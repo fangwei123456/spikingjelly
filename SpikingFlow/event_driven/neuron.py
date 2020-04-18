@@ -75,9 +75,12 @@ class Tempotron(nn.Module):
             t = torch.arange(0, self.T).to(in_spikes.device)  # t = [0, 1, 2, ..., T-1] shape=[T]
             t = t.view(1, 1, t.shape[0]).repeat(in_spikes.shape[0], v_out.shape[1], 1)  # shape=[batch_size, out_features, T]
             max_index_soft = (F.softmax(v_out * self.T, dim=2) * t).sum(dim=2)  # shape=[batch_size, out_features]
-            mask = (F.max_pool1d(v_out, kernel_size=self.T).squeeze() >= self.v_threshold).float() * 2 - 1
+            v_max = F.max_pool1d(v_out, kernel_size=self.T).squeeze()
+            mask = (v_max >= self.v_threshold).float() * 2 - 1
+            # mask_soft = torch.tanh(v_max - self.v_threshold)
             # mask中的元素均为±1，表示峰值电压是否过阈值
             max_index = max_index * mask
+            # max_index_soft = max_index_soft * mask_soft
             max_index_soft = max_index_soft * mask
             # print('max_index\n', max_index, '\nmax_index_soft\n', max_index_soft)
             return max_index_soft + (max_index - max_index_soft).detach()

@@ -36,7 +36,7 @@ SNN之于RNN
 .. math::
     \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + X(t)
 
-    \tau_{m} V(t) = -(V(t-1) - V_{reset}) + X(t)
+    \tau_{m} (V(t) - V(t-1)) = -(V(t-1) - V_{reset}) + X(t)
 
 由于状态更新方程不能描述脉冲发放的过程，因此我们用 :math:`H(t)` 来代替 :math:`V(t)`，用 :math:`V(t)` 表示完成脉冲发放（或者\
 不发放）过程后的神经元膜电压。
