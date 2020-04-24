@@ -38,6 +38,19 @@ class Tempotron(nn.Module):
         # 指数衰减的脉冲输入
         return (torch.exp(-t / tau) - torch.exp(-t / tau_s)) * (t >= 0).float()
 
+    @staticmethod
+    def mse_loss(v_max, v_threshold, label, num_classes):
+        '''
+        :param v_max: Tempotron神经元在仿真周期内输出的最大电压值，与forward函数在ret_type == 'v_max'时的返回值相\
+        同。shape=[batch_size, out_features]的tensor
+        :param v_threshold: Tempotron的阈值电压，float或shape=[batch_size, out_features]的tensor
+        :param label: 样本的真实标签，shape=[batch_size]的tensor
+        :param num_classes: 样本的类别总数，int
+        :return: 分类错误的神经元的电压，与阈值电压之差的均方误差
+        '''
+        wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
+        return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
+
     def forward(self, in_spikes: torch.Tensor, ret_type):
         '''
         :param in_spikes: shape=[batch_size, in_features]
