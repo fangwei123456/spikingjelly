@@ -93,5 +93,8 @@ Tempotron的膜电位定义为：
 压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 `SpikingFlow/event_driven/neuron.py` 中\
 实现了集成全连接层、并行计算的Tempotron，读者如有兴趣可以直接阅读源代码。
 
+识别MNIST
+--------
+
 
 .. [#f1] Gutig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based decisions[J]. Nature Neuroscience, 2006, 9(3): 420-428.
