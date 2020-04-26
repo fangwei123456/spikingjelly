@@ -41,7 +41,7 @@ SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网�
 * :doc:`突触连接 SpikingFlow.connection<./tutorial.3>`
 * :doc:`学习规则 SpikingFlow.learning<./tutorial.4>`
 * :doc:`软反向传播 SpikingFlow.softbp <./tutorial.5>`
-* :doc:`事件驱动（施工中，未完成） SpikingFlow.event_driven <./tutorial.6>`
+* :doc:`事件驱动 SpikingFlow.event_driven <./tutorial.6>`
 
 模块文档
 -------------------------
