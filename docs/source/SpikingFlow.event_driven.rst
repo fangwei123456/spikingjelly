@@ -1,6 +1,13 @@
 SpikingFlow.event\_driven package
 =================================
 
+Subpackages
+-----------
+
+.. toctree::
+
+   SpikingFlow.event_driven.examples
+
 Submodules
 ----------
 
