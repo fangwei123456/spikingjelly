@@ -173,7 +173,7 @@ Tempotron的膜电位定义为：
             wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
             return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
 
- 下面我们直接运行代码。完整的源代码位于 ``SpikingFlow/event_driven/examples/tempotron-mnist.py``：
+下面我们直接运行代码。完整的源代码位于 ``SpikingFlow/event_driven/examples/tempotron-mnist.py``：
 
 .. code-block:: bash
 
