@@ -1,7 +1,7 @@
 欢迎来到SpikingFlow的文档
 -------------------------
 
-SpikingFlow是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网络(Spiking Neuron Network, SNN)框架。
+`SpikingFlow <https://github.com/fangwei123456/SpikingFlow>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ 的脉冲神经网络(Spiking Neuron Network, SNN)框架。
 
 安装
 ----------------
