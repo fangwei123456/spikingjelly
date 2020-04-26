@@ -110,8 +110,8 @@ Tempotron的膜电位定义为：
 出 :math:`m` 条高斯曲线 :math:`g^{i}_{j}` 的均值和方差：
 
 .. math::
-    \mu^{i}_{j} = x^{i}_{min} + \frac{2j - 3}{2} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}, j=1, 2, ..., m \\
-    \sigma^{i}_{j] = \frac{1}{\beta} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}
+    \mu^{i}_{j} & = x^{i}_{min} + \frac{2j - 3}{2} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}, j=1, 2, ..., m \\
+    \sigma^{i}_{j] & = \frac{1}{\beta} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}
 
 :math:`\beta` 通常取值为 :math:`1.5`。可以看出，这 :math:`m` 条高斯曲线的形状完全相同，只是对称轴所在的位置不同。
 
