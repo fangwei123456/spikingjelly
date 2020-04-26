@@ -109,10 +109,6 @@ Tempotron的膜电位定义为：
 对于第 :math:`i` 个特征 :math:`X^{i}`，它的取值范围为 :math:`X^{i}_{min} \leq X^{i} \leq X^{i}_{max}`，首先计算\
 出 :math:`m` 条高斯曲线 :math:`g^{i}_{j}` 的均值和方差：
 
-.. math::
-    \mu^{i}_{j} & = x^{i}_{min} + \frac{2j - 3}{2} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}, j=1, 2, ..., m \\
-    \sigma^{i}_{j] & = \frac{1}{\beta} \frac{x^{i}_{max} - x^{i}_{min}}{m - 2}
-
 其中 :math:`\beta` 通常取值为 :math:`1.5`。可以看出，这 :math:`m` 条高斯曲线的形状完全相同，只是对称轴所在的位置不同。
 
 对于要编码的数据 :math:`x \in X^{i}`，首先计算出 :math:`x` 对应的高斯函数值 :math:`g^{i}_{j}(x)`，这些函数值全部介\
