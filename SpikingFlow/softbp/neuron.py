@@ -148,4 +148,3 @@ class PLIFNode(BaseNode):
     def forward(self, dv: torch.Tensor):
         self.v += (dv - (self.v - self.v_reset)) * self.tau
         return self.spiking()
-

@@ -48,7 +48,7 @@ class Tempotron(nn.Module):
         :param num_classes: 样本的类别总数，int
         :return: 分类错误的神经元的电压，与阈值电压之差的均方误差
         '''
-        wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
+        wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, num_classes)).float()
         return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
 
     def forward(self, in_spikes: torch.Tensor, ret_type):
