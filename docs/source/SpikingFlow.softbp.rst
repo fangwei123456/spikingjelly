@@ -11,6 +11,14 @@ Subpackages
 Submodules
 ----------
 
+SpikingFlow.softbp.functional module
+------------------------------------
+
+.. automodule:: SpikingFlow.softbp.functional
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 SpikingFlow.softbp.layer module
 -------------------------------
 
