@@ -35,7 +35,8 @@ release = '0.2.2'
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx_rtd_theme',
-    'sphinx.ext.viewcode'
+    'sphinx.ext.viewcode',
+    'sphinx.ext.inheritance_diagram'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -66,7 +67,7 @@ html_theme = 'sphinx_rtd_theme'
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-autodoc_mock_imports = ['torch', 'torch.Tensor', 'torch.nn', 'torch.nn.functional', 'numpy', 'torchvision']
+autodoc_mock_imports = ['torch', 'numpy', 'torchvision']
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False
