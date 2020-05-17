@@ -11,7 +11,7 @@ setuptools.setup(
     name="SpikingFlow",
     version="0.2.3",
     author="PKU MLG",
-    author_email="fangwei123456@pku.edu.cn",
+    author_email="fangwei123456@pku.edu.cn, chyq@pku.edu.cn",
     description="A Spiking Neural Networks simulator built on PyTorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
