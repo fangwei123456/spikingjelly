@@ -34,7 +34,8 @@ release = '0.2.2'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx_rtd_theme'
+    'sphinx_rtd_theme',
+    'sphinx.ext.viewcode'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -68,6 +69,6 @@ html_static_path = ['_static']
 autodoc_mock_imports = ['torch', 'numpy', 'torchvision']
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
-
+autodoc_inherit_docstrings = False
 
 master_doc = 'index'

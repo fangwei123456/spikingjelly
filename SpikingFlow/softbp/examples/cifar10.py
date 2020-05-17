@@ -8,7 +8,6 @@ import SpikingFlow.softbp.neuron as neuron
 import SpikingFlow.encoding as encoding
 from torch.utils.tensorboard import SummaryWriter
 import readline
-
 class Net(nn.Module):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
