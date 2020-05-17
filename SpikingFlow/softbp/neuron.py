@@ -12,7 +12,7 @@ class BaseNode(nn.Module):
 
         softbp包中，可微分SNN神经元的基类神经元
 
-        可微分SNN神经元，在前向传播时输出真正的脉冲（离散的0和1）。脉冲的产生过程可以可以看作是一个\
+        可微分SNN神经元，在前向传播时输出真正的脉冲（离散的0和1）。脉冲的产生过程可以可以看作是一个\\
         阶跃函数：
 
         .. math::
@@ -24,10 +24,10 @@ class BaseNode(nn.Module):
             0, & x < 0
             \\end{cases}
 
-        :math:`\\Theta(x)` 是一个不可微的函数，用一个形状类似的函数 :math:`\\sigma(x)` 去近似它，在反向传播时\
+        :math:`\\Theta(x)` 是一个不可微的函数，用一个形状类似的函数 :math:`\\sigma(x)` 去近似它，在反向传播时\\
         用 :math:`\\sigma'(x)` 来近似 :math:`\\Theta'(x)`，这样就可以使用梯度下降法来更新SNN了
 
-        前向传播使用 :math:`\\Theta(x)`，反向传播时按前向传播为 :math:`\\sigma(x)` 来计算梯度，在PyTorch中很容易实现，参见\
+        前向传播使用 :math:`\\Theta(x)`，反向传播时按前向传播为 :math:`\\sigma(x)` 来计算梯度，在PyTorch中很容易实现，参见\\
         这个类的spiking()函数
         '''
         super().__init__()
