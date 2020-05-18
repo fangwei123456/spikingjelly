@@ -137,7 +137,7 @@ class Dropout(nn.Module):
         '''
         if self.training:
             if self.mask is None:
-                self.mask = (torch.rand_like(x) < self.p).float()
+                self.mask = (torch.rand_like(x) > self.p).float()
             return self.mask * x
         else:
             return x
