@@ -128,6 +128,7 @@ class Dropout(nn.Module):
             影响，即便dropout的概率被设置成高达0.9。可能是LIF神经元的积分行为，对某一个时刻输入的缺失并不敏感
         '''
         super().__init__()
+        assert 0 < p < 1
         self.mask = None
         self.p = p
     def forward(self, x:torch.Tensor):
@@ -138,7 +139,7 @@ class Dropout(nn.Module):
         if self.training:
             if self.mask is None:
                 self.mask = (torch.rand_like(x) > self.p).float()
-            return self.mask * x
+            return self.mask * x / (1 - self.p)
         else:
             return x
 
