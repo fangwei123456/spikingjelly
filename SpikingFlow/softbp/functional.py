@@ -145,12 +145,13 @@ def similar_loss(spikes:torch.Tensor, labels:torch.Tensor, loss_type='mse'):
     '''
 
     spikes = spikes.flatten(start_dim=1)
-
-    sim_p = spikes.mm(spikes.t()) / spikes.shape[1]  # shape=[N, N] sim[i][j]表示i与j的输出脉冲乘积，可以表示相似度
+    spikes = spikes * 2 - 1  # 0 1变换到-1 1
+    sim_p = spikes.mm(spikes.t()) / spikes.shape[1]
+    # shape=[N, N] sim[i][j]表示i与j的输出脉冲乘积，可以表示相似度。1表示完全相同，-1表示完全不相同
     # / spikes.shape[1]是为了归一化
+    sim_p = (sim_p + 1) / 2  # -1 1变换到0 1
 
-
-
+    labels = labels.float()
     sim = labels.mm(labels.t()).clamp_max(1)  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
     # 将大于1的元素设置为1，因为共享至少同一个标签，就认为他们相似
 
