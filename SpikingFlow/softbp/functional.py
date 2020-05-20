@@ -118,3 +118,47 @@ def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
         k_positive = torch.logical_and(k_positive, k_positive_mask)
 
         return N_o, k_positive, k_negative
+
+def similar_loss(spikes:torch.Tensor, labels:torch.Tensor, loss_type='mse'):
+    '''
+    :param spikes: shape=[N, M, T]，N个数据生成的脉冲
+    :param labels: shape=[N, C]，N个数据的标签，labels[i][k] == 1表示数据i属于第k类，labels[i][k] == 0则表示数据i不属于第\\
+    k类，允许多标签
+    :param loss_type: 返回哪种损失，可以为'mse', 'l1'
+    :return: shape=[1]的tensor，相似损失
+
+    将N个数据输入到输出层有M个神经元的SNN，运行T步，得到shape=[N, M, T]的脉冲。这N个数据的标签为shape=[N, C]的labels。
+
+    用shape=[N, N]的矩阵sim表示相似矩阵，sim[i][j] == 1表示数据i与数据j相似，sim[i][j] == 0表示数据i与数据j不相似。若\\
+    labels[i]与labels[j]共享至少同一个标签，则认为他们相似，否则不相似。
+
+    用shape=[N, N]的矩阵sim_p表示脉冲相似矩阵，sim_p[i][j]的取值为0到1，值越大表示数据i与数据j的脉冲越相似。
+
+    对于相似的数据，根据输入的loss_type，返回度量sim与sim_p差异的损失。
+
+    loss_type == 'mse'时，返回sim与sim_p的均方误差（也就是l2误差）。
+
+    loss_type == 'l1'时，返回sim与sim_p的l1误差。
+
+    loss_type == 'bce'时，返回sim与sim_p的二值交叉熵误差。
+
+    '''
+
+    spikes = spikes.flatten(start_dim=1)
+
+    sim_p = spikes.mm(spikes.t()) / spikes.shape[1]  # shape=[N, N] sim[i][j]表示i与j的输出脉冲乘积，可以表示相似度
+    # / spikes.shape[1]是为了归一化
+
+
+
+    sim = labels.mm(labels.t()).clamp_max(1)  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
+    # 将大于1的元素设置为1，因为共享至少同一个标签，就认为他们相似
+
+    if loss_type == 'mse':
+        return F.mse_loss(sim_p, sim)
+    elif loss_type == 'l1':
+        return F.l1_loss(sim_p, sim)
+    elif loss_type == 'bce':
+        return F.binary_cross_entropy(sim_p, sim)
+    else:
+        raise NotImplementedError
