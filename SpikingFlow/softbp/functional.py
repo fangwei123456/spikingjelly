@@ -124,8 +124,9 @@ def similar_loss(spikes:torch.Tensor, labels:torch.Tensor, loss_type='mse'):
     :param spikes: shape=[N, M, T]，N个数据生成的脉冲
     :param labels: shape=[N, C]，N个数据的标签，labels[i][k] == 1表示数据i属于第k类，labels[i][k] == 0则表示数据i不属于第\\
     k类，允许多标签
-    :param loss_type: 返回哪种损失，可以为'mse', 'l1'
-    :return: shape=[1]的tensor，相似损失
+    :param loss_type: 返回哪种损失，可以为'mse', 'l1', 'bce'
+    :return:
+    shape=[1]的tensor，相似损失
 
     将N个数据输入到输出层有M个神经元的SNN，运行T步，得到shape=[N, M, T]的脉冲。这N个数据的标签为shape=[N, C]的labels。
 
