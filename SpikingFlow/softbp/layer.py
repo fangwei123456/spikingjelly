@@ -7,23 +7,23 @@ class NeuNorm(nn.Module):
     def __init__(self, in_channels, k=0.9):
         '''
         .. warning::
-            可能是错误的实现。测试的结果表明，增加NeuNorm后的收敛速度和正确率反而下降了
+            可能是错误的实现。测试的结果表明，增加NeuNorm后的收敛速度和正确率反而下降了。
 
         :param in_channels: 输入数据的通道数
         :param k: 动量项系数
 
         Wu Y, Deng L, Li G, et al. Direct Training for Spiking Neural Networks: Faster, Larger, Better[C]. national conference on artificial intelligence, 2019, 33(01): 1311-1318.
-        中提出的NeuNorm层。NeuNorm层必须放在二维卷积层后的脉冲神经元后，例如
+        中提出的NeuNorm层。NeuNorm层必须放在二维卷积层后的脉冲神经元后，例如：
 
         Conv2d -> LIF -> NeuNorm
 
-        要求输入的尺寸是[batch_size, in_channels, W, H]
+        要求输入的尺寸是[batch_size, in_channels, W, H]。
 
-        in_channels是输入到NeuNorm层的通道数，也就是论文中的 :math:`F`
+        in_channels是输入到NeuNorm层的通道数，也就是论文中的 :math:`F`。
 
-        k是动量项系数，相当于论文中的 :math:`k_{\\tau 2}`
+        k是动量项系数，相当于论文中的 :math:`k_{\\tau 2}`。
 
-        论文中的 :math:`\\frac{v}{F}` 会根据 :math:`k_{\\tau 2} + vF = 1` 自动算出
+        论文中的 :math:`\\frac{v}{F}` 会根据 :math:`k_{\\tau 2} + vF = 1` 自动算出。
         '''
         super().__init__()
         self.x = 0
@@ -44,7 +44,7 @@ class NeuNorm(nn.Module):
         '''
         :return: None
 
-        本层是一个有状态的层。此函数重置本层的状态变量
+        本层是一个有状态的层。此函数重置本层的状态变量。
         '''
         self.x = 0
 
@@ -54,9 +54,9 @@ class DCT(nn.Module):
         :param kernel_size: 进行分块DCT变换的块大小
 
         将输入的shape=[*, W, H]的数据进行分块DCT变换的层，*表示任意额外添加的维度。变换只在最后2维进行，要求W和H都能\\
-        整除kernel_size
+        整除kernel_size。
 
-        DCT是AXAT的一种特例
+        DCT是AXAT的一种特例。
         '''
         super().__init__()
         self.kernel = torch.zeros(size=[kernel_size, kernel_size])
@@ -91,9 +91,9 @@ class AXAT(nn.Module):
 
         对输入数据 :math:`X` 进行线性变换 :math:`AXA^{T}` 的操作。
 
-        要求输入数据的shape=[*, in_features, in_features]，*表示任意额外添加的维度
+        要求输入数据的shape=[*, in_features, in_features]，*表示任意额外添加的维度。
 
-        将输入的数据看作是批量个shape=[in_features, in_features]的矩阵，而 :math:`A` 是shape=[out_features, in_features]的矩阵
+        将输入的数据看作是批量个shape=[in_features, in_features]的矩阵，而 :math:`A` 是shape=[out_features, in_features]的矩阵。
         '''
         super().__init__()
         self.A = nn.Parameter(torch.Tensor(out_features, in_features))
@@ -118,14 +118,14 @@ class Dropout(nn.Module):
         :param p: 设置为0的概率
 
         nn.Dropout在SNN中使用时，由于SNN需要运行一定的步长，每一步运行（t=0,1,...,T-1）时都会有不同的dropout，导致网络的结构\\
-        实际上是在持续变化：例如可能出现t=0时刻，i到j的连接被断开，但t=1时刻，i到j的连接又被保持
+        实际上是在持续变化：例如可能出现t=0时刻，i到j的连接被断开，但t=1时刻，i到j的连接又被保持。
 
         在SNN中的dropout应该是，当前这一轮的运行中，t=0时若i到j的连接被断开，则之后t=1,2,...,T-1时刻，i到j的连接应该一直被\\
-        断开；而到了下一轮运行时，重新按照概率去决定i到j的连接是否断开，因此重写了适用于SNN的Dropout
+        断开；而到了下一轮运行时，重新按照概率去决定i到j的连接是否断开，因此重写了适用于SNN的Dropout。
 
         .. tip::
             从之前的实验结果可以看出，当使用LIF神经元，损失函数或分类结果被设置成时间上累计输出的值，nn.Dropout几乎对SNN没有\\
-            影响，即便dropout的概率被设置成高达0.9。可能是LIF神经元的积分行为，对某一个时刻输入的缺失并不敏感
+            影响，即便dropout的概率被设置成高达0.9。可能是LIF神经元的积分行为，对某一个时刻输入的缺失并不敏感。
         '''
         super().__init__()
         assert 0 < p < 1
@@ -147,7 +147,7 @@ class Dropout(nn.Module):
         '''
         :return: None
 
-        本层是一个有状态的层。此函数重置本层的状态变量
+        本层是一个有状态的层。此函数重置本层的状态变量。
         '''
         self.mask = None
 
