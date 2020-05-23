@@ -147,7 +147,7 @@ def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, sim_type='stric
 
     其中 :math:`\\epsilon` 是一个很小的正数，可以为1e-6，防止出现除以0导致的数值不稳定。
 
-    .. tip::
+    .. note::
         将脉冲看作是一维的向量。
 
         'strict'其实是将脉冲从0,1线性变换到-1,1，然后求解两个脉冲向量的夹角余弦值。再将取值范围为[-1,1]的余弦值线性变换到[0,1]。
