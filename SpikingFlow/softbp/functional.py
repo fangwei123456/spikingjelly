@@ -119,10 +119,11 @@ def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
 
         return N_o, k_positive, k_negative
 
-def similar_loss(spikes:torch.Tensor, labels:torch.Tensor, loss_type='mse'):
+def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, sim_type='strict', loss_type='mse'):
     '''
     :param spikes: shape=[N, M, T]，N个数据生成的脉冲
     :param labels: shape=[N, C]，N个数据的标签，labels[i][k] == 1表示数据i属于第k类，labels[i][k] == 0则表示数据i不属于第k类，允许多标签
+    :param sim_type: 如何定义脉冲的“相似”，可以为'strict'或'relaxed'
     :param loss_type: 返回哪种损失，可以为'mse', 'l1', 'bce'
     :return:
     shape=[1]的tensor，相似损失
@@ -133,6 +134,25 @@ def similar_loss(spikes:torch.Tensor, labels:torch.Tensor, loss_type='mse'):
     labels[i]与labels[j]共享至少同一个标签，则认为他们相似，否则不相似。
 
     用shape=[N, N]的矩阵sim_p表示脉冲相似矩阵，sim_p[i][j]的取值为0到1，值越大表示数据i与数据j的脉冲越相似。
+
+    当sim_type == 'strict'时，数据i的脉冲 :math:`s_{i}` 和数据j的脉冲 :math:`s_{j}` 的相似度计算按照
+
+    .. math::
+        sim_{p_{ij}} = \\frac{1}{2}(\\frac{\\sum_{m=0}^{M-1} \\sum_{t=0}^{T-1}(2s_{i,m,t} - 1)(2s_{j,m,t} - 1)}{MT} + 1)
+
+    当sim_type == 'relaxed'时，数据i的脉冲 :math:`s_{i}` 和数据j的脉冲 :math:`s_{j}` 的相似度计算按照
+
+    .. math::
+        sim_{p_{ij}} = \\frac{\\sum_{m=0}^{M-1} \\sum_{t=0}^{T-1}s_{i,m,t}s_{j,m,t}}{\\sqrt{|s_{i}||s_{j}|} + \\epsilon}
+
+    其中 :math:`\\epsilon` 是一个很小的正数，可以为1e-6，防止出现除以0导致的数值不稳定。
+
+    .. tip::
+        将脉冲看作是一维的向量。
+
+        'strict'其实是将脉冲从0,1线性变换到-1,1，然后求解两个脉冲向量的夹角余弦值。再将取值范围为[-1,1]的余弦值线性变换到[0,1]。
+
+        'relaxed'是直接求解两个脉冲向量的夹角余弦值，由于脉冲向量的元素都为0或1，因此不会出现负余弦值，求解出的余弦值范围均为[0,1]。
 
     对于相似的数据，根据输入的loss_type，返回度量sim与sim_p差异的损失。
 
@@ -145,11 +165,17 @@ def similar_loss(spikes:torch.Tensor, labels:torch.Tensor, loss_type='mse'):
     '''
 
     spikes = spikes.flatten(start_dim=1)
-    spikes = spikes * 2 - 1  # 0 1变换到-1 1
-    sim_p = spikes.mm(spikes.t()) / spikes.shape[1]
-    # shape=[N, N] sim[i][j]表示i与j的输出脉冲乘积，可以表示相似度。1表示完全相同，-1表示完全不相同
-    # / spikes.shape[1]是为了归一化
-    sim_p = (sim_p + 1) / 2  # -1 1变换到0 1
+    if sim_type == 'strict':
+        spikes = spikes * 2 - 1  # 0 1变换到-1 1
+        sim_p = spikes.mm(spikes.t()) / spikes.shape[1]
+        # shape=[N, N] sim[i][j]表示i与j的输出脉冲乘积，可以表示相似度。1表示完全相同，-1表示完全不相同
+        # / spikes.shape[1]是为了归一化
+        sim_p = (sim_p + 1) / 2  # -1 1变换到0 1
+    elif sim_type == 'relaxed':
+        spikes_norm2 = spikes.norm(dim=1, keepdim=True)  # shape=[N, 1]，表示N个脉冲的2范数（向量的长度）
+        sim_p = spikes.mm(spikes.t()) / (spikes_norm2.mm(spikes_norm2.t()) + 1e-6)  # + 1e-6防止出现除以0
+    else:
+        raise NotImplementedError
 
     labels = labels.float()
     sim = labels.mm(labels.t()).clamp_max(1)  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
