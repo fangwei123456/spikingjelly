@@ -67,23 +67,23 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 
 .. image:: ./_static/tutorials/5-1.png
 
-默认的近似门控函数为 ``SpikingFlow.softbp.soft_pulse_function.Sigmoid()``。近似门控函数是 ``softbp`` 包中基类神经元构造\\
-函数的参数之一：
+默认的近似门控函数为 ``SpikingFlow.softbp.soft_pulse_function.Sigmoid()``。近似门控函数是 ``softbp`` 包中基类神经元构造函数\
+的参数之一：
 
 .. code-block:: python
 
     class BaseNode(nn.Module):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid()):
-        '''
-        :param v_threshold: 神经元的阈值电压
-        :param v_reset: 神经元的重置电压
-        :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
-        '''
-         super().__init__()
-        self.v_threshold = v_threshold
-        self.v_reset = v_reset
-        self.v = v_reset
-        self.pulse_soft = pulse_soft
+        def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid()):
+            '''
+            :param v_threshold: 神经元的阈值电压
+            :param v_reset: 神经元的重置电压
+            :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
+            '''
+             super().__init__()
+            self.v_threshold = v_threshold
+            self.v_reset = v_reset
+            self.v = v_reset
+            self.pulse_soft = pulse_soft
 
 在 ``SpikingFlow.softbp.soft_pulse_function`` 中还提供了其他的可选近似门控函数。
 
