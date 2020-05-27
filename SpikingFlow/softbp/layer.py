@@ -150,4 +150,5 @@ class Dropout(nn.Module):
         本层是一个有状态的层。此函数重置本层的状态变量。
         '''
         self.mask = None
+        
 

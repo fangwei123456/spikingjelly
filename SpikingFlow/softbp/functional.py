@@ -164,6 +164,7 @@ def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, sim_type='stric
 
     '''
 
+    # todo 对脉冲进行卷积
     spikes = spikes.flatten(start_dim=1)
     if sim_type == 'strict':
         spikes = spikes * 2 - 1  # 0 1变换到-1 1

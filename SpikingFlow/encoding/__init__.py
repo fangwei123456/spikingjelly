@@ -346,3 +346,4 @@ class GaussianTuningCurveEncoder(BaseEncoder):
 
 
 
+
