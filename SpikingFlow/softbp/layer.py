@@ -152,7 +152,7 @@ class Dropout(nn.Module):
         self.mask = None
 
 
-class LowPassSynapseFilter(nn.Module):
+class LowPassSynapse(nn.Module):
     def __init__(self, tau=100.0, learnable=False):
         '''
         :param tau: 突触上电流衰减的时间常数
@@ -180,7 +180,7 @@ class LowPassSynapseFilter(nn.Module):
 
             T = 50
             in_spikes = (torch.rand(size=[T]) >= 0.95).float()
-            lp_syn = LowPassSynapseFilter(tau=10.0)
+            lp_syn = LowPassSynapse(tau=10.0)
             pyplot.subplot(2, 1, 1)
             pyplot.bar(torch.arange(0, T).tolist(), in_spikes, label='in spike')
             pyplot.xlabel('t')
