@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import SpikingFlow.softbp.neuron as neuron
 
 def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
     '''
@@ -190,3 +191,27 @@ def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, sim_type='stric
         return F.binary_cross_entropy(sim_p, sim)
     else:
         raise NotImplementedError
+
+def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tensor,
+                         eval_threshold=1.0, threshold0=0.9, threshold1=1.1):
+    '''
+    :param output_layer: 用于分类的网络的输出层，输出层输出shape=[batch_size, C]
+    :param label_one_hot: one hot格式的样本标签，shape=[batch_size, C]
+    :param eval_threshold: 输出层神经元在测试（推理）时使用的电压阈值
+    :param threshold0: 输出层神经元在训练时，负样本的电压阈值
+    :param threshold1: 输出层神经元在训练时，正样本的电压阈值
+    :return:
+    None
+
+    对于用来分类的网络，为输出层神经元的电压阈值设置一定的裕量，以获得更好的分类性能。
+
+    类别总数为C，网络的输出层共有C个神经元。网络在训练时，当输入真实类别为i的数据，输出层中第i个神经元的电压阈值会被设置成\\
+    threshold1，而其他神经元的电压阈值会被设置成threshold0。而在测试（推理）时，输出层中神经元的电压阈值被统一设置成eval_threshold。
+    '''
+    if output_layer.training:
+        output_layer.v_threshold = torch.ones_like(label_one_hot) * threshold0
+        output_layer.v_threshold[label_one_hot == 1] = threshold1
+    else:
+        output_layer.v_threshold = eval_threshold
+
+
