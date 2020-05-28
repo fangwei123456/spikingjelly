@@ -215,10 +215,19 @@ class LowPassSynapse(nn.Module):
         self.out_i = 0
 
     def forward(self, in_spikes: torch.Tensor):
+        '''
+        :param in_spikes: shape任意的输入脉冲
+        :return: shape与in_spikes.shape相同的输出电流
+        '''
         self.out_i = self.out_i - (1 - in_spikes) * self.out_i * self.tau + in_spikes
         return self.out_i
 
     def reset(self):
+        '''
+        :return: None
+
+        本层是一个有状态的层。此函数重置本层的状态变量。将电流重置为0。
+        '''
         self.out_i = 0
         
 
