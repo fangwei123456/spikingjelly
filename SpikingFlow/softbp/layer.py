@@ -150,5 +150,70 @@ class Dropout(nn.Module):
         本层是一个有状态的层。此函数重置本层的状态变量。
         '''
         self.mask = None
+
+
+class LowPassSynapseFilter(nn.Module):
+    def __init__(self, tau=100.0, learnable=False):
+        '''
+        :param tau: 突触上电流衰减的时间常数
+        :param learnable: 时间常数是否设置成可以学习的参数。当设置为可学习参数时，函数参数中的tau是该参数的初始值
+
+        具有低通滤波性质的突触。突触的输出电流满足，当没有脉冲输入时，输出电流指数衰减：
+
+        .. math::
+            \\tau \\frac{\\mathrm{d} I(t)}{\\mathrm{d} t} = - I(t)
+
+        当有新脉冲输入时，输出电流自增1：
+
+        .. math::
+            I(t) = I(t) + 1
+        ..
+
+        记输入脉冲为 :math:`S(t)`，则离散化后，统一的电流更新方程为：
+
+        .. math::
+            I(t) = I(t-1) - (1 - S(t)) \\frac{1}{\\tau} I(t-1) + S(t)
+
+        这种突触能将输入脉冲进行“平滑”，简单的示例代码和输出结果：
+
+        .. code-block:: python
+
+            T = 50
+            in_spikes = (torch.rand(size=[T]) >= 0.95).float()
+            lp_syn = LowPassSynapseFilter(tau=10.0)
+            pyplot.subplot(2, 1, 1)
+            pyplot.bar(torch.arange(0, T).tolist(), in_spikes, label='in spike')
+            pyplot.xlabel('t')
+            pyplot.ylabel('spike')
+            pyplot.legend()
+
+            out_i = []
+            for i in range(T):
+                out_i.append(lp_syn(in_spikes[i]))
+            pyplot.subplot(2, 1, 2)
+            pyplot.plot(out_i, label='out i')
+            pyplot.xlabel('t')
+            pyplot.ylabel('i')
+            pyplot.legend()
+            pyplot.show()
+
+        .. image:: ./_static/API/LowPassSynapseFilter.png
+
+        输出电流不仅取决于当前时刻的输入，还取决于之前的输入，使得该突触具有了一定的记忆能力。
+
+        '''
+        super().__init__()
+        if learnable:
+            self.tau = nn.Parameter(torch.ones(size=[1]) / tau)
+        else:
+            self.tau = 1 / tau
+        self.out_i = 0
+
+    def forward(self, in_spikes: torch.Tensor):
+        self.out_i = self.out_i - (1 - in_spikes) * self.out_i * self.tau + in_spikes
+        return self.out_i
+
+    def reset(self):
+        self.out_i = 0
         
 
