@@ -200,8 +200,7 @@ def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tenso
     :param eval_threshold: 输出层神经元在测试（推理）时使用的电压阈值
     :param threshold0: 输出层神经元在训练时，负样本的电压阈值
     :param threshold1: 输出层神经元在训练时，正样本的电压阈值
-    :return:
-    None
+    :return: None
 
     对于用来分类的网络，为输出层神经元的电压阈值设置一定的裕量，以获得更好的分类性能。
 
