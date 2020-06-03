@@ -229,5 +229,20 @@ class LowPassSynapse(nn.Module):
         本层是一个有状态的层。此函数重置本层的状态变量。将电流重置为0。
         '''
         self.out_i = 0
-        
 
+class ChannelsMaxPool(nn.Module):
+    def __init__(self, pool:nn.MaxPool1d):
+        '''
+        :param pool: nn.Maxpool1d的池化层
+
+        在通道所在的维度，第1维，进行池化的层。
+        '''
+        super().__init__()
+        self.pool = pool
+    def forward(self, x:torch.Tensor):
+        '''
+        :param x: shape=[batch_size, C_in, *]的tensor，C_in是输入数据的通道数，*表示任意维度
+        :return: shape=[batch_size, C_out, *]的tensor，C_out是池化后的通道数
+        '''
+        x_shape = x.shape
+        return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
