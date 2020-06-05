@@ -117,14 +117,17 @@ class Dropout(nn.Module):
         '''
         :param p: 设置为0的概率
 
-        nn.Dropout在SNN中使用时，由于SNN需要运行一定的步长，每一步运行（t=0,1,...,T-1）时都会有不同的dropout，导致网络的结构\\
+        与torch.nn.Dropout的操作相同，但是在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
+        数后，才会按照概率去重新决定，哪些位置被置0。
+
+        torch.nn.Dropout在SNN中使用时，由于SNN需要运行一定的步长，每一步运行（t=0,1,...,T-1）时都会有不同的dropout，导致网络的结构\\
         实际上是在持续变化：例如可能出现t=0时刻，i到j的连接被断开，但t=1时刻，i到j的连接又被保持。
 
         在SNN中的dropout应该是，当前这一轮的运行中，t=0时若i到j的连接被断开，则之后t=1,2,...,T-1时刻，i到j的连接应该一直被\\
         断开；而到了下一轮运行时，重新按照概率去决定i到j的连接是否断开，因此重写了适用于SNN的Dropout。
 
         .. tip::
-            从之前的实验结果可以看出，当使用LIF神经元，损失函数或分类结果被设置成时间上累计输出的值，nn.Dropout几乎对SNN没有\\
+            从之前的实验结果可以看出，当使用LIF神经元，损失函数或分类结果被设置成时间上累计输出的值，torch.nn.Dropout几乎对SNN没有\\
             影响，即便dropout的概率被设置成高达0.9。可能是LIF神经元的积分行为，对某一个时刻输入的缺失并不敏感。
         '''
         super().__init__()
@@ -151,6 +154,38 @@ class Dropout(nn.Module):
         '''
         self.mask = None
 
+class Dropout2d(nn.Module):
+    def __init__(self, p=0.5):
+        '''
+        :param p: 设置为0的概率
+
+        与torch.nn.Dropout2d的操作相同，但是在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
+        数后，才会按照概率去重新决定，哪些位置被置0。
+
+        '''
+        super().__init__()
+        assert 0 < p < 1
+        self.mask = None
+        self.p = p
+    def forward(self, x:torch.Tensor):
+        '''
+        :param x: shape=[N, C, W, H]的tensor
+        :return: shape=[N, C, W, H]，与x.shape相同的tensor
+        '''
+        if self.training:
+            if self.mask is None:
+                self.mask = (torch.rand(size=[x.shape[0], x.shape[1], 1, 1]) > self.p).float()
+            return self.mask * x / (1 - self.p)
+        else:
+            return x
+
+    def reset(self):
+        '''
+        :return: None
+
+        本层是一个有状态的层。此函数重置本层的状态变量。
+        '''
+        self.mask = None
 
 class LowPassSynapse(nn.Module):
     def __init__(self, tau=100.0, learnable=False):
