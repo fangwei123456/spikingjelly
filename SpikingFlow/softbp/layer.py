@@ -174,7 +174,7 @@ class Dropout2d(nn.Module):
         '''
         if self.training:
             if self.mask is None:
-                self.mask = (torch.rand(size=[x.shape[0], x.shape[1], 1, 1]) > self.p).float()
+                self.mask = (torch.rand(size=[x.shape[0], x.shape[1], 1, 1], device=x.device) > self.p).float()
             return self.mask * x / (1 - self.p)
         else:
             return x
