@@ -250,3 +250,34 @@ def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tenso
         output_layer.v_threshold = eval_threshold
 
 
+def redundant_one_hot(labels:torch.Tensor, num_classes:int, n:int):
+    '''
+    :param labels: shape=[batch_size]的tensor，表示batch_size个标签
+    :param num_classes: int，类别总数
+    :param n: 表示每个类别所用的编码数量
+    :return: shape=[batch_size, num_classes * n]的tensor
+
+    对数据进行冗余的one hot编码，每一类用n个1和(num_classes - 1) * n个0来编码。
+
+    示例：
+
+    .. code-block:: python
+
+        >>> num_classes = 3
+        >>> n = 2
+        >>> labels = torch.randint(0, num_classes, [4])
+        >>> labels
+        tensor([0, 1, 1, 0])
+        >>> codes = functional.redundant_one_hot(labels, num_classes, n)
+        >>> codes
+        tensor([[1., 1., 0., 0., 0., 0.],
+                [0., 0., 1., 1., 0., 0.],
+                [0., 0., 1., 1., 0., 0.],
+                [1., 1., 0., 0., 0., 0.]])
+
+    '''
+    redundant_classes = num_classes * n
+    codes = torch.zeros(size=[labels.shape[0], redundant_classes], device=labels.device)
+    for i in range(n):
+        codes += F.one_hot(labels * n + i, redundant_classes)
+    return codes
