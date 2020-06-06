@@ -167,7 +167,7 @@ def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, kernel_type='li
 
     if kernel_type == 'linear':
         spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
-        sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-6)
+        sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
 
 
     labels = labels.float()
