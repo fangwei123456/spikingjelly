@@ -281,3 +281,37 @@ def redundant_one_hot(labels:torch.Tensor, num_classes:int, n:int):
     for i in range(n):
         codes += F.one_hot(labels * n + i, redundant_classes)
     return codes
+
+def first_spike_index(spikes: torch.Tensor):
+    '''
+    :param spikes: shape=[*, T]，表示任意个神经元在t=0, 1, ..., T-1，共T个时刻的输出脉冲
+    :return: index, shape=[*, T]，为True的位置表示该神经元首次释放脉冲的时刻
+
+    输入任意个神经元的输出脉冲，返回一个与输入相同shape的bool类型的index。index为True的位置，表示该神经元首次释放脉冲的时刻。
+
+    示例：
+
+    .. code-block:: python
+
+        >>> spikes = (torch.rand(size=[2, 3, 8]) >= 0.8).float()
+        >>> spikes
+        tensor([[[0., 0., 0., 0., 0., 0., 0., 0.],
+         [1., 0., 0., 0., 0., 0., 1., 0.],
+         [0., 1., 0., 0., 0., 1., 0., 1.]],
+
+        [[0., 0., 1., 1., 0., 0., 0., 1.],
+         [1., 1., 0., 0., 1., 0., 0., 0.],
+         [0., 0., 0., 1., 0., 0., 0., 0.]]])
+        >>> first_spike_index(spikes)
+        tensor([[[False, False, False, False, False, False, False, False],
+         [ True, False, False, False, False, False, False, False],
+         [False,  True, False, False, False, False, False, False]],
+
+        [[False, False,  True, False, False, False, False, False],
+         [ True, False, False, False, False, False, False, False],
+         [False, False, False,  True, False, False, False, False]]])
+
+    '''
+    with torch.no_grad():
+        # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
+        return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
