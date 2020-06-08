@@ -155,7 +155,7 @@ class Dropout(nn.Module):
         self.mask = None
 
 class Dropout2d(nn.Module):
-    def __init__(self, p=0.1):
+    def __init__(self, p=0.2):
         '''
         :param p: 设置为0的概率
 
