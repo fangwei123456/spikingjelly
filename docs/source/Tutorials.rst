@@ -11,8 +11,3 @@
    tutorial.4
    tutorial.5
    tutorial.6
-
-.. automodule:: 快速上手教程
-   :members:
-   :undoc-members:
-   :show-inheritance:
