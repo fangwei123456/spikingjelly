@@ -35,6 +35,14 @@ SpikingFlow.softbp.neuron module
    :undoc-members:
    :show-inheritance:
 
+SpikingFlow.softbp.optim module
+--------------------------------
+
+.. automodule:: SpikingFlow.softbp.optim
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 SpikingFlow.softbp.soft\_pulse\_function module
 -----------------------------------------------
 
