@@ -5,6 +5,9 @@ dependencies:
   - python>=3.5
   - pytorch
   - torchvision
-  - sphinx
-  - sphinx_rtd_theme
-  - sphinx-autobuild
+  - pip
+  - pip:
+    - sphinx
+    - sphinx-autobuild
+    - sphinx-rtd-theme
+    - sphinxcontrib-bibtex
