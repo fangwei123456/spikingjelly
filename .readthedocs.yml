@@ -23,4 +23,4 @@ formats: all
 #     - requirements: docs/requirements.txt
 
 conda:
-  file: docs/readthedocs-environment.yml
+  environment: docs/readthedocs-environment.yml
