@@ -2,17 +2,17 @@ channels:
   - default
   - conda-forge
   - pytorch
-  dependencies:
-    - python>=3.5
-    - sphinx
-    - pandoc
-    - pip
-    - pip:
-        - sphinx
-        - nbsphinx
-        - nbconvert
-        - sphinx-rtd-theme
-    - matplotlib
-    - numpy
-    - pytorch
-    - torchvision
+dependencies:
+  - python>=3.5
+  - sphinx
+  - pandoc
+  - pip
+  - pip:
+      - sphinx
+      - nbsphinx
+      - nbconvert
+      - sphinx-rtd-theme
+  - matplotlib
+  - numpy
+  - pytorch
+  - torchvision
