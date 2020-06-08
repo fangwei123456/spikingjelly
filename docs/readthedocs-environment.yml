@@ -1,13 +1,8 @@
 channels:
   - default
   - pytorch
+  - conda-forge
 dependencies:
-  - python>=3.5
-  - pytorch
+  - python=3.7
+  - pytorch=1.5
   - torchvision
-  - pip
-  - pip:
-    - sphinx
-    - sphinx-autobuild
-    - sphinx-rtd-theme
-    - sphinxcontrib-bibtex
