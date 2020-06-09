@@ -1,2 +1,2 @@
-pytorch>=1.5
-torchvision
+torch==1.5.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
+torchvision==0.6.0+cpu -f https://download.pytorch.org/whl/torch_stable.html
