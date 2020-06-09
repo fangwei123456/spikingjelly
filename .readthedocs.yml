@@ -25,3 +25,6 @@ formats: all
 #    system_packages: true
 conda:
   environment: docs/environment.yml
+
+build:
+  image: stable
