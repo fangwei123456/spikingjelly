@@ -2,4 +2,7 @@ channels:
   - pytorch
   - conda-forge
 dependencies:
-  - python=3.7
+  - pytorch>=1.5
+  - torchvision
+  - cpuonly
+  - numpy
