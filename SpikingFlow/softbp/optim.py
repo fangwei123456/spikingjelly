@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.optim.optimizer import Optimizer
 
 class AdamRewiring(Optimizer):
@@ -10,7 +10,7 @@ class AdamRewiring(Optimizer):
             该算法的收敛性尚未得到任何证明，以及在基于softbp的SNN上的剪枝可靠性也未知。
 
         :param params: （原始Adam）网络参数的迭代器，或者由字典定义的参数组
-        :param lr: （原始Adam）学习率（默认值：1e-3）
+        :param lr: （原始Adam）学习率
         :param betas: （原始Adam）用于计算运行时梯度平均值的以及平均值平方的两个参数
         :param eps: （原始Adam）除法计算时，加入到分母中的小常数，用于提高数值稳定性
         :param weight_decay: （原始Adam）L2范数惩罚因子
