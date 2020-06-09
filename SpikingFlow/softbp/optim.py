@@ -1,5 +1,5 @@
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.optim.optimizer import Optimizer
 
 class AdamRewiring(Optimizer):
