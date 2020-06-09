@@ -1,0 +1,2 @@
+pytorch>=1.5
+torchvision
