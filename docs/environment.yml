@@ -6,3 +6,4 @@ dependencies:
   - torchvision
   - cpuonly
   - numpy
+  - tensorboard
