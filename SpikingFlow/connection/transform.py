@@ -84,12 +84,11 @@ class ExpDecayCurrent(BaseTransformer):
 
 
 class STPTransformer(BaseTransformer):
-    def __init__(self, u_base, tau_f, tau_d, size=[1]):
+    def __init__(self, u_base, tau_f, tau_d):
         '''
         :param tau_f: 刺激信号衰减的时间常数
         :param tau_d: 抑制信号衰减的时间常数
         :param u_base: u的基本值
-        :param size: Short time plasticity单元的维度，默认为1
 
         突触的短期可塑性。工作在突触前脉冲的时刻，用于调制突触前脉冲的刺激值，使其不至于产生大量突触后电流。
 
@@ -104,11 +103,11 @@ class STPTransformer(BaseTransformer):
         输出电流为 :math:`u x \delta (t)`
         '''
         super().__init__()
-        self.u_base = torch.tensor(u_base)
-        self.tau_f = torch.tensor(tau_f)
-        self.tau_d = torch.tensor(tau_d)
-        self.x = torch.ones(size)
-        self.u = torch.ones(size) * self.u_base
+        self.u_base = float(u_base)
+        self.tau_f = float(tau_f)
+        self.tau_d = float(tau_d)
+        self.x = 1.0
+        self.u = self.u_base
         
     
     def forward(self, in_spike):
