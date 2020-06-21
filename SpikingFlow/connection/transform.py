@@ -84,11 +84,11 @@ class ExpDecayCurrent(BaseTransformer):
 
 
 class STPTransformer(BaseTransformer):
-    def __init__(self, u_base, tau_f, tau_d):
+    def __init__(self, v_base, tau_f, tau_d):
         '''
+        :param v_base: v的基本值
         :param tau_f: 刺激信号衰减的时间常数
         :param tau_d: 抑制信号衰减的时间常数
-        :param u_base: u的基本值
 
         突触的短期可塑性。工作在突触前脉冲的时刻，用于调制突触前脉冲的刺激值，使其不至于产生大量突触后电流。
 
@@ -96,18 +96,18 @@ class STPTransformer(BaseTransformer):
 
         .. math::
             \\begin{split}
-            \\frac{dx}{dt} &= \\frac{1-x}{\\tau_d} - u x \\delta (t) \\\\
-            \\frac{du}{dt} &= \\frac{U-u}{\\tau_f} + U (1-u) \\delta (t)
+            \\frac{\\mathrm{d}x}{\\mathrm{d}t} &= \\frac{1-x}{\\tau_d} - v x \\delta (t) \\\\
+            \\frac{\\mathrm{d}v}{\\mathrm{d}t} &= \\frac{V_{base}-v}{\\tau_f} + V_{base} (1-v) \\delta (t)
             \\end{split}
 
-        输出电流为 :math:`u x \delta (t)`
+        输出电流为 :math:`v x \\delta (t)`
         '''
         super().__init__()
-        self.u_base = float(u_base)
+        self.v_base = float(v_base)
         self.tau_f = float(tau_f)
         self.tau_d = float(tau_d)
         self.x = 1.0
-        self.u = self.u_base
+        self.v = self.v_base
         
     
     def forward(self, in_spike):
@@ -116,21 +116,21 @@ class STPTransformer(BaseTransformer):
         :return: 输出电流
         '''
         in_spike_float = in_spike.float()
-        # First calculate x using previouse u
-        x_decay = (1.0 - self.x)/self.tau_d
-        self.x += x_decay - self.x * in_spike_float * self.u
-        u_decay = (self.u_base - self.u) / self.tau_f
-        self.u += u_decay + self.u_base * (1-self.u) * in_spike_float
-        return self.u * self.x * in_spike_float
+        # First calculate x using previous v
+        x_decay = (1.0 - self.x) / self.tau_d
+        self.x += x_decay - self.x * in_spike_float * self.v
+        u_decay = (self.v_base - self.v) / self.tau_f
+        self.v += u_decay + self.v_base * (1-self.v) * in_spike_float
+        return self.v * self.x * in_spike_float
     
     
     def reset(self):
         '''
         :return: None
-        重置所有状态变量x,u为初始值1.0和u_base
+        重置所有状态变量x, v为初始值1.0和v_base
         '''
-        self.x.fill_(1.0)
-        self.u.fill_(self.u_base)
+        self.x = 1.0
+        self.v = self.v_base
 
 
 
