@@ -8,12 +8,13 @@ class BaseNode(nn.Module):
     def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid()):
         '''
         :param v_threshold: 神经元的阈值电压
-        :param v_reset: 神经元的重置电压
+        :param v_reset: 神经元的重置电压。如果不为None，当神经元释放脉冲后，电压会被重置为v_reset；如果设置为None，则电压会\\
+        被减去阈值
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
 
         softbp包中，可微分SNN神经元的基类神经元
 
-        可微分SNN神经元，在前向传播时输出真正的脉冲（离散的0和1）。脉冲的产生过程可以可以看作是一个\\
+        可微分SNN神经元，在前向传播时输出真正的脉冲（离散的0和1）。脉冲的产生过程可以看作是一个\\
         阶跃函数：
 
         .. math::
@@ -35,7 +36,10 @@ class BaseNode(nn.Module):
         super().__init__()
         self.v_threshold = v_threshold
         self.v_reset = v_reset
-        self.v = v_reset
+        if self.v_reset is None:
+            self.v = 0
+        else:
+            self.v = self.v_reset
         self.pulse_soft = pulse_soft
 
 
@@ -49,13 +53,20 @@ class BaseNode(nn.Module):
         if self.training:
             spike_hard = (self.v >= self.v_threshold).float()
             spike_soft = self.pulse_soft(self.v - self.v_threshold)
-            v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-            v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
+            if self.v_reset is None:
+                v_hard = self.v - spike_hard * self.v_threshold
+                v_soft = self.v - spike_soft * self.v_threshold
+            else:
+                v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
+                v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
             self.v = v_soft + (v_hard - v_soft).detach_()
             return spike_soft + (spike_hard - spike_soft).detach_()
         else:
             spike_hard = (self.v >= self.v_threshold).float()
-            self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
+            if self.v_reset is None:
+                self.v = self.v - spike_hard * self.v_threshold
+            else:
+                self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
             return spike_hard
 
 
@@ -76,8 +87,10 @@ class BaseNode(nn.Module):
 
         如果子类的神经元还含有其他状态变量，需要在此函数中将这些状态变量全部重置
         '''
-        self.v = self.v_reset
-
+        if self.v_reset is None:
+            self.v = 0
+        else:
+            self.v = self.v_reset
 class IFNode(BaseNode):
     def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid()):
         '''
