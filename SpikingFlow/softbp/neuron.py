@@ -8,8 +8,7 @@ class BaseNode(nn.Module):
     def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid()):
         '''
         :param v_threshold: 神经元的阈值电压
-        :param v_reset: 神经元的重置电压。如果不为None，当神经元释放脉冲后，电压会被重置为v_reset；如果设置为None，则电压会\\
-        被减去阈值
+        :param v_reset: 神经元的重置电压。如果不为None，当神经元释放脉冲后，电压会被重置为v_reset；如果设置为None，则电压会被减去阈值
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
 
         softbp包中，可微分SNN神经元的基类神经元
