@@ -83,5 +83,55 @@ class ExpDecayCurrent(BaseTransformer):
         self.i = 0
 
 
+class STPTransformer(BaseTransformer):
+    def __init__(self, u_base, tau_f, tau_d, size=[1]):
+        '''
+        :param tau_f: 刺激信号衰减的时间常数
+        :param tau_d: 抑制信号衰减的时间常数
+        :param u_base: u的基本值
+        :param size: Short time plasticity单元的维度，默认为1
+
+        突触的短期可塑性。工作在突触前脉冲的时刻，用于调制突触前脉冲的刺激值，使其不至于产生大量突触后电流。
+
+        其动态方程为
+
+        .. math::
+            \\begin{split}
+            \\frac{dx}{dt} &= \\frac{1-x}{\\tau_d} - u x \\delta (t) \\\\
+            \\frac{du}{dt} &= \\frac{U-u}{\\tau_f} + U (1-u) \\delta (t)
+            \\end{split}
+
+        输出电流为 :math:`u x \delta (t)`
+        '''
+        super().__init__()
+        self.u_base = torch.tensor(u_base)
+        self.tau_f = torch.tensor(tau_f)
+        self.tau_d = torch.tensor(tau_d)
+        self.x = torch.ones(size)
+        self.u = torch.ones(size) * self.u_base
+        
+    
+    def forward(self, in_spike):
+        '''
+        :param in_spike: 输入脉冲
+        :return: 输出电流
+        '''
+        in_spike_float = in_spike.float()
+        # First calculate x using previouse u
+        x_decay = (1.0 - self.x)/self.tau_d
+        self.x += x_decay - self.x * in_spike_float * self.u
+        u_decay = (self.u_base - self.u) / self.tau_f
+        self.u += u_decay + self.u_base * (1-self.u) * in_spike_float
+        return self.u * self.x * in_spike_float
+    
+    
+    def reset(self):
+        '''
+        :return: None
+        重置所有状态变量x,u为初始值1.0和u_base
+        '''
+        self.x.fill_(1.0)
+        self.u.fill_(self.u_base)
+
 
 

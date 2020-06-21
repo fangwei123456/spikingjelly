@@ -86,6 +86,33 @@ class Linear(BaseConnection):
         return torch.matmul(x, self.w.t())
 
 
+class GaussianLinear(BaseConnection):
+    def __init__(self, in_num, out_num, std, device='cpu'):
+        '''
+        :param in_num: 输入数量
+        :param out_num: 输出数量
+        :param std: 噪声的标准差
+        :param device: 数据所在设备
+
+        带高斯噪声的线性全连接层，噪声是施加在输出端的，所以可以对不同的神经元产生不同的随机噪声。
+        维度上，输入是[batch_size, *, in_num]，输出是[batch_size, *, out_num]。
+
+        连接权重矩阵为 :math:`W`，输入为 :math:`x`，输出为 :math:`y`，标准差为std的噪声为 :math:`e`, 则
+
+        .. math::
+            y = xW^T + e
+        '''
+        super().__init__()
+        self.out_num = out_num
+        self.w = torch.rand(size=[out_num, in_num], device=device) / 128
+        self.std = torch.tensor(std, device=device)
+        self.device = device
+
+    def forward(self, x):
+        current = torch.matmul(x, self.w.t())
+        noise = torch.randn(self.out_num, device=self.device)*self.std
+        return current+noise
+
 
 
 
