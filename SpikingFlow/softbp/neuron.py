@@ -56,8 +56,8 @@ class BaseNode(nn.Module):
         '''
         spike = self.pulse_soft(self.v - self.v_threshold)
         if self.monitor:
-            self.monitor['v'].append(self.v.detach().cpu().numpy())
-            self.monitor['s'].append(spike.detach().cpu().numpy())
+            self.monitor['v'].append(self.v.data.cpu().numpy())
+            self.monitor['s'].append(spike.data.cpu().numpy())
 
         if self.v_reset is None:
             self.v = self.v - spike * self.v_threshold
