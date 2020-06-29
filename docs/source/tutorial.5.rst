@@ -73,42 +73,39 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
 .. code-block:: python
 
     class BaseNode(nn.Module):
-        def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid()):
+        def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
             '''
             :param v_threshold: 神经元的阈值电压
-            :param v_reset: 神经元的重置电压
+            :param v_reset: 神经元的重置电压。如果不为None，当神经元释放脉冲后，电压会被重置为v_reset；如果设置为None，则电压会被减去阈值
             :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
+            :param monitor: 是否设置监视器来保存神经元的电压和释放的脉冲。
+                            若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
+                            转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
             '''
-             super().__init__()
-            self.v_threshold = v_threshold
-            self.v_reset = v_reset
-            self.v = v_reset
-            self.pulse_soft = pulse_soft
 
 在 ``SpikingFlow.softbp.soft_pulse_function`` 中还提供了其他的可选近似门控函数。
 
-如果想要自定义新的近似门控函数，可以参考 ``soft_pulse_function.Sigmoid()`` 的代码实现。
-
-硬前向传播与软反向传播，在PyTorch中很容易实现，参考 ``SpikingFlow.softbp.neuron.BaseNode`` 中的 ``spiking``：
+如果想要自定义新的近似门控函数，可以参考 ``soft_pulse_function.Sigmoid()`` 的代码实现：
 
 .. code-block:: python
 
-        def spiking(self):
-            if self.training:
-                spike_hard = (self.v >= self.v_threshold).float()
-                spike_soft = self.pulse_soft(self.v - self.v_threshold)
-                v_hard = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-                v_soft = self.v_reset * spike_soft + self.v * (1 - spike_soft)
-                self.v = v_soft + (v_hard - v_soft).detach_()
-                return spike_soft + (spike_hard - spike_soft).detach_()
-            else:
-                spike_hard = (self.v >= self.v_threshold).float()
-                self.v = self.v_reset * spike_hard + self.v * (1 - spike_hard)
-                return spike_hard
+    class sigmoid(torch.autograd.Function):
+        @staticmethod
+        def forward(ctx, x, alpha):
+            alpha_x = x * alpha
+            ctx.save_for_backward(alpha_x)
+            ctx.alpha = alpha
+            return (alpha_x >= 0).float()
 
-前向传播时，该函数返回 ``spike_soft + spike_hard - spike_soft`` 即 ``spike_hard``，但计算图却是按照函数返回 ``spike_soft``\
-建立的，因为 ``(spike_hard - spike_soft).detach_()`` 使得 ``spike_hard - spike_soft`` 被从计算图中剔除，因此反向传播时按\
-照前向传播为 ``spike_soft`` 来计算梯度。
+        @staticmethod
+        def backward(ctx, grad_output):
+            grad_x = None
+            if ctx.needs_input_grad[0]:
+                alpha_x = ctx.saved_tensors[0]
+                s_x = torch.sigmoid(alpha_x)
+                grad_x = grad_output * s_x * (1 - s_x) * ctx.alpha
+            return grad_x, None
+
 
 作为激活函数的SNN神经元
 ----------------------
