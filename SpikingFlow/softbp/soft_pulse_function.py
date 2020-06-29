@@ -5,12 +5,11 @@ import torch.nn.functional as F
 class bilinear_leaky_relu(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, a=1, b=0.01, c=0.5):
-        piecewise0 = (x < -c).float()
-        piecewise2 = (x > c).float()
-        piecewise1 = torch.ones_like(x) - piecewise0 - piecewise2
-
-        ctx.save_for_backward(piecewise0 * b + piecewise1 * a + piecewise2 * b)
-
+        if x.requires_grad:
+            piecewise0 = (x < -c).float()
+            piecewise2 = (x > c).float()
+            piecewise1 = torch.ones_like(x) - piecewise0 - piecewise2
+            ctx.save_for_backward(piecewise0 * b + piecewise1 * a + piecewise2 * b)
         return (x >= 0).float()
 
     @staticmethod
@@ -18,7 +17,6 @@ class bilinear_leaky_relu(torch.autograd.Function):
         grad_x = None
         if ctx.needs_input_grad[0]:
             grad_x = grad_output * ctx.saved_tensors[0]
-
         return grad_x, None, None, None
 
 class BilinearLeakyReLU(nn.Module):
@@ -60,9 +58,10 @@ class BilinearLeakyReLU(nn.Module):
 class sigmoid(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        alpha_x = x * alpha
-        ctx.save_for_backward(alpha_x)
-        ctx.alpha = alpha
+        if x.requires_grad:
+            alpha_x = x * alpha
+            ctx.save_for_backward(alpha_x)
+            ctx.alpha = alpha
         return (alpha_x >= 0).float()
 
     @staticmethod
@@ -100,9 +99,10 @@ class Sigmoid(nn.Module):
 class sign_swish(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, beta=1.0):
-        beta_x = beta * x
-        ctx.save_for_backward(beta_x)
-        ctx.beta = beta
+        if x.requires_grad:
+            beta_x = beta * x
+            ctx.save_for_backward(beta_x)
+            ctx.beta = beta
         return (x >= 0).float()
 
     @staticmethod

@@ -92,9 +92,10 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的门控函数 :ma
     class sigmoid(torch.autograd.Function):
         @staticmethod
         def forward(ctx, x, alpha):
-            alpha_x = x * alpha
-            ctx.save_for_backward(alpha_x)
-            ctx.alpha = alpha
+            if x.requires_grad:
+                alpha_x = x * alpha
+                ctx.save_for_backward(alpha_x)
+                ctx.alpha = alpha
             return (alpha_x >= 0).float()
 
         @staticmethod
