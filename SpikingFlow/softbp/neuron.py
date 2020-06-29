@@ -60,7 +60,7 @@ class BaseNode(nn.Module):
         else:
             self.v = self.v_reset * spike + self.v * (1 - spike)
 
-            return spike
+        return spike
 
     def forward(self, dv: torch.Tensor):
         '''
