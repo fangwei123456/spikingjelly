@@ -147,8 +147,13 @@ class PLIFNode(BaseNode):
         电压在不为v_reset时，会指数衰减。对于同一层神经元，它们的tau是共享的。
 
         .. tip::
-            LIF神经元的电压更新方程为`self.v += (dv - (self.v - self.v_reset)) / self.tau`。为了防止出现除以0的情况，PLIF神经元\\
-            没有使用除法，而是用乘法代替：`self.v += (dv - (self.v - self.v_reset)) * self.tau`。
+            LIF神经元的电压更新方程为：
+
+            ``self.v += (dv - (self.v - self.v_reset)) / self.tau``
+
+            为了防止出现除以0的情况，PLIF神经元没有使用除法，而是用乘法代替：
+
+            ``self.v += (dv - (self.v - self.v_reset)) * self.tau``
         '''
         super().__init__(v_threshold, v_reset, pulse_soft)
         self.tau = nn.Parameter(torch.ones(size=[1]) / 2)
