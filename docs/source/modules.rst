@@ -2,7 +2,7 @@ SpikingFlow
 ===========
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 5
 
    SpikingFlow
    Tutorials
