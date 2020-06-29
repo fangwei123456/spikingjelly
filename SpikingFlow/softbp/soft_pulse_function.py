@@ -62,7 +62,7 @@ class sigmoid(torch.autograd.Function):
             alpha_x = x * alpha
             ctx.save_for_backward(alpha_x)
             ctx.alpha = alpha
-        return (alpha_x >= 0).float()
+        return (x >= 0).float()
 
     @staticmethod
     def backward(ctx, grad_output):
