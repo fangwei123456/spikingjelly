@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.optim.optimizer import Optimizer
-
+import math
 class AdamRewiring(Optimizer):
     def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
                  weight_decay=0, amsgrad=False, T=1e-5, l1=1e-5):
