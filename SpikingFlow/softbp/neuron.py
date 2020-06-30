@@ -198,5 +198,5 @@ class RIFNode(BaseNode):
         self.w = nn.Parameter(- torch.ones(size=[1]) / 1024)
 
     def forward(self, dv: torch.Tensor):
-        self.v += (self.v - self.v_reset) * self.w + dv
+        self.v = (self.v - self.v_reset) * self.w + dv
         return self.spiking()
