@@ -141,10 +141,11 @@ class Dropout(nn.Module):
         '''
         if self.training:
             if self.mask is None:
-                self.mask = (torch.rand_like(x) > self.p).float()
-            return self.mask * x / (1 - self.p)
+                self.mask = F.dropout(torch.ones_like(x), self.p, training=True)
+            return self.mask * x
         else:
             return x
+
 
     def reset(self):
         '''
@@ -174,11 +175,10 @@ class Dropout2d(nn.Module):
         '''
         if self.training:
             if self.mask is None:
-                self.mask = (torch.rand(size=[x.shape[0], x.shape[1], 1, 1], device=x.device) > self.p).float()
-            return self.mask * x / (1 - self.p)
+                self.mask = F.dropout2d(torch.ones_like(x), self.p, training=True)
+            return self.mask * x
         else:
             return x
-
     def reset(self):
         '''
         :return: None
