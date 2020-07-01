@@ -22,7 +22,7 @@ def plot_neurons_voltage_heatmap(v:np.ndarray):
 
     .. image:: ./_static/API/plot_neurons_voltage_heatmap.png
     '''
-    fig, heatmap = plt.subplots()
+    fig, heatmap = plt.subplots(dpi=200)
     im = heatmap.imshow(v)
     heatmap.set_title('voltage of neurons')
     heatmap.set_xlabel('simulating step')
@@ -56,7 +56,7 @@ def plot_neurons_spikes(spikes:np.asarray, plot_spiking_rate=True):
     .. image:: ./_static/API/plot_neurons_spikes.png
     '''
     if plot_spiking_rate:
-        fig = plt.figure(tight_layout=True)
+        fig = plt.figure(tight_layout=True, dpi=200)
         gs = matplotlib.gridspec.GridSpec(1, 5)
         spikes_map = fig.add_subplot(gs[0, 0:4])
         spiking_rate_map = fig.add_subplot(gs[0, 4])
@@ -80,18 +80,15 @@ def plot_neurons_spikes(spikes:np.asarray, plot_spiking_rate=True):
     t_spike = spikes * t
     mask = (spikes == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
 
-    colormap = plt.get_cmap('brg')  # cmap的种类参见https://matplotlib.org/gallery/color/colormap_reference.html
+    colormap = plt.get_cmap('tab10')  # cmap的种类参见https://matplotlib.org/gallery/color/colormap_reference.html
 
-    # 使得颜色交叉分布，便于查看
-    for i in range(0, N, 2):
-        spikes_map.eventplot(t_spike[i][mask[i]], lineoffsets=i, colors=colormap(i / N))
-    for i in range(1, N, 2):
-        spikes_map.eventplot(t_spike[i][mask[i]], lineoffsets=i, colors=colormap(1 - i / N))
+    for i in range(N):
+        spikes_map.eventplot(t_spike[i][mask[i]], lineoffsets=i, colors=colormap(i % 10))
 
     if plot_spiking_rate:
         spiking_rate = np.mean(spikes, axis=1, keepdims=True)
         spiking_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
-        spiking_rate_map.imshow(spiking_rate, cmap='cool', aspect='auto')
+        spiking_rate_map.imshow(spiking_rate, cmap='plasma', aspect='auto')
         for i in range(spiking_rate.shape[0]):
             spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w')
         spiking_rate_map.get_xaxis().set_visible(False)
@@ -123,7 +120,7 @@ def plot_2d_feature_map_spikes(spikes:np.asarray, nrows, ncols):
 
     assert nrows * ncols == C, 'nrows * ncols != C'
 
-    fig, axs = plt.subplots(nrows=nrows, ncols=ncols)
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols, dpi=200)
     fig.suptitle('feature map spikes')
     for i in range(nrows):
         for j in range(ncols):
