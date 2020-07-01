@@ -2,7 +2,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_voltage_heatmap(v:np.ndarray):
+def plot_neurons_voltage_heatmap(v:np.ndarray):
     '''
     :param v: shape=[N, T]的np数组，表示N个神经元在T个时刻的电压值
     :return: 一个figure，画出了N个神经元在T个时刻的电压的热力图
@@ -17,14 +17,15 @@ def plot_voltage_heatmap(v:np.ndarray):
         w = torch.rand([neuron_num]) * 50
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
-        plot_voltage_heatmap(np.asarray(lif_node.monitor['v']).T)
+        visualizing.plot_neurons_voltage_heatmap(np.asarray(lif_node.monitor['v']).T)
         plt.show()
-    .. image:: ./_static/API/plot_voltage_heatmap.png
+
+    .. image:: ./_static/API/plot_neurons_voltage_heatmap.png
 
     '''
     fig, heatmap = plt.subplots()
     im = heatmap.imshow(v)
-    heatmap.set_title('voloage of neurons')
+    heatmap.set_title('voltage of neurons')
     heatmap.set_xlabel('simulating step')
     heatmap.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
     heatmap.set_ylabel('neuron index')
@@ -34,7 +35,7 @@ def plot_voltage_heatmap(v:np.ndarray):
     cbar.ax.set_ylabel('voloage magnitude', rotation=90, va='top')
     return fig
 
-def plot_spikes(spikes:np.asarray, plot_spiking_rate=True):
+def plot_neurons_spikes(spikes:np.asarray, plot_spiking_rate=True):
     '''
     :param spikes: shape=[N, T]的np数组，其中的元素只为0或1，表示N个神经元在T个时刻的脉冲
     :param plot_spiking_rate: 是否画出各个神经元的脉冲发放频率
@@ -50,10 +51,10 @@ def plot_spikes(spikes:np.asarray, plot_spiking_rate=True):
         w = torch.rand([neuron_num]) * 50
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
-        plot_spikes(np.asarray(lif_node.monitor['s']).T)
+        visualizing.plot_neurons_spikes(np.asarray(lif_node.monitor['s']).T)
         plt.show()
 
-    .. image:: ./_static/API/plot_spikes.png
+    .. image:: ./_static/API/plot_neurons_spikes.png
 
 
     '''
