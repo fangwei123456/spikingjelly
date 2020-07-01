@@ -21,7 +21,6 @@ def plot_neurons_voltage_heatmap(v:np.ndarray):
         plt.show()
 
     .. image:: ./_static/API/plot_neurons_voltage_heatmap.png
-
     '''
     fig, heatmap = plt.subplots()
     im = heatmap.imshow(v)
@@ -55,8 +54,6 @@ def plot_neurons_spikes(spikes:np.asarray, plot_spiking_rate=True):
         plt.show()
 
     .. image:: ./_static/API/plot_neurons_spikes.png
-
-
     '''
     if plot_spiking_rate:
         fig = plt.figure(tight_layout=True)
@@ -99,3 +96,37 @@ def plot_neurons_spikes(spikes:np.asarray, plot_spiking_rate=True):
             spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w')
         spiking_rate_map.get_xaxis().set_visible(False)
         spiking_rate_map.set_title('spiking rate')
+
+
+def plot_2d_feature_map_spikes(spikes:np.asarray, nrows, ncols):
+    '''
+    :param spikes: shape=[C, W, H]，C个尺寸为W * H的脉冲矩阵，矩阵中的元素为0或1。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
+    :param nrows: 画成多少行
+    :param ncols: 画成多少列
+    :return: 一个figure，将C个矩阵全部画出，然后排列成nrows行ncols列
+
+    将C个尺寸为W * H的脉冲矩阵，全部画出，然后排列成nrows行ncols列。这样的矩阵一般来源于卷积层后的脉冲神经元的输出，通过这个函数\\
+    可以对输出进行可视化。示例代码：
+
+    .. code-block:: python
+
+        C = 48
+        W = 8
+        H = 8
+        spikes = (np.random.rand(C, W, H) > 0.8).astype(float)
+        visualizing.plot_2d_feature_map_spikes(spikes, 6, 8)
+        plt.show()
+
+    .. image:: ./_static/API/plot_2d_feature_map_spikes.png
+    '''
+    C = spikes.shape[0]
+
+    assert nrows * ncols == C, 'nrows * ncols != C'
+
+    fig, axs = plt.subplots(nrows=nrows, ncols=ncols)
+    fig.suptitle('feature map spikes')
+    for i in range(nrows):
+        for j in range(ncols):
+            axs[i][j].imshow(spikes[i * ncols + j], cmap='gray')
+            axs[i][j].get_xaxis().set_visible(False)
+            axs[i][j].get_yaxis().set_visible(False)
