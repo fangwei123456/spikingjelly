@@ -51,14 +51,6 @@ SpikingFlow.softbp.soft\_pulse\_function module
    :undoc-members:
    :show-inheritance:
 
-SpikingFlow.softbp.visualizing module
--------------------------------------
-
-.. automodule:: SpikingFlow.softbp.visualizing
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 
 Module contents
 ---------------
