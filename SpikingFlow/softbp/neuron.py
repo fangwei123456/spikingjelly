@@ -5,12 +5,12 @@ from SpikingFlow.softbp import soft_pulse_function, accelerating
 
 
 class BaseNode(nn.Module):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
         '''
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压。如果不为None，当神经元释放脉冲后，电压会被重置为v_reset；如果设置为None，则电压会被减去阈值
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
-        :param monitor: 是否设置监视器来保存神经元的电压和释放的脉冲。
+        :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
                         若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
                         转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
 
@@ -42,11 +42,22 @@ class BaseNode(nn.Module):
         else:
             self.v = self.v_reset
         self.pulse_soft = pulse_soft
-        if monitor:
-            self.monitor = {'v':[], 's':[]}
+        if monitor_state:
+            self.monitor = {'v': [], 's': []}
         else:
             self.monitor = False
 
+    def set_monitor(self, monitor_state=True):
+        '''
+        :param monitor_state: True或False，表示开启或关闭monitor
+        :return: None
+
+        设置开启或关闭monitor。
+        '''
+        if monitor_state:
+            self.monitor = {'v': [], 's': []}
+        else:
+            self.monitor = False
 
     def spiking(self):
         '''
@@ -115,9 +126,9 @@ class IFNode(BaseNode):
         return self.spiking()
 
 
-
 class LIFNode(BaseNode):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
+    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(),
+                 monitor=False):
         '''
         :param tau: 膜电位时间常数，越大则充电越慢
         :param v_threshold: 神经元的阈值电压
@@ -140,8 +151,6 @@ class LIFNode(BaseNode):
     def forward(self, dv: torch.Tensor):
         self.v += (dv - (self.v - self.v_reset)) / self.tau
         return self.spiking()
-
-
 
 
 class PLIFNode(BaseNode):
@@ -175,6 +184,7 @@ class PLIFNode(BaseNode):
     def forward(self, dv: torch.Tensor):
         self.v += (dv - (self.v - self.v_reset)) * self.tau
         return self.spiking()
+
 
 class RIFNode(BaseNode):
     def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
