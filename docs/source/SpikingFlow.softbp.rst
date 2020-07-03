@@ -11,6 +11,14 @@ Subpackages
 Submodules
 ----------
 
+SpikingFlow.softbp.accelerating module
+--------------------------------------
+
+.. automodule:: SpikingFlow.softbp.accelerating
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 SpikingFlow.softbp.functional module
 ------------------------------------
 
