@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import SpikingFlow.softbp.soft_pulse_function as soft_pulse_function
+from SpikingFlow.softbp import soft_pulse_function, accelerating
 
 
 class BaseNode(nn.Module):
@@ -60,9 +60,9 @@ class BaseNode(nn.Module):
             self.monitor['s'].append(spike.data.cpu().numpy())
 
         if self.v_reset is None:
-            self.v = self.v - spike * self.v_threshold
+            self.v = accelerating.soft_vlotage_transform(self.v, spike, self.v_threshold)
         else:
-            self.v = self.v_reset * spike + self.v * (1 - spike)
+            self.v = accelerating.hard_voltage_transform(self.v, spike, self.v_reset)
 
         return spike
 
