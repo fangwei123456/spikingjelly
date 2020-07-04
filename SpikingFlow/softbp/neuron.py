@@ -154,7 +154,7 @@ class LIFNode(BaseNode):
 
 
 class PLIFNode(BaseNode):
-    def __init__(self, init_tau=100.0, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
+    def __init__(self, init_tau=2.0, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
         '''
         :param init_tau: 初始的tau
         :param v_threshold: 神经元的阈值电压
