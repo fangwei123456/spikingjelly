@@ -36,7 +36,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     .. image:: ./_static/API/plot_2d_heatmap.png
     '''
     fig, heatmap = plt.subplots(dpi=dpi)
-    im = heatmap.imshow(array)
+    im = heatmap.imshow(array, aspect='auto')
     heatmap.set_title(title)
     heatmap.set_xlabel(xlabel)
     heatmap.set_ylabel(ylabel)
