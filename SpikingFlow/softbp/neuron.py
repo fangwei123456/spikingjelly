@@ -103,12 +103,12 @@ class BaseNode(nn.Module):
 
 
 class IFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
         '''
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
-        :param monitor: 是否设置监视器来保存神经元的电压和释放的脉冲。
+        :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
                         若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
                         转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
 
@@ -119,7 +119,7 @@ class IFNode(BaseNode):
 
         电压一旦达到阈值v_threshold则放出脉冲，同时电压归位到重置电压v_reset。
         '''
-        super().__init__(v_threshold, v_reset, pulse_soft, monitor)
+        super().__init__(v_threshold, v_reset, pulse_soft, monitor_state)
 
     def forward(self, dv: torch.Tensor):
         self.v += dv
@@ -128,13 +128,13 @@ class IFNode(BaseNode):
 
 class LIFNode(BaseNode):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(),
-                 monitor=False):
+                 monitor_state=False):
         '''
         :param tau: 膜电位时间常数，越大则充电越慢
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
-        :param monitor: 是否设置监视器来保存神经元的电压和释放的脉冲。
+        :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
                         若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
                         转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
 
@@ -145,7 +145,7 @@ class LIFNode(BaseNode):
 
         电压在不为v_reset时，会指数衰减。
         '''
-        super().__init__(v_threshold, v_reset, pulse_soft, monitor)
+        super().__init__(v_threshold, v_reset, pulse_soft, monitor_state)
         self.tau = tau
 
     def forward(self, dv: torch.Tensor):
@@ -154,8 +154,9 @@ class LIFNode(BaseNode):
 
 
 class PLIFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
+    def __init__(self, init_tau=100.0, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
         '''
+        :param init_tau: 初始的tau
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
@@ -178,8 +179,8 @@ class PLIFNode(BaseNode):
 
             ``self.v += (dv - (self.v - self.v_reset)) * self.tau``
         '''
-        super().__init__(v_threshold, v_reset, pulse_soft, monitor)
-        self.tau = nn.Parameter(torch.ones(size=[1]) / 2)
+        super().__init__(v_threshold, v_reset, pulse_soft, monitor_state)
+        self.tau = nn.Parameter(1 / torch.tensor([init_tau]))
 
     def forward(self, dv: torch.Tensor):
         self.v += (dv - (self.v - self.v_reset)) * self.tau
@@ -187,12 +188,13 @@ class PLIFNode(BaseNode):
 
 
 class RIFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor=False):
+    def __init__(self, init_w=-1e-3, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
         '''
+        :param init_w: 初始的自连接权重
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
-        :param monitor: 是否设置监视器来保存神经元的电压和释放的脉冲。
+        :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
                         若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
                         转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
 
@@ -204,8 +206,8 @@ class RIFNode(BaseNode):
         其中 :math:`w` 是自连接权重，权重是可以学习的。对于同一层神经元，它们的 :math:`w` 是共享的。
 
         '''
-        super().__init__(v_threshold, v_reset, pulse_soft, monitor)
-        self.w = nn.Parameter(- torch.ones(size=[1]) / 1024)
+        super().__init__(v_threshold, v_reset, pulse_soft, monitor_state)
+        self.w = nn.Parameter(torch.tensor([init_w]))
 
     def forward(self, dv: torch.Tensor):
         self.v = (self.v - self.v_reset) * self.w + dv
