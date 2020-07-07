@@ -140,6 +140,3 @@ dmypy.json
 
 /experiments
 
-# dataset包暂未完成，尚不发布
-/datasets
-
