@@ -2,7 +2,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import SpikingFlow.softbp.neuron as neuron
+def reset_net(net: nn.Module):
+    '''
+    :param net: 任何属于nn.Module子类的网络
+    :return: None
 
+    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若含有 ``reset()`` 函数，则调用。
+    '''
+    for m in net.modules():
+        if hasattr(m, 'reset'):
+            m.reset()
 def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
     '''
     :param v: shape=[T, N]，N个神经元在t=[0, 1, ..., T-1]时刻的电压值
