@@ -6,18 +6,18 @@ import tqdm
 cifar10_class = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 
-class DVSCIFAR10(SpikingFlow.datasets.SubDirDataset):
+class CIFAR10DVS(SpikingFlow.datasets.SubDirDataset):
 
     @ staticmethod
     def download_zip(zip_dir):
         '''
-        :param zip_dir: 保存SpikingFlow提供的DVS CIFAR10对应的10个zip文件的文件夹
+        :param zip_dir: 保存SpikingFlow提供的CIFAR10-DVS对应的10个zip文件的文件夹
         :return: None
 
         .. warning::
             代码尚未完成，请勿使用。
 
-        原始的DVS CIFAR10数据集位于 https://figshare.com/articles/CIFAR10-DVS_New/4724671。原始的DVS CIFAR10使用jAER格式，\
+        原始的CIFAR10-DVS数据集位于 https://figshare.com/articles/CIFAR10-DVS_New/4724671。原始的CIFAR10-DVS使用jAER格式，\
         需要首先使用MATLAB转换成mat格式才能使用，较为繁琐。SpikingFlow的开发者将原始数据集转化为numpy数组并存为npz文件，\
         每一类的数据都重新压缩并重新上传到了figshare。运行此函数，会将SpikingFlow提供的10个zip文件下载到 ``zip_dir``，下载好\
         的文件夹是如下形式：
@@ -42,7 +42,7 @@ class DVSCIFAR10(SpikingFlow.datasets.SubDirDataset):
     @ staticmethod
     def unzip(zip_dir, events_data_dir):
         '''
-        :param zip_dir: 保存SpikingFlow提供的DVS CIFAR10对应的10个zip文件的文件夹
+        :param zip_dir: 保存SpikingFlow提供的CIFAR10-DVS对应的10个zip文件的文件夹
         :param events_data_dir: 保存数据集的文件夹，运行 ``download_zip(zip_dir)`` 下载的10个zip文件，会被逐个解压到 ``events_data_dir`` 目录
         :return: None
 
@@ -74,11 +74,11 @@ class DVSCIFAR10(SpikingFlow.datasets.SubDirDataset):
 
     def __init__(self, frames_data_dir: str, train=True, split_ratio=0.9):
         '''
-        :param frames_data_dir: 保存frame格式的DVS CIFAR10数据集的文件夹
+        :param frames_data_dir: 保存frame格式的CIFAR10-DVS数据集的文件夹
         :param train: 训练还是测试
         :param split_ratio: 训练集占数据集的比例。对于每一类，会抽取前 ``split_ratio`` 的数据作为训练集，而剩下 ``split_ratio`` 的数据集作为测试集
 
-        DVS CIFAR10数据集由以下论文发布：
+        CIFAR10-DVS数据集由以下论文发布：
 
         Li H, Liu H, Ji X, Li G and Shi L (2017) CIFAR10-DVS: An Event-Stream Dataset for Object Classification. Front. Neurosci. 11:309. doi: 10.3389/fnins.2017.00309
 
