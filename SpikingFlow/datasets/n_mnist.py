@@ -1,49 +1,33 @@
 import SpikingFlow
 import zipfile
 import os
-import tqdm
-
-cifar10_class = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-
-
-class DVSCIFAR10(SpikingFlow.datasets.SubDirDataset):
+class NMNIST(SpikingFlow.datasets.SubDirDataset):
 
     @ staticmethod
     def download_zip(zip_dir):
         '''
-        :param zip_dir: 保存SpikingFlow提供的DVS CIFAR10对应的10个zip文件的文件夹
+        :param zip_dir: 保存下载的N_MNIST训练集和测试集zip压缩包的文件夹
         :return: None
 
         .. warning::
             代码尚未完成，请勿使用。
 
-        原始的DVS CIFAR10数据集位于 https://figshare.com/articles/CIFAR10-DVS_New/4724671。原始的DVS CIFAR10使用jAER格式，\
-        需要首先使用MATLAB转换成mat格式才能使用，较为繁琐。SpikingFlow的开发者将原始数据集转化为numpy数组并存为npz文件，\
-        每一类的数据都重新压缩并重新上传到了figshare。运行此函数，会将SpikingFlow提供的10个zip文件下载到 ``zip_dir``，下载好\
+        运行此函数，会将N_MNIST训练集和测试集zip压缩包下载到 ``zip_dir``，下载好\
         的文件夹是如下形式：
 
         .. code-block:: bash
 
             zip_dir/
-            |-- airplane.zip
-            |-- automobile.zip
-            |-- bird.zip
-            |-- cat.zip
-            |-- deer.zip
-            |-- dog.zip
-            |-- frog.zip
-            |-- horse.zip
-            |-- ship.zip
-            `-- truck.zip
-
+            |-- train.zip
+            |-- test.zip
         '''
         raise NotImplementedError
 
     @ staticmethod
     def unzip(zip_dir, events_data_dir):
         '''
-        :param zip_dir: 保存SpikingFlow提供的DVS CIFAR10对应的10个zip文件的文件夹
-        :param events_data_dir: 保存数据集的文件夹，运行 ``download_zip(zip_dir)`` 下载的10个zip文件，会被逐个解压到 ``events_data_dir`` 目录
+        :param zip_dir: 保存下载的N_MNIST训练集和测试集zip压缩包的文件夹
+        :param events_data_dir: 保存数据集的文件夹，运行 ``download_zip(zip_dir)`` 下载的N_MNIST训练集和测试集zip压缩包，会被逐个解压到 ``events_data_dir`` 目录
         :return: None
 
         ``events_data_dir`` 文件夹在数据集全部解压后，会具有如下的格式：
@@ -51,12 +35,12 @@ class DVSCIFAR10(SpikingFlow.datasets.SubDirDataset):
         .. code-block:: bash
 
             events_data_dir/
-            |-- airplane
+            |-- 0
             |   |-- 0.npz
             |   |-- ...
-            |-- automobile
-            |-- bird
-            |-- cat
+            |-- 1
+            |-- 2
+            |-- 3
             |-- deer
             |-- dog
             |-- frog
@@ -114,10 +98,3 @@ class DVSCIFAR10(SpikingFlow.datasets.SubDirDataset):
         '''
 
         super().__init__(frames_data_dir, train, split_ratio)
-
-
-
-
-
-
-

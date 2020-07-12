@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from SpikingFlow.softbp import soft_pulse_function, accelerating
-
+import math
 
 class BaseNode(nn.Module):
     def __init__(self, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
@@ -180,7 +180,7 @@ class PLIFNode(BaseNode):
             ``self.v += (dv - (self.v - self.v_reset)) * self.tau``
         '''
         super().__init__(v_threshold, v_reset, pulse_soft, monitor_state)
-        self.tau = nn.Parameter(1 / torch.tensor([init_tau]))
+        self.tau = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))
 
     def forward(self, dv: torch.Tensor):
         self.v += (dv - (self.v - self.v_reset)) * self.tau
@@ -188,9 +188,12 @@ class PLIFNode(BaseNode):
 
 
 class RIFNode(BaseNode):
-    def __init__(self, init_w=-1e-3, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
+    def __init__(self, init_w=-1e-3, amplitude=None, v_threshold=1.0, v_reset=0.0, pulse_soft=soft_pulse_function.Sigmoid(), monitor_state=False):
         '''
         :param init_w: 初始的自连接权重
+        :param amplitude: 对自连接权重的限制。若为 ``None``，则不会对权重有任何限制；
+                            若为一个 ``float``，会限制权重在 ``(- amplitude, amplitude)`` 范围内；
+                            若为一个 ``tuple``，会限制权重在 ``(amplitude[0], amplitude[1])`` 范围内。
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param pulse_soft: 反向传播时用来计算脉冲函数梯度的替代函数，即软脉冲函数
@@ -207,8 +210,41 @@ class RIFNode(BaseNode):
 
         '''
         super().__init__(v_threshold, v_reset, pulse_soft, monitor_state)
-        self.w = nn.Parameter(torch.tensor([init_w]))
+        self.amplitude = amplitude
+        if isinstance(self.amplitude, int):
+            self.amplitude = float(self.amplitude)
+
+        if self.amplitude is None:
+            self.g = nn.Parameter(torch.tensor([init_w], dtype=torch.float))
+        elif isinstance(self.amplitude, float):
+            self.g = math.log((amplitude + init_w) / (amplitude - init_w))
+            self.g = nn.Parameter(torch.tensor([self.g], dtype=torch.float))
+            # (self.w.sigmoid() * 2 - 1 ) * self.amplitude == init_w
+        else:
+            self.g = math.log((init_w - amplitude[0]) / (amplitude[1] - init_w))
+            self.g = nn.Parameter(torch.tensor([self.g], dtype=torch.float))
+            # self.w.sigmoid() * (self.amplitude[1] - self.amplitude[0]) + self.amplitude[0] == init_w
+
+    def w(self):
+        '''
+        :return: 返回自连接权重
+        '''
+        if self.amplitude is None:
+            return self.g
+        elif isinstance(self.amplitude, float):
+            return (self.g.sigmoid() * 2 - 1 ) * self.amplitude
+        else:
+            return (self.g.sigmoid() * (self.amplitude[1] - self.amplitude[0]) + self.amplitude[0])
+
 
     def forward(self, dv: torch.Tensor):
-        self.v = (self.v - self.v_reset) * self.w + dv
+        if self.amplitude is None:
+            self.v = (self.v - self.v_reset) * self.g + dv
+        elif isinstance(self.amplitude, float):
+            self.v = (self.v - self.v_reset) * ((self.g.sigmoid() * 2 - 1 ) * self.amplitude) + dv
+        else:
+            self.v = (self.v - self.v_reset) * \
+                     (self.g.sigmoid() * (self.amplitude[1] - self.amplitude[0]) + self.amplitude[0]) * self.amplitude + dv
+
+
         return self.spiking()
