@@ -1,2 +1,0 @@
-# simulating
-simulating包中实现了以流水线方式运行多个神经元/突触的仿真器。

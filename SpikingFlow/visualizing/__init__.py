@@ -23,7 +23,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
 
         neuron_num = 32
         T = 50
-        lif_node = neuron.LIFNode(monitor=True)
+        lif_node = SpikingFlow.event_driven.neuron.LIFNode(monitor=True)
         w = torch.rand([neuron_num]) * 50
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
@@ -83,7 +83,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
 
         neuron_num = 4
         T = 50
-        lif_node = neuron.LIFNode(monitor=True)
+        lif_node = SpikingFlow.event_driven.neuron.LIFNode(monitor=True)
         w = torch.rand([neuron_num]) * 10
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
@@ -135,7 +135,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
         neuron_num = 32
         T = 50
-        lif_node = neuron.LIFNode(monitor=True)
+        lif_node = SpikingFlow.event_driven.neuron.LIFNode(monitor=True)
         w = torch.rand([neuron_num]) * 50
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
