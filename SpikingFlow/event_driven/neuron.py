@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+
 class Tempotron(nn.Module):
     def __init__(self, in_features, out_features, T, tau=15.0, tau_s=15.0 / 4, v_threshold=1.0):
         '''

@@ -6,14 +6,9 @@ Subpackages
 
 .. toctree::
 
-   SpikingFlow.connection
-   SpikingFlow.encoding
+   SpikingFlow.clock_driven
+   SpikingFlow.datasets
    SpikingFlow.event_driven
-   SpikingFlow.examples
-   SpikingFlow.learning
-   SpikingFlow.neuron
-   SpikingFlow.simulating
-   SpikingFlow.softbp
    SpikingFlow.visualizing
 
 Module contents
