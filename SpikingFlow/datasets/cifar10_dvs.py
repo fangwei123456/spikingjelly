@@ -1,7 +1,6 @@
 import SpikingFlow
 import zipfile
 import os
-import tqdm
 
 cifar10_class = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 

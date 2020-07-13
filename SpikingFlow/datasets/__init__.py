@@ -8,6 +8,24 @@ import threading
 
 class CVTThread(threading.Thread):
     def __init__(self, show_bar, sub_dir, events_data_dir, frames_data_dir, weight, height, frames_num, normalization):
+        '''
+        :param show_bar: 是否显示进度条
+        :param sub_dir: 要处理的events数据所在的子文件夹名
+        :param events_data_dir: 保存events数据的文件夹
+        :param frames_data_dir: 保存frames数据的文件夹
+        :param weight: 脉冲数据的宽度，例如对于DVS CIFAR10是128
+        :param height: 脉冲数据的高度，例如对于DVS CIFAR10是128
+        :param frames_num: 转换后数据的帧数
+        :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
+                            为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
+                            为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
+        :return: None
+
+        ``CVTThread`` 是一个多线程的类。会对 ``events_data_dir`` 目录下的 ``sub_dir`` 中的数据进行转换，转换后的数据保存到\
+         ``frames_data_dir`` 目录下的 ``sub_dir`` 文件夹。若 ``sub_dir`` 文件夹不存在，会自动创建。
+
+        ``convert_events_to_frames()`` 会用到此类，开启多个线程，并行处理多个文件夹下的events数据。
+        '''
         super().__init__()
         self.show_bar = show_bar
         self.events_sub_dir = os.path.join(events_data_dir, sub_dir)
@@ -19,6 +37,12 @@ class CVTThread(threading.Thread):
         self.cvted_num = 0
 
     def cvt(self, file_name):
+        '''
+        :param file_name: events文件
+        :return: None
+
+        将 ``file_name`` 文件的events数据转化成frames数据。
+        '''
         events = np.load(os.path.join(self.events_sub_dir, file_name))
         # events: {'t', 'x', 'y', 'p'}
         frames = np.zeros(shape=[self.frames_num, 2, self.weight, self.height])

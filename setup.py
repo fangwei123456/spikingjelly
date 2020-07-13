@@ -9,9 +9,9 @@ with open("./README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     name="SpikingFlow",
-    version="0.2.3",
+    version="0.2.4.4",
     author="PKU MLG",
-    author_email="fangwei123456@pku.edu.cn, chyq@pku.edu.cn",
+    author_email="fwei@pku.edu.cn, chyq@pku.edu.cn",
     description="A Spiking Neural Networks simulator built on PyTorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",

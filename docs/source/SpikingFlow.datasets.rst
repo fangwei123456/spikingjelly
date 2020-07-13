@@ -4,10 +4,18 @@ SpikingFlow.datasets package
 Submodules
 ----------
 
-SpikingFlow.datasets.dvs\_cifar10 module
+SpikingFlow.datasets.cifar10\_dvs module
 ----------------------------------------
 
-.. automodule:: SpikingFlow.datasets.dvs_cifar10
+.. automodule:: SpikingFlow.datasets.cifar10_dvs
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+SpikingFlow.datasets.n\_mnist module
+------------------------------------
+
+.. automodule:: SpikingFlow.datasets.n_mnist
    :members:
    :undoc-members:
    :show-inheritance:
