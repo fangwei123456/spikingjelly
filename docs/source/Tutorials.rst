@@ -4,10 +4,5 @@
 
 .. toctree::
 
-   tutorial.0
-   tutorial.1
-   tutorial.2
-   tutorial.3
-   tutorial.4
-   tutorial.5
-   tutorial.6
+   tutorial.clock_driven
+   tutorial.event_driven

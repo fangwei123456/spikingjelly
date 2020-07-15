@@ -146,6 +146,7 @@ class PLIFNode(BaseNode):
         :param monitor: 是否设置监视器来保存神经元的电压和释放的脉冲。
                         若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
                         转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
+
         Parametric LIF神经元模型，时间常数tau可学习的LIF神经元：
 
         .. math::
