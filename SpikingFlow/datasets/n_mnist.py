@@ -4,40 +4,10 @@ import os
 import threading
 import tqdm
 import numpy as np
+import torch
+from torch.utils.data import Dataset
 
-t_bit_mask = int('1' * 23, base=2)
-class CVTThread(SpikingFlow.datasets.CVTThread):
-    def cvt(self, file_name):
-        t_list, x_list, y_list, p_list = np.asarray(NMNIST.read_bin(os.path.join(self.events_sub_dir, file_name)))
-
-        events = {}
-        events['t'] = np.asarray(t_list)
-        events['x'] = np.asarray(x_list)
-        events['y'] = np.asarray(y_list)
-        events['p'] = np.asarray(p_list)
-        # events: {'t', 'x', 'y', 'p'}
-        frames = np.zeros(shape=[self.frames_num, 2, self.weight, self.height])
-        dt = events['t'].shape[0] // self.frames_num
-        for i in range(self.frames_num):
-            # 将events在t维度分割成frames_num段，每段的范围是[i * dt, (i + 1) * dt)，每段累加得到一帧
-            index_l = i * dt
-            index_r = index_l + dt
-            frames[i, events['p'][index_l:index_r], events['x'][index_l:index_r], events['y'][index_l:index_r]] \
-                += events['t'][index_l:index_r]
-            if self.normalization == 'frequency':
-                frames[i] /= dt  # 表示脉冲发放的频率
-            elif self.normalization == 'max':
-                frames[i] /= frames[i].max()
-            elif self.normalization == 'norm':
-                frames[i] = (frames[i] - frames[i].mean()) / np.sqrt((frames[i].var() + 1e-5))
-            elif self.normalization is None:
-                continue
-            else:
-                raise NotImplementedError
-        np.savez_compressed(os.path.join(self.frames_sub_dir, file_name), frames)
-        self.cvted_num += 1
-
-class NMNIST(SpikingFlow.datasets.SubDirDataset):
+class NMNIST(Dataset):
 
     @ staticmethod
     def download_zip(zip_dir):
@@ -54,77 +24,32 @@ class NMNIST(SpikingFlow.datasets.SubDirDataset):
         .. code-block:: bash
 
             zip_dir/
-            |-- train.zip
-            |-- test.zip
+            |-- Train.zip
+            |-- Test.zip
         '''
         raise NotImplementedError
-
-    @ staticmethod
-    def unzip(zip_dir, events_data_dir):
-        '''
-        :param zip_dir: 保存下载的N-MNIST训练集和测试集zip压缩包的文件夹
-        :param events_data_dir: 保存数据集的文件夹，运行 ``download_zip(zip_dir)`` 下载的N-MNIST训练集和测试集zip压缩包，会被逐个解压到 ``events_data_dir`` 目录
-        :return: None
-
-        ``events_data_dir`` 文件夹在数据集全部解压后，会具有如下的格式：
-
-        .. code-block:: bash
-
-            events_data_dir/
-            |-- 0
-            |   |-- 0.bin
-            |   |-- ...
-            |-- 1
-            |-- 2
-            |-- 3
-            |-- 4
-            |-- 5
-            |-- 6
-            |-- 7
-            |-- 8
-            `-- 9
-        '''
-        for i in range(10):
-            class_name = str(i)
-            zip_file_name = os.path.join(zip_dir, class_name + '.zip')
-            un_dir = os.path.join(events_data_dir, class_name)
-            print('unzip', zip_file_name, 'to', un_dir)
-            with zipfile.ZipFile(zip_file_name, 'r') as zip_file:
-                zip_file.extractall(un_dir)
-            print('extra file number', os.listdir(un_dir).__len__())
 
     @staticmethod
     def read_bin(file_name: str):
         '''
         :param file_name: N-MNIST原始bin格式数据的文件名
-        :return: 4个list，分别是t, x, y, p
+        :return: 一个字典，键是{'t', 'x', 'y', 'p'}，值是np数组
         
         原始的N-MNIST提供的是bin格式数据，不能直接读取。本函数提供了一个读取的接口。
         '''
-        t_list = []
-        x_list = []
-        y_list = []
-        p_list = []
+
         with open(file_name, 'rb') as bin_f:
-            while True:
-                bin_x = bin_f.read(1)
-                if bin_x.__len__() == 0:
-                    break
-                x = int.from_bytes(bin_x, byteorder='big')
-                y = int.from_bytes(bin_f.read(1), byteorder='big')
-                bits = int.from_bytes(bin_f.read(3), byteorder='big')
-                p = bits >> 23
-                t = bits & t_bit_mask
-                t_list.append(t)
-                x_list.append(x)
-                y_list.append(y)
-                p_list.append(p)
-        return t_list, x_list, y_list, p_list
+            raw_data = np.uint32(np.fromfile(bin_f, dtype=np.uint8))
+            y = raw_data[1::5]
+            x = raw_data[0::5]
+            p = (raw_data[2::5] & 128) >> 7  # bit 7
+            t = ((raw_data[2::5] & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
+        return {'t': t, 'x': x, 'y': y, 'p': p}
 
     @staticmethod
-    def convert_events_to_frames(events_data_dir, frames_data_dir, frames_num=10, normalization=None):
+    def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, normalization=None):
         '''
-        :param events_data_dir: 保存N-MNIST原始数据集bin文件的文件夹
+        :param events_data_dir: 保存N-MNIST原始数据集bin文件的文件夹，例如解压后的 ``Train`` 文件夹
         :param frames_data_dir: 保存frames数据的文件夹
         :param frames_num: 转换后数据的帧数
         :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
@@ -143,42 +68,96 @@ class NMNIST(SpikingFlow.datasets.SubDirDataset):
             |   |-- 0.bin
             |   |-- ...
             |-- 1
-            |-- 2
-            |-- 3
-            |-- 4
-            |-- 5
-            |-- 6
-            |-- 7
-            |-- 8
-            `-- 9
+            |-- ..
 
-        本函数会在 ``frames_data_dir`` 文件夹下生成与 ``events_data_dir`` 相同的子文件夹，每个子文件夹内也是npz的数据，以键为 ``'arr_0'`` 的字典（numpy默认）保存数据。
+
+        本函数会在 ``frames_data_dir`` 文件夹下生成与 ``events_data_dir`` 相同的目录结构，每个子文件夹内也是npz的数据，以键为 ``'arr_0'`` 的字典（numpy默认）保存数据。
         '''
-        weight = 28
-        height = 28
-        data_num = 0
+        def cvt_data_in_dir(source_dir, target_dir, show_bar):
+            print('processing', source_dir)
+            if not os.path.exists(target_dir):
+                os.mkdir(target_dir)
+                print('mkdir', target_dir)
+            if show_bar:
+                for file_name in tqdm.tqdm(os.listdir(source_dir)):
+                    events = NMNIST.read_bin(os.path.join(source_dir, file_name))
+                    # events: {'t', 'x', 'y', 'p'}
+                    frames = SpikingFlow.datasets.convert_events_to_frames(events=events, weight=34, height=34,
+                                                                               frames_num=frames_num, normalization=normalization)
+                    np.savez_compressed(os.path.join(target_dir, file_name), frames)
+            else:
+                for file_name in os.listdir(source_dir):
+                    events = NMNIST.read_bin(os.path.join(source_dir, file_name))
+                    # events: {'t', 'x', 'y', 'p'}
+                    frames = SpikingFlow.datasets.convert_events_to_frames(events=events, weight=34, height=34,
+                                                                               frames_num=frames_num, normalization=normalization)
+                    np.savez_compressed(os.path.join(target_dir, file_name), frames)
+
         thread_list = []
+
         sub_dir_list = os.listdir(events_data_dir)
         for i in range(sub_dir_list.__len__()):
             sub_dir = sub_dir_list[i]
+            events_sub_dir = os.path.join(events_data_dir, sub_dir)
+            frames_sub_dir = os.path.join(frames_data_dir, sub_dir)
             if i == sub_dir_list.__len__() - 1:
                 show_bar = True
             else:
                 show_bar = False
-            thread_list.append(CVTThread(show_bar, sub_dir, events_data_dir, frames_data_dir, weight, height,
-                                         frames_num, normalization))
+            thread_list.append(SpikingFlow.datasets.FunctionThread(f=cvt_data_in_dir, source_dir=events_sub_dir,
+                                                                   target_dir=frames_sub_dir, show_bar=show_bar))
             print('start thread', thread_list.__len__())
-            thread_list[i].start()
+            thread_list[-1].start()
 
-        for td in thread_list:
-            td.join()
-        for td in thread_list:
-            data_num += td.cvted_num
-        print('converted data num = ', data_num)
+        for i in range(thread_list.__len__()):
+            thread_list[i].join()
+            print('thread', i, 'finished')
 
-    def __init__(self, frames_data_dir: str, train=True, split_ratio=0.9):
+    @staticmethod
+    def install_dataset(zip_dir, frames_data_dir, frames_num=10, normalization=None):
         '''
-        :param frames_data_dir: 保存frame格式的N MNIST数据集的文件夹
+        :param zip_dir: 下载N-MNIST数据集的 ``Train.zip`` 和 ``Test.zip`` 保存到哪个文件夹。如果这个文件夹内已经存在这2个文件，则不会下载
+        :param frames_data_dir: 保存frames数据的文件夹，会将训练集和测试集分别保存到 ``Train`` 和 ``Test`` 文件夹内
+        :param frames_num: 转换后数据的帧数
+        :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
+                            为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
+                            为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
+        :return: None
+
+        一步完成对N-MNIST数据集的下载，解压，转换为frames数据。
+        '''
+
+        # 数据集不存在则下载
+        if not os.path.exists(os.path.join(zip_dir, 'Train.zip')) or not os.path.exists(os.path.join(zip_dir, 'Test.zip')):
+            print('download N-MNIST')
+            NMNIST.download_zip(zip_dir)
+
+        # 解压数据集
+        ext_dir = os.path.join(zip_dir, 'extract')
+        print('unzip Train.zip and Test.zip to', ext_dir)
+        SpikingFlow.datasets.extract_zip_in_dir(zip_dir, ext_dir)
+
+        # 转换events为frames
+        train_events_dir = os.path.join(ext_dir, 'Train/Train')
+        train_frames_dir = os.path.join(frames_data_dir, 'Train')
+        if not os.path.exists(train_frames_dir):
+            os.mkdir(train_frames_dir)
+        test_events_dir = os.path.join(ext_dir, 'Test/Test')
+        test_frames_dir = os.path.join(frames_data_dir, 'Test')
+        if not os.path.exists(test_frames_dir):
+            os.mkdir(test_frames_dir)
+
+        print('convert train dataset')
+        NMNIST.create_frames_dataset(train_events_dir, train_frames_dir, frames_num=10, normalization=None)
+        print('convert test dataset')
+        NMNIST.create_frames_dataset(test_events_dir, test_frames_dir, frames_num=10, normalization=None)
+
+
+
+
+    def __init__(self, frames_data_dir: str, train=True):
+        '''
+        :param frames_data_dir: 保存frame格式的N MNIST数据集的文件夹，其中包含训练集和测试集， ``Train`` 和 ``Test`` 文件夹
         :param train: 训练还是测试
         :param split_ratio: 训练集占数据集的比例。对于每一类，会抽取前 ``split_ratio`` 的数据作为训练集，而剩下 ``split_ratio`` 的数据集作为测试集
 
@@ -186,35 +165,36 @@ class NMNIST(SpikingFlow.datasets.SubDirDataset):
 
         Orchard G, Jayawant A, Cohen G, et al. Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades[J]. Frontiers in Neuroscience, 2015: 437-437.
 
-        需要保证``root`` 文件夹具有如下的格式：
-
-        .. code-block:: bash
-
-            frames_data_dir/
-            |-- 0
-            |   |-- 0.npz
-            |   |-- ...
-            |-- 1
-            |-- 2
-            |-- 3
-            |-- 4
-            |-- 5
-            |-- 6
-            |-- 7
-            |-- 8
-            `-- 9
-
-        其中的npz文件，以键为't','x','y','p'的字典保存数据。
-
         为了构造好这样的数据集文件夹，建议遵循如下顺序：
 
         1.原始的N-MNIST数据集 ``zip_dir``。可以手动下载，也可以调用静态方法 ``NMNIST.download_zip(zip_dir)``；
 
-        2.分别解压训练集和测试集到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``NMNIST.unzip(zip_dir, events_data_dir)``；
+        2.分别解压训练集和测试集到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``SpikingFlow.datasets.extract_zip_in_dir(zip_dir, events_data_dir)``；
 
-        3.将events数据转换成frames数据。调用 ``NMNIST.convert_events_to_frames(events_data_dir, frames_data_dir, frames_num=10, normalization=None)``。
+        3.将events数据转换成frames数据。调用 ``NMNIST.create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, normalization=None)``。
 
         由于DVS数据集体积庞大，在生成需要的frames格式的数据后，可以考虑删除之前下载的原始数据。
         '''
+        super().__init__()
 
-        super().__init__(frames_data_dir, train, split_ratio)
+        self.file_path = []
+        self.label = []
+        if train:
+            self.root = os.path.join(frames_data_dir, 'Train')
+        else:
+            self.root = os.path.join(frames_data_dir, 'Test')
+
+        for class_name in os.listdir(self.root):
+            sub_dir = os.path.join(self.root, class_name)
+            for file_name in os.listdir(sub_dir):
+                self.file_path.append(os.path.join(sub_dir, file_name))
+                self.label.append(int(class_name))
+
+    def __len__(self):
+        return self.file_path.__len__()
+
+    def __getitem__(self, index):
+        frame = torch.from_numpy(np.load(self.file_path[index])['arr_0']).float()
+        # shape=[frames_num, 2, weight, height]
+        return frame, self.label[index]
+
