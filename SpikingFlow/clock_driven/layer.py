@@ -134,6 +134,12 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
+
+    def extra_repr(self):
+        return 'p={}'.format(
+            self.p
+        )
+
     def forward(self, x:torch.Tensor):
         '''
         :param x: shape=[*]的tensor
@@ -168,6 +174,12 @@ class Dropout2d(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
+
+    def extra_repr(self):
+        return 'p={}'.format(
+            self.p
+        )
+
     def forward(self, x:torch.Tensor):
         '''
         :param x: shape=[N, C, W, H]的tensor
@@ -179,6 +191,7 @@ class Dropout2d(nn.Module):
             return self.mask * x
         else:
             return x
+
     def reset(self):
         '''
         :return: None
@@ -255,6 +268,11 @@ class LowPassSynapse(nn.Module):
             self.tau = 1 / tau
         self.out_i = 0
 
+    def extra_repr(self):
+        return 'tau={}'.format(
+            1 / self.tau
+        )
+
     def forward(self, in_spikes: torch.Tensor):
         '''
         :param in_spikes: shape任意的输入脉冲
@@ -272,7 +290,7 @@ class LowPassSynapse(nn.Module):
         self.out_i = 0
 
 class ChannelsMaxPool(nn.Module):
-    def __init__(self, pool:nn.MaxPool1d):
+    def __init__(self, pool: nn.MaxPool1d):
         '''
         :param pool: nn.Maxpool1d的池化层
 

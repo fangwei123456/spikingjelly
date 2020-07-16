@@ -30,6 +30,11 @@ class BaseNode(nn.Module):
         else:
             self.monitor = False
 
+    def extra_repr(self):
+        return 'v_threshold={}, v_reset={}'.format(
+            self.v_threshold, self.v_reset
+        )
+
     def set_monitor(self, monitor_state=True):
         '''
         :param monitor_state: True或False，表示开启或关闭monitor
@@ -131,15 +136,19 @@ class LIFNode(BaseNode):
         super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
         self.tau = tau
 
+    def extra_repr(self):
+        return 'v_threshold={}, v_reset={}, tau={}'.format(
+            self.v_threshold, self.v_reset, self.tau
+        )
     def forward(self, dv: torch.Tensor):
         self.v += (dv - (self.v - self.v_reset)) / self.tau
         return self.spiking()
 
-
 class PLIFNode(BaseNode):
-    def __init__(self, init_tau=2.0, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
+    def __init__(self, init_tau=2.0, decay=False, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
         '''
         :param init_tau: 初始的tau
+        :param decay: 为 ``True`` 时会限制 ``tau`` 的取值恒大于1，使得神经元不会给自身充电；为 ``False`` 时不会有任何限制
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -161,15 +170,34 @@ class PLIFNode(BaseNode):
 
             为了防止出现除以0的情况，PLIF神经元没有使用除法，而是用乘法代替：
 
-            ``self.v += (dv - (self.v - self.v_reset)) * self.tau``
+            ``self.w = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))``
+
+            ``self.v += (dv - (self.v - self.v_reset)) * self.w``
         '''
         super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
-        self.tau = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))
+        self.decay = decay
+        if self.decay:
+            self.w = nn.Parameter(torch.tensor([math.log(1 / (init_tau - 1))], dtype=torch.float))
+            # self.w.sigmoid() == init_tau
+        else:
+            self.w = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))
 
     def forward(self, dv: torch.Tensor):
-        self.v += (dv - (self.v - self.v_reset)) * self.tau
+        if self.decay:
+            self.v += (dv - (self.v - self.v_reset)) * self.w.sigmoid()
+        else:
+            self.v += (dv - (self.v - self.v_reset)) * self.w
         return self.spiking()
 
+    def extra_repr(self):
+        if self.decay:
+            tau = 1 / self.w.data.sigmoid()
+        else:
+            tau = 1 / self.w.data
+
+        return 'v_threshold={}, v_reset={}, tau={}'.format(
+            self.v_threshold, self.v_reset, tau
+        )
 
 class RIFNode(BaseNode):
     def __init__(self, init_w=-1e-3, amplitude=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
@@ -214,12 +242,17 @@ class RIFNode(BaseNode):
         :return: 返回自连接权重
         '''
         if self.amplitude is None:
-            return self.g
+            return self.g.data
         elif isinstance(self.amplitude, float):
-            return (self.g.sigmoid() * 2 - 1) * self.amplitude
+            return (self.g.data.sigmoid() * 2 - 1) * self.amplitude
         else:
-            return self.g.sigmoid() * (self.amplitude[1] - self.amplitude[0]) + self.amplitude[0]
+            return self.g.data.sigmoid() * (self.amplitude[1] - self.amplitude[0]) + self.amplitude[0]
 
+    def extra_repr(self):
+
+        return 'v_threshold={}, v_reset={}, w={}'.format(
+            self.v_threshold, self.v_reset, self.w()
+        )
 
     def forward(self, dv: torch.Tensor):
         if self.amplitude is None:

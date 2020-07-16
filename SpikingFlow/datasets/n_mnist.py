@@ -47,17 +47,22 @@ class NMNIST(Dataset):
         return {'t': t, 'x': x, 'y': y, 'p': p}
 
     @staticmethod
-    def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, normalization=None):
+    def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, split_by='time', normalization=None):
         '''
         :param events_data_dir: 保存N-MNIST原始数据集bin文件的文件夹，例如解压后的 ``Train`` 文件夹
         :param frames_data_dir: 保存frames数据的文件夹
         :param frames_num: 转换后数据的帧数
+        :param split_by: ``'time'`` 或 ``'number'``。为 ``'time'`` 表示将events数据在时间上分段，例如events记录的 ``t`` 介于
+                        [0, 105]且 ``frames_num=10``，则转化得到的10帧分别为 ``t`` 属于[0, 10), [10,20), ..., [90, 105)的
+                        脉冲的累加；
+                        为 ``'number'`` 表示将events数据在数量上分段，例如events一共有105个且 ``frames_num=10``，则转化得到
+                        的10帧分别是第[0, 10), [10,20), ..., [90, 105)个脉冲的累加
         :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
                             为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
                             为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
         :return: None
 
-        将N-MNIST的events数据，在t维度分割成 ``frames_num`` 段，每段的范围是 ``[i * dt, (i + 1) * dt)`` ，每段累加得到一帧，转换成 ``frames_num`` 帧数。
+        将N-MNIST的events数据进行分段，每段累加得到一帧，转换成 ``frames_num`` 帧数。
 
         ``events_data_dir`` 文件夹应该包含解压后的N-MNIST数据集，会具有如下的格式：
 
@@ -82,15 +87,15 @@ class NMNIST(Dataset):
                 for file_name in tqdm.tqdm(os.listdir(source_dir)):
                     events = NMNIST.read_bin(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = SpikingFlow.datasets.convert_events_to_frames(events=events, weight=34, height=34,
-                                                                               frames_num=frames_num, normalization=normalization)
+                    frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
+                                                                               frames_num=frames_num, split_by=split_by, normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, file_name), frames)
             else:
                 for file_name in os.listdir(source_dir):
                     events = NMNIST.read_bin(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = SpikingFlow.datasets.convert_events_to_frames(events=events, weight=34, height=34,
-                                                                               frames_num=frames_num, normalization=normalization)
+                    frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
+                                                                               frames_num=frames_num, split_by=split_by, normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, file_name), frames)
 
         thread_list = []
@@ -114,7 +119,7 @@ class NMNIST(Dataset):
             print('thread', i, 'finished')
 
     @staticmethod
-    def install_dataset(zip_dir, frames_data_dir, frames_num=10, normalization=None):
+    def install_dataset(zip_dir, frames_data_dir, frames_num=10, split_by='time', normalization=None):
         '''
         :param zip_dir: 下载N-MNIST数据集的 ``Train.zip`` 和 ``Test.zip`` 保存到哪个文件夹。如果这个文件夹内已经存在这2个文件，则不会下载
         :param frames_data_dir: 保存frames数据的文件夹，会将训练集和测试集分别保存到 ``Train`` 和 ``Test`` 文件夹内
@@ -137,21 +142,29 @@ class NMNIST(Dataset):
         print('unzip Train.zip and Test.zip to', ext_dir)
         SpikingFlow.datasets.extract_zip_in_dir(zip_dir, ext_dir)
 
+        if not os.path.exists(frames_data_dir):
+            os.mkdir(frames_data_dir)
+            print('mkdir', frames_data_dir)
         # 转换events为frames
         train_events_dir = os.path.join(ext_dir, 'Train/Train')
         train_frames_dir = os.path.join(frames_data_dir, 'Train')
         if not os.path.exists(train_frames_dir):
             os.mkdir(train_frames_dir)
+            print('mkdir', train_frames_dir)
         test_events_dir = os.path.join(ext_dir, 'Test/Test')
         test_frames_dir = os.path.join(frames_data_dir, 'Test')
         if not os.path.exists(test_frames_dir):
             os.mkdir(test_frames_dir)
+            print('mkdir', test_frames_dir)
+
 
         print('convert train dataset')
-        NMNIST.create_frames_dataset(train_events_dir, train_frames_dir, frames_num=10, normalization=None)
+        NMNIST.create_frames_dataset(train_events_dir, train_frames_dir, frames_num=frames_num, split_by=split_by, normalization=normalization)
         print('convert test dataset')
-        NMNIST.create_frames_dataset(test_events_dir, test_frames_dir, frames_num=10, normalization=None)
+        NMNIST.create_frames_dataset(test_events_dir, test_frames_dir, frames_num=frames_num, split_by=split_by, normalization=normalization)
 
+        print('create frames data in', train_frames_dir, test_frames_dir)
+        print('frames_num', frames_num, 'split_by', split_by, 'normalization', normalization)
 
 
 
@@ -167,11 +180,11 @@ class NMNIST(Dataset):
 
         为了构造好这样的数据集文件夹，建议遵循如下顺序：
 
-        1.原始的N-MNIST数据集 ``zip_dir``。可以手动下载，也可以调用静态方法 ``NMNIST.download_zip(zip_dir)``；
+        1.原始的N-MNIST数据集 ``zip_dir``。可以手动下载，也可以调用静态方法 ``NMNIST.download_zip``；
 
-        2.分别解压训练集和测试集到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``SpikingFlow.datasets.extract_zip_in_dir(zip_dir, events_data_dir)``；
+        2.分别解压训练集和测试集到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``SpikingFlow.datasets.extract_zip_in_dir``；
 
-        3.将events数据转换成frames数据。调用 ``NMNIST.create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, normalization=None)``。
+        3.将events数据转换成frames数据。调用 ``NMNIST.create_frames_dataset``。
 
         由于DVS数据集体积庞大，在生成需要的frames格式的数据后，可以考虑删除之前下载的原始数据。
         '''
