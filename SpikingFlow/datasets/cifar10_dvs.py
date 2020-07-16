@@ -40,11 +40,16 @@ class CIFAR10DVS(SpikingFlow.datasets.SubDirDataset):
         raise NotImplementedError
 
     @staticmethod
-    def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, normalization=None):
+    def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, split_by='time', normalization=None):
         '''
         :param events_data_dir: 保存events数据的文件夹
         :param frames_data_dir: 保存frames数据的文件夹
         :param frames_num: 转换后数据的帧数
+        :param split_by: ``'time'`` 或 ``'number'``。为 ``'time'`` 表示将events数据在时间上分段，例如events记录的 ``t`` 介于
+                        [0, 105]且 ``frames_num=10``，则转化得到的10帧分别为 ``t`` 属于[0, 10), [10,20), ..., [90, 105)的
+                        脉冲的累加；
+                        为 ``'number'`` 表示将events数据在数量上分段，例如events一共有105个且 ``frames_num=10``，则转化得到
+                        的10帧分别是第[0, 10), [10,20), ..., [90, 105)个脉冲的累加
         :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
                             为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
                             为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
@@ -52,7 +57,9 @@ class CIFAR10DVS(SpikingFlow.datasets.SubDirDataset):
 
         将DVS的events数据，在t维度分割成 ``frames_num`` 段，每段的范围是 ``[i * dt, (i + 1) * dt)`` ，每段累加得到一帧，转换成 ``frames_num`` 帧数。
         ``events_data_dir`` 文件夹中应该包含多个子文件夹，每个子文件夹内是npz的数据，以键为 ``'t','x','y','p'`` 的字典保存数据，例如：
+
         .. code-block:: bash
+
             dvs_cifar10_npz/
             |-- airplane
             |   |-- 0.npz
@@ -78,15 +85,17 @@ class CIFAR10DVS(SpikingFlow.datasets.SubDirDataset):
                 for file_name in tqdm.tqdm(os.listdir(source_dir)):
                     events = np.load(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = SpikingFlow.datasets.convert_events_to_frames(events=events, weight=128, height=128,
-                                                                               frames_num=frames_num, normalization=normalization)
+                    frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
+                                                                               frames_num=frames_num, split_by=split_by,
+                                                                             normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, file_name), frames)
             else:
                 for file_name in os.listdir(source_dir):
                     events = np.load(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = SpikingFlow.datasets.convert_events_to_frames(events=events, weight=128, height=128,
-                                                                               frames_num=frames_num, normalization=normalization)
+                    frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
+                                                                               frames_num=frames_num, split_by=split_by,
+                                                                             normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, file_name), frames)
 
 
@@ -141,11 +150,11 @@ class CIFAR10DVS(SpikingFlow.datasets.SubDirDataset):
 
         为了构造好这样的数据集文件夹，建议遵循如下顺序：
 
-        1.下载SpikingFlow提供的10个zip文件下载到 ``zip_dir``。可以手动下载，也可以调用静态方法 ``DVSCIFAR10.download_zip(zip_dir)``；
+        1.下载SpikingFlow提供的10个zip文件下载到 ``zip_dir``。可以手动下载，也可以调用静态方法 ``DVSCIFAR10.download_zip``；
 
-        2.解压这10个文件夹到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``SpikingFlow.datasets.extract_zip_in_dir(zip_dir, events_data_dir)``；
+        2.解压这10个文件夹到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``SpikingFlow.datasets.extract_zip_in_dir``；
 
-        3.将events数据转换成frames数据。调用 ``CIFAR10DVS.create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, normalization=None)``。
+        3.将events数据转换成frames数据。调用 ``CIFAR10DVS.create_frames_dataset``。
 
         由于DVS数据集体积庞大，在生成需要的frames格式的数据后，可以考虑删除之前下载的原始数据。
         '''
