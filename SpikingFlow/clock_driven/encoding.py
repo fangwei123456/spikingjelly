@@ -5,9 +5,7 @@ import math
 class BaseEncoder(nn.Module):
     def __init__(self):
         '''
-        所有编码器的基类
-
-        编码器将输入数据（例如图像）编码为脉冲数据
+        所有编码器的基类。编码器将输入数据（例如图像）编码为脉冲数据。
         '''
         super().__init__()
 
@@ -16,13 +14,11 @@ class BaseEncoder(nn.Module):
         :param x: 要编码的数据
         :return: 编码后的脉冲，或者是None
 
-        将x编码为脉冲。少数编码器（例如ConstantEncoder）可以将x编码成时长为1个dt的脉冲，在这种情况下，本函数返回编码后的脉冲
+        将x编码为脉冲。少数编码器（例如ConstantEncoder）可以将x编码成时长为1个dt的脉冲，在这种情况下，本函数返回编码后的脉冲。
 
-        多数编码器（例如PeriodicEncoder），都是把x编码成时长为n个dt的脉冲out_spike，out_spike.shape=[n, *]
+        多数编码器（例如PeriodicEncoder），都是把x编码成时长为n个dt的脉冲out_spike，out_spike.shape=[n, *]。
 
-        因此编码一次后，需要调用n次step()函数才能将脉冲全部发放完毕
-
-        第index调用step()会得到out_spike[index]
+        因此编码一次后，需要调用n次step()函数才能将脉冲全部发放完毕，第index此调用step()会得到out_spike[index]。
         '''
         raise NotImplementedError
 
@@ -30,7 +26,7 @@ class BaseEncoder(nn.Module):
         '''
         :return: 1个dt的脉冲
 
-        多数编码器（例如PeriodicEncoder），编码一次x，需要经过多步仿真才能将数据输出，这种情况下则用step来获取每一步的数据
+        多数编码器（例如PeriodicEncoder），编码一次x，需要经过多步仿真才能将数据输出，这种情况下则用step来获取每一步的数据。
         '''
         raise NotImplementedError
 
@@ -38,7 +34,7 @@ class BaseEncoder(nn.Module):
         '''
         :return: None
 
-        将编码器的所有状态变量设置为初始状态。对于有状态的编码器，需要重写这个函数
+        将编码器的所有状态变量设置为初始状态。对于有状态的编码器，需要重写这个函数。
         '''
         pass
 
@@ -48,7 +44,7 @@ class PeriodicEncoder(BaseEncoder):
         :param out_spike: shape=[T, *]，PeriodicEncoder会不断的输出out_spike[0], out_spike[1], ..., out_spike[T-1],
                           out_spike[0], out_spike[1], ...
 
-        给定out_spike后，周期性的输出out_spike[0], out_spike[1], ..., out_spike[T-1]的编码器
+        给定out_spike后，周期性的输出out_spike[0], out_spike[1], ..., out_spike[T-1]的编码器。
         '''
         super().__init__()
         assert out_spike.dtype == torch.bool
@@ -67,7 +63,7 @@ class PeriodicEncoder(BaseEncoder):
         '''
         :return: out_spike[index]
 
-        初始化时index=0，每调用一次，index则自增1，index为T时修改为0
+        初始化时index=0，每调用一次，index则自增1，index为T时修改为0。
         '''
         index = self.index
         self.index += 1
@@ -80,7 +76,7 @@ class PeriodicEncoder(BaseEncoder):
         :param out_spike: 新设定的out_spike，必须是torch.bool
         :return: None
 
-        重新设定编码器的输出脉冲self.out_spike为out_spike
+        重新设定编码器的输出脉冲self.out_spike为out_spike。
         '''
         assert out_spike.dtype == torch.bool
         self.out_spike = out_spike
@@ -91,7 +87,7 @@ class PeriodicEncoder(BaseEncoder):
         '''
         :return: None
 
-        重置编码器的状态变量，对于PeriodicEncoder而言将索引index置0即可
+        重置编码器的状态变量，对于PeriodicEncoder而言将索引index置0即可。
         '''
         self.index = 0
 
@@ -105,9 +101,9 @@ class LatencyEncoder(BaseEncoder):
         :param function_type: 'linear'或'log'
         :param device: 数据所在设备
 
-        延迟编码，刺激强度越大，脉冲发放越早。要求刺激强度已经被归一化到[0, 1]
+        延迟编码，刺激强度越大，脉冲发放越早。要求刺激强度已经被归一化到[0, 1]。
 
-        脉冲发放时间 :math:`t_i` 与刺激强度 :math:`x_i` 满足
+        脉冲发放时间 :math:`t_i` 与刺激强度 :math:`x_i` 满足：
 
         type='linear'
             .. math::
@@ -117,7 +113,7 @@ class LatencyEncoder(BaseEncoder):
             .. math::
                 t_i = (t_{max} - 1) - ln(alpha * x_i + 1)
 
-        :math:`alpha` 满足
+        :math:`alpha` 满足：
 
         .. math::
             (t_{max} - 1) - ln(alpha * 1 + 1) = 0
@@ -126,9 +122,9 @@ class LatencyEncoder(BaseEncoder):
         .. math::
             alpha = exp(t_{max} - 1) - 1
 
-        当 :math:`t_{max}` 较大时 :math:`alpha` 极大
+        当 :math:`t_{max}` 较大时 :math:`alpha` 极大。
 
-        示例代码
+        示例代码：
 
         .. code-block:: python
 
@@ -162,7 +158,7 @@ class LatencyEncoder(BaseEncoder):
         '''
         :param x: 要编码的数据，任意形状的tensor，要求x的数据范围必须在[0, 1]
 
-        将输入数据x编码为max_spike_time个时刻的max_spike_time个脉冲
+        将输入数据x编码为max_spike_time个时刻的max_spike_time个脉冲。
         '''
 
         # 将输入数据转换为不同时刻发放的脉冲
@@ -181,7 +177,7 @@ class LatencyEncoder(BaseEncoder):
         '''
         :return: out_spike[index]
 
-        初始化时index=0，每调用一次，index则自增1，index为max_spike_time时修改为0
+        初始化时index=0，每调用一次，index则自增1，index为max_spike_time时修改为0。
 
         '''
         index = self.index
@@ -195,7 +191,7 @@ class LatencyEncoder(BaseEncoder):
         '''
         :return: None
 
-        重置LatencyEncoder的所有状态变量（包括spike_time，out_spike，index）为初始值0
+        重置LatencyEncoder的所有状态变量（包括spike_time，out_spike，index）为初始值0。
         '''
         self.spike_time = 0
         self.out_spike = 0
@@ -204,9 +200,9 @@ class LatencyEncoder(BaseEncoder):
 class PoissonEncoder(BaseEncoder):
     def __init__(self):
         '''
-        泊松频率编码，输出脉冲可以看作是泊松流，发放脉冲的概率即为刺激强度，要求刺激强度已经被归一化到[0, 1]
+        泊松频率编码，输出脉冲可以看作是泊松流，发放脉冲的概率即为刺激强度，要求刺激强度已经被归一化到[0, 1]。
 
-        示例代码
+        示例代码：
 
         .. code-block:: python
 
@@ -221,7 +217,7 @@ class PoissonEncoder(BaseEncoder):
         '''
         :param x: 要编码的数据，任意形状的tensor，要求x的数据范围必须在[0, 1]
 
-        将输入数据x编码为脉冲，脉冲发放的概率即为对应位置元素的值
+        将输入数据x编码为脉冲，脉冲发放的概率即为对应位置元素的值。
         '''
         out_spike = torch.rand_like(x).le(x)
         # torch.rand_like(x)生成与x相同shape的介于[0, 1)之间的随机数， 这个随机数小于等于x中对应位置的元素，则发放脉冲
@@ -241,18 +237,18 @@ class GaussianTuningCurveEncoder(BaseEncoder):
 
         Bohte S M, Kok J N, La Poutre H. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1-4): 17-37.
 
-        高斯调谐曲线编码，一种时域编码方法
+        高斯调谐曲线编码，一种时域编码方法。
 
-        首先生成tuning_curve_num个高斯函数，这些高斯函数的对称轴在数据范围内均匀排列
-        对于每一个输入x，计算tuning_curve_num个高斯函数的值，使用这些函数值线性地生成tuning_curve_num个脉冲发放时间
+        首先生成tuning_curve_num个高斯函数，这些高斯函数的对称轴在数据范围内均匀排列，对于每一个输入x，计算tuning_curve_num个\
+        高斯函数的值，使用这些函数值线性地生成tuning_curve_num个脉冲发放时间。
 
-        待编码向量是M维tensor，也就是有M个特征
+        待编码向量是M维tensor，也就是有M个特征。
 
-        1个M维tensor会被编码成shape=[M, tuning_curve_num]的tensor，表示M * tuning_curve_num个神经元的脉冲发放时间
+        1个M维tensor会被编码成shape=[M, tuning_curve_num]的tensor，表示M * tuning_curve_num个神经元的脉冲发放时间。
 
-        需要注意的是，编码一次数据，经过max_spike_time步仿真，才能进行下一次的编码
+        需要注意的是，编码一次数据，经过max_spike_time步仿真，才能进行下一次的编码。
 
-        示例代码
+        示例代码：
 
         .. code-block:: python
 
@@ -291,7 +287,7 @@ class GaussianTuningCurveEncoder(BaseEncoder):
         '''
         :param x: 要编码的数据，shape=[batch_size, M]
 
-        将输入数据x编码为脉冲
+        将输入数据x编码为脉冲。
         '''
         assert self.index == 0
         self.spike_time = torch.zeros(size=[x.shape[0], x.shape[1], self.tuning_curve_num], dtype=torch.float,
@@ -310,7 +306,7 @@ class GaussianTuningCurveEncoder(BaseEncoder):
         '''
         :return: out_spike[index]
 
-        初始化时index=0，每调用一次，index则自增1，index为max_spike_time时修改为0
+        初始化时index=0，每调用一次，index则自增1，index为max_spike_time时修改为0。
         '''
         index = self.index
         self.index += 1
@@ -323,12 +319,38 @@ class GaussianTuningCurveEncoder(BaseEncoder):
         '''
         :return: None
 
-        重置GaussianTuningCurveEncoder的所有状态变量（包括spike_time，out_spike，index）为初始值0
+        重置GaussianTuningCurveEncoder的所有状态变量（包括spike_time，out_spike，index）为初始值0。
         '''
         self.spike_time = 0
         self.out_spike = 0
         self.index = 0
 
+class IntervalEncoder(BaseEncoder):
+    def __init__(self, T_in, shape, device='cpu'):
+        '''
+        :param T_in: 脉冲发放的间隔
+        :param shape: 输出形状
+        :param device: 输出脉冲所在的设备
+
+        每隔 ``T_in`` 个步长就发放一次脉冲的编码器。
+        '''
+        super().__init__()
+        self.t = 0
+        self.T_in = T_in
+        self.out_spike = [torch.zeros(size=shape, device=device, dtype=torch.bool),
+                          torch.ones(size=shape, device=device, dtype=torch.bool)]
+
+    def step(self):
+        if self.t == self.T_in:
+            self.t = 0
+            return self.out_spike[1]
+        else:
+            self.t += 1
+            return self.out_spike[0]
+
+
+    def reset(self):
+        self.t = 0
 
 
 

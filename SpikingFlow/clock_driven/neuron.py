@@ -55,13 +55,16 @@ class BaseNode(nn.Module):
         '''
         spike = self.surrogate_function(self.v - self.v_threshold)
         if self.monitor:
-            self.monitor['v'].append(self.v.data.cpu().numpy())
-            self.monitor['s'].append(spike.data.cpu().numpy())
+            self.monitor['v'].append(self.v.data.cpu().numpy().copy())
+            self.monitor['s'].append(spike.data.cpu().numpy().copy())
 
         if self.v_reset is None:
             self.v = accelerating.soft_vlotage_transform(self.v, spike, self.v_threshold)
         else:
             self.v = accelerating.hard_voltage_transform(self.v, spike, self.v_reset)
+
+        if self.monitor:
+            self.monitor['v'].append(self.v.data.cpu().numpy().copy())
 
         return spike
 
