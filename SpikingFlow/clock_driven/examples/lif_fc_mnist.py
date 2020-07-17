@@ -26,7 +26,7 @@ def main():
 
     使用全连接-LIF-全连接-LIF的网络结构，进行MNIST识别。运行示例：
 
-    .. code-bloack:: python
+    .. code-block:: python
 
         >>> import SpikingFlow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
         >>> lif_fc_mnist.main()

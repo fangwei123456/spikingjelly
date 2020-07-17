@@ -22,6 +22,7 @@ def main():
     :return: None
 
     使用高斯调谐曲线编码器编码图像为脉冲，单层Tempotron进行MNIST识别。运行示例：
+    
     .. code-block:: python
 
         >>> import SpikingFlow.event_driven.examples.tempotron_mnist as tempotron_mnist
