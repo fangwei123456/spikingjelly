@@ -1,7 +1,6 @@
 Clock_driven SpikingFlow.clock_driven
 =======================================
-Author: `fangwei123456 <https://github.com/fangwei123456>`_
-        `lucifer2859 <https://github.com/lucifer2859>`_
+Author: `fangwei123456 <https://github.com/fangwei123456>`_, `lucifer2859 <https://github.com/lucifer2859>`_
 
 This tutorial focuses on ``SpikingFlow.clock_driven``, introduce the clock-driven simulation method, the concept of gradient substitution method, and the use of differentiable SNN neurons.
 
