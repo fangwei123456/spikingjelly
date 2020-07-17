@@ -36,7 +36,7 @@ def main():
     '''
     :return: None
 
-    .. code-bloack:: python
+    .. code-block:: python
 
         >>> import SpikingFlow.clock_driven.examples.lif_conv_cifar10 as lif_conv_cifar10
         >>> lif_conv_cifar10.main()
