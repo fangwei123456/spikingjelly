@@ -8,3 +8,4 @@ dependencies:
   - numpy
   - tensorboard
   - matplotlib
+  - tqdm
