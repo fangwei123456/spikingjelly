@@ -30,6 +30,10 @@
 * :doc:`时间驱动 SpikingFlow.clock_driven <./tutorial.clock_driven>`
 * :doc:`事件驱动 SpikingFlow.event_driven <./tutorial.event_driven>`
 
+Tutorials
+-------------------------
+* :doc:`Clock Driven SpikingFlow.clock_driven <./tutorial_en.clock_driven>`
+
 模块文档
 -------------------------
 
