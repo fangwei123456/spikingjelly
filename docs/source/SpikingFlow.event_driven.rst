@@ -1,32 +1,12 @@
 SpikingFlow.event\_driven package
 =================================
 
-Subpackages
------------
-
 .. toctree::
+   :hidden:
 
    SpikingFlow.event_driven.examples
-
-Submodules
-----------
-
-SpikingFlow.event\_driven.encoding module
------------------------------------------
-
-.. automodule:: SpikingFlow.event_driven.encoding
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-SpikingFlow.event\_driven.neuron module
----------------------------------------
-
-.. automodule:: SpikingFlow.event_driven.neuron
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
+   SpikingFlow.event_driven.encoding
+   SpikingFlow.event_driven.neuron
 
 Module contents
 ---------------

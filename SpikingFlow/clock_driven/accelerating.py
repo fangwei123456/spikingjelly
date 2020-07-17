@@ -318,24 +318,6 @@ class ModelPipeline(nn.Module):
         :param split_sizes: 输入数据x会在维度0上被拆分成每split_size一组，得到[x0, x1, ...]，这些数据会被串行的送入\
         module_list中的各个模块进行计算
         :return: 输出数据
-
-        例如将模型分成4部分，因而 ``module_list`` 中有4个子模型；将输入分割为3部分，则每次调用 ``forward(x, split_sizes)`` ，函数内部的\
-        计算过程如下：
-        .. code-block:: python
-                step=0     x0, x1, x2  |m0|    |m1|    |m2|    |m3|
-                step=1     x0, x1      |m0| x2 |m1|    |m2|    |m3|
-                step=2     x0          |m0| x1 |m1| x2 |m2|    |m3|
-                step=3                 |m0| x0 |m1| x1 |m2| x2 |m3|
-                step=4                 |m0|    |m1| x0 |m2| x1 |m3| x2
-                step=5                 |m0|    |m1|    |m2| x0 |m3| x1, x2
-                step=6                 |m0|    |m1|    |m2|    |m3| x0, x1, x2
-        不使用流水线，则任何时刻只有一个GPU在运行，而其他GPU则在等待这个GPU的数据；而使用流水线，例如上面计算过程中的 ``step=3`` 到\
-        ``step=4``，尽管在代码的写法为顺序执行：
-        .. code-block:: python
-            x0 = m1(x0)
-            x1 = m2(x1)
-            x2 = m3(x2)
-        但由于PyTorch优秀的特性，上面的3行代码实际上是并行执行的，因为这3个在CUDA上的计算使用各自的数据，互不影响。
         '''
 
         assert x.shape[0] % split_sizes == 0, print('x.shape[0]不能被split_sizes整除！')
