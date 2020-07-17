@@ -159,7 +159,7 @@ class PLIFNode(BaseNode):
                         若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
                         转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
 
-        Parametric LIF神经元模型，时间常数tau可学习的LIF神经元：
+        Wei Fang.  Leaky integrate-and-fire spiking neuron with learnable membrane time parameter,2020. 提出的Parametric LIF神经元模型，时间常数tau可学习的LIF神经元：
 
         .. math::
             \\tau_{m} \\frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
