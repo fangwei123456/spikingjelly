@@ -2,9 +2,9 @@ Clock_driven SpikingFlow.clock_driven
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_, `lucifer2859 <https://github.com/lucifer2859>`_
 
-This tutorial focuses on ``SpikingFlow.clock_driven``, introduce the clock-driven simulation method, the concept of gradient substitution method, and the use of differentiable SNN neurons.
+This tutorial focuses on ``SpikingFlow.clock_driven``, introducing the clock-driven simulation method, the concept of surrogate gradient method, and the use of differentiable spiking neurons.
 
-Surrogate gradient method is a new method emerging in recent years. For more information about this method, please refer to the following overview:
+The surrogate gradient method is a new method emerging in recent years. For more information about this method, please refer to the following overview:
 
 Neftci E, Mostafa H, Zenke F, et al. Surrogate Gradient Learning in Spiking Neural Networks: Bringing the Power of Gradient-based optimization to spiking neural networks[J]. IEEE Signal Processing Magazine, 2019, 36(6): 51-63.
 
@@ -12,9 +12,9 @@ The download address for this article can be found at `arXiv <https://arxiv.org/
 
 SNN compared with RNN
 ----------
-The neuron in SNN can be regarded as a kind of RNN, and its input is the voltage increment (or the product of current and membrane resistance, but for convenience, ``clock_driven.neuron`` uses voltage increment). The hidden state is the membrane voltage, and the output is a spike. Such SNN neurons are Markovian: the output at the current time is only related to the input at the current time and the state of the neuron itself.
+The neuron in SNN can be regarded as a kind of RNN, and its input is the voltage increment (or the product of current and membrane resistance, but for convenience, ``clock_driven.neuron`` uses voltage increment). The hidden state is the membrane voltage, and the output is a spike. Such spiking neurons are Markovian: the output at the current time is only related to the input at the current time and the state of the neuron itself.
 
-You can use three discrete equations —— charge, discharge, reset —— to describe any discrete spiking neuron:
+You can use three discrete equations —— Charge, Discharge, Reset —— to describe any discrete spiking neuron:
 
 
 .. math::
@@ -24,20 +24,20 @@ You can use three discrete equations —— charge, discharge, reset —— to d
 
 where :math:`V(t)` is the membrane voltage of the neuron; :math:`X(t)` is an external source input, such as voltage increment; :math:`H(t)` is the hidden state of the neuron, which can be understood as the instant before the neuron has not fired a spike; :math:`f(V(t-1), X(t))` is the state update equation of the neuron. Different neurons differ in the update equation.
 
-For example, for a LIF neuron, describing the differential equation of its dynamics below a threshold, and the corresponding difference equation are:
+For example, for a LIF neuron, we describe the differential equation of its dynamics below a threshold, and the corresponding difference equation are:
 
 .. math::
     \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + X(t)
 
     \tau_{m} (V(t) - V(t-1)) = -(V(t-1) - V_{reset}) + X(t)
 
-The corresponding charging equation is
+The corresponding Charge equation is
 
 .. math::
     f(V(t - 1), X(t)) = V(t - 1) + \frac{1}{\tau_{m}}(-(V(t - 1) - V_{reset}) + X(t))
 
 
-In the discharge equation, :math:`S(t)` is a spike fired from a neuron, :math:`g(x)=\Theta(x)` is a step function. RNN is used to call it a gating function. In SNN, it is called a spiking function. The output of the spiking function is only 0 or 1, which can represent the firing process of spike, defined as
+In the Discharge equation, :math:`S(t)` is a spike fired by a neuron, :math:`g(x)=\Theta(x)` is a step function. RNN is used to call it a gating function. In SNN, it is called a spiking function. The output of the spiking function is only 0 or 1, which can represent the firing process of spike, defined as
 
 .. math::
     \Theta(x) =
@@ -46,13 +46,13 @@ In the discharge equation, :math:`S(t)` is a spike fired from a neuron, :math:`g
     0, & x < 0
     \end{cases}
 
-Reset means the voltage reset process: when a spike is fired, the voltage is reset to :math:`V_{reset}`; If no spike is fired, the voltage remains unchanged.
+Reset means the reset process of the voltage: when a spike is fired, the voltage is reset to :math:`V_{reset}`; If no spike is fired, the voltage remains unchanged.
 
 Surrogate Gradient Method
 -------------
 RNN uses differentiable gating functions, such as the tanh function. Obviously, the spiking function of SNN :math:`g(x)=\Theta(x)` is not differentiable, which leads to the fact that SNN is very similar to RNN to a certain extent, but it cannot be trained by gradient descent and backpropagation. We can use a gating function that is very similar to :math:`g(x)=\Theta(x)` , but differentiable :math:`\sigma(x)` to replace it.
 
-The core idea of ​​this method is: when forwarding, using :math:`g(x)=\Theta(x)`, the output of the neuron is discrete 0 and 1, and our network is still SNN; When backpropagation, the gradient of the surrogate gradient function :math:`g'(x)=\sigma'(x)` is used to replace the gradient of the spiking function. The most common gradient substitution function is the sigmoid function :math:`\sigma(\alpha x)=\frac{1}{1 + exp(-\alpha x)}`，:math:`\alpha` can control the smoothness of the function, the fuction with larger :math:`\alpha` will be closer to :math:`\Theta(x)`, but when it gets closer to :math:`x=0`, the gradient will be more likely to explode, and when it gets farther to :math:`x=0`, the gradient will be more likely to disappear. This makes the network more difficult to train. The following figure shows the shape of the gradient substitution function and the shape of the corresponding reset equation for different :math:`\alpha`:
+The core idea of ​​this method is: when forwarding, using :math:`g(x)=\Theta(x)`, the output of the neuron is discrete 0 and 1, and our network is still SNN; When backpropagation, the gradient of the surrogate gradient function :math:`g'(x)=\sigma'(x)` is used to replace the gradient of the spiking function. The most common surrogate gradient function is the sigmoid function :math:`\sigma(\alpha x)=\frac{1}{1 + exp(-\alpha x)}`. :math:`\alpha` can control the smoothness of the function. The function with larger :math:`\alpha` will be closer to :math:`\Theta(x)`. But when it gets closer to :math:`x=0`, the gradient will be more likely to explode. And when it gets farther to :math:`x=0`, the gradient will be more likely to disappear. This makes the network more difficult to train. The following figure shows the shape of the surrogate gradient function and the corresponding Reset equation for different :math:`\alpha`:
 
 .. image:: ./_static/tutorials/clock_driven/1.png
 
@@ -69,7 +69,7 @@ The surrogate gradient function is one of the parameters of the neuron construct
             :param surrogate_function: Surrogate function used to calculate the gradient of the spiking function during backpropagation
             :param monitor_state: Whether to set up a monitor to save the voltage of the neurons and the spikes fired. If True, self.monitor is a dictionary, whose keys include 'v' and 's', recording voltage and output spike respectively. The corresponding value is a linked list. In order to save video memory (memory), what is stored in the list is the value of the original variable converted into a numpy array. Also note that the self.reset() function will clear these linked lists
 
-If you want to customize the new approximate gating function, you can refer to the code in ``clock_driven.surrogate``. Usually it is to define ``torch.autograd.Function``, and then encapsulate it into a subclass of ``torch.nn.Module``.
+If you want to customize the new approximate gating function, you can refer to the code in ``clock_driven.surrogate``. Usually we define it as ``torch.autograd.Function``, and then encapsulate it into a subclass of ``torch.nn.Module``.
 
 Embed spiking neurons into deep networks
 ------------------------
@@ -129,8 +129,7 @@ Initialize the data loader, network, optimizer, and encoder (we use a Poisson en
     # Use Poisson encoder
     encoder = encoding.PoissonEncoder()
 
-The training of the network is simple. Run the network for ``T`` time steps to accumulate the output spikes of 10 neurons in the output layer to obtain the number of spikes fired by the output layer ``out_spikes_counter``;\
-Use the firing times of the spike divided by the simulation duration to get the output layer pulse emission frequency ``out_spikes_counter_frequency = out_spikes_counter / T``. We hope that when the actual category of the input image is ``i``, the ``i``th neuron in the output layer has the maximum activation degree, while the other neurons remain silent. Therefore, the loss function is naturally defined as the spike of the output layer\firing frequency ``out_spikes_counter_frequency`` and the cross-entropy of ``label_one_hot`` obtained after one-hot encoding with the actual category, or MSE. We use MSE because the experiment found that MSE is better. In particular, note that SNN is a stateful, or memorized network, so before entering new data, you must reset the state of the network. This can be done by calling ``clock_driven.functional.reset_net(net)``  to fulfill. The training code is as follows:
+The training of the network is simple. Run the network for ``T`` time steps to accumulate the output spikes of 10 neurons in the output layer to obtain the number of spikes fired by the output layer ``out_spikes_counter``; Use the firing times of the spike divided by the simulation duration to get the firing frequency of the output layer ``out_spikes_counter_frequency = out_spikes_counter / T``. We hope that when the real category of the input image is ``i``, the ``i``-th neuron in the output layer has the maximum activation degree, while the other neurons remain silent. Therefore, the loss function is naturally defined as the firing frequency of the output layer ``out_spikes_counter_frequency`` and the cross-entropy of ``label_one_hot`` obtained after one-hot encoding with the real category, or MSE. We use MSE because the experiment found that MSE is better. In particular, note that SNN is a stateful, or memorized network. So before entering new data, you must reset the state of the network. This can be done by calling ``clock_driven.functional.reset_net(net)``  to fulfill. The training code is as follows:
 
 .. code-block:: python
 
@@ -214,4 +213,4 @@ Our model, training 100 epochs on Tesla K80, takes about 75 minutes. The changes
 .. image:: ./_static/examples/clock_driven/lif_fc_mnist/accuracy_curve.png
 
 
-The final test set accuracy rate is about 92%, which is not a very high accuracy rate, because we use a very simple network structure and Poisson encoder.  We can completely remove the Poisson encoder and send the image directly to the SNN. In this case, the first layer of LIF neurons can be regarded as an encoder.
+The final test set accuracy rate is about 92%, which is not a very high accuracy rate, because we use a very simple network structure and Poisson encoder. We can completely remove the Poisson encoder and send the image directly to the SNN. In this case, the first layer of LIF neurons can be regarded as an encoder.
