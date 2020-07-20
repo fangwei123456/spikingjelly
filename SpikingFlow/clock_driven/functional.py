@@ -14,6 +14,19 @@ def reset_net(net: nn.Module):
         if hasattr(m, 'reset'):
             m.reset()
 
+
+def set_monitor(net: nn.Module, monitor_state):
+    '''
+    :param net: 任何属于nn.Module子类的网络
+    :param monitor_state: ``True`` 或 ``False``，表示开启或关闭monitor
+    :return: None
+
+    将 ``net`` 中的所有含有监视器的模块，监视器状态设置为 ``monitor_state``。
+    '''
+    for m in net.modules():
+        if hasattr(m, 'set_monitor'):
+            m.set_monitor(monitor_state)
+
 def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
     '''
     :param v: shape=[T, N]，N个神经元在t=[0, 1, ..., T-1]时刻的电压值
