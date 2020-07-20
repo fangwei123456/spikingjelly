@@ -186,12 +186,13 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         spiking_rate_map.set_title(spiking_rate_map_title)
 
 
-def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, title: str, dpi=200):
+def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: str, dpi=200):
     '''
     :param spikes: shape=[C, W, H]，C个尺寸为W * H的脉冲矩阵，矩阵中的元素为0或1。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
     :param nrows: 画成多少行
     :param ncols: 画成多少列
-    :param title: 热力图的标题
+    :param space: 矩阵之间的间隙
+    :param title: 图的标题
     :param dpi: 绘图的dpi
     :return: 一个figure，将C个矩阵全部画出，然后排列成nrows行ncols列
 
@@ -204,7 +205,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, title: str, dp
         W = 8
         H = 8
         spikes = (np.random.rand(C, W, H) > 0.8).astype(float)
-        visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, title='spiking feature map', dpi=200)
+        visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='spiking feature map', dpi=200)
         plt.show()
 
     .. image:: ./_static/API/plot_2d_spiking_feature_map.png
@@ -213,10 +214,18 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, title: str, dp
 
     assert nrows * ncols == C, 'nrows * ncols != C'
 
-    fig, axs = plt.subplots(nrows=nrows, ncols=ncols, dpi=dpi)
+    w = spikes.shape[1]
+    h = spikes.shape[2]
+    y = np.ones(shape=[(h + space) * nrows, (w + space) * ncols]) * spikes.max().item()
+    index = 0
+    for i in range(space // 2, y.shape[0], h + space):
+        for j in range(space // 2, y.shape[1], w + space):
+            y[i:i + w, j:j + h] = spikes[index]
+            index += 1
+    fig, maps = plt.subplots(dpi=dpi)
     fig.suptitle(title)
-    for i in range(nrows):
-        for j in range(ncols):
-            axs[i][j].imshow(spikes[i * ncols + j], cmap='gray')
-            axs[i][j].get_xaxis().set_visible(False)
-            axs[i][j].get_yaxis().set_visible(False)
+    maps.imshow(y, cmap='gray')
+
+    maps.get_xaxis().set_visible(False)
+    maps.get_yaxis().set_visible(False)
+

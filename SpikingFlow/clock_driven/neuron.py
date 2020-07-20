@@ -37,7 +37,7 @@ class BaseNode(nn.Module):
 
     def set_monitor(self, monitor_state=True):
         '''
-        :param monitor_state: True或False，表示开启或关闭monitor
+        :param monitor_state: ``True`` 或 ``False``，表示开启或关闭monitor
         :return: None
 
         设置开启或关闭monitor。
