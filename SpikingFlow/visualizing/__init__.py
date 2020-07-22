@@ -111,7 +111,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_x_ticks))
     ax.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_y_ticks))
     ax.zaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_z_ticks))
-
+    return fig
 
 def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
                    plot_spiking_rate=True, spiking_rate_map_title='spiking rate', dpi=200):
@@ -184,7 +184,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
             spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w')
         spiking_rate_map.get_xaxis().set_visible(False)
         spiking_rate_map.set_title(spiking_rate_map_title)
-
+    return fig
 
 def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: str, dpi=200):
     '''
@@ -228,4 +228,4 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
 
     maps.get_xaxis().set_visible(False)
     maps.get_yaxis().set_visible(False)
-
+    return fig

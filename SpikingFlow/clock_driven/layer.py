@@ -298,10 +298,63 @@ class ChannelsMaxPool(nn.Module):
         '''
         super().__init__()
         self.pool = pool
-    def forward(self, x:torch.Tensor):
+
+    def forward(self, x: torch.Tensor):
         '''
         :param x: shape=[batch_size, C_in, *]的tensor，C_in是输入数据的通道数，*表示任意维度
         :return: shape=[batch_size, C_out, *]的tensor，C_out是池化后的通道数
         '''
         x_shape = x.shape
         return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
+
+class BatchNorm2d(nn.Module):
+    def __init__(self, num_features, eps=1e-05, momentum=0.1, scaling=True, track_running_stats=True):
+        '''
+        :param num_features: 本层作用于 :math:`(N, C, H, W)` 的数据，``num_features`` 即为输入数据的通道数 :math:`C`
+
+            :math:`C` from an expected input of size :math:`(N, C, H, W)`
+        :param eps: 为了防止出现除以0造成数值不稳定而增加的小数，默认为1e-5
+
+            a value added to the denominator for numerical stability.
+            Default: 1e-5
+        :param momentum: running_mean和running_var的动量项，若不需要动量项则设置成 ``None``，默认为0.1
+
+            the value used for the running_mean and running_var
+            computation. Can be set to ``None`` for cumulative moving average
+            (i.e. simple average). Default: 0.1
+        :param scaling: 是否使用缩放变换。若为 ``True`` 则会带有可学习的缩放变换参数，默认为 ``True``
+
+            a boolean value that when set to ``True``, this module has
+            learnable scaling parameters. Default: ``True``
+        :param track_running_stats: 是否持续追踪整个训练过程中数据的均值和方差。若为 ``False`` 则只会使用每个batch内的均值和
+            方差。默认为 ``True``
+
+            a boolean value that when set to ``True``, this
+            module tracks the running mean and variance, and when set to ``False``,
+            this module does not track such statistics and always uses batch
+            statistics in both training and eval modes. Default: ``True``
+
+        当 ``scaling=False`` 时，与 ``torch.nn.BatchNorm2d(affline=False)`` 行为完全相同；当 ``scaling=True`` 时，缩放变换为：
+
+        .. math::
+            y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma
+
+        When ``scaling=False``, this module is same with ``torch.nn.BatchNorm2d(affline=False)``. When ``scaling=True``,
+        this module will do a scaling transform:
+
+        .. math::
+            y = \\frac{x - \\mathrm{E}[x]}{ \\sqrt{\\mathrm{Var}[x] + \\epsilon}} * \\gamma
+        '''
+        super().__init__()
+        self.bn = nn.BatchNorm2d(num_features, eps, momentum, False, track_running_stats)
+        if scaling:
+            self.weight = nn.Parameter(torch.Tensor(num_features, 1, 1))
+            nn.init.ones_(self.weight)
+        else:
+            self.weight = None
+
+    def forward(self, x: torch.Tensor):
+        if self.weight is None:
+            return self.bn(x)
+        else:
+            return self.bn(x) * self.weight
