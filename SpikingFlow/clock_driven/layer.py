@@ -358,3 +358,9 @@ class BatchNorm2d(nn.Module):
             return self.bn(x)
         else:
             return self.bn(x) * self.weight
+
+    def __repr__(self):
+        if self.weight is None:
+            return 'layer.BatchNorm2d(\n' + self.bn.__repr__() + '\n)'
+        else:
+            return 'layer.BatchNorm2d(\n' + self.bn.__repr__() + '\nweight(num_features=' + str(self.weight.data.shape[0]) + ')\n)'
