@@ -267,7 +267,7 @@ class PLIFNode(BaseNode):
             array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary.
 
         `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_ 提出的Parametric
-        LIF神经元模型，时间常数 ``tau``可学习的LIF神经元。其阈下神经动力学方程与LIF神经元相同：
+        LIF神经元模型，时间常数 ``tau`` 可学习的LIF神经元。其阈下神经动力学方程与LIF神经元相同：
 
         .. math::
             \\tau_{m} \\frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
