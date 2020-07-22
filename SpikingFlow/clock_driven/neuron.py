@@ -207,14 +207,15 @@ class RIFNode(BaseNode):
         '''
         :param init_w: 初始的自连接权重
         :param amplitude: 对自连接权重的限制。若为 ``None``，则不会对权重有任何限制；
-                            若为一个 ``float``，会限制权重在 ``(- amplitude, amplitude)`` 范围内；
-                            若为一个 ``tuple``，会限制权重在 ``(amplitude[0], amplitude[1])`` 范围内。
+            若为一个 ``float``，会限制权重在 ``(- amplitude, amplitude)`` 范围内；
+            若为一个 ``tuple``，会限制权重在 ``(amplitude[0], amplitude[1])`` 范围内。
+            权重的限制是通过套上sigmoid函数进行限幅，然后进行线性变换来实现。
         :param v_threshold: 神经元的阈值电压
         :param v_reset: 神经元的重置电压
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
-                        若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
-                        转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
+            若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
+            转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
 
         Recurrent IF神经元模型。与Parametric LIF神经元模型类似，但有微妙的区别，自连接权重不会作用于输入。其膜电位更新方程为：
 
