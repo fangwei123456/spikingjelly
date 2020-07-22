@@ -194,12 +194,12 @@ class PLIFNode(BaseNode):
 
     def extra_repr(self):
         if self.decay:
-            tau = 1 / self.w.data.sigmoid()
+            tau = 1 / self.w.data.sigmoid().item()
         else:
-            tau = 1 / self.w.data
+            tau = 1 / self.w.data.item()
 
-        return 'v_threshold={}, v_reset={}, tau={}'.format(
-            self.v_threshold, self.v_reset, tau
+        return 'v_threshold={}, v_reset={}, tau={}, decay={}'.format(
+            self.v_threshold, self.v_reset, tau, self.decay
         )
 
 class RIFNode(BaseNode):
