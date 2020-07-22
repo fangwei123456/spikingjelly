@@ -9,6 +9,8 @@ class NeuNorm(nn.Module):
         .. warning::
             可能是错误的实现。测试的结果表明，增加NeuNorm后的收敛速度和正确率反而下降了。
 
+
+
         :param in_channels: 输入数据的通道数
         :param k: 动量项系数
 
