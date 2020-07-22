@@ -40,8 +40,10 @@ class NMNIST(Dataset):
 
         with open(file_name, 'rb') as bin_f:
             raw_data = np.uint32(np.fromfile(bin_f, dtype=np.uint8))
-            y = raw_data[1::5]
-            x = raw_data[0::5]
+            # y = raw_data[1::5]
+            # x = raw_data[0::5]
+            x = raw_data[1::5]
+            y = raw_data[0::5]
             p = (raw_data[2::5] & 128) >> 7  # bit 7
             t = ((raw_data[2::5] & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
         return {'t': t, 'x': x, 'y': y, 'p': p}
@@ -89,14 +91,15 @@ class NMNIST(Dataset):
                     # events: {'t', 'x', 'y', 'p'}
                     frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
                                                                                frames_num=frames_num, split_by=split_by, normalization=normalization)
-                    np.savez_compressed(os.path.join(target_dir, file_name), frames)
+                    # os.path.splitext是为了去掉'.bin'，防止保存的文件命为'*.bin.npz'
+                    np.savez_compressed(os.path.join(target_dir, os.path.splitext(file_name)[0]), frames)
             else:
                 for file_name in os.listdir(source_dir):
                     events = NMNIST.read_bin(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
                     frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
                                                                                frames_num=frames_num, split_by=split_by, normalization=normalization)
-                    np.savez_compressed(os.path.join(target_dir, file_name), frames)
+                    np.savez_compressed(os.path.join(target_dir, os.path.splitext(file_name)[0]), frames)
 
         thread_list = []
 
