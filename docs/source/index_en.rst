@@ -1,4 +1,4 @@
-Welcome to SpikingFlow's document!
+Welcome to SpikingFlow's documentation!
 -------------------------
 
 `SpikingFlow <https://github.com/fangwei123456/SpikingFlow>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
