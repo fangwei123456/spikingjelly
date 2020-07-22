@@ -32,12 +32,11 @@ def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
     :param v: shape=[T, N]，N个神经元在t=[0, 1, ..., T-1]时刻的电压值
     :param v_threshold: 神经元的阈值电压，float或者是shape=[N]的tensor
     :param T_in: 脉冲聚类的距离阈值。一个脉冲聚类满足，内部任意2个相邻脉冲的距离不大于T_in，而其内部任一脉冲与外部的脉冲距离大于T_in
-    :return:
-    N_o: shape=[N]，N个神经元的输出脉冲的脉冲聚类的数量
+    :return: N_o: shape=[N]，N个神经元的输出脉冲的脉冲聚类的数量
 
-    k_positive: shape=[N]，bool类型的tensor，索引。需要注意的是，k_positive可能是一个全False的tensor
+        k_positive: shape=[N]，bool类型的tensor，索引。需要注意的是，k_positive可能是一个全False的tensor
 
-    k_negative: shape=[N]，bool类型的tensor，索引。需要注意的是，k_negative可能是一个全False的tensor
+        k_negative: shape=[N]，bool类型的tensor，索引。需要注意的是，k_negative可能是一个全False的tensor
 
     Gu P, Xiao R, Pan G, et al. STCA: Spatio-Temporal Credit Assignment with Delayed Feedback in Deep Spiking Neural Networks[C]. international joint conference on artificial intelligence, 2019: 1366-1372.\
     一文提出的脉冲聚类方法。如果想使用该文中定义的损失，可以参考如下代码：
