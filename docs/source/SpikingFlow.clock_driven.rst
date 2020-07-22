@@ -1,4 +1,4 @@
-SpikingFlow.clock\_driven package
+SpikingFlow.clock_driven package
 =================================
 
 .. toctree::

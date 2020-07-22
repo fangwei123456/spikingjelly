@@ -11,6 +11,6 @@ SpikingFlow 是一个基于PyTorch，使用脉冲神经网络(Spiking Neuron Net
 
 该框架还在开发中，尚未正式发布，目前仅有中文文档。
 
-文档地址：https://spikingflow.readthedocs.io/zh_CN/latest/  
+文档地址：https://spikingflow.readthedocs.io
 
 
