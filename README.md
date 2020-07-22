@@ -1,6 +1,6 @@
 # SpikingFlow
 
-[![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest/?badge=latest)
+[![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest)
 [![HitCount](http://hits.dwyl.com/fangwei123456/SpikingFlow.svg)](http://hits.dwyl.com/fangwei123456/SpikingFlow)
 
 SpikingFlow is an open source deep learning framework for Spiking Neural Network (SNN) based on PyTorch.
