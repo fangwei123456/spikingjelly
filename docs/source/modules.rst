@@ -1,5 +1,0 @@
-SpikingFlow
-===========
-
-.. toctree::
-   SpikingFlow
