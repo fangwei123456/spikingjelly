@@ -1,4 +1,4 @@
-Clock_driven SpikingFlow.clock_driven
+Clock_driven
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_, `lucifer2859 <https://github.com/lucifer2859>`_
 
@@ -10,7 +10,7 @@ Neftci E, Mostafa H, Zenke F, et al. Surrogate Gradient Learning in Spiking Neur
 
 The download address for this article can be found at `arXiv <https://arxiv.org/abs/1901.09948>`_ .
 
-SNN compared with RNN
+SNN Compared with RNN
 ----------
 The neuron in SNN can be regarded as a kind of RNN, and its input is the voltage increment (or the product of current and membrane resistance, but for convenience, ``clock_driven.neuron`` uses voltage increment). The hidden state is the membrane voltage, and the output is a spike. Such spiking neurons are Markovian: the output at the current time is only related to the input at the current time and the state of the neuron itself.
 
@@ -71,7 +71,7 @@ The surrogate gradient function is one of the parameters of the neuron construct
 
 If you want to customize the new approximate gating function, you can refer to the code in ``clock_driven.surrogate``. Usually we define it as ``torch.autograd.Function``, and then encapsulate it into a subclass of ``torch.nn.Module``.
 
-Embed spiking neurons into deep networks
+Embed Spiking Neurons into Deep Networks
 ------------------------
 After solving the differential problem of spiking neurons, our spiking neurons can be embedded into any network built using PyTorch like an activation function, making the network an SNN. Some classic neurons have been implemented in ``clock_driven.neuron``, which can easily build various networks, such as a simple fully connected network:
 

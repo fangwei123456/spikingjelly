@@ -2,5 +2,4 @@ SpikingFlow
 ===========
 
 .. toctree::
-   Tutorials
    SpikingFlow
