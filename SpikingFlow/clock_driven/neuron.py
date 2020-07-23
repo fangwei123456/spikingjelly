@@ -39,7 +39,7 @@ class BaseNode(nn.Module):
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
-            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary.
+            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary
 
         This class is the base class of differentiable spiking neurons.
         '''
@@ -214,7 +214,7 @@ class IFNode(BaseNode):
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
-            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary.
+            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary
 
         The Integrate-and-Fire neuron, which can be seen as a ideal integrator. The voltage of the IF neuron will not decay
         as that of the LIF neuron. The subthreshold neural dynamics of it is as followed:
@@ -273,7 +273,7 @@ class LIFNode(BaseNode):
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
-            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary.
+            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary
 
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
@@ -353,7 +353,7 @@ class PLIFNode(BaseNode):
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
-            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary.
+            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary
 
         The Parametric LIF neuron that is proposed in `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_.
         The membrane time constant ``tau`` of PLIF neuron is learnable. The subthreshold neural dynamics of the PLIF neuron
@@ -454,7 +454,7 @@ class RIFNode(BaseNode):
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
-            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary.
+            array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary
 
         The Recurrent Integrate-and-Fire neuron. It is very similar with the Parametric LIF neuron. But there is a tricky
         difference that the self connection will not apply to input. The subthreshold neural dynamics of the PLIF neuron
