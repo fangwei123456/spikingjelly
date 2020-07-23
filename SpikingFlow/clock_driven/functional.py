@@ -14,7 +14,6 @@ def reset_net(net: nn.Module):
         if hasattr(m, 'reset'):
             m.reset()
 
-
 def set_monitor(net: nn.Module, monitor_state):
     '''
     :param net: 任何属于nn.Module子类的网络
@@ -247,10 +246,6 @@ def kernel_dot_product(x:torch.Tensor, y:torch.Tensor, kernel='linear', *args):
     else:
         raise NotImplementedError
 
-
-
-
-
 def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tensor,
                          eval_threshold=1.0, threshold0=0.9, threshold1=1.1):
     '''
@@ -271,7 +266,6 @@ def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tenso
         output_layer.v_threshold[label_one_hot == 1] = threshold1
     else:
         output_layer.v_threshold = eval_threshold
-
 
 def redundant_one_hot(labels:torch.Tensor, num_classes:int, n:int):
     '''
