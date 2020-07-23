@@ -27,9 +27,11 @@ class BilinearLeakyReLU(nn.Module):
         .. _BilinearLeakyReLU.__init__-cn:
 
         :param a: -c <= x <= c 时反向传播的梯度
+
         :param b: x > c 或 x < -c 时反向传播的梯度
+
         :param c: 决定梯度区间的参数
-        :return: None
+
 
         双线性的近似脉冲发放函数。梯度为
 
@@ -55,9 +57,10 @@ class BilinearLeakyReLU(nn.Module):
         .. _BilinearLeakyReLU.__init__-en:
 
         :param a: gradient of x when -c <= x <= c
+
         :param b: gradient of x when x > c or x < -c
+
         :param c: parameter to determine width
-        :return: None
 
         双线性的近似脉冲发放函数。梯度为
 
@@ -113,9 +116,8 @@ class Sigmoid(nn.Module):
 
         .. _Sigmoid.__init__-cn:
 
-        :param x: 输入数据
         :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :return: None
+
 
         反向传播时使用sigmoid的梯度的脉冲发放函数。反向传播为
 
@@ -132,7 +134,7 @@ class Sigmoid(nn.Module):
         .. _Sigmoid.__init__-en:
 
         :param alpha: parameter to control smoothness of gradient
-        :return: None
+
 
         The sigmoid surrogate spiking function. The gradient is defined by
 
@@ -177,7 +179,6 @@ class SignSwish(nn.Module):
         .. _SignSwish.__init__-cn:
 
         :param beta: 控制梯度平滑程度的参数
-        :return: None
 
         反向传播时使用swish的梯度的脉冲发放函数。反向传播为
 
@@ -196,7 +197,6 @@ class SignSwish(nn.Module):
         .. _SignSwish.__init__-en:
 
         :param beta: parameter to control smoothness of gradient
-        :return: None
 
          The SignSiwsh surrogate spiking function. The gradient is defined by
 
