@@ -22,10 +22,14 @@ class bilinear_leaky_relu(torch.autograd.Function):
 class BilinearLeakyReLU(nn.Module):
     def __init__(self, a=1, b=0.01, c=0.5):
         '''
+        * :ref:`API in English <BilinearLeakyReLU.__init__-en>`
+
+        .. _BilinearLeakyReLU.__init__-cn:
+
         :param a: -c <= x <= c 时反向传播的梯度
         :param b: x > c 或 x < -c 时反向传播的梯度
         :param c: 决定梯度区间的参数
-        :return: 与输入相同shape的输出
+        :return: None
 
         双线性的近似脉冲发放函数。梯度为
 
@@ -46,6 +50,35 @@ class BilinearLeakyReLU(nn.Module):
             bx - bc + ac, & x > c \\\\
             \\end{cases}
 
+        * :ref:`中文API <BilinearLeakyReLU.__init__-cn>`
+
+        .. _BilinearLeakyReLU.__init__-en:
+
+        :param a: gradient of x when -c <= x <= c
+        :param b: gradient of x when x > c or x < -c
+        :param c: parameter to determine width
+        :return: None
+
+        双线性的近似脉冲发放函数。梯度为
+
+        The bilinear surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            a, & -c \\leq x \\leq c \\\\
+            b, & x < -c ~or~ x > c
+            \\end{cases}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            bx + bc - ac, & x < -c \\\\
+            ax, & -c \\leq x \\leq c \\\\
+            bx - bc + ac, & x > c \\\\
+            \\end{cases}
         '''
         super().__init__()
         self.a = a
@@ -76,9 +109,13 @@ class sigmoid(torch.autograd.Function):
 class Sigmoid(nn.Module):
     def __init__(self, alpha=1.0):
         '''
+        * :ref:`API in English <Sigmoid.__init__-en>`
+
+        .. _Sigmoid.__init__-cn:
+
         :param x: 输入数据
         :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :return: 与输入相同shape的输出
+        :return: None
 
         反向传播时使用sigmoid的梯度的脉冲发放函数。反向传播为
 
@@ -86,6 +123,23 @@ class Sigmoid(nn.Module):
             g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
 
         对应的原函数为
+
+        .. math::
+            g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
+
+        * :ref:`中文API <Sigmoid.__init__-cn>`
+
+        .. _Sigmoid.__init__-en:
+
+        :param alpha: parameter to control smoothness of gradient
+        :return: None
+
+        The sigmoid surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
+
+        The primitive function is defined by
 
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
@@ -118,11 +172,12 @@ class sign_swish(torch.autograd.Function):
 class SignSwish(nn.Module):
     def __init__(self, beta=5.0):
         '''
-        :param x: 输入数据
-        :param beta: 控制反向传播的参数
-        :return: 与输入相同shape的输出
+        * :ref:`API in English <SignSwish.__init__-en>`
 
-        Darabi, Sajad, et al. "BNN+: Improved binary network training." arXiv preprint arXiv:1812.11800 (2018).
+        .. _SignSwish.__init__-cn:
+
+        :param beta: 控制梯度平滑程度的参数
+        :return: None
 
         反向传播时使用swish的梯度的脉冲发放函数。反向传播为
 
@@ -133,6 +188,27 @@ class SignSwish(nn.Module):
 
         .. math::
             g(x) = 2 * \\mathrm{sigmoid}(\\beta x) * (1 + \\beta x (1 - \\mathrm{sigmoid}(\\beta x))) - 1
+
+        SignSwish函数由 `BNN+: Improved binary network training <https://arxiv.org/abs/1812.11800>`_ 提出。
+
+        * :ref:`中文API <SignSwish.__init__-cn>`
+
+        .. _SignSwish.__init__-en:
+
+        :param beta: parameter to control smoothness of gradient
+        :return: None
+
+         The SignSiwsh surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\beta (2 - \\beta x \\mathrm{tanh} \\frac{\\beta x}{2})}{1 + \\mathrm{cosh}(\\beta x)}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = 2 * \\mathrm{sigmoid}(\\beta x) * (1 + \\beta x (1 - \\mathrm{sigmoid}(\\beta x))) - 1
+
+        SignSwish is proposed by `BNN+: Improved binary network training <https://arxiv.org/abs/1812.11800>`_.
         '''
         super().__init__()
         self.beta = beta
