@@ -4,14 +4,6 @@ SpikingFlow.clock\_driven.examples package
 Submodules
 ----------
 
-SpikingFlow.clock\_driven.examples.lif\_conv\_cifar10 module
-------------------------------------------------------------
-
-.. automodule:: SpikingFlow.clock_driven.examples.lif_conv_cifar10
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 SpikingFlow.clock\_driven.examples.lif\_fc\_mnist module
 --------------------------------------------------------
 
