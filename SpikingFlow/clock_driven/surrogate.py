@@ -62,8 +62,6 @@ class BilinearLeakyReLU(nn.Module):
 
         :param c: parameter to determine width
 
-        双线性的近似脉冲发放函数。梯度为
-
         The bilinear surrogate spiking function. The gradient is defined by
 
         .. math::
