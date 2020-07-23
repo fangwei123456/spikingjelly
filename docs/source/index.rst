@@ -112,4 +112,4 @@ APIs
 .. toctree::
    :maxdepth: 4
 
-   APIs <modules>
+   APIs <SpikingFlow>
