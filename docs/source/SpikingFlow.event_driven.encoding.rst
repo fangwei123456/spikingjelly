@@ -1,5 +1,5 @@
 SpikingFlow.event_driven.encoding package
-===============================
+=========================================
 
 Module contents
 ---------------

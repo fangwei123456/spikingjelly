@@ -1,5 +1,5 @@
 SpikingFlow.clock_driven.layer package
-===============================
+======================================
 
 Module contents
 ---------------

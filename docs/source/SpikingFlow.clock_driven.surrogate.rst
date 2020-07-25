@@ -1,5 +1,5 @@
 SpikingFlow.clock_driven.surrogate package
-===============================
+==========================================
 
 Module contents
 ---------------
