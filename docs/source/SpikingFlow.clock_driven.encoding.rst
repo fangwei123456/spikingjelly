@@ -1,5 +1,5 @@
 SpikingFlow.clock_driven.encoding package
-===============================
+=========================================
 
 Module contents
 ---------------

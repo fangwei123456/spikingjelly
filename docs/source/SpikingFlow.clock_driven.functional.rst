@@ -1,5 +1,5 @@
 SpikingFlow.clock_driven.functional package
-===============================
+===========================================
 
 Module contents
 ---------------
