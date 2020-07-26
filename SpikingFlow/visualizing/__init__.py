@@ -214,13 +214,13 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
 
     assert nrows * ncols == C, 'nrows * ncols != C'
 
-    w = spikes.shape[1]
-    h = spikes.shape[2]
+    h = spikes.shape[1]
+    w = spikes.shape[2]
     y = np.ones(shape=[(h + space) * nrows, (w + space) * ncols]) * spikes.max().item()
     index = 0
     for i in range(space // 2, y.shape[0], h + space):
         for j in range(space // 2, y.shape[1], w + space):
-            y[i:i + w, j:j + h] = spikes[index]
+            y[i:i + h, j:j + w] = spikes[index]
             index += 1
     fig, maps = plt.subplots(dpi=dpi)
     fig.suptitle(title)
