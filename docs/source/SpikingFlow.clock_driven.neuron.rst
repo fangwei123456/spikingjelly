@@ -1,5 +1,5 @@
 SpikingFlow.clock_driven.neuron package
-===============================
+=======================================
 
 Module contents
 ---------------

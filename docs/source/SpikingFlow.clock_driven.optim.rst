@@ -1,5 +1,5 @@
 SpikingFlow.clock_driven.optim package
-===============================
+======================================
 
 Module contents
 ---------------

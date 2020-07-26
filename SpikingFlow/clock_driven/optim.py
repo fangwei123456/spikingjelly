@@ -20,14 +20,7 @@ class AdamRewiring(Optimizer):
 
         G. Bellec et al, "Deep Rewiring: Training very sparse deep networks," ICLR 2018.
 
-        该实现将论文中的基于SGD优化算法的 `Deep R`_ 算法移植到 `Adam: A Method for Stochastic Optimization`_ 优化算法上，是基于Adam算法在Pytorch中的 `官方实现`_ 修改而来。
-
-        .. _Adam\: A Method for Stochastic Optimization:
-            https://arxiv.org/abs/1412.6980
-        .. _官方实现:
-            https://github.com/pytorch/pytorch/blob/6e2bb1c05442010aff90b413e21fce99f0393727/torch/optim/adam.py
-        .. _Deep R:
-            https://openreview.net/pdf?id=BJ_wN01C-
+        该实现将论文中的基于SGD优化算法的\ `Deep R <https://openreview.net/pdf?id=BJ_wN01C->`_\ 算法移植到\ `Adam: A Method for Stochastic Optimization <https://arxiv.org/abs/1412.6980>`_\ 优化算法上，是基于Adam算法在Pytorch中的\ `官方实现 <https://github.com/pytorch/pytorch/blob/6e2bb1c05442010aff90b413e21fce99f0393727/torch/optim/adam.py>`_\ 修改而来。
         '''
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))

@@ -1,5 +1,5 @@
 SpikingFlow.event_driven.neuron package
-===============================
+=======================================
 
 Module contents
 ---------------
