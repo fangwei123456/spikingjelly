@@ -5,10 +5,25 @@ import SpikingFlow.clock_driven.neuron as neuron
 
 def reset_net(net: nn.Module):
     '''
-    :param net: 任何属于nn.Module子类的网络
+    * :ref:`API in English <reset_net-en>`
+
+    .. _reset_net-cn:
+
+    :param net: 任何属于 ``nn.Module`` 子类的网络
+
     :return: None
 
     将网络的状态重置。做法是遍历网络中的所有 ``Module``，若含有 ``reset()`` 函数，则调用。
+
+    * :ref:`中文API <reset_net-cn>`
+
+    .. _reset_net-en:
+
+    :param net: Any network inherits from ``nn.Module``
+
+    :return: None
+
+    Reset the whole network.  Walk through every ``Module`` and call their ``reset()`` function if exists.
     '''
     for m in net.modules():
         if hasattr(m, 'reset'):
@@ -16,11 +31,25 @@ def reset_net(net: nn.Module):
 
 def set_monitor(net: nn.Module, monitor_state):
     '''
-    :param net: 任何属于nn.Module子类的网络
-    :param monitor_state: ``True`` 或 ``False``，表示开启或关闭monitor
+    * :ref:`API in English <set_monitor-en>`
+
+    .. _set_monitor-cn:
+
+    :param net: 任何属于 ``nn.Module`` 子类的网络
+    :param bool monitor_state: 表示开启或关闭monitor
     :return: None
 
-    将 ``net`` 中的所有含有监视器的模块，监视器状态设置为 ``monitor_state``。
+    将 ``net`` 中的所有含有监视器的模块，监视器状态设置为\ ``monitor_state``。
+
+    * :ref:`中文API <set_monitor-cn>`
+
+    .. _set_monitor-en:
+
+    :param net: Any network inherits from ``nn.Module``
+    :param bool monitor_state: Indicating whether to turn on the monitor
+    :return: None
+
+    Set states of all monitors in modules of ``net`` to ``monitor_state``.
     '''
     for m in net.modules():
         if hasattr(m, 'set_monitor'):
@@ -28,17 +57,51 @@ def set_monitor(net: nn.Module, monitor_state):
 
 def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
     '''
-    :param v: shape=[T, N]，N个神经元在t=[0, 1, ..., T-1]时刻的电压值
+    * :ref:`API in English <spike_cluster-en>`
+
+    .. _spike_cluster-cn:
+
+    :param v: shape=[T, N]，N个神经元在 t=[0, 1, ..., T-1] 时刻的电压值
     :param v_threshold: 神经元的阈值电压，float或者是shape=[N]的tensor
-    :param T_in: 脉冲聚类的距离阈值。一个脉冲聚类满足，内部任意2个相邻脉冲的距离不大于T_in，而其内部任一脉冲与外部的脉冲距离大于T_in
-    :return: N_o: shape=[N]，N个神经元的输出脉冲的脉冲聚类的数量
+    :type v_threshold: float or tensor
+    :param T_in: 脉冲聚类的距离阈值。一个脉冲聚类满足，内部任意2个相邻脉冲的距离不大于\ ``T_in``，而其内部任一脉冲与外部的脉冲距离大于\ ``T_in``。
+    :return: 一个元组，包含
+    
+        - **N_o** -- shape=[N]，N个神经元的输出脉冲的脉冲聚类的数量
 
-        k_positive: shape=[N]，bool类型的tensor，索引。需要注意的是，k_positive可能是一个全False的tensor
+        - **k_positive** -- shape=[N]，bool类型的tensor，索引。需要注意的是，k_positive可能是一个全False的tensor
 
-        k_negative: shape=[N]，bool类型的tensor，索引。需要注意的是，k_negative可能是一个全False的tensor
+        - **k_negative** -- shape=[N]，bool类型的tensor，索引。需要注意的是，k_negative可能是一个全False的tensor 
+    :rtype: (Tensor, Tensor, Tensor)
 
-    Gu P, Xiao R, Pan G, et al. STCA: Spatio-Temporal Credit Assignment with Delayed Feedback in Deep Spiking Neural Networks[C]. international joint conference on artificial intelligence, 2019: 1366-1372.\
-    一文提出的脉冲聚类方法。如果想使用该文中定义的损失，可以参考如下代码：
+    `STCA: Spatio-Temporal Credit Assignment with Delayed Feedback in Deep Spiking Neural Networks <https://www.ijcai.org/Proceedings/2019/0189.pdf>`_\ 一文提出的脉冲聚类方法。如果想使用该文中定义的损失，可以参考如下代码：
+
+    .. code-block:: python
+
+        v_k_negative = out_v * k_negative.float().sum(dim=0)
+        v_k_positive = out_v * k_positive.float().sum(dim=0)
+        loss0 = ((N_o > N_d).float() * (v_k_negative - 1.0)).sum()
+        loss1 = ((N_o < N_d).float() * (1.0 - v_k_positive)).sum()
+        loss = loss0 + loss1
+
+    * :ref:`中文API <spike_cluster-cn>`
+
+    .. _spike_cluster-en:
+
+    :param v: shape=[T, N], membrane potentials of N neurons when t=[0, 1, ..., T-1]
+    :param v_threshold: Threshold voltage(s) of the neurons, float or tensor of the shape=[N]
+    :type v_threshold: float or tensor
+    :param T_in: Distance threshold of the spike clusters. A spike cluster satisfies that the distance of any two adjacent spikes within cluster is NOT greater than ``T_in`` and the distance between any internal and any external spike of cluster is greater than ``T_in``. 
+    :return: A tuple containing
+    
+        - **N_o** -- shape=[N], numbers of spike clusters of N neurons' output spikes
+
+        - **k_positive** -- shape=[N], tensor of type BoolTensor, indexes. Note that k_positive can be a tensor filled with False
+
+        - **k_negative** -- shape=[N], tensor of type BoolTensor, indexes. Note that k_negative can be a tensor filled with False
+    :rtype: (Tensor, Tensor, Tensor)
+
+    A spike clustering method proposed in `STCA: Spatio-Temporal Credit Assignment with Delayed Feedback in Deep Spiking Neural Networks. <https://www.ijcai.org/Proceedings/2019/0189.pdf>`_ You can refer to the following code if this form of loss function is needed:
 
     .. code-block:: python
 
@@ -144,43 +207,85 @@ def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
 
 def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, kernel_type='linear', loss_type='mse', *args):
     '''
+    * :ref:`API in English <spike_similar_loss-en>`
+
+    .. _spike_similar_loss-cn:
+
     :param spikes: shape=[N, M, T]，N个数据生成的脉冲
-    :param labels: shape=[N, C]，N个数据的标签，labels[i][k] == 1表示数据i属于第k类，labels[i][k] == 0则表示数据i不属于第k类，允许多标签
-    :param kernel_type: 使用内积来衡量两个脉冲之间的相似性，kernel_type是计算内积时，所使用的核函数种类
-    :param loss_type: 返回哪种损失，可以为'mse', 'l1', 'bce'
+    :param labels: shape=[N, C]，N个数据的标签，\ ``labels[i][k] == 1``\ 表示数据i属于第k类，反之亦然，允许多标签
+    :param str kernel_type: 使用内积来衡量两个脉冲之间的相似性，\ ``kernel_type``\ 是计算内积时，所使用的核函数种类
+    :param str loss_type: 返回哪种损失，可以为'mse', 'l1', 'bce'
     :param args: 用于计算内积的额外参数
     :return: shape=[1]的tensor，相似损失
 
-    将N个数据输入到输出层有M个神经元的SNN，运行T步，得到shape=[N, M, T]的脉冲。这N个数据的标签为shape=[N, C]的labels。
+    将N个数据输入到输出层有M个神经元的SNN，运行T步，得到shape=[N, M, T]的脉冲。这N个数据的标签为shape=[N, C]的\ ``labels``。
 
-    用shape=[N, N]的矩阵sim表示相似矩阵，sim[i][j] == 1表示数据i与数据j相似，sim[i][j] == 0表示数据i与数据j不相似。若\\
-    labels[i]与labels[j]共享至少同一个标签，则认为他们相似，否则不相似。
+    用shape=[N, N]的矩阵\ ``sim``\ 表示\ **实际相似度矩阵**，\ ``sim[i][j] == 1``\ 表示数据i与数据j相似，反之亦然。若\\
+    \ ``labels[i]``\ 与\ ``labels[j]``\ 共享至少同一个标签，则认为他们相似，否则不相似。
 
-    用shape=[N, N]的矩阵sim_p表示脉冲相似矩阵，sim_p[i][j]的取值为0到1，值越大表示数据i与数据j的脉冲越相似。
+    用shape=[N, N]的矩阵\ ``sim_p``\ 表示\ **输出相似度矩阵**，\ ``sim_p[i][j]``\ 的取值为0到1，值越大表示数据i与数据j的脉冲越相似。
 
-    使用内积来衡量两个脉冲之间的相似性，kernel_type是计算内积时，所使用的核函数种类。
+    使用内积来衡量两个脉冲之间的相似性，\ ``kernel_type``\ 是计算内积时，所使用的核函数种类：
 
-    kernel_type == 'linear'，线性内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}}`。
+    - 'linear'，线性内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}}`。
 
-    kernel_type == 'sigmoid'，sigmoid内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`，其中 :math:`\\alpha = args[0]`。
+    - 'sigmoid'，Sigmoid内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`，其中 :math:`\\alpha = args[0]`。
 
-    kernel_type == 'gaussian'，高斯内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`，其中 :math:`\\sigma = args[0]`。
+    - 'gaussian'，高斯内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`，其中 :math:`\\sigma = args[0]`。
 
-    当使用sigmoid或高斯内积时，内积的取值范围均在[0, 1]之间；而使用线性内积时，为了保证内积取值仍然在[0, 1]之间，会进行归一化：\\
-    按照sim_p[i][j] = :math:`\\frac{\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}})}{||\\boldsymbol{x_{i}}|| · ||\\boldsymbol{y_{j}}||}`。
+    当使用Sigmoid或高斯内积时，内积的取值范围均在[0, 1]之间；而使用线性内积时，为了保证内积取值仍然在[0, 1]之间，会进行归一化：\\
+    按照 :math:`\\text{sim_p}[i][j]=\\frac{\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}})}{||\\boldsymbol{x_{i}}|| · ||\\boldsymbol{y_{j}}||}`。
 
+    对于相似的数据，根据输入的\ ``loss_type``，返回度量\ ``sim``\ 与\ ``sim_p``\ 差异的损失：
 
-    对于相似的数据，根据输入的loss_type，返回度量sim与sim_p差异的损失。
+    - 'mse' -- 返回sim与sim_p的均方误差（也就是l2误差）。
 
-    loss_type == 'mse'时，返回sim与sim_p的均方误差（也就是l2误差）。
+    - 'l1' -- 返回sim与sim_p的l1误差。
 
-    loss_type == 'l1'时，返回sim与sim_p的l1误差。
-
-    loss_type == 'bce'时，返回sim与sim_p的二值交叉熵误差。
+    - 'bce' -- 返回sim与sim_p的二值交叉熵误差。
 
     .. note::
         脉冲向量稀疏、离散，最好先使用高斯核进行平滑，然后再计算相似度。
 
+    * :ref:`中文API <spike_similar_loss-cn>`
+
+    .. _spike_similar_loss-en:
+
+    :param spikes: shape=[N, M, T], output spikes corresponding to a batch of N inputs
+    :param labels: shape=[N, C], labels of inputs, ``labels[i][k] == 1`` means the i-th input belongs to the k-th category and vice versa. Multi-label input is allowed.
+    :param str kernel_type: Type of kernel function used when calculating inner products. The inner product is the similarity measure of two spikes.
+    :param str loss_type: Type of loss returned. Can be: 'mse', 'l1', 'bce'
+    :param args: Extra parameters for inner product
+    :return: shape=[1], similarity loss
+
+    A SNN consisting M neurons will receive a batch of N input data in each timestep (from 0 to T-1) and output a spike tensor of shape=[N, M, T]. The label is a tensor of shape=[N, C].
+
+    The **groundtruth similarity matrix** ``sim`` has a shape of [N, N]. ``sim[i][j] == 1`` indicates that input i is similar to input j and vice versa. If and only if ``labels[i]`` and ``labels[j]`` have at least one common label, they are viewed as similar.
+
+    The **output similarity matrix** ``sim_p`` has a shape of [N, N]. The value of ``sim_p[i][j]`` ranges from 0 to 1, represents the similarity between output spike from both input i and input j.
+
+    The similarity is measured by inner product of two spikes. ``kernel_type`` is the type of kernel function when calculating inner product:
+
+    - 'linear', Linear kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}}`.
+
+    - 'sigmoid', Sigmoid kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`, where :math:`\\alpha = args[0]`.
+
+    - 'gaussian', Gaussian kernel，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`, where :math:`\\sigma = args[0]`.
+
+    When Sigmoid or Gaussian kernel is applied, the inner product naturally lies in :math:`[0, 1]`. To make the value consistent when using linear kernel, the result will be normalized as: :math:`\\text{sim_p}[i][j]=\\frac{\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}})}{||\\boldsymbol{x_{i}}|| · ||\\boldsymbol{y_{j}}||}`.
+
+    For similar data, return the specified discrepancy loss between ``sim`` and ``sim_p`` according to ``loss_type``.
+
+    - 'mse' -- Return the Mean-Square Error (squared L2 norm) between sim and sim_p.
+
+    - 'l1' -- Return the L1 error between sim and sim_p.
+
+    - 'bce' -- Return the Binary Cross Entropy between sim and sim_p.
+
+    .. admonition:: Note
+        :class: note
+
+        Since spike vectors are usually discrete and sparse, it would be better to apply Gaussian filter first to smooth the vectors before calculating similarities.
     '''
 
     spikes = spikes.flatten(start_dim=1)
@@ -208,22 +313,45 @@ def spike_similar_loss(spikes:torch.Tensor, labels:torch.Tensor, kernel_type='li
 def kernel_dot_product(x:torch.Tensor, y:torch.Tensor, kernel='linear', *args):
 
     '''
+    * :ref:`API in English <kernel_dot_product-en>`
+
+    .. _kernel_dot_product-cn:
+    
     :param x: shape=[N, M]的tensor，看作是N个M维向量
     :param y: shape=[N, M]的tensor，看作是N个M维向量
-    :param kernel: 计算内积时所使用的核函数
+    :param str kernel: 计算内积时所使用的核函数
     :param args: 用于计算内积的额外的参数
-    :return: ret, shape=[N. N]的tensor，ret[i][j]表示x[i]和y[j]的内积
+    :return: ret, shape=[N, N]的tensor，``ret[i][j]``\ 表示\ ``x[i]``\ 和\ ``y[j]``\ 的内积
 
-    计算批量数据x和y在核空间的内积。记2个M维tensor分别为 :math:`\\boldsymbol{x_{i}}` 和 :math:`\\boldsymbol{y_{j}}`，则
+    计算批量数据\ ``x``\ 和\ ``y``\ 在核空间的内积。记2个M维tensor分别为 :math:`\\boldsymbol{x_{i}}` 和 :math:`\\boldsymbol{y_{j}}`，``kernel``\ 定义了不同形式的内积：
 
-    kernel == 'linear'，线性内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}}`。
+    - 'linear'，线性内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}}`。
 
-    kernel == 'polynomial'，多项式内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = (\\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})^{d}`，其中 :math:`d = args[0]`。
+    - 'polynomial'，多项式内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = (\\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})^{d}`，其中 :math:`d = args[0]`。
 
-    kernel == 'sigmoid'，sigmoid内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`，其中 :math:`\\alpha = args[0]`。
+    - 'sigmoid'，Sigmoid内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`，其中 :math:`\\alpha = args[0]`。
 
-    kernel == 'gaussian'，高斯内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`，其中 :math:`\\sigma = args[0]`。
+    - 'gaussian'，高斯内积，:math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`，其中 :math:`\\sigma = args[0]`。
 
+    * :ref:`中文API <kernel_dot_product-cn>`
+
+    .. _kernel_dot_product-en:
+
+    :param x: Tensor of shape=[N, M]
+    :param y: Tensor of shape=[N, M]
+    :param str kernel: Type of kernel function used when calculating inner products.
+    :param args: Extra parameters for inner product
+    :return: ret, Tensor of shape=[N, N], ``ret[i][j]`` is inner product of ``x[i]`` and ``y[j]``.
+
+    Calculate inner product of ``x`` and ``y`` in kernel space. These 2 M-dim tensors are denoted by :math:`\\boldsymbol{x_{i}}` and :math:`\\boldsymbol{y_{j}}`. ``kernel`` determine the kind of inner product: 
+
+    - 'linear' -- Linear kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}}`.
+
+    - 'polynomial' -- Polynomial kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = (\\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})^{d}`, where :math:`d = args[0]`.
+
+    - 'sigmoid' -- Sigmoid kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`, where :math:`\\alpha = args[0]`.
+
+    - 'gaussian' -- Gaussian kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`, where :math:`\\sigma = args[0]`.
     '''
     if kernel == 'linear':
         return x.mm(y.t())
@@ -249,17 +377,38 @@ def kernel_dot_product(x:torch.Tensor, y:torch.Tensor, kernel='linear', *args):
 def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tensor,
                          eval_threshold=1.0, threshold0=0.9, threshold1=1.1):
     '''
+    * :ref:`API in English <set_threshold_margin-en>`
+
+    .. _set_threshold_margin-cn:
+
     :param output_layer: 用于分类的网络的输出层，输出层输出shape=[batch_size, C]
     :param label_one_hot: one hot格式的样本标签，shape=[batch_size, C]
-    :param eval_threshold: 输出层神经元在测试（推理）时使用的电压阈值
-    :param threshold0: 输出层神经元在训练时，负样本的电压阈值
-    :param threshold1: 输出层神经元在训练时，正样本的电压阈值
+    :param float eval_threshold: 输出层神经元在测试（推理）时使用的电压阈值
+    :param float threshold0: 输出层神经元在训练时，负样本的电压阈值
+    :param float threshold1: 输出层神经元在训练时，正样本的电压阈值
     :return: None
 
     对于用来分类的网络，为输出层神经元的电压阈值设置一定的裕量，以获得更好的分类性能。
 
     类别总数为C，网络的输出层共有C个神经元。网络在训练时，当输入真实类别为i的数据，输出层中第i个神经元的电压阈值会被设置成\\
-    threshold1，而其他神经元的电压阈值会被设置成threshold0。而在测试（推理）时，输出层中神经元的电压阈值被统一设置成eval_threshold。
+    ``threshold1``，而其他神经元的电压阈值会被设置成\ ``threshold0``。而在测试（推理）时，输出层中神经元的电压阈值被统一设置成\ ``eval_threshold``。
+
+    * :ref:`中文API <set_threshold_margin-cn>`
+
+    .. _set_threshold_margin-en:
+
+    :param output_layer: The output layer of classification network, where the shape of output should be [batch_size, C]
+    :param label_one_hot: Labels in one-hot format, shape=[batch_size, C]
+    :param float eval_threshold: Voltage threshold of neurons in output layer when evaluating (inference)
+    :param float threshold0: Voltage threshold of the corresponding neurons of **negative** samples in output layer when training
+    :param float threshold1: Voltage threshold of the corresponding neurons of **positive** samples in output layer when training
+    :return: None
+
+    Set voltage threshold margin for neurons in the output layer to reach better performance in classification task.
+
+    When there are C different classes, the output layer contains C neurons. During training, when the input with groundtruth label i are sent into the network, the voltage threshold of the i-th neurons in the output layer will be set to ``threshold1`` and the remaining will be set to ``threshold0``.
+    
+    During inference, the voltage thresholds of **ALL** neurons in the output layer will be set to ``eval_threshold``.
     '''
     if output_layer.training:
         output_layer.v_threshold = torch.ones_like(label_one_hot) * threshold0
@@ -269,12 +418,16 @@ def set_threshold_margin(output_layer:neuron.BaseNode, label_one_hot:torch.Tenso
 
 def redundant_one_hot(labels:torch.Tensor, num_classes:int, n:int):
     '''
-    :param labels: shape=[batch_size]的tensor，表示batch_size个标签
-    :param num_classes: int，类别总数
-    :param n: 表示每个类别所用的编码数量
+    * :ref:`API in English <redundant_one_hot-en>`
+
+    .. _redundant_one_hot-cn:
+
+    :param labels: shape=[batch_size]的tensor，表示\ ``batch_size``\ 个标签
+    :param int num_classes: 类别总数
+    :param int n: 表示每个类别所用的编码数量
     :return: shape=[batch_size, num_classes * n]的tensor
 
-    对数据进行冗余的one hot编码，每一类用n个1和(num_classes - 1) * n个0来编码。
+    对数据进行冗余的one-hot编码，每一类用 ``n`` 个1和 ``(num_classes - 1) * n`` 个0来编码。
 
     示例：
 
@@ -292,6 +445,32 @@ def redundant_one_hot(labels:torch.Tensor, num_classes:int, n:int):
                 [0., 0., 1., 1., 0., 0.],
                 [1., 1., 0., 0., 0., 0.]])
 
+    * :ref:`中文API <redundant_one_hot-cn>`
+
+    .. _redundant_one_hot-en:
+
+    :param labels: Tensor of shape=[batch_size], ``batch_size`` labels 
+    :param int num_classes: The total number of classes.
+    :param int n: The encoding length for each class.
+    :return: Tensor of shape=[batch_size, num_classes * n]
+
+    Redundant one-hot encoding for data. Each class is encoded to ``n`` 1's and  ``(num_classes - 1) * n`` 0's
+
+    e.g.:
+
+    .. code-block:: python
+
+        >>> num_classes = 3
+        >>> n = 2
+        >>> labels = torch.randint(0, num_classes, [4])
+        >>> labels
+        tensor([0, 1, 1, 0])
+        >>> codes = functional.redundant_one_hot(labels, num_classes, n)
+        >>> codes
+        tensor([[1., 1., 0., 0., 0., 0.],
+                [0., 0., 1., 1., 0., 0.],
+                [0., 0., 1., 1., 0., 0.],
+                [1., 1., 0., 0., 0., 0.]])
     '''
     redundant_classes = num_classes * n
     codes = torch.zeros(size=[labels.shape[0], redundant_classes], device=labels.device)
@@ -301,12 +480,47 @@ def redundant_one_hot(labels:torch.Tensor, num_classes:int, n:int):
 
 def first_spike_index(spikes: torch.Tensor):
     '''
+    * :ref:`API in English <first_spike_index-en>`
+
+    .. _first_spike_index-cn:
+
     :param spikes: shape=[*, T]，表示任意个神经元在t=0, 1, ..., T-1，共T个时刻的输出脉冲
     :return: index, shape=[*, T]，为True的位置表示该神经元首次释放脉冲的时刻
 
-    输入任意个神经元的输出脉冲，返回一个与输入相同shape的bool类型的index。index为True的位置，表示该神经元首次释放脉冲的时刻。
+    输入若干个神经元的输出脉冲，返回一个与输入相同shape的bool类型的index。index为True的位置，表示该神经元首次释放脉冲的时刻。
 
     示例：
+
+    .. code-block:: python
+
+        >>> spikes = (torch.rand(size=[2, 3, 8]) >= 0.8).float()
+        >>> spikes
+        tensor([[[0., 0., 0., 0., 0., 0., 0., 0.],
+         [1., 0., 0., 0., 0., 0., 1., 0.],
+         [0., 1., 0., 0., 0., 1., 0., 1.]],
+
+        [[0., 0., 1., 1., 0., 0., 0., 1.],
+         [1., 1., 0., 0., 1., 0., 0., 0.],
+         [0., 0., 0., 1., 0., 0., 0., 0.]]])
+        >>> first_spike_index(spikes)
+        tensor([[[False, False, False, False, False, False, False, False],
+         [ True, False, False, False, False, False, False, False],
+         [False,  True, False, False, False, False, False, False]],
+
+        [[False, False,  True, False, False, False, False, False],
+         [ True, False, False, False, False, False, False, False],
+         [False, False, False,  True, False, False, False, False]]])
+
+    * :ref:`中文API <first_spike_index-cn>`
+
+    .. _first_spike_index-en:
+
+    :param spikes: shape=[*, T], indicates the output spikes of some neurons when t=0, 1, ..., T-1.
+    :return: index, shape=[*, T], the index of True represents the moment of first spike.
+
+    Return an ``index`` tensor of the same shape of input tensor, which is the output spike of some neurons. The index of True represents the moment of first spike.
+
+    e.g.:
 
     .. code-block:: python
 
