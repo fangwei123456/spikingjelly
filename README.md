@@ -3,11 +3,15 @@
 [![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest)
 [![HitCount](http://hits.dwyl.com/fangwei123456/SpikingFlow.svg)](http://hits.dwyl.com/fangwei123456/SpikingFlow)
 
+[中文README](https://github.com/fangwei123456/SpikingFlow/blob/master/README_cn.md)
+
 SpikingFlow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
 The documentation of SpikingFlow is written in both English and Chinese: https://spikingflow.readthedocs.io
 
 ## Installation
+
+Note that SpikingFlow is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingFlow.
 
 Install from [PyPI](https://pypi.org/project/SpikingFlow/)：
 
@@ -42,7 +46,7 @@ class Net(nn.Module):
         return self.fc(x)
 ```
 
-This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingflow.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal:
+This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingflow.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
 >>> import SpikingFlow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
@@ -55,4 +59,4 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 
 The list of developers can be found at https://github.com/fangwei123456/SpikingFlow/graphs/contributors.
 
-Any useful contributions to SpikingFlow is welcome!
+Any contributions to SpikingFlow is welcome!
