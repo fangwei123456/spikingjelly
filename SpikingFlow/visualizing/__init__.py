@@ -228,4 +228,4 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
 
     maps.get_xaxis().set_visible(False)
     maps.get_yaxis().set_visible(False)
-    return fig
+    return fig, maps

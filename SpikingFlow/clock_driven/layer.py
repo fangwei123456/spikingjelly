@@ -34,7 +34,9 @@ class NeuNorm(nn.Module):
 
         .. _NeuNorm.__init__-en:
 
-        .. warning::
+        .. admonition:: Warning
+            :class: warning
+
             There may be some wrong in code implement. Our experiment results show that networks with NeuNorm perform worse.
 
         :param in_channels: channels of input
@@ -211,7 +213,9 @@ class Dropout(nn.Module):
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
         has been called and a new simulation is started.
 
-        .. tip::
+        .. admonition:: Tip
+            :class: tip
+
             This kind of Dropout is firstly described in `Enabling Spike-based Backpropagation for Training Deep Neural
             Network Architectures <https://arxiv.org/abs/1903.06379>`_:
 
@@ -279,6 +283,8 @@ class Dropout2d(nn.Module):
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
 
+        关于SNN中Dropout的更多信息，参见 :ref:`layer.Dropout <Dropout.__init__-cn>`。
+
         * :ref:`中文API <Dropout2d.__init__-cn>`
 
         .. _Dropout2d.__init__-en:
@@ -288,6 +294,8 @@ class Dropout2d(nn.Module):
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
         has been called and a new simulation is started.
+
+        For more information about Dropout in SNN, refer to :ref:`layer.Dropout <Dropout.__init__-en>`.
         '''
         super().__init__()
         assert 0 < p < 1
