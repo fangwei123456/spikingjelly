@@ -33,7 +33,7 @@ SpikingFlow非常易于使用。使用SpikingFlow搭建SNN，就像使用PyTorch
 class Net(nn.Module):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
         super().__init__()
-        # Network structure, a simple two-layer fully connected network, each layer is followed by LIF neurons
+        # 网络结构，简单的双层全连接网络，每一层之后都是LIF神经元
         self.fc = nn.Sequential(
             nn.Flatten(),
             nn.Linear(28 * 28, 14 * 14, bias=False),
