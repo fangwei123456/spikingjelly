@@ -54,3 +54,5 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingFlow.
 
 The list of developers can be found at https://github.com/fangwei123456/SpikingFlow/graphs/contributors.
+
+Any useful contributions to SpikingFlow is welcome!
