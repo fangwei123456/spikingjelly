@@ -84,7 +84,7 @@ def add(x: torch.Tensor, spike: torch.Tensor):
     '''
     * :ref:`API in English <add-en>`
 
-    .. add-cn:
+    .. _add-cn:
 
     :param x: 任意tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
@@ -94,7 +94,7 @@ def add(x: torch.Tensor, spike: torch.Tensor):
 
     * :ref:`中文API <add-cn>`
 
-    .. add-en:
+    .. _add-en:
 
     :param x: an arbitrary tensor
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
@@ -110,7 +110,7 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     '''
     * :ref:`API in English <sub-en>`
 
-    .. sub-cn:
+    .. _sub-cn:
 
     :param x: 任意tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
@@ -120,7 +120,7 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
 
     * :ref:`中文API <sub-cn>`
 
-    .. sub-en:
+    .. _sub-en:
 
     :param x: an arbitrary tensor
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
@@ -136,7 +136,7 @@ def mul(x: torch.Tensor, spike: torch.Tensor):
     '''
     * :ref:`API in English <mul-en>`
 
-    .. mul-cn:
+    .. _mul-cn:
 
     :param x: 任意tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
@@ -146,7 +146,7 @@ def mul(x: torch.Tensor, spike: torch.Tensor):
 
     * :ref:`中文API <mul-cn>`
 
-    .. mul-en:
+    .. _mul-en:
 
     :param x: an arbitrary tensor
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
@@ -186,7 +186,7 @@ def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: fl
     '''
     * :ref:`API in English <soft_voltage_transform-en>`
 
-    .. soft_voltage_transform-cn:
+    .. _soft_voltage_transform-cn:
 
     :param v: 重置前电压
     :param spike: 释放的脉冲
@@ -199,7 +199,7 @@ def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: fl
 
     * :ref:`中文API <soft_voltage_transform-cn>`
 
-    .. soft_voltage_transform-en:
+    .. _soft_voltage_transform-en:
 
     :param v: voltage before reset
     :param spike: fired spikes
@@ -245,7 +245,7 @@ def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float)
     '''
     * :ref:`API in English <hard_voltage_transform-en>`
 
-    .. hard_voltage_transform-cn:
+    .. _hard_voltage_transform-cn:
 
     :param v: 重置前电压
     :param spike: 释放的脉冲
@@ -258,7 +258,7 @@ def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float)
 
     * :ref:`中文API <hard_voltage_transform-cn>`
 
-    .. hard_voltage_transform-en:
+    .. _hard_voltage_transform-en:
 
     :param v: voltage before reset
     :param spike: fired spikes
