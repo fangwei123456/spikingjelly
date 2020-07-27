@@ -82,31 +82,79 @@ class subtract_spike(torch.autograd.Function):
 
 def add(x: torch.Tensor, spike: torch.Tensor):
     '''
+    * :ref:`API in English <add-en>`
+
+    .. add-cn:
+
     :param x: 任意tensor
-    :param spike: 脉冲tensor。要求spike中的元素只能为0或1，且spike.shape必须与x.shape相同
-    :return: x + spike
+    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :return: ``x + spike``
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的加法运算。
+
+    * :ref:`中文API <add-cn>`
+
+    .. add-en:
+
+    :param x: an arbitrary tensor
+    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
+        with ``x.shape``
+    :return: ``x + spike``
+
+    Add operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
+    numerical stability.
     '''
     return add_spike.apply(x, spike)
 
 def sub(x: torch.Tensor, spike: torch.Tensor):
     '''
+    * :ref:`API in English <sub-en>`
+
+    .. sub-cn:
+
     :param x: 任意tensor
-    :param spike: 脉冲tensor。要求spike中的元素只能为0或1，且spike.shape必须与x.shape相同
-    :return: x - spike
+    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :return: ``x - spike``
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的减法运算。
+
+    * :ref:`中文API <sub-cn>`
+
+    .. sub-en:
+
+    :param x: an arbitrary tensor
+    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
+        with ``x.shape``
+    :return: ``x - spike``
+
+    Subtract operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
+    numerical stability.
     '''
     return subtract_spike.apply(x, spike)
 
 def mul(x: torch.Tensor, spike: torch.Tensor):
     '''
+    * :ref:`API in English <mul-en>`
+
+    .. mul-cn:
+
     :param x: 任意tensor
-    :param spike: 脉冲tensor。要求spike中的元素只能为0或1，且spike.shape必须与x.shape相同
-    :return: x * spike
+    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :return: ``x * spike``
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的乘法运算。
+
+    * :ref:`中文API <mul-cn>`
+
+    .. mul-en:
+
+    :param x: an arbitrary tensor
+    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
+        with ``x.shape``
+    :return: ``x * spike``
+
+    Multiplication operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
+    numerical stability.
     '''
     return multiply_spike.apply(x, spike)
 
@@ -134,8 +182,12 @@ class soft_vlotage_transform_function(torch.autograd.Function):
             grad_spike = - ctx.v_threshold * grad_output
         return grad_v, grad_spike, None
 
-def soft_vlotage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
+def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
     '''
+    * :ref:`API in English <soft_voltage_transform-en>`
+
+    .. soft_voltage_transform-cn:
+
     :param v: 重置前电压
     :param spike: 释放的脉冲
     :param v_threshold: 阈值电压
@@ -144,6 +196,20 @@ def soft_vlotage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: fl
     根据释放的脉冲，以soft方式重置电压，即释放脉冲后，电压会减去阈值：:math:`v = v - s \\cdot v_{threshold}`。
 
     该函数针对脉冲数据进行了前反向传播的加速，并能节省内存，且保持数值稳定。
+
+    * :ref:`中文API <soft_voltage_transform-cn>`
+
+    .. soft_voltage_transform-en:
+
+    :param v: voltage before reset
+    :param spike: fired spikes
+    :param v_threshold: threshold voltage
+    :return: voltage after reset
+
+    Reset the voltage according to fired spikes in a soft way, which means that voltage of neurons that just fired spikes
+    will subtract ``v_threshold``: :math:`v = v - s \\cdot v_{threshold}`.
+
+    This function is specially optimized for memory, speed, and numerical stability.
     '''
     return soft_vlotage_transform_function.apply(v, spike, v_threshold)
 
@@ -177,21 +243,38 @@ class hard_voltage_transform_function(torch.autograd.Function):
 
 def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
     '''
+    * :ref:`API in English <hard_voltage_transform-en>`
+
+    .. hard_voltage_transform-cn:
+
     :param v: 重置前电压
     :param spike: 释放的脉冲
-    :param v_reset: 重置电压
+    :param v_threshold: 阈值电压
     :return: 重置后的电压
 
-    根据释放的脉冲，以hard方式重置电压，即释放脉冲后，电压会直接置为重置电压：:math:`v = v \\cdot (1-s) + v_{reset} \\cdot s`。
+    根据释放的脉冲，以hard方式重置电压，即释放脉冲后，电压会被直接设置成 ``v_reset``。
 
     该函数针对脉冲数据进行了前反向传播的加速，并能节省内存，且保持数值稳定。
+
+    * :ref:`中文API <hard_voltage_transform-cn>`
+
+    .. hard_voltage_transform-en:
+
+    :param v: voltage before reset
+    :param spike: fired spikes
+    :param v_threshold: threshold voltage
+    :return: voltage after reset
+
+    Reset the voltage according to fired spikes in a hard way, which means that voltage of neurons that just fired spikes
+    will be set to ``v_reset``.
+
+    This function is specially optimized for memory, speed, and numerical stability.
     '''
     return hard_voltage_transform_function.apply(v, spike, v_reset)
 
 class ModelPipeline(nn.Module):
     def __init__(self):
         '''
-
         一个基于流水线多GPU串行并行的基类，使用者只需要继承 ``ModelPipeline``，然后调\
         用 ``append(nn_module, gpu_id)``，就可以将 ``nn_module`` 添加到流水线中，并且 ``nn_module`` 会被运行在 ``gpu_id`` 上。\
         在调用模型进行计算时， ``forward(x, split_sizes)`` 中的 ``split_sizes`` 指的是输入数据 ``x`` 会在维度0上被拆分成\
