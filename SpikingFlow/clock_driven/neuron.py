@@ -390,14 +390,15 @@ class PLIFNode(BaseNode):
             self.v += (dv - (self.v - self.v_reset)) * self.w
         return self.spiking()
 
-    def extra_repr(self):
+    def tau(self):
         if self.decay:
-            tau = 1 / self.w.data.sigmoid().item()
+            return 1 / self.w.data.sigmoid().item()
         else:
-            tau = 1 / self.w.data.item()
+            return 1 / self.w.data.item()
 
+    def extra_repr(self):
         return 'v_threshold={}, v_reset={}, tau={}, decay={}'.format(
-            self.v_threshold, self.v_reset, tau, self.decay
+            self.v_threshold, self.v_reset, self.tau(), self.decay
         )
 
 class RIFNode(BaseNode):
