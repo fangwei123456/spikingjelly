@@ -2,6 +2,45 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class spike_multiply_spike(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, spike_a: torch.Tensor, spike_b: torch.Tensor):
+        # y = spike_a * spike_b
+        assert spike_a.shape == spike_b.shape, print('x.shape != spike.shape')  # 禁用广播机制
+        if spike_a.dtype == torch.bool:
+            mask_a = spike_a
+        else:
+            mask_a = spike_a.bool()
+        if spike_b.dtype == torch.bool:
+            mask_b = spike_b
+        else:
+            mask_b = spike_b.bool()
+
+        if spike_a.requires_grad and spike_b.requires_grad:
+            ctx.save_for_backward(mask_a, mask_b)
+        elif spike_a.requires_grad and not spike_b.requires_grad:
+            ctx.save_for_backward(mask_b)
+        elif not spike_a.requires_grad and spike_b.requires_grad:
+            ctx.save_for_backward(mask_a)
+        ret = mask_a.logical_and(mask_b).float()
+        ret.requires_grad_(spike_a.requires_grad or spike_b.requires_grad)
+        return ret
+
+    @staticmethod
+    def backward(ctx, grad_output: torch.Tensor):
+        grad_spike_a = None
+        grad_spike_b = None
+        # grad_spike_a = grad_output * grad_spike_b
+        # grad_spike_b = grad_output * grad_spike_a
+        if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
+            grad_spike_a = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[1]), 0)
+            grad_spike_b = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[0]), 0)
+        elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
+            grad_spike_a = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[0]), 0)
+        elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
+            grad_spike_b = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[0]), 0)
+
+        return grad_spike_a, grad_spike_b
 
 class multiply_spike(torch.autograd.Function):
     @staticmethod
@@ -9,7 +48,10 @@ class multiply_spike(torch.autograd.Function):
         # y = x * spike
         # x乘spike，等价于将x中spike == 0的位置全部填充为0
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
-        mask = torch.logical_not(spike.bool())
+        if spike.dtype == torch.bool:
+            mask = torch.logical_not(spike)
+        else:
+            mask = torch.logical_not(spike.bool())
         if x.requires_grad and spike.requires_grad:
             ctx.save_for_backward(mask, x)
         elif x.requires_grad and not spike.requires_grad:
@@ -41,7 +83,10 @@ class add_spike(torch.autograd.Function):
         # y = x + spike
         # x乘spike，等价于将x中spike == 1的位置增加1
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
-        mask = spike.bool()
+        if spike.dtype == torch.bool:
+            mask = spike
+        else:
+            mask = spike.bool()
         y = x.clone()
         y[mask] += 1
         return y
@@ -64,7 +109,10 @@ class subtract_spike(torch.autograd.Function):
         # y = x - spike
         # x乘spike，等价于将x中spike == 1的位置减去1
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
-        mask = spike.bool()
+        if spike.dtype == torch.bool:
+            mask = spike
+        else:
+            mask = spike.bool()
         y = x.clone()
         y[mask] -= 1
         return y
@@ -87,7 +135,7 @@ def add(x: torch.Tensor, spike: torch.Tensor):
     .. _add-cn:
 
     :param x: 任意tensor
-    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
     :return: ``x + spike``
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的加法运算。
@@ -97,7 +145,7 @@ def add(x: torch.Tensor, spike: torch.Tensor):
     .. _add-en:
 
     :param x: an arbitrary tensor
-    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
+    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
     :return: ``x + spike``
 
@@ -113,7 +161,7 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     .. _sub-cn:
 
     :param x: 任意tensor
-    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
     :return: ``x - spike``
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的减法运算。
@@ -123,7 +171,7 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     .. _sub-en:
 
     :param x: an arbitrary tensor
-    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
+    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
     :return: ``x - spike``
 
@@ -132,14 +180,16 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     '''
     return subtract_spike.apply(x, spike)
 
-def mul(x: torch.Tensor, spike: torch.Tensor):
+def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
     '''
     * :ref:`API in English <mul-en>`
 
     .. _mul-cn:
 
     :param x: 任意tensor
-    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 或 ``1``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :param x_is_spike: ``x`` 是否也是脉冲数据，即满足元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``。若 ``x`` 满足
+        这一条件，则会调用更高级别的加速
     :return: ``x * spike``
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的乘法运算。
@@ -149,14 +199,19 @@ def mul(x: torch.Tensor, spike: torch.Tensor):
     .. _mul-en:
 
     :param x: an arbitrary tensor
-    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` or ``1``, and ``spike.shape`` should be same
+    :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
+    :param x_is_spike: whether ``x`` is the spike. When the elements in ``x`` are ``0`` and ``1`` or ``False`` and ``True``,
+        this param can be ``True`` and this function will call an advanced accelerator
     :return: ``x * spike``
 
     Multiplication operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
     numerical stability.
     '''
-    return multiply_spike.apply(x, spike)
+    if x_is_spike:
+        return spike_multiply_spike.apply(x, spike)
+    else:
+        return multiply_spike.apply(x, spike)
 
 
 
