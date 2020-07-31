@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from SpikingFlow.clock_driven import accelerating
 
 class NeuNorm(nn.Module):
     def __init__(self, in_channels, k=0.9):
@@ -175,13 +176,14 @@ class AXAT(nn.Module):
         return x.view(x_shape)
 
 class Dropout(nn.Module):
-    def __init__(self, p=0.5):
+    def __init__(self, p=0.5, behind_spiking_layer=False):
         '''
         * :ref:`API in English <Dropout.__init__-en>`
 
         .. _Dropout.__init__-cn:
 
         :param p: 每个元素被设置为0的概率
+        :param behind_spiking_layer: 本层是否位于输出脉冲数据的层，例如 ``neuron.LIFNode`` 层之后。若为 ``True``，则计算会有一定的加速
 
         与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -208,6 +210,8 @@ class Dropout(nn.Module):
         .. _Dropout.__init__-en:
 
         :param p: probability of an element to be zeroed
+        :param behind_spiking_layer: whether this layer is behind a spiking layer, such as ``neuron.LIFNode``. If ``True``,
+            the calculation will be accelerated
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
@@ -236,6 +240,7 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
+        self.behind_spiking_layer = behind_spiking_layer
 
     def extra_repr(self):
         return 'p={}'.format(
@@ -245,8 +250,8 @@ class Dropout(nn.Module):
     def forward(self, x: torch.Tensor):
         if self.training:
             if self.mask is None:
-                self.mask = F.dropout(torch.ones_like(x), self.p, training=True)
-            return self.mask * x
+                self.mask = F.dropout(torch.ones_like(x), self.p, training=True).bool()
+            return accelerating.mul(x, self.mask, self.behind_spiking_layer)
         else:
             return x
 
@@ -272,13 +277,14 @@ class Dropout(nn.Module):
         self.mask = None
 
 class Dropout2d(nn.Module):
-    def __init__(self, p=0.2):
+    def __init__(self, p=0.2, behind_spiking_layer=False):
         '''
         * :ref:`API in English <Dropout2d.__init__-en>`
 
         .. _Dropout2d.__init__-cn:
 
         :param p: 每个元素被设置为0的概率
+        :param behind_spiking_layer: 本层是否位于输出脉冲数据的层，例如 ``neuron.LIFNode`` 层后。若为 ``True``，则计算会有一定的加速
 
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -290,7 +296,9 @@ class Dropout2d(nn.Module):
         .. _Dropout2d.__init__-en:
 
         :param p: probability of an element to be zeroed
-
+        :param behind_spiking_layer: whether this layer is behind a spiking layer, such as ``neuron.LIFNode``. If ``True``,
+            the calculation will be accelerated
+            
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
         has been called and a new simulation is started.
@@ -301,6 +309,7 @@ class Dropout2d(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
+        self.behind_spiking_layer = behind_spiking_layer
 
     def extra_repr(self):
         return 'p={}'.format(
@@ -310,8 +319,8 @@ class Dropout2d(nn.Module):
     def forward(self, x: torch.Tensor):
         if self.training:
             if self.mask is None:
-                self.mask = F.dropout2d(torch.ones_like(x), self.p, training=True)
-            return self.mask * x
+                self.mask = F.dropout2d(torch.ones_like(x), self.p, training=True).bool()
+            return accelerating.mul(x, self.mask, self.behind_spiking_layer)
         else:
             return x
 
