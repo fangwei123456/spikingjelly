@@ -13,17 +13,17 @@ class Net(nn.Module):
         super().__init__()
 
         self.train_times = 0
-        self.max_test_accuracy = 0  # 0.9954
+        self.max_test_accuracy = 0  # 0.9953
         self.epoch = 0
 
         self.conv = nn.Sequential(
             nn.Conv2d(2, 128, kernel_size=3, padding=1, bias=False),
-            layer.BatchNorm2d(128),
+            nn.BatchNorm2d(128),
             neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
             nn.MaxPool2d(2, 2),  # 17 * 17
 
             nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-            layer.BatchNorm2d(128),
+            nn.BatchNorm2d(128),
             neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
             nn.MaxPool2d(2, 2)  # 8 * 8
 
@@ -53,7 +53,7 @@ def main():
     :return: None
 
     `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_ 中
-    分类N-MNIST数据集的训练代码。在测试集上最高正确率为 ``99.54%``。原始超参数为：
+    分类N-MNIST数据集的训练代码。在测试集上最高正确率为 ``99.53%``。原始超参数为：
 
     .. code-block:: python
 
@@ -76,7 +76,7 @@ def main():
     :return: None
 
     The network for classifying N-MNIST proposed in `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_.
-    The max accuracy on test dataset is ``99.54%``. The origin hyper-parameters are:
+    The max accuracy on test dataset is ``99.53%``. The origin hyper-parameters are:
 
     .. code-block:: python
 
