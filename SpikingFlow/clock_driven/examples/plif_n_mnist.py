@@ -46,9 +46,9 @@ class Net(nn.Module):
 
 def main():
     '''
-    * :ref:`API in English <main-en>`
+    * :ref:`API in English <plif_n_mnist.main-en>`
 
-    .. _main-cn:
+    .. _plif_n_mnist.main-cn:
 
     :return: None
 
@@ -69,9 +69,9 @@ def main():
         split_by='number'
         normalization='max'
 
-    * :ref:`中文API <main-cn>`
+    * :ref:`中文API <plif_n_mnist.main-cn>`
 
-    .. _main-en:
+    .. _plif_n_mnist.main-en:
 
     :return: None
 

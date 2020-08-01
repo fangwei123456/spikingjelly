@@ -53,6 +53,8 @@ class Net(nn.Module):
 >>> lif_fc_mnist.main()
 ```
 
+阅读[SpikingFlow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/SpikingFlow.clock_driven.examples.html)以探索更多先进的神经网络！
+
 ## 项目信息
 
 北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 是SpikingFlow的主要开发者。
