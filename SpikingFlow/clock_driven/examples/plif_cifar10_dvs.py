@@ -5,36 +5,49 @@ import sys
 from SpikingFlow.clock_driven import functional, layer, neuron
 from torch.utils.tensorboard import SummaryWriter
 import os
-import numpy as np
 import readline
-from SpikingFlow.datasets.n_mnist import NMNIST
+from SpikingFlow.datasets.cifar10_dvs import CIFAR10DVS
+'''
+dvs_cifar10_frames_10_split_by_number_normalization_max 0.679
+dvs_cifar10_frames_20_split_by_number_normalization_max 0.692
+'''
+
 class Net(nn.Module):
     def __init__(self, v_threshold=1.0, v_reset=0.0):
         super().__init__()
 
         self.train_times = 0
-        self.max_test_accuracy = 0  # 0.9954
+        self.max_test_accuracy = 0
         self.epoch = 0
 
         self.conv = nn.Sequential(
             nn.Conv2d(2, 128, kernel_size=3, padding=1, bias=False),
-            layer.BatchNorm2d(128),
+            nn.BatchNorm2d(128),
             neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
-            nn.MaxPool2d(2, 2),  # 17 * 17
+            nn.MaxPool2d(2, 2),  # 64 * 64
 
             nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-            layer.BatchNorm2d(128),
+            nn.BatchNorm2d(128),
             neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
-            nn.MaxPool2d(2, 2)  # 8 * 8
+            nn.MaxPool2d(2, 2),  # 32 * 32
+
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
+            nn.MaxPool2d(2, 2),  # 16 * 16
+
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
+            nn.MaxPool2d(2, 2),  # 8 * 8
 
         )
-
         self.fc = nn.Sequential(
             nn.Flatten(),
-            layer.Dropout(0.5, behind_spiking_layer=True),
+            layer.Dropout(0.5),
             nn.Linear(128 * 8 * 8, 128 * 4 * 4, bias=False),
             neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
-            layer.Dropout(0.5, behind_spiking_layer=True),
+            layer.Dropout(0.5),
             nn.Linear(128 * 4 * 4, 128, bias=False),
             neuron.PLIFNode(decay=True, v_threshold=v_threshold, v_reset=v_reset),
             nn.Linear(128, 10, bias=False),
@@ -53,19 +66,19 @@ def main():
     :return: None
 
     `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_ 中
-    分类N-MNIST数据集的训练代码。在测试集上最高正确率为 ``99.54%``。原始超参数为：
+    分类CIFAR10-DVS数据集的训练代码。在测试集上最高正确率为 ``69.2%``。原始超参数为：
 
     .. code-block:: python
 
-        batch_size = 128
+        batch_size = 16
         learning_rate = 1e-4
-        T = 10
+        T = 20
 
-    数据集是对原始N-MNIST使用 ``SpikingFlow.datasets.n_mnist`` 中的函数转换而来的帧数据，超参数为：
+    数据集是对原始CIFAR10-DVS使用 ``SpikingFlow.datasets.CIFAR10DVS`` 中的函数转换而来的帧数据，超参数为：
 
     .. code-block:: python
 
-        frames_num=10
+        frames_num=20
         split_by='number'
         normalization='max'
 
@@ -75,21 +88,21 @@ def main():
 
     :return: None
 
-    The network for classifying N-MNIST proposed in `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_.
-    The max accuracy on test dataset is ``99.54%``. The origin hyper-parameters are:
+    The network for classifying CIFAR10-DVS proposed in `Leaky integrate-and-fire spiking neuron with learnable membrane time parameter <https://arxiv.org/abs/2007.05785>`_.
+    The max accuracy on test dataset is ``69.2%``. The origin hyper-parameters are:
 
     .. code-block:: python
 
-        batch_size = 128
+        batch_size = 16
         learning_rate = 1e-4
-        T = 10
+        T = 20
 
-    The frames dataset is converted from the origin N-MNIST dataset by functions in ``SpikingFlow.datasets.n_mnist``. The
+    The frames dataset is converted from the origin CIFAR10-DVS dataset by functions in ``SpikingFlow.datasets.CIFAR10DVS``. The
     hyper-parameters are:
 
     .. code-block:: python
 
-        frames_num=10
+        frames_num=20
         split_by='number'
         normalization='max'
     '''
@@ -103,13 +116,13 @@ def main():
 
 
     train_data_loader = torch.utils.data.DataLoader(
-        dataset=NMNIST(dataset_dir, train=True),
+        dataset=CIFAR10DVS(dataset_dir, train=True, split_ratio=0.9),
         batch_size=batch_size,
         shuffle=True,
         drop_last=True)
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=NMNIST(dataset_dir, train=False),
-        batch_size=batch_size * 4,
+        dataset=CIFAR10DVS(dataset_dir, train=False, split_ratio=0.9),
+        batch_size=batch_size * 2,
         shuffle=False,
         drop_last=False)
 
