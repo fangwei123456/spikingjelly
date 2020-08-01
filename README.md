@@ -53,7 +53,7 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 >>> lif_fc_mnist.main()
 ```
 
-Read [SpikingFlow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/SpikingFlow.clock_driven.examples.html) for exploring more advanced networks!
+Read [SpikingFlow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/SpikingFlow.clock_driven.examples.html) to explore more advanced networks!
 
 ## About
 
