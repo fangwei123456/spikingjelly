@@ -59,9 +59,9 @@ class Net(nn.Module):
 
 def main():
     '''
-    * :ref:`API in English <main-en>`
+    * :ref:`API in English <plif_cifar10_dvs.main-en>`
 
-    .. _main-cn:
+    .. _plif_cifar10_dvs.main-cn:
 
     :return: None
 
@@ -82,9 +82,9 @@ def main():
         split_by='number'
         normalization='max'
 
-    * :ref:`中文API <main-cn>`
+    * :ref:`中文API <plif_cifar10_dvs.main-cn>`
 
-    .. _main-en:
+    .. _plif_cifar10_dvs.main-en:
 
     :return: None
 
