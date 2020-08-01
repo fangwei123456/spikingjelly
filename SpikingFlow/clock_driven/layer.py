@@ -512,14 +512,14 @@ class SynapseFilter(nn.Module):
         '''
         self.out_i = 0
 
-class ChannelsMaxPool(nn.Module):
-    def __init__(self, pool: nn.MaxPool1d):
+class ChannelsPool(nn.Module):
+    def __init__(self, pool: nn.MaxPool1d or nn.AvgPool1d):
         '''
-        * :ref:`API in English <ChannelsMaxPool.__init__-en>`
+        * :ref:`API in English <ChannelsPool.__init__-en>`
 
-        .. _ChannelsMaxPool.__init__-cn:
+        .. _ChannelsPool.__init__-cn:
 
-        :param pool: ``nn.Maxpool1d``，池化层
+        :param pool: ``nn.MaxPool1d`` 或 ``nn.AvgPool1d``，池化层
 
         使用 ``pool`` 将输入的4-D数据在第1个维度上进行池化。
 
@@ -527,17 +527,17 @@ class ChannelsMaxPool(nn.Module):
 
         .. code-block:: python
 
-            >>> cmp = ChannelsMaxPool(torch.nn.MaxPool1d(2, 2))
+            >>> cp = ChannelsPool(torch.nn.MaxPool1d(2, 2))
             >>> x = torch.rand(size=[2, 8, 4, 4])
-            >>> y = cmp(x)
+            >>> y = cp(x)
             >>> y.shape
             torch.Size([2, 4, 4, 4])
 
-        * :ref:`中文API <ChannelsMaxPool.__init__-cn>`
+        * :ref:`中文API <ChannelsPool.__init__-cn>`
 
-        .. _ChannelsMaxPool.__init__-en:
+        .. _ChannelsPool.__init__-en:
 
-        :param pool: ``nn.Maxpool1d``, the pool layer
+        :param pool: ``nn.MaxPool1d`` or ``nn.AvgPool1d``, the pool layer
 
         Use ``pool`` to pooling 4-D input at dimension 1.
 
@@ -545,9 +545,9 @@ class ChannelsMaxPool(nn.Module):
 
         .. code-block:: python
 
-            >>> cmp = ChannelsMaxPool(torch.nn.MaxPool1d(2, 2))
+            >>> cmp = ChannelsPool(torch.nn.MaxPool1d(2, 2))
             >>> x = torch.rand(size=[2, 8, 4, 4])
-            >>> y = cmp(x)
+            >>> y = cp(x)
             >>> y.shape
             torch.Size([2, 4, 4, 4])
         '''
