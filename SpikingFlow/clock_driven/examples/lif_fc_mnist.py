@@ -22,41 +22,20 @@ class Net(nn.Module):
         return self.fc(x)
 def main():
     '''
+    * :ref:`API in English <lif_fc_mnist.main-en>`
+
+    .. _lif_fc_mnist.main-cn:
+
     :return: None
 
-    使用全连接-LIF-全连接-LIF的网络结构，进行MNIST识别。运行示例：
+    使用全连接-LIF-全连接-LIF的网络结构，进行MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
 
-    .. code-block:: python
+    * :ref:`中文API <lif_fc_mnist.main-cn>`
 
-        >>> import SpikingFlow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
-        >>> lif_fc_mnist.main()
-        输入运行的设备，例如“cpu”或“cuda:0”
-         input device, e.g., "cpu" or "cuda:0": cuda:15
-        输入保存MNIST数据集的位置，例如“./”
-         input root directory for saving MNIST dataset, e.g., "./": ./mnist
-        输入batch_size，例如“64”
-         input batch_size, e.g., "64": 128
-        输入学习率，例如“1e-3”
-         input learning rate, e.g., "1e-3": 1e-3
-        输入仿真时长，例如“100”
-         input simulating steps, e.g., "100": 50
-        输入LIF神经元的时间常数tau，例如“100.0”
-         input membrane time constant, tau, for LIF neurons, e.g., "100.0": 100.0
-        输入训练轮数，即遍历训练集的次数，例如“100”
-         input training epochs, e.g., "100": 100
-        输入保存tensorboard日志文件的位置，例如“./”
-         input root directory for saving tensorboard logs, e.g., "./": ./logs_lif_fc_mnist
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 0 train_accuracy 0.109375
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 1024 train_accuracy 0.5078125
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 2048 train_accuracy 0.7890625
-        ...
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 46080 train_accuracy 0.9296875
+    .. _lif_fc_mnist.main-en:
 
-
+    The network with FC-LIF-FC-LIF structure for classifying MNIST. This function initials the network, starts training
+    and shows accuracy on test dataset.
     '''
     device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
     dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
