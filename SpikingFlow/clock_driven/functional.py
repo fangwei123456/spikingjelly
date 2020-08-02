@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import SpikingFlow.clock_driven.neuron as neuron
+from SpikingFlow.clock_driven import neuron, accelerating
 
 def reset_net(net: nn.Module):
     '''
@@ -485,9 +485,9 @@ def first_spike_index(spikes: torch.Tensor):
     .. _first_spike_index-cn:
 
     :param spikes: shape=[*, T]，表示任意个神经元在t=0, 1, ..., T-1，共T个时刻的输出脉冲
-    :return: index, shape=[*, T]，为True的位置表示该神经元首次释放脉冲的时刻
+    :return: index, shape=[*, T]，为 ``True`` 的位置表示该神经元首次释放脉冲的时刻
 
-    输入若干个神经元的输出脉冲，返回一个与输入相同shape的bool类型的index。index为True的位置，表示该神经元首次释放脉冲的时刻。
+    输入若干个神经元的输出脉冲，返回一个与输入相同shape的 ``bool`` 类型的index。index为 ``True`` 的位置，表示该神经元首次释放脉冲的时刻。
 
     示例：
 
@@ -516,9 +516,9 @@ def first_spike_index(spikes: torch.Tensor):
     .. _first_spike_index-en:
 
     :param spikes: shape=[*, T], indicates the output spikes of some neurons when t=0, 1, ..., T-1.
-    :return: index, shape=[*, T], the index of True represents the moment of first spike.
+    :return: index, shape=[*, T], the index of ``True`` represents the moment of first spike.
 
-    Return an ``index`` tensor of the same shape of input tensor, which is the output spike of some neurons. The index of True represents the moment of first spike.
+    Return an ``index`` tensor of the same shape of input tensor, which is the output spike of some neurons. The index of ``True`` represents the moment of first spike.
 
     e.g.:
 
@@ -546,3 +546,46 @@ def first_spike_index(spikes: torch.Tensor):
     with torch.no_grad():
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
+
+def spike_mse_loss(x: torch.Tensor, spikes: torch.Tensor):
+    '''
+    * :ref:`API in English <spike_mse_loss-en>`
+
+    .. _spike_mse_loss-cn:
+
+    :param x: 任意tensor
+    :param spikes: 脉冲tensor。要求 ``spikes`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spikes.shape`` 必须与 ``x.shape`` 相同
+    :return: ``x`` 和 ``spikes`` 逐元素的均方误差（L2范数的平方）
+
+    这个函数与 ``torch.nn.functional.mse_loss()`` 相比，针对脉冲数据进行了加速。其计算按照
+
+    .. math::
+        (x - s)^{2} = x^{2} + s^{2} - 2xs = x^{2} + (1 - 2x)s
+
+    .. note::
+        由于计算图已经改变，此函数计算出的梯度 :math:`\\frac{\\partial L}{\\partial s}` 与 ``torch.nn.functional.mse_loss()`` 计算出
+        的是不一样的。
+
+    * :ref:`中文API <spike_mse_loss-cn>`
+
+    .. _spike_mse_loss-en:
+
+    :param x: an arbitrary tensor
+    :param spikes: spiking tensor. The elements in ``spikes`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spikes.shape`` should be same
+        with ``x.shape``
+    :return: the mean squared error (squared L2 norm) between each element in ``x`` and ``spikes``
+
+    This function is faster than ``torch.nn.functional.mse_loss()`` for its optimization on spiking data. The compulation
+    is carried out as
+
+    .. math::
+        (x - s)^{2} = x^{2} + s^{2} - 2xs = x^{2} + (1 - 2x)s
+
+    .. admonition:: Note
+        :class: note
+
+        The computation graph of this function is different with the standard MSE. So :math:`\\frac{\\partial L}{\\partial s}`
+        compulated by this function is different with that by ``torch.nn.functional.mse_loss()``.
+
+    '''
+    return (x.pow(2) + accelerating.mul(1 - 2 * x, spikes)).mean()
