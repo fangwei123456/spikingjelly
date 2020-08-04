@@ -1,10 +1,9 @@
 """
-@author Yanqi Chen
-@desc A reproduction of the paper "Enabling Spike-Based Backpropagation for Training Deep Neural Network Architectures"
-@date 2020/8/3
+.. codeauthor:: Yanqi Chen <chyq@pku.edu.cn>
 
-This code reproduces a novel gradient-based training method of SNN proposed in https://doi.org/10.3389/fnins.2020.00119.
-We to some extent refer to the network structure and some other detailed implementation in the authors' code (https://github.com/chan8972/Enabling_Spikebased_Backpropagation). Since the training method and neuron models are slightly different from which in this framework, we rewrite them in a compatible style.
+A reproduction of the paper `Enabling Spike-Based Backpropagation for Training Deep Neural Network Architectures <https://doi.org/10.3389/fnins.2020.00119>`_\ .
+
+This code reproduces a novel gradient-based training method of SNN. We to some extent refer to the network structure and some other detailed implementation in the `authors' implementation <https://github.com/chan8972/Enabling_Spikebased_Backpropagation>`_\ . Since the training method and neuron models are slightly different from which in this framework, we rewrite them in a compatible style.
 
 Assuming you have at least 1 Nvidia GPU.
 """
@@ -286,7 +285,7 @@ def main():
 	max_test_accuracy = 0
 	train_epoch = 0
 	step = 0
-	
+
 	while 1:
 		print(log_prefix)
 		#### Train ####
