@@ -12,6 +12,14 @@ SpikingFlow.clock\_driven.examples.lif\_fc\_mnist module
    :undoc-members:
    :show-inheritance:
 
+SpikingFlow.clock\_driven.examples.cifar10\_r11\_enabling\_spikebased\_backpropagation
+--------------------------------------------------------
+
+.. automodule:: SpikingFlow.clock_driven.examples.cifar10_r11_enabling_spikebased_backpropagation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
