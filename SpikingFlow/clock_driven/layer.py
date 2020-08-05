@@ -250,7 +250,7 @@ class Dropout(nn.Module):
     def forward(self, x: torch.Tensor):
         if self.training:
             if self.mask is None:
-                self.mask = F.dropout(torch.ones_like(x), self.p, training=True).bool()
+                self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True).bool()
             return accelerating.mul(x, self.mask, self.behind_spiking_layer)
         else:
             return x
@@ -319,7 +319,7 @@ class Dropout2d(nn.Module):
     def forward(self, x: torch.Tensor):
         if self.training:
             if self.mask is None:
-                self.mask = F.dropout2d(torch.ones_like(x), self.p, training=True).bool()
+                self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True).bool()
             return accelerating.mul(x, self.mask, self.behind_spiking_layer)
         else:
             return x
