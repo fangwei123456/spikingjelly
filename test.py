@@ -5,26 +5,26 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from SpikingFlow.clock_driven import neuron, encoding, accelerating, surrogate, functional
-
-import time
+from matplotlib import pyplot as plt
 
 
 if __name__ == '__main__':
-    x = torch.rand([4]) - 0.5
-    # x = x.to('cuda:1')
-
-    alpha = 2
+    plt.style.use(['muted'])
+    fig = plt.figure(dpi=200)
+    x = torch.arange(-2.5, 2.5, 0.001)
+    plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
+    surrogate_function = surrogate.BilinearLeakyReLU(w=1, c=0, spiking=False)
     x = x.data.clone()
     x.requires_grad_(True)
-
-    x = x.data.clone()
-    x.requires_grad_(True)
-    sg = surrogate.Sigmoid(alpha)
-    t1 = time.time()
-    for i in range(1):
-        z = sg(x)
-        z.sum().backward()
-        x.grad.zero_()
-
-    t1 = time.time() - t1
-    print('c++', t1 / 100)
+    y = surrogate_function(x)
+    plt.plot(x.data, y.data, label='primitive, w=1, c=0.01')
+    z = y.sum()
+    z.backward()
+    plt.plot(x.data, x.grad, label='gradient, w=1, c=0.01')
+    plt.xlim(-2, 2)
+    plt.legend()
+    plt.title('BilinearLeakyReLU surrogate function')
+    plt.xlabel('Input')
+    plt.ylabel('Output')
+    plt.grid(linestyle='--')
+    plt.show()
