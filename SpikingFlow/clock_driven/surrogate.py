@@ -295,3 +295,25 @@ class FastSigmoid(nn.Module):
     def primitive_function(x: torch.Tensor, alpha):
         alpha_x = alpha * x
         return (alpha_x / (1 + alpha_x.abs()) + 1) / 2
+
+    # plt.style.use(['muted'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
+    # surrogate_function = surrogate.FastSigmoid(alpha=3, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='primitive, alpha=3')
+    #
+    # surrogate_function = surrogate.FastSigmoid(alpha=3, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='gradient, alpha=3')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('FastSigmoid surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
