@@ -2,15 +2,18 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+def heaviside(x: torch.Tensor):
+    return (x >= 0).to(x.dtype)
+
 class bilinear_leaky_relu(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, a=1, b=0.01, c=0.5):
+    def forward(ctx, x: torch.Tensor, w=1, c=0.01):
         if x.requires_grad:
-            piecewise0 = (x < -c).float()
-            piecewise2 = (x > c).float()
-            piecewise1 = torch.ones_like(x) - piecewise0 - piecewise2
-            ctx.save_for_backward(piecewise0 * b + piecewise1 * a + piecewise2 * b)
-        return (x >= 0).float()
+            mask_width = (x.abs() < w)
+            mask_negative_slope = mask_width.logical_not()
+            grad_x = x.masked_fill(mask_width, 1 / w).masked_fill(mask_negative_slope, c)
+            ctx.save_for_backward(grad_x)
+        return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
@@ -20,148 +23,199 @@ class bilinear_leaky_relu(torch.autograd.Function):
         return grad_x, None, None, None
 
 class BilinearLeakyReLU(nn.Module):
-    def __init__(self, a=1, b=0.01, c=0.5):
+    def __init__(self, w=1, c=0.01, spiking=True):
         '''
         * :ref:`API in English <BilinearLeakyReLU.__init__-en>`
         .. _BilinearLeakyReLU.__init__-cn:
-        :param a: -c <= x <= c 时反向传播的梯度
-        :param b: x > c 或 x < -c 时反向传播的梯度
-        :param c: 决定梯度区间的参数
+        :param w: ``-w <= x <= w`` 时反向传播的梯度为 ``1 / 2w``
+        :param c: ``x > w`` 或 ``x < -w`` 时反向传播的梯度为 ``c``
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
         双线性的近似脉冲发放函数。梯度为
+
         .. math::
             g'(x) =
             \\begin{cases}
-            a, & -c \\leq x \\leq c \\\\
-            b, & x < -c ~or~ x > c
+            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
+            c, & x < -w ~or~ x > w
             \\end{cases}
+
         对应的原函数为
+
         .. math::
             g(x) =
             \\begin{cases}
-            bx + bc - ac, & x < -c \\\\
-            ax, & -c \\leq x \\leq c \\\\
-            bx - bc + ac, & x > c \\\\
+            cx + cw, & x < -w \\\\
+            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
+            cx - cw + 1, & x > w \\\\
             \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/BilinearLeakyReLU.png
+
         * :ref:`中文API <BilinearLeakyReLU.__init__-cn>`
         .. _BilinearLeakyReLU.__init__-en:
-        :param a: gradient of x when -c <= x <= c
-        :param b: gradient of x when x > c or x < -c
-        :param c: parameter to determine width
+        :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
+        :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
         The bilinear surrogate spiking function. The gradient is defined by
+
         .. math::
             g'(x) =
             \\begin{cases}
-            a, & -c \\leq x \\leq c \\\\
-            b, & x < -c ~or~ x > c
+            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
+            c, & x < -w ~or~ x > w
             \\end{cases}
+
         The primitive function is defined by
+
         .. math::
             g(x) =
             \\begin{cases}
-            bx + bc - ac, & x < -c \\\\
-            ax, & -c \\leq x \\leq c \\\\
-            bx - bc + ac, & x > c \\\\
+            cx + cw, & x < -w \\\\
+            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
+            cx - cw + 1, & x > w \\\\
             \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/BilinearLeakyReLU.png
+
         '''
         super().__init__()
-        self.a = a
-        self.b = b
+        self.w = w
         self.c = c
-        self.f = bilinear_leaky_relu.apply
+        self.spiking = spiking
+        if spiking:
+            self.f = bilinear_leaky_relu.apply
+        else:
+            self.f = self.primitive_function
+
     def forward(self, x):
-        return self.f(x, self.a, self.b, self.c)
+        return self.f(x, self.w, self.c)
+
+
+    @ staticmethod
+    def primitive_function(x: torch.Tensor, w, c):
+        mask0 = (x < -w).float()
+        mask1 = (x > w).float()
+        mask2 = torch.ones_like(x) - mask0 - mask1
+        if c == 0:
+            return mask2 * (x / (2 * w) + 1 / 2) + mask1
+        else:
+            cw = c * w
+            return mask0 * (c * x + cw) + mask1 * (c * x + (- cw + 1)) \
+                   + mask2 * (x / (2 * w) + 1 / 2)
+
+    # plt.style.use(['muted'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
+    # surrogate_function = surrogate.BilinearLeakyReLU(w=1, c=0.01, spiking=False)
+    # x = x.data.clone()
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='primitive, w=1, c=0.01')
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='gradient, w=1, c=0.01')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('BilinearLeakyReLU surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
 
 class sigmoid(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            alpha_x = x * alpha
-            ctx.save_for_backward(alpha_x)
+            ctx.save_for_backward(x)
             ctx.alpha = alpha
-        return (x >= 0).float()
+        return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            alpha_x = ctx.saved_tensors[0]
-            s_x = torch.sigmoid(alpha_x)
+            s_x = torch.sigmoid(ctx.alpha * ctx.saved_tensors[0])
             grad_x = grad_output * s_x * (1 - s_x) * ctx.alpha
         return grad_x, None
 
 class Sigmoid(nn.Module):
-    def __init__(self, alpha=1.0):
+    def __init__(self, alpha=1.0, spiking=True):
         '''
         * :ref:`API in English <Sigmoid.__init__-en>`
         .. _Sigmoid.__init__-cn:
+
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
         反向传播时使用sigmoid的梯度的脉冲发放函数。反向传播为
+
         .. math::
             g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
+
         对应的原函数为
+
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
+
+        .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.png
+
         * :ref:`中文API <Sigmoid.__init__-cn>`
         .. _Sigmoid.__init__-en:
+
         :param alpha: parameter to control smoothness of gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
         The sigmoid surrogate spiking function. The gradient is defined by
+
         .. math::
             g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
+
         The primitive function is defined by
+
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
+
+        .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.png
+
         '''
         super().__init__()
         self.alpha = alpha
-        self.f = sigmoid.apply
+        self.spiking = spiking
+        if spiking:
+            self.f = sigmoid.apply
+        else:
+            self.f = self.primitive_function
     def forward(self, x):
         return self.f(x, self.alpha)
-
-class sign_swish(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, beta=1.0):
-        if x.requires_grad:
-            beta_x = beta * x
-            ctx.save_for_backward(beta_x)
-            ctx.beta = beta
-        return (x >= 0).float()
+    def primitive_function(x: torch.Tensor, alpha):
+        return (x * alpha).sigmoid()
 
-    @staticmethod
-    def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            beta_x = ctx.saved_tensors[0]
-            grad_x = ctx.beta * (2 - beta_x * torch.tanh(beta_x / 2)) / (1 + torch.cosh(beta_x)) \
-                     * grad_output
-
-        return grad_x, None
-
-class SignSwish(nn.Module):
-    def __init__(self, beta=5.0):
-        '''
-        * :ref:`API in English <SignSwish.__init__-en>`
-        .. _SignSwish.__init__-cn:
-        :param beta: 控制梯度平滑程度的参数
-        反向传播时使用swish的梯度的脉冲发放函数。反向传播为
-        .. math::
-            g'(x) = \\frac{\\beta (2 - \\beta x \\mathrm{tanh} \\frac{\\beta x}{2})}{1 + \\mathrm{cosh}(\\beta x)}
-        对应的原函数为
-        .. math::
-            g(x) = 2 * \\mathrm{sigmoid}(\\beta x) * (1 + \\beta x (1 - \\mathrm{sigmoid}(\\beta x))) - 1
-        SignSwish函数由 `BNN+: Improved binary network training <https://arxiv.org/abs/1812.11800>`_ 提出。
-        * :ref:`中文API <SignSwish.__init__-cn>`
-        .. _SignSwish.__init__-en:
-        :param beta: parameter to control smoothness of gradient
-         The SignSiwsh surrogate spiking function. The gradient is defined by
-        .. math::
-            g'(x) = \\frac{\\beta (2 - \\beta x \\mathrm{tanh} \\frac{\\beta x}{2})}{1 + \\mathrm{cosh}(\\beta x)}
-        The primitive function is defined by
-        .. math::
-            g(x) = 2 * \\mathrm{sigmoid}(\\beta x) * (1 + \\beta x (1 - \\mathrm{sigmoid}(\\beta x))) - 1
-        SignSwish is proposed by `BNN+: Improved binary network training <https://arxiv.org/abs/1812.11800>`_.
-        '''
-        super().__init__()
-        self.beta = beta
-        self.f = sign_swish.apply
-    def forward(self, x):
-        return self.f(x, self.beta)
+    # plt.style.use(['muted'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
+    # surrogate_function = surrogate.Sigmoid(alpha=5, spiking=False)
+    # x = x.data.clone()
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='primitive, alpha=5')
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='gradient, alpha=5')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('Sigmoid surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
