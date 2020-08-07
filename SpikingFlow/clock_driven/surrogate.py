@@ -112,14 +112,16 @@ class BilinearLeakyReLU(nn.Module):
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
     # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
-    # surrogate_function = surrogate.BilinearLeakyReLU(w=1, c=0.01, spiking=False)
-    # x = x.data.clone()
+    # surrogate_function = surrogate.BilinearLeakyReLU(w=1, c=0.1, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='primitive, w=1, c=0.1')
+    #
+    # surrogate_function = surrogate.BilinearLeakyReLU(w=1, c=0.1, spiking=True)
     # x.requires_grad_(True)
     # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='primitive, w=1, c=0.01')
     # z = y.sum()
     # z.backward()
-    # plt.plot(x.data, x.grad, label='gradient, w=1, c=0.01')
+    # plt.plot(x.data, x.grad, label='gradient, w=1, c=0.1')
     # plt.xlim(-2, 2)
     # plt.legend()
     # plt.title('BilinearLeakyReLU surrogate function')
@@ -205,10 +207,12 @@ class Sigmoid(nn.Module):
     # x = torch.arange(-2.5, 2.5, 0.001)
     # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
     # surrogate_function = surrogate.Sigmoid(alpha=5, spiking=False)
-    # x = x.data.clone()
-    # x.requires_grad_(True)
     # y = surrogate_function(x)
     # plt.plot(x.data, y.data, label='primitive, alpha=5')
+    #
+    # surrogate_function = surrogate.Sigmoid(alpha=5, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
     # z = y.sum()
     # z.backward()
     # plt.plot(x.data, x.grad, label='gradient, alpha=5')
@@ -219,3 +223,75 @@ class Sigmoid(nn.Module):
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
     # plt.show()
+
+class fast_sigmoid(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = None
+        if ctx.needs_input_grad[0]:
+            grad_x = ctx.alpha / 2 / (1 + ctx.alpha * ctx.saved_tensors[0].abs()).pow(2) * grad_output
+        return grad_x, None
+
+class FastSigmoid(nn.Module):
+    def __init__(self, alpha=2.0, spiking=True):
+        '''
+        * :ref:`API in English <FastSigmoid.__init__-en>`
+        .. _FastSigmoid.__init__-cn:
+
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        反向传播时使用fast sigmoid的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
+
+        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.png
+
+        * :ref:`中文API <FastSigmoid.__init__-cn>`
+        .. _FastSigmoid.__init__-en:
+
+        :param alpha: parameter to control smoothness of gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The fast sigmoid surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
+
+        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.png
+
+        '''
+        super().__init__()
+        self.alpha = alpha
+        if spiking:
+            self.f = fast_sigmoid.apply
+        else:
+            self.f = self.primitive_function
+    def forward(self, x):
+        return self.f(x, self.alpha)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, alpha):
+        alpha_x = alpha * x
+        return (alpha_x / (1 + alpha_x.abs()) + 1) / 2
