@@ -393,7 +393,7 @@ class SynapseFilter(nn.Module):
             pyplot.legend()
             pyplot.show()
 
-        .. image:: ./_static/API/LowPassSynapseFilter.png
+        .. image:: ./_static/API/clock_driven/layer/SynapseFilter.png
 
         输出电流不仅取决于当前时刻的输入，还取决于之前的输入，使得该突触具有了一定的记忆能力。
 
@@ -456,7 +456,7 @@ class SynapseFilter(nn.Module):
             pyplot.legend()
             pyplot.show()
 
-        .. image:: ./_static/API/LowPassSynapseFilter.png
+        .. image:: ./_static/API/clock_driven/layer/SynapseFilter.png
 
         The output current is not only determined by the present input but also by the previous input, which makes this
         synapse have memory.
