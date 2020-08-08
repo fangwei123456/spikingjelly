@@ -10,8 +10,8 @@ class bilinear_leaky_relu(torch.autograd.Function):
     def forward(ctx, x: torch.Tensor, w=1, c=0.01):
         if x.requires_grad:
             mask_width = (x.abs() < w)
-            mask_negative_slope = mask_width.logical_not()
-            grad_x = x.masked_fill(mask_width, 1 / w).masked_fill(mask_negative_slope, c)
+            mask_c = mask_width.logical_not()
+            grad_x = x.masked_fill(mask_width, 1 / w).masked_fill(mask_c, c)
             ctx.save_for_backward(grad_x)
         return heaviside(x)
 
