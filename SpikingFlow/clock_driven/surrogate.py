@@ -1,8 +1,44 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import math
 def heaviside(x: torch.Tensor):
+    '''
+    * :ref:`API in English <heaviside.__init__-en>`
+    .. _heaviside.__init__-cn:
+
+    :param x: 输入tensor
+    :return: 输出tensor
+
+    heaviside阶跃函数，定义为
+
+    .. math::
+        g(x) =
+        \\begin{cases}
+        1, & x \geq 0 \\\\
+        0, & x < 0 \\\\
+        \\end{cases}
+
+    阅读 `HeavisideTheta <https://reference.wolfram.com/language/ref/HeavisideTheta.html>`_ 以获得更多信息。
+
+* :ref:`中文API <heaviside.__init__-cn>`
+    .. _heaviside.__init__-en:
+
+    :param x: the input tensor
+    :return: the output tensor
+
+    The heaviside function, which is defined by
+
+    .. math::
+        g(x) =
+        \\begin{cases}
+        1, & x \geq 0 \\\\
+        0, & x < 0 \\\\
+        \\end{cases}
+
+    For more information, see `HeavisideTheta <https://reference.wolfram.com/language/ref/HeavisideTheta.html>`_.
+
+    '''
     return (x >= 0).to(x.dtype)
 
 class bilinear_leaky_relu(torch.autograd.Function):
@@ -318,3 +354,102 @@ class FastSigmoid(nn.Module):
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
     # plt.show()
+
+class atan(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, half_alpha, half_pi_alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.half_pi_alpha = half_pi_alpha
+            ctx.half_alpha = half_alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = None
+        if ctx.needs_input_grad[0]:
+            grad_x = grad_output * ctx.half_alpha / (1 + (ctx.half_pi_alpha * ctx.saved_tensors[0]).pow(2))
+        return grad_x, None, None
+
+class ATan(nn.Module):
+    def __init__(self, alpha=2.0, spiking=True):
+        '''
+        * :ref:`API in English <ATan.__init__-en>`
+        .. _ATan.__init__-cn:
+
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        反向传播时使用反正切函数arc tangent的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
+
+        .. image:: ./_static/API/clock_driven/surrogate/ATan.png
+
+        * :ref:`中文API <ATan.__init__-cn>`
+        .. _ATan.__init__-en:
+
+        :param alpha: parameter to control smoothness of gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The arc tangent surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
+
+        .. image:: ./_static/API/clock_driven/surrogate/ATan.png
+
+        '''
+        super().__init__()
+        self.half_pi_alpha = math.pi / 2 * alpha
+        self.spiking = spiking
+        if spiking:
+            self.coefficient = alpha / 2
+            self.f = atan.apply
+        else:
+            self.coefficient = 1 / math.pi
+            self.f = self.primitive_function
+
+    def forward(self, x):
+        return self.f(x, self.coefficient, self.half_pi_alpha)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, coefficient, half_pi_alpha):
+        return coefficient * (half_pi_alpha * x).atan() + 0.5
+
+    # plt.style.use(['muted'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
+    # surrogate_function = surrogate.ATan(alpha=3, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='primitive, alpha=3')
+    #
+    # surrogate_function = surrogate.ATan(alpha=3, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='gradient, alpha=3')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('ATan surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
+
