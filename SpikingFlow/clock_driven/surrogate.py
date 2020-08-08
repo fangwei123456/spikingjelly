@@ -272,7 +272,7 @@ class fast_sigmoid(torch.autograd.Function):
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.inv_alpha / 2 / (ctx.inv_alpha + ctx.saved_tensors[0].abs()).pow(2)
+            grad_x = ctx.inv_alpha / 2 / (ctx.inv_alpha + ctx.saved_tensors[0].abs()).pow(2) * grad_output
         return grad_x, None
 
 class FastSigmoid(nn.Module):
