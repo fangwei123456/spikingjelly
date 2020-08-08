@@ -226,17 +226,17 @@ class Sigmoid(nn.Module):
 
 class fast_sigmoid(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, alpha):
+    def forward(ctx, x, inv_alpha):
         if x.requires_grad:
             ctx.save_for_backward(x)
-            ctx.alpha = alpha
+            ctx.inv_alpha = inv_alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.alpha / 2 / (1 + ctx.alpha * ctx.saved_tensors[0].abs()).pow(2) * grad_output
+            grad_x = ctx.inv_alpha / 2 / (ctx.inv_alpha + ctx.saved_tensors[0].abs()).pow(2)
         return grad_x, None
 
 class FastSigmoid(nn.Module):
@@ -252,12 +252,13 @@ class FastSigmoid(nn.Module):
         反向传播时使用fast sigmoid的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}}
+            g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}} = \\frac{1}{2\\alpha(\\frac{1}{\\alpha} + |x|)^{2}}
 
         对应的原函数为
 
         .. math::
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
+            = \\frac{1}{2} (\\frac{x}{\\frac{1}{\\alpha} + |x|} + 1)
 
         .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.png
 
@@ -283,18 +284,18 @@ class FastSigmoid(nn.Module):
 
         '''
         super().__init__()
-        self.alpha = alpha
+        assert alpha > 0, 'alpha must be lager than 0'
+        self.inv_alpha = 1 / alpha
         if spiking:
             self.f = fast_sigmoid.apply
         else:
             self.f = self.primitive_function
     def forward(self, x):
-        return self.f(x, self.alpha)
+        return self.f(x, self.inv_alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha):
-        alpha_x = alpha * x
-        return (alpha_x / (1 + alpha_x.abs()) + 1) / 2
+    def primitive_function(x: torch.Tensor, inv_alpha):
+        return (x / (inv_alpha + x.abs()) + 1) / 2
 
     # plt.style.use(['muted'])
     # fig = plt.figure(dpi=200)
