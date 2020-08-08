@@ -15,7 +15,7 @@ def heaviside(x: torch.Tensor):
     .. math::
         g(x) =
         \\begin{cases}
-        1, & x \geq 0 \\\\
+        1, & x \\geq 0 \\\\
         0, & x < 0 \\\\
         \\end{cases}
 
@@ -32,7 +32,7 @@ def heaviside(x: torch.Tensor):
     .. math::
         g(x) =
         \\begin{cases}
-        1, & x \geq 0 \\\\
+        1, & x \\geq 0 \\\\
         0, & x < 0 \\\\
         \\end{cases}
 
@@ -272,7 +272,7 @@ class fast_sigmoid(torch.autograd.Function):
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.inv_alpha / 2 / (ctx.inv_alpha + ctx.saved_tensors[0].abs()).pow(2) * grad_output
+            grad_x = ctx.inv_alpha / 2 / (ctx.inv_alpha + ctx.saved_tensors[0].abs()).square() * grad_output
         return grad_x, None
 
 class FastSigmoid(nn.Module):
@@ -368,7 +368,7 @@ class atan(torch.autograd.Function):
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = grad_output * ctx.half_alpha / (1 + (ctx.half_pi_alpha * ctx.saved_tensors[0]).pow(2))
+            grad_x = grad_output * ctx.half_alpha / (1 + (ctx.half_pi_alpha * ctx.saved_tensors[0]).square())
         return grad_x, None, None
 
 class ATan(nn.Module):
@@ -453,3 +453,127 @@ class ATan(nn.Module):
     # plt.grid(linestyle='--')
     # plt.show()
 
+class nonzero_sign_log_abs(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, inv_alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.inv_alpha = inv_alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = None
+        if ctx.needs_input_grad[0]:
+            grad_x = grad_output / (ctx.saved_tensors[0].abs() + ctx.inv_alpha)
+        return grad_x, None
+
+class NonzeroSignLogAbs(nn.Module):
+    def __init__(self, alpha=1.0, spiking=True):
+        '''
+        * :ref:`API in English <LogAbs.__init__-en>`
+        .. _LogAbs.__init__-cn:
+
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        .. warning::
+            原函数的输出范围并不是(0, 1)。它的优势是反向传播的计算量特别小。
+
+        反向传播时使用NonzeroSignLogAbs的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{1 + |\\alpha x|} = \\frac{1}{\\frac{1}{\\alpha} + |x|}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \\mathrm{NonzeroSign}(x) \\log (|\\alpha x| + 1)
+
+        其中
+
+            .. math::
+                \\mathrm{NonzeroSign}(x) =
+                \\begin{cases}
+                1, & x \\geq 0 \\\\
+                -1, & x < 0 \\\\
+                \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.png
+
+        * :ref:`中文API <LogAbs.__init__-cn>`
+        .. _LogAbs.__init__-en:
+
+        :param alpha: parameter to control smoothness of gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        .. admonition:: Warning
+            :class: warning
+
+            The output range the primitive function is not (0, 1). The advantage of this function is that computation
+            cost is small when backward.
+
+        The NonzeroSignLogAbs surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{1 + |\\alpha x|} = \\frac{1}{\\frac{1}{\\alpha} + |x|}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \\mathrm{NonzeroSign}(x) \\log (|\\alpha x| + 1)
+
+        where
+
+        .. math::
+            \\mathrm{NonzeroSign}(x) =
+            \\begin{cases}
+            1, & x \\geq 0 \\\\
+            -1, & x < 0 \\\\
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.png
+
+        '''
+        super().__init__()
+        if spiking:
+            self.coefficient = 1 / alpha
+            self.f = nonzero_sign_log_abs.apply
+        else:
+            self.coefficient = alpha
+            self.f = self.primitive_function
+
+    def forward(self, x):
+        return self.f(x, self.coefficient)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, alpha):
+        # the gradient of ``(heaviside(x) * 2 - 1) * (alpha * x.abs() + 1).log()`` by autograd is wrong at ``x==0``
+        mask_p = heaviside(x) * 2 - 1
+        return mask_p * (alpha * mask_p * x + 1).log()
+
+    # plt.style.use(['muted'])
+    # fig = plt.figure(dpi=150)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='heaviside', linestyle='-.')
+    # surrogate_function = surrogate.NonzeroSignLogAbs(alpha=1, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='primitive, alpha=1')
+    #
+    # surrogate_function = surrogate.NonzeroSignLogAbs(alpha=1, spiking=False)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # print(x.grad)
+    # plt.plot(x.data, x.grad, label='gradient, alpha=1')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('NonzeroSignLogAbs surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
