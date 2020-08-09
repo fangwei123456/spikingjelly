@@ -33,7 +33,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
                                     plot_colorbar=True, colorbar_y_label='voltage magnitude', dpi=200)
         plt.show()
 
-    .. image:: ._static/API/visualizing/plot_2d_heatmap.png
+    .. image:: ./_static/API/visualizing/plot_2d_heatmap.png
     '''
     fig, heatmap = plt.subplots(dpi=dpi)
     im = heatmap.imshow(array, aspect='auto')
@@ -75,7 +75,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
                                       int_z_ticks=False, dpi=200)
         plt.show()
 
-    .. image:: ._static/API/visualizing/plot_2d_bar_in_3d.png
+    .. image:: ./_static/API/visualizing/plot_2d_bar_in_3d.png
 
     也可以用来绘制一张表示多个神经元在不同时刻的电压的热力图，示例代码：
 
@@ -93,7 +93,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
                                       int_z_ticks=False, dpi=200)
         plt.show()
 
-    .. image:: ._static/API/visualizing/plot_2d_bar_in_3d_1.png
+    .. image:: ./_static/API/visualizing/plot_2d_bar_in_3d_1.png
 
     '''
 
@@ -145,7 +145,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
                                     plot_spiking_rate=True, spiking_rate_map_title='spiking rate', dpi=200)
         plt.show()
 
-    .. image:: ._static/API/visualizing/plot_1d_spikes.png
+    .. image:: ./_static/API/visualizing/plot_1d_spikes.png
     '''
     if plot_spiking_rate:
         fig = plt.figure(tight_layout=True, dpi=dpi)
@@ -208,7 +208,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
         visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='spiking feature map', dpi=200)
         plt.show()
 
-    .. image:: ._static/API/visualizing/plot_2d_spiking_feature_map.png
+    .. image:: ./_static/API/visualizing/plot_2d_spiking_feature_map.png
     '''
     C = spikes.shape[0]
 

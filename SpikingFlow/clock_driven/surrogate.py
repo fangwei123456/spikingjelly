@@ -186,7 +186,7 @@ class PiecewiseLeakyReLU(nn.Module):
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
 
-       分段线性的近似脉冲发放函数。梯度为
+        分段线性的近似脉冲发放函数。梯度为
 
         .. math::
             g'(x) =
@@ -209,7 +209,7 @@ class PiecewiseLeakyReLU(nn.Module):
 
         * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
         .. _PiecewiseLeakyReLU.__init__-en:
-        
+
         :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
         :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
@@ -236,7 +236,6 @@ class PiecewiseLeakyReLU(nn.Module):
             \\end{cases}
 
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.png
-
         '''
         super().__init__()
         self.w = w
