@@ -364,8 +364,8 @@ def kernel_dot_product(x:torch.Tensor, y:torch.Tensor, kernel='linear', *args):
     elif kernel == 'gaussian':
         sigma = args[0]
         N = x.shape[0]
-        x2 = x.pow(2).sum(dim=1)  # shape=[N]
-        y2 = y.pow(2).sum(dim=1)  # shape=[N]
+        x2 = x.square().sum(dim=1)  # shape=[N]
+        y2 = y.square().sum(dim=1)  # shape=[N]
         xy = x.mm(y.t())  # shape=[N, N]
         d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
         # d_xy[i][j]的元素是x[i]的平方和，加上y[j]的平方和，减去2倍的sum_{k} x[i][k]y[j][k]，因此
@@ -588,4 +588,4 @@ def spike_mse_loss(x: torch.Tensor, spikes: torch.Tensor):
         compulated by this function is different with that by ``torch.nn.functional.mse_loss()``.
 
     '''
-    return (x.pow(2) + accelerating.mul(1 - 2 * x, spikes)).mean()
+    return (x.square() + accelerating.mul(1 - 2 * x, spikes)).mean()

@@ -22,7 +22,7 @@ class GaussianTuning:
         self.mu = x_min.unsqueeze(-1).repeat(1, m) + \
                   (2 * i - 3) / 2 * \
                   (x_max.unsqueeze(-1).repeat(1, m) - x_min.unsqueeze(-1).repeat(1, m)) / (m - 2)  # shape=[n, m]
-        self.sigma2 = (1 / 1.5 * (x_max - x_min) / (m - 2)).unsqueeze(-1).pow(2).repeat(1, m)  # shape=[n, m]
+        self.sigma2 = (1 / 1.5 * (x_max - x_min) / (m - 2)).unsqueeze(-1).square().repeat(1, m)  # shape=[n, m]
 
         # print('mu\n', self.mu)
         # print('sigma2\n', self.sigma2)
@@ -39,7 +39,7 @@ class GaussianTuning:
         x = x.contiguous().view(-1, x.shape[2])  # shape=[batch_size * k, n]
         x = x.unsqueeze(-1).repeat(1, 1, self.m)  # shape=[batch_size * k, n, m]
         # 计算x对应的m个高斯函数值
-        y = torch.exp(- (x - self.mu).pow(2) / 2 / self.sigma2)  # shape=[batch_size * k, n, m]
+        y = torch.exp(- (x - self.mu).square() / 2 / self.sigma2)  # shape=[batch_size * k, n, m]
         out_spikes = (max_spike_time * (1 - y)).round()
         out_spikes[out_spikes >= max_spike_time] = -1  # -1表示无脉冲发放
         # shape: [batch_size * k, n, m] -> [batch_size, k, n, m]
