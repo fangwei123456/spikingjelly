@@ -157,7 +157,6 @@ class PiecewiseQuadratic(nn.Module):
     # plt.grid(linestyle='--')
     # plt.show()
 
-
 class piecewise_leaky_relu(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, w=1, c=0.01):
@@ -232,7 +231,7 @@ class PiecewiseLeakyReLU(nn.Module):
             \\begin{cases}
             cx + cw, & x < -w \\\\
             \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
-            cx - cw + 1, & x > w \\\\
+            cx - cw + 1, & x > w
             \\end{cases}
 
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.png
@@ -279,6 +278,110 @@ class PiecewiseLeakyReLU(nn.Module):
     # plt.xlim(-2, 2)
     # plt.legend()
     # plt.title('PiecewiseLeakyReLU surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
+
+class piecewise_exp(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = None
+        if ctx.needs_input_grad[0]:
+            grad_x = grad_output * ctx.alpha / 2 * (-ctx.alpha * ctx.saved_tensors[0].abs()).exp()
+        return grad_x, None
+
+class PiecewiseExp(nn.Module):
+    def __init__(self, alpha=1.0, spiking=True):
+        '''
+        * :ref:`API in English <PiecewiseExp.__init__-en>`
+        .. _PiecewiseExp.__init__-cn:
+
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        反向传播时使用分段指数函数的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2}e^{-\\alpha |x|}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = 
+            \\begin{cases}
+            \\frac{1}{2}e^{\\alpha x}, & x < 0 \\\\
+            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.png
+
+        * :ref:`中文API <PiecewiseExp.__init__-cn>`
+        .. _PiecewiseExp.__init__-en:
+
+        :param alpha: parameter to control smoothness of gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The piecewise exponential surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2}e^{-\\alpha |x|}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = 
+            \\begin{cases}
+            \\frac{1}{2}e^{\\alpha x}, & x < 0 \\\\
+            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.png
+
+        '''
+        super().__init__()
+        self.alpha = alpha
+        self.spiking = spiking
+        if spiking:
+            self.f = piecewise_exp.apply
+        else:
+            self.f = self.primitive_function
+    def forward(self, x):
+        return self.f(x, self.alpha)
+    @staticmethod
+    def primitive_function(x: torch.Tensor, alpha):
+        exp_x = 0.5 * (x.abs() * -alpha).exp()
+        mask_positive = (x > 0).float()
+        
+        return mask_positive - exp_x * (mask_positive * 2 - 1)
+
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.PiecewiseExp(alpha=2, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=2$')
+
+    # surrogate_function = surrogate.PiecewiseExp(alpha=2, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=2$')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('Piecewise exponential surrogate function')
     # plt.xlabel('Input')
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
