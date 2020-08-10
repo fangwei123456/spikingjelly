@@ -543,6 +543,7 @@ class FastSigmoid(nn.Module):
         super().__init__()
         assert alpha > 0, 'alpha must be lager than 0'
         self.inv_alpha = 1 / alpha
+        self.spiking = spiking
         if spiking:
             self.f = fast_sigmoid.apply
         else:
@@ -760,6 +761,7 @@ class NonzeroSignLogAbs(nn.Module):
 
         '''
         super().__init__()
+        self.spiking = spiking
         if spiking:
             self.coefficient = 1 / alpha
             self.f = nonzero_sign_log_abs.apply
@@ -870,6 +872,7 @@ class Erf(nn.Module):
         '''
         super().__init__()
         self.alpha = alpha
+        self.spiking = spiking
         if spiking:
             self.f = erf.apply
         else:
