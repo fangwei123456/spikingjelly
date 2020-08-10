@@ -360,10 +360,11 @@ class PiecewiseExp(nn.Module):
         return self.f(x, self.alpha)
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha):
-        exp_x = 0.5 * (x.abs() * -alpha).exp()
-        mask_positive = (x > 0).float()
+        mask_nonnegative = heaviside(x)
+        mask_sign = mask_nonnegative * 2 - 1
+        exp_x = 0.5 * (mask_sign * x * -alpha).exp()
         
-        return mask_positive - exp_x * (mask_positive * 2 - 1)
+        return mask_nonnegative - exp_x * mask_sign
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
