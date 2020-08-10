@@ -113,9 +113,15 @@ class BaseNode(nn.Module):
             self.monitor['s'].append(spike.data.cpu().numpy().copy())
 
         if self.v_reset is None:
-            self.v = accelerating.soft_voltage_transform(self.v, spike, self.v_threshold)
+            if self.surrogate_function.spiking:
+                self.v = accelerating.soft_voltage_transform(self.v, spike, self.v_threshold)
+            else:
+                self.v = self.v - spike * self.v_threshold
         else:
-            self.v = accelerating.hard_voltage_transform(self.v, spike, self.v_reset)
+            if self.surrogate_function.spiking:
+                self.v = accelerating.hard_voltage_transform(self.v, spike, self.v_reset)
+            else:
+                self.v = self.v * (1 - spike) + self.v_reset * spike
 
         if self.monitor:
             self.monitor['v'].append(self.v.data.cpu().numpy().copy())
