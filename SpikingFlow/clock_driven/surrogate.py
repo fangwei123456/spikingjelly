@@ -87,7 +87,8 @@ class PiecewiseQuadratic(nn.Module):
             1, & x > \\frac{1}{\\alpha} \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.png
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
+            :width: 100%
 
         * :ref:`中文API <PiecewiseQuadratic.__init__-cn>`
         .. _PiecewiseQuadratic.__init__-en:
@@ -116,7 +117,8 @@ class PiecewiseQuadratic(nn.Module):
             1, & x > \\frac{1}{\\alpha} \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.png
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
+            :width: 100%
 
         '''
         super().__init__()
@@ -204,7 +206,8 @@ class PiecewiseLeakyReLU(nn.Module):
             cx - cw + 1, & x > w \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.png
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
+            :width: 100%
 
         * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
         .. _PiecewiseLeakyReLU.__init__-en:
@@ -234,7 +237,8 @@ class PiecewiseLeakyReLU(nn.Module):
             cx - cw + 1, & x > w
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.png
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
+            :width: 100%
         '''
         super().__init__()
         self.w = w
@@ -322,7 +326,8 @@ class PiecewiseExp(nn.Module):
             1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.png
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.*
+            :width: 100%
 
         * :ref:`中文API <PiecewiseExp.__init__-cn>`
         .. _PiecewiseExp.__init__-en:
@@ -346,7 +351,8 @@ class PiecewiseExp(nn.Module):
             1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.png
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.*
+            :width: 100%
 
         '''
         super().__init__()
@@ -424,7 +430,8 @@ class Sigmoid(nn.Module):
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
 
-        .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.png
+        .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.*
+            :width: 100%
 
         * :ref:`中文API <Sigmoid.__init__-cn>`
         .. _Sigmoid.__init__-en:
@@ -444,7 +451,8 @@ class Sigmoid(nn.Module):
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
 
-        .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.png
+        .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.*
+            :width: 100%
 
         '''
         super().__init__()
@@ -518,7 +526,8 @@ class FastSigmoid(nn.Module):
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
             = \\frac{1}{2} (\\frac{x}{\\frac{1}{\\alpha} + |x|} + 1)
 
-        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.png
+        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.*
+            :width: 100%
 
         * :ref:`中文API <FastSigmoid.__init__-cn>`
         .. _FastSigmoid.__init__-en:
@@ -538,7 +547,8 @@ class FastSigmoid(nn.Module):
         .. math::
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
 
-        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.png
+        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.*
+            :width: 100%
 
         '''
         super().__init__()
@@ -614,7 +624,8 @@ class ATan(nn.Module):
         .. math::
             g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
 
-        .. image:: ./_static/API/clock_driven/surrogate/ATan.png
+        .. image:: ./_static/API/clock_driven/surrogate/ATan.*
+            :width: 100%
 
         * :ref:`中文API <ATan.__init__-cn>`
         .. _ATan.__init__-en:
@@ -634,7 +645,8 @@ class ATan(nn.Module):
         .. math::
             g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
 
-        .. image:: ./_static/API/clock_driven/surrogate/ATan.png
+        .. image:: ./_static/API/clock_driven/surrogate/ATan.*
+            :width: 100%
 
         '''
         super().__init__()
@@ -723,7 +735,8 @@ class NonzeroSignLogAbs(nn.Module):
                 -1, & x < 0 \\\\
                 \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.png
+        .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.*
+            :width: 100%
 
         * :ref:`中文API <LogAbs.__init__-cn>`
         .. _LogAbs.__init__-en:
@@ -758,7 +771,8 @@ class NonzeroSignLogAbs(nn.Module):
             -1, & x < 0 \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.png
+        .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.*
+            :width: 100%
 
         '''
         super().__init__()
@@ -842,7 +856,8 @@ class Erf(nn.Module):
             &= \\frac{1}{\\sqrt{\\pi}}\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
             \\end{split}
 
-        .. image:: ./_static/API/clock_driven/surrogate/Erf.png
+        .. image:: ./_static/API/clock_driven/surrogate/Erf.*
+            :width: 100%
 
         * :ref:`中文API <Erf.__init__-cn>`
         .. _Erf.__init__-en:
@@ -868,7 +883,8 @@ class Erf(nn.Module):
             &= \\frac{1}{\\sqrt{\\pi}}\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
             \\end{split}
 
-        .. image:: ./_static/API/clock_driven/surrogate/Erf.png
+        .. image:: ./_static/API/clock_driven/surrogate/Erf.*
+            :width: 100%
 
         '''
         super().__init__()
