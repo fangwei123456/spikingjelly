@@ -87,7 +87,7 @@ class PiecewiseQuadratic(nn.Module):
             1, & x > \\frac{1}{\\alpha} \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.svg
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
         * :ref:`中文API <PiecewiseQuadratic.__init__-cn>`
@@ -117,7 +117,7 @@ class PiecewiseQuadratic(nn.Module):
             1, & x > \\frac{1}{\\alpha} \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.svg
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
         '''
