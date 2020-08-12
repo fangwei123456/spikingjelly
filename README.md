@@ -5,16 +5,7 @@
 
 [中文README](https://github.com/fangwei123456/SpikingFlow/blob/master/README_cn.md)
 
-![plot_2d_heatmap](docs/source/_static/API/visualizing/plot_2d_heatmap.svg)
-
-<center class="half">
-    <img src="docs/source/_static/API/visualizing/plot_1d_spikes.svg" height=160><img src="docs/source/_static/API/visualizing/plot_2d_spiking_feature_map.svg" height=160>
-</center>
-
-
-
-
-
+![demo](demo.png)
 
 SpikingFlow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
