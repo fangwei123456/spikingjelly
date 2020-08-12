@@ -185,8 +185,8 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     spikes_map.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     spikes_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
 
-    spikes_map.set_xlim(-0.5, spikes.shape[1] + 0.5)
-    spikes_map.set_ylim(-0.5, spikes.shape[0] + 0.5)
+    spikes_map.set_xlim(-0.5, spikes.shape[1] - 0.5)
+    spikes_map.set_ylim(-0.5, spikes.shape[0] - 0.5)
     spikes_map.invert_yaxis()
     N = spikes.shape[0]
     T = spikes.shape[1]
@@ -201,11 +201,12 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
     if plot_spiking_rate:
         spiking_rate = np.mean(spikes, axis=1, keepdims=True)
+        max_rate = spiking_rate.max()
         spiking_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
         spiking_rate_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-        spiking_rate_map.imshow(spiking_rate, cmap='plasma', aspect='auto')
+        spiking_rate_map.imshow(spiking_rate, cmap='magma', aspect='auto')
         for i in range(spiking_rate.shape[0]):
-            spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w')
+            spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w' if spiking_rate[i][0] < 0.8 * max_rate else 'black')
         spiking_rate_map.get_xaxis().set_visible(False)
         spiking_rate_map.set_title(spiking_rate_map_title)
     return fig
@@ -252,7 +253,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
             y[i:i + h, j:j + w] = spikes[index]
             index += 1
     fig, maps = plt.subplots(dpi=dpi)
-    fig.suptitle(title)
+    maps.set_title(title)
     maps.imshow(y, cmap='gray')
 
     maps.get_xaxis().set_visible(False)
