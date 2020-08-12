@@ -31,8 +31,8 @@ class BaseNode(nn.Module):
 
         :param v_threshold: threshold voltage of neurons
 
-        :param v_reset: reset voltage of neurons. If ``v_reset=None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If not ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
@@ -212,8 +212,8 @@ class IFNode(BaseNode):
 
         :param v_threshold: threshold voltage of neurons
 
-        :param v_reset: reset voltage of neurons. If ``v_reset=None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If not ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
@@ -271,8 +271,8 @@ class LIFNode(BaseNode):
 
         :param v_threshold: threshold voltage of neurons
 
-        :param v_reset: reset voltage of neurons. If ``v_reset=None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If not ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
@@ -351,8 +351,8 @@ class PLIFNode(BaseNode):
 
         :param v_threshold: threshold voltage of neurons
 
-        :param v_reset: reset voltage of neurons. If ``v_reset=None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If not ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
@@ -453,8 +453,8 @@ class RIFNode(BaseNode):
 
         :param v_threshold: threshold voltage of neurons
 
-        :param v_reset: reset voltage of neurons. If ``v_reset=None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If not ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
