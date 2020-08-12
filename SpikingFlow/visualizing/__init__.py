@@ -21,19 +21,27 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
 
     .. code-block:: python
 
+        from matplotlib import pyplot as plt
+        import torch
+        from SpikingFlow.clock_driven import neuron
+        from SpikingFlow import visualizing
+        import numpy as np
+
         neuron_num = 32
         T = 50
-        lif_node = SpikingFlow.event_driven.neuron.LIFNode(monitor=True)
+        lif_node = neuron.LIFNode(monitor_state=True)
         w = torch.rand([neuron_num]) * 50
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
         v_t_array = np.asarray(lif_node.monitor['v']).T  # v_t_array[i][j]表示神经元i在j时刻的电压值
-        visualizing.plot_2d_heatmap(array=v_t_array, title='voltage of neurons', xlabel='simulating step',
-                                    ylabel='neuron index', int_x_ticks=True, int_y_ticks=True,
-                                    plot_colorbar=True, colorbar_y_label='voltage magnitude', dpi=200)
+        visualizing.plot_2d_heatmap(array=v_t_array, title='Membrane Potentials', xlabel='Simulating Step',
+                                    ylabel='Neuron Index', int_x_ticks=True, int_y_ticks=True,
+                                    plot_colorbar=True, colorbar_y_label='Voltage Magnitude', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_heatmap.png
+    .. image:: ./_static/API/visualizing/plot_2d_heatmap.*
+        :width: 100%
+
     '''
     fig, heatmap = plt.subplots(dpi=dpi)
     im = heatmap.imshow(array, aspect='auto')
@@ -42,9 +50,13 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     heatmap.set_ylabel(ylabel)
     heatmap.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_x_ticks))
     heatmap.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_y_ticks))
+    heatmap.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    heatmap.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+
     if plot_colorbar:
         cbar = heatmap.figure.colorbar(im)
         cbar.ax.set_ylabel(colorbar_y_label, rotation=90, va='top')
+        cbar.ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     return fig
 
 def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, zlabel: str, int_x_ticks=True, int_y_ticks=True, int_z_ticks=False, dpi=200):
@@ -133,19 +145,27 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
     .. code-block:: python
 
+        from matplotlib import pyplot as plt
+        import torch
+        from SpikingFlow.clock_driven import neuron
+        from SpikingFlow import visualizing
+        import numpy as np
+
         neuron_num = 32
         T = 50
-        lif_node = SpikingFlow.event_driven.neuron.LIFNode(monitor=True)
+        lif_node = neuron.LIFNode(monitor_state=True)
         w = torch.rand([neuron_num]) * 50
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
         s_t_array = np.asarray(lif_node.monitor['s']).T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
-        visualizing.plot_1d_spikes(spikes=s_t_array, title='spikes of neurons', xlabel='simulating step',
-                                    ylabel='neuron index', int_x_ticks=True, int_y_ticks=True,
-                                    plot_spiking_rate=True, spiking_rate_map_title='spiking rate', dpi=200)
+        visualizing.plot_1d_spikes(spikes=s_t_array, title='Spikes of Neurons', xlabel='Simulating Step',
+                                ylabel='Neuron Index', int_x_ticks=True, int_y_ticks=True,
+                                plot_spiking_rate=True, spiking_rate_map_title='Firing Rate', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_1d_spikes.png
+    .. image:: ./_static/API/visualizing/plot_1d_spikes.*
+        :width: 100%
+
     '''
     if plot_spiking_rate:
         fig = plt.figure(tight_layout=True, dpi=dpi)
@@ -161,6 +181,9 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
     spikes_map.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_x_ticks))
     spikes_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_y_ticks))
+
+    spikes_map.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+    spikes_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
 
     spikes_map.set_xlim(-0.5, spikes.shape[1] + 0.5)
     spikes_map.set_ylim(-0.5, spikes.shape[0] + 0.5)
@@ -179,6 +202,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     if plot_spiking_rate:
         spiking_rate = np.mean(spikes, axis=1, keepdims=True)
         spiking_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+        spiking_rate_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
         spiking_rate_map.imshow(spiking_rate, cmap='plasma', aspect='auto')
         for i in range(spiking_rate.shape[0]):
             spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w')
@@ -201,6 +225,9 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
 
     .. code-block:: python
 
+        from SpikingFlow import visualizing
+        import numpy as np
+
         C = 48
         W = 8
         H = 8
@@ -208,7 +235,9 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
         visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='spiking feature map', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_spiking_feature_map.png
+    .. image:: ./_static/API/visualizing/plot_2d_spiking_feature_map.*
+        :width: 100%
+
     '''
     C = spikes.shape[0]
 
