@@ -8,7 +8,7 @@
 ![plot_2d_heatmap](docs/source/_static/API/visualizing/plot_2d_heatmap.svg)
 
 <center class="half">
-    <img src="docs/source/_static/API/visualizing/plot_1d_spikes.svg" height=320><img src="docs/source/_static/API/visualizing/plot_2d_spiking_feature_map.svg" height=320>
+    <img src="docs/source/_static/API/visualizing/plot_1d_spikes.svg" height=240><img src="docs/source/_static/API/visualizing/plot_2d_spiking_feature_map.svg" height=240>
 </center>
 
 
