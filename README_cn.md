@@ -5,6 +5,8 @@
 
 [README in English](https://github.com/fangwei123456/SpikingFlow/blob/master/README.md)
 
+![demo](demo.png)
+
 [SpikingFlow](https://github.com/fangwei123456/SpikingFlow) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neuron Network, SNN)进行深度学习的框架。
 
 SpikingFlow的文档使用中英双语编写： https://spikingflow.readthedocs.io
