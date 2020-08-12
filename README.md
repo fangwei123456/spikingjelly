@@ -5,6 +5,16 @@
 
 [中文README](https://github.com/fangwei123456/SpikingFlow/blob/master/README_cn.md)
 
+![plot_2d_heatmap](docs/source/_static/API/visualizing/plot_2d_heatmap.svg)
+
+<figure class="double">
+    <img src="docs/source/_static/API/visualizing/plot_1d_spikes.svg" width=55%>
+    <img src="docs/source/_static/API/visualizing/plot_2d_spiking_feature_map.svg" width=43%>
+</figure>
+
+
+
+
 SpikingFlow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
 The documentation of SpikingFlow is written in both English and Chinese: https://spikingflow.readthedocs.io
@@ -59,6 +69,6 @@ Read [SpikingFlow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_C
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingFlow.
 
-The list of developers can be found at https://github.com/fangwei123456/SpikingFlow/graphs/contributors.
+The list of developers can be found [here](https://github.com/fangwei123456/SpikingFlow/graphs/contributors).
 
 Any contributions to SpikingFlow is welcome!
