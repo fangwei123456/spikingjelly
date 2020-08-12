@@ -5,6 +5,13 @@
 
 [README in English](https://github.com/fangwei123456/SpikingFlow/blob/master/README.md)
 
+![plot_2d_heatmap](docs/source/_static/API/visualizing/plot_2d_heatmap.svg)
+
+<figure class="double">
+    <img src="docs/source/_static/API/visualizing/plot_1d_spikes.svg" width=55%>
+    <img src="docs/source/_static/API/visualizing/plot_2d_spiking_feature_map.svg" width=43%>
+</figure>
+
 [SpikingFlow](https://github.com/fangwei123456/SpikingFlow) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neuron Network, SNN)进行深度学习的框架。
 
 SpikingFlow的文档使用中英双语编写： https://spikingflow.readthedocs.io
