@@ -233,7 +233,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
         W = 8
         H = 8
         spikes = (np.random.rand(C, W, H) > 0.8).astype(float)
-        visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='spiking feature map', dpi=200)
+        visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='Spiking Feature Maps', dpi=200)
         plt.show()
 
     .. image:: ./_static/API/visualizing/plot_2d_spiking_feature_map.*
