@@ -1,5 +1,8 @@
 import torch
 from matplotlib import pyplot as plt
+
+plt.style.use(['science','muted'])
+
 def reset_v(h, s):
     return h * (1 - s)
 x = torch.arange(-1, 1.01, 0.01)
@@ -24,8 +27,8 @@ plt.plot(h, reset_v(h, (h >= 1).float()), label='$\\Theta(x)$')
 plt.plot(h, reset_v(h, torch.sigmoid(5 * (h - 1))), linestyle=':', label='$\\sigma(\\alpha x), \\alpha=5.0$')
 plt.plot(h, reset_v(h, torch.sigmoid(10 * (h - 1))), linestyle=':', label='$\\sigma(\\alpha x), \\alpha=10.0$')
 plt.plot(h, reset_v(h, torch.sigmoid(50 * (h - 1))), linestyle=':', label='$\\sigma(\\alpha x), \\alpha=50.0$')
-plt.axhline(0, linestyle='--', label='$V_{reset}$', c='g')
-plt.axhline(1, linestyle='--', label='$V_{threshold}$', c='r')
+plt.axhline(0, linestyle='--', label='$V_\\text{reset}$', c='g')
+plt.axhline(1, linestyle='--', label='$V_\\text{threshold}$', c='r')
 
 plt.legend()
 plt.show()
