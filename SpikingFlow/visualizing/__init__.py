@@ -28,6 +28,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
         from SpikingFlow import visualizing
         import numpy as np
 
+        plt.style.use(['science'])
         neuron_num = 32
         T = 50
         lif_node = neuron.LIFNode(monitor_state=True)
@@ -37,7 +38,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
         v_t_array = np.asarray(lif_node.monitor['v']).T  # v_t_array[i][j]表示神经元i在j时刻的电压值
         visualizing.plot_2d_heatmap(array=v_t_array, title='Membrane Potentials', xlabel='Simulating Step',
                                     ylabel='Neuron Index', int_x_ticks=True, int_y_ticks=True,
-                                    plot_colorbar=True, colorbar_y_label='Voltage Magnitude', dpi=200)
+                                    plot_colorbar=True, colorbar_y_label='Voltage Magnitude', x_max=T, dpi=200)
         plt.show()
 
     .. image:: ./_static/API/visualizing/plot_2d_heatmap.*
@@ -45,25 +46,16 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
 
     '''
     fig, heatmap = plt.subplots(dpi=dpi)
-    im = heatmap.imshow(array, aspect='auto')
+    if x_max is not None:
+        im = heatmap.imshow(array, aspect='auto', extent=[-0.5, x_max, array.shape[0] - 0.5, -0.5])
+    else:
+        im = heatmap.imshow(array, aspect='auto')
+
     heatmap.set_title(title)
     heatmap.set_xlabel(xlabel)
     heatmap.set_ylabel(ylabel)
-    if x_max is not None:
-        labels_num = heatmap.get_xticklabels().__len__()
-        xticklabels = []
-        xticks = []
-        for i in range(labels_num):
-            if int_x_ticks:
-                xticklabels.append(x_max // labels_num * i)
-            else:
-                xticklabels.append(round(x_max / labels_num * i, 2))
 
-            xticks.append(xticklabels[-1] / x_max * array.shape[1])
-        xticklabels.append(x_max - 1)
-        xticks.append(array.shape[1] - 1)
-        heatmap.set_xticks(xticks)
-        heatmap.set_xticklabels(xticklabels)
+    heatmap.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_x_ticks))
     heatmap.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_y_ticks))
     heatmap.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     heatmap.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())

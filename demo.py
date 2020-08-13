@@ -62,7 +62,7 @@ spiking_rate_map.set_title('Firing Rate')
 # plot_2d_heatmap
 
 heatmap = fig.add_subplot(gs[3:, :3])
-im = heatmap.imshow(v_t_array, aspect='auto')
+im = heatmap.imshow(v_t_array, aspect='auto', extent=[-0.5, T, v_t_array.shape[0] - 0.5, -0.5])
 heatmap.set_title('Membrane Potentials')
 heatmap.set_xlabel('Simulating Step')
 heatmap.set_ylabel('Neuron Index')
