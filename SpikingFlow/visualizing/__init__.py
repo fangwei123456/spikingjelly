@@ -4,7 +4,7 @@ import numpy as np
 
 
 def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                    plot_colorbar=True, colorbar_y_label='magnitude', dpi=200):
+                    plot_colorbar=True, colorbar_y_label='magnitude', x_max=None, dpi=200):
     '''
     :param array: shape=[N, M]的任意数组
     :param title: 热力图的标题
@@ -14,6 +14,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     :param int_y_ticks: y轴上是否只显示整数刻度
     :param plot_colorbar: 是否画出显示颜色和数值对应关系的colorbar
     :param colorbar_y_label: colorbar的y轴label
+    :param x_max: 横轴的最大刻度。若设置为 ``None``，则认为横轴的最大刻度是 ``array.shape[1]``
     :param dpi: 绘图的dpi
     :return: 绘制好的figure
 
@@ -48,7 +49,21 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     heatmap.set_title(title)
     heatmap.set_xlabel(xlabel)
     heatmap.set_ylabel(ylabel)
-    heatmap.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_x_ticks))
+    if x_max is not None:
+        labels_num = heatmap.get_xticklabels().__len__()
+        xticklabels = []
+        xticks = []
+        for i in range(labels_num):
+            if int_x_ticks:
+                xticklabels.append(x_max // labels_num * i)
+            else:
+                xticklabels.append(round(x_max / labels_num * i, 2))
+
+            xticks.append(xticklabels[-1] / x_max * array.shape[1])
+        xticklabels.append(x_max - 1)
+        xticks.append(array.shape[1] - 1)
+        heatmap.set_xticks(xticks)
+        heatmap.set_xticklabels(xticklabels)
     heatmap.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_y_ticks))
     heatmap.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     heatmap.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
@@ -259,3 +274,58 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
     maps.get_xaxis().set_visible(False)
     maps.get_yaxis().set_visible(False)
     return fig, maps
+
+def plot_one_neuron_v_s(v: list, s: list, v_threshold=1.0, v_reset=0.0,
+                        title='$V_{t}$ and $S_{t}$ of the neuron', dpi=200):
+    '''
+    :param v: 一个 ``list``，存放神经元不同时刻的电压
+    :param s: 一个 ``list``，存放神经元不同时刻释放的脉冲
+    :param v_threshold: 神经元的阈值电压
+    :param v_reset: 神经元的重置电压。也可以为 ``None``
+    :param title: 图的标题
+    :param dpi: 绘图的dpi
+    :return: 一个figure
+
+    绘制单个神经元的电压、脉冲随着时间的变化情况。常见的用法是，使用神经元的 ``monitor`` 记录的输入作为输入。示例代码：
+
+    .. code-block:: python
+
+        lif = neuron.LIFNode()
+        lif.set_monitor(True)
+
+        x = torch.Tensor([2.0])
+        T = 150
+        for t in range(T):
+            lif(x)
+        plot_one_neuron_v_s(lif.monitor['v'], lif.monitor['s'], v_threshold=lif.v_threshold, v_reset=lif.v_reset, dpi=200)
+        plt.show()
+
+    .. image:: ./_static/API/visualizing/plot_one_neuron_v_s.*
+        :width: 100%
+    '''
+    plt.style.use(['science', 'muted'])
+    fig = plt.figure(dpi=dpi)
+    ax0 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
+    ax0.set_title(title)
+    T = s.__len__()
+    ax0.plot(np.linspace(0, T, v.__len__()), v)
+    ax0.set_xlim(-0.5, T - 0.5)
+    ax0.set_ylabel('voltage')
+    ax0.axhline(v_threshold, label='$V_{threshold}$', linestyle='-.', c='r')
+    if v_reset is not None:
+        ax0.axhline(v_reset, label='$V_{reset}$', linestyle='-.', c='g')
+    ax0.legend()
+    t = np.arange(0, T)
+    s_np = np.asarray(s).squeeze()
+    t_spike = s_np * t
+    mask = (s_np == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
+    ax1 = plt.subplot2grid((3, 1), (2, 0))
+    ax1.eventplot(t_spike[mask], lineoffsets=0, colors='r')
+    ax1.set_xlim(-0.5, T - 0.5)
+
+    ax1.set_xlabel('simulating step')
+    ax1.set_ylabel('spike')
+    ax1.set_yticks([])
+
+    ax1.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+    return fig

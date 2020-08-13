@@ -6,3 +6,10 @@
 
    tutorial.clock_driven
    tutorial.event_driven
+
+
+新版上手教程（更新中，尚未完成）
+============================
+
+.. toctree::
+    ./clock_driven/0_neuron
