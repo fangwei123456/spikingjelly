@@ -21,7 +21,7 @@ class MaxPool2d(nn.Module):
                         当为 ``None`` 时，将在门控函数中使用累计脉冲数
         :return: ``None``
 
-        基于文献[1]中2.2.6章节设计MaxPool2d模块。为了兼容Pytorch的MaxPool2d模块，众多参数设定和Pytorch相同。详情请见 ``torch.nn.MaxPool2d`` 。
+        基于文献 [#f1]_ 中2.2.6章节设计MaxPool2d模块。为了兼容Pytorch的MaxPool2d模块，众多参数设定和Pytorch相同。详情请见 ``torch.nn.MaxPool2d`` 。
         基本想法是对输入脉冲进行统计，统计量可以控制门控函数确定以哪一路输入信号作为输出。
         根据 `momentum` 参数类型不同可以有不同的统计功能。 `momentum` 参数支持None值和[0,1]区间的浮点数数值作为输出。
         假定在t时刻，脉冲输入张量为 :math:`s_t` ，脉冲统计量为 :math:`p_t` 
@@ -50,7 +50,7 @@ class MaxPool2d(nn.Module):
                         when ``None``, will use accumulated spike in gate functions
         :return: ``None``
 
-        Design the MaxPool2d module based on section 2.2.6 in [1]. In order to be compatible with Pytorch's MaxPool2d module, many parameter settings are the same as Pytorch. See ``torch.nn.MaxPool2d`` for details.
+        Design the MaxPool2d module based on section 2.2.6 in [#f1]_ . In order to be compatible with Pytorch's MaxPool2d module, many parameter settings are the same as Pytorch. See ``torch.nn.MaxPool2d`` for details.
         The basic idea is to accumulate the input spikes, which can control the gating function to determine which input spike is used as output.
         Depending on the type of `momentum` parameter, different statistical functions can be used.
         `momentum` supports the floating-point value in [0,1] or value ``None``
@@ -65,7 +65,7 @@ class MaxPool2d(nn.Module):
         .. math::
             p_t = momentum * p_{t-1} + (1-momentum) * s_t
 
-        [1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to
+        .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to
         Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
         '''
 

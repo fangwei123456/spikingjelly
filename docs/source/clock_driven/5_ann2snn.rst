@@ -11,7 +11,9 @@ ANN转换SNN的理论基础
 
 SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。在ANN大行其道的今天，SNN的直接训练需要较多资源。自然我们会想到使用现在非常成熟的ANN转换到SNN，希望SNN也能有类似的表现。这就牵扯到如何搭建起ANN和SNN桥梁的问题。现在SNN主流的方式是采用频率编码，因此对于输出层，我们会用神经元输出脉冲数来判断类别。发放率和ANN有没有关系呢？
 
-幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = max(input,0)` 。
+幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingflow.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_ 中提到的Soft方式。
+
+下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = max(input,0)` 。
 
 .. image:: ./_static/tutorials/clock_driven/5_ann2snn/relu_if.png
 
@@ -21,24 +23,24 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 对于采用减法重置的IF神经元，其膜电位V随时间变化为：
 
 .. math::
-	V(t)=V(t-1)+z-V_{threshold}\theta_t
+	V_t=V_{t-1}+z-V_{threshold}\theta_t
 
 其中：
  :math:`V_{threshold}` 为发放阈值，通常设为1.0。 :math:`\theta_t` 为输出脉冲。 :math:`T` 时间步内的平均发放率可以通过对膜电位求和得到：
 
 .. math::
-	\sum_{t=1}^{T} V(t)= \sum_{t=1}^{T} V(t-1)+zT-V_{threshold} \sum_{t=1}^{T}\theta_t
+	\sum_{t=1}^{T} V_t= \sum_{t=1}^{T} V_{t-1}+z T-V_{threshold} \sum_{t=1}^{T}\theta_t
 
-将含有 :math:`V(t`) 的项全部移项到左边，两边同时除以 :math:`T` ：
+将含有 :math:`V_t` 的项全部移项到左边，两边同时除以 :math:`T` ：
 
 .. math::
-	\frac{V(T)-V(0)}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
+	\frac{V_T-V_0}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
 
 其中 :math:`N` 为 :math:`T` 时间步内脉冲数， :math:`\frac{N}{T}` 就是发放率  :math:`r`。利用  :math:`z= V_{threshold} a` 
 即：
 
 .. math::
-	r = a- \frac{ V(T)-V(0) }{T V_{threshold}}
+	r = a- \frac{ V_T-V_0 }{T V_{threshold}}
 
 故在仿真时间步  :math:`T` 无限长情况下:
 
@@ -48,7 +50,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 类似地，针对神经网络更高层，文献 [#f1]_ 进一步说明层间发放率满足：
 
 .. math::
-	r^l = W^l r^{l-1}+b^l- \frac{V^l(T)}{T V_{threshold}}
+	r^l = W^l r^{l-1}+b^l- \frac{V^l_T}{T V_{threshold}}
 
 详细的说明见文献 [#f1]_ 。ann2snn中的方法也主要来自文献 [#f1]_ 
 
