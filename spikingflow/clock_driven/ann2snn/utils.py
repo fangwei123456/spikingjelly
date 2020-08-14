@@ -1,8 +1,8 @@
 import torch
 import torch.nn.functional as F
 import os
-import spikingflow.ann2snn.parser as parser
-import spikingflow.ann2snn.simulation as sim
+import spikingflow.clock_driven.ann2snn.parser as parser
+import spikingflow.clock_driven.ann2snn.simulation as sim
 import numpy as np
 import json
 
