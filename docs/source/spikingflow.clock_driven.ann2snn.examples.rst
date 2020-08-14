@@ -1,13 +1,13 @@
-SpikingFlow.ann2snn.examples package
+spikingflow.clock_driven.ann2snn.examples package
 ====================================
 
 Submodules
 ----------
 
-SpikingFlow.ann2snn.examples.if\_cnn\_mnist module
+spikingflow.clock_driven.ann2snn.examples.if\_cnn\_mnist module
 --------------------------------------------------
 
-.. automodule:: SpikingFlow.ann2snn.examples.if_cnn_mnist
+.. automodule:: spikingflow.clock_driven.ann2snn.examples.if_cnn_mnist
    :members:
    :undoc-members:
    :show-inheritance:
@@ -16,7 +16,7 @@ SpikingFlow.ann2snn.examples.if\_cnn\_mnist module
 Module contents
 ---------------
 
-.. automodule:: SpikingFlow.ann2snn.examples
+.. automodule:: spikingflow.clock_driven.ann2snn.examples
    :members:
    :undoc-members:
    :show-inheritance:

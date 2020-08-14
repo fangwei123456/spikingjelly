@@ -1,8 +1,8 @@
-前馈ANN转换SNN SpikingFlow.ann2snn
+前馈ANN转换SNN
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_
 
-本节教程主要关注 ``SpikingFlow.ann2snn``，介绍如何将训练好的前馈ANN转换SNN，并且在SpikingFlow框架上进行仿真。
+本节教程主要关注 ``spikingflow.clock_driven.ann2snn``，介绍如何将训练好的前馈ANN转换SNN，并且在SpikingFlow框架上进行仿真。
 
 目前暂时支持Pytorch中实现的包含 ``nn.Conv2d`` , ``nn.Linear`` , ``nn.MaxPool2d`` , ``nn.AvgPool2d`` , ``nn.BatchNorm1d`` , ``nn.BatchNorm2d`` , ``nn.Flatten`` , ``nn.ReLU`` 的前馈神经网络的转换，其他模块方案正在开发中...
 
@@ -13,7 +13,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 
 幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = max(input,0)` 。
 
-.. image:: ./_static/tutorials/ann2snn/relu_if.png
+.. image:: ./_static/tutorials/clock_driven/5_ann2snn/relu_if.png
 
 文献 [#f1]_ 对ANN转SNN提供了解析的理论基础。理论说明，SNN中的IF神经元是ReLU激活函数在时间上的无偏估计器。
 
@@ -289,7 +289,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 .. code-block:: python
 
-    >>> import SpikingFlow.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
+    >>> import spikingflow.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
     >>> if_cnn_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
      input device, e.g., "cpu" or "cuda:0": cuda:15
@@ -330,7 +330,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 示例中，这个模型训练10个epoch。训练时测试集准确率变化情况如下：
 
-.. image:: ./_static/tutorials/ann2snn/accuracy_curve.png
+.. image:: ./_static/tutorials/clock_driven/5_ann2snn/accuracy_curve.png
 
 最终达到98.8%的测试集准确率。
 
