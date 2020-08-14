@@ -1,4 +1,4 @@
-import SpikingFlow
+import spikingflow
 import zipfile
 import os
 import threading
@@ -89,7 +89,7 @@ class NMNIST(Dataset):
                 for file_name in tqdm.tqdm(os.listdir(source_dir)):
                     events = NMNIST.read_bin(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
+                    frames = spikingflow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
                                                                                frames_num=frames_num, split_by=split_by, normalization=normalization)
                     # os.path.splitext是为了去掉'.bin'，防止保存的文件命为'*.bin.npz'
                     np.savez_compressed(os.path.join(target_dir, os.path.splitext(file_name)[0]), frames)
@@ -97,7 +97,7 @@ class NMNIST(Dataset):
                 for file_name in os.listdir(source_dir):
                     events = NMNIST.read_bin(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = SpikingFlow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
+                    frames = spikingflow.datasets.integrate_events_to_frames(events=events, weight=34, height=34,
                                                                                frames_num=frames_num, split_by=split_by, normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, os.path.splitext(file_name)[0]), frames)
 
@@ -112,7 +112,7 @@ class NMNIST(Dataset):
                 show_bar = True
             else:
                 show_bar = False
-            thread_list.append(SpikingFlow.datasets.FunctionThread(f=cvt_data_in_dir, source_dir=events_sub_dir,
+            thread_list.append(spikingflow.datasets.FunctionThread(f=cvt_data_in_dir, source_dir=events_sub_dir,
                                                                    target_dir=frames_sub_dir, show_bar=show_bar))
             print('start thread', thread_list.__len__())
             thread_list[-1].start()
@@ -143,7 +143,7 @@ class NMNIST(Dataset):
         # 解压数据集
         ext_dir = os.path.join(zip_dir, 'extract')
         print('unzip Train.zip and Test.zip to', ext_dir)
-        SpikingFlow.datasets.extract_zip_in_dir(zip_dir, ext_dir)
+        spikingflow.datasets.extract_zip_in_dir(zip_dir, ext_dir)
 
         if not os.path.exists(frames_data_dir):
             os.mkdir(frames_data_dir)
@@ -185,7 +185,7 @@ class NMNIST(Dataset):
 
         1.原始的N-MNIST数据集 ``zip_dir``。可以手动下载，也可以调用静态方法 ``NMNIST.download_zip``；
 
-        2.分别解压训练集和测试集到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``SpikingFlow.datasets.extract_zip_in_dir``；
+        2.分别解压训练集和测试集到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``spikingflow.datasets.extract_zip_in_dir``；
 
         3.将events数据转换成frames数据。调用 ``NMNIST.create_frames_dataset``。
 

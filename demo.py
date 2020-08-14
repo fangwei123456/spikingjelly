@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 import torch
-from SpikingFlow.clock_driven import neuron
-from SpikingFlow import visualizing
+from spikingflow.clock_driven import neuron
+from spikingflow import visualizing
 import numpy as np
 import matplotlib
 

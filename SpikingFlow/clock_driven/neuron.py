@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from SpikingFlow.clock_driven import surrogate, accelerating
+from spikingflow.clock_driven import surrogate, accelerating
 import math
 
 class BaseNode(nn.Module):

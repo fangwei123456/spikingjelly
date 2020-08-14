@@ -8,7 +8,7 @@ with open("./README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="SpikingFlow",
+    name="spikingflow",
     version="0.2.4.5.935",
     author="PKU MLG and other contributors",
     author_email="fwei@pku.edu.cn, chyq@pku.edu.cn",
