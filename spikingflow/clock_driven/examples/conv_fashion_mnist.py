@@ -144,7 +144,7 @@ def main():
         print(
             'device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
                 device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy,
-                net.train_times
+                train_times
             ))
 if __name__ == '__main__':
     main()
