@@ -227,13 +227,13 @@ class ModelParser(nn.Module):
 
         :param norm_tensor: 用于归一化模型的数据
         :param log_dir: 用于保存临时文件的文件夹名
-        :param robust: 当取值为 ``True`` 时使用文献[2]中提出的鲁棒归一化
+        :param robust: 当取值为 ``True`` 时使用文献 [#f2]_ 中提出的鲁棒归一化
         :return: ``None``
 
         模型归一化的对象为吸收了BatchNorm参数后的ANN中的参数模块（Linear, Conv2d），其目的在于限制每层激活的输出范围在[0,1]范围内，
         如此便可使得模型在转换为SNN时的脉冲发放率在[0,:math:`r_max`]范围内。
-        模型归一化在文献[1]中被提出，所提出的归一化利用权重的最大最小值。但是[1]中的方法不涉及神经网络中存在bias的情况。
-        为了适应更多的神经网络，此处参考文献[2]实现归一化模块：通过缩放因子缩放权重和偏置项。
+        模型归一化在文献 [#f1]_ 中被提出，所提出的归一化利用权重的最大最小值。但是文献 [#f1]_ 中的方法不涉及神经网络中存在bias的情况。
+        为了适应更多的神经网络，此处参考文献 [#f2]_ 实现归一化模块：通过缩放因子缩放权重和偏置项。
         对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}` ,输出张量的最大值为 :math:`\lambda` 。那么，归一化后的权重 :math:`\hat{W}` 为：
 
         .. math::
@@ -244,9 +244,9 @@ class ModelParser(nn.Module):
         .. math::
             \hat{b} = b / \lambda
         ANN每层输出的分布虽然服从某个特定分布，但是数据中常常会存在较大的离群值，这会导致整体神经元发放率降低。
-        为了解决这一问题，鲁棒归一化将缩放因子从张量的最大值调整为张量的p-分位点。[2]中推荐的分位点值为99.9%。
+        为了解决这一问题，鲁棒归一化将缩放因子从张量的最大值调整为张量的p-分位点。 [#f2]_ 中推荐的分位点值为99.9%。
         
-        更多内容见文献[2]
+        更多内容见文献 [#f2]_ 
 
         * :ref:`API in English <ModelParser.normalize_model-cn>`
 
@@ -254,15 +254,15 @@ class ModelParser(nn.Module):
 
         :param norm_tensor: tensors used to normalize the model
         :param log_dir: Name of the folder used to save temporary files
-        :param robust: when ``True``, use robust normalization proposed in [2]
+        :param robust: when ``True``, use robust normalization proposed in [#f2]_
         :return: ``None``
 
         Model normalization is designed for modules that have parameters (Linear, Conv2d) and have absorbed the BatchNorm parameters.
         The purpose is to limit the output range of each layer to the range of [0,1]
         This allows the model to be in the range of the firing rate when converted to SNN in the range of [0,:math:`r_max`].
-        Model normalization is proposed in [1], and the proposed normalization takes advantage of the maximum value of the weight.
-        However, the method in [1] does not involve bias in the neural network.
-        To accommodate more neural networks, model normalization is implemented based on [2]: scaling weights and bias through scaling factors.
+        Model normalization is proposed in  [#f1]_ , and the proposed normalization takes advantage of the maximum value of the weight.
+        However, the method in  [#f1]_  does not involve bias in the neural network.
+        To accommodate more neural networks, model normalization is implemented based on [#f2]_ : scaling weights and bias through scaling factors.
         For a parameter module, assuming that the input tensor and output tensor are obtained, the maximum value of the input tensor is :math:`\lambda_{pre}`, and the maximum value of the output tensor is :math:`\lambda`. Then, the normalized weight :math:`\hat{W}` is:
 
         .. math::
@@ -274,12 +274,12 @@ class ModelParser(nn.Module):
             \hat{b} = b / \lambda
         
         Although the distribution of the output of the ANN per layer is subject to a particular distribution, there are often large outliers, which results in a decrease in the overall firing rate.
-        To solve this problem, robust normalization adjusts the scaling factor from tensor's maximum value to tensor's p-percentile. The recommended p is 99.9%[2].
+        To solve this problem, robust normalization adjusts the scaling factor from tensor's maximum value to tensor's p-percentile. The recommended p is 99.9% [#f2]_ .
 
-        [1] Diehl, Peter U. , et al. "Fast classifying, high-accuracy spiking deep networks through weight and threshold
+        .. [#f1] Diehl, Peter U. , et al. "Fast classifying, high-accuracy spiking deep networks through weight and threshold
         balancing." Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.
         
-        [2] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to
+        .. [#f2] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to
         Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 
         '''
