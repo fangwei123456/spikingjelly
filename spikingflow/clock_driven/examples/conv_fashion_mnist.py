@@ -141,9 +141,8 @@ def main():
             test_accuracy = correct_sum / test_sum
             writer.add_scalar('test_accuracy', test_accuracy, epoch)
             max_test_accuracy = max(max_test_accuracy, test_accuracy)
-        print(
-            f'device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={learning_rate}, T={T}, '
-            f'log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
+        print(f'device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={learning_rate}, T={T},'
+              f' log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
 if __name__ == '__main__':
     main()
 
