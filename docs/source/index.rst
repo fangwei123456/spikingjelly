@@ -1,9 +1,9 @@
 .. _index:
 
-欢迎来到spikingflow的文档
+欢迎来到SpikingFlow的文档
 ###################################
 
-`spikingflow <https://github.com/fangwei123456/spikingflow>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
+`SpikingFlow <https://github.com/fangwei123456/spikingflow>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
 网络(Spiking Neuron Network, SNN)进行深度学习的框架。
 
 * :ref:`Homepage in English <index_en>`
@@ -11,7 +11,7 @@
 安装
 ----------------
 
-注意，spikingflow是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装spikingflow。
+注意，SpikingFlow是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装spikingflow。
 
 从 `PyPI <https://pypi.org/project/spikingflow/>`_ 安装：
 
@@ -30,7 +30,7 @@
 .. toctree::
    :maxdepth: 4
 
-   Tutorials
+   tutorials
 
 
 模块文档
@@ -54,17 +54,17 @@
 
 .. _index_en:
 
-Welcome to spikingflow's documentation
+Welcome to SpikingFlow's documentation
 ############################################
 
-`spikingflow <https://github.com/fangwei123456/spikingflow>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
+`SpikingFlow <https://github.com/fangwei123456/spikingflow>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
 
 * :ref:`中文首页 <index>`
 
 Installation
 ----------------
 
-Note that spikingflow is based on PyTorch. Please make sure that you have installed PyTorch before you install spikingflow.
+Note that SpikingFlow is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingFlow.
 
 Install from `PyPI <https://pypi.org/project/spikingflow/>`_：
 
@@ -83,7 +83,7 @@ Tutorials
 .. toctree::
    :maxdepth: 4
 
-   Tutorials_en
+   tutorials_en
 
 Modules Docs
 -------------------------
