@@ -2,6 +2,6 @@
 =======================================
 本教程作者：
 
-本节教程主要关注 ``SpikingFlow.clock_driven.surrogate``，介绍如何通过梯度替代法。
+本节教程主要关注 ``spikingflow.clock_driven.surrogate``，介绍如何通过梯度替代法。
 
 

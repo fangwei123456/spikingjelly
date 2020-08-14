@@ -2,7 +2,7 @@ Clock_driven
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_, `lucifer2859 <https://github.com/lucifer2859>`_
 
-This tutorial focuses on ``SpikingFlow.clock_driven``, introducing the clock-driven simulation method, the concept of surrogate gradient method, and the use of differentiable spiking neurons.
+This tutorial focuses on ``spikingflow.clock_driven``, introducing the clock-driven simulation method, the concept of surrogate gradient method, and the use of differentiable spiking neurons.
 
 The surrogate gradient method is a new method emerging in recent years. For more information about this method, please refer to the following overview:
 
@@ -186,7 +186,7 @@ The complete code is located at ``clock_driven.examples.lif_fc_mnist.py``. In th
 
     .. code-block:: python
 
-        >>> import SpikingFlow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+        >>> import spikingflow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
         >>> lif_fc_mnist.main()
         Enter the input device, e.g., "cpu" or "cuda:0": cuda:15
         Enter the input root directory for saving MNIST dataset, e.g., "./": ./mnist

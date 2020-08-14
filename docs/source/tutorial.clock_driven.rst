@@ -2,7 +2,7 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``SpikingFlow.clock_driven``，介绍时钟驱动的仿真方法、梯度替代法的概念、可微分SNN神经元的使用方式。
+本节教程主要关注 ``spikingflow.clock_driven``，介绍时钟驱动的仿真方法、梯度替代法的概念、可微分SNN神经元的使用方式。
 
 梯度替代法是近年来兴起的一种新方法，关于这种方法的更多信息，可以参见如下综述：
 
@@ -204,7 +204,7 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :ma
 
     .. code-block:: python
 
-        >>> import SpikingFlow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+        >>> import spikingflow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
         >>> lif_fc_mnist.main()
         输入运行的设备，例如“cpu”或“cuda:0”
          input device, e.g., "cpu" or "cuda:0": cuda:15

@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from SpikingFlow.clock_driven import accelerating
+from spikingflow.clock_driven import accelerating
 
 class NeuNorm(nn.Module):
     def __init__(self, in_channels, k=0.9):
