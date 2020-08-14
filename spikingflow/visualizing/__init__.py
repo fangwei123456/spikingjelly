@@ -133,7 +133,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     return fig
 
 def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                   plot_spiking_rate=True, spiking_rate_map_title='spiking rate', dpi=200):
+                   plot_spiking_rate=True, spiking_rate_map_title='Spiking Rate', dpi=200):
     '''
 
 

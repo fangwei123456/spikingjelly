@@ -179,7 +179,6 @@ Soft方式重置方程为：
     for t in range(T):
         lif(x)
 
-    plt.style.use(['science', 'muted'])
     visualizing.plot_2d_heatmap(array=np.asarray(lif.monitor['v']).T, title='Membrane Potentials', xlabel='Simulating Step',
                                         ylabel='Neuron Index', int_x_ticks=True, x_max=T, dpi=200)
     visualizing.plot_1d_spikes(spikes=np.asarray(lif.monitor['s']).T, title='Membrane Potentials', xlabel='Simulating Step',
