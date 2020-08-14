@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import spikingflow.clock_driven.neuron as neuron
 import spikingflow.clock_driven.ann2snn.modules as modules
-import spikingflow.clock_driven as encoding
+import spikingflow.clock_driven.encoding as encoding
 
 
 class SNN(nn.Module):
