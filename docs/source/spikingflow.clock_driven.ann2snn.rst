@@ -1,5 +1,5 @@
 spikingflow.clock_driven.ann2snn package
-===========================
+========================================
 
 Subpackages
 -----------

@@ -12,6 +12,7 @@ spikingflow.clock_driven package
    spikingflow.clock_driven.neuron
    spikingflow.clock_driven.optim
    spikingflow.clock_driven.surrogate
+   spikingflow.clock_driven.ann2snn
 
 Module contents
 ---------------
