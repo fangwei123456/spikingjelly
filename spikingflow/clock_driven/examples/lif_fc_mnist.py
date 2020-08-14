@@ -12,9 +12,7 @@ class Net(nn.Module):
         # 网络结构，简单的双层全连接网络，每一层之后都是LIF神经元
         self.fc = nn.Sequential(
             nn.Flatten(),
-            nn.Linear(28 * 28, 14 * 14, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-            nn.Linear(14 * 14, 10, bias=False),
+            nn.Linear(28 * 28, 10, bias=False),
             neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
         )
 
@@ -76,6 +74,7 @@ def main():
     # 使用泊松编码器
     encoder = encoding.PoissonEncoder()
     train_times = 0
+    max_test_accuracy = 0
     for epoch in range(train_epoch):
         net.train()
         for img, label in train_data_loader:
@@ -108,9 +107,6 @@ def main():
             accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
             if train_times % 256 == 0:
                 writer.add_scalar('train_accuracy', accuracy, train_times)
-            if train_times % 1024 == 0:
-                print(device, dataset_dir, batch_size, learning_rate, T, tau, train_epoch, log_dir)
-                print('train_times', train_times, 'train_accuracy', accuracy)
             train_times += 1
         net.eval()
         with torch.no_grad():
@@ -128,8 +124,14 @@ def main():
                 correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
                 test_sum += label.numel()
                 functional.reset_net(net)
-
-            writer.add_scalar('test_accuracy', correct_sum / test_sum, epoch)
+            test_accuracy = correct_sum / test_sum
+            writer.add_scalar('test_accuracy', test_accuracy, epoch)
+            max_test_accuracy = max(max_test_accuracy, test_accuracy)
+        print(
+            'device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
+                device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy,
+                train_times
+            ))
 
 if __name__ == '__main__':
     main()
