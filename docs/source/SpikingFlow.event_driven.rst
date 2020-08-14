@@ -1,17 +1,17 @@
-SpikingFlow.event\_driven package
+spikingflow.event\_driven package
 =================================
 
 .. toctree::
    :hidden:
 
-   SpikingFlow.event_driven.examples
-   SpikingFlow.event_driven.encoding
-   SpikingFlow.event_driven.neuron
+   spikingflow.event_driven.examples
+   spikingflow.event_driven.encoding
+   spikingflow.event_driven.neuron
 
 Module contents
 ---------------
 
-.. automodule:: SpikingFlow.event_driven
+.. automodule:: spikingflow.event_driven
    :members:
    :undoc-members:
    :show-inheritance:

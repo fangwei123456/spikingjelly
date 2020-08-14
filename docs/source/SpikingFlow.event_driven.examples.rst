@@ -1,13 +1,13 @@
-SpikingFlow.event\_driven.examples package
+spikingflow.event\_driven.examples package
 ==========================================
 
 Submodules
 ----------
 
-SpikingFlow.event\_driven.examples.tempotron\_mnist module
+spikingflow.event\_driven.examples.tempotron\_mnist module
 ----------------------------------------------------------
 
-.. automodule:: SpikingFlow.event_driven.examples.tempotron_mnist
+.. automodule:: spikingflow.event_driven.examples.tempotron_mnist
    :members:
    :undoc-members:
    :show-inheritance:
@@ -16,7 +16,7 @@ SpikingFlow.event\_driven.examples.tempotron\_mnist module
 Module contents
 ---------------
 
-.. automodule:: SpikingFlow.event_driven.examples
+.. automodule:: spikingflow.event_driven.examples
    :members:
    :undoc-members:
    :show-inheritance:

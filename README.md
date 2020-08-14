@@ -1,35 +1,35 @@
-# SpikingFlow
+# spikingflow
 
 [![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest)
-[![HitCount](http://hits.dwyl.com/fangwei123456/SpikingFlow.svg)](http://hits.dwyl.com/fangwei123456/SpikingFlow)
+[![HitCount](http://hits.dwyl.com/fangwei123456/spikingflow.svg)](http://hits.dwyl.com/fangwei123456/spikingflow)
 
-[中文README](https://github.com/fangwei123456/SpikingFlow/blob/master/README_cn.md)
+[中文README](https://github.com/fangwei123456/spikingflow/blob/master/README_cn.md)
 
 ![demo](demo.png)
 
-SpikingFlow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
+spikingflow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
-The documentation of SpikingFlow is written in both English and Chinese: https://spikingflow.readthedocs.io
+The documentation of spikingflow is written in both English and Chinese: https://spikingflow.readthedocs.io
 
 ## Installation
 
-Note that SpikingFlow is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingFlow.
+Note that spikingflow is based on PyTorch. Please make sure that you have installed PyTorch before you install spikingflow.
 
-Install from [PyPI](https://pypi.org/project/SpikingFlow/)：
+Install from [PyPI](https://pypi.org/project/spikingflow/)：
 
 ```bash
-pip install SpikingFlow
+pip install spikingflow
 ```
 
 Developers can download the latest version from GitHub:
 
 ```bash
-git clone https://github.com/fangwei123456/SpikingFlow.git
+git clone https://github.com/fangwei123456/spikingflow.git
 ```
 
 ## Build SNN In An Unprecedented Simple Way
 
-SpikingFlow is user-friendly. Building SNN with SpikingFlow is as simple as building ANN in PyTorch:
+spikingflow is user-friendly. Building SNN with spikingflow is as simple as building ANN in PyTorch:
 
 ```python
 class Net(nn.Module):
@@ -51,16 +51,16 @@ class Net(nn.Module):
 This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingflow.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
->>> import SpikingFlow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+>>> import spikingflow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
 >>> lif_fc_mnist.main()
 ```
 
-Read [SpikingFlow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/SpikingFlow.clock_driven.examples.html) to explore more advanced networks!
+Read [spikingflow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/spikingflow.clock_driven.examples.html) to explore more advanced networks!
 
 ## About
 
-[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingFlow.
+[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of spikingflow.
 
-The list of developers can be found [here](https://github.com/fangwei123456/SpikingFlow/graphs/contributors).
+The list of developers can be found [here](https://github.com/fangwei123456/spikingflow/graphs/contributors).
 
-Any contributions to SpikingFlow is welcome!
+Any contributions to spikingflow is welcome!

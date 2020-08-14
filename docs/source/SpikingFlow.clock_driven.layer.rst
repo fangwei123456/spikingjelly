@@ -1,10 +1,10 @@
-SpikingFlow.clock_driven.layer package
+spikingflow.clock_driven.layer package
 ======================================
 
 Module contents
 ---------------
 
-.. automodule:: SpikingFlow.clock_driven.layer
+.. automodule:: spikingflow.clock_driven.layer
    :members:
    :undoc-members:
    :show-inheritance:

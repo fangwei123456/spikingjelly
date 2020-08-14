@@ -18,13 +18,13 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.transforms as transforms
 
-from SpikingFlow.clock_driven import functional, layer
+from spikingflow.clock_driven import functional, layer
 
 from tqdm import tqdm
 import math
 
 
-parser = argparse.ArgumentParser(description='SpikingFlow CIFAR10 Training')
+parser = argparse.ArgumentParser(description='spikingflow CIFAR10 Training')
 parser.add_argument('data', metavar='DIR',
 					help='path to dataset')
 parser.add_argument('-j', '--workers', default=4, type=int, metavar='N',
