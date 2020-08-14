@@ -11,7 +11,9 @@ Theoretical basis of ANN2SNN
 
 Compared with ANN, SNN generates discrete spikes, which is conducive to efficient communication. Today, ANN is popular, while direct training of SNN requires far more resources. Naturally, people will think of using very mature ANN to switch to SNN, and hope that SNN can have similar performance. This leads to the question of how to build a bridge between ANN and SNN. The current SNN mainstream method is to use frequency coding. So for the output layer, we will use the number of neuron output spikes to determine the category. Is the firing rate related to ANN?
 
-Fortunately, there is a strong correlation between the non-linear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold :math:`V_{threshold}` ). We can use this feature for conversion. The following figure shows this correspondence: the left figure is a curve obtained by giving a constant input to an IF neuron and observing its firing over a period of time. The right one is the ReLU activation curve, which satisfies :math:`activation = max(input,0)`.
+Fortunately, there is a strong correlation between the non-linear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold :math:`V_{threshold}` ). We can use this feature for conversion. The neuron update method mentioned here is the Soft method mentioned in the `Clock Driven Tutorial <https://spikingflow.readthedocs.io/zh_CN/latest/clock_driven_en/0_neuron.html>`_.
+
+The following figure shows this correspondence: the left figure is a curve obtained by giving a constant input to an IF neuron and observing its firing over a period of time. The right one is the ReLU activation curve, which satisfies :math:`activation = max(input,0)`.
 
 .. image:: ./_static/tutorials/clock_driven/5_ann2snn/relu_if.png
 
@@ -21,24 +23,24 @@ For the first layer of the neural network, the input layer, discuss the relation
 For the IF neuron reset by subtraction, its membrane potential V changes with time as follows:
 
 .. math::
-	V(t)=V(t-1)+z-V_{threshold}\theta_t
+	V_t=V_{t-1}+z-V_{threshold}\theta_t
 
 Where:
 :math:`V_{threshold}` is the firing threshold, usually set to 1.0. :math:`\theta_t` is the output spike. The average firing rate in the :math:`T` time steps can be obtained by summing the membrane potential:
 
 .. math::
-	\sum_{t=1}^{T} V(t)= \sum_{t=1}^{T} V(t-1)+zT-V_{threshold} \sum_{t=1}^{T}\theta_t
+	\sum_{t=1}^{T} V_t= \sum_{t=1}^{T} V_{t-1}+z T-V_{threshold} \sum_{t=1}^{T}\theta_t
 
-Move all the items containing :math:`V(t`) to the left, and divide both sides by :math:`T`:
+Move all the items containing :math:`V_t` to the left, and divide both sides by :math:`T`:
 
 .. math::
-	\frac{V(T)-V(0)}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
+	\frac{V_T-V_0}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
 
 Where :math:`N` is the number of pulses in the time step of :math:`T`, and :math:`\frac{N}{T}` is the issuing rate :math:`r`. Use :math:`z = V_{threshold} a`
 which is:
 
 .. math::
-	r = a- \frac{ V(T)-V(0) }{T V_{threshold}}
+	r = a- \frac{ V_T-V_0 }{T V_{threshold}}
 
 Therefore, when the simulation time step :math:`T` is infinite:
 
@@ -48,7 +50,7 @@ Therefore, when the simulation time step :math:`T` is infinite:
 Similarly, for the higher layers of the neural network, literature [#f1]_ further explains that the inter-layer firing rate satisfies:
 
 .. math::
-	r^l = W^l r^{l-1}+b^l- \frac{V^l(T)}{T V_{threshold}}
+	r^l = W^l r^{l-1}+b^l- \frac{V^l_T}{T V_{threshold}}
 
 For details, please refer to [#f1]_. The methods in ann2snn also mainly come from [#f1]_ .
 
