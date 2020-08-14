@@ -124,12 +124,12 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 Hard方式重置方程为：
 
 .. math::
-    V_{t} & = H_{t} \cdot (1 - S_{t}) + V_{reset} \cdot S_{t}
+    V_{t} = H_{t} \cdot (1 - S_{t}) + V_{reset} \cdot S_{t}
 
 Soft方式重置方程为：
 
 .. math::
-    V_{t} & = H_{t} - V_{threshold} \cdot S_{t}
+    V_{t} = H_{t} - V_{threshold} \cdot S_{t}
 
 其中 :math:`V_{t}` 是神经元的膜电位；:math:`X_{t}` 是外源输入，例如电压增量；为了避免混淆，我们使用 :math:`H_{t}` 表示神经元
 充电后、释放脉冲前的膜电位；:math:`V_{t}` 是神经元释放脉冲后的膜电位；:math:`f(V(t-1), X(t))` 是神经元的状态更新方程，不同的神
