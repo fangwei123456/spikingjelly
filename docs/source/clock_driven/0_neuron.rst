@@ -87,7 +87,7 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 ``spikingflow.clock_driven.neuron`` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，LIF神经元的充电方程为：
 
 .. math::
-    \tau_{m} (V_{t} - V_{t-1}) = -(V{t-1} - V_{reset}) + X(t)
+    \tau_{m} (V_{t} - V_{t-1}) = -(V_{t-1} - V_{reset}) + X_{t}
 
 因此可以得到 :math:`V_{t}` 的表达式为
 
