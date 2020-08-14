@@ -45,6 +45,9 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
         :width: 100%
 
     '''
+    if spikes.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
+
     fig, heatmap = plt.subplots(dpi=dpi)
     if x_max is not None:
         im = heatmap.imshow(array, aspect='auto', extent=[-0.5, x_max, array.shape[0] - 0.5, -0.5])
@@ -115,6 +118,8 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     .. image:: ./_static/API/visualizing/plot_2d_bar_in_3d_1.png
 
     '''
+    if spikes.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
 
     fig = plt.figure(dpi=dpi)
     ax = fig.add_subplot(111, projection='3d')
@@ -174,6 +179,9 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         :width: 100%
 
     '''
+    if spikes.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
+
     if plot_spiking_rate:
         fig = plt.figure(tight_layout=True, dpi=dpi)
         gs = matplotlib.gridspec.GridSpec(1, 5)
@@ -247,6 +255,9 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
         :width: 100%
 
     '''
+    if spikes.ndim != 3:
+        raise ValueError(f"Expected 3D array, got {spikes.ndim}D array instead")
+
     C = spikes.shape[0]
 
     assert nrows * ncols == C, 'nrows * ncols != C'
@@ -295,7 +306,6 @@ def plot_one_neuron_v_s(v: list, s: list, v_threshold=1.0, v_reset=0.0,
     .. image:: ./_static/API/visualizing/plot_one_neuron_v_s.*
         :width: 100%
     '''
-    plt.style.use(['science', 'muted'])
     fig = plt.figure(dpi=dpi)
     ax0 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax0.set_title(title)
