@@ -7,13 +7,13 @@
 
 ![demo](demo.png)
 
-spikingflow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
+SpikingFlow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
-The documentation of spikingflow is written in both English and Chinese: https://spikingflow.readthedocs.io
+The documentation of SpikingFlow is written in both English and Chinese: https://spikingflow.readthedocs.io
 
 ## Installation
 
-Note that spikingflow is based on PyTorch. Please make sure that you have installed PyTorch before you install spikingflow.
+Note that SpikingFlow is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingFlow.
 
 Install from [PyPI](https://pypi.org/project/spikingflow/)：
 
@@ -29,7 +29,7 @@ git clone https://github.com/fangwei123456/spikingflow.git
 
 ## Build SNN In An Unprecedented Simple Way
 
-spikingflow is user-friendly. Building SNN with spikingflow is as simple as building ANN in PyTorch:
+SpikingFlow is user-friendly. Building SNN with SpikingFlow is as simple as building ANN in PyTorch:
 
 ```python
 class Net(nn.Module):
@@ -59,8 +59,8 @@ Read [spikingflow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_C
 
 ## About
 
-[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of spikingflow.
+[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingFlow.
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingflow/graphs/contributors).
 
-Any contributions to spikingflow is welcome!
+Any contributions to SpikingFlow is welcome!

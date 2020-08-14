@@ -7,13 +7,13 @@
 
 ![demo](demo.png)
 
-[spikingflow](https://github.com/fangwei123456/spikingflow) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neuron Network, SNN)进行深度学习的框架。
+[SpikingFlow](https://github.com/fangwei123456/spikingflow) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neuron Network, SNN)进行深度学习的框架。
 
-spikingflow的文档使用中英双语编写： https://spikingflow.readthedocs.io
+SpikingFlow的文档使用中英双语编写： https://spikingflow.readthedocs.io
 
 ## 安装
 
-注意，spikingflow是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装spikingflow。
+注意，SpikingFlow是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingFlow。
 
 从 [PyPI](https://pypi.org/project/spikingflow/) 安装：
 
@@ -29,7 +29,7 @@ git clone https://github.com/fangwei123456/spikingflow.git
 
 ## 以前所未有的简单方式搭建SNN
 
-spikingflow非常易于使用。使用spikingflow搭建SNN，就像使用PyTorch搭建ANN一样简单：
+SpikingFlow非常易于使用。使用SpikingFlow搭建SNN，就像使用PyTorch搭建ANN一样简单：
 
 ```python
 class Net(nn.Module):
@@ -59,7 +59,7 @@ class Net(nn.Module):
 
 ## 项目信息
 
-北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 是spikingflow的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 是SpikingFlow的主要开发者。
 
 开发人员名单可见于 https://github.com/fangwei123456/spikingflow/graphs/contributors。
 
