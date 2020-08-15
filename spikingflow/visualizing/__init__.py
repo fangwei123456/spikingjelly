@@ -45,8 +45,8 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
         :width: 100%
 
     '''
-    if spikes.ndim != 2:
-        raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
+    if array.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
 
     fig, heatmap = plt.subplots(dpi=dpi)
     if x_max is not None:
@@ -118,8 +118,8 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     .. image:: ./_static/API/visualizing/plot_2d_bar_in_3d_1.png
 
     '''
-    if spikes.ndim != 2:
-        raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
+    if array.ndim != 2:
+        raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
 
     fig = plt.figure(dpi=dpi)
     ax = fig.add_subplot(111, projection='3d')
