@@ -241,7 +241,6 @@ class IFNode(BaseNode):
         self.v += dv
         return self.spiking()
 
-
 class LIFNode(BaseNode):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
                  monitor_state=False):
@@ -306,7 +305,8 @@ class LIFNode(BaseNode):
         return self.spiking()
 
 class PLIFNode(BaseNode):
-    def __init__(self, init_tau=2.0, decay=False, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
+    def __init__(self, init_tau=2.0, decay=False, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
+                 monitor_state=False):
         '''
         * :ref:`API in English <PLIFNode.__init__-en>`
 
@@ -391,21 +391,34 @@ class PLIFNode(BaseNode):
         super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
         self.decay = decay
         if self.decay:
-            self.w = nn.Parameter(torch.tensor([math.log(1 / (init_tau - 1))], dtype=torch.float))
-            # self.w.sigmoid() == init_tau
+            if init_tau > 2:
+                init_w = math.log(2 / init_tau)
+            elif init_tau < 2:
+                init_w = math.log(init_tau / (2 * init_tau - 2))
+            else:
+                init_w = 0.0
+            self.w = nn.Parameter(torch.tensor([init_w], dtype=torch.float))
+
         else:
             self.w = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))
 
     def forward(self, dv: torch.Tensor):
         if self.decay:
-            self.v += (dv - (self.v - self.v_reset)) * self.w.sigmoid()
+            if self.w.item() >= 0:
+                self.v += (dv - (self.v - self.v_reset)) * (1 - (- self.w).exp() / 2)
+            else:
+                self.v += (dv - (self.v - self.v_reset)) * (self.w.exp() / 2)
         else:
             self.v += (dv - (self.v - self.v_reset)) * self.w
         return self.spiking()
 
     def tau(self):
         if self.decay:
-            return 1 / self.w.data.sigmoid().item()
+            w_item = self.w.item()
+            if w_item >= 0:
+                return 1 / (1 - math.exp(- w_item) / 2)
+            else:
+                return 1 / (math.exp(w_item) / 2)
         else:
             return 1 / self.w.data.item()
 
