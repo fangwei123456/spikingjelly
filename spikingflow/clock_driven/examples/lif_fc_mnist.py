@@ -2,22 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+import numpy as np
 from spikingflow.clock_driven import neuron, encoding, functional
 from torch.utils.tensorboard import SummaryWriter
 import readline
+from tqdm import tqdm
 
-class Net(nn.Module):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
-        super().__init__()
-        # 网络结构，简单的双层全连接网络，每一层之后都是LIF神经元
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 10, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
-        )
 
-    def forward(self, x):
-        return self.fc(x)
 def main():
     '''
     * :ref:`API in English <lif_fc_mnist.main-en>`
@@ -48,36 +39,45 @@ def main():
     writer = SummaryWriter(log_dir)
 
     # 初始化数据加载器
+    train_dataset = torchvision.datasets.MNIST(
+        root=dataset_dir,
+        train=True,
+        transform=torchvision.transforms.ToTensor(),
+        download=True
+    )
+    test_dataset = torchvision.datasets.MNIST(root=dataset_dir,train=False,transform=torchvision.transforms.ToTensor(),download=True)
+
     train_data_loader = torch.utils.data.DataLoader(
-        dataset=torchvision.datasets.MNIST(
-            root=dataset_dir,
-            train=True,
-            transform=torchvision.transforms.ToTensor(),
-            download=True),
+        dataset=train_dataset,
         batch_size=batch_size,
         shuffle=True,
         drop_last=True)
     test_data_loader = torch.utils.data.DataLoader(
-        dataset=torchvision.datasets.MNIST(
-            root=dataset_dir,
-            train=False,
-            transform=torchvision.transforms.ToTensor(),
-            download=True),
+        dataset=test_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         drop_last=False)
 
-    # 初始化网络
-    net = Net(tau=tau).to(device)
+    # 定义并初始化网络
+    net = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau)
+    )
+    net = net.to(device)
     # 使用Adam优化器
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
     # 使用泊松编码器
     encoder = encoding.PoissonEncoder()
     train_times = 0
     max_test_accuracy = 0
+
+    test_accs = []
+    train_accs = []
+
     for epoch in range(train_epoch):
         net.train()
-        for img, label in train_data_loader:
+        for img, label in tqdm(train_data_loader):
             img = img.to(device)
             label = label.to(device)
             label_one_hot = F.one_hot(label, 10).float()
@@ -105,8 +105,10 @@ def main():
 
             # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
             accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
-            if train_times % 256 == 0:
-                writer.add_scalar('train_accuracy', accuracy, train_times)
+            
+            writer.add_scalar('train_accuracy', accuracy, train_times)
+            train_accs.append(accuracy)
+
             train_times += 1
         net.eval()
         with torch.no_grad():
@@ -126,12 +128,34 @@ def main():
                 functional.reset_net(net)
             test_accuracy = correct_sum / test_sum
             writer.add_scalar('test_accuracy', test_accuracy, epoch)
+            test_accs.append(test_accuracy)
             max_test_accuracy = max(max_test_accuracy, test_accuracy)
-        print(
-            'device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
-                device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy,
-                train_times
-            ))
+        print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={learning_rate}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
+    
+    # 保存绘图用数据
+    net.eval()
+    functional.set_monitor(net, True)
+    with torch.no_grad():
+        img, label = test_dataset[0]        
+        img = img.to(device)
+        for t in range(T):
+            if t == 0:
+                out_spikes_counter = net(encoder(img).float())
+            else:
+                out_spikes_counter += net(encoder(img).float())
+        out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
+        print(f'Firing rate: {out_spikes_counter_frequency}')
+        output_layer = net[-1] # 输出层
+        v_t_array = np.asarray(output_layer.monitor['v']).squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
+        np.save("v_t_array.npy",v_t_array)
+        s_t_array = np.asarray(output_layer.monitor['s']).squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
+        np.save("s_t_array.npy",s_t_array)
+
+    train_accs = np.array(train_accs)
+    np.save('train_accs.npy', train_accs)
+    test_accs = np.array(test_accs)
+    np.save('test_accs.npy', test_accs)
+
 
 if __name__ == '__main__':
     main()
