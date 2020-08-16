@@ -55,7 +55,9 @@ def main():
 
     :return: None
 
-    使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
+    使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。会将训练过
+    程中测试集正确率最高的网络的 ``state_dict`` 保存在 ``tensorboard`` 日志文件的同级目录下。这个目录的位置，是在运行 ``main()``
+    函数时由用户输入的。
 
     训练100个epoch，训练batch和测试集上的正确率如下：
 
@@ -70,7 +72,8 @@ def main():
     .. _conv_fashion_mnist.main-en:
 
     The network with Conv-FC structure for classifying Fashion MNIST. This function initials the network, starts training
-    and shows accuracy on test dataset.
+    and shows accuracy on test dataset. The ``state_dict`` of net with the max accuracy on test dataset will be saved in
+    the root directory for saving ``tensorboard`` logs, which is inputted by user when running the ``main()``  function.
 
     After 100 epochs, the accuracy on train batch and test dataset is as followed:
 
@@ -156,11 +159,17 @@ def main():
                 functional.reset_net(net)
             test_accuracy = correct_sum / test_sum
             writer.add_scalar('test_accuracy', test_accuracy, epoch)
-            max_test_accuracy = max(max_test_accuracy, test_accuracy)
+            if max_test_accuracy < test_accuracy:
+                max_test_accuracy = test_accuracy
+                print('saving net...')
+                torch.save(net.state_dict(), log_dir + '/net_max_acc.pt')
+                print('saved')
+
         print(
             'device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
                 device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy, train_times
             ))
+
 if __name__ == '__main__':
     main()
 
