@@ -14,5 +14,6 @@
 
 .. toctree::
     ./clock_driven/0_neuron
+    ./clock_driven/3_fc_mnist
     ./clock_driven/4_conv_fashion_mnist
     ./clock_driven/5_ann2snn
