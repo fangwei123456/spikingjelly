@@ -1689,7 +1689,7 @@ L 386.736756 17.90218
 " style="fill:none;stroke:#000000;stroke-linecap:square;stroke-linejoin:miter;stroke-width:0.5;"/>
    </g>
    <g id="text_20">
-    <!-- FastSigmoid surrogate function -->
+    <!-- SoftSign surrogate function -->
     <defs>
      <path d="M 54.40625 67.796875 
 L 5.09375 67.796875 

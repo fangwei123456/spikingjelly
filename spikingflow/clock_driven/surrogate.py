@@ -490,32 +490,32 @@ class Sigmoid(nn.Module):
     # plt.grid(linestyle='--')
     # plt.show()
 
-class fast_sigmoid(torch.autograd.Function):
+class soft_sign(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, inv_alpha):
+    def forward(ctx, x, alpha):
         if x.requires_grad:
             ctx.save_for_backward(x)
-            ctx.inv_alpha = inv_alpha
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.inv_alpha / 2 / (ctx.inv_alpha + ctx.saved_tensors[0].abs()).square() * grad_output
+            grad_x = 1 / 2 / ctx.alpha / (1 / ctx.alpha + ctx.saved_tensors[0].abs()).square() * grad_output
         return grad_x, None
 
-class FastSigmoid(nn.Module):
+class SoftSign(nn.Module):
     def __init__(self, alpha=2.0, spiking=True):
         '''
-        * :ref:`API in English <FastSigmoid.__init__-en>`
-        .. _FastSigmoid.__init__-cn:
+        * :ref:`API in English <SoftSign.__init__-en>`
+        .. _SoftSign.__init__-cn:
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
 
-        反向传播时使用fast sigmoid的梯度的脉冲发放函数。反向传播为
+        反向传播时使用soft sign的梯度的脉冲发放函数。反向传播为
 
         .. math::
             g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}} = \\frac{1}{2\\alpha(\\frac{1}{\\alpha} + |x|)^{2}}
@@ -526,18 +526,18 @@ class FastSigmoid(nn.Module):
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
             = \\frac{1}{2} (\\frac{x}{\\frac{1}{\\alpha} + |x|} + 1)
 
-        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.*
+        .. image:: ./_static/API/clock_driven/surrogate/SoftSign.*
             :width: 100%
 
-        * :ref:`中文API <FastSigmoid.__init__-cn>`
-        .. _FastSigmoid.__init__-en:
+        * :ref:`中文API <SoftSign.__init__-cn>`
+        .. _SoftSign.__init__-en:
 
         :param alpha: parameter to control smoothness of gradient
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
 
-        The fast sigmoid surrogate spiking function. The gradient is defined by
+        The soft sign surrogate spiking function. The gradient is defined by
 
         .. math::
             g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}}
@@ -547,34 +547,34 @@ class FastSigmoid(nn.Module):
         .. math::
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
 
-        .. image:: ./_static/API/clock_driven/surrogate/FastSigmoid.*
+        .. image:: ./_static/API/clock_driven/surrogate/SoftSign.*
             :width: 100%
 
         '''
         super().__init__()
         assert alpha > 0, 'alpha must be lager than 0'
-        self.inv_alpha = 1 / alpha
+        self.alpha = alpha
         self.spiking = spiking
         if spiking:
-            self.f = fast_sigmoid.apply
+            self.f = soft_sign.apply
         else:
             self.f = self.primitive_function
     def forward(self, x):
-        return self.f(x, self.inv_alpha)
+        return self.f(x, self.alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, inv_alpha):
-        return (x / (inv_alpha + x.abs()) + 1) / 2
+    def primitive_function(x: torch.Tensor, alpha):
+        return F.softsign(x * alpha)
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
     # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.FastSigmoid(alpha=3, spiking=False)
+    # surrogate_function = surrogate.SoftSign(alpha=3, spiking=False)
     # y = surrogate_function(x)
     # plt.plot(x.data, y.data, label='Primitive, $\\alpha=3$')
 
-    # surrogate_function = surrogate.FastSigmoid(alpha=3, spiking=True)
+    # surrogate_function = surrogate.SoftSign(alpha=3, spiking=True)
     # x.requires_grad_(True)
     # y = surrogate_function(x)
     # z = y.sum()
@@ -582,7 +582,7 @@ class FastSigmoid(nn.Module):
     # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=3$')
     # plt.xlim(-2, 2)
     # plt.legend()
-    # plt.title('FastSigmoid surrogate function')
+    # plt.title('SoftSign surrogate function')
     # plt.xlabel('Input')
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
