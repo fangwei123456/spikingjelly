@@ -57,12 +57,28 @@ def main():
 
     使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
 
+    训练100个epoch，训练batch和测试集上的正确率如下：
+
+    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+        :width: 100%
+
+    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+        :width: 100%
+
     * :ref:`中文API <conv_fashion_mnist.main-cn>`
 
     .. _conv_fashion_mnist.main-en:
 
     The network with Conv-FC structure for classifying Fashion MNIST. This function initials the network, starts training
     and shows accuracy on test dataset.
+
+    After 100 epochs, the accuracy on train batch and test dataset is as followed:
+
+    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+        :width: 100%
+
+    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+        :width: 100%
     '''
     device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
     dataset_dir = input('输入保存Fashion MNIST数据集的位置，例如“./”\n input root directory for saving Fashion MNIST dataset, e.g., "./": ')
