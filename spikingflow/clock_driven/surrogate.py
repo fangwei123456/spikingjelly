@@ -564,7 +564,7 @@ class SoftSign(nn.Module):
 
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha):
-        return F.softsign(x * alpha)
+        return (F.softsign(x * alpha) + 1) / 2
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
