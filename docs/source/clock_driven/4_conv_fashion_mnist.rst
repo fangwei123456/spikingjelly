@@ -171,7 +171,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 训练网络
 -----------------
 完整的代码位于 `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingflow/blob/master/spikingflow/clock_driven/examples/conv_fashion_mnist.py>`_。
-也可以通过命令行直接运行：
+也可以通过命令行直接运行。会将训练过程中测试集正确率最高的网络的 ``state_dict`` 保存在 ``tensorboard`` 日志文件的同级目录下。
 
 .. code-block:: python
 
