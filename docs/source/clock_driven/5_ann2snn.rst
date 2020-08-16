@@ -13,9 +13,9 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 
 幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingflow.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_ 中提到的Soft方式。
 
-下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = max(input,0)` 。
+下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = \max\{input,0\}` 。
 
-.. image:: ./_static/tutorials/clock_driven/5_ann2snn/relu_if.png
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/relu_if.png
 
 文献 [#f1]_ 对ANN转SNN提供了解析的理论基础。理论说明，SNN中的IF神经元是ReLU激活函数在时间上的无偏估计器。
 
@@ -64,13 +64,13 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 
 模型分析主要解决两个问题：
 
-1、ANN为了快速训练和收敛提出了批归一化（Batch Normalization）。批归一化旨在将ANN输出归一化到0均值，这与SNN的特性相违背。因此，需要将BN的参数吸收到前面的参数层中（Linear、Conv2d）
+1. ANN为了快速训练和收敛提出了批归一化（Batch Normalization）。批归一化旨在将ANN输出归一化到0均值，这与SNN的特性相违背。因此，需要将BN的参数吸收到前面的参数层中（Linear、Conv2d）
 
-2、根据转换理论，ANN的每层输入输出需要被限制在[0,1]范围内，这就需要对参数进行缩放（模型归一化）
+2. 根据转换理论，ANN的每层输入输出需要被限制在[0,1]范围内，这就需要对参数进行缩放（模型归一化）
 
 ◆ BatchNorm参数吸收
 
-假定BatchNorm的参数为 :math:`\gamma` (BatchNorm.weight)， :math:`\beta` (BatchNorm.bias)， :math:`\mu`(BatchNorm.running_mean) ， :math:`\sigma` (BatchNorm.running_var running_var开根号)。具体参数定义详见 ``torch.nn.batchnorm`` 。
+假定BatchNorm的参数为 :math:`\gamma` (BatchNorm.weight)， :math:`\beta` (BatchNorm.bias)， :math:`\mu` (BatchNorm.running_mean) ， :math:`\sigma` (BatchNorm.running_var running_var开根号)。具体参数定义详见 ``torch.nn.batchnorm`` 。
 参数模块（例如Linear）具有参数 :math:`W` 和 :math:`b` 。BatchNorm参数吸收就是将BatchNorm的参数通过运算转移到参数模块的 :math:`W`和 :math:`b` 中，使得数据输入新模块的输出和有BatchNorm时相同。
 对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
 
@@ -332,7 +332,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 示例中，这个模型训练10个epoch。训练时测试集准确率变化情况如下：
 
-.. image:: ./_static/tutorials/clock_driven/5_ann2snn/accuracy_curve.png
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/accuracy_curve.png
 
 最终达到98.8%的测试集准确率。
 
@@ -345,7 +345,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
     norm_set = train_data_dataset.data[:norm_set_len, :, :].float() / 255
     norm_tensor = torch.FloatTensor(norm_set).view(-1,1,28,28)
 
-调用``ann2snn.utils``中实现的标准转换函数``standard_conversion``就可以实现ANN的转换加上SNN仿真。
+调用\ ``ann2snn.utils``\ 中实现的标准转换函数\ ``standard_conversion``\ 就可以实现ANN的转换加上SNN仿真。
 
 .. code-block:: python
 
