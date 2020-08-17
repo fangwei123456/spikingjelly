@@ -170,9 +170,6 @@ class LatencyEncoder(BaseEncoder):
         self.out_spike = F.one_hot(self.spike_time,
                                        num_classes=self.max_spike_time).bool()  # [*, max_spike_time]
 
-        self.out_spike.transpose_(0, self.out_spike.shape[-1])  # [*, max_spike_time] -> [max_spike_time, *]
-
-
     def step(self):
         '''
         :return: out_spike[index]
@@ -185,7 +182,7 @@ class LatencyEncoder(BaseEncoder):
         if self.index == self.max_spike_time:
             self.index = 0
 
-        return self.out_spike[self.index]
+        return self.out_spike[..., self.index]
 
     def reset(self):
         '''
