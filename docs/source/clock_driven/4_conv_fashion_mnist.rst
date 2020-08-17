@@ -202,5 +202,5 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
     :width: 100%
 
-在训练100个epoch后，最高测试集正确率可以达到94.4%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_
+在训练100个epoch后，最高测试集正确率可以达到94.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_
 的BenchMark中使用Normalization, random horizontal flip, random vertical flip, random translation, random rotation的ResNet18的94.9%正确率。
