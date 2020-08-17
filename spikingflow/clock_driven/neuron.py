@@ -329,6 +329,14 @@ class PLIFNode(BaseNode):
     def inverse_sigmoid(init_tau: float):
         return - math.log(init_tau - 1)
 
+    @staticmethod
+    def reciprocal_abs_plus_1(w: torch.Tensor):
+        return 1 / (1 + w.abs())
+
+    @staticmethod
+    def inverse_reciprocal_abs_plus_1(init_tau: float):
+        return init_tau - 1
+
 
     def __init__(self, init_tau=2.0, clamp=False, clamp_function=None, inverse_clamp_function=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
                  monitor_state=False):
