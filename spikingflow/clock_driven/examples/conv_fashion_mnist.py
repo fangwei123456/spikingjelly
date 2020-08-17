@@ -61,10 +61,10 @@ def main():
 
     训练100个epoch，训练batch和测试集上的正确率如下：
 
-    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
         :width: 100%
 
-    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
         :width: 100%
 
     * :ref:`中文API <conv_fashion_mnist.main-cn>`
@@ -77,10 +77,10 @@ def main():
 
     After 100 epochs, the accuracy on train batch and test dataset is as followed:
 
-    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
         :width: 100%
 
-    .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
         :width: 100%
     '''
     device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
