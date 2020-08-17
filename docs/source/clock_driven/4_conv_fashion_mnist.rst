@@ -37,7 +37,6 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
             nn.BatchNorm2d(128),
             neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2)  # 7 * 7
-
         )
 
 ``1 * 28 * 28`` 的输入经过这样的卷积层作用后，得到 ``128 * 7 * 7`` 的输出脉冲。
@@ -110,12 +109,22 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
             # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
             functional.reset_net(net)
 
-但我们如果重新审视网络的结构，可以发现，有一些计算是重复的：对于网络的前2层，即
+但我们如果重新审视网络的结构，可以发现，有一些计算是重复的：对于网络的前2层，即下面代码中的高亮部分：
 
 .. code-block:: python
+    :emphasize-lines: 2, 3
 
-    nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
-    nn.BatchNorm2d(128)
+    self.conv = nn.Sequential(
+            nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            nn.MaxPool2d(2, 2),  # 14 * 14
+
+            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            nn.MaxPool2d(2, 2)  # 7 * 7
+        )
 
 这2层接收的输入图片，并不随 ``t`` 变化，但在 ``for`` 循环中，每次 ``img`` 都会重新经过这2层的计算，得到相同的输出。我们提取出这些层，
 同时将时间上的循环封装进网络本身，方便计算。新的网络结构完整定义为：
@@ -171,7 +180,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 训练网络
 -----------------
 完整的代码位于 `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingflow/blob/master/spikingflow/clock_driven/examples/conv_fashion_mnist.py>`_。
-也可以通过命令行直接运行。会将训练过程中测试集正确率最高的网络的 ``state_dict`` 保存在 ``tensorboard`` 日志文件的同级目录下。
+也可以通过命令行直接运行。会将训练过程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。
 
 .. code-block:: python
 
@@ -204,3 +213,110 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 在训练100个epoch后，最高测试集正确率可以达到94.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_
 的BenchMark中使用Normalization, random horizontal flip, random vertical flip, random translation, random rotation的ResNet18的94.9%正确率。
+
+可视化编码器
+------------------------------------
+
+正如我们在前文中所述，直接将数据送入SNN，则首个脉冲神经元层及其之前的层，可以看作是一个可学习的编码器。具体而言，是我们的网络中如
+下所示的高亮部分：
+
+.. code-block:: python
+    :emphasize-lines: 6, 7, 8, 9, 12
+
+    class Net(nn.Module):
+        def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
+            ...
+            self.static_conv = nn.Sequential(
+                nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(128),
+            )
+
+            self.conv = nn.Sequential(
+                neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            ...
+
+现在让我们来查看一下，训练好的编码器，编码效果如何。让我们新建一个python文件，导入相关的模块，并重新定义一个 ``batch_size=1`` 的数据加载器，因为我们想要一
+张图片一张图片的查看：
+
+.. code-block:: python
+
+    from matplotlib import pyplot as plt
+    import numpy as np
+    from spikingflow.clock_driven.examples.conv_fashion_mnist import Net
+    from spikingflow import visualizing
+    import torch
+    import torch.nn as nn
+    import torchvision
+
+    test_data_loader = torch.utils.data.DataLoader(
+        dataset=torchvision.datasets.FashionMNIST(
+            root=dataset_dir,
+            train=False,
+            transform=torchvision.transforms.ToTensor(),
+            download=True),
+        batch_size=1,
+        shuffle=True,
+        drop_last=False)
+
+从保存网络的位置，即 ``log_dir`` 目录下，加载训练好的网络，并提取出编码器。在CPU上运行即可：
+
+.. code-block:: python
+
+    net = torch.load('./logs_conv_fashion_mnist/net_max_acc.pt', 'cpu')
+    encoder = nn.Sequential(
+        net.static_conv,
+        net.conv[0]
+    )
+    encoder.eval()
+
+接下来，从数据集中抽取一张图片，送入编码器，并查看输出脉冲的累加值 :math:`\sum_{t} S_{t}`。为了显示清晰，我们还对输出的 ``feature_map``
+的像素值做了归一化，将数值范围线性变换到 ``[0, 1]``。
+
+.. code-block:: python
+
+    with torch.no_grad():
+        # 每遍历一次全部数据集，就在测试集上测试一次
+        for img, label in test_data_loader:
+            fig = plt.figure(dpi=200)
+            plt.imshow(img.squeeze().numpy(), cmap='gray')
+            # 注意输入到网络的图片尺寸是 ``[1, 1, 28, 28]``，第0个维度是 ``batch``，第1个维度是 ``channel``
+            # 因此在调用 ``imshow`` 时，先使用 ``squeeze()`` 将尺寸变成 ``[28, 28]``
+            plt.title('Input image', fontsize=20)
+            plt.xticks([])
+            plt.yticks([])
+            plt.show()
+            out_spikes = 0
+            for t in range(net.T):
+                out_spikes += encoder(img).squeeze()
+                # encoder(img)的尺寸是 ``[1, 128, 28, 28]``，同样使用 ``squeeze()`` 变换尺寸为 ``[128, 28, 28]``
+                if t == 0 or t == net.T - 1:
+                    out_spikes_c = out_spikes.clone()
+                    for i in range(out_spikes_c.shape[0]):
+                        if out_spikes_c[i].max().item() > out_spikes_c[i].min().item():
+                            # 对每个feature map做归一化，使显示更清晰
+                            out_spikes_c[i] = (out_spikes_c[i] - out_spikes_c[i].min()) / (out_spikes_c[i].max() - out_spikes_c[i].min())
+                    visualizing.plot_2d_spiking_feature_map(out_spikes_c, 8, 16, 1, None)
+                    plt.title('$\\sum_{t} S_{t}$ at $t = ' + str(t) + '$', fontsize=20)
+                    plt.show()
+
+下面展示2个输入图片，以及在最开始 ``t=0`` 和最后 ``t=7`` 时刻的编码器输出的累计脉冲 :math:`\sum_{t} S_{t}`：
+
+.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x0.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y00.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y07.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x1.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y17.*
+    :width: 100%
+
+观察可以发现，编码器的累计输出脉冲 :math:`\sum_{t} S_{t}` 非常接近原图像的轮廓，表面这种自学习的脉冲编码器，有很强的编码能力。
