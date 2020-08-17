@@ -305,7 +305,32 @@ class LIFNode(BaseNode):
         return self.spiking()
 
 class PLIFNode(BaseNode):
-    def __init__(self, init_tau=2.0, decay=False, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
+    @staticmethod
+    def piecewise_exp(w: torch.Tensor):
+        if w.item() >= 0:
+            return 1 - (- w).exp() / 2
+        else:
+            return w.exp() / 2
+
+    @staticmethod
+    def inverse_piecewise_exp(init_tau: float):
+        if init_tau > 2:
+            return math.log(2 / init_tau)
+        elif init_tau < 2:
+            return math.log(init_tau / (2 * init_tau - 2))
+        else:
+            return 0.0
+
+    @staticmethod
+    def sigmoid(w: torch.Tensor):
+        return w.sigmoid()
+
+    @staticmethod
+    def inverse_sigmoid(init_tau: float):
+        return - math.log(init_tau - 1)
+
+
+    def __init__(self, init_tau=2.0, clamp=False, clamp_function=None, inverse_clamp_function=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
                  monitor_state=False):
         '''
         * :ref:`API in English <PLIFNode.__init__-en>`
@@ -314,7 +339,13 @@ class PLIFNode(BaseNode):
 
         :param init_tau: 初始的 ``tau``
 
-        :param decay: 为 ``True`` 时会限制 ``tau`` 的取值恒大于1，使得神经元不会给自身充电；为 ``False`` 时不会有任何限制
+        :param clamp: 本层神经元中可学习的参数为``w``,当 ``clamp == False`` 时，``self.v`` 的更新按照 ``self.v += (dv - (self.v - self.v_reset)) * self.w``；
+            当 ``clamp == True`` 时，``self.v`` 的更新按照 ``self.v += (dv - (self.v - self.v_reset)) * clamp_function(self.w)``，
+            且 ``self.w`` 的初始值为 ``inverse_clamp_function(init_tau)``
+
+        :param clamp_function: 通常是取值 ``(0,1)`` 的一个函数，当 ``clamp == True``，在前向传播时，``tau = 1 / clamp_function(self.w)``。
+
+        :param inverse_clamp_function: ``clamp_function`` 的反函数。这个参数只在 ``clamp == True`` 时生效
 
         :param v_threshold: 神经元的阈值电压
 
@@ -341,7 +372,7 @@ class PLIFNode(BaseNode):
 
             ``self.v += (dv - (self.v - self.v_reset)) / self.tau``
 
-            为了防止出现除以0的情况，PLIF神经元没有使用除法，而是用乘法代替：
+            为了防止出现除以0的情况，PLIF神经元没有使用除法，而是用乘法代替（``clamp == False`` 时）：
 
             ``self.w = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))``
 
@@ -353,8 +384,14 @@ class PLIFNode(BaseNode):
 
         :param init_tau: initial value of ``tau``
 
-        :param decay: If ``True``, ``tau`` will be restricted to larger than 1, making sure that neurons will not charge themselves.
-            If ``False``, there won't be any restriction on ``tau``.
+        :param clamp: the learnable parameter is ``w`. When ``clamp == False``, the update of ``self.v`` is ``self.v += (dv - (self.v - self.v_reset)) * self.w``;
+            when ``clamp == True``, the update of ``self.v`` is ``self.v += (dv - (self.v - self.v_reset)) * clamp_function(self.w)``,
+            and the initial value of ``self.w`` is ``inverse_clamp_function(init_tau)``
+
+        :param clamp_function: can be a function range ``(0,1)``. When ``clamp == True``, ``tau = 1 / clamp_function(self.w)``
+            during forward.
+
+        :param inverse_clamp_function: inverse function of ``clamp_function``. This param only takes effect when ``clamp == True``
 
         :param v_threshold: threshold voltage of neurons
 
@@ -382,43 +419,34 @@ class PLIFNode(BaseNode):
 
             ``self.v += (dv - (self.v - self.v_reset)) / self.tau``
 
-            To avoid division by zero, the code for the PLIF neuron uses multiplication substitute for division:
+            To avoid division by zero, the code for the PLIF neuron uses multiplication substitute for division (when
+            ``clamp == False``):
 
             ``self.w = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))``
 
             ``self.v += (dv - (self.v - self.v_reset)) * self.w``
         '''
         super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
-        self.decay = decay
-        if self.decay:
-            if init_tau > 2:
-                init_w = math.log(2 / init_tau)
-            elif init_tau < 2:
-                init_w = math.log(init_tau / (2 * init_tau - 2))
-            else:
-                init_w = 0.0
+        self.clamp = clamp
+        if self.clamp:
+            self.clamp_function = clamp_function
+            init_w = inverse_clamp_function(init_tau)
             self.w = nn.Parameter(torch.tensor([init_w], dtype=torch.float))
+            assert abs(self.tau() - init_tau) < 1e-4, print('tau:', self.tau(), 'init_tau', init_tau)
 
         else:
             self.w = nn.Parameter(1 / torch.tensor([init_tau], dtype=torch.float))
 
     def forward(self, dv: torch.Tensor):
-        if self.decay:
-            if self.w.item() >= 0:
-                self.v += (dv - (self.v - self.v_reset)) * (1 - (- self.w).exp() / 2)
-            else:
-                self.v += (dv - (self.v - self.v_reset)) * (self.w.exp() / 2)
+        if self.clamp:
+            self.v += (dv - (self.v - self.v_reset)) * self.clamp_function(self.w)
         else:
             self.v += (dv - (self.v - self.v_reset)) * self.w
         return self.spiking()
 
     def tau(self):
-        if self.decay:
-            w_item = self.w.item()
-            if w_item >= 0:
-                return 1 / (1 - math.exp(- w_item) / 2)
-            else:
-                return 1 / (math.exp(w_item) / 2)
+        if self.clamp:
+            return 1 / self.clamp_function(self.w.data).item()
         else:
             return 1 / self.w.data.item()
 
