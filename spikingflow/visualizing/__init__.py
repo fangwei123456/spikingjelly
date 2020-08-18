@@ -216,12 +216,15 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
     if plot_spiking_rate:
         spiking_rate = np.mean(spikes, axis=1, keepdims=True)
+
         max_rate = spiking_rate.max()
+        min_rate = spiking_rate.min()
+
         spiking_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
         spiking_rate_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
         spiking_rate_map.imshow(spiking_rate, cmap='magma', aspect='auto')
         for i in range(spiking_rate.shape[0]):
-            spiking_rate_map.text(0, i, spiking_rate[i][0], ha='center', va='center', color='w' if spiking_rate[i][0] < 0.8 * max_rate else 'black')
+            spiking_rate_map.text(0, i, f'{spiking_rate[i][0]:.2f}', ha='center', va='center', color='w' if spiking_rate[i][0] < 0.7 * max_rate or min_rate == max_rate else 'black')
         spiking_rate_map.get_xaxis().set_visible(False)
         spiking_rate_map.set_title(spiking_rate_map_title)
     return fig
