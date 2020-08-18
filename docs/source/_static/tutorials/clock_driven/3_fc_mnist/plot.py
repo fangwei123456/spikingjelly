@@ -50,5 +50,5 @@ plt.show()
 s_t_array = np.load('s_t_array.npy')
 visualizing.plot_1d_spikes(spikes=s_t_array, title='Spikes of Neurons', xlabel='Simulating Step',
 							ylabel='Neuron Index', int_x_ticks=True, int_y_ticks=True,
-							plot_spiking_rate=True, spiking_rate_map_title='Firing Rate', dpi=200)
+							plot_firing_rate=True, firing_rate_map_title='Firing Rate', dpi=200)
 plt.show()
