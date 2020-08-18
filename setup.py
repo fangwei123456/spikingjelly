@@ -4,10 +4,14 @@ python -m twine upload dist/*
 '''
 import setuptools
 
+with open("./requirements.txt", "r", encoding="utf-8") as fh:
+    install_requires = fh.read()
+
 with open("./README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setuptools.setup(
+    install_requires=install_requires,
     name="spikingflow",
     version="0.2.4.5.937",
     author="PKU MLG and other contributors",
@@ -22,5 +26,5 @@ setuptools.setup(
         "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.5',
+    python_requires='>=3.6',
 )
