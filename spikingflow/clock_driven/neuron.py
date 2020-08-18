@@ -112,9 +112,9 @@ class BaseNode(nn.Module):
             if self.monitor['v'].__len__() == 0:
                 # 补充在0时刻的电压
                 if self.v_reset is None:
-                    self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
-                else:
                     self.monitor['v'].append(self.v.data.cpu().numpy().copy() * 0)
+                else:
+                    self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
 
             self.monitor['v'].append(self.v.data.cpu().numpy().copy())
             self.monitor['s'].append(spike.data.cpu().numpy().copy())
