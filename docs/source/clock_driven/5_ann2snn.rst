@@ -1,6 +1,6 @@
 前馈ANN转换SNN
 =======================================
-本教程作者： `DingJianhao <https://github.com/DingJianhao>`_
+本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
 本节教程主要关注 ``spikingflow.clock_driven.ann2snn``，介绍如何将训练好的前馈ANN转换SNN，并且在SpikingFlow框架上进行仿真。
 
@@ -12,6 +12,76 @@ ANN转换SNN的理论基础
 SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。在ANN大行其道的今天，SNN的直接训练需要较多资源。自然我们会想到使用现在非常成熟的ANN转换到SNN，希望SNN也能有类似的表现。这就牵扯到如何搭建起ANN和SNN桥梁的问题。现在SNN主流的方式是采用频率编码，因此对于输出层，我们会用神经元输出脉冲数来判断类别。发放率和ANN有没有关系呢？
 
 幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingflow.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_ 中提到的Soft方式。
+
+实验：IF神经元脉冲发放频率和输入的关系
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+我们给与恒定输入到IF神经元，观察其输出脉冲和脉冲发放频率。首先导入相关的模块，新建IF神经元层，确定输入并画出每个IF神经元的输入 :math:`x_{i}`：
+
+.. code-block:: python
+
+    import torch
+    from spikingflow.clock_driven import neuron
+    from spikingflow import visualizing
+    from matplotlib import pyplot as plt
+    import numpy as np
+
+    plt.rcParams['figure.dpi'] = 200
+    if_node = neuron.IFNode(v_reset=None, monitor_state=True)
+    T = 128
+    x = torch.arange(-0.2, 1.2, 0.04)
+    plt.scatter(torch.arange(x.shape[0]), x)
+    plt.title('Input $x_{i}$ to IF neurons')
+    plt.xlabel('Neuron index $i$')
+    plt.ylabel('Input $x_{i}$')
+    plt.grid(linestyle='-.')
+    plt.show()
+
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/0.*
+    :width: 100%
+
+接下来，将输入送入到IF神经元层，并运行 ``T=128`` 步，观察各个神经元发放的脉冲、脉冲发放频率：
+
+.. code-block:: python
+
+    for t in range(T):
+        if_node(x)
+    out_spikes = np.asarray(if_node.monitor['s']).T
+    visualizing.plot_1d_spikes(out_spikes, 'IF neurons\' spikes and firing rates', 't', 'Neuron index $i$')
+    plt.show()
+
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/1.*
+    :width: 100%
+
+可以发现，脉冲发放的频率在一定范围内，与输入 :math:`x_{i}` 的大小成正比。
+
+接下来，让我们画出IF神经元脉冲发放频率和输入 :math:`x_{i}` 的曲线，并与 :math:`\mathrm{ReLU}(x_{i})` 对比：
+
+.. code-block:: python
+
+    plt.subplot(1, 2, 1)
+    firing_rate = np.mean(out_spikes, axis=1)
+    plt.plot(x, firing_rate)
+    plt.title('Input $x_{i}$ and firing rate')
+    plt.xlabel('Input $x_{i}$')
+    plt.ylabel('Firing rate')
+    plt.grid(linestyle='-.')
+
+    plt.subplot(1, 2, 2)
+    plt.plot(x, x.relu())
+    plt.title('Input $x_{i}$ and ReLU($x_{i}$)')
+    plt.xlabel('Input $x_{i}$')
+    plt.ylabel('ReLU($x_{i}$)')
+    plt.grid(linestyle='-.')
+    plt.show()
+
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/2.*
+    :width: 100%
+
+可以发现，两者的曲线几乎一致。需要注意的是，脉冲频率不可能高于1，因此IF神经元无法拟合ANN中ReLU的输入大于1的情况。
+
+理论证明
+^^^^^^^^
 
 下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = \max\{input,0\}` 。
 

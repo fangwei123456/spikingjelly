@@ -88,11 +88,11 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
 
         Epochs = 5
         N = 10
-        spiking_rate = torch.zeros(N, Epochs)
-        init_spiking_rate = torch.rand(size=[N])
+        firing_rate = torch.zeros(N, Epochs)
+        init_firing_rate = torch.rand(size=[N])
         for i in range(Epochs):
-            spiking_rate[:, i] = torch.softmax(init_spiking_rate * (i + 1) ** 2, dim=0)
-        visualizing.plot_2d_bar_in_3d(spiking_rate.numpy(), title='spiking rates of output layer', xlabel='neuron index',
+            firing_rate[:, i] = torch.softmax(init_firing_rate * (i + 1) ** 2, dim=0)
+        visualizing.plot_2d_bar_in_3d(firing_rate.numpy(), title='spiking rates of output layer', xlabel='neuron index',
                                       ylabel='training epoch', zlabel='spiking rate', int_x_ticks=True, int_y_ticks=True,
                                       int_z_ticks=False, dpi=200)
         plt.show()
@@ -138,7 +138,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     return fig
 
 def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                   plot_spiking_rate=True, spiking_rate_map_title='Spiking Rate', dpi=200):
+                   plot_firing_rate=True, firing_rate_map_title='Firing Rate', dpi=200):
     '''
 
 
@@ -148,8 +148,8 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     :param ylabel: 热力图的y轴的label
     :param int_x_ticks: x轴上是否只显示整数刻度
     :param int_y_ticks: y轴上是否只显示整数刻度
-    :param plot_spiking_rate: 是否画出各个脉冲发放频率
-    :param spiking_rate_map_title: 脉冲频率发放图的标题
+    :param plot_firing_rate: 是否画出各个脉冲发放频率
+    :param firing_rate_map_title: 脉冲频率发放图的标题
     :param dpi: 绘图的dpi
     :return: 绘制好的figure
 
@@ -172,7 +172,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         s_t_array = np.asarray(lif_node.monitor['s']).T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
         visualizing.plot_1d_spikes(spikes=s_t_array, title='Spikes of Neurons', xlabel='Simulating Step',
                                 ylabel='Neuron Index', int_x_ticks=True, int_y_ticks=True,
-                                plot_spiking_rate=True, spiking_rate_map_title='Firing Rate', dpi=200)
+                                plot_firing_rate=True, firing_rate_map_title='Firing Rate', dpi=200)
         plt.show()
 
     .. image:: ./_static/API/visualizing/plot_1d_spikes.*
@@ -182,11 +182,11 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     if spikes.ndim != 2:
         raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
 
-    if plot_spiking_rate:
+    if plot_firing_rate:
         fig = plt.figure(tight_layout=True, dpi=dpi)
         gs = matplotlib.gridspec.GridSpec(1, 5)
         spikes_map = fig.add_subplot(gs[0, 0:4])
-        spiking_rate_map = fig.add_subplot(gs[0, 4])
+        firing_rate_map = fig.add_subplot(gs[0, 4])
     else:
         fig, spikes_map = plt.subplots()
 
@@ -214,19 +214,19 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     for i in range(N):
         spikes_map.eventplot(t_spike[i][mask[i]], lineoffsets=i, colors=colormap(i % 10))
 
-    if plot_spiking_rate:
-        spiking_rate = np.mean(spikes, axis=1, keepdims=True)
+    if plot_firing_rate:
+        firing_rate = np.mean(spikes, axis=1, keepdims=True)
 
-        max_rate = spiking_rate.max()
-        min_rate = spiking_rate.min()
+        max_rate = firing_rate.max()
+        min_rate = firing_rate.min()
 
-        spiking_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
-        spiking_rate_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-        spiking_rate_map.imshow(spiking_rate, cmap='magma', aspect='auto')
-        for i in range(spiking_rate.shape[0]):
-            spiking_rate_map.text(0, i, f'{spiking_rate[i][0]:.2f}', ha='center', va='center', color='w' if spiking_rate[i][0] < 0.7 * max_rate or min_rate == max_rate else 'black')
-        spiking_rate_map.get_xaxis().set_visible(False)
-        spiking_rate_map.set_title(spiking_rate_map_title)
+        firing_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+        firing_rate_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
+        firing_rate_map.imshow(firing_rate, cmap='magma', aspect='auto')
+        for i in range(firing_rate.shape[0]):
+            firing_rate_map.text(0, i, f'{firing_rate[i][0]:.2f}', ha='center', va='center', color='w' if firing_rate[i][0] < 0.7 * max_rate or min_rate == max_rate else 'black')
+        firing_rate_map.get_xaxis().set_visible(False)
+        firing_rate_map.set_title(firing_rate_map_title)
     return fig
 
 def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: str, dpi=200):

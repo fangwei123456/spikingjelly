@@ -1,6 +1,6 @@
 spikingflow.clock_driven.ann2snn
 =======================================
-Author: `DingJianhao <https://github.com/DingJianhao>`_
+Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
 This tutorial focuses on ``spikingflow.clock_driven.ann2snn``，introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingFlow framework.
 
