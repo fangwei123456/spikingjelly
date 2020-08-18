@@ -221,7 +221,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 下所示的高亮部分：
 
 .. code-block:: python
-    :emphasize-lines: 6, 7, 8, 9, 12
+    :emphasize-lines: 5, 6, 10
 
     class Net(nn.Module):
         def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
