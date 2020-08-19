@@ -1,12 +1,6 @@
-# SpikingFlow
+# SpikingFlow ![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingflow) [![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingflow)](https://pypi.org/project/spikingflow) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingflow)](https://pypi.org/project/spikingflow) ![License](https://img.shields.io/github/license/fangwei123456/spikingflow)
 
-![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingflow)
-[![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest)
-[![PyPI](https://img.shields.io/pypi/v/spikingflow)](https://pypi.org/project/spikingflow)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingflow)](https://pypi.org/project/spikingflow)
-![License](https://img.shields.io/github/license/fangwei123456/spikingflow)
-
-[README in English](https://github.com/fangwei123456/spikingflow/blob/master/README.md)
+[English](https://github.com/fangwei123456/spikingflow/blob/master/README.md) | 中文
 
 ![demo](demo.png)
 
