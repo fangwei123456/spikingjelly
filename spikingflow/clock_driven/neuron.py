@@ -459,8 +459,8 @@ class PLIFNode(BaseNode):
             return 1 / self.w.data.item()
 
     def extra_repr(self):
-        return 'v_threshold={}, v_reset={}, tau={}, decay={}'.format(
-            self.v_threshold, self.v_reset, self.tau(), self.decay
+        return 'v_threshold={}, v_reset={}, tau={}, clamp={}'.format(
+            self.v_threshold, self.v_reset, self.tau(), self.clamp
         )
 
 class RIFNode(BaseNode):
