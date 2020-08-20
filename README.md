@@ -54,6 +54,18 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 
 Read [spikingflow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/spikingflow.clock_driven.examples.html) to explore more advanced networks!
 
+## Device Supports
+
+-   [x] Nvidia GPU
+-   [x] CPU
+
+As simple as using PyTorch.
+
+```python
+>>> net = nn.Sequential(nn.Flatten(), neuron.LIFNode(tau=tau))
+>>> net = net.to(device) # Can be CPU or CUDA devices
+```
+
 ## About
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingFlow.
