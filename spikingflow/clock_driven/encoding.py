@@ -18,7 +18,7 @@ class BaseEncoder(nn.Module):
 
         多数编码器（例如PeriodicEncoder），都是把x编码成时长为n个dt的脉冲out_spike，out_spike.shape=[n, *]。
 
-        因此编码一次后，需要调用n次step()函数才能将脉冲全部发放完毕，第index此调用step()会得到out_spike[index]。
+        因此编码一次后，需要调用n次step()函数才能将脉冲全部发放完毕，第index次调用step()会得到out_spike[index]。
         '''
         raise NotImplementedError
 
@@ -165,7 +165,7 @@ class LatencyEncoder(BaseEncoder):
         if self.type == 'log':
             self.spike_time = (self.max_spike_time - 1 - torch.log(self.alpha * x + 1)).round().long()
         else:
-            self.spike_time = (self.max_spike_time - 1) * (1 - x).round().long()
+            self.spike_time = ((self.max_spike_time - 1) * (1 - x)).round().long()
 
         self.out_spike = F.one_hot(self.spike_time,
                                        num_classes=self.max_spike_time).bool()  # [*, max_spike_time]
