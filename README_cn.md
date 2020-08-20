@@ -54,6 +54,18 @@ class Net(nn.Module):
 
 阅读[spikingflow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/spikingflow.clock_driven.examples.html)以探索更多先进的神经网络！
 
+## 设备支持
+
+-   [x] Nvidia GPU
+-   [x] CPU
+
+像使用PyTorch一样简单。
+
+```python
+>>> net = nn.Sequential(nn.Flatten(), neuron.LIFNode(tau=tau))
+>>> net = net.to(device) # Can be CPU or CUDA devices
+```
+
 ## 项目信息
 
 北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 是SpikingFlow的主要开发者。
