@@ -581,3 +581,155 @@ class RIFNode(BaseNode):
 
 
         return self.spiking()
+
+class SpikingLSTMCell(nn.Module):
+    def __init__(self, input_size, hidden_size, bias=True, v_threshold=1.0,
+                 surrogate_function1=surrogate.Erf(), surrogate_function2=None, monitor_state=False):
+        '''
+        :param input_size: The number of expected features in the input ``x``
+
+        :param hidden_size: The number of features in the hidden state ``h``
+
+        :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and
+            ``b_hh``. Default: ``True``
+
+        :param v_threshold: threshold voltage of neurons
+
+        :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
+            back-propagation, which is used for generating ``i``, ``f``, ``o``
+
+        :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
+            back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
+            will be set as ``surrogate_function1``. Default: ``None``
+
+        :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
+            If ``True``, ``self.monitor`` will be a dictionary with key ``i``, ``f``, ``g``, ``o``, ``c``, ``h`` for
+            recording spikes and outputs. And the value of the dictionary is lists. To save memory, the elements in lists
+            are ``numpy`` array converted from origin data. Besides, ``self.reset()`` will clear these lists in the dictionary
+
+        A `spiking` long short-term memory (LSTM) cell, which is firstly proposed in
+        `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
+
+        .. math::
+
+            i &= \\Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\\\
+            f &= \\Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\\\
+            g &= \\Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\\\
+            o &= \\Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\\\
+            c' &= f * c + i * g \\\\
+            h' &= o * c'
+
+        where :math:`\\Theta` is the heaviside function, and :math:`*` is the Hadamard product.
+
+        .. admonition:: Note
+            :class: note
+
+            All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
+            where :math:`k = \\frac{1}{\\text{hidden_size}}`.
+
+        Examples:
+
+        .. code-block:: python
+
+            T = 6
+            batch_size = 2
+            input_size = 3
+            hidden_size = 4
+            rnn = neuron.SpikingLSTMCell(input_size, hidden_size)
+            input = torch.randn(T, batch_size, input_size) * 50
+            output_h = []
+            output_c = []
+            for t in range(T):
+                h, c = rnn(input[t])
+                output_h.append(h)
+                output_c.append(c)
+            print(output_h)
+            print(output_c)
+        '''
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.bias = bias
+        self.v_threshold = v_threshold
+        if monitor_state:
+            self.monitor = {'i': [], 'f': [], 'g': [], 'o': [], 'c': [], 'h': []}
+        else:
+            self.monitor = False
+        self.c = None
+        self.h = None
+
+        self.linear_ih = nn.Linear(input_size, 4 * hidden_size, bias=bias)
+        self.linear_hh = nn.Linear(hidden_size, 4 * hidden_size, bias=bias)
+
+        self.surrogate_function1 = surrogate_function1
+        self.surrogate_function2 = surrogate_function2
+
+        self.reset_parameters()
+
+
+    def reset_parameters(self):
+        sqrt_k = math.sqrt(1 / self.hidden_size)
+        nn.init.uniform_(self.linear_ih.weight, -sqrt_k, sqrt_k)
+        nn.init.uniform_(self.linear_hh.weight, -sqrt_k, sqrt_k)
+        if self.bias is not None:
+            nn.init.uniform_(self.linear_ih.bias, -sqrt_k, sqrt_k)
+            nn.init.uniform_(self.linear_hh.bias, -sqrt_k, sqrt_k)
+
+    def forward(self, x: torch.Tensor):
+        '''
+        :param x: the input tensor with ``shape = [batch_size, input_size]``
+        :return: (h', c')
+
+            - **c'** -- ``shape = [batch, hidden_size]``: tensor containing the next hidden state for each element in the batch
+
+            - **h'** -- ``shape = [batch, hidden_size]``: tensor containing the next cell state for each element in the batch
+        '''
+        if self.h is None:
+            self.c = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
+            self.h = torch.zeros_like(self.c)
+
+        if self.surrogate_function2 is None:
+            i, f, g, o = torch.split(self.surrogate_function1(self.linear_ih(x) + self.linear_hh(self.h) - self.v_threshold),
+                                     self.hidden_size, dim=1)
+        else:
+            i, f, g, o = torch.split(self.linear_ih(x) + self.linear_hh(x) - self.v_threshold, self.hidden_size, dim=1)
+            i = self.surrogate_function1(i)
+            f = self.surrogate_function1(f)
+            g = self.surrogate_function2(g)
+            o = self.surrogate_function1(o)
+
+        # self.c can be 0, 1, 2
+        # self.c = f * self.c + i * g
+        self.c = accelerating.mul(self.c, f) + accelerating.mul(i, g, True)
+        # self.h = o * self.c
+        self.h = accelerating.mul(self.c, o)
+
+        if self.monitor:
+            self.monitor['i'].append(i)
+            self.monitor['f'].append(f)
+            self.monitor['g'].append(g)
+            self.monitor['o'].append(o)
+            self.monitor['c'].append(self.c)
+            self.monitor['h'].append(self.h)
+
+        return self.h, self.c
+
+    def reset(self):
+        self.c = None
+        self.h = None
+        if self.monitor:
+            self.monitor = {'i': [], 'f': [], 'g': [], 'o': [], 'c': [], 'h': []}
+
+
+
+    def weight_ih(self):
+        return self.linear_ih.weight
+
+    def weight_hh(self):
+        return self.linear_hh.weight
+
+    def bias_ih(self):
+        return self.linear_ih.bias
+
+    def bias_hh(self):
+        return self.linear_hh.bias
