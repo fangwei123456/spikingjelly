@@ -84,7 +84,7 @@
 .. math::
     t_i = (t_{max} - 1) - ln(\alpha * x_i + 1)
 
-其中， :math:`t_{max}` 为最大脉冲发放时间， :math:`x_i` 需归一化到[0,1]。
+其中， :math:`t_{max}` 为最大脉冲发放时间， :math:`x_i` 需归一化到 :math:`[0,1]`。
 
 考虑第二个式子， :math:`\alpha` 需满足：
 
