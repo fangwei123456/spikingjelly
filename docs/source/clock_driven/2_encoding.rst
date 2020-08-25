@@ -94,7 +94,7 @@
 这会导致该编码器很可能发生溢出，因为
 
 .. math::
-    \alpha = \exp(t_{max} - 1) - 1
+    \alpha = e^{t_{max} - 1} - 1
 
 :math:`\alpha` 会随着 :math:`t_{max}` 增大而指数增长，最终造成溢出。
 
