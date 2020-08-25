@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from spikingflow.clock_driven import surrogate, accelerating
+from spikingflow.clock_driven import surrogate, accelerating, layer
 import math
 
 class BaseNode(nn.Module):
@@ -638,13 +638,10 @@ class SpikingLSTMCell(nn.Module):
             rnn = neuron.SpikingLSTMCell(input_size, hidden_size)
             input = torch.randn(T, batch_size, input_size) * 50
             output_h = []
-            output_c = []
             for t in range(T):
-                h, c = rnn(input[t])
+                h = rnn(input[t])
                 output_h.append(h)
-                output_c.append(c)
             print(output_h)
-            print(output_c)
         '''
         super().__init__()
         self.input_size = input_size
@@ -678,9 +675,7 @@ class SpikingLSTMCell(nn.Module):
     def forward(self, x: torch.Tensor):
         '''
         :param x: the input tensor with ``shape = [batch_size, input_size]``
-        :return: (h', c')
-
-            - **c'** -- ``shape = [batch, hidden_size]``: tensor containing the next hidden state for each element in the batch
+        :return: h'
 
             - **h'** -- ``shape = [batch, hidden_size]``: tensor containing the next cell state for each element in the batch
         '''
@@ -712,7 +707,7 @@ class SpikingLSTMCell(nn.Module):
             self.monitor['c'].append(self.c)
             self.monitor['h'].append(self.h)
 
-        return self.h, self.c
+        return self.h
 
     def reset(self):
         self.c = None
@@ -733,3 +728,29 @@ class SpikingLSTMCell(nn.Module):
 
     def bias_hh(self):
         return self.linear_hh.bias
+
+class SpikingLSTM(nn.Module):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout=0, invariant_dropout_mask=False, v_threshold=1.0,
+                 surrogate_function1=surrogate.Erf(), surrogate_function2=None, monitor_state=False):
+        super().__init__()
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.num_layers = num_layers
+
+        stack_lstmcell = []
+        stack_lstmcell.append(SpikingLSTMCell(input_size, hidden_size, bias, v_threshold,
+                                              surrogate_function1, surrogate_function2, monitor_state))
+        for i in range(num_layers - 1):
+            if dropout > 0:
+                if invariant_dropout_mask:
+                    stack_lstmcell.append(layer.Dropout(dropout))
+                else:
+                    stack_lstmcell.append(nn.Dropout(dropout))
+            stack_lstmcell.append(SpikingLSTMCell(hidden_size, hidden_size, bias, v_threshold,
+                                                  surrogate_function1, surrogate_function2, monitor_state))
+        self.stack = nn.Sequential(*stack_lstmcell)
+
+    def forward(self, x: torch.Tensor):
+        return self.stack(x)
+
+
