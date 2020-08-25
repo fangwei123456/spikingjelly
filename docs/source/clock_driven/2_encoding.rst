@@ -82,21 +82,21 @@
 当编码类型为对数时（ ``function_type='log'`` ）
 
 .. math::
-    t_i = (t_{max} - 1) - ln(alpha * x_i + 1)
+    t_i = (t_{max} - 1) - ln(\alpha * x_i + 1)
 
 其中， :math:`t_{max}` 为最大脉冲发放时间， :math:`x_i` 需归一化到[0,1]。
 
-考虑第二个式子， :math:`alpha`需满足：
+考虑第二个式子， :math:`\alpha` 需满足：
 
 .. math::
-    (t_{max} - 1) - ln(alpha * 1 + 1) = 0
+    (t_{max} - 1) - ln(\alpha * 1 + 1) = 0
 
 这会导致该编码器很可能发生溢出，因为
 
 .. math::
-    alpha = exp(t_{max} - 1) - 1
+    \alpha = \exp(t_{max} - 1) - 1
 
-:math:`alpha` 会随着 :math:`t_{max}` 增大而指数增长，最终造成溢出。
+:math:`\alpha` 会随着 :math:`t_{max}` 增大而指数增长，最终造成溢出。
 
 示例：随机生成6个 ``x`` ，分别为6个神经元的刺激强度，并设定最大脉冲发放时间为20，对以上输入数据进行编码。
 
@@ -178,10 +178,10 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 对于第 :math:`i` 个特征 :math:`X^i`，取值范围为 :math:`X^i_{min}<=X^i<=X^i_{max}`。根据特征最大和最小值可计算出 ``tuning_curve_num`` 条高斯曲线 :math:`G^i_j` 的均值和方差：
 
 .. math::
-    mu^i_j = x^i_{min} + \frac{2j-3}{2} \frac{x^i_{max} - x^i_{min}}{m - 2}
-    sigma^i_j = \frac{1}{beta} \frac{x^i_{max} - x^i_{min}}{m - 2}
+    \mu^i_j = x^i_{min} + \frac{2j-3}{2} \frac{x^i_{max} - x^i_{min}}{m - 2}
+    \sigma^i_j = \frac{1}{\beta} \frac{x^i_{max} - x^i_{min}}{m - 2}
 
-其中 :math:`beta` 通常取值 :math:`1.5`。对于同一个特征，所有高斯曲线形状完全相同，对称轴位置不同。
+其中 :math:`\beta` 通常取值 :math:`1.5`。对于同一个特征，所有高斯曲线形状完全相同，对称轴位置不同。
 
 生成高斯曲线后，则计算每个输入对应的高斯函数值，并将这些函数值线性转换为 ``[0, max_spike_time - 1]`` 之间的脉冲发放时间。此外，对于最后时刻发放的脉冲，
 被认为是没有脉冲发放。
