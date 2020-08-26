@@ -111,18 +111,18 @@ class LatencyEncoder(BaseEncoder):
 
         type='log'
             .. math::
-                t_i = (t_{max} - 1) - ln(/alpha * x_i + 1)
+                t_i = (t_{max} - 1) - ln(\\alpha * x_i + 1)
 
-        :math:`/alpha` 满足：
+        :math:`\\alpha` 满足：
 
         .. math::
-            (t_{max} - 1) - ln(/alpha * 1 + 1) = 0
+            (t_{max} - 1) - ln(\\alpha * 1 + 1) = 0
         这导致此编码器很容易发生溢出，因为
 
         .. math::
-            /alpha = e^{t_{max} - 1} - 1
+            \\alpha = e^{t_{max} - 1} - 1
 
-        当 :math:`t_{max}` 较大时 :math:`/alpha` 极大。
+        当 :math:`t_{max}` 较大时 :math:`\\alpha` 极大。
 
         示例代码：
 
