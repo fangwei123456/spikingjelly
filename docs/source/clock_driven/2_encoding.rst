@@ -46,6 +46,12 @@
 
 .. code-block:: python
 
+    import torch
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import visualizing
+    import encoding
+
     # 给定脉冲序列
     set_spike = torch.full((3, 5), 0, dtype=torch.bool)
     set_spike[0, 1] = 1
@@ -60,7 +66,7 @@
         out_spike[:, t] = pe.step()
 
     plt.style.use(['science', 'muted'])
-    visualizing.plot_1d_spikes(out_spike.numpy(), 'PeriodicEncoder', 'Simulating Step', 'Neuron Index',
+    visualizing.plot_1d_spikes(out_spike.float().numpy(), 'PeriodicEncoder', 'Simulating Step', 'Neuron Index',
                                plot_spiking_rate=False)
     plt.show()
 
@@ -102,13 +108,19 @@
 
 .. code-block:: python
 
+    import torch
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import visualizing
+    import encoding
+
     # 随机生成6个神经元的刺激强度，设定最大脉冲时间为20
     x = torch.rand(6)
     max_spike_time = 20
 
     # 将输入数据编码为脉冲序列
     le = encoding.LatencyEncoder(max_spike_time)
-    le.forward(x)
+    le(x)
 
     # 输出延迟编码器的编码结果
     out_spike = torch.full((6, 20), 0, dtype=torch.bool)
@@ -117,8 +129,8 @@
 
     print(x)
     plt.style.use(['science', 'muted'])
-    visualizing.plot_1d_spikes(out_spike.numpy(), 'LatencyEncoder', 'Simulating Step', 'Neuron Index',
-                           plot_spiking_rate=False)
+    visualizing.plot_1d_spikes(out_spike.float().numpy(), 'LatencyEncoder', 'Simulating Step', 'Neuron Index',
+                               plot_spiking_rate=False)
     plt.show()
 
 当随机生成的6个刺激强度分别为 ``0.6650`` 、 ``0.3704`` 、 ``0.8485`` 、 ``0.0247`` 、 ``0.5589`` 和 ``0.1030`` 时，得到的脉冲序列如下：
@@ -132,12 +144,20 @@
 这样的脉冲流就是一个泊松流。更具体地说，在整个脉冲流中，互不相交的区间里出现脉冲的个数是相互独立的，且在任意一个区间中，出现脉冲的个数与区间的起点无关，
 与区间的长度有关。因此，为了实现泊松编码，我们令一个时间步长的脉冲发放概率 :math:`p=x`, 其中 :math:`x` 需归一化到[0,1]。
 
-示例：输入图像为lena，仿真20个时间步长，得到20个脉冲矩阵。
+示例：输入图像为 `lena512.bmp <https://www.ece.rice.edu/~wakin/images/lena512.bmp>`_ ，仿真20个时间步长，得到20个脉冲矩阵。
 
 .. code-block:: python
 
+    import torch
+    import numpy as np
+    import matplotlib
+    import matplotlib.pyplot as plt
+    from PIL import Image
+    import visualizing
+    import encoding
+
     # 读入lena图像
-    lena_img = cv2.imread('lena512.bmp', flags=0) / 255
+    lena_img = np.array(Image.open('lena512.bmp')) / 255
     x = torch.from_numpy(lena_img)
 
     pe = encoding.PoissonEncoder()
@@ -147,17 +167,15 @@
     out_spike = torch.full((20, w, h), 0, dtype=torch.bool)
     T = 20
     for t in range(T):
-        out_spike[t] = pe.forward(x)
+        out_spike[t] = pe(x)
 
     plt.figure()
+    plt.style.use(['science', 'muted'])
     plt.imshow(x, cmap='gray')
     plt.axis('off')
 
-    plt.style.use(['science', 'muted'])
-    visualizing.plot_2d_spiking_feature_map(out_spike, 4, 5, 30, 'PoissonEncoder')
+    visualizing.plot_2d_spiking_feature_map(out_spike.float().numpy(), 4, 5, 30, 'PoissonEncoder')
     plt.axis('off')
-
-    plt.show()
 
 lena原灰度图和编码后20个脉冲矩阵如下：
 
@@ -168,6 +186,36 @@ lena原灰度图和编码后20个脉冲矩阵如下：
     :width: 100%
 
 对比原灰度图和编码后的脉冲矩阵，可发现脉冲矩阵很接近原灰度图的轮廓，可见泊松编码器性能的优越性。
+
+同样对lena灰度图进行编码，仿真512个时间步长，将每一步得到的脉冲矩阵叠加，得到第1、128、256、384、512步叠加得到的结果并画图：
+
+.. code-block:: python
+
+    # 仿真512个时间不长，将编码的脉冲矩阵逐次叠加，得到第1、128、256、384、512次叠加的结果并输出
+    superposition = torch.full((w, h), 0, dtype=torch.float)
+    superposition_ = torch.full((5, w, h), 0, dtype=torch.float)
+    T = 512
+    for t in range(T):
+        superposition += pe(x).float()
+        if t == 0 or t == 127 or t == 255 or t == 387 or t == 511:
+            superposition_[int((t + 1) / 128)] = superposition
+
+    # 归一化
+    for i in range(5):
+        min_ = superposition_[i].min()
+        max_ = superposition_[i].max()
+        superposition_[i] = (superposition_[i] - min_) / (max_ - min_)
+
+    # 画图
+    visualizing.plot_2d_spiking_feature_map(superposition_.numpy(), 1, 5, 30, 'PoissonEncoder')
+    plt.axis('off')
+
+    plt.show()
+
+叠加后的图像如下：
+
+.. image:: ../_static/tutorials/clock_driven/2_encoding/5.*
+    :width: 100%
 
 高斯协调曲线编码器
 ------------------------
