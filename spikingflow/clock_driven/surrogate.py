@@ -90,6 +90,8 @@ class PiecewiseQuadratic(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
+        该函数在文章 [1]_ [3]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_ 中使用。
+
         * :ref:`中文API <PiecewiseQuadratic.__init__-cn>`
         .. _PiecewiseQuadratic.__init__-en:
 
@@ -119,6 +121,8 @@ class PiecewiseQuadratic(nn.Module):
 
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
             :width: 100%
+
+        The function is used in [1]_ [3]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
 
         '''
         super().__init__()
@@ -209,6 +213,8 @@ class PiecewiseLeakyReLU(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
+        该函数在文章 [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#STCA]_ 中使用。
+
         * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
         .. _PiecewiseLeakyReLU.__init__-en:
 
@@ -239,6 +245,8 @@ class PiecewiseLeakyReLU(nn.Module):
 
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
+
+        The function is used in [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#STCA]_.
         '''
         super().__init__()
         self.w = w
@@ -329,6 +337,8 @@ class PiecewiseExp(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.*
             :width: 100%
 
+        该函数在文章 [#SLAYER]_ [#neftci2019surrogate]_ 中使用。
+
         * :ref:`中文API <PiecewiseExp.__init__-cn>`
         .. _PiecewiseExp.__init__-en:
 
@@ -354,6 +364,7 @@ class PiecewiseExp(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseExp.*
             :width: 100%
 
+        The function is used in [#SLAYER]_ [#neftci2019surrogate]_ .
         '''
         super().__init__()
         self.alpha = alpha
@@ -433,6 +444,8 @@ class Sigmoid(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.*
             :width: 100%
 
+        该函数在文章 [#STBP]_ [#SNNLSTM]_ [#SNU]_ 中使用。
+
         * :ref:`中文API <Sigmoid.__init__-cn>`
         .. _Sigmoid.__init__-en:
 
@@ -454,6 +467,7 @@ class Sigmoid(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.*
             :width: 100%
 
+        The function is used in  [#STBP]_ [#SNNLSTM]_ [#SNU]_ .
         '''
         super().__init__()
         self.alpha = alpha
@@ -529,6 +543,8 @@ class SoftSign(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/SoftSign.*
             :width: 100%
 
+        该函数在文章 [#SuperSpike]_ [#neftci2019surrogate]_ 中使用。
+
         * :ref:`中文API <SoftSign.__init__-cn>`
         .. _SoftSign.__init__-en:
 
@@ -550,6 +566,7 @@ class SoftSign(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/SoftSign.*
             :width: 100%
 
+        The function is used in [#SuperSpike]_ [#neftci2019surrogate]_ .
         '''
         super().__init__()
         assert alpha > 0, 'alpha must be lager than 0'
@@ -627,6 +644,8 @@ class ATan(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/ATan.*
             :width: 100%
 
+        该函数在文章  中使用。
+
         * :ref:`中文API <ATan.__init__-cn>`
         .. _ATan.__init__-en:
 
@@ -648,6 +667,7 @@ class ATan(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/ATan.*
             :width: 100%
 
+        The function is used in  .
         '''
         super().__init__()
         self.half_pi_alpha = math.pi / 2 * alpha
@@ -738,6 +758,8 @@ class NonzeroSignLogAbs(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
+        该函数在文章  中使用。
+
         * :ref:`中文API <LogAbs.__init__-cn>`
         .. _LogAbs.__init__-en:
 
@@ -774,6 +796,7 @@ class NonzeroSignLogAbs(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
+        The function is used in  .
         '''
         super().__init__()
         self.spiking = spiking
@@ -858,6 +881,8 @@ class Erf(nn.Module):
 
         .. image:: ./_static/API/clock_driven/surrogate/Erf.*
             :width: 100%
+        
+        该函数在文章 [#esser2015backpropagation]_ [#STBP]_ 中使用。
 
         * :ref:`中文API <Erf.__init__-cn>`
         .. _Erf.__init__-en:
@@ -886,6 +911,7 @@ class Erf(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Erf.*
             :width: 100%
 
+        The function is used in [#esser2015backpropagation]_ [#STBP]_.
         '''
         super().__init__()
         self.alpha = alpha
