@@ -213,7 +213,7 @@ class PiecewiseLeakyReLU(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
-        该函数在文章 [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#STCA]_ 中使用。
+        该函数在文章 [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#roy2019scaling]_ [#STCA]_ [#LISNN]_ 中使用。
 
         * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
         .. _PiecewiseLeakyReLU.__init__-en:
@@ -246,7 +246,7 @@ class PiecewiseLeakyReLU(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
-        The function is used in [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#STCA]_.
+        The function is used in [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#roy2019scaling]_ [#STCA]_ [#LISNN]_.
         '''
         super().__init__()
         self.w = w
@@ -444,7 +444,7 @@ class Sigmoid(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.*
             :width: 100%
 
-        该函数在文章 [#STBP]_ [#SNNLSTM]_ [#SNU]_ 中使用。
+        该函数在文章 [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ 中使用。
 
         * :ref:`中文API <Sigmoid.__init__-cn>`
         .. _Sigmoid.__init__-en:
@@ -467,7 +467,7 @@ class Sigmoid(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Sigmoid.*
             :width: 100%
 
-        The function is used in  [#STBP]_ [#SNNLSTM]_ [#SNU]_ .
+        The function is used in  [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ .
         '''
         super().__init__()
         self.alpha = alpha
