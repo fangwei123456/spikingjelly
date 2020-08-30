@@ -2,6 +2,7 @@ channels:
   - pytorch
   - conda-forge
 dependencies:
+  - sphinx_rtd_theme
   - pytorch>=1.5
   - torchvision
   - cpuonly
