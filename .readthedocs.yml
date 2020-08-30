@@ -20,8 +20,7 @@ formats: all
 python:
    version: 3.7
    install:
-      - method: pip
-        path: docs/requirements.txt
+      - requirements: docs/requirements.txt
    system_packages: true
 # conda:
 #   environment: docs/environment.yml
