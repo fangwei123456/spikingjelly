@@ -1,0 +1,7 @@
+torch==1.6.0+cpu
+torchvision==0.7.0+cpu
+tensorboard
+matplotlib
+tqdm
+sphinx_rtd_theme>=0.5.0
+sphinx>=3.2.1
