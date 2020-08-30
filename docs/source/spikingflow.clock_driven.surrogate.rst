@@ -12,9 +12,8 @@ Module contents
 References
 ----------
 
-.. [1]	Bohte, S.M., *Error-Backpropagation in Networks of Fractionally Predictive Spiking Neurons*. Artificial Neural Networks and Machine Learning - ICANN 2011, Pt I, 2011. 6791: p. 60-68.
 .. [#esser2015backpropagation]	Esser, S.K., et al., *Backpropagation for Energy-Efficient Neuromorphic Computing*. Advances in Neural Information Processing Systems 28 (NIPS 2015), 2015. 28.
-.. [3]	Esser, S.K., et al., *Convolutional networks for fast, energy-efficient neuromorphic computing*. Proceedings of the National Academy of Sciences of the United States of America, 2016. 113(41): p. 11441-11446.
+.. [#esser2016convolutional]	Esser, S.K., et al., *Convolutional networks for fast, energy-efficient neuromorphic computing*. Proceedings of the National Academy of Sciences of the United States of America, 2016. 113(41): p. 11441-11446.
 .. [#yin2017algorithm]	Yin, S., et al. *Algorithm and hardware design of discrete-time spiking neural networks based on back propagation with binary activations*. in 2017 IEEE Biomedical Circuits and Systems Conference (BioCAS). 2017.
 .. [#STBP]	Wu, Y., et al., *Spatio-Temporal Backpropagation for Training High-Performance Spiking Neural Networks*. Front Neurosci, 2018. 12: p. 331.
 .. [#huh2018gradient]	Huh, D. and T.J. Sejnowski, *Gradient Descent for Spiking Neural Networks*. Advances in Neural Information Processing Systems 31 (NIPS 2018), 2018. 31.
@@ -29,3 +28,4 @@ References
 .. [#SNNLSTM]	Lotfi Rezaabad, A. and S. Vishwanath, *Long Short-Term Memory Spiking Networks and Their Applications*, in International Conference on Neuromorphic Systems 2020. 2020, Association for Computing Machinery: Oak Ridge, TN, USA. p. 1-9.
 .. [#SNU]	Woźniak, S., et al., *Deep learning incorporating biologically inspired neural dynamics and in-memory computing*. Nature Machine Intelligence, 2020. 2(6): p. 325-336.
 .. [#LISNN]	Cheng, X., et al., *LISNN: Improving Spiking Neural Networks with Lateral Interactions for Robust Object Recognition*, in Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence. 2020. p. 1519-1525.
+.. [#DECOLLE]	Kaiser, J., H. Mostafa, and E. Neftci, *Synaptic Plasticity Dynamics for Deep Continuous Local Learning (DECOLLE)*. Frontiers in Neuroscience, 2020. 14: p. 424.

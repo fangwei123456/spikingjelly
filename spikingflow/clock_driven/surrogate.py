@@ -90,7 +90,7 @@ class PiecewiseQuadratic(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
-        该函数在文章 [1]_ [3]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_ 中使用。
+        该函数在文章 [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_ 中使用。
 
         * :ref:`中文API <PiecewiseQuadratic.__init__-cn>`
         .. _PiecewiseQuadratic.__init__-en:
@@ -122,7 +122,7 @@ class PiecewiseQuadratic(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
-        The function is used in [1]_ [3]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
+        The function is used in [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
 
         '''
         super().__init__()
@@ -213,7 +213,7 @@ class PiecewiseLeakyReLU(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
-        该函数在文章 [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#roy2019scaling]_ [#STCA]_ [#LISNN]_ 中使用。
+        该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_ 中使用。
 
         * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
         .. _PiecewiseLeakyReLU.__init__-en:
@@ -246,7 +246,7 @@ class PiecewiseLeakyReLU(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
-        The function is used in [#yin2017algorithm]_ [#huh2018gradient]_ [#STBP]_ [#wu2019direct]_ [#roy2019scaling]_ [#STCA]_ [#LISNN]_.
+        The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
         '''
         super().__init__()
         self.w = w
