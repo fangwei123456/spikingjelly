@@ -1,8 +1,8 @@
-SpikingFlow APIs
+SpikingJelly APIs
 ========================
 
 .. toctree::
-   spikingflow.clock_driven
-   spikingflow.datasets
-   spikingflow.event_driven
-   spikingflow.visualizing
+   spikingjelly.clock_driven
+   spikingjelly.datasets
+   spikingjelly.event_driven
+   spikingjelly.visualizing

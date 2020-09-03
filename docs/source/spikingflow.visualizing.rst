@@ -1,10 +1,10 @@
-spikingflow.visualizing package
+spikingjelly.visualizing package
 ===============================
 
 Module contents
 ---------------
 
-.. automodule:: spikingflow.visualizing
+.. automodule:: spikingjelly.visualizing
    :members:
    :undoc-members:
    :show-inheritance:

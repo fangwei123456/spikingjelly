@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 import numpy as np
-from spikingflow.clock_driven.examples.conv_fashion_mnist import Net
-from spikingflow import visualizing
+from spikingjelly.clock_driven.examples.conv_fashion_mnist import Net
+from spikingjelly import visualizing
 import torch
 import torch.nn as nn
 import torchvision

@@ -16,13 +16,13 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision
-    from spikingflow.clock_driven import neuron, functional, surrogate, layer
+    from spikingjelly.clock_driven import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
     import readline
     class Net(nn.Module):
         def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
 
-接下来，我们在 ``Net`` 的成员变量中添加卷积层和全连接层。``SpikingFlow`` 的开发者们在实验中发现，对于不含时间信息、静态的图片数据，
+接下来，我们在 ``Net`` 的成员变量中添加卷积层和全连接层。``SpikingJelly`` 的开发者们在实验中发现，对于不含时间信息、静态的图片数据，
 卷积层中的神经元用 ``IFNode`` 效果更好一些。我们添加2个卷积-BN-池化层：
 
 .. code-block:: python
@@ -179,12 +179,12 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 训练网络
 -----------------
-完整的代码位于 `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingflow/blob/master/spikingflow/clock_driven/examples/conv_fashion_mnist.py>`_。
+完整的代码位于 `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/conv_fashion_mnist.py>`_。
 也可以通过命令行直接运行。会将训练过程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。
 
 .. code-block:: python
 
-    >>> from spikingflow.clock_driven.examples import conv_fashion_mnist
+    >>> from spikingjelly.clock_driven.examples import conv_fashion_mnist
     >>> conv_fashion_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
      input device, e.g., "cpu" or "cuda:0": cuda:9
@@ -242,8 +242,8 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
     from matplotlib import pyplot as plt
     import numpy as np
-    from spikingflow.clock_driven.examples.conv_fashion_mnist import Net
-    from spikingflow import visualizing
+    from spikingjelly.clock_driven.examples.conv_fashion_mnist import Net
+    from spikingjelly import visualizing
     import torch
     import torch.nn as nn
     import torchvision

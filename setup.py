@@ -12,14 +12,14 @@ with open("./README.md", "r", encoding="utf-8") as fh:
 
 setuptools.setup(
     install_requires=install_requires,
-    name="spikingflow",
+    name="spikingjelly",
     version="0.2.4.5.939",
     author="PKU MLG and other contributors",
     author_email="fwei@pku.edu.cn, chyq@pku.edu.cn",
     description="A Spiking Neural Networks simulator built on PyTorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/fangwei123456/spikingflow",
+    url="https://github.com/fangwei123456/spikingjelly",
     packages=setuptools.find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3 :: Only",

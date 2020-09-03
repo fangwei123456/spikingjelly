@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from spikingflow.clock_driven import neuron, encoding, functional
-from spikingflow import visualizing
+from spikingjelly.clock_driven import neuron, encoding, functional
+from spikingjelly import visualizing
 
 T=100
 

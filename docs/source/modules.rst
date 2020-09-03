@@ -1,7 +1,7 @@
-SpikingFlow
+SpikingJelly
 ===========
 
 .. toctree::
    :maxdepth: 4
 
-   SpikingFlow
+   SpikingJelly

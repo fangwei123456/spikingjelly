@@ -24,8 +24,8 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
 
         from matplotlib import pyplot as plt
         import torch
-        from spikingflow.clock_driven import neuron
-        from spikingflow import visualizing
+        from spikingjelly.clock_driven import neuron
+        from spikingjelly import visualizing
         import numpy as np
 
         plt.style.use(['science'])
@@ -105,7 +105,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
 
         neuron_num = 4
         T = 50
-        lif_node = spikingflow.event_driven.neuron.LIFNode(monitor=True)
+        lif_node = spikingjelly.event_driven.neuron.LIFNode(monitor=True)
         w = torch.rand([neuron_num]) * 10
         for t in range(T):
             lif_node(w * torch.rand(size=[neuron_num]))
@@ -159,8 +159,8 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
         from matplotlib import pyplot as plt
         import torch
-        from spikingflow.clock_driven import neuron
-        from spikingflow import visualizing
+        from spikingjelly.clock_driven import neuron
+        from spikingjelly import visualizing
         import numpy as np
 
         neuron_num = 32
@@ -244,7 +244,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
 
     .. code-block:: python
 
-        from spikingflow import visualizing
+        from spikingjelly import visualizing
         import numpy as np
 
         C = 48

@@ -1,8 +1,8 @@
-spikingflow.clock_driven.ann2snn
+spikingjelly.clock_driven.ann2snn
 =======================================
 Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-This tutorial focuses on ``spikingflow.clock_driven.ann2snn``，introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingFlow framework.
+This tutorial focuses on ``spikingjelly.clock_driven.ann2snn``，introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
 
 Currently support conversion of Pytorch modules including ``nn.Conv2d`` , ``nn.Linear`` , ``nn.MaxPool2d`` , ``nn.AvgPool2d`` , ``nn.BatchNorm1d`` , ``nn.BatchNorm2d`` , ``nn.Flatten`` , ``nn.ReLU`` ,other module solutions are under development...
 
@@ -11,7 +11,7 @@ Theoretical basis of ANN2SNN
 
 Compared with ANN, SNN generates discrete spikes, which is conducive to efficient communication. Today, ANN is popular, while direct training of SNN requires far more resources. Naturally, people will think of using very mature ANN to switch to SNN, and hope that SNN can have similar performance. This leads to the question of how to build a bridge between ANN and SNN. The current SNN mainstream method is to use frequency coding. So for the output layer, we will use the number of neuron output spikes to determine the category. Is the firing rate related to ANN?
 
-Fortunately, there is a strong correlation between the non-linear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold :math:`V_{threshold}` ). We can use this feature for conversion. The neuron update method mentioned here is the Soft method mentioned in the `Clock Driven Tutorial <https://spikingflow.readthedocs.io/zh_CN/latest/clock_driven_en/0_neuron.html>`_.
+Fortunately, there is a strong correlation between the non-linear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold :math:`V_{threshold}` ). We can use this feature for conversion. The neuron update method mentioned here is the Soft method mentioned in the `Clock Driven Tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/0_neuron.html>`_.
 
 The following figure shows this correspondence: the left figure is a curve obtained by giving a constant input to an IF neuron and observing its firing over a period of time. The right one is the ReLU activation curve, which satisfies :math:`activation = max(input,0)`.
 
@@ -287,7 +287,7 @@ The complete code is located in ``ann2snn.examples.if_cnn_mnist.py``, in the cod
 
 .. code-block:: python
 
-    >>> import spikingflow.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
+    >>> import spikingjelly.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
     >>> if_cnn_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
      input device, e.g., "cpu" or "cuda:0": cuda:15

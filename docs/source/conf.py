@@ -1,4 +1,4 @@
-# sphinx-apidoc -o ./docs/source ./spikingflow
+# sphinx-apidoc -o ./docs/source ./spikingjelly
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -13,13 +13,13 @@
 #
 import os
 import sys
-# sys.path.insert(0, os.path.abspath('../../spikingflow/'))
+# sys.path.insert(0, os.path.abspath('../../spikingjelly/'))
 sys.path.insert(0, os.path.abspath('../../'))
 print('sys.path', sys.path)
 print('list dir', os.listdir(sys.path[0]))
 # -- Project information -----------------------------------------------------
 
-project = 'spikingflow'
+project = 'spikingjelly'
 copyright = '2020, PKU MLG'
 author = 'PKU MLG'
 

@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision
 import os
 import time
-import spikingflow.clock_driven.ann2snn.utils as utils
+import spikingjelly.clock_driven.ann2snn.utils as utils
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -48,7 +48,7 @@ def main(log_dir=None):
 
         .. code-block:: python
 
-            >>> import spikingflow.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
+            >>> import spikingjelly.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
             >>> if_cnn_mnist.main()
             输入运行的设备，例如“cpu”或“cuda:0”
              input device, e.g., "cpu" or "cuda:0": cuda:15

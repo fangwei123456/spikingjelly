@@ -1,23 +1,23 @@
-spikingflow.clock_driven package
+spikingjelly.clock_driven package
 =================================
 
 .. toctree::
    :hidden:
 
-   spikingflow.clock_driven.examples
-   spikingflow.clock_driven.accelerating
-   spikingflow.clock_driven.encoding
-   spikingflow.clock_driven.functional
-   spikingflow.clock_driven.layer
-   spikingflow.clock_driven.neuron
-   spikingflow.clock_driven.optim
-   spikingflow.clock_driven.surrogate
-   spikingflow.clock_driven.ann2snn
+   spikingjelly.clock_driven.examples
+   spikingjelly.clock_driven.accelerating
+   spikingjelly.clock_driven.encoding
+   spikingjelly.clock_driven.functional
+   spikingjelly.clock_driven.layer
+   spikingjelly.clock_driven.neuron
+   spikingjelly.clock_driven.optim
+   spikingjelly.clock_driven.surrogate
+   spikingjelly.clock_driven.ann2snn
 
 Module contents
 ---------------
 
-.. automodule:: spikingflow.clock_driven
+.. automodule:: spikingjelly.clock_driven
    :members:
    :undoc-members:
    :show-inheritance:
