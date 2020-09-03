@@ -1,6 +1,6 @@
 import torch
-from spikingflow.clock_driven import neuron
-from spikingflow import visualizing
+from spikingjelly.clock_driven import neuron
+from spikingjelly import visualizing
 from matplotlib import pyplot as plt
 import numpy as np
 plt.style.use(['science', 'muted'])

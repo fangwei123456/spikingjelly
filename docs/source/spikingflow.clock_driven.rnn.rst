@@ -1,10 +1,10 @@
-spikingjelly.clock_driven.functional package
+spikingjelly.clock_driven.rnn package
 ===========================================
 
 Module contents
 ---------------
 
-.. automodule:: spikingjelly.clock_driven.functional
+.. automodule:: spikingjelly.clock_driven.rnn
    :members:
    :undoc-members:
    :show-inheritance:

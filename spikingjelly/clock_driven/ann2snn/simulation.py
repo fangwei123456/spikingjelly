@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-import spikingflow.clock_driven.neuron as neuron
-import spikingflow.clock_driven.ann2snn.modules as modules
-import spikingflow.clock_driven.encoding as encoding
+import spikingjelly.clock_driven.neuron as neuron
+import spikingjelly.clock_driven.ann2snn.modules as modules
+import spikingjelly.clock_driven.encoding as encoding
 
 
 class SNN(nn.Module):
@@ -15,7 +15,7 @@ class SNN(nn.Module):
         :param v_threshold: v_threshold一般设置为1.0，对应ReLU的spiking版本:IFNode
         :param v_reset: v_reset设置为 ``None`` ，神经元reset的时候采用减去v_threshold的方式；否则，刚刚发放的脉冲会被设置为v_reset
 
-        SNN类用来加载归一化好的模型，并且将其中的torch.nn.ReLU转化为spikingflow.IFNode。加载后的SNN可以使用simulate_snn函数进行仿真。
+        SNN类用来加载归一化好的模型，并且将其中的torch.nn.ReLU转化为spikingjelly.IFNode。加载后的SNN可以使用simulate_snn函数进行仿真。
 
         * :ref:`API in English <SNN.__init__-cn>`
 
@@ -25,7 +25,7 @@ class SNN(nn.Module):
         :param v_reset: If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
 
-        class SNN is used to load a normalized model and replace torch.nn.ReLU to spikingflow.IFnode.
+        class SNN is used to load a normalized model and replace torch.nn.ReLU to spikingjelly.IFnode.
         Loaded SNN can be simulated using function simulate_snn below.
         '''
         super().__init__()

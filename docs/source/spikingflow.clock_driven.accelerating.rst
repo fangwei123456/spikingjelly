@@ -1,10 +1,10 @@
-spikingflow.clock_driven.accelerating package
+spikingjelly.clock_driven.accelerating package
 =============================================
 
 Module contents
 ---------------
 
-.. automodule:: spikingflow.clock_driven.accelerating
+.. automodule:: spikingjelly.clock_driven.accelerating
    :members:
    :undoc-members:
    :show-inheritance:

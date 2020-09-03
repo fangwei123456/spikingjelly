@@ -1,10 +1,10 @@
-spikingflow.clock_driven.neuron package
+spikingjelly.clock_driven.neuron package
 =======================================
 
 Module contents
 ---------------
 
-.. automodule:: spikingflow.clock_driven.neuron
+.. automodule:: spikingjelly.clock_driven.neuron
    :members:
    :undoc-members:
    :show-inheritance:

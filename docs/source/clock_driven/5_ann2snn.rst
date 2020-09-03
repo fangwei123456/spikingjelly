@@ -2,7 +2,7 @@
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingflow.clock_driven.ann2snn``，介绍如何将训练好的前馈ANN转换SNN，并且在SpikingFlow框架上进行仿真。
+本节教程主要关注 ``spikingjelly.clock_driven.ann2snn``，介绍如何将训练好的前馈ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
 目前暂时支持Pytorch中实现的包含 ``nn.Conv2d`` , ``nn.Linear`` , ``nn.MaxPool2d`` , ``nn.AvgPool2d`` , ``nn.BatchNorm1d`` , ``nn.BatchNorm2d`` , ``nn.Flatten`` , ``nn.ReLU`` 的前馈神经网络的转换，其他模块方案正在开发中...
 
@@ -11,7 +11,7 @@ ANN转换SNN的理论基础
 
 SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。在ANN大行其道的今天，SNN的直接训练需要较多资源。自然我们会想到使用现在非常成熟的ANN转换到SNN，希望SNN也能有类似的表现。这就牵扯到如何搭建起ANN和SNN桥梁的问题。现在SNN主流的方式是采用频率编码，因此对于输出层，我们会用神经元输出脉冲数来判断类别。发放率和ANN有没有关系呢？
 
-幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingflow.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_ 中提到的Soft方式。
+幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_ 中提到的Soft方式。
 
 实验：IF神经元脉冲发放频率和输入的关系
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -21,8 +21,8 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 .. code-block:: python
 
     import torch
-    from spikingflow.clock_driven import neuron
-    from spikingflow import visualizing
+    from spikingjelly.clock_driven import neuron
+    from spikingjelly import visualizing
     from matplotlib import pyplot as plt
     import numpy as np
 
@@ -361,7 +361,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 .. code-block:: python
 
-    >>> import spikingflow.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
+    >>> import spikingjelly.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
     >>> if_cnn_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
      input device, e.g., "cpu" or "cuda:0": cuda:15
