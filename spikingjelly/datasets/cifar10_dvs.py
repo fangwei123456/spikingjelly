@@ -1,4 +1,4 @@
-import spikingflow
+import spikingjelly
 import zipfile
 import os
 import tqdm
@@ -6,20 +6,20 @@ import numpy as np
 cifar10_class = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
 
-class CIFAR10DVS(spikingflow.datasets.SubDirDataset):
+class CIFAR10DVS(spikingjelly.datasets.SubDirDataset):
 
     @ staticmethod
     def download_zip(zip_dir):
         '''
-        :param zip_dir: 保存spikingflow提供的CIFAR10-DVS对应的10个zip文件的文件夹
+        :param zip_dir: 保存spikingjelly提供的CIFAR10-DVS对应的10个zip文件的文件夹
         :return: None
 
         .. warning::
             代码尚未完成，请勿使用。
 
         原始的CIFAR10-DVS数据集位于 https://figshare.com/articles/CIFAR10-DVS_New/4724671。原始的CIFAR10-DVS使用jAER格式，\
-        需要首先使用MATLAB转换成mat格式才能使用，较为繁琐。spikingflow的开发者将原始数据集转化为numpy数组并存为npz文件，\
-        每一类的数据都重新压缩并重新上传到了figshare。运行此函数，会将spikingflow提供的10个zip文件下载到 ``zip_dir``，下载好\
+        需要首先使用MATLAB转换成mat格式才能使用，较为繁琐。spikingjelly的开发者将原始数据集转化为numpy数组并存为npz文件，\
+        每一类的数据都重新压缩并重新上传到了figshare。运行此函数，会将spikingjelly提供的10个zip文件下载到 ``zip_dir``，下载好\
         的文件夹是如下形式：
 
         .. code-block:: bash
@@ -85,7 +85,7 @@ class CIFAR10DVS(spikingflow.datasets.SubDirDataset):
                 for file_name in tqdm.tqdm(os.listdir(source_dir)):
                     events = np.load(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = spikingflow.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
+                    frames = spikingjelly.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
                                                                                frames_num=frames_num, split_by=split_by,
                                                                              normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, file_name), frames)
@@ -93,7 +93,7 @@ class CIFAR10DVS(spikingflow.datasets.SubDirDataset):
                 for file_name in os.listdir(source_dir):
                     events = np.load(os.path.join(source_dir, file_name))
                     # events: {'t', 'x', 'y', 'p'}
-                    frames = spikingflow.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
+                    frames = spikingjelly.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
                                                                                frames_num=frames_num, split_by=split_by,
                                                                              normalization=normalization)
                     np.savez_compressed(os.path.join(target_dir, file_name), frames)
@@ -109,7 +109,7 @@ class CIFAR10DVS(spikingflow.datasets.SubDirDataset):
                 show_bar = True
             else:
                 show_bar = False
-            thread_list.append(spikingflow.datasets.FunctionThread(f=cvt_data_in_dir, source_dir=events_sub_dir,
+            thread_list.append(spikingjelly.datasets.FunctionThread(f=cvt_data_in_dir, source_dir=events_sub_dir,
                                                                    target_dir=frames_sub_dir, show_bar=show_bar))
             print('start thread', thread_list.__len__())
             thread_list[-1].start()
@@ -150,9 +150,9 @@ class CIFAR10DVS(spikingflow.datasets.SubDirDataset):
 
         为了构造好这样的数据集文件夹，建议遵循如下顺序：
 
-        1.下载spikingflow提供的10个zip文件下载到 ``zip_dir``。可以手动下载，也可以调用静态方法 ``DVSCIFAR10.download_zip``；
+        1.下载spikingjelly提供的10个zip文件下载到 ``zip_dir``。可以手动下载，也可以调用静态方法 ``DVSCIFAR10.download_zip``；
 
-        2.解压这10个文件夹到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``spikingflow.datasets.extract_zip_in_dir``；
+        2.解压这10个文件夹到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``spikingjelly.datasets.extract_zip_in_dir``；
 
         3.将events数据转换成frames数据。调用 ``CIFAR10DVS.create_frames_dataset``。
 

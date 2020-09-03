@@ -1,32 +1,32 @@
-# SpikingFlow ![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingflow) [![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingflow)](https://pypi.org/project/spikingflow) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingflow)](https://pypi.org/project/spikingflow) ![License](https://img.shields.io/github/license/fangwei123456/spikingflow)
+# SpikingJelly ![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) ![License](https://img.shields.io/github/license/fangwei123456/spikingjelly)
 
-English | [中文](https://github.com/fangwei123456/spikingflow/blob/master/README_cn.md)
+English | [中文](https://github.com/fangwei123456/spikingjelly/blob/master/README_cn.md)
 
 ![demo](demo.png)
 
-SpikingFlow is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
+SpikingJelly is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
-The documentation of SpikingFlow is written in both English and Chinese: https://spikingflow.readthedocs.io
+The documentation of SpikingJelly is written in both English and Chinese: https://spikingjelly.readthedocs.io
 
 ## Installation
 
-Note that SpikingFlow is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingFlow.
+Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-Install from [PyPI](https://pypi.org/project/spikingflow/)：
+Install from [PyPI](https://pypi.org/project/spikingjelly/)：
 
 ```bash
-pip install spikingflow
+pip install spikingjelly
 ```
 
 Developers can download the latest version from GitHub:
 
 ```bash
-git clone https://github.com/fangwei123456/spikingflow.git
+git clone https://github.com/fangwei123456/spikingjelly.git
 ```
 
 ## Build SNN In An Unprecedented Simple Way
 
-SpikingFlow is user-friendly. Building SNN with SpikingFlow is as simple as building ANN in PyTorch:
+SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
 
 ```python
 class Net(nn.Module):
@@ -45,14 +45,14 @@ class Net(nn.Module):
         return self.fc(x)
 ```
 
-This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingflow.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
+This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
->>> import spikingflow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+>>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
 >>> lif_fc_mnist.main()
 ```
 
-Read [spikingflow.clock_driven.examples](https://spikingflow.readthedocs.io/zh_CN/latest/spikingflow.clock_driven.examples.html) to explore more advanced networks!
+Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html) to explore more advanced networks!
 
 ## Device Supports
 
@@ -68,8 +68,8 @@ As simple as using PyTorch.
 
 ## About
 
-[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingFlow.
+[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingJelly.
 
-The list of developers can be found [here](https://github.com/fangwei123456/spikingflow/graphs/contributors).
+The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
-Any contributions to SpikingFlow is welcome!
+Any contributions to SpikingJelly is welcome!

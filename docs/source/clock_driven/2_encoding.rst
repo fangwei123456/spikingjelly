@@ -2,12 +2,12 @@
 =======================================
 本教程作者： `Grasshlw <https://github.com/Grasshlw>`_
 
-本节教程主要关注 ``spikingflow.clock_driven.encoding`` ，介绍编码器。
+本节教程主要关注 ``spikingjelly.clock_driven.encoding`` ，介绍编码器。
 
 编码器基类
 -----------------
 
-在 ``spikingflow.clock_driven`` 中，所定义的编码器都继承自编码器基类 ``BaseEncoder`` ，该编码器继承 ``torch.nn.Module`` ，
+在 ``spikingjelly.clock_driven`` 中，所定义的编码器都继承自编码器基类 ``BaseEncoder`` ，该编码器继承 ``torch.nn.Module`` ，
 定义三个方法， 其一 ``forward`` 将输入数据 ``x`` 编码为脉冲；其二 ``step`` 针对多数编码器， ``x`` 被编码成一定长度的脉冲序列，
 需进行多步输出，则用 ``step`` 获取每一步的脉冲数据；其三 ``reset`` 将编码器的状态变量设置为初始状态。
 

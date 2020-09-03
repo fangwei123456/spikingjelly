@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 import numpy as np
-from spikingflow.clock_driven import neuron, encoding, functional
+from spikingjelly.clock_driven import neuron, encoding, functional
 from torch.utils.tensorboard import SummaryWriter
 import readline
 from tqdm import tqdm

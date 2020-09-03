@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from spikingflow.clock_driven import neuron, functional, surrogate, layer
+from spikingjelly.clock_driven import neuron, functional, surrogate, layer
 from torch.utils.tensorboard import SummaryWriter
 import readline
 

@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
-import spikingflow.event_driven.encoding as encoding
-import spikingflow.event_driven.neuron as neuron
+import spikingjelly.event_driven.encoding as encoding
+import spikingjelly.event_driven.neuron as neuron
 import readline
 import math
 
@@ -25,7 +25,7 @@ def main():
     
     .. code-block:: python
 
-        >>> import spikingflow.event_driven.examples.tempotron_mnist as tempotron_mnist
+        >>> import spikingjelly.event_driven.examples.tempotron_mnist as tempotron_mnist
         >>> tempotron_mnist.main()
         输入运行的设备，例如“cpu”或“cuda:0”
          input device, e.g., "cpu" or "cuda:0": cuda:15

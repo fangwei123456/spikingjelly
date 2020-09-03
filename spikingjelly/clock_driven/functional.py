@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from spikingflow.clock_driven import neuron, accelerating
+from spikingjelly.clock_driven import neuron, accelerating
 
 def reset_net(net: nn.Module):
     '''

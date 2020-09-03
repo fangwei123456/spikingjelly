@@ -1,10 +1,10 @@
-spikingflow.event_driven.neuron package
+spikingjelly.event_driven.neuron package
 =======================================
 
 Module contents
 ---------------
 
-.. automodule:: spikingflow.event_driven.neuron
+.. automodule:: spikingjelly.event_driven.neuron
    :members:
    :undoc-members:
    :show-inheritance:

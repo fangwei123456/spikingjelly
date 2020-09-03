@@ -2,13 +2,13 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingflow.clock_driven.neuron``，介绍脉冲神经元，和时间驱动的仿真方法。
+本节教程主要关注 ``spikingjelly.clock_driven.neuron``，介绍脉冲神经元，和时间驱动的仿真方法。
 
 脉冲神经元模型
 ----------------
-在 ``spikingflow`` 中，我们约定，只能输出脉冲，即0或1的神经元，都可以称之为“脉冲神经元”。使用脉冲神经元的网络，进而也可以称之为
+在 ``spikingjelly`` 中，我们约定，只能输出脉冲，即0或1的神经元，都可以称之为“脉冲神经元”。使用脉冲神经元的网络，进而也可以称之为
 脉冲神经元网络（Spiking Neural Networks）。
-``spikingflow.clock_driven.neuron`` 中定义了各种常见的脉冲神经元模型，我们以 ``spikingflow.clock_driven.neuron.LIFNode``
+``spikingjelly.clock_driven.neuron`` 中定义了各种常见的脉冲神经元模型，我们以 ``spikingjelly.clock_driven.neuron.LIFNode``
 为例来介绍脉冲神经元。
 
 首先导入相关的模块：
@@ -17,8 +17,8 @@
 
     import torch
     import torch.nn as nn
-    from spikingflow.clock_driven import neuron
-    from spikingflow import visualizing
+    from spikingjelly.clock_driven import neuron
+    from spikingjelly import visualizing
     from matplotlib import pyplot as plt
 
 新建一个LIF神经元层：
@@ -41,11 +41,11 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 其中 ``surrogate_function`` 参数，我们暂时不会用到反向传播，因此可以先不关心。
 
-你可能会好奇这一层神经元的数量是多少。对于 ``spikingflow.clock_driven.neuron``
+你可能会好奇这一层神经元的数量是多少。对于 ``spikingjelly.clock_driven.neuron``
 中的绝大多数神经元层，神经元的数量是在初始化或调用 ``reset()`` 函数重新初始化后，根据第一次接收的输入的 ``shape`` 自动决定的。
 
 与RNN中的神经元非常类似，脉冲神经元也是有状态的，或者说是有记忆。脉冲神经元的状态变量，一般是它的膜电位 :math:`V_{t}`。因此，
-``spikingflow.clock_driven.neuron`` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的LIF神经元层的膜电位：
+``spikingjelly.clock_driven.neuron`` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的LIF神经元层的膜电位：
 
 .. code-block:: python
     print(lif.v)
@@ -80,7 +80,7 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 其中 :math:`\tau_{m}` 是膜电位时间常数，:math:`V_{reset}` 是重置电压。对于这样的微分方程，由于 :math:`X(t)` 并不是常量，因此
 难以求出显示的解析解。
 
-``spikingflow.clock_driven.neuron`` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，LIF神经元的充电方程为：
+``spikingjelly.clock_driven.neuron`` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，LIF神经元的充电方程为：
 
 .. math::
     \tau_{m} (V_{t} - V_{t-1}) = -(V_{t-1} - V_{reset}) + X_{t}
@@ -105,7 +105,7 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 #. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V = V - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。``spikingflow.clock_driven.neuron`` 中的神经
+可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。``spikingjelly.clock_driven.neuron`` 中的神经
 元，在构造函数的参数之一 ``v_reset``，默认为``1.0``，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。
 
 描述离散脉冲神经元的三个方程
@@ -134,7 +134,7 @@ Soft方式重置方程为：
 时间驱动的仿真方式
 ----------------------
 
-``spikingflow.clock_driven`` 使用时间驱动的方式，对SNN逐步进行仿真。
+``spikingjelly.clock_driven`` 使用时间驱动的方式，对SNN逐步进行仿真。
 
 接下来，我们将逐步给与神经元输入，并查看它的膜电位和输出脉冲。为了记录数据，只需要将神经元层的监视器 ``monitor`` 打开：
 

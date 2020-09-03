@@ -101,7 +101,7 @@
 
 .. code-block:: python
 
-   >>> import spikingflow.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+   >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
    >>> lif_fc_mnist.main()
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
@@ -135,4 +135,4 @@
 .. image:: ../_static/tutorials/clock_driven/3_fc_mnist/2d_heatmap.*
     :width: 100%
 
-可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `clock_driven/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingflow/blob/master/spikingflow/clock_driven/examples/lif_fc_mnist.py>`_ 。
+可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `clock_driven/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/lif_fc_mnist.py>`_ 。

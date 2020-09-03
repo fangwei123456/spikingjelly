@@ -1,8 +1,8 @@
-事件驱动 spikingflow.event_driven
+事件驱动 spikingjelly.event_driven
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingflow.event_driven``，介绍事件驱动概念、Tempotron神经元。
+本节教程主要关注 ``spikingjelly.event_driven``，介绍事件驱动概念、Tempotron神经元。
 
 事件驱动的SNN仿真
 -----------------
@@ -87,7 +87,7 @@ Tempotron的膜电位定义为：
 并行实现
 --------
 如前所述，对于脉冲响应模型，一旦输入给定，神经元的响应方程已知，任意时刻的神经元状态都可以求解。此外，计算 :math:`t` 时刻的电\
-压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 ``spikingflow/event_driven/neuron.py`` 中\
+压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 ``spikingjelly/event_driven/neuron.py`` 中\
 实现了集成全连接层、并行计算的Tempotron，将时间看作是一个单独的维度，整个网络在 :math:`t=0, 1, ..., T-1` 时刻的状态全都被并
 行地计算出。读者如有兴趣可以直接阅读源代码。
 
@@ -170,11 +170,11 @@ Tempotron的膜电位定义为：
             wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
             return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
 
-下面我们直接运行代码。完整的源代码位于 ``spikingflow/event_driven/examples/tempotron_mnist.py``：
+下面我们直接运行代码。完整的源代码位于 ``spikingjelly/event_driven/examples/tempotron_mnist.py``：
 
 .. code-block:: python
 
-    >>> import spikingflow.event_driven.examples.tempotron_mnist as tempotron_mnist
+    >>> import spikingjelly.event_driven.examples.tempotron_mnist as tempotron_mnist
     >>> tempotron_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
      input device, e.g., "cpu" or "cuda:0": cuda:15
