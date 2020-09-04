@@ -882,7 +882,7 @@ class Erf(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Erf.*
             :width: 100%
         
-        该函数在文章 [#esser2015backpropagation]_ [#STBP]_ 中使用。
+        该函数在文章 [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_ 中使用。
 
         * :ref:`中文API <Erf.__init__-cn>`
         .. _Erf.__init__-en:
@@ -911,7 +911,7 @@ class Erf(nn.Module):
         .. image:: ./_static/API/clock_driven/surrogate/Erf.*
             :width: 100%
 
-        The function is used in [#esser2015backpropagation]_ [#STBP]_.
+        The function is used in [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_.
         '''
         super().__init__()
         self.alpha = alpha
