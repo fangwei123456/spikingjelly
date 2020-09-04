@@ -29,3 +29,4 @@ References
 .. [#SNU]	Woźniak, S., A. Pantazi, T. Bohnstingl and E. Eleftheriou (2020). "Deep learning incorporating biologically inspired neural dynamics and in-memory computing." Nature Machine Intelligence **2**\ (6): 325-336.
 .. [#LISNN]	Cheng, X., Y. Hao, J. Xu and B. Xu (2020). LISNN: Improving Spiking Neural Networks with Lateral Interactions for Robust Object Recognition. Proceedings of the Twenty-Ninth International Joint Conference on Artificial Intelligence\ **:** 1519-1525.
 .. [#DECOLLE]	Kaiser, J., H. Mostafa and E. Neftci (2020). "Synaptic Plasticity Dynamics for Deep Continuous Local Learning (DECOLLE)." Frontiers in Neuroscience **14**: 424.
+.. [#SRNN] Yin, B., F. Corradi and S. M. Bohté (2020). Effective and Efficient Computation with Multiple-timescale Spiking Recurrent Neural Networks. International Conference on Neuromorphic Systems 2020: 1-8.
