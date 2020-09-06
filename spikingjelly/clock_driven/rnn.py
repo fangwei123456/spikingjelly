@@ -79,6 +79,8 @@ class SpikingLSTMCell(nn.Module):
 
         self.surrogate_function1 = surrogate_function1
         self.surrogate_function2 = surrogate_function2
+        if self.surrogate_function2 is not None:
+            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
 
         self.reset_parameters()
 
@@ -127,12 +129,17 @@ class SpikingLSTMCell(nn.Module):
             g = self.surrogate_function2(g)
             o = self.surrogate_function1(o)
 
-        # c can be 0, 1, 2
-        # c = f * c + i * g
-        c = accelerating.mul(c, f) + accelerating.mul(i, g, True)
-        # h = o * c
-        h = accelerating.mul(c, o)
-
+        if self.surrogate_function2 is not None:
+            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
+        if self.surrogate_function1.spiking:
+            # 可以使用针对脉冲的加速
+            # c = f * c + i * g
+            c = accelerating.mul(c, f) + accelerating.mul(i, g, True)
+            # h = o * c
+            h = accelerating.mul(c, o)
+        else:
+            c = c * f + i * g
+            h = c * o
         return h, c
 
     def weight_ih(self):
@@ -149,7 +156,7 @@ class SpikingLSTMCell(nn.Module):
 
 class SpikingLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
-                 invariant_dropout_mask=False, v_threshold=1.0,
+                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         super().__init__()
         self.input_size = input_size
@@ -157,24 +164,53 @@ class SpikingLSTM(nn.Module):
         self.num_layers = num_layers
         self.dropout_p = dropout_p
         self.invariant_dropout_mask = invariant_dropout_mask
+        self.bidirectional = bidirectional
 
-        self.lstm_cells = []
-        for i in range(num_layers):
-            self.lstm_cells.append(SpikingLSTMCell(hidden_size, hidden_size, bias, v_threshold,
-                                                  surrogate_function1, surrogate_function2))
+        if self.bidirectional:
+            raise NotImplementedError
+        else:
+            self.lstm_cells = []
+            for i in range(num_layers):
+                self.lstm_cells.append(SpikingLSTMCell(hidden_size, hidden_size, bias, v_threshold,
+                                                      surrogate_function1, surrogate_function2))
 
     def forward(self, x: torch.Tensor, hc=None):
         # x.shape=[T, batch_size, input_size]
-
-        if self.training:
-            if self.dropout_p > 0:
+        T = x.shape[0]
+        if self.bidirectional:
+            raise NotImplementedError
+        else:
+            # 生成保存h和c的list
+            # 初始的h c从输入获取
+            if hc is None:
+                hc_list = [None] * self.num_layers
+            else:
+                hc_list = []
+                for i in range(self.num_layers):
+                    hc_list.append(hc[i])
+            if self.training and self.dropout_p > 0:
                 if self.invariant_dropout_mask:
+                    # 生成不随时间变化的dropout的mask
                     mask = F.dropout(torch.zeros_like(x[0].data), p=self.dropout_p, training=True, inplace=True)
-                    for t in range(x.shape[0]):
-                        for lstm_cell in self.lstm_cells:
+                output = []
+                for t in range(T):
+                    hc_list[0] = self.lstm_cells[0](x[t], hc_list[0])
+                    for i in range(1, self.num_layers):
+                        if self.invariant_dropout_mask:
+                            hc_list[i] = self.lstm_cells[i](hc_list[i - 1][0] * mask, hc_list[i])
+                        else:
+                            hc_list[i] = self.lstm_cells[i](F.dropout(hc_list[i - 1][0], p=self.dropout_p, training=True),
+                                                            hc_list[i])
+                    output.append(hc_list[-1][0].unsqueeze(0))
+                h_n = []
+                c_n = []
+                for hc in hc_list:
+                    h_n.append(hc[0].unsqueeze(0))
+                    c_n.append(hc[1].unsqueeze(0))
+                return torch.cat(output, dim=0), torch.cat(h_n, dim=0), torch.cat(c_n, dim=0)
 
 
-                else:
+
 
 
 
