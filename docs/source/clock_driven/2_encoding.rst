@@ -49,8 +49,8 @@
     import torch
     import matplotlib
     import matplotlib.pyplot as plt
-    import visualizing
-    import encoding
+    from spikingjelly.clock_driven import encoding
+    from spikingjelly import visualizing
 
     # 给定脉冲序列
     set_spike = torch.full((3, 5), 0, dtype=torch.bool)
@@ -67,7 +67,7 @@
 
     plt.style.use(['science', 'muted'])
     visualizing.plot_1d_spikes(out_spike.float().numpy(), 'PeriodicEncoder', 'Simulating Step', 'Neuron Index',
-                               plot_spiking_rate=False)
+                               plot_firing_rate=False)
     plt.show()
 
 .. image:: ../_static/tutorials/clock_driven/2_encoding/1.*
@@ -111,8 +111,8 @@
     import torch
     import matplotlib
     import matplotlib.pyplot as plt
-    import visualizing
-    import encoding
+    from spikingjelly.clock_driven import encoding
+    from spikingjelly import visualizing
 
     # 随机生成6个神经元的刺激强度，设定最大脉冲时间为20
     x = torch.rand(6)
@@ -130,7 +130,7 @@
     print(x)
     plt.style.use(['science', 'muted'])
     visualizing.plot_1d_spikes(out_spike.float().numpy(), 'LatencyEncoder', 'Simulating Step', 'Neuron Index',
-                               plot_spiking_rate=False)
+                               plot_firing_rate=False)
     plt.show()
 
 当随机生成的6个刺激强度分别为 ``0.6650`` 、 ``0.3704`` 、 ``0.8485`` 、 ``0.0247`` 、 ``0.5589`` 和 ``0.1030`` 时，得到的脉冲序列如下：
@@ -153,8 +153,8 @@
     import matplotlib
     import matplotlib.pyplot as plt
     from PIL import Image
-    import visualizing
-    import encoding
+    from spikingjelly.clock_driven import encoding
+    from spikingjelly import visualizing
 
     # 读入lena图像
     lena_img = np.array(Image.open('lena512.bmp')) / 255
