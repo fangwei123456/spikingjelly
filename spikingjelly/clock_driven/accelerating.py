@@ -202,7 +202,7 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     return subtract_spike.apply(x, spike)
 
 
-def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
+def mul(x: torch.Tensor, spike: torch.Tensor, spike_mul_spike=False):
     '''
     * :ref:`API in English <mul-en>`
 
@@ -212,9 +212,9 @@ def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
     :type x: torch.Tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
     :type spike: torch.Tensor
-    :param x_is_spike: ``x`` 是否也是脉冲数据，即满足元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``。若 ``x`` 满足
+    :param spike_mul_spike: 是否为两个脉冲数据相乘，即``x`` 是否也是脉冲数据，即满足元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``。若 ``x`` 满足
         这一条件，则会调用更高级别的加速
-    :type x_is_spike: bool
+    :type spike_mul_spike: bool
     :return: ``x * spike``
     :rtype: torch.Tensor
 
@@ -229,16 +229,16 @@ def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
     :type spike: torch.Tensor
-    :param x_is_spike: whether ``x`` is the spike. When the elements in ``x`` are ``0`` and ``1`` or ``False`` and ``True``,
+    :param spike_mul_spike: whether spike multiplies spike, or whether ``x`` is the spiking data. When the elements in ``x`` are ``0`` and ``1`` or ``False`` and ``True``,
         this param can be ``True`` and this function will call an advanced accelerator
-    :type x_is_spike: torch.Tensor
+    :type spike_mul_spike: torch.Tensor
     :return: ``x * spike``
     :rtype: torch.Tensor
 
     Multiplication operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
     numerical stability.
     '''
-    if x_is_spike:
+    if spike_mul_spike:
         return spike_multiply_spike.apply(x, spike)
     else:
         return multiply_spike.apply(x, spike)
