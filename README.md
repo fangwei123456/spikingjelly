@@ -19,10 +19,12 @@ Install from [PyPI](https://pypi.org/project/spikingjelly/)：
 pip install spikingjelly
 ```
 
-Developers can download the latest version from GitHub:
+Developers can download and install the latest version from GitHub:
 
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
+cd spikingjelly
+python setup.py install
 ```
 
 ## Build SNN In An Unprecedented Simple Way
