@@ -2,27 +2,34 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class spike_multiply_spike(torch.autograd.Function):
     @staticmethod
     def forward(ctx, spike_a: torch.Tensor, spike_b: torch.Tensor):
         # y = spike_a * spike_b
         assert spike_a.shape == spike_b.shape, print('x.shape != spike.shape')  # 禁用广播机制
         if spike_a.dtype == torch.bool:
-            mask_a = spike_a
+            spike_a_bool = spike_a
         else:
-            mask_a = spike_a.bool()
+            spike_a_bool = spike_a.bool()
+
         if spike_b.dtype == torch.bool:
-            mask_b = spike_b
+            spike_b_bool = spike_b
         else:
-            mask_b = spike_b.bool()
+            spike_b_bool = spike_b.bool()
+
+        if spike_a.dtype == torch.bool and spike_b.dtype == bool:
+            # 若spike_a 和 spike_b 都是bool，则不应该需要计算梯度，因bool类型的tensor无法具有gard
+            return spike_a_bool.logical_and(spike_b_bool)
 
         if spike_a.requires_grad and spike_b.requires_grad:
-            ctx.save_for_backward(mask_a, mask_b)
+            ctx.save_for_backward(spike_b_bool, spike_a_bool)
         elif spike_a.requires_grad and not spike_b.requires_grad:
-            ctx.save_for_backward(mask_b)
+            ctx.save_for_backward(spike_b_bool)
         elif not spike_a.requires_grad and spike_b.requires_grad:
-            ctx.save_for_backward(mask_a)
-        ret = mask_a.logical_and(mask_b).float()
+            ctx.save_for_backward(spike_a_bool)
+
+        ret = spike_a_bool.logical_and(spike_b_bool).float()
         ret.requires_grad_(spike_a.requires_grad or spike_b.requires_grad)
         return ret
 
@@ -33,32 +40,32 @@ class spike_multiply_spike(torch.autograd.Function):
         # grad_spike_a = grad_output * grad_spike_b
         # grad_spike_b = grad_output * grad_spike_a
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            grad_spike_a = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[1]), 0)
-            grad_spike_b = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[0]), 0)
+            grad_spike_a = grad_output * ctx.saved_tensors[0]
+            grad_spike_b = grad_output * ctx.saved_tensors[1]
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            grad_spike_a = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[0]), 0)
+            grad_spike_a = grad_output * ctx.saved_tensors[0]
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            grad_spike_b = grad_output.masked_fill(torch.logical_not(ctx.saved_tensors[0]), 0)
+            grad_spike_b = grad_output * ctx.saved_tensors[0]
 
         return grad_spike_a, grad_spike_b
+
 
 class multiply_spike(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, spike: torch.Tensor):
         # y = x * spike
-        # x乘spike，等价于将x中spike == 0的位置全部填充为0
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
         if spike.dtype == torch.bool:
-            mask = torch.logical_not(spike)
+            spike_bool = spike
         else:
-            mask = torch.logical_not(spike.bool())
+            spike_bool = spike.bool()
         if x.requires_grad and spike.requires_grad:
-            ctx.save_for_backward(mask, x)
+            ctx.save_for_backward(spike_bool, x)
         elif x.requires_grad and not spike.requires_grad:
-            ctx.save_for_backward(mask)
+            ctx.save_for_backward(spike_bool)
         elif not x.requires_grad and spike.requires_grad:
             ctx.save_for_backward(x)
-        return x.masked_fill(mask, 0)
+        return x * spike_bool
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
@@ -67,10 +74,10 @@ class multiply_spike(torch.autograd.Function):
         # grad_x = grad_output * spike
         # grad_spike = grad_output * x
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            grad_x = grad_output.masked_fill(ctx.saved_tensors[0], 0)
+            grad_x = grad_output * ctx.saved_tensors[0]
             grad_spike = grad_output * ctx.saved_tensors[1]
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            grad_x = grad_output.masked_fill(ctx.saved_tensors[0], 0)
+            grad_x = grad_output * ctx.saved_tensors[0]
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             grad_spike = grad_output * ctx.saved_tensors[0]
 
@@ -81,15 +88,12 @@ class add_spike(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, spike: torch.Tensor):
         # y = x + spike
-        # x乘spike，等价于将x中spike == 1的位置增加1
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
         if spike.dtype == torch.bool:
-            mask = spike
+            spike_bool = spike
         else:
-            mask = spike.bool()
-        y = x.clone()
-        y[mask] += 1
-        return y
+            spike_bool = spike.bool()
+        return x + spike_bool
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
@@ -108,14 +112,17 @@ class subtract_spike(torch.autograd.Function):
     def forward(ctx, x: torch.Tensor, spike: torch.Tensor):
         # y = x - spike
         # x乘spike，等价于将x中spike == 1的位置减去1
+        # 截止pytorch 1.6 bool尚不支持减法，可以通过 - ( -x + y_bool)实现
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
         if spike.dtype == torch.bool:
-            mask = spike
+            spike_bool = spike
         else:
-            mask = spike.bool()
+            spike_bool = spike.bool()
+        # return - (- x + spike_bool)
         y = x.clone()
-        y[mask] -= 1
+        y[spike_bool] -= 1
         return y
+
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
@@ -128,6 +135,7 @@ class subtract_spike(torch.autograd.Function):
 
         return grad_x, grad_spike
 
+
 def add(x: torch.Tensor, spike: torch.Tensor):
     '''
     * :ref:`API in English <add-en>`
@@ -135,8 +143,11 @@ def add(x: torch.Tensor, spike: torch.Tensor):
     .. _add-cn:
 
     :param x: 任意tensor
+    :type x: torch.Tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :type spike: torch.Tensor
     :return: ``x + spike``
+    :rtype: torch.Tensor
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的加法运算。
 
@@ -145,14 +156,18 @@ def add(x: torch.Tensor, spike: torch.Tensor):
     .. _add-en:
 
     :param x: an arbitrary tensor
+    :type x: torch.Tensor
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
+    :type spike: torch.Tensor
     :return: ``x + spike``
+    :rtype: torch.Tensor
 
     Add operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
     numerical stability.
     '''
     return add_spike.apply(x, spike)
+
 
 def sub(x: torch.Tensor, spike: torch.Tensor):
     '''
@@ -161,8 +176,11 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     .. _sub-cn:
 
     :param x: 任意tensor
+    :type x: torch.Tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :type spike: torch.Tensor
     :return: ``x - spike``
+    :rtype: torch.Tensor
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的减法运算。
 
@@ -171,14 +189,18 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     .. _sub-en:
 
     :param x: an arbitrary tensor
+    :type x: torch.Tensor
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
+    :type spike: torch.Tensor
     :return: ``x - spike``
+    :rtype: torch.Tensor
 
     Subtract operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
     numerical stability.
     '''
     return subtract_spike.apply(x, spike)
+
 
 def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
     '''
@@ -187,10 +209,14 @@ def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
     .. _mul-cn:
 
     :param x: 任意tensor
+    :type x: torch.Tensor
     :param spike: 脉冲tensor。要求 ``spike`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spike.shape`` 必须与 ``x.shape`` 相同
+    :type spike: torch.Tensor
     :param x_is_spike: ``x`` 是否也是脉冲数据，即满足元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``。若 ``x`` 满足
         这一条件，则会调用更高级别的加速
+    :type x_is_spike: bool
     :return: ``x * spike``
+    :rtype: torch.Tensor
 
     针对与脉冲这一特殊的数据类型，进行前反向传播加速并保持数值稳定的乘法运算。
 
@@ -199,11 +225,15 @@ def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
     .. _mul-en:
 
     :param x: an arbitrary tensor
+    :type x: torch.Tensor
     :param spike: a spike tensor. The elements in ``spike`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spike.shape`` should be same
         with ``x.shape``
+    :type spike: torch.Tensor
     :param x_is_spike: whether ``x`` is the spike. When the elements in ``x`` are ``0`` and ``1`` or ``False`` and ``True``,
         this param can be ``True`` and this function will call an advanced accelerator
+    :type x_is_spike: torch.Tensor
     :return: ``x * spike``
+    :rtype: torch.Tensor
 
     Multiplication operation for an arbitrary tensor and a spike tensor, which is specially optimized for memory, speed, and
     numerical stability.
@@ -212,8 +242,6 @@ def mul(x: torch.Tensor, spike: torch.Tensor, x_is_spike=False):
         return spike_multiply_spike.apply(x, spike)
     else:
         return multiply_spike.apply(x, spike)
-
-
 
 
 class soft_vlotage_transform_function(torch.autograd.Function):
@@ -237,6 +265,7 @@ class soft_vlotage_transform_function(torch.autograd.Function):
             grad_spike = - ctx.v_threshold * grad_output
         return grad_v, grad_spike, None
 
+
 def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
     '''
     * :ref:`API in English <soft_voltage_transform-en>`
@@ -244,9 +273,13 @@ def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: fl
     .. _soft_voltage_transform-cn:
 
     :param v: 重置前电压
+    :type v: torch.Tensor
     :param spike: 释放的脉冲
+    :type spike: torch.Tensor
     :param v_threshold: 阈值电压
+    :type v_threshold: float
     :return: 重置后的电压
+    :rtype: torch.Tensor
 
     根据释放的脉冲，以soft方式重置电压，即释放脉冲后，电压会减去阈值：:math:`v = v - s \\cdot v_{threshold}`。
 
@@ -257,9 +290,13 @@ def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: fl
     .. _soft_voltage_transform-en:
 
     :param v: voltage before reset
+    :type v: torch.Tensor
     :param spike: fired spikes
+    :type spike: torch.Tensor
     :param v_threshold: threshold voltage
+    :type v_threshold: float
     :return: voltage after reset
+    :rtype: torch.Tensor
 
     Reset the voltage according to fired spikes in a soft way, which means that voltage of neurons that just fired spikes
     will subtract ``v_threshold``: :math:`v = v - s \\cdot v_{threshold}`.
@@ -268,15 +305,16 @@ def soft_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_threshold: fl
     '''
     return soft_vlotage_transform_function.apply(v, spike, v_threshold)
 
+
 class hard_voltage_transform_function(torch.autograd.Function):
     @staticmethod
     def forward(ctx, v: torch.Tensor, spike: torch.Tensor, v_reset: float):
         # v = v * (1 - spikes) + v_reset * spikes
         mask = spike.bool()  # 表示释放脉冲的位置
         if v.requires_grad and spike.requires_grad:
-            ctx.save_for_backward(mask, v_reset - v)
+            ctx.save_for_backward(~mask, v_reset - v)
         elif v.requires_grad and not spike.requires_grad:
-            ctx.save_for_backward(mask)
+            ctx.save_for_backward(~mask)
         elif not v.requires_grad and spike.requires_grad:
             ctx.save_for_backward(v_reset - v)
 
@@ -287,14 +325,15 @@ class hard_voltage_transform_function(torch.autograd.Function):
         grad_v = None
         grad_spike = None
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            grad_v = grad_output.masked_fill(ctx.saved_tensors[0], 0)
+            grad_v = grad_output * ctx.saved_tensors[0]
             grad_spike = grad_output * ctx.saved_tensors[1]
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            grad_v = grad_output.masked_fill(ctx.saved_tensors[0], 0)
+            grad_v = grad_output * ctx.saved_tensors[0]
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             grad_spike = grad_output * ctx.saved_tensors[0]
 
         return grad_v, grad_spike, None
+
 
 def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
     '''
@@ -303,9 +342,13 @@ def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float)
     .. _hard_voltage_transform-cn:
 
     :param v: 重置前电压
+    :type: torch.Tensor
     :param spike: 释放的脉冲
-    :param v_threshold: 阈值电压
+    :type: torch.Tensor
+    :param v_reset: 重置电压
+    :type: float
     :return: 重置后的电压
+    :rtype: torch.Tensor
 
     根据释放的脉冲，以hard方式重置电压，即释放脉冲后，电压会被直接设置成 ``v_reset``。
 
@@ -316,9 +359,13 @@ def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float)
     .. _hard_voltage_transform-en:
 
     :param v: voltage before reset
+    :type: torch.Tensor
     :param spike: fired spikes
-    :param v_threshold: threshold voltage
+    :type: torch.Tensor
+    :param v_reset: reset voltage
+    :type: float
     :return: voltage after reset
+    :rtype: torch.Tensor
 
     Reset the voltage according to fired spikes in a hard way, which means that voltage of neurons that just fired spikes
     will be set to ``v_reset``.
@@ -326,6 +373,7 @@ def hard_voltage_transform(v: torch.Tensor, spike: torch.Tensor, v_reset: float)
     This function is specially optimized for memory, speed, and numerical stability.
     '''
     return hard_voltage_transform_function.apply(v, spike, v_reset)
+
 
 class ModelPipeline(nn.Module):
     def __init__(self):
@@ -371,7 +419,6 @@ class ModelPipeline(nn.Module):
         super().__init__()
         self.module_list = nn.ModuleList()
         self.gpu_list = []
-
 
     def append(self, nn_module, gpu_id):
         '''
