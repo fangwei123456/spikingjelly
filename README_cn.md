@@ -18,10 +18,12 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 pip install spikingjelly
 ```
 
-或者对于开发者，下载源代码，进行代码补充、修改和测试：
+或者对于开发者，从GitHub下载源代码并安装：
 
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
+cd spikingjelly
+python setup.py install
 ```
 
 ## 以前所未有的简单方式搭建SNN
