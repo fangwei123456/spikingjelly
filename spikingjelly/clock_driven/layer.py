@@ -176,14 +176,16 @@ class AXAT(nn.Module):
         return x.view(x_shape)
 
 class Dropout(nn.Module):
-    def __init__(self, p=0.5, behind_spiking_layer=False):
+    def __init__(self, p=0.5, dropout_spikes=False):
         '''
         * :ref:`API in English <Dropout.__init__-en>`
 
         .. _Dropout.__init__-cn:
 
         :param p: 每个元素被设置为0的概率
-        :param behind_spiking_layer: 本层是否位于输出脉冲数据的层，例如 ``neuron.LIFNode`` 层之后。若为 ``True``，则计算会有一定的加速
+        :type p: float
+        :param dropout_spikes: 本层是否作用于脉冲数据，例如放在 ``neuron.LIFNode`` 层之后。若为 ``True``，则计算会有一定的加速
+        :type dropout_spikes: bool
 
         与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -210,8 +212,10 @@ class Dropout(nn.Module):
         .. _Dropout.__init__-en:
 
         :param p: probability of an element to be zeroed
-        :param behind_spiking_layer: whether this layer is behind a spiking layer, such as ``neuron.LIFNode``. If ``True``,
+        :type p: float
+        :param dropout_spikes: whether dropout is applied to spikes, such as after ``neuron.LIFNode``. If ``True``,
             the calculation will be accelerated
+        :type dropout_spikes: bool
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
@@ -240,21 +244,26 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
-        self.behind_spiking_layer = behind_spiking_layer
+        self.dropout_spikes = dropout_spikes
 
     def extra_repr(self):
-        return 'p={}'.format(
-            self.p
+        return 'p={}, dropout_spikes={}'.format(
+            self.p, self.dropout_spikes
         )
+
+    def create_mask(self, x: torch.Tensor):
+        self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True)
 
     def forward(self, x: torch.Tensor):
         if self.training:
             if self.mask is None:
-                self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True).bool()
-            return accelerating.mul(x, self.mask, self.behind_spiking_layer)
+                self.create_mask(x)
+            if self.dropout_spikes:
+                return accelerating.mul(self.mask, x)
+            else:
+                return x * self.mask
         else:
             return x
-
 
     def reset(self):
         '''
@@ -276,15 +285,17 @@ class Dropout(nn.Module):
         '''
         self.mask = None
 
-class Dropout2d(nn.Module):
-    def __init__(self, p=0.2, behind_spiking_layer=False):
+class Dropout2d(Dropout):
+    def __init__(self, p=0.2, dropout_spikes=False):
         '''
         * :ref:`API in English <Dropout2d.__init__-en>`
 
         .. _Dropout2d.__init__-cn:
 
         :param p: 每个元素被设置为0的概率
-        :param behind_spiking_layer: 本层是否位于输出脉冲数据的层，例如 ``neuron.LIFNode`` 层后。若为 ``True``，则计算会有一定的加速
+        :type p: float
+        :param dropout_spikes: 本层是否作用于脉冲数据，例如放在 ``neuron.LIFNode`` 层之后。若为 ``True``，则计算会有一定的加速
+        :type dropout_spikes: bool
 
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -296,53 +307,20 @@ class Dropout2d(nn.Module):
         .. _Dropout2d.__init__-en:
 
         :param p: probability of an element to be zeroed
-        :param behind_spiking_layer: whether this layer is behind a spiking layer, such as ``neuron.LIFNode``. If ``True``,
+        :type p: float
+        :param dropout_spikes: whether dropout is applied to spikes, such as after ``neuron.LIFNode``. If ``True``,
             the calculation will be accelerated
-            
+        :type dropout_spikes: bool
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
         has been called and a new simulation is started.
 
         For more information about Dropout in SNN, refer to :ref:`layer.Dropout <Dropout.__init__-en>`.
         '''
-        super().__init__()
-        assert 0 < p < 1
-        self.mask = None
-        self.p = p
-        self.behind_spiking_layer = behind_spiking_layer
+        super().__init__(p, dropout_spikes)
 
-    def extra_repr(self):
-        return 'p={}'.format(
-            self.p
-        )
-
-    def forward(self, x: torch.Tensor):
-        if self.training:
-            if self.mask is None:
-                self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True).bool()
-            return accelerating.mul(x, self.mask, self.behind_spiking_layer)
-        else:
-            return x
-
-    def reset(self):
-        '''
-        * :ref:`API in English <Dropout2d.reset-en>`
-
-        .. _Dropout2d.reset-cn:
-
-        :return: None
-
-        本层是一个有状态的层。此函数重置本层的状态变量。
-
-        * :ref:`中文API <Dropout2d.reset-cn>`
-
-        .. _Dropout2d.reset-en:
-
-        :return: None
-
-        This layer is stateful. This function will reset all stateful variables.
-        '''
-        self.mask = None
+    def create_mask(self, x: torch.Tensor):
+        self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
 
 class SynapseFilter(nn.Module):
     def __init__(self, tau=100.0, learnable=False):
