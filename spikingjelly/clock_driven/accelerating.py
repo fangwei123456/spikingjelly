@@ -200,8 +200,6 @@ def sub(x: torch.Tensor, spike: torch.Tensor):
     numerical stability.
     '''
     return subtract_spike.apply(x, spike)
-
-
 def mul(x: torch.Tensor, spike: torch.Tensor, spike_mul_spike=False):
     '''
     * :ref:`API in English <mul-en>`
