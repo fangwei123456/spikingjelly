@@ -36,14 +36,23 @@ class NMNIST(Dataset):
         :return: 一个字典，键是{'t', 'x', 'y', 'p'}，值是np数组
         
         原始的N-MNIST提供的是bin格式数据，不能直接读取。本函数提供了一个读取的接口。
+        本函数参考了 https://github.com/jackd/events-tfds 的代码。
+
+        原始数据以二进制存储：
+
+        Each example is a separate binary file consisting of a list of events. Each event occupies 40 bits as described below:
+        bit 39 - 32: Xaddress (in pixels)
+        bit 31 - 24: Yaddress (in pixels)
+        bit 23: Polarity (0 for OFF, 1 for ON)
+        bit 22 - 0: Timestamp (in microseconds)
+
+
         '''
 
         with open(file_name, 'rb') as bin_f:
             raw_data = np.uint32(np.fromfile(bin_f, dtype=np.uint8))
-            # y = raw_data[1::5]
-            # x = raw_data[0::5]
-            x = raw_data[1::5]
-            y = raw_data[0::5]
+            x = raw_data[0::5]
+            y = raw_data[1::5]
             p = (raw_data[2::5] & 128) >> 7  # bit 7
             t = ((raw_data[2::5] & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
         return {'t': t, 'x': x, 'y': y, 'p': p}
