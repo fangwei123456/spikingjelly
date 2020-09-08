@@ -4,7 +4,19 @@ import os
 import tqdm
 import numpy as np
 cifar10_class = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-
+# https://figshare.com/articles/dataset/CIFAR10-DVS_New/4724671
+resource_url = {
+    'airplane': ('https://ndownloader.figshare.com/files/7712788', None),
+    'automobile': ('https://ndownloader.figshare.com/files/7712791', None),
+    'bird': ('https://ndownloader.figshare.com/files/7712794', None),
+    'cat': ('https://ndownloader.figshare.com/files/7712812', None),
+    'deer': ('https://ndownloader.figshare.com/files/7712815', None),
+    'dog': ('https://ndownloader.figshare.com/files/7712818', None),
+    'frog': ('https://ndownloader.figshare.com/files/7712842', None),
+    'horse': ('https://ndownloader.figshare.com/files/7712851', None),
+    'ship': ('https://ndownloader.figshare.com/files/7712836', None),
+    'truck': ('https://ndownloader.figshare.com/files/7712839', None)
+}
 
 class CIFAR10DVS(spikingjelly.datasets.SubDirDataset):
 
