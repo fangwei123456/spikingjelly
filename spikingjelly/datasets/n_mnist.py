@@ -55,8 +55,9 @@ class NMNIST(Dataset):
             raw_data = np.uint32(np.fromfile(bin_f, dtype=np.uint8))
             x = raw_data[0::5]
             y = raw_data[1::5]
-            p = (raw_data[2::5] & 128) >> 7  # bit 7
-            t = ((raw_data[2::5] & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
+            rd_2__5 = raw_data[2::5]
+            p = (rd_2__5 & 128) >> 7  # bit 7
+            t = ((rd_2__5 & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
         return {'t': t, 'x': x, 'y': y, 'p': p}
 
     @staticmethod
