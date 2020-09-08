@@ -17,32 +17,36 @@ resource = {
 }
 
 
-# The file format is .dat (CCAM ATIS), and contains only td events (no aps events).
-# It can be easily read using the Loris python toolbox -- https://github.com/neuromorphic-paris/loris/ -- or the python script provided -- read_td_events.py --.
-#
-# Events are encoded in binary format on 64 bits (8 bytes):
-# 32 bits for timestamp
-# 9 bits for x address
-# 8 bits for y address
-# 2 bits for polarity
-# 13 bits padding
+
 class NavGesture(Dataset):
-    # @staticmethod
-    # def read_bin(file_name: str):
-    #     '''
-    #     :param file_name: N-MNIST原始bin格式数据的文件名
-    #     :return: 一个字典，键是{'t', 'x', 'y', 'p'}，值是np数组
-    #
-    #     原始的NavGesture提供的是bin格式数据，不能直接读取。本函数提供了一个读取的接口。
-    #     '''
-    #
-    #     with open(file_name, 'rb') as bin_f:
-    #         raw_data = np.uint64(np.fromfile(bin_f, dtype=np.uint64))
-    #         x = raw_data[1::5]
-    #         y = raw_data[0::5]
-    #         p = (raw_data[2::5] & 128) >> 7  # bit 7
-    #         t = ((raw_data[2::5] & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
-    #     return {'t': t, 'x': x, 'y': y, 'p': p}
+    @staticmethod
+    def read_bin(file_name: str):
+        '''
+        :param file_name: NavGesture原始bin格式数据的文件名
+        :return: 一个字典，键是{'t', 'x', 'y', 'p'}，值是np数组
+
+        原始的NavGesture提供的是bin格式数据，不能直接读取。本函数提供了一个读取的接口。
+        原始数据以二进制存储：
+
+        Events are encoded in binary format on 64 bits (8 bytes):
+        32 bits for timestamp
+        9 bits for x address
+        8 bits for y address
+        2 bits for polarity
+        13 bits padding
+        '''
+        with open(file_name, 'rb') as bin_f:
+            # `& 128` 是取一个8位二进制数的最高位
+            # `& 127` 是取其除了最高位，也就是剩下的7位
+            raw_data = np.uint64(np.fromfile(bin_f, dtype=np.uint8))
+            t = (raw_data[0::8] << 24) | (raw_data[1::8] << 16) | (raw_data[2::8] << 8) | raw_data[3::8]
+            rd_5__8 = raw_data[5::8]
+            x = (raw_data[4::8] << 8) | (rd_5__8 & 128 >> 7)
+            rd_6__8 = raw_data[6::8]
+            y = (rd_5__8 & 127 << 1) | (rd_6__8 & 128)
+            # 0b01110000 = 112
+            p = rd_6__8 & 112 >> 4
+            return {'t': t, 'x': x, 'y': y, 'p': p}
 
     @staticmethod
     def download_and_extract(dataset_name: str, download_root: str, extract_root=None):

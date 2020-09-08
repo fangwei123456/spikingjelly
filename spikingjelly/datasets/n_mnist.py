@@ -50,6 +50,8 @@ class NMNIST(Dataset):
         '''
 
         with open(file_name, 'rb') as bin_f:
+            # `& 128` 是取一个8位二进制数的最高位
+            # `& 127` 是取其除了最高位，也就是剩下的7位
             raw_data = np.uint32(np.fromfile(bin_f, dtype=np.uint8))
             x = raw_data[0::5]
             y = raw_data[1::5]
