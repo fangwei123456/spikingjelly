@@ -14,11 +14,11 @@ class FunctionThread(threading.Thread):
     def run(self):
         self.f(**self.kwargs)
 
-def integrate_events_to_frames(events, weight, height, frames_num=10, split_by='time', normalization=None):
+def integrate_events_to_frames(events, height, weight, frames_num=10, split_by='time', normalization=None):
     '''
     :param events: 键是{'t', 'x', 'y', 'p'}，值是np数组的的字典
-    :param weight: 脉冲数据的宽度，例如对于DVS CIFAR10是128
     :param height: 脉冲数据的高度，例如对于DVS CIFAR10是128
+    :param weight: 脉冲数据的宽度，例如对于DVS CIFAR10是128
     :param frames_num: 转换后数据的帧数
     :param split_by: ``'time'`` 或 ``'number'``。为 ``'time'`` 表示将events数据在时间上分段，例如events记录的 ``t`` 介于
                         [0, 105]且 ``frames_num=10``，则转化得到的10帧分别为 ``t`` 属于[0, 10), [10,20), ..., [90, 105)的
@@ -29,10 +29,10 @@ def integrate_events_to_frames(events, weight, height, frames_num=10, split_by='
                         为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
                         为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
                         为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
-    :return: 转化后的frames数据，是一个 ``shape = [frames_num, 2, weight, height]`` 的np数组
+    :return: 转化后的frames数据，是一个 ``shape = [frames_num, 2, height, weight]`` 的np数组
 
     '''
-    frames = np.zeros(shape=[frames_num, 2, weight, height])
+    frames = np.zeros(shape=[frames_num, 2, height, weight])
 
     if split_by == 'time':
         # 按照脉冲的发生时刻进行等分
@@ -50,7 +50,7 @@ def integrate_events_to_frames(events, weight, height, frames_num=10, split_by='
                 index_r = events['t'].shape[0]
             else:
                 index_r = index_list[i]
-            frames[i, events['p'][index_l:index_r], events['x'][index_l:index_r], events['y'][index_l:index_r]] \
+            frames[i, events['p'][index_l:index_r], events['y'][index_l:index_r], events['x'][index_l:index_r]] \
                 += events['t'][index_l:index_r]
             index_l = index_r
             if normalization == 'frequency':
@@ -77,7 +77,7 @@ def integrate_events_to_frames(events, weight, height, frames_num=10, split_by='
             else:
                 index_r = index_l + dt
 
-            frames[i, events['p'][index_l:index_r], events['x'][index_l:index_r], events['y'][index_l:index_r]] \
+            frames[i, events['p'][index_l:index_r], events['y'][index_l:index_r], events['x'][index_l:index_r]] \
                 += events['t'][index_l:index_r]
             if normalization == 'frequency':
                 frames[i] /= dt  # 表示脉冲发放的频率
