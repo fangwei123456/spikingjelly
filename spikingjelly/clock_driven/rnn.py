@@ -4,6 +4,55 @@ import torch.nn.functional as F
 from spikingjelly.clock_driven import surrogate, accelerating, layer
 import math
 
+def bidirectional_rnn_cell_forward(cell: nn.Module, cell_reverse: nn.Module, x: torch.Tensor,
+                                   states: torch.Tensor, states_reverse: torch.Tensor):
+    '''
+    :param cell: 正向RNN cell，输入是正向序列
+    :type cell: nn.Module
+    :param cell_reverse: 反向的RNN cell，输入是反向序列
+    :type cell_reverse: nn.Module
+    :param x: ``shape = [T, batch_size, input_size]`` 的输入
+    :type x: torch.Tensor
+    :param states: 正向RNN cell的起始状态
+        若RNN cell只有单个隐藏状态，则 ``shape = [batch_size, hidden_size]`` ；
+        否则 ``shape = [states_num, batch_size, hidden_size]``
+    :type states: torch.Tensor
+    :param states_reverse: 反向RNN cell的起始状态
+        若RNN cell只有单个隐藏状态，则 ``shape = [batch_size, hidden_size]`` ；
+        否则 ``shape = [states_num, batch_size, hidden_size]``
+    :type states: torch.Tensor
+    :return: y, ss, ss_r
+        y: torch.Tensor
+            ``shape = [T, batch_size, 2 * hidden_size]`` 的输出。``y[t]`` 由正向cell在 ``t`` 时刻和反向cell在 ``T - t - 1``
+            时刻的输出拼接而来
+        ss: torch.Tensor
+            ``shape`` 与 ``states`` 相同，正向cell在 ``T-1`` 时刻的状态
+        ss_r: torch.Tensor
+            ``shape`` 与 ``states_reverse`` 相同，反向cell在 ``0`` 时刻的状态
+
+    计算单个正向和反向RNN cell沿着时间维度的循环并输出结果和两个cell的最终状态。
+    '''
+    T = x.shape[0]
+    ss = states
+    ss_r = states_reverse
+    output = []
+    output_r = []
+    for t in range(T):
+        ss = cell(x[t], ss)
+        ss_r = cell_reverse(x[T - t - 1], ss_r)
+        if states.dim() == 2:
+            output.append(ss)
+            output_r.append(ss_r)
+        elif states.dim() == 3:
+            output.append(ss[0])
+            output_r.append(ss_r[0])
+            # 当RNN cell具有多个隐藏状态时，通常第0个隐藏状态是其输出
+
+    ret = []
+    for t in range(T):
+        ret.append(torch.cat((output[t], output_r[T - t - 1]), dim=-1))
+    return torch.stack(ret), ss, ss_r
+
 class SpikingLSTMCell(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
@@ -84,8 +133,6 @@ class SpikingLSTMCell(nn.Module):
 
         self.reset_parameters()
 
-
-
     def reset_parameters(self):
         sqrt_k = math.sqrt(1 / self.hidden_size)
         nn.init.uniform_(self.linear_ih.weight, -sqrt_k, sqrt_k)
@@ -153,63 +200,161 @@ class SpikingLSTMCell(nn.Module):
     def bias_hh(self):
         return self.linear_hh.bias
 
-class SpikingLSTM(nn.Module):
+
+class SpikingRNNBase(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
-                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
-                 surrogate_function1=surrogate.Erf(), surrogate_function2=None):
+                 invariant_dropout_mask=False, bidirectional=False, *args, **kwargs):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.num_layers = num_layers
+        self.bias = bias
         self.dropout_p = dropout_p
         self.invariant_dropout_mask = invariant_dropout_mask
         self.bidirectional = bidirectional
 
         if self.bidirectional:
-            raise NotImplementedError
-        else:
-            self.lstm_cells = []
-            self.lstm_cells.append(SpikingLSTMCell(input_size, hidden_size, bias, v_threshold,
-                                                   surrogate_function1, surrogate_function2))
-            for i in range(num_layers - 1):
-                self.lstm_cells.append(SpikingLSTMCell(hidden_size, hidden_size, bias, v_threshold,
-                                                      surrogate_function1, surrogate_function2))
-        self.lstm_cells = nn.Sequential(*self.lstm_cells)
+            # 双向LSTM的结构可以参考 https://cedar.buffalo.edu/~srihari/CSE676/10.3%20BidirectionalRNN.pdf
+            # https://cs224d.stanford.edu/lecture_notes/LectureNotes4.pdf
+            self.cells, self.cells_reverse = self.create_cells(*args, **kwargs)
 
-    def forward(self, x: torch.Tensor, hc=None):
+        else:
+            self.cells = self.create_cells(*args, **kwargs)
+
+    def create_cells(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @staticmethod
+    def states_num():
+        # LSTM: 2
+        # GRU: 1
+        # RNN: 1
+        raise NotImplementedError
+
+    def forward(self, x: torch.Tensor, states=None):
         # x.shape=[T, batch_size, input_size]
+        # states states_num 个 [num_layers * num_directions, batch, hidden_size]
         T = x.shape[0]
         batch_size = x.shape[1]
-        if self.bidirectional:
-            raise NotImplementedError
+
+        if isinstance(states, tuple):
+            # states非None且为tuple，则合并成tensor
+            states_list = torch.stack(states)
+            # shape = [self.states_num(), self.num_layers * 2, batch_size, self.hidden_size]
+        elif isinstance(states, torch.Tensor):
+            # states非None且不为tuple时，它本身就是一个tensor，例如普通RNN的状态
+            states_list = states
+        elif states is None:
+            # squeeze()的作用是，若states_num() == 1则去掉多余的维度
+            if self.bidirectional:
+                states_list = torch.zeros(
+                    size=[self.states_num(), self.num_layers * 2, batch_size, self.hidden_size]).to(x).squeeze()
+            else:
+                states_list = torch.zeros(size=[self.states_num(), self.num_layers, batch_size, self.hidden_size]).to(
+                    x).squeeze()
         else:
-            # 生成保存h和c的list
-            h_list = torch.zeros(size=[self.num_layers, batch_size, self.hidden_size]).to(x)
-            c_list = torch.zeros_like(h_list)
-            # 初始的h c从输入获取
-            if hc is not None:
-                h_list = hc[0]
-                c_list = hc[1]
+            raise TypeError
+
+        if self.bidirectional:
+            # y 表示第i层的输出。初始化时，y即为输入
+            y = x
             if self.training and self.dropout_p > 0 and self.invariant_dropout_mask:
-                mask = F.dropout(torch.ones(size=[batch_size, self.hidden_size]), p=self.dropout_p, training=True, inplace=True).to(x)
+                mask = F.dropout(torch.ones(size=[self.num_layers - 1, batch_size, self.hidden_size * 2]),
+                                 p=self.dropout_p, training=True, inplace=True).to(x)
+            for i in range(self.num_layers):
+                # 第i层神经元的起始状态从输入states_list获取
+                if self.states_num() == 1:
+                    cell_init_states = states_list[i]
+                    cell_init_states_reverse = states_list[i + self.num_layers]
+                else:
+                    cell_init_states = states_list[:, i]
+                    cell_init_states_reverse = states_list[:, i + self.num_layers]
+
+                if self.training and self.dropout_p > 0:
+                    if i > 1:
+                        if self.invariant_dropout_mask:
+                            y = y * mask[i - 1]
+                        else:
+                            y = F.dropout(y, p=self.dropout_p, training=True)
+                y, ss, ss_r = bidirectional_rnn_cell_forward(
+                    self.cells[i], self.cells_reverse[i], y, cell_init_states, cell_init_states_reverse)
+                # 更新states_list[i]
+                if self.states_num() == 1:
+                    states_list[i] = ss
+                    states_list[i + self.num_layers] = ss_r
+                else:
+                    states_list[:, i] = torch.stack(ss)
+                    states_list[:, i + self.num_layers] = torch.stack(ss_r)
+            if self.states_num() == 1:
+                return y, states_list
+            else:
+                # split使得返回值是tuple
+                return y, torch.split(states_list, 1, dim=0)
+
+        else:
+            if self.training and self.dropout_p > 0 and self.invariant_dropout_mask:
+                mask = F.dropout(torch.ones(size=[self.num_layers - 1, batch_size, self.hidden_size]),
+                                 p=self.dropout_p, training=True, inplace=True).to(x)
 
             output = []
             for t in range(T):
-                h_list[0], c_list[0] = self.lstm_cells[0](x[t], (h_list[0], c_list[0]))
+                if self.states_num() == 1:
+                    states_list[0] = self.cells[0](x[t], states_list[0])
+                else:
+                    states_list[:, 0] = torch.stack(self.cells[0](x[t], states_list[:, 0]))
                 for i in range(1, self.num_layers):
-                    h = h_list[i - 1]
+                    y = states_list[0, i - 1]
                     if self.training and self.dropout_p > 0:
                         if self.invariant_dropout_mask:
-                            h = h * mask
+                            y = y * mask[i - 1]
                         else:
-                            h = F.dropout(h, p=self.dropout_p, training=True)
-                    h_list[i], c_list[i] = self.lstm_cells[i](h, (h_list[i], c_list[i]))
-                output.append(h_list[-1].unsqueeze(0))
+                            y = F.dropout(y, p=self.dropout_p, training=True)
+                    if self.states_num() == 1:
+                        states_list[i] = self.cells[i](y, states_list[i])
+                    else:
+                        states_list[:, i] = torch.stack(self.cells[i](y, states_list[:, i]))
+                if self.states_num() == 1:
+                    output.append(states_list[-1].clone().unsqueeze(0))
+                else:
+                    output.append(states_list[0, -1].clone().unsqueeze(0))
+            if self.states_num() == 1:
+                return torch.cat(output, dim=0), states_list
+            else:
+                # split使得返回值是tuple
+                return torch.cat(output, dim=0), torch.split(states_list, 1, dim=0)
 
-            return torch.cat(output, dim=0), (h_list, c_list)
 
+class SpikingLSTM(SpikingRNNBase):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
+                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
+                 surrogate_function1=surrogate.Erf(), surrogate_function2=None):
+        super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
+                         v_threshold, surrogate_function1, surrogate_function2)
 
+    @staticmethod
+    def states_num():
+        return 2
 
+    def create_cells(self, v_threshold, surrogate_function1, surrogate_function2):
+        if self.bidirectional:
+            cells = []
+            cells_reverse = []
+            cells.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, v_threshold,
+                                         surrogate_function1, surrogate_function2))
+            cells_reverse.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, v_threshold,
+                                                 surrogate_function1, surrogate_function2))
+            for i in range(self.num_layers - 1):
+                cells.append(SpikingLSTMCell(self.hidden_size * 2, self.hidden_size, self.bias, v_threshold,
+                                             surrogate_function1, surrogate_function2))
+                cells_reverse.append(SpikingLSTMCell(self.hidden_size * 2, self.hidden_size, self.bias, v_threshold,
+                                                     surrogate_function1, surrogate_function2))
+            return nn.Sequential(*cells), nn.Sequential(*cells_reverse)
 
-
-
+        else:
+            cells = []
+            cells.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, v_threshold,
+                                         surrogate_function1, surrogate_function2))
+            for i in range(self.num_layers - 1):
+                cells.append(SpikingLSTMCell(self.hidden_size, self.hidden_size, self.bias, v_threshold,
+                                             surrogate_function1, surrogate_function2))
+            return nn.Sequential(*cells)
