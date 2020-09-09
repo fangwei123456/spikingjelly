@@ -136,4 +136,6 @@ dmypy.json
 
 /experiments
 /test.py
-
+# event data
+*.bin
+*.dat
