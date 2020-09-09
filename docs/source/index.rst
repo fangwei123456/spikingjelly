@@ -19,11 +19,13 @@
 
     pip install spikingjelly
 
-或者对于开发者，下载源代码，进行代码补充、修改和测试：
+或者对于开发者，从Github最新的源代码进行安装：
 
 .. code-block:: bash
 
     git clone https://github.com/fangwei123456/spikingjelly.git
+    cd spikingjelly
+    python setup.py install
 
 上手教程
 -------------------------
@@ -72,11 +74,13 @@ Install from `PyPI <https://pypi.org/project/spikingjelly/>`_：
 
     pip install spikingjelly
 
-Developers can download the latest version from GitHub:
+Developers can download the latest version from GitHub and install:
 
 .. code-block:: bash
 
     git clone https://github.com/fangwei123456/spikingjelly.git
+    cd spikingjelly
+    python setup.py install
 
 Tutorials
 -------------------------
