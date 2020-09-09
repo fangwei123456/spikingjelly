@@ -103,7 +103,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     def __init__(self, root: str, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         events_root = os.path.join(root, 'events')
-        if os.path.exists(events_root) and os.listdir(events_root).__len__() == 10:
+        if os.path.exists(events_root) and os.listdir(events_root).__len__() == 9:
             # 如果root目录下存在events_root目录，且events_root下有10个子文件夹，则认为数据集文件存在
             print(f'events data root {events_root} already exists.')
         else:
@@ -113,7 +113,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         self.data_dir = None
         if use_frame:
             frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{normalization}')
-            if os.path.exists(frames_root) and os.listdir(frames_root).__len__() == 10:
+            if os.path.exists(frames_root) and os.listdir(frames_root).__len__() == 9:
                 # 如果root目录下存在frames_root目录，且frames_root下有10个子文件夹，则认为数据集文件存在
                 print(f'frames data root {frames_root} already exists.')
             else:
