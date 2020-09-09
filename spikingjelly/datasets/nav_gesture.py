@@ -101,7 +101,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             thread_list[i].join()
             print('thread', i, 'finished')
 
-    def __init__(self, root: str, use_frame=True, frames_num=10, split_by='number', normalization=None):
+    def __init__(self, root: str, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         events_root = os.path.join(root, 'events')
         if os.path.exists(events_root) and os.listdir(events_root).__len__() == 10:
             # 如果root目录下存在events_root目录，且events_root下有10个子文件夹，则认为数据集文件存在
@@ -112,8 +112,13 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         self.use_frame = use_frame
         self.data_dir = None
         if use_frame:
-            frames_root = os.path.join(root, 'frames')
-            NavGesture.create_frames_dataset(events_root, frames_root, frames_num, split_by, normalization)
+            frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{normalization}')
+            if os.path.exists(frames_root) and os.listdir(frames_root).__len__() == 10:
+                # 如果root目录下存在frames_root目录，且frames_root下有10个子文件夹，则认为数据集文件存在
+                print(f'frames data root {frames_root} already exists.')
+            else:
+                os.mkdir(frames_root)
+                NavGesture.create_frames_dataset(events_root, frames_root, frames_num, split_by, normalization)
             for sub_dir in utils.list_dir(frames_root, True):
                     self.file_name.extend(utils.list_files(sub_dir, '.npy', True))
             self.data_dir = frames_root
