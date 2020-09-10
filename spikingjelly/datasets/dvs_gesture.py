@@ -106,14 +106,12 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def convert_aedat_dir_to_npy_dir(aedat_data_dir: str, npy_data_dir: str):
-        # 将aedat_data_dir目录下的.aedat文件读取并转换成np保存的字典，保存在npy_data_dir目录
-        print('convert events data from aedat to numpy format.')
-        for aedat_file in tqdm.tqdm(utils.list_files(aedat_data_dir, '.aedat')):
+        def cvt_file_fun(aedat_file):
             base_name = aedat_file[0: -6]
             events = DvsGesture.read_bin(os.path.join(aedat_data_dir, aedat_file))
             # 读取csv文件，获取各段的label，保存对应的数据和label
             events_csv = np.loadtxt(os.path.join(aedat_data_dir, base_name + '_labels.csv'),
-                            dtype=np.uint32, delimiter=',', skiprows=1)
+                                    dtype=np.uint32, delimiter=',', skiprows=1)
             index = 0
             index_l = 0
             index_r = 0
@@ -140,6 +138,7 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                 j = 0
                 while True:
                     file_name = os.path.join(npy_data_dir, f'{base_name}_{label}_{j}.npy')
+                    # 由于不同线程执行的base_name一定不相同，因此这里不会出现多线程之间的数据复用造成的错误
                     if os.path.exists(file_name):  # 防止同一个aedat里存在多个相同label的数据段
                         j += 1
                     else:
@@ -150,6 +149,23 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                             'p': events['p'][index_l:index_r]
                         })
                         break
+        def cvt_files_fun(aedat_file_list):
+            for aedat_file in aedat_file_list:
+                cvt_file_fun(aedat_file)
+
+        # 将aedat_data_dir目录下的.aedat文件读取并转换成np保存的字典，保存在npy_data_dir目录
+        print('convert events data from aedat to numpy format.')
+        # 速度很慢，并行化
+        aedat_files = utils.list_files(aedat_data_dir, '.aedat')
+        block = aedat_files.__len__() // 8  # 分成8个子任务
+        thread_list = []
+        for i in range(7):
+            thread_list.append(spikingjelly.datasets.FunctionThread(cvt_files_fun, aedat_files[i * block, (i + 1) * block]))
+
+        # 最后一段任务由主线程完成
+        for aedat_file in tqdm.tqdm(aedat_files[7 * block:]):
+            cvt_file_fun(aedat_file)
+
 
 
     @staticmethod
