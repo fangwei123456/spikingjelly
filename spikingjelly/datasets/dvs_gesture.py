@@ -35,7 +35,7 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         file_name = os.path.join(download_root, 'DvsGesture.tar.gz')
         if os.path.exists(file_name):
             if utils.check_md5(file_name, resource[1]):
-                utils.extract_archive(download_root, extract_root)
+                utils.extract_archive(file_name, extract_root)
             else:
                 print(f'{file_name} corrupted.')
 
@@ -171,8 +171,6 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             # 如果root目录下存在events_root目录则认为数据集文件存在
             print(f'events data root {events_root} already exists.')
         else:
-            os.mkdir(events_root)
-            print(f'mkdir {events_root}')
             self.download_and_extract(root, events_root)
 
         events_npy_root = os.path.join(root, 'events_npy')
@@ -181,7 +179,7 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         else:
             os.mkdir(events_npy_root)
             print(f'mkdir {events_root}')
-            print('read evetns data from *.aedat and save to *.npy...')
+            print('read events data from *.aedat and save to *.npy...')
             DvsGesture.convert_aedat_dir_to_npy_dir(events_root, events_npy_root)
 
 
