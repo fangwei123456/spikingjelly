@@ -161,10 +161,16 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         thread_list = []
         for i in range(7):
             thread_list.append(spikingjelly.datasets.FunctionThread(cvt_files_fun, aedat_files[i * block, (i + 1) * block]))
-
+            print('thread {i} start')
+            thread_list[-1].start()
         # 最后一段任务由主线程完成
+        print('thread {7} start')
         for aedat_file in tqdm.tqdm(aedat_files[7 * block:]):
             cvt_file_fun(aedat_file)
+        print('thread {7} finished')
+        for i in range(thread_list.__len__()):
+            thread_list[i].join()
+            print(f'thread {i} finished')
 
 
 
