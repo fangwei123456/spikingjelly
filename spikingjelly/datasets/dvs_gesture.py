@@ -209,3 +209,9 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             self.data_dir = events_npy_root
             self.get_item_fun = DvsGesture.get_events_item
 
+
+    def __len__(self):
+        return self.file_name.__len__()
+    def __getitem__(self, index):
+        return self.get_item_fun(self.file_name[index])
+
