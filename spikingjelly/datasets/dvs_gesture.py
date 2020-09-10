@@ -171,7 +171,9 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             # 如果root目录下存在events_root目录则认为数据集文件存在
             print(f'events data root {events_root} already exists.')
         else:
-           self.download_and_extract(root, events_root)
+            os.mkdir(events_root)
+            print(f'mkdir {events_root}')
+            self.download_and_extract(root, events_root)
 
         events_npy_root = os.path.join(root, 'events_npy')
         if os.path.exists(events_npy_root):
