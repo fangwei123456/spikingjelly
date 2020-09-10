@@ -15,7 +15,7 @@ resource = {
     'walk': ['https://www.neuromorphic-vision.com/public/downloads/navgesture/navgesture-walk.zip',
              '5d305266f13005401959e819abe206f0']
 }
-labels = {
+labels_dict = {
     'do': 0,
     'up': 1,
     'le': 2,
@@ -58,7 +58,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         # Files are named userID_classID_userclipID.dat and allow to identify the user and gesture class. For example, "user09_do_11.dat" is a "Down Swipe" gesture from user09. classID can be:
         # do: down swipe ; up: up swipe ; le: left swipe ; ri: right swipe ; se: select ; ho: home
         base_name = os.path.basename(file_name)
-        return labels[base_name.split('_')[1]]
+        return labels_dict[base_name.split('_')[1]]
 
     @staticmethod
     def get_events_item(file_name):
@@ -102,6 +102,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             print('thread', i, 'finished')
 
     def __init__(self, root: str, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+        # depend on loris
         events_root = os.path.join(root, 'events')
         if os.path.exists(events_root) and os.listdir(events_root).__len__() == 9:
             # 如果root目录下存在events_root目录，且events_root下有10个子文件夹，则认为数据集文件存在
