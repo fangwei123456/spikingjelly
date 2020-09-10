@@ -167,21 +167,19 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         return np.load(file_name), int(os.path.basename(file_name).split('_')[-2]) - 1
 
     def __init__(self, root: str, use_frame=True, frames_num=10, split_by='number', normalization='max'):
-        events_root = os.path.join(root, 'events')
-        if os.path.exists(events_root):
-            # 如果root目录下存在events_root目录则认为数据集文件存在
-            print(f'events data root {events_root} already exists.')
-        else:
-            self.download_and_extract(root, events_root)
-
         events_npy_root = os.path.join(root, 'events_npy')
         if os.path.exists(events_npy_root):
             print(f'npy format events data root {events_npy_root} already exists')
         else:
+            extracted_root = os.path.join(root, 'extracted')
+            if os.path.exists(extracted_root):
+                print(f'extracted root {extracted_root} already exists.')
+            else:
+                self.download_and_extract(root, extracted_root)
             os.mkdir(events_npy_root)
-            print(f'mkdir {events_root}')
+            print(f'mkdir {events_npy_root}')
             print('read events data from *.aedat and save to *.npy...')
-            DvsGesture.convert_aedat_dir_to_npy_dir(events_root, events_npy_root)
+            DvsGesture.convert_aedat_dir_to_npy_dir(os.path.join(extracted_root, 'DvsGesture'), events_npy_root)
 
 
         self.file_name = []  # 保存数据文件的路径
