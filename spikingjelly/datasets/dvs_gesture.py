@@ -36,6 +36,7 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         if os.path.exists(file_name):
             if utils.check_md5(file_name, resource[1]):
                 utils.extract_archive(file_name, extract_root)
+                return
             else:
                 print(f'{file_name} corrupted.')
 
