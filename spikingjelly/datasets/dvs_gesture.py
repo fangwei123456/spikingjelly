@@ -6,6 +6,8 @@ import tqdm
 import numpy as np
 import struct
 from torchvision.datasets import utils
+import time
+import multiprocessing
 # https://www.research.ibm.com/dvsgesture/
 # https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794
 
@@ -34,7 +36,9 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
     def download_and_extract(download_root: str, extract_root: str):
         file_name = os.path.join(download_root, 'DvsGesture.tar.gz')
         if os.path.exists(file_name):
+            print('DvsGesture.tar.gz already exists, check md5')
             if utils.check_md5(file_name, resource[1]):
+                print('md5 checked, extracting...')
                 utils.extract_archive(file_name, extract_root)
                 return
             else:
@@ -106,83 +110,112 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def convert_aedat_dir_to_npy_dir(aedat_data_dir: str, npy_data_dir: str):
-        def cvt_file_fun(aedat_file):
-            base_name = aedat_file[0: -6]
-            events = DvsGesture.read_bin(os.path.join(aedat_data_dir, aedat_file))
-            # 读取csv文件，获取各段的label，保存对应的数据和label
-            events_csv = np.loadtxt(os.path.join(aedat_data_dir, base_name + '_labels.csv'),
-                                    dtype=np.uint32, delimiter=',', skiprows=1)
-            index = 0
-            index_l = 0
-            index_r = 0
-            for i in range(events_csv.shape[0]):
-                label = events_csv[i][0]
-                t_start = events_csv[i][1]
-                t_end = events_csv[i][2]
-
-                while True:
-                    t = events['t'][index]
-                    if t < t_start:
-                        index += 1
-                    else:
-                        index_l = index  # 左闭
-                        break
-                while True:
-                    t = events['t'][index]
-                    if t < t_end:
-                        index += 1
-                    else:
-                        index_r = index  # 右开
-                        break
-                # [index_l, index_r)
-                j = 0
-                while True:
-                    file_name = os.path.join(npy_data_dir, f'{base_name}_{label}_{j}.npy')
-                    # 由于不同线程执行的base_name一定不相同，因此这里不会出现多线程之间的数据复用造成的错误
-                    if os.path.exists(file_name):  # 防止同一个aedat里存在多个相同label的数据段
-                        j += 1
-                    else:
-                        np.save(file=file_name, arr={
-                            't': events['t'][index_l:index_r],
-                            'x': events['x'][index_l:index_r],
-                            'y': events['y'][index_l:index_r],
-                            'p': events['p'][index_l:index_r]
-                        })
-                        break
         def cvt_files_fun(aedat_file_list):
             for aedat_file in aedat_file_list:
-                cvt_file_fun(aedat_file)
+                base_name = aedat_file[0: -6]
+                events = DvsGesture.read_bin(os.path.join(aedat_data_dir, aedat_file))
+                # 读取csv文件，获取各段的label，保存对应的数据和label
+                events_csv = np.loadtxt(os.path.join(aedat_data_dir, base_name + '_labels.csv'),
+                                        dtype=np.uint32, delimiter=',', skiprows=1)
+                index = 0
+                index_l = 0
+                index_r = 0
+                for i in range(events_csv.shape[0]):
+                    label = events_csv[i][0]
+                    t_start = events_csv[i][1]
+                    t_end = events_csv[i][2]
+
+                    while True:
+                        t = events['t'][index]
+                        if t < t_start:
+                            index += 1
+                        else:
+                            index_l = index  # 左闭
+                            break
+                    while True:
+                        t = events['t'][index]
+                        if t < t_end:
+                            index += 1
+                        else:
+                            index_r = index  # 右开
+                            break
+                    # [index_l, index_r)
+                    j = 0
+                    while True:
+                        file_name = os.path.join(npy_data_dir, f'{base_name}_{label}_{j}.npy')
+                        # 由于不同线程执行的base_name一定不相同，因此这里不会出现多线程之间的数据复用造成的错误
+                        if os.path.exists(file_name):  # 防止同一个aedat里存在多个相同label的数据段
+                            j += 1
+                        else:
+                            np.save(file=file_name, arr={
+                                't': events['t'][index_l:index_r],
+                                'x': events['x'][index_l:index_r],
+                                'y': events['y'][index_l:index_r],
+                                'p': events['p'][index_l:index_r]
+                            })
+                            break
 
         # 将aedat_data_dir目录下的.aedat文件读取并转换成np保存的字典，保存在npy_data_dir目录
         print('convert events data from aedat to numpy format.')
         # 速度很慢，并行化
+
+        # 统计文件总数量
         aedat_files = utils.list_files(aedat_data_dir, '.aedat')
-        block = aedat_files.__len__() // 8  # 分成8个子任务
+
+        npy_data_num = 0
+        for aedat_file in aedat_files:
+            csv_file = os.path.join(aedat_data_dir, aedat_file[0: -6] + '_labels.csv')
+            npy_data_num += np.loadtxt(csv_file, dtype=np.uint32, delimiter=',', skiprows=1).shape[0]
+
+        thread_num = multiprocessing.cpu_count()
+        block = aedat_files.__len__() // thread_num  # 分成thread_num个子任务
         thread_list = []
-        for i in range(7):
+        for i in range(thread_num - 1):
             thread_list.append(spikingjelly.datasets.FunctionThread(cvt_files_fun, aedat_files[i * block: (i + 1) * block]))
             print(f'thread {i} start')
             thread_list[-1].start()
-        # 最后一段任务由主线程完成
-        print('thread 7 start')
-        for aedat_file in tqdm.tqdm(aedat_files[7 * block:]):
-            cvt_file_fun(aedat_file)
-        print('thread 7 finished')
-        for i in range(thread_list.__len__()):
-            thread_list[i].join()
-            print(f'thread {i} finished')
+
+        thread_list.append(spikingjelly.datasets.FunctionThread(cvt_files_fun, aedat_files[(thread_num - 1) * block:]))
+        print(f'thread {thread_num - 1} start')
+        thread_list[-1].start()
+        # 主线程等待各个子线程
+        # for i in range(thread_list.__len__()):
+        #     thread_list[i].join()
+        #     print('thread', i, 'finished')
+
+        with tqdm.tqdm(total=npy_data_num) as pbar:
+            while True:
+                working_thread = []
+                finished_thread = []
+                for i in range(thread_list.__len__()):
+                    if thread_list[i].is_alive():
+                        working_thread.append(i)
+                    else:
+                        finished_thread.append(i)
+                pbar.update(utils.list_files(npy_data_dir, '.npy').__len__())
+                print('wroking thread:', working_thread)
+                print('finished thread:', finished_thread)
+                if finished_thread.__len__() == thread_list.__len__():
+                    return
+                else:
+                    time.sleep(10)
+
+
 
 
 
     @staticmethod
     def create_frames_dataset(events_data_dir: str, frames_data_dir: str, frames_num: int, split_by: str, normalization: str or None):
         width, height = DvsGesture.get_wh()
+        def read_fun(file_name):
+            return np.load(file_name, allow_pickle=True).item()
         spikingjelly.datasets.convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, '.npy',
-                                                               np.load, height, width, frames_num, split_by, normalization)
+                                                               read_fun, height, width, frames_num, split_by,
+                                                               normalization, thread_num=4)
 
     @staticmethod
     def get_events_item(file_name):
-        return np.load(file_name), int(os.path.basename(file_name).split('_')[-2]) - 1
+        return np.load(file_name, allow_pickle=True).item(), int(os.path.basename(file_name).split('_')[-2]) - 1
 
     @staticmethod
     def get_frames_item(file_name):
@@ -218,14 +251,12 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                 print('creating frames data..')
                 DvsGesture.create_frames_dataset(events_npy_root, frames_root, frames_num, split_by, normalization)
 
-            for sub_dir in utils.list_dir(frames_root, True):
-                self.file_name.extend(utils.list_files(sub_dir, '.npy', True))
+            self.file_name = utils.list_files(frames_root, '.npy', True)
             self.data_dir = frames_root
             self.get_item_fun = DvsGesture.get_frames_item
 
         else:
-            for sub_dir in utils.list_dir(events_npy_root, True):
-                self.file_name.extend(utils.list_files(sub_dir, '.npy', True))
+            self.file_name = utils.list_files(events_npy_root, '.npy', True)
             self.data_dir = events_npy_root
             self.get_item_fun = DvsGesture.get_events_item
 

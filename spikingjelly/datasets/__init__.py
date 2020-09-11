@@ -80,7 +80,8 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             if normalization == 'frequency':
                 frames[i] /= dt  # 表示脉冲发放的频率
             elif normalization == 'max':
-                frames[i] /= frames[i].max()
+                frames[i] /= max(frames[i].max(), 1e-5)
+
             elif normalization == 'norm':
                 frames[i] = (frames[i] - frames[i].mean()) / np.sqrt((frames[i].var() + 1e-5))
             elif normalization is None:
@@ -92,12 +93,35 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
         raise NotImplementedError
 
 def convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, suffix, read_function, height, width,
-                                              frames_num=10, split_by='time', normalization=None):
+                                              frames_num=10, split_by='time', normalization=None, thread_num=1):
     # 遍历events_data_dir目录下的所有脉冲数据文件，在frames_data_dir目录下生成帧数据文件
-    for events_file in utils.list_files(events_data_dir, suffix, True):
-        frames = integrate_events_to_frames(read_function(events_file), height, width, frames_num, split_by, normalization)
-        frames_file = os.path.join(frames_data_dir, os.path.basename(events_file)[0: -suffix.__len__()] + '.npy')
-        np.save(frames_file, frames)
+    def cvt_fun(events_file_list):
+        for events_file in events_file_list:
+            frames = integrate_events_to_frames(read_function(events_file), height, width, frames_num, split_by,
+                                                normalization)
+            frames_file = os.path.join(frames_data_dir, os.path.basename(events_file)[0: -suffix.__len__()] + '.npy')
+            np.save(frames_file, frames)
+    events_file_list = utils.list_files(events_data_dir, suffix, True)
+    if thread_num == 1:
+        cvt_fun(events_file_list)
+    else:
+        # 多线程加速
+        thread_list = []
+        block = events_file_list.__len__() // thread_num
+        for i in range(thread_num - 1):
+            thread_list.append(FunctionThread(cvt_fun, events_file_list[i * block: (i + 1) * block]))
+            thread_list[-1].start()
+            print(f'thread {i} start, processing files index: {i * block} : {(i + 1) * block}.')
+        thread_list.append(FunctionThread(cvt_fun, events_file_list[(thread_num - 1) * block:]))
+        thread_list[-1].start()
+        print(f'thread {thread_num} start, processing files index: {(thread_num - 1) * block} : {events_file_list.__len__()}.')
+        for i in range(thread_num):
+            thread_list[i].join()
+            print(f'thread {i} finished.')
+
+
+
+
 
 def extract_zip_in_dir(source_dir, target_dir):
     '''
