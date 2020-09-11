@@ -52,141 +52,17 @@ def bidirectional_rnn_cell_forward(cell: nn.Module, cell_reverse: nn.Module, x: 
     for t in range(T):
         ret.append(torch.cat((output[t], output_r[T - t - 1]), dim=-1))
     return torch.stack(ret), ss, ss_r
-
-class SpikingLSTMCell(nn.Module):
-    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
-                 surrogate_function1=surrogate.Erf(), surrogate_function2=None):
-        '''
-        A `spiking` long short-term memory (LSTM) cell, which is firstly proposed in
-        `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
-
-        .. math::
-
-            i &= \\Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\\\
-            f &= \\Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\\\
-            g &= \\Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\\\
-            o &= \\Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\\\
-            c' &= f * c + i * g \\\\
-            h' &= o * c'
-
-        where :math:`\\Theta` is the heaviside function, and :math:`*` is the Hadamard product.
-
-        :param input_size: The number of expected features in the input ``x``
-        :type input_size: int
-
-        :param hidden_size: int
-        :type hidden_size: The number of features in the hidden state ``h``
-
-        :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and
-            ``b_hh``. Default: ``True``
-        :type bias: bool
-
-        :param v_threshold: threshold voltage of neurons
-        :type v_threshold: float
-
-        :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
-            back-propagation, which is used for generating ``i``, ``f``, ``o``
-
-        :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
-            back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
-            will be set as ``surrogate_function1``. Default: ``None``
-
-        .. admonition:: Note
-            :class: note
-
-            All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
-            where :math:`k = \\frac{1}{\\text{hidden_size}}`.
-
-        Examples:
-
-        .. code-block:: python
-
-            T = 6
-            batch_size = 2
-            input_size = 3
-            hidden_size = 4
-            rnn = rnn.SpikingLSTMCell(input_size, hidden_size)
-            input = torch.randn(T, batch_size, input_size) * 50
-            h = torch.randn(batch_size, hidden_size)
-            c = torch.randn(batch_size, hidden_size)
-
-            output = []
-            for t in range(T):
-                h, c = rnn(input[t], (h, c))
-                output.append(h)
-            print(output)
-        '''
-
+class SpikingRNNCellBase(nn.Module):
+    def __init__(self, input_size: int, hidden_size: int, bias=True):
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
-        self.v_threshold = v_threshold
-
-        self.linear_ih = nn.Linear(input_size, 4 * hidden_size, bias=bias)
-        self.linear_hh = nn.Linear(hidden_size, 4 * hidden_size, bias=bias)
-
-        self.surrogate_function1 = surrogate_function1
-        self.surrogate_function2 = surrogate_function2
-        if self.surrogate_function2 is not None:
-            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
-
-        self.reset_parameters()
 
     def reset_parameters(self):
         sqrt_k = math.sqrt(1 / self.hidden_size)
-        nn.init.uniform_(self.linear_ih.weight, -sqrt_k, sqrt_k)
-        nn.init.uniform_(self.linear_hh.weight, -sqrt_k, sqrt_k)
-        if self.bias is not None:
-            nn.init.uniform_(self.linear_ih.bias, -sqrt_k, sqrt_k)
-            nn.init.uniform_(self.linear_hh.bias, -sqrt_k, sqrt_k)
-
-    def forward(self, x: torch.Tensor, hc=None):
-        '''
-        :param x: the input tensor with ``shape = [batch_size, input_size]``
-        :type x: torch.Tensor
-
-        :param hc: (h_0, c_0)
-                h_0 : torch.Tensor
-                    ``shape = [batch_size, hidden_size]``, tensor containing the initial hidden state for each element in the batch
-                c_0 : torch.Tensor
-                    ``shape = [batch_size, hidden_size]``, tensor containing the initial cell state for each element in the batch
-                If (h_0, c_0) is not provided, both ``h_0`` and ``c_0`` default to zero
-        :type hc: tuple or None
-        :return: (h_1, c_1) :
-                h_1 : torch.Tensor
-                    ``shape = [batch_size, hidden_size]``, tensor containing the next hidden state for each element in the batch
-                c_1 : torch.Tensor
-                    ``shape = [batch_size, hidden_size]``, tensor containing the next cell state for each element in the batch
-        :rtype: tuple
-        '''
-        if hc is None:
-            h = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
-            c = torch.zeros_like(h)
-        else:
-            h = hc[0]
-            c = hc[1]
-        if self.surrogate_function2 is None:
-            i, f, g, o = torch.split(self.surrogate_function1(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold),
-                                     self.hidden_size, dim=1)
-        else:
-            i, f, g, o = torch.split(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold, self.hidden_size, dim=1)
-            i = self.surrogate_function1(i)
-            f = self.surrogate_function1(f)
-            g = self.surrogate_function2(g)
-            o = self.surrogate_function1(o)
-        if self.surrogate_function2 is not None:
-            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
-        if self.surrogate_function1.spiking:
-            # 可以使用针对脉冲的加速
-            # c = f * c + i * g
-            c = accelerating.mul(c, f) + accelerating.mul(i, g, True)
-            # h = o * c
-            h = accelerating.mul(c, o)
-        else:
-            c = c * f + i * g
-            h = c * o
-        return h, c
+        for param in self.parameters():
+            nn.init.uniform_(param, -sqrt_k, sqrt_k)
 
     def weight_ih(self):
         return self.linear_ih.weight
@@ -199,7 +75,6 @@ class SpikingLSTMCell(nn.Module):
 
     def bias_hh(self):
         return self.linear_hh.bias
-
 
 class SpikingRNNBase(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
@@ -222,6 +97,25 @@ class SpikingRNNBase(nn.Module):
             self.cells = self.create_cells(*args, **kwargs)
 
     def create_cells(self, *args, **kwargs):
+        if self.bidirectional:
+            cells = []
+            cells_reverse = []
+            cells.append(self.base_cell()(self.input_size, self.hidden_size, self.bias, *args, **kwargs))
+            cells_reverse.append(self.base_cell()(self.input_size, self.hidden_size, self.bias, *args, **kwargs))
+            for i in range(self.num_layers - 1):
+                cells.append(self.base_cell()(self.hidden_size * 2, self.hidden_size, self.bias, *args, **kwargs))
+                cells_reverse.append(self.base_cell()(self.hidden_size * 2, self.hidden_size, self.bias, *args, **kwargs))
+            return nn.Sequential(*cells), nn.Sequential(*cells_reverse)
+
+        else:
+            cells = []
+            cells.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, *args, **kwargs))
+            for i in range(self.num_layers - 1):
+                cells.append(SpikingLSTMCell(self.hidden_size, self.hidden_size, self.bias, *args, **kwargs))
+            return nn.Sequential(*cells)
+
+    @staticmethod
+    def base_cell():
         raise NotImplementedError
 
     @staticmethod
@@ -323,6 +217,129 @@ class SpikingRNNBase(nn.Module):
                 # split使得返回值是tuple
                 return torch.cat(output, dim=0), torch.split(states_list, 1, dim=0)
 
+class SpikingLSTMCell(SpikingRNNCellBase):
+    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
+                 surrogate_function1=surrogate.Erf(), surrogate_function2=None):
+        '''
+        A `spiking` long short-term memory (LSTM) cell, which is firstly proposed in
+        `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
+
+        .. math::
+
+            i &= \\Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\\\
+            f &= \\Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\\\
+            g &= \\Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\\\
+            o &= \\Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\\\
+            c' &= f * c + i * g \\\\
+            h' &= o * c'
+
+        where :math:`\\Theta` is the heaviside function, and :math:`*` is the Hadamard product.
+
+        :param input_size: The number of expected features in the input ``x``
+        :type input_size: int
+
+        :param hidden_size: int
+        :type hidden_size: The number of features in the hidden state ``h``
+
+        :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and
+            ``b_hh``. Default: ``True``
+        :type bias: bool
+
+        :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float
+
+        :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
+            back-propagation, which is used for generating ``i``, ``f``, ``o``
+
+        :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
+            back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
+            will be set as ``surrogate_function1``. Default: ``None``
+
+        .. admonition:: Note
+            :class: note
+
+            All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
+            where :math:`k = \\frac{1}{\\text{hidden_size}}`.
+
+        Examples:
+
+        .. code-block:: python
+
+            T = 6
+            batch_size = 2
+            input_size = 3
+            hidden_size = 4
+            rnn = rnn.SpikingLSTMCell(input_size, hidden_size)
+            input = torch.randn(T, batch_size, input_size) * 50
+            h = torch.randn(batch_size, hidden_size)
+            c = torch.randn(batch_size, hidden_size)
+
+            output = []
+            for t in range(T):
+                h, c = rnn(input[t], (h, c))
+                output.append(h)
+            print(output)
+        '''
+
+        super().__init__(input_size, hidden_size, bias)
+        self.v_threshold = v_threshold
+
+        self.linear_ih = nn.Linear(input_size, 4 * hidden_size, bias=bias)
+        self.linear_hh = nn.Linear(hidden_size, 4 * hidden_size, bias=bias)
+
+        self.surrogate_function1 = surrogate_function1
+        self.surrogate_function2 = surrogate_function2
+        if self.surrogate_function2 is not None:
+            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
+
+        self.reset_parameters()
+
+    def forward(self, x: torch.Tensor, hc=None):
+        '''
+        :param x: the input tensor with ``shape = [batch_size, input_size]``
+        :type x: torch.Tensor
+
+        :param hc: (h_0, c_0)
+                h_0 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``, tensor containing the initial hidden state for each element in the batch
+                c_0 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``, tensor containing the initial cell state for each element in the batch
+                If (h_0, c_0) is not provided, both ``h_0`` and ``c_0`` default to zero
+        :type hc: tuple or None
+        :return: (h_1, c_1) :
+                h_1 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``, tensor containing the next hidden state for each element in the batch
+                c_1 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``, tensor containing the next cell state for each element in the batch
+        :rtype: tuple
+        '''
+        if hc is None:
+            h = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
+            c = torch.zeros_like(h)
+        else:
+            h = hc[0]
+            c = hc[1]
+        if self.surrogate_function2 is None:
+            i, f, g, o = torch.split(self.surrogate_function1(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold),
+                                     self.hidden_size, dim=1)
+        else:
+            i, f, g, o = torch.split(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold, self.hidden_size, dim=1)
+            i = self.surrogate_function1(i)
+            f = self.surrogate_function1(f)
+            g = self.surrogate_function2(g)
+            o = self.surrogate_function1(o)
+        if self.surrogate_function2 is not None:
+            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
+        if self.surrogate_function1.spiking:
+            # 可以使用针对脉冲的加速
+            # c = f * c + i * g
+            c = accelerating.mul(c, f) + accelerating.mul(i, g, True)
+            # h = o * c
+            h = accelerating.mul(c, o)
+        else:
+            c = c * f + i * g
+            h = c * o
+        return h, c
 
 class SpikingLSTM(SpikingRNNBase):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
@@ -330,31 +347,100 @@ class SpikingLSTM(SpikingRNNBase):
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
                          v_threshold, surrogate_function1, surrogate_function2)
+    @staticmethod
+    def base_cell():
+        return SpikingLSTMCell
 
     @staticmethod
     def states_num():
         return 2
 
-    def create_cells(self, v_threshold, surrogate_function1, surrogate_function2):
-        if self.bidirectional:
-            cells = []
-            cells_reverse = []
-            cells.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, v_threshold,
-                                         surrogate_function1, surrogate_function2))
-            cells_reverse.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, v_threshold,
-                                                 surrogate_function1, surrogate_function2))
-            for i in range(self.num_layers - 1):
-                cells.append(SpikingLSTMCell(self.hidden_size * 2, self.hidden_size, self.bias, v_threshold,
-                                             surrogate_function1, surrogate_function2))
-                cells_reverse.append(SpikingLSTMCell(self.hidden_size * 2, self.hidden_size, self.bias, v_threshold,
-                                                     surrogate_function1, surrogate_function2))
-            return nn.Sequential(*cells), nn.Sequential(*cells_reverse)
+class SpikingVanillaRNNCell(SpikingRNNCellBase):
+    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
+                 surrogate_function=surrogate.Erf()):
+        super().__init__(input_size, hidden_size, bias)
+        self.v_threshold = v_threshold
 
+        self.linear_ih = nn.Linear(input_size, hidden_size, bias=bias)
+        self.linear_hh = nn.Linear(hidden_size, hidden_size, bias=bias)
+
+        self.surrogate_function = surrogate_function
+
+        self.reset_parameters()
+
+    def forward(self, x: torch.Tensor, h=None):
+        if h is None:
+            h = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
+        return self.surrogate_function(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold)
+
+class SpikingVanillaRNN(SpikingRNNBase):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
+                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
+                 surrogate_function=surrogate.Erf()):
+        super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
+                         v_threshold, surrogate_function)
+
+    @staticmethod
+    def base_cell():
+        return SpikingVanillaRNNCell
+
+    @staticmethod
+    def states_num():
+        return 1
+
+class SpikingGRUCell(SpikingRNNCellBase):
+    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
+                 surrogate_function1=surrogate.Erf(), surrogate_function2=None):
+        super().__init__(input_size, hidden_size, bias)
+        self.v_threshold = v_threshold
+
+        self.linear_ih = nn.Linear(input_size, 3 * hidden_size, bias=bias)
+        self.linear_hh = nn.Linear(hidden_size, 3 * hidden_size, bias=bias)
+
+        self.surrogate_function1 = surrogate_function1
+        self.surrogate_function2 = surrogate_function2
+        if self.surrogate_function2 is not None:
+            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
+
+        self.reset_parameters()
+    def forward(self, x: torch.Tensor, hc=None):
+        if hc is None:
+            h = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
+            c = torch.zeros_like(h)
         else:
-            cells = []
-            cells.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, v_threshold,
-                                         surrogate_function1, surrogate_function2))
-            for i in range(self.num_layers - 1):
-                cells.append(SpikingLSTMCell(self.hidden_size, self.hidden_size, self.bias, v_threshold,
-                                             surrogate_function1, surrogate_function2))
-            return nn.Sequential(*cells)
+            h = hc[0]
+            c = hc[1]
+
+        y_ih = torch.split(self.linear_ih(x), self.hidden_size, dim=1)
+        y_hh = torch.split(self.linear_hh(x), self.hidden_size, dim=1)
+        r = self.surrogate_function1(y_ih[0] + y_hh[0] - self.v_threshold)
+        z = self.surrogate_function1(y_ih[1] + y_hh[1] - self.v_threshold)
+
+        if self.surrogate_function2 is None:
+            n = self.surrogate_function1(y_ih[2] + r * y_hh[2] - self.v_threshold)
+        else:
+            assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
+            n = self.surrogate_function2(y_ih[2] + r * y_hh[2] - self.v_threshold)
+
+        if self.surrogate_function1.spiking:
+            # 可以使用针对脉冲的加速
+            h = accelerating.mul(accelerating.sub(torch.ones_like(z.data), z), n, True) + accelerating.mul(h, z)
+            # h不一定是脉冲数据，因此没有使用 accelerating.mul(h, True)
+        else:
+            h = (1 - z) * n + z * h
+        return h
+
+class SpikingGRU(SpikingRNNBase):
+    def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
+                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
+                 surrogate_function1=surrogate.Erf(), surrogate_function2=None):
+        super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
+                         v_threshold, surrogate_function1, surrogate_function2)
+    @staticmethod
+    def base_cell():
+        return SpikingGRUCell
+
+    @staticmethod
+    def states_num():
+        return 1
+
