@@ -102,6 +102,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             print('thread', i, 'finished')
 
     def __init__(self, root: str, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+        super().__init__()
         # depend on loris
         events_root = os.path.join(root, 'events')
         if os.path.exists(events_root) and os.listdir(events_root).__len__() == 9:
@@ -119,22 +120,22 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                 print(f'frames data root {frames_root} already exists.')
             else:
                 os.mkdir(frames_root)
-                NavGesture.create_frames_dataset(events_root, frames_root, frames_num, split_by, normalization)
+                self.create_frames_dataset(events_root, frames_root, frames_num, split_by, normalization)
             for sub_dir in utils.list_dir(frames_root, True):
                     self.file_name.extend(utils.list_files(sub_dir, '.npy', True))
             self.data_dir = frames_root
-            self.get_item_fun = NavGesture.get_frames_item
 
         else:
             for sub_dir in utils.list_dir(events_root, True):
                     self.file_name.extend(utils.list_files(sub_dir, '.dat', True))
             self.data_dir = events_root
-            self.get_item_fun = NavGesture.get_events_item
 
     def __len__(self):
         return self.file_name.__len__()
     
     def __getitem__(self, index):
-        return self.get_item_fun(self.file_name[index])
-
+        if self.use_frame:
+            return self.get_frames_item(self.file_name[index])
+        else:
+            return self.get_events_item(self.file_name[index])
 

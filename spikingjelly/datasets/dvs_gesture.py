@@ -227,6 +227,7 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         return np.load(file_name), int(os.path.basename(file_name).split('_')[-2]) - 1
 
     def __init__(self, root: str, train: bool, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+        super().__init__()
         events_npy_root = os.path.join(root, 'events_npy')
         events_npy_train_root = os.path.join(events_npy_root, 'train')
         events_npy_test_root = os.path.join(events_npy_root, 'test')
@@ -247,7 +248,7 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             os.mkdir(events_npy_test_root)
             print(f'mkdir {events_npy_test_root}')
             print('read events data from *.aedat and save to *.npy...')
-            DvsGesture.convert_aedat_dir_to_npy_dir(os.path.join(extracted_root, 'DvsGesture'), events_npy_train_root, events_npy_test_root)
+            self.convert_aedat_dir_to_npy_dir(os.path.join(extracted_root, 'DvsGesture'), events_npy_train_root, events_npy_test_root)
 
 
         self.file_name = []  # 保存数据文件的路径
@@ -266,8 +267,8 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                 os.mkdir(frames_test_root)
                 print(f'mkdir {frames_root}, {frames_train_root}, {frames_test_root}.')
                 print('creating frames data..')
-                DvsGesture.create_frames_dataset(events_npy_train_root, frames_train_root, frames_num, split_by, normalization)
-                DvsGesture.create_frames_dataset(events_npy_test_root, frames_test_root, frames_num, split_by, normalization)
+                self.create_frames_dataset(events_npy_train_root, frames_train_root, frames_num, split_by, normalization)
+                self.create_frames_dataset(events_npy_test_root, frames_test_root, frames_num, split_by, normalization)
             if train:
                 self.data_dir = frames_train_root
             else:
@@ -275,7 +276,6 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
 
             self.file_name = utils.list_files(self.data_dir, '.npy', True)
-            self.get_item_fun = DvsGesture.get_frames_item
 
         else:
             if train:
@@ -283,11 +283,13 @@ class DvsGesture(spikingjelly.datasets.EventsFramesDatasetBase):
             else:
                 self.data_dir = events_npy_test_root
             self.file_name = utils.list_files(self.data_dir, '.npy', True)
-            self.get_item_fun = DvsGesture.get_events_item
 
 
     def __len__(self):
         return self.file_name.__len__()
     def __getitem__(self, index):
-        return self.get_item_fun(self.file_name[index])
+        if self.use_frame:
+            return self.get_frames_item(self.file_name[index])
+        else:
+            return self.get_events_item(self.file_name[index])
 
