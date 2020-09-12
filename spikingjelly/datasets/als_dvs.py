@@ -149,15 +149,15 @@ class ALSDVS(spikingjelly.datasets.EventsFramesDatasetBase):
         for class_name in labels_dict.keys():
             class_dir = os.path.join(self.data_dir, class_name)
             for i in index:
-                self.file_name.append(os.path.join(class_dir, str(i).zfill(4)))
+                self.file_name.append(os.path.join(class_dir, class_name + '_' + str(i).zfill(4)))
 
     def __len__(self):
         return self.file_name.__len__()
 
     def __getitem__(self, index):
         if self.use_frame:
-            return self.get_frames_item(self.file_name[index])
+            return self.get_frames_item(self.file_name[index] + '.npz')
         else:
-            return self.get_events_item(self.file_name[index])
+            return self.get_events_item(self.file_name[index] + '.mat')
 
 
