@@ -125,10 +125,6 @@ def convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, suffix, r
             thread_list[i].join()
             print(f'thread {i} finished.')
 
-
-
-
-
 def extract_zip_in_dir(source_dir, target_dir):
     '''
     :param source_dir: 保存有zip文件的文件夹
