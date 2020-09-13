@@ -218,7 +218,7 @@ class SpikingRNNBase(nn.Module):
                 return torch.cat(output, dim=0), torch.split(states_list, 1, dim=0)
 
 class SpikingLSTMCell(SpikingRNNCellBase):
-    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
+    def __init__(self, input_size: int, hidden_size: int, bias=True,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         '''
         A `spiking` long short-term memory (LSTM) cell, which is firstly proposed in
@@ -244,9 +244,6 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and
             ``b_hh``. Default: ``True``
         :type bias: bool
-
-        :param v_threshold: threshold voltage of neurons
-        :type v_threshold: float
 
         :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``i``, ``f``, ``o``
@@ -282,7 +279,6 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         '''
 
         super().__init__(input_size, hidden_size, bias)
-        self.v_threshold = v_threshold
 
         self.linear_ih = nn.Linear(input_size, 4 * hidden_size, bias=bias)
         self.linear_hh = nn.Linear(hidden_size, 4 * hidden_size, bias=bias)
@@ -320,10 +316,10 @@ class SpikingLSTMCell(SpikingRNNCellBase):
             h = hc[0]
             c = hc[1]
         if self.surrogate_function2 is None:
-            i, f, g, o = torch.split(self.surrogate_function1(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold),
+            i, f, g, o = torch.split(self.surrogate_function1(self.linear_ih(x) + self.linear_hh(h)),
                                      self.hidden_size, dim=1)
         else:
-            i, f, g, o = torch.split(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold, self.hidden_size, dim=1)
+            i, f, g, o = torch.split(self.linear_ih(x) + self.linear_hh(h), self.hidden_size, dim=1)
             i = self.surrogate_function1(i)
             f = self.surrogate_function1(f)
             g = self.surrogate_function2(g)
@@ -343,10 +339,10 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
 class SpikingLSTM(SpikingRNNBase):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
-                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
+                 invariant_dropout_mask=False, bidirectional=False,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
-                         v_threshold, surrogate_function1, surrogate_function2)
+                         surrogate_function1, surrogate_function2)
     @staticmethod
     def base_cell():
         return SpikingLSTMCell
@@ -356,10 +352,9 @@ class SpikingLSTM(SpikingRNNBase):
         return 2
 
 class SpikingVanillaRNNCell(SpikingRNNCellBase):
-    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
+    def __init__(self, input_size: int, hidden_size: int, bias=True,
                  surrogate_function=surrogate.Erf()):
         super().__init__(input_size, hidden_size, bias)
-        self.v_threshold = v_threshold
 
         self.linear_ih = nn.Linear(input_size, hidden_size, bias=bias)
         self.linear_hh = nn.Linear(hidden_size, hidden_size, bias=bias)
@@ -371,14 +366,13 @@ class SpikingVanillaRNNCell(SpikingRNNCellBase):
     def forward(self, x: torch.Tensor, h=None):
         if h is None:
             h = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
-        return self.surrogate_function(self.linear_ih(x) + self.linear_hh(h) - self.v_threshold)
+        return self.surrogate_function(self.linear_ih(x) + self.linear_hh(h))
 
 class SpikingVanillaRNN(SpikingRNNBase):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
-                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
-                 surrogate_function=surrogate.Erf()):
+                 invariant_dropout_mask=False, bidirectional=False, surrogate_function=surrogate.Erf()):
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
-                         v_threshold, surrogate_function)
+                         surrogate_function)
 
     @staticmethod
     def base_cell():
@@ -389,10 +383,9 @@ class SpikingVanillaRNN(SpikingRNNBase):
         return 1
 
 class SpikingGRUCell(SpikingRNNCellBase):
-    def __init__(self, input_size: int, hidden_size: int, bias=True, v_threshold=1.0,
+    def __init__(self, input_size: int, hidden_size: int, bias=True,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         super().__init__(input_size, hidden_size, bias)
-        self.v_threshold = v_threshold
 
         self.linear_ih = nn.Linear(input_size, 3 * hidden_size, bias=bias)
         self.linear_hh = nn.Linear(hidden_size, 3 * hidden_size, bias=bias)
@@ -413,14 +406,14 @@ class SpikingGRUCell(SpikingRNNCellBase):
 
         y_ih = torch.split(self.linear_ih(x), self.hidden_size, dim=1)
         y_hh = torch.split(self.linear_hh(x), self.hidden_size, dim=1)
-        r = self.surrogate_function1(y_ih[0] + y_hh[0] - self.v_threshold)
-        z = self.surrogate_function1(y_ih[1] + y_hh[1] - self.v_threshold)
+        r = self.surrogate_function1(y_ih[0] + y_hh[0])
+        z = self.surrogate_function1(y_ih[1] + y_hh[1])
 
         if self.surrogate_function2 is None:
-            n = self.surrogate_function1(y_ih[2] + r * y_hh[2] - self.v_threshold)
+            n = self.surrogate_function1(y_ih[2] + r * y_hh[2])
         else:
             assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
-            n = self.surrogate_function2(y_ih[2] + r * y_hh[2] - self.v_threshold)
+            n = self.surrogate_function2(y_ih[2] + r * y_hh[2])
 
         if self.surrogate_function1.spiking:
             # 可以使用针对脉冲的加速
@@ -432,10 +425,10 @@ class SpikingGRUCell(SpikingRNNCellBase):
 
 class SpikingGRU(SpikingRNNBase):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
-                 invariant_dropout_mask=False, bidirectional=False, v_threshold=1.0,
+                 invariant_dropout_mask=False, bidirectional=False,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
-                         v_threshold, surrogate_function1, surrogate_function2)
+                         surrogate_function1, surrogate_function2)
     @staticmethod
     def base_cell():
         return SpikingGRUCell
