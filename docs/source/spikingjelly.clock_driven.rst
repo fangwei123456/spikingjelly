@@ -11,6 +11,7 @@ spikingjelly.clock_driven package
    spikingjelly.clock_driven.layer
    spikingjelly.clock_driven.neuron
    spikingjelly.clock_driven.optim
+   spikingjelly.clock_driven.rnn
    spikingjelly.clock_driven.surrogate
    spikingjelly.clock_driven.ann2snn
 

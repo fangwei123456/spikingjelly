@@ -22,6 +22,7 @@ def bidirectional_rnn_cell_forward(cell: nn.Module, cell_reverse: nn.Module, x: 
         否则 ``shape = [states_num, batch_size, hidden_size]``
     :type states: torch.Tensor
     :return: y, ss, ss_r
+
         y: torch.Tensor
             ``shape = [T, batch_size, 2 * hidden_size]`` 的输出。``y[t]`` 由正向cell在 ``t`` 时刻和反向cell在 ``T - t - 1``
             时刻的输出拼接而来
@@ -54,31 +55,203 @@ def bidirectional_rnn_cell_forward(cell: nn.Module, cell_reverse: nn.Module, x: 
     return torch.stack(ret), ss, ss_r
 class SpikingRNNCellBase(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, bias=True):
+        '''
+        * :ref:`API in English <SpikingRNNCellBase.__init__-en>`
+
+        .. _SpikingRNNCellBase.__init__-cn:
+
+        Spiking RNN Cell 的基类。
+
+        :param input_size: 输入 ``x`` 的特征数
+        :type input_size: int
+
+        :param hidden_size: 隐藏状态 ``h`` 的特征数
+        :type hidden_size: int
+
+        :param bias: 若为 ``False``, 则内部的隐藏层不会带有偏置项 ``b_ih`` 和 ``b_hh``。 默认为 ``True``
+        :type bias: bool
+
+        .. note::
+
+            所有权重和偏置项都会按照 :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` 进行初始化。
+            其中 :math:`k = \\frac{1}{\\text{hidden_size}}`.
+
+        * :ref:`中文API <SpikingRNNCellBase.__init__-cn>`
+
+        .. _SpikingRNNCellBase.__init__-en:
+
+        The base class of Spiking RNN Cell.
+
+        :param input_size: The number of expected features in the input ``x``
+        :type input_size: int
+
+        :param hidden_size: The number of features in the hidden state ``h``
+        :type hidden_size: int
+
+        :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and
+            ``b_hh``. Default: ``True``
+        :type bias: bool
+
+        .. admonition:: Note
+            :class: note
+
+            All the weights and biases are initialized from :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})`
+            where :math:`k = \\frac{1}{\\text{hidden_size}}`.
+
+        '''
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
         self.bias = bias
 
     def reset_parameters(self):
+        '''
+        * :ref:`API in English <SpikingRNNCellBase.reset_parameters-en>`
+
+        .. _SpikingRNNCellBase.reset_parameters-cn:
+
+        初始化所有可学习参数。
+
+        * :ref:`中文API <SpikingRNNCellBase.reset_parameters-cn>`
+
+        .. _SpikingRNNCellBase.reset_parameters-en:
+
+        Initialize all learnable parameters.
+        '''
         sqrt_k = math.sqrt(1 / self.hidden_size)
         for param in self.parameters():
             nn.init.uniform_(param, -sqrt_k, sqrt_k)
 
     def weight_ih(self):
+        '''
+        * :ref:`API in English <SpikingRNNCellBase.weight_ih-en>`
+
+        .. _SpikingRNNCellBase.weight_ih-cn:
+
+        :return: 输入到隐藏状态的连接权重
+        :rtype: torch.Tensor
+
+        * :ref:`中文API <SpikingRNNCellBase.weight_ih-cn>`
+
+        .. _SpikingRNNCellBase.weight_ih-en:
+
+        :return: the learnable input-hidden weights
+        :rtype: torch.Tensor
+        '''
         return self.linear_ih.weight
 
     def weight_hh(self):
+        '''
+        * :ref:`API in English <SpikingRNNCellBase.weight_hh-en>`
+
+        .. _SpikingRNNCellBase.weight_hh-cn:
+
+        :return: 隐藏状态到隐藏状态的连接权重
+        :rtype: torch.Tensor
+
+        * :ref:`中文API <SpikingRNNCellBase.weight_hh-cn>`
+
+        .. _SpikingRNNCellBase.weight_hh-en:
+
+        :return: the learnable hidden-hidden weights
+        :rtype: torch.Tensor
+        '''
         return self.linear_hh.weight
 
     def bias_ih(self):
+        '''
+        * :ref:`API in English <SpikingRNNCellBase.bias_ih-en>`
+
+        .. _SpikingRNNCellBase.bias_ih-cn:
+
+        :return: 输入到隐藏状态的连接偏置项
+        :rtype: torch.Tensor
+
+        * :ref:`中文API <SpikingRNNCellBase.bias_ih-cn>`
+
+        .. _SpikingRNNCellBase.bias_ih-en:
+
+        :return: the learnable input-hidden bias
+        :rtype: torch.Tensor
+        '''
         return self.linear_ih.bias
 
     def bias_hh(self):
+        '''
+        * :ref:`API in English <SpikingRNNCellBase.bias_hh-en>`
+
+        .. _SpikingRNNCellBase.bias_hh-cn:
+
+        :return: 隐藏状态到隐藏状态的连接偏置项
+        :rtype: torch.Tensor
+
+        * :ref:`中文API <SpikingRNNCellBase.bias_hh-cn>`
+
+        .. _SpikingRNNCellBase.bias_hh-en:
+
+        :return: the learnable hidden-hidden bias
+        :rtype: torch.Tensor
+        '''
         return self.linear_hh.bias
 
 class SpikingRNNBase(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
                  invariant_dropout_mask=False, bidirectional=False, *args, **kwargs):
+        '''
+        * :ref:`API in English <SpikingRNNBase.__init__-en>`
+
+        .. _SpikingRNNBase.__init__-cn:
+
+        多层 `脉冲` RNN的基类。
+
+        :param input_size: 输入 ``x`` 的特征数
+        :type input_size: int
+        :param hidden_size: 隐藏状态 ``h`` 的特征数
+        :type hidden_size: int
+        :param num_layers: 内部RNN的层数，例如 ``num_layers = 2`` 将会创建堆栈式的两层RNN，第1层接收第0层的输出作为输入，
+            并计算最终输出
+        :type num_layers: int
+        :param bias: 若为 ``False``, 则内部的隐藏层不会带有偏置项 ``b_ih`` 和 ``b_hh``。 默认为 ``True``
+        :type bias: bool
+        :param dropout_p: 若非 ``0``，则除了最后一层，每个RNN层后会增加一个丢弃概率为 ``dropout_p`` 的 `Dropout` 层。
+            默认为 ``0``
+        :type dropout_p: float
+        :param invariant_dropout_mask: 若为 ``False``，则使用普通的 `Dropout`；若为 ``True``，则使用SNN中特有的，`mask` 不
+            随着时间变化的 `Dropout``，参见 :class:`~spikingjelly.clock_driven.layer.Dropout`。默认为 ``False``
+        :type invariant_dropout_mask: bool
+        :param bidirectional: 若为 ``True``，则使用双向RNN。默认为 ``False``
+        :type bidirectional: bool
+        :param args: 子类使用的额外参数
+        :param kwargs: 子类使用的额外参数
+
+        * :ref:`中文API <SpikingRNNBase.__init__-cn>`
+
+        .. _SpikingRNNBase.__init__-en:
+
+        The base-class of a multi-layer `spiking` RNN.
+
+        :param input_size: The number of expected features in the input ``x``
+        :type input_size: int
+        :param hidden_size: The number of features in the hidden state ``h``
+        :type hidden_size: int
+        :param num_layers: Number of recurrent layers. E.g., setting ``num_layers=2`` would mean stacking two LSTMs
+            together to form a `stacked RNN`, with the second RNN taking in outputs of the first RNN and computing the
+            final results
+        :type num_layers: int
+        :param bias: If ``False``, then the layer does not use bias weights `b_ih` and `b_hh`. Default: ``True``
+        :type bias: bool
+        :param dropout_p: If non-zero, introduces a `Dropout` layer on the outputs of each RNN layer except the last
+            layer, with dropout probability equal to :attr:`dropout`. Default: 0
+        :type dropout_p: float
+        :param invariant_dropout_mask: If ``False``，use the naive `Dropout`；If ``True``，use the dropout in SNN that
+            `mask` doesn't change in different time steps, see :class:`~spikingjelly.clock_driven.layer.Dropout` for more
+            information. Defaule: ``False``
+        :type invariant_dropout_mask: bool
+        :param bidirectional: If ``True``, becomes a bidirectional LSTM. Default: ``False``
+        :type bidirectional: bool
+        :param args: additional arguments for sub-class
+        :param kwargs: additional arguments for sub-class
+        '''
         super().__init__()
         self.input_size = input_size
         self.hidden_size = hidden_size
@@ -97,6 +270,26 @@ class SpikingRNNBase(nn.Module):
             self.cells = self.create_cells(*args, **kwargs)
 
     def create_cells(self, *args, **kwargs):
+        '''
+        * :ref:`API in English <SpikingRNNBase.create_cells-en>`
+
+        .. _SpikingRNNBase.create_cells-cn:
+
+        :param args: 子类使用的额外参数
+        :param kwargs: 子类使用的额外参数
+        :return: 若 ``self.bidirectional == True`` 则会返回正反两个堆栈式RNN；否则返回单个堆栈式RNN
+        :rtype: nn.Sequential
+
+        * :ref:`中文API <SpikingRNNBase.create_cells-cn>`
+
+        .. _SpikingRNNBase.create_cells-en:
+
+        :param args: additional arguments for sub-class
+        :param kwargs: additional arguments for sub-class
+        :return: If ``self.bidirectional == True``, return a RNN for forward direction and a RNN for reverse direction;
+            else, return a single stacking RNN
+        :rtype: nn.Sequential
+        '''
         if self.bidirectional:
             cells = []
             cells_reverse = []
@@ -116,16 +309,93 @@ class SpikingRNNBase(nn.Module):
 
     @staticmethod
     def base_cell():
+        '''
+        * :ref:`API in English <SpikingRNNBase.base_cell-en>`
+
+        .. _SpikingRNNBase.base_cell-cn:
+
+        :return: 构成该RNN的基本RNN Cell。例如对于 :class:`~spikingjelly.clock_driven.rnn.SpikingLSTM`，
+            返回的是 :class:`~spikingjelly.clock_driven.rnn.SpikingLSTMCell`
+        :rtype: nn.Module
+
+        * :ref:`中文API <SpikingRNNBase.base_cell-cn>`
+
+        .. _SpikingRNNBase.base_cell-en:
+
+        :return: The base cell of this RNN. E.g., in :class:`~spikingjelly.clock_driven.rnn.SpikingLSTM` this function
+            will return :class:`~spikingjelly.clock_driven.rnn.SpikingLSTMCell`
+        :rtype: nn.Module
+        '''
         raise NotImplementedError
 
     @staticmethod
     def states_num():
+        '''
+        * :ref:`API in English <SpikingRNNBase.states_num-en>`
+
+        .. _SpikingRNNBase.states_num-cn:
+
+        :return: 状态变量的数量。例如对于 :class:`~spikingjelly.clock_driven.rnn.SpikingLSTM`，由于其输出是 ``h`` 和 ``c``，
+            因此返回 ``2``；而对于 :class:`~spikingjelly.clock_driven.rnn.SpikingGRU`，由于其输出是 ``h``，因此返回 ``1``
+        :rtype: int
+
+        * :ref:`中文API <SpikingRNNBase.states_num-cn>`
+
+        .. _SpikingRNNBase.states_num-en:
+
+        :return: The states number. E.g., for :class:`~spikingjelly.clock_driven.rnn.SpikingLSTM` the output are ``h``
+            and ``c``, this function will return ``2``; for :class:`~spikingjelly.clock_driven.rnn.SpikingGRU` the output
+            is ``h``, this function will return ``1``
+        :rtype: int
+        '''
         # LSTM: 2
         # GRU: 1
         # RNN: 1
         raise NotImplementedError
 
     def forward(self, x: torch.Tensor, states=None):
+        '''
+        * :ref:`API in English <SpikingRNNBase.forward-en>`
+
+        .. _SpikingRNNBase.forward-cn:
+
+        :param x: ``shape = [T, batch_size, input_size]``，输入序列
+        :type x: torch.Tensor
+        :param states: ``self.states_num()`` 为 ``1`` 时是单个tensor, 否则是一个tuple，包含 ``self.states_num()`` 个tensors。
+            所有的tensor的尺寸均为 ``shape = [num_layers * num_directions, batch, hidden_size]``, 包含 ``self.states_num()``
+            个初始状态
+            如果RNN是双向的, ``num_directions`` 为 ``2``, 否则为 ``1``
+        :type states: torch.Tensor or tuple
+        :return: output, output_states
+            output: torch.Tensor
+                ``shape = [T, batch, num_directions * hidden_size]``，最后一层在所有时刻的输出
+            output_states: torch.Tensor or tuple
+                ``self.states_num()`` 为 ``1`` 时是单个tensor, 否则是一个tuple，包含 ``self.states_num()`` 个tensors。
+                所有的tensor的尺寸均为 ``shape = [num_layers * num_directions, batch, hidden_size]``, 包含 ``self.states_num()``
+                个最后时刻的状态
+
+        * :ref:`中文API <SpikingRNNBase.forward-cn>`
+
+        .. _SpikingRNNBase.forward-en:
+
+        :param x: ``shape = [T, batch_size, input_size]``, tensor containing the features of the input sequence
+        :type x: torch.Tensor
+        :param states: a single tensor when ``self.states_num()`` is ``1``, otherwise a tuple with ``self.states_num()``
+            tensors.
+            ``shape = [num_layers * num_directions, batch, hidden_size]`` for all tensors, containing the ``self.states_num()``
+            initial states for each element in the batch.
+            If the RNN is bidirectional, ``num_directions`` should be ``2``, else it should be ``1``
+        :type states: torch.Tensor or tuple
+        :return: output, output_states
+            output: torch.Tensor
+                ``shape = [T, batch, num_directions * hidden_size]``, tensor containing the output features from the last
+                layer of the RNN, for each ``t``
+            output_states: torch.Tensor or tuple
+                a single tensor when ``self.states_num()`` is ``1``, otherwise a tuple with ``self.states_num()``
+                tensors.
+                ``shape = [num_layers * num_directions, batch, hidden_size]`` for all tensors, containing the ``self.states_num()``
+                states for ``t = T - 1``
+        '''
         # x.shape=[T, batch_size, input_size]
         # states states_num 个 [num_layers * num_directions, batch, hidden_size]
         T = x.shape[0]
@@ -221,6 +491,68 @@ class SpikingLSTMCell(SpikingRNNCellBase):
     def __init__(self, input_size: int, hidden_size: int, bias=True,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
         '''
+        * :ref:`API in English <SpikingLSTMCell.__init__-en>`
+
+        .. _SpikingLSTMCell.__init__-cn:
+
+        `脉冲` 长短时记忆 (LSTM) cell, 最先由 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_
+        一文提出。
+
+        .. math::
+
+            i &= \\Theta(W_{ii} x + b_{ii} + W_{hi} h + b_{hi}) \\\\
+            f &= \\Theta(W_{if} x + b_{if} + W_{hf} h + b_{hf}) \\\\
+            g &= \\Theta(W_{ig} x + b_{ig} + W_{hg} h + b_{hg}) \\\\
+            o &= \\Theta(W_{io} x + b_{io} + W_{ho} h + b_{ho}) \\\\
+            c' &= f * c + i * g \\\\
+            h' &= o * c'
+
+        其中 :math:`\\Theta` 是heaviside阶跃函数（脉冲函数）, and :math:`*` 是Hadamard点积，即逐元素相乘。
+
+        :param input_size: 输入 ``x`` 的特征数
+        :type input_size: int
+
+        :param hidden_size: 隐藏状态 ``h`` 的特征数
+        :type hidden_size: int
+
+        :param bias: 若为 ``False``, 则内部的隐藏层不会带有偏置项 ``b_ih`` 和 ``b_hh``。 默认为 ``True``
+        :type bias: bool
+
+        :param surrogate_function1: 反向传播时用来计算脉冲函数梯度的替代函数, 计算 ``i``, ``f``, ``o`` 反向传播时使用
+        :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :param surrogate_function2: 反向传播时用来计算脉冲函数梯度的替代函数, 计算 ``g`` 反向传播时使用。 若为 ``None``, 则设置成
+            ``surrogate_function1``。默认为 ``None``
+        :type surrogate_function2: None or spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+
+
+        .. note::
+
+            所有权重和偏置项都会按照 :math:`\\mathcal{U}(-\\sqrt{k}, \\sqrt{k})` 进行初始化。
+            其中 :math:`k = \\frac{1}{\\text{hidden_size}}`.
+
+        示例代码：
+
+        .. code-block:: python
+
+            T = 6
+            batch_size = 2
+            input_size = 3
+            hidden_size = 4
+            rnn = rnn.SpikingLSTMCell(input_size, hidden_size)
+            input = torch.randn(T, batch_size, input_size) * 50
+            h = torch.randn(batch_size, hidden_size)
+            c = torch.randn(batch_size, hidden_size)
+
+            output = []
+            for t in range(T):
+                h, c = rnn(input[t], (h, c))
+                output.append(h)
+            print(output)
+
+        * :ref:`中文API <SpikingLSTMCell.__init__-cn>`
+
+        .. _SpikingLSTMCell.__init__-en:
+
         A `spiking` long short-term memory (LSTM) cell, which is firstly proposed in
         `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
 
@@ -247,10 +579,13 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
         :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``i``, ``f``, ``o``
+        :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+
 
         :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
             will be set as ``surrogate_function1``. Default: ``None``
+        :type surrogate_function2: None or spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
 
         .. admonition:: Note
             :class: note
@@ -292,6 +627,31 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
     def forward(self, x: torch.Tensor, hc=None):
         '''
+        * :ref:`API in English <SpikingLSTMCell.forward-en>`
+
+        .. _SpikingLSTMCell.forward-cn:
+
+        :param x: ``shape = [batch_size, input_size]`` 的输入
+        :type x: torch.Tensor
+
+        :param hc: (h_0, c_0)
+                h_0 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``，起始隐藏状态
+                c_0 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``，起始细胞状态
+                如果不提供(h_0, c_0)，``h_0`` 默认 ``c_0`` 默认为0
+        :type hc: tuple or None
+        :return: (h_1, c_1) :
+                h_1 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``，下一个时刻的隐藏状态
+                c_1 : torch.Tensor
+                    ``shape = [batch_size, hidden_size]``，下一个时刻的细胞状态
+        :rtype: tuple
+
+        * :ref:`中文API <SpikingLSTMCell.forward-cn>`
+
+        .. _SpikingLSTMCell.forward-en:
+
         :param x: the input tensor with ``shape = [batch_size, input_size]``
         :type x: torch.Tensor
 
@@ -341,6 +701,106 @@ class SpikingLSTM(SpikingRNNBase):
     def __init__(self, input_size, hidden_size, num_layers, bias=True, dropout_p=0,
                  invariant_dropout_mask=False, bidirectional=False,
                  surrogate_function1=surrogate.Erf(), surrogate_function2=None):
+        '''
+        * :ref:`API in English <SpikingLSTM.__init__-en>`
+
+        .. _SpikingLSTM.__init__-cn:
+
+        多层`脉冲` 长短时记忆LSTM, 最先由 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_
+        一文提出。
+
+        每一层的计算按照
+
+        .. math::
+
+            i_{t} &= \\Theta(W_{ii} x_{t} + b_{ii} + W_{hi} h_{t-1} + b_{hi}) \\\\
+            f_{t} &= \\Theta(W_{if} x_{t} + b_{if} + W_{hf} h_{t-1} + b_{hf}) \\\\
+            g_{t} &= \\Theta(W_{ig} x_{t} + b_{ig} + W_{hg} h_{t-1} + b_{hg}) \\\\
+            o_{t} &= \\Theta(W_{io} x_{t} + b_{io} + W_{ho} h_{t-1} + b_{ho}) \\\\
+            c_{t} &= f_{t} * c_{t-1} + i_{t} * g_{t} \\\\
+            h_{t} &= o_{t} * c_{t-1}'
+
+        其中 :math:`h_{t}` 是 :math:`t` 时刻的隐藏状态，:math:`c_{t}` 是 :math:`t` 时刻的细胞状态，:math:`h_{t-1}` 是该层 :math:`t-1`
+        时刻的隐藏状态或起始状态，:math:`i_{t}`，:math:`f_{t}`，:math:`g_{t}`，:math:`o_{t}` 分别是输入，遗忘，细胞，输出门，
+        :math:`\\Theta` 是heaviside阶跃函数（脉冲函数）, and :math:`*` 是Hadamard点积，即逐元素相乘。
+
+        :param input_size: 输入 ``x`` 的特征数
+        :type input_size: int
+        :param hidden_size: 隐藏状态 ``h`` 的特征数
+        :type hidden_size: int
+        :param num_layers: 内部RNN的层数，例如 ``num_layers = 2`` 将会创建堆栈式的两层RNN，第1层接收第0层的输出作为输入，
+            并计算最终输出
+        :type num_layers: int
+        :param bias: 若为 ``False``, 则内部的隐藏层不会带有偏置项 ``b_ih`` 和 ``b_hh``。 默认为 ``True``
+        :type bias: bool
+        :param dropout_p: 若非 ``0``，则除了最后一层，每个RNN层后会增加一个丢弃概率为 ``dropout_p`` 的 `Dropout` 层。
+            默认为 ``0``
+        :type dropout_p: float
+        :param invariant_dropout_mask: 若为 ``False``，则使用普通的 `Dropout`；若为 ``True``，则使用SNN中特有的，`mask` 不
+            随着时间变化的 `Dropout``，参见 :class:`~spikingjelly.clock_driven.layer.Dropout`。默认为 ``False``
+        :type invariant_dropout_mask: bool
+        :param bidirectional: 若为 ``True``，则使用双向RNN。默认为 ``False``
+        :type bidirectional: bool
+        :param surrogate_function1: 反向传播时用来计算脉冲函数梯度的替代函数, 计算 ``i``, ``f``, ``o`` 反向传播时使用
+        :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :param surrogate_function2: 反向传播时用来计算脉冲函数梯度的替代函数, 计算 ``g`` 反向传播时使用。 若为 ``None``, 则设置成
+            ``surrogate_function1``。默认为 ``None``
+        :type surrogate_function2: None or spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+
+
+        * :ref:`中文API <SpikingLSTM.__init__-cn>`
+
+        .. _SpikingLSTM.__init__-en:
+
+        The `spiking` multi-layer long short-term memory (LSTM), which is firstly proposed in
+        `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_.
+
+        For each element in the input sequence, each layer computes the following
+        function:
+
+        .. math::
+
+            i_{t} &= \\Theta(W_{ii} x_{t} + b_{ii} + W_{hi} h_{t-1} + b_{hi}) \\\\
+            f_{t} &= \\Theta(W_{if} x_{t} + b_{if} + W_{hf} h_{t-1} + b_{hf}) \\\\
+            g_{t} &= \\Theta(W_{ig} x_{t} + b_{ig} + W_{hg} h_{t-1} + b_{hg}) \\\\
+            o_{t} &= \\Theta(W_{io} x_{t} + b_{io} + W_{ho} h_{t-1} + b_{ho}) \\\\
+            c_{t} &= f_{t} * c_{t-1} + i_{t} * g_{t} \\\\
+            h_{t} &= o_{t} * c_{t-1}'
+
+        where :math:`h_t` is the hidden state at time `t`, :math:`c_t` is the cell
+        state at time `t`, :math:`x_t` is the input at time `t`, :math:`h_{t-1}`
+        is the hidden state of the layer at time `t-1` or the initial hidden
+        state at time `0`, and :math:`i_t`, :math:`f_t`, :math:`g_t`,
+        :math:`o_t` are the input, forget, cell, and output gates, respectively.
+        :math:`\\Theta` is the heaviside function, and :math:`*` is the Hadamard product.
+
+        :param input_size: The number of expected features in the input ``x``
+        :type input_size: int
+        :param hidden_size: The number of features in the hidden state ``h``
+        :type hidden_size: int
+        :param num_layers: Number of recurrent layers. E.g., setting ``num_layers=2`` would mean stacking two LSTMs
+            together to form a `stacked RNN`, with the second RNN taking in outputs of the first RNN and computing the
+            final results
+        :type num_layers: int
+        :param bias: If ``False``, then the layer does not use bias weights `b_ih` and `b_hh`. Default: ``True``
+        :type bias: bool
+        :param dropout_p: If non-zero, introduces a `Dropout` layer on the outputs of each RNN layer except the last
+            layer, with dropout probability equal to :attr:`dropout`. Default: 0
+        :type dropout_p: float
+        :param invariant_dropout_mask: If ``False``，use the naive `Dropout`；If ``True``，use the dropout in SNN that
+            `mask` doesn't change in different time steps, see :class:`~spikingjelly.clock_driven.layer.Dropout` for more
+            information. Defaule: ``False``
+        :type invariant_dropout_mask: bool
+        :param bidirectional: If ``True``, becomes a bidirectional LSTM. Default: ``False``
+        :type bidirectional: bool
+        :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
+            back-propagation, which is used for generating ``i``, ``f``, ``o``
+        :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
+            back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
+            will be set as ``surrogate_function1``. Default: ``None``
+        :type surrogate_function2: None or spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        '''
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
                          surrogate_function1, surrogate_function2)
     @staticmethod
