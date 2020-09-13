@@ -115,7 +115,7 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
 
         self.use_frame = use_frame
         if use_frame:
-            frames_root = os.path.join(root, 'frames')
+            frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{normalization}')
             if os.path.exists(frames_root):
                 print(f'{frames_root} already exists')
             else:
