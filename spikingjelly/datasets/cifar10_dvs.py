@@ -1,181 +1,238 @@
-import spikingjelly
-import zipfile
-import os
-import tqdm
+import spikingjelly.datasets
 import numpy as np
-cifar10_class = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-# https://figshare.com/articles/dataset/CIFAR10-DVS_New/4724671
-resource_url = {
-    'airplane': ('https://ndownloader.figshare.com/files/7712788', None),
-    'automobile': ('https://ndownloader.figshare.com/files/7712791', None),
-    'bird': ('https://ndownloader.figshare.com/files/7712794', None),
-    'cat': ('https://ndownloader.figshare.com/files/7712812', None),
-    'deer': ('https://ndownloader.figshare.com/files/7712815', None),
-    'dog': ('https://ndownloader.figshare.com/files/7712818', None),
-    'frog': ('https://ndownloader.figshare.com/files/7712842', None),
-    'horse': ('https://ndownloader.figshare.com/files/7712851', None),
-    'ship': ('https://ndownloader.figshare.com/files/7712836', None),
-    'truck': ('https://ndownloader.figshare.com/files/7712839', None)
+import os
+from torchvision.datasets import utils
+labels_dict = {
+    'airplane': 0,
+    'automobile': 1,
+    'bird': 2,
+    'cat': 3,
+    'deer': 4,
+    'dog': 5,
+    'frog': 6,
+    'horse': 7,
+    'ship': 8,
+    'truck': 9
 }
+# https://figshare.com/articles/dataset/CIFAR10-DVS_New/4724671
+resource = {
+    'airplane': ('https://ndownloader.figshare.com/files/7712788', '0afd5c4bf9ae06af762a77b180354fdd'),
+    'automobile': ('https://ndownloader.figshare.com/files/7712791', '8438dfeba3bc970c94962d995b1b9bdd'),
+    'bird': ('https://ndownloader.figshare.com/files/7712794', 'a9c207c91c55b9dc2002dc21c684d785'),
+    'cat': ('https://ndownloader.figshare.com/files/7712812', '52c63c677c2b15fa5146a8daf4d56687'),
+    'deer': ('https://ndownloader.figshare.com/files/7712815', 'b6bf21f6c04d21ba4e23fc3e36c8a4a3'),
+    'dog': ('https://ndownloader.figshare.com/files/7712818', 'f379ebdf6703d16e0a690782e62639c3'),
+    'frog': ('https://ndownloader.figshare.com/files/7712842', 'cad6ed91214b1c7388a5f6ee56d08803'),
+    'horse': ('https://ndownloader.figshare.com/files/7712851', 'e7cbbf77bec584ffbf913f00e682782a'),
+    'ship': ('https://ndownloader.figshare.com/files/7712836', '41c7bd7d6b251be82557c6cce9a7d5c9'),
+    'truck': ('https://ndownloader.figshare.com/files/7712839', '89f3922fd147d9aeff89e76a2b0b70a7')
+}
+# https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
-class CIFAR10DVS(spikingjelly.datasets.SubDirDataset):
 
-    @ staticmethod
-    def download_zip(zip_dir):
-        '''
-        :param zip_dir: 保存spikingjelly提供的CIFAR10-DVS对应的10个zip文件的文件夹
-        :return: None
+EVT_DVS = 0  # DVS event type
+EVT_APS = 1  # APS event
 
-        .. warning::
-            代码尚未完成，请勿使用。
+def read_bits(arr, mask=None, shift=None):
+    if mask is not None:
+        arr = arr & mask
+    if shift is not None:
+        arr = arr >> shift
+    return arr
 
-        原始的CIFAR10-DVS数据集位于 https://figshare.com/articles/CIFAR10-DVS_New/4724671。原始的CIFAR10-DVS使用jAER格式，\
-        需要首先使用MATLAB转换成mat格式才能使用，较为繁琐。spikingjelly的开发者将原始数据集转化为numpy数组并存为npz文件，\
-        每一类的数据都重新压缩并重新上传到了figshare。运行此函数，会将spikingjelly提供的10个zip文件下载到 ``zip_dir``，下载好\
-        的文件夹是如下形式：
 
-        .. code-block:: bash
+y_mask = 0x7FC00000
+y_shift = 22
 
-            zip_dir/
-            |-- airplane.zip
-            |-- automobile.zip
-            |-- bird.zip
-            |-- cat.zip
-            |-- deer.zip
-            |-- dog.zip
-            |-- frog.zip
-            |-- horse.zip
-            |-- ship.zip
-            `-- truck.zip
+x_mask = 0x003FF000
+x_shift = 12
 
-        '''
-        raise NotImplementedError
+polarity_mask = 0x800
+polarity_shift = 11
+
+valid_mask = 0x80000000
+valid_shift = 31
+
+
+def skip_header(fp):
+    p = 0
+    lt = fp.readline()
+    ltd = lt.decode().strip()
+    while ltd and ltd[0] == "#":
+        p += len(lt)
+        lt = fp.readline()
+        try:
+            ltd = lt.decode().strip()
+        except UnicodeDecodeError:
+            break
+    return p
+
+
+def load_raw_events(fp,
+                    bytes_skip=0,
+                    bytes_trim=0,
+                    filter_dvs=False,
+                    times_first=False):
+    p = skip_header(fp)
+    fp.seek(p + bytes_skip)
+    data = fp.read()
+    if bytes_trim > 0:
+        data = data[:-bytes_trim]
+    data = np.fromstring(data, dtype='>u4')
+    if len(data) % 2 != 0:
+        print(data[:20:2])
+        print('---')
+        print(data[1:21:2])
+        raise ValueError('odd number of data elements')
+    raw_addr = data[::2]
+    timestamp = data[1::2]
+    if times_first:
+        timestamp, raw_addr = raw_addr, timestamp
+    if filter_dvs:
+        valid = read_bits(raw_addr, valid_mask, valid_shift) == EVT_DVS
+        timestamp = timestamp[valid]
+        raw_addr = raw_addr[valid]
+    return timestamp, raw_addr
+
+
+def parse_raw_address(addr,
+                      x_mask=x_mask,
+                      x_shift=x_shift,
+                      y_mask=y_mask,
+                      y_shift=y_shift,
+                      polarity_mask=polarity_mask,
+                      polarity_shift=polarity_shift):
+    polarity = read_bits(addr, polarity_mask, polarity_shift).astype(np.bool)
+    x = read_bits(addr, x_mask, x_shift)
+    y = read_bits(addr, y_mask, y_shift)
+    return x, y, polarity
+
+
+def load_events(
+        fp,
+        filter_dvs=False,
+        # bytes_skip=0,
+        # bytes_trim=0,
+        # times_first=False,
+        **kwargs):
+    timestamp, addr = load_raw_events(
+        fp,
+        filter_dvs=filter_dvs,
+        #   bytes_skip=bytes_skip,
+        #   bytes_trim=bytes_trim,
+        #   times_first=times_first
+    )
+    x, y, polarity = parse_raw_address(addr, **kwargs)
+    return timestamp, x, y, polarity
+
+
+
+class CIFAR10DVS(spikingjelly.datasets.EventsFramesDatasetBase):
+    @staticmethod
+    def get_wh():
+        return 128, 128
 
     @staticmethod
-    def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, split_by='time', normalization=None):
-        '''
-        :param events_data_dir: 保存events数据的文件夹
-        :param frames_data_dir: 保存frames数据的文件夹
-        :param frames_num: 转换后数据的帧数
-        :param split_by: ``'time'`` 或 ``'number'``。为 ``'time'`` 表示将events数据在时间上分段，例如events记录的 ``t`` 介于
-                        [0, 105]且 ``frames_num=10``，则转化得到的10帧分别为 ``t`` 属于[0, 10), [10,20), ..., [90, 105)的
-                        脉冲的累加；
-                        为 ``'number'`` 表示将events数据在数量上分段，例如events一共有105个且 ``frames_num=10``，则转化得到
-                        的10帧分别是第[0, 10), [10,20), ..., [90, 105)个脉冲的累加
-        :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
-                            为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
-                            为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
-        :return: None
-
-        将DVS的events数据，在t维度分割成 ``frames_num`` 段，每段的范围是 ``[i * dt, (i + 1) * dt)`` ，每段累加得到一帧，转换成 ``frames_num`` 帧数。
-        ``events_data_dir`` 文件夹中应该包含多个子文件夹，每个子文件夹内是npz的数据，以键为 ``'t','x','y','p'`` 的字典保存数据，例如：
-
-        .. code-block:: bash
-
-            dvs_cifar10_npz/
-            |-- airplane
-            |   |-- 0.npz
-            |   |-- ...
-            |-- automobile
-            |-- bird
-            |-- cat
-            |-- deer
-            |-- dog
-            |-- frog
-            |-- horse
-            |-- ship
-            `-- truck
-        本函数会在 ``frames_data_dir`` 文件夹下生成与 ``events_data_dir`` 相同的子文件夹，每个子文件夹内也是npz的数据，以键为 ``'arr_0'`` 的字典（numpy默认）保存数据。
-        '''
-
-        def cvt_data_in_dir(source_dir, target_dir, show_bar):
-            print('processing', source_dir)
-            if not os.path.exists(target_dir):
-                os.mkdir(target_dir)
-                print('mkdir', target_dir)
-            if show_bar:
-                for file_name in tqdm.tqdm(os.listdir(source_dir)):
-                    events = np.load(os.path.join(source_dir, file_name))
-                    # events: {'t', 'x', 'y', 'p'}
-                    frames = spikingjelly.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
-                                                                               frames_num=frames_num, split_by=split_by,
-                                                                             normalization=normalization)
-                    np.savez_compressed(os.path.join(target_dir, file_name), frames)
+    def download_and_extract(download_root: str, extract_root: str):
+        for key in resource.keys():
+            file_name = os.path.join(download_root, key + '.zip')
+            if os.path.exists(file_name):
+                if utils.check_md5(file_name, resource[key][1]):
+                    print(f'extract {file_name} to {extract_root}')
+                    utils.extract_archive(file_name, extract_root)
+                else:
+                    print(f'{file_name} corrupted, re-download...')
+                    utils.download_and_extract_archive(resource[key][0], download_root, extract_root,
+                                                       filename=key + '.zip',
+                                                       md5=resource[key][1])
             else:
-                for file_name in os.listdir(source_dir):
-                    events = np.load(os.path.join(source_dir, file_name))
-                    # events: {'t', 'x', 'y', 'p'}
-                    frames = spikingjelly.datasets.integrate_events_to_frames(events=events, weight=128, height=128,
-                                                                               frames_num=frames_num, split_by=split_by,
-                                                                             normalization=normalization)
-                    np.savez_compressed(os.path.join(target_dir, file_name), frames)
+                utils.download_and_extract_archive(resource[key][0], download_root, extract_root, filename=key + '.zip',
+                                                   md5=resource[key][1])
 
 
+    @staticmethod
+    def read_bin(file_name: str):
+        with open(file_name, 'rb') as fp:
+            t, x, y, p = load_events(fp,
+                        x_mask=0xfE,
+                        x_shift=1,
+                        y_mask=0x7f00,
+                        y_shift=8,
+                        polarity_mask=1,
+                        polarity_shift=None)
+            return {'t': t, 'x': 127 - x, 'y': y, 'p': 1 - p.astype(int)}
+        # 原作者的代码可能有一点问题，因此不是直接返回 t x y p
+
+    @staticmethod
+    def create_frames_dataset(events_data_dir: str, frames_data_dir: str, frames_num: int, split_by: str,
+                              normalization: str or None):
+        width, height = CIFAR10DVS.get_wh()
         thread_list = []
-        sub_dir_list = os.listdir(events_data_dir)
-        for i in range(sub_dir_list.__len__()):
-            sub_dir = sub_dir_list[i]
-            events_sub_dir = os.path.join(events_data_dir, sub_dir)
-            frames_sub_dir = os.path.join(frames_data_dir, sub_dir)
-            if i == sub_dir_list.__len__() - 1:
-                show_bar = True
-            else:
-                show_bar = False
-            thread_list.append(spikingjelly.datasets.FunctionThread(f=cvt_data_in_dir, source_dir=events_sub_dir,
-                                                                   target_dir=frames_sub_dir, show_bar=show_bar))
-            print('start thread', thread_list.__len__())
+        for key in resource.keys():
+            source_dir = os.path.join(events_data_dir, key)
+            target_dir = os.path.join(frames_data_dir, key)
+            os.mkdir(target_dir)
+            print(f'mkdir {target_dir}')
+            print(f'convert {source_dir} to {target_dir}')
+            thread_list.append(spikingjelly.datasets.FunctionThread(
+                spikingjelly.datasets.convert_events_dir_to_frames_dir,
+                source_dir, target_dir, '.aedat',
+                CIFAR10DVS.read_bin, height, width, frames_num, split_by, normalization, 1, True))
             thread_list[-1].start()
+            print(f'thread {thread_list.__len__() - 1} start')
 
         for i in range(thread_list.__len__()):
             thread_list[i].join()
-            print('thread', i, 'finished')
+            print(f'thread {i} finished')
 
-    def __init__(self, frames_data_dir: str, train=True, split_ratio=0.9):
-        '''
-        :param frames_data_dir: 保存frame格式的CIFAR10-DVS数据集的文件夹
-        :param train: 训练还是测试
-        :param split_ratio: 训练集占数据集的比例。对于每一类，会抽取前 ``split_ratio`` 的数据作为训练集，而剩下 ``split_ratio`` 的数据集作为测试集
+    @staticmethod
+    def get_frames_item(file_name):
+        return np.load(file_name)['arr_0'], labels_dict[file_name.split('_')[-2]]
 
-        CIFAR10-DVS数据集由以下论文发布：
+    @staticmethod
+    def get_events_item(file_name):
+        return CIFAR10DVS.read_bin(file_name), labels_dict[file_name.split('_')[-2]]
 
-        Li H, Liu H, Ji X, Li G and Shi L (2017) CIFAR10-DVS: An Event-Stream Dataset for Object Classification. Front. Neurosci. 11:309. doi: 10.3389/fnins.2017.00309
+    def __init__(self, root: str, train: bool, split_ratio=0.9, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+        super().__init__()
+        self.train = train
+        events_root = os.path.join(root, 'events')
+        if os.path.exists(events_root):
+            print(f'{events_root} already exists')
+        else:
+            self.download_and_extract(root, events_root)
 
-        需要保证``root`` 文件夹具有如下的格式：
+        self.use_frame = use_frame
+        if use_frame:
+            frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{normalization}')
+            if os.path.exists(frames_root):
+                print(f'{frames_root} already exists')
+            else:
+                os.mkdir(frames_root)
+                print(f'mkdir {frames_root}')
+                self.create_frames_dataset(events_root, frames_root, frames_num, split_by, normalization)
+        self.data_dir = frames_root if use_frame else events_root
 
-        .. code-block:: bash
+        self.file_name = []
+        if train:
+            index = np.arange(0, int(split_ratio * 1000))
+        else:
+            index = np.arange(int(split_ratio * 1000), 1000)
 
-            frames_data_dir/
-            |-- airplane
-            |   |-- 0.npz
-            |   |-- ...
-            |-- automobile
-            |-- bird
-            |-- cat
-            |-- deer
-            |-- dog
-            |-- frog
-            |-- horse
-            |-- ship
-            `-- truck
+        for class_name in labels_dict.keys():
+            class_dir = os.path.join(self.data_dir, class_name)
+            for i in index:
+                if self.use_frame:
+                    self.file_name.append(os.path.join(class_dir, 'cifar10_' + class_name + '_' + str(i) + '.npz'))
+                else:
+                    self.file_name.append(os.path.join(class_dir, 'cifar10_' + class_name + '_' + str(i) + '.aedat'))
 
-        其中的npz文件，以键为't','x','y','p'的字典保存数据。
-
-        为了构造好这样的数据集文件夹，建议遵循如下顺序：
-
-        1.下载spikingjelly提供的10个zip文件下载到 ``zip_dir``。可以手动下载，也可以调用静态方法 ``DVSCIFAR10.download_zip``；
-
-        2.解压这10个文件夹到 ``events_data_dir`` 目录。可以手动解压，也可以调用静态方法 ``spikingjelly.datasets.extract_zip_in_dir``；
-
-        3.将events数据转换成frames数据。调用 ``CIFAR10DVS.create_frames_dataset``。
-
-        由于DVS数据集体积庞大，在生成需要的frames格式的数据后，可以考虑删除之前下载的原始数据。
-        '''
-
-        super().__init__(frames_data_dir, train, split_ratio)
-
-
-
-
+    def __len__(self):
+        return self.file_name.__len__()
 
 
-
+    def __getitem__(self, index):
+        if self.use_frame:
+            return self.get_frames_item(self.file_name[index])
+        else:
+            return self.get_events_item(self.file_name[index])
