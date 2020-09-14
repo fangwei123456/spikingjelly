@@ -41,7 +41,7 @@ resource = ['https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CA
             '8b46191acf6c1760ad3f2d2cb4380e24']
 
 
-class ALSDVS(spikingjelly.datasets.EventsFramesDatasetBase):
+class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
     @staticmethod
     def get_wh():
         return 240, 180
@@ -80,7 +80,7 @@ class ALSDVS(spikingjelly.datasets.EventsFramesDatasetBase):
     @staticmethod
     def get_events_item(file_name):
         base_name = os.path.basename(file_name)
-        return ALSDVS.read_bin(file_name), labels_dict[base_name[0]]
+        return ASLDVS.read_bin(file_name), labels_dict[base_name[0]]
 
     @staticmethod
     def get_frames_item(file_name):
@@ -89,7 +89,7 @@ class ALSDVS(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def create_frames_dataset(events_data_dir: str, frames_data_dir: str, frames_num: int, split_by: str, normalization: str or None):
-        width, height = ALSDVS.get_wh()
+        width, height = ASLDVS.get_wh()
         thread_list = []
         for source_dir in utils.list_dir(events_data_dir):
             abs_source_dir = os.path.join(events_data_dir, source_dir)
@@ -100,7 +100,7 @@ class ALSDVS(spikingjelly.datasets.EventsFramesDatasetBase):
             print(f'thread {thread_list.__len__()} convert events data in {abs_source_dir} to {abs_target_dir}')
             thread_list.append(
                 spikingjelly.datasets.FunctionThread(spikingjelly.datasets.convert_events_dir_to_frames_dir,
-                                                     abs_source_dir, abs_target_dir, '.mat', ALSDVS.read_bin,
+                                                     abs_source_dir, abs_target_dir, '.mat', ASLDVS.read_bin,
                                                      height, width, frames_num, split_by, normalization, 1, True))
             # 文件数量太多，体积太大，因此采用压缩格式
 
