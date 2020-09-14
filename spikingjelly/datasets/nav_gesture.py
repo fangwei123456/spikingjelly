@@ -25,7 +25,7 @@ labels_dict = {
 }
 
 
-class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
+class NAVGesture(spikingjelly.datasets.EventsFramesDatasetBase):
     @staticmethod
     def get_wh():
         return 304, 240
@@ -62,13 +62,13 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def get_events_item(file_name):
-        events = NavGesture.read_bin(file_name)
-        return events, NavGesture.get_label(file_name)
+        events = NAVGesture.read_bin(file_name)
+        return events, NAVGesture.get_label(file_name)
     
     @staticmethod
     def get_frames_item(file_name):
         frames = np.load(file_name)
-        return frames, NavGesture.get_label(file_name)
+        return frames, NAVGesture.get_label(file_name)
     @staticmethod
     def download_and_extract(download_root: str, extract_root: str):
         dataset_name = 'walk'
@@ -85,7 +85,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def create_frames_dataset(events_data_dir, frames_data_dir, frames_num=10, split_by='time', normalization=None):
-        width, height = NavGesture.get_wh()
+        width, height = NAVGesture.get_wh()
         thread_list = []
         for source_dir in utils.list_dir(events_data_dir):
             abs_source_dir = os.path.join(events_data_dir, source_dir)
@@ -95,7 +95,7 @@ class NavGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                 print(f'mkdir {abs_target_dir}')
             print(f'thread {thread_list.__len__()} convert events data in {abs_source_dir} to {abs_target_dir}')
             thread_list.append(spikingjelly.datasets.FunctionThread(spikingjelly.datasets.convert_events_dir_to_frames_dir,
-                abs_source_dir, abs_target_dir, '.dat', NavGesture.read_bin, height, width, frames_num, split_by, normalization))
+                abs_source_dir, abs_target_dir, '.dat', NAVGesture.read_bin, height, width, frames_num, split_by, normalization))
             thread_list[-1].start()
         for i in range(thread_list.__len__()):
             thread_list[i].join()
