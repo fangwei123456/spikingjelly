@@ -23,7 +23,7 @@ spikingjelly.datasets.cifar10\_dvs module
 spikingjelly.datasets.dvs\_gesture module
 -----------------------------------------
 
-.. automodule:: spikingjelly.datasets.dvs_gesture
+.. automodule:: spikingjelly.datasets.dvs128_gesture
    :members:
    :undoc-members:
    :show-inheritance:
