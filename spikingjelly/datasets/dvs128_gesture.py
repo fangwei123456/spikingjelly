@@ -27,7 +27,7 @@ labels_dict = {
 # url md5
 resource = ['https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '8a5c71fb11e24e5ca5b11866ca6c00a1']
 
-class DVSGesture(spikingjelly.datasets.EventsFramesDatasetBase):
+class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
     @staticmethod
     def get_wh():
         return 128, 128
@@ -113,7 +113,7 @@ class DVSGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         def cvt_files_fun(aedat_file_list, output_dir):
             for aedat_file in aedat_file_list:
                 base_name = aedat_file[0: -6]
-                events = DVSGesture.read_bin(os.path.join(aedat_data_dir, aedat_file))
+                events = DVS128Gesture.read_bin(os.path.join(aedat_data_dir, aedat_file))
                 # 读取csv文件，获取各段的label，保存对应的数据和label
                 events_csv = np.loadtxt(os.path.join(aedat_data_dir, base_name + '_labels.csv'),
                                         dtype=np.uint32, delimiter=',', skiprows=1)
@@ -211,7 +211,7 @@ class DVSGesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def create_frames_dataset(events_data_dir: str, frames_data_dir: str, frames_num: int, split_by: str, normalization: str or None):
-        width, height = DVSGesture.get_wh()
+        width, height = DVS128Gesture.get_wh()
         def read_fun(file_name):
             return np.load(file_name, allow_pickle=True).item()
         spikingjelly.datasets.convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, '.npy',
