@@ -684,6 +684,8 @@ class atan(torch.autograd.Function):
 
 
 class ATan(SurrogateFunctionBase):
+    def __init__(self, alpha=2.0, spiking=True, learnable=False):
+        super().__init__(alpha, spiking, learnable)
     '''
     * :ref:`API in English <ATan.__init__-en>`
     .. _ATan.__init__-cn:

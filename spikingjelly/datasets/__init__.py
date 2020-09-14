@@ -1,11 +1,11 @@
 from torch.utils.data import Dataset
-import tqdm
 import os
 import numpy as np
 import torch
 import threading
 import zipfile
 from torchvision.datasets import utils
+
 class FunctionThread(threading.Thread):
     def __init__(self, f, *args, **kwargs):
         super().__init__()
