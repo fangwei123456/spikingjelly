@@ -1,14 +1,10 @@
 import spikingjelly
-import zipfile
 import os
-import threading
-import tqdm
 import numpy as np
-import torch
-from torch.utils.data import Dataset
 from torchvision.datasets import utils
 import shutil
 import loris
+import torch
 
 # url md5
 resource = {
@@ -68,7 +64,7 @@ class NAVGesture(spikingjelly.datasets.EventsFramesDatasetBase):
     @staticmethod
     def get_frames_item(file_name):
         frames = np.load(file_name)
-        return frames, NAVGesture.get_label(file_name)
+        return torch.from_numpy(frames).float(), NAVGesture.get_label(file_name)
     @staticmethod
     def download_and_extract(download_root: str, extract_root: str):
         dataset_name = 'walk'

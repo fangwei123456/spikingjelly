@@ -6,7 +6,7 @@ from torchvision.datasets import utils
 import multiprocessing
 import shutil
 import scipy.io
-from torchvision import transforms
+import torch
 labels_dict = {
 'a': 0,
 'b': 1,
@@ -82,7 +82,7 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
     @staticmethod
     def get_frames_item(file_name):
         base_name = os.path.basename(file_name)
-        return np.load(file_name)['arr_0'], labels_dict[base_name[0]]
+        return torch.from_numpy(np.load(file_name)['arr_0']).float(), labels_dict[base_name[0]]
 
     @staticmethod
     def create_frames_dataset(events_data_dir: str, frames_data_dir: str, frames_num: int, split_by: str, normalization: str or None):
@@ -111,7 +111,7 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
                 thread_list[j].join()
                 print('thread', j, 'finished')
 
-    def __init__(self, root: str, train: bool, split_ratio=0.9, use_frame=True, frames_num=10, split_by='number', normalization='max', transform=transforms.Resize((256, 256))):
+    def __init__(self, root: str, train: bool, split_ratio=0.9, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         '''
         :param root: 保存数据集的根目录
         :type root: str
@@ -130,8 +130,6 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
                         为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
                         为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
         :type normalization: str or None
-        :param transform: 对帧数据的每一帧进行的变换，默认是将帧数据缩放到256*256
-        :type transform: callable
 
         ASL-DVS数据集，出自 `Graph-Based Object Classification for Neuromorphic Vision Sensing <https://arxiv.org/abs/1908.06648>`_，
         包含24个英文字母（从A到Y，排除J）的美国手语，American Sign Language (ASL)。更多信息参见 https://github.com/PIX2NVS/NVS2Graph，
@@ -141,7 +139,6 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
         '''
         super().__init__()
         self.train = train
-        self.transform = transform
         events_root = os.path.join(root, 'events')
         if os.path.exists(events_root):
             # 如果root目录下存在events_root目录
@@ -181,11 +178,7 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
 
     def __getitem__(self, index):
         if self.use_frame:
-            frame, label = self.get_frames_item(self.file_name[index] + '.npz')
-            if self.transform is not None:
-                for t in range(frame.shape[0]):
-                    frame[t] = self.transform(frame[t])
-            return frame, label
+            return self.get_frames_item(self.file_name[index] + '.npz')
         else:
             return self.get_events_item(self.file_name[index] + '.mat')
 
