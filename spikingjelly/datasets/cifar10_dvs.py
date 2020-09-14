@@ -2,6 +2,7 @@ import spikingjelly.datasets
 import numpy as np
 import os
 from torchvision.datasets import utils
+import torch
 labels_dict = {
     'airplane': 0,
     'automobile': 1,
@@ -187,7 +188,7 @@ class CIFAR10DVS(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def get_frames_item(file_name):
-        return np.load(file_name)['arr_0'], labels_dict[file_name.split('_')[-2]]
+        return torch.from_numpy(np.load(file_name)['arr_0']).float(), labels_dict[file_name.split('_')[-2]]
 
     @staticmethod
     def get_events_item(file_name):

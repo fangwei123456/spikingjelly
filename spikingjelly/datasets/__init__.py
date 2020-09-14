@@ -1,7 +1,6 @@
 from torch.utils.data import Dataset
 import os
 import numpy as np
-import torch
 import threading
 import zipfile
 from torchvision.datasets import utils

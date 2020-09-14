@@ -1,13 +1,12 @@
 import spikingjelly.datasets
-import zipfile
 import os
-import threading
 import tqdm
 import numpy as np
 import struct
 from torchvision.datasets import utils
 import time
 import multiprocessing
+import torch
 # https://www.research.ibm.com/dvsgesture/
 # https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794
 
@@ -224,7 +223,7 @@ class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def get_frames_item(file_name):
-        return np.load(file_name), int(os.path.basename(file_name).split('_')[-2]) - 1
+        return torch.from_numpy(np.load(file_name)).float(), int(os.path.basename(file_name).split('_')[-2]) - 1
 
     def __init__(self, root: str, train: bool, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         '''
