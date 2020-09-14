@@ -105,6 +105,28 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
         return np.load(file_name), int(os.path.dirname(file_name)[-1])
 
     def __init__(self, root: str, train: bool, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+        '''
+        :param root: 保存数据集的根目录
+        :type root: str
+        :param train: 是否使用训练集
+        :type train: bool
+        :param use_frame: 是否将事件数据转换成帧数据
+        :type use_frame: bool
+        :param frames_num: 转换后数据的帧数
+        :type frames_num: int
+        :param split_by: 脉冲数据转换成帧数据的累计方式。``'time'`` 或 ``'number'``
+        :type split_by: str
+        :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；
+                        为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
+                        为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
+                        为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
+        :type normalization: str or None
+
+        Neuromorphic-MNIST数据集，出自 `Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades <https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full>`_，
+        数据来源于ATIS相机拍摄的显示器上的MNIST图片。原始数据的原始下载地址参见 https://www.garrickorchard.com/datasets/n-mnist。
+
+        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.integrate_events_to_frames`。
+        '''
         super().__init__()
         self.train = train
         events_root = os.path.join(root, 'events')

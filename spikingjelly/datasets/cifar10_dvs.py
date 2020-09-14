@@ -194,6 +194,30 @@ class CIFAR10DVS(spikingjelly.datasets.EventsFramesDatasetBase):
         return CIFAR10DVS.read_bin(file_name), labels_dict[file_name.split('_')[-2]]
 
     def __init__(self, root: str, train: bool, split_ratio=0.9, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+        '''
+        :param root: 保存数据集的根目录
+        :type root: str
+        :param train: 是否使用训练集
+        :type train: bool
+        :param split_ratio: 分割比例。每一类中前split_ratio的数据会被用作训练集，剩下的数据为测试集
+        :type split_ratio: float
+        :param use_frame: 是否将事件数据转换成帧数据
+        :type use_frame: bool
+        :param frames_num: 转换后数据的帧数
+        :type frames_num: int
+        :param split_by: 脉冲数据转换成帧数据的累计方式。``'time'`` 或 ``'number'``
+        :type split_by: str
+        :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；
+                        为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
+                        为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
+                        为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
+        :type normalization: str or None
+
+        CIFAR10 DVS数据集，出自 `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://www.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_，
+        数据来源于DVS相机拍摄的显示器上的CIFAR10图片。原始数据的下载地址为 https://figshare.com/articles/dataset/CIFAR10-DVS_New/4724671。
+
+        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.integrate_events_to_frames`。
+        '''
         super().__init__()
         self.train = train
         events_root = os.path.join(root, 'events')
