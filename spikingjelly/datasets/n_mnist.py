@@ -1,11 +1,7 @@
 import spikingjelly.datasets
-import zipfile
 import os
-import threading
-import tqdm
 import numpy as np
 import torch
-from torch.utils.data import Dataset
 from torchvision.datasets import utils
 
 # https://www.garrickorchard.com/datasets/n-mnist
@@ -102,7 +98,7 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
 
     @staticmethod
     def get_frames_item(file_name):
-        return np.load(file_name), int(os.path.dirname(file_name)[-1])
+        return torch.from_numpy(np.load(file_name)).float(), int(os.path.dirname(file_name)[-1])
 
     def __init__(self, root: str, train: bool, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         '''
