@@ -59,6 +59,9 @@ class SurrogateFunctionBase(nn.Module):
         else:
             self.f = self.primitive_function
 
+    def extra_repr(self):
+        return f'alpha={self.alpha}, spiking={self.spiking}, learnable={self.alpha}'
+
     @staticmethod
     def spiking_function(x, alpha):
         raise NotImplementedError
