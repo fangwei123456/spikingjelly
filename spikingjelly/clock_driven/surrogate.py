@@ -60,7 +60,7 @@ class SurrogateFunctionBase(nn.Module):
             self.f = self.primitive_function
 
     def extra_repr(self):
-        return f'alpha={self.alpha}, spiking={self.spiking}, learnable={self.alpha}'
+        return f'alpha={self.alpha}, spiking={self.spiking}, learnable={self.learnable}'
 
     @staticmethod
     def spiking_function(x, alpha):
