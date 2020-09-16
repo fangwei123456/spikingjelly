@@ -83,10 +83,6 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 理论证明
 ^^^^^^^^
 
-下图就展示了这种对应关系：左图是给一个IF神经元恒定输入，观察其一段时间发放情况得到的曲线。右边是ReLU激活的曲线，满足 :math:`activation = \max\{input,0\}` 。
-
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/relu_if.png
-
 文献 [#f1]_ 对ANN转SNN提供了解析的理论基础。理论说明，SNN中的IF神经元是ReLU激活函数在时间上的无偏估计器。
 
 针对神经网络第一层即输入层，讨论SNN神经元的发放率 :math:`r` 和对应ANN中激活的关系。假定输入恒定为 :math:`z \in [0,1]`。
@@ -140,7 +136,9 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 
 ◆ BatchNorm参数吸收
 
-假定BatchNorm的参数为 :math:`\gamma` (BatchNorm.weight)， :math:`\beta` (BatchNorm.bias)， :math:`\mu` (BatchNorm.running_mean) ， :math:`\sigma` (BatchNorm.running_var running_var开根号)。具体参数定义详见 ``torch.nn.batchnorm`` 。
+假定BatchNorm的参数为 :math:`\gamma` (``BatchNorm.weight``)， :math:`\beta` (``BatchNorm.bias``)， :math:`\mu` (``BatchNorm.running_mean``) ，
+:math:`\sigma` (``BatchNorm.running_var``，:math:`\sigma = \sqrt{\mathrm{running\_var}}`)。具体参数定义详见
+`torch.nn.batchnorm1d <https://pytorch.org/docs/stable/generated/torch.nn.BatchNorm2d.html#torch.nn.BatchNorm1d>`_ 。
 参数模块（例如Linear）具有参数 :math:`W` 和 :math:`b` 。BatchNorm参数吸收就是将BatchNorm的参数通过运算转移到参数模块的 :math:`W`和 :math:`b` 中，使得数据输入新模块的输出和有BatchNorm时相同。
 对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
 
