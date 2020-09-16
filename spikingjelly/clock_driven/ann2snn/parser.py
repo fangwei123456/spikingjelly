@@ -65,6 +65,7 @@ class ModelParser(nn.Module):
             2、对于Softmax，使用ReLU进行替代，Softmax关于某个输入变量是单调递增的，意味着ReLU并不会对输出的正确性造成太大影响。
 
             3、对于BatchNorm，将其参数吸收进对应的参数化模块，其中：BatchNorm1d默认其上一个模块为Linear，BatchNorm2d默认其上一个模块为Conv2d。
+            
                 假定BatchNorm的参数为 :math:`\\gamma` (BatchNorm.weight)， :math:`\\beta` (BatchNorm.bias)， :math:`\\mu` (BatchNorm.running_mean) ， :math:`\\sigma` (BatchNorm.running_var running_var开根号)。具体参数定义详见 ``torch.nn.batchnorm`` 。参数模块（例如Linear）具有参数 :math:`W` 和 :math:`b` 。BatchNorm参数吸收就是将BatchNorm的参数通过运算转移到参数模块的 :math:`W`和 :math:`b` 中，使得数据输入新模块的输出和有BatchNorm时相同。
                 对此，新模型的 :math:`\\bar{W}` 和 :math:`\\bar{b}` 公式表示为：
 
@@ -241,7 +242,7 @@ class ModelParser(nn.Module):
         .. math::
             \\hat{W} = W * \\frac{\\lambda_{pre}}{\\lambda}
 
-           归一化后的偏置 :math:`\\hat{b}` 为：
+        归一化后的偏置 :math:`\\hat{b}` 为：
 
         .. math::
             \\hat{b} = b / \\lambda
@@ -270,7 +271,7 @@ class ModelParser(nn.Module):
         .. math::
             \\hat{W} = W * \\frac{\\lambda_{pre}}{\\lambda}
 
-        The normalized bias :math:`\hat{b}` is:
+        The normalized bias :math:`\\hat{b}` is:
 
         .. math::
             \\hat{b} = b / \\lambda
