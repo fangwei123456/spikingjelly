@@ -89,34 +89,34 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 对于采用减法重置的IF神经元，其膜电位V随时间变化为：
 
 .. math::
-	V_t=V_{t-1}+z-V_{threshold}\theta_t
+    V_t=V_{t-1}+z-V_{threshold}\theta_t
 
 其中：
  :math:`V_{threshold}` 为发放阈值，通常设为1.0。 :math:`\theta_t` 为输出脉冲。 :math:`T` 时间步内的平均发放率可以通过对膜电位求和得到：
 
 .. math::
-	\sum_{t=1}^{T} V_t= \sum_{t=1}^{T} V_{t-1}+z T-V_{threshold} \sum_{t=1}^{T}\theta_t
+    \sum_{t=1}^{T} V_t= \sum_{t=1}^{T} V_{t-1}+z T-V_{threshold} \sum_{t=1}^{T}\theta_t
 
 将含有 :math:`V_t` 的项全部移项到左边，两边同时除以 :math:`T` ：
 
 .. math::
-	\frac{V_T-V_0}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
+    \frac{V_T-V_0}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
 
 其中 :math:`N` 为 :math:`T` 时间步内脉冲数， :math:`\frac{N}{T}` 就是发放率  :math:`r`。利用  :math:`z= V_{threshold} a` 
 即：
 
 .. math::
-	r = a- \frac{ V_T-V_0 }{T V_{threshold}}
+    r = a- \frac{ V_T-V_0 }{T V_{threshold}}
 
 故在仿真时间步  :math:`T` 无限长情况下:
 
 .. math::
-	r = a (a>0)
+    r = a (a>0)
 
 类似地，针对神经网络更高层，文献 [#f1]_ 进一步说明层间发放率满足：
 
 .. math::
-	r^l = W^l r^{l-1}+b^l- \frac{V^l_T}{T V_{threshold}}
+    r^l = W^l r^{l-1}+b^l- \frac{V^l_T}{T V_{threshold}}
 
 详细的说明见文献 [#f1]_ 。ann2snn中的方法也主要来自文献 [#f1]_ 
 
@@ -143,10 +143,10 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
 
 .. math::
-	\bar{W} = \frac{\gamma}{\sigma}  W
+    \bar{W} = \frac{\gamma}{\sigma}  W
 
 .. math::
-	\bar{b} = \frac{\gamma}{\sigma} (b - \mu) + \beta
+    \bar{b} = \frac{\gamma}{\sigma} (b - \mu) + \beta
 
 ◆ 模型归一化
 
@@ -154,12 +154,12 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 那么，归一化后的权重 :math:`\hat{W}` 为：
 
 .. math::
-	\hat{W} = W * \frac{\lambda_{pre}}{\lambda}
+    \hat{W} = W * \frac{\lambda_{pre}}{\lambda}
 
 归一化后的偏置 :math:`\hat{b}` 为：
 
 .. math::
-	\hat{b} = b / \lambda
+    \hat{b} = \frac{b}{\lambda}
 
 ANN每层输出的分布虽然服从某个特定分布，但是数据中常常会存在较大的离群值，这会导致整体神经元发放率降低。
 为了解决这一问题，鲁棒归一化将缩放因子从张量的最大值调整为张量的p分位点。文献中推荐的分位点值为99.9。
@@ -193,67 +193,67 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 可行值： ``None`` , 浮点数
 
-说明：当设置为 ``None`` ，神经元重置的时候采用减去 :math:`V_{threshold}` 的方式；当为浮点数时，刚刚发放的神经元会被设置为 :math:`V_{reset}` 。对于需要归一化的转换模型，设置为 ``None`` 是推荐的方式，具有理论保证.
+说明：当设置为 ``None`` ，神经元重置的时候采用减去 :math:`V_{threshold}` 的方式；当为浮点数时，刚刚发放的神经元会被设置为 :math:`V_{reset}` 。对于需要归一化的转换模型，设置为 ``None`` 是推荐的方式，具有理论保证
 
 (3)conf['simulation']['encoder']['possion']
 
 可行值： ``bool`` 类型
 
-说明：当设置为 ``True`` ，输入采用泊松编码器；否则，采用浮点数持续的输入仿真时长T时间。
+说明：当设置为 ``True`` ，输入采用泊松编码器；否则，采用浮点数持续的输入仿真时长T时间
 
 (4)conf['simulation']['avg_pool']['has_neuron']
 
 可行值： ``bool`` 类型
 
-说明：当设置为 ``True`` ，平均池化层被转化为空间下采样加上一层IF神经元；否则，平均池化层仅被转化为空间下采样。
+说明：当设置为 ``True`` ，平均池化层被转化为空间下采样加上一层IF神经元；否则，平均池化层仅被转化为空间下采样
 
 (5)conf['simulation']['max_pool']['if_spatial_avg']
 
 可行值： ``bool`` 类型
 
-说明：当设置为``True``，最大池化层被转化为平均池化。这个方式根据文献可能会导致精度下降。
+说明：当设置为``True``，最大池化层被转化为平均池化。这个方式根据文献可能会导致精度下降
 
 (6)conf['simulation']['max_pool']['if_wta']
 
 可行值： ``bool`` 类型
 
-说明：当设置为 ``True`` ，最大池化层和ANN中最大池化一样。使用ANN的最大池化意味着当感受野中一旦有脉冲即输出1。
+说明：当设置为 ``True`` ，最大池化层和ANN中最大池化一样。使用ANN的最大池化意味着当感受野中一旦有脉冲即输出1
 
 (7)conf['simulation']['max_pool']['momentum']
 
 可行值： ``None`` , [0,1]内浮点数
 
-说明：最大池化层被转化为基于动量累计脉冲的门控函数控制脉冲通道。当设置为 ``None`` ，直接累计脉冲；若为[0,1]浮点数，进行脉冲动量累积。
+说明：最大池化层被转化为基于动量累计脉冲的门控函数控制脉冲通道。当设置为 ``None`` ，直接累计脉冲；若为[0,1]浮点数，进行脉冲动量累积
 
 默认配置为：
 
 .. code-block:: python
 
-	default_config = 
-	{
-	'simulation':
-		{
-		'reset_to_zero': False,
-		'encoder':
-			{
-			'possion': False
-			},
-		'avg_pool':
-			{
-			'has_neuron': True
-			},
-		'max_pool':
-			{
-			'if_spatial_avg': False,
-			'if_wta': False,
-			'momentum': None
-			}
-		},
-	'parser':
-		{
-		'robust_norm': True
-		}
-	}
+    default_config =
+    {
+    'simulation':
+        {
+        'reset_to_zero': False,
+        'encoder':
+            {
+            'possion': False
+            },
+        'avg_pool':
+            {
+            'has_neuron': True
+            },
+        'max_pool':
+            {
+            'if_spatial_avg': False,
+            'if_wta': False,
+            'momentum': None
+            }
+        },
+    'parser':
+        {
+        'robust_norm': True
+        }
+    }
 
 
 
@@ -265,42 +265,42 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 首先定义我们的网络结构：
 
 .. code-block:: python
-	
-	class ANN(nn.Module):
-		def __init__(self):
-			super().__init__()
-			self.network = nn.Sequential(
-				nn.Conv2d(1, 32, 3, 1),
-				nn.BatchNorm2d(32, eps=1e-3),
-				nn.ReLU(),
-				nn.AvgPool2d(2, 2),
 
-				nn.Conv2d(32, 32, 3, 1),
-				nn.BatchNorm2d(32, eps=1e-3),
-				nn.ReLU(),
-				nn.AvgPool2d(2, 2),
+    class ANN(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.network = nn.Sequential(
+                nn.Conv2d(1, 32, 3, 1),
+                nn.BatchNorm2d(32, eps=1e-3),
+                nn.ReLU(),
+                nn.AvgPool2d(2, 2),
 
-				nn.Conv2d(32, 32, 3, 1),
-				nn.BatchNorm2d(32, eps=1e-3),
-				nn.ReLU(),
-				nn.AvgPool2d(2, 2),
+                nn.Conv2d(32, 32, 3, 1),
+                nn.BatchNorm2d(32, eps=1e-3),
+                nn.ReLU(),
+                nn.AvgPool2d(2, 2),
 
-				nn.Flatten(),
-				nn.Linear(32, 10),
-				nn.ReLU()
-			)
+                nn.Conv2d(32, 32, 3, 1),
+                nn.BatchNorm2d(32, eps=1e-3),
+                nn.ReLU(),
+                nn.AvgPool2d(2, 2),
 
-		def forward(self,x):
-			x = self.network(x)
-			return x
+                nn.Flatten(),
+                nn.Linear(32, 10),
+                nn.ReLU()
+            )
 
-注意：定义的网络中，模块定义的顺序必须和前向的顺序保持一致，否则会影响网络的自动分析。最好使用 ``nn.Sequence(·)`` 完整定义好网络。每一个Conv2d和Linear层后，必须要放一个ReLU层，其间可以隔着一个BatchNorm层。池化层后不加ReLU。如果遇到需要将tensor展开的情况，就在网络中定义一个 ``nn.Flatten`` 模块，在forward函数中需要使用定义的Flatten而不是view函数。
+        def forward(self,x):
+            x = self.network(x)
+            return x
+
+注意：定义的网络中，模块定义的顺序必须和前向的顺序保持一致，否则会影响网络的自动分析。最好使用 ``nn.Sequence()`` 完整定义好网络。每一个Conv2d和Linear层后，必须要放一个ReLU层，其间可以隔着一个BatchNorm层。池化层后不加ReLU。如果遇到需要将tensor展开的情况，就在网络中定义一个 ``nn.Flatten`` 模块，在forward函数中需要使用定义的Flatten而不是view函数。
 
 定义我们的超参数：
 
 .. code-block:: python
 
-	device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
+    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
     dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
     batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
     learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
@@ -310,50 +310,49 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 程序按照指定的文件夹搜寻训练好的模型存档（和 `model_name` 同名的文件），之后的所有临时文件都会储存到文件夹中。
 
-加载默认的转换配置并保存
+加载默认的转换配置并保存：
 
 .. code-block:: python
 
-	config = utils.Config.default_config
-	print('ann2snn config:\n\t', config)
-	utils.Config.store_config(os.path.join(log_dir,'default_config.json'),config)
+    config = utils.Config.default_config
+    print('ann2snn config:\n\t', config)
+    utils.Config.store_config(os.path.join(log_dir,'default_config.json'),config)
 
-
-初始化数据加载器、网络、优化器、损失函数
-
-.. code-block:: python
-
-	# 初始化网络
-	ann = ANN().to(device)
-	# 定义损失函数
-	loss_function = nn.CrossEntropyLoss()
-	# 使用Adam优化器
-	optimizer = torch.optim.Adam(ann.parameters(), lr=learning_rate, weight_decay=5e-4)
-
-训练ANN，并定期测试。训练时也可以使用utils中预先写好的训练程序
+初始化数据加载器、网络、优化器、损失函数：
 
 .. code-block:: python
 
-	for epoch in range(train_epoch):
-		# 使用utils中预先写好的训练程序训练网络
-		# 训练程序的写法和经典ANN中的训练也是一样的
-		# Train the network using a pre-prepared code in ''utils''
-		utils.train_ann(net=ann,
-						device=device,
-						data_loader=train_data_loader,
-						optimizer=optimizer,
-						loss_function=loss_function,
-						epoch=epoch
-						)
-		# 使用utils中预先写好的验证程序验证网络输出
-		# Validate the network using a pre-prepared code in ''utils''
-		acc = utils.val_ann(net=ann,
-							device=device,
-							data_loader=test_data_loader,
-							epoch=epoch
-							)
-		if best_acc <= acc:
-			utils.save_model(ann, log_dir, model_name+'.pkl')
+    # 初始化网络
+    ann = ANN().to(device)
+    # 定义损失函数
+    loss_function = nn.CrossEntropyLoss()
+    # 使用Adam优化器
+    optimizer = torch.optim.Adam(ann.parameters(), lr=learning_rate, weight_decay=5e-4)
+
+训练ANN，并定期测试。训练时也可以使用utils中预先写好的训练程序：
+
+.. code-block:: python
+
+    for epoch in range(train_epoch):
+        # 使用utils中预先写好的训练程序训练网络
+        # 训练程序的写法和经典ANN中的训练也是一样的
+        # Train the network using a pre-prepared code in ''utils''
+        utils.train_ann(net=ann,
+                        device=device,
+                        data_loader=train_data_loader,
+                        optimizer=optimizer,
+                        loss_function=loss_function,
+                        epoch=epoch
+                        )
+        # 使用utils中预先写好的验证程序验证网络输出
+        # Validate the network using a pre-prepared code in ''utils''
+        acc = utils.val_ann(net=ann,
+                            device=device,
+                            data_loader=test_data_loader,
+                            epoch=epoch
+                            )
+        if best_acc <= acc:
+            utils.save_model(ann, log_dir, model_name+'.pkl')
 
 完整的代码位于 ``ann2snn.examples.if_cnn_mnist.py`` ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在Python命令行运行它：
 
@@ -408,7 +407,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 .. code-block:: python
 
-	norm_set_len = int(train_data_dataset.data.shape[0] / 500)
+    norm_set_len = int(train_data_dataset.data.shape[0] / 500)
     print('Using %d pictures as norm set'%(norm_set_len))
     norm_set = train_data_dataset.data[:norm_set_len, :, :].float() / 255
     norm_tensor = torch.FloatTensor(norm_set).view(-1,1,28,28)
@@ -417,7 +416,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 .. code-block:: python
 
-	utils.standard_conversion(model_name=model_name,
+    utils.standard_conversion(model_name=model_name,
                               norm_data=norm_tensor,
                               test_data_loader=test_data_loader,
                               device=device,
@@ -430,67 +429,67 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 .. code-block:: python
 
-	ModelParser(
-	  (network): Sequential(
-		(0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-		(1): ReLU()
-		(2): AvgPool2d(kernel_size=2, stride=2, padding=0)
-		(3): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-		(4): ReLU()
-		(5): AvgPool2d(kernel_size=2, stride=2, padding=0)
-		(6): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-		(7): ReLU()
-		(8): AvgPool2d(kernel_size=2, stride=2, padding=0)
-		(9): Flatten()
-		(10): Linear(in_features=32, out_features=10, bias=True)
-		(11): ReLU()
-	  )
-	)
+    ModelParser(
+      (network): Sequential(
+        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
+        (1): ReLU()
+        (2): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (3): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        (4): ReLU()
+        (5): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (6): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        (7): ReLU()
+        (8): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (9): Flatten()
+        (10): Linear(in_features=32, out_features=10, bias=True)
+        (11): ReLU()
+      )
+    )
 
 同时，我们也观察一下SNN的结构：
 
 .. code-block:: python
 
-	SNN(
-	  (network): Sequential(
-		(0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-		(1): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-		(2): AvgPool2d(kernel_size=2, stride=2, padding=0)
-		(3): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-		(4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-		(5): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-		(6): AvgPool2d(kernel_size=2, stride=2, padding=0)
-		(7): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-		(8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-		(9): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-		(10): AvgPool2d(kernel_size=2, stride=2, padding=0)
-		(11): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-		(12): Flatten()
-		(13): Linear(in_features=32, out_features=10, bias=True)
-		(14): IFNode(
-		  v_threshold=1.0, v_reset=None
-		  (surrogate_function): Sigmoid()
-		)
-	  )
-	)
+    SNN(
+      (network): Sequential(
+        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
+        (1): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+        (2): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (3): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+        (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        (5): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+        (6): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (7): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+        (8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
+        (9): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+        (10): AvgPool2d(kernel_size=2, stride=2, padding=0)
+        (11): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+        (12): Flatten()
+        (13): Linear(in_features=32, out_features=10, bias=True)
+        (14): IFNode(
+          v_threshold=1.0, v_reset=None
+          (surrogate_function): Sigmoid()
+        )
+      )
+    )
 
 可以看出，ANN模型中的ReLU激活被SNN的IFNode取代。每一层AvgPool2d后都跟了一层IFNode。
 
@@ -498,19 +497,19 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 .. code-block:: python
 
-	[SNN Simulating... 1.00%] Acc:0.990
-	[SNN Simulating... 2.00%] Acc:0.990
-	[SNN Simulating... 3.00%] Acc:0.990
-	[SNN Simulating... 4.00%] Acc:0.988
-	[SNN Simulating... 5.00%] Acc:0.990
-	……
-	[SNN Simulating... 95.00%] Acc:0.986
-	[SNN Simulating... 96.00%] Acc:0.986
-	[SNN Simulating... 97.00%] Acc:0.986
-	[SNN Simulating... 98.00%] Acc:0.986
-	[SNN Simulating... 99.00%] Acc:0.987
-	SNN Simulating Accuracy:0.987
-	Summary:	ANN Accuracy:98.7900%  	SNN Accuracy:98.6500% [Decreased 0.1400%]
+    [SNN Simulating... 1.00%] Acc:0.990
+    [SNN Simulating... 2.00%] Acc:0.990
+    [SNN Simulating... 3.00%] Acc:0.990
+    [SNN Simulating... 4.00%] Acc:0.988
+    [SNN Simulating... 5.00%] Acc:0.990
+    ……
+    [SNN Simulating... 95.00%] Acc:0.986
+    [SNN Simulating... 96.00%] Acc:0.986
+    [SNN Simulating... 97.00%] Acc:0.986
+    [SNN Simulating... 98.00%] Acc:0.986
+    [SNN Simulating... 99.00%] Acc:0.987
+    SNN Simulating Accuracy:0.987
+    Summary:	ANN Accuracy:98.7900%  	SNN Accuracy:98.6500% [Decreased 0.1400%]
 
 通过最后的输出，可以知道，ANN的MNIST分类准确率为98.79%。转换后的SNN准确率为98.65%。转换带来了0.14%的性能下降。
 
