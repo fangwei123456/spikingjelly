@@ -462,30 +462,32 @@ class SpikingRNNBase(nn.Module):
 
             output = []
             for t in range(T):
+                new_states_list = torch.zeros_like(states_list.data)
                 if self.states_num() == 1:
-                    states_list[0] = self.cells[0](x[t], states_list[0].clone())
+                    new_states_list[0] = self.cells[0](x[t], states_list[0])
                 else:
-                    states_list[:, 0] = torch.stack(self.cells[0](x[t], states_list[:, 0].clone()))
+                    new_states_list[:, 0] = torch.stack(self.cells[0](x[t], states_list[:, 0]))
                 for i in range(1, self.num_layers):
-                    y = states_list[0, i - 1]
+                    y = new_states_list[0, i - 1]
                     if self.training and self.dropout_p > 0:
                         if self.invariant_dropout_mask:
                             y = y * mask[i - 1]
                         else:
                             y = F.dropout(y, p=self.dropout_p, training=True)
                     if self.states_num() == 1:
-                        states_list[i] = self.cells[i](y, states_list[i].clone())
+                        new_states_list[i] = self.cells[i](y, states_list[i])
                     else:
-                        states_list[:, i] = torch.stack(self.cells[i](y, states_list[:, i].clone()))
+                        new_states_list[:, i] = torch.stack(self.cells[i](y, states_list[:, i]))
                 if self.states_num() == 1:
-                    output.append(states_list[-1].clone().unsqueeze(0))
+                    output.append(new_states_list[-1].clone().unsqueeze(0))
                 else:
-                    output.append(states_list[0, -1].clone().unsqueeze(0))
+                    output.append(new_states_list[0, -1].clone().unsqueeze(0))
+                states_list = new_states_list.clone()
             if self.states_num() == 1:
-                return torch.cat(output, dim=0), states_list
+                return torch.cat(output, dim=0), new_states_list
             else:
                 # split使得返回值是tuple
-                return torch.cat(output, dim=0), torch.split(states_list, 1, dim=0)
+                return torch.cat(output, dim=0), torch.split(new_states_list, 1, dim=0)
 
 class SpikingLSTMCell(SpikingRNNCellBase):
     def __init__(self, input_size: int, hidden_size: int, bias=True,
