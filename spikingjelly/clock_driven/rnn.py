@@ -421,12 +421,13 @@ class SpikingRNNBase(nn.Module):
 
         if self.bidirectional:
             # y 表示第i层的输出。初始化时，y即为输入
-            y = x
+            y = x.clone()
             if self.training and self.dropout_p > 0 and self.invariant_dropout_mask:
                 mask = F.dropout(torch.ones(size=[self.num_layers - 1, batch_size, self.hidden_size * 2]),
                                  p=self.dropout_p, training=True, inplace=True).to(x)
             for i in range(self.num_layers):
                 # 第i层神经元的起始状态从输入states_list获取
+                new_states_list = torch.zeros_like(states_list.data)
                 if self.states_num() == 1:
                     cell_init_states = states_list[i]
                     cell_init_states_reverse = states_list[i + self.num_layers]
@@ -444,16 +445,17 @@ class SpikingRNNBase(nn.Module):
                     self.cells[i], self.cells_reverse[i], y, cell_init_states, cell_init_states_reverse)
                 # 更新states_list[i]
                 if self.states_num() == 1:
-                    states_list[i] = ss
-                    states_list[i + self.num_layers] = ss_r
+                    new_states_list[i] = ss
+                    new_states_list[i + self.num_layers] = ss_r
                 else:
-                    states_list[:, i] = torch.stack(ss)
-                    states_list[:, i + self.num_layers] = torch.stack(ss_r)
+                    new_states_list[:, i] = torch.stack(ss)
+                    new_states_list[:, i + self.num_layers] = torch.stack(ss_r)
+                states_list = new_states_list.clone()
             if self.states_num() == 1:
-                return y, states_list
+                return y, new_states_list
             else:
                 # split使得返回值是tuple
-                return y, torch.split(states_list, 1, dim=0)
+                return y, torch.split(new_states_list, 1, dim=0)
 
         else:
             if self.training and self.dropout_p > 0 and self.invariant_dropout_mask:
