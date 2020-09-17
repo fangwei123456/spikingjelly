@@ -461,6 +461,7 @@ class SpikingRNNBase(nn.Module):
                                  p=self.dropout_p, training=True, inplace=True).to(x)
 
             output = []
+
             for t in range(T):
                 new_states_list = torch.zeros_like(states_list.data)
                 if self.states_num() == 1:
@@ -468,7 +469,7 @@ class SpikingRNNBase(nn.Module):
                 else:
                     new_states_list[:, 0] = torch.stack(self.cells[0](x[t], states_list[:, 0]))
                 for i in range(1, self.num_layers):
-                    y = new_states_list[0, i - 1]
+                    y = states_list[0, i - 1]
                     if self.training and self.dropout_p > 0:
                         if self.invariant_dropout_mask:
                             y = y * mask[i - 1]
