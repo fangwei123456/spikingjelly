@@ -688,40 +688,41 @@ class atan(torch.autograd.Function):
 
 class ATan(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True, learnable=False):
+        '''
+        * :ref:`API in English <ATan.__init__-en>`
+        .. _ATan.__init__-cn:
+
+        反向传播时使用反正切函数arc tangent的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
+
+        .. image:: ./_static/API/clock_driven/surrogate/ATan.*
+            :width: 100%
+
+        * :ref:`中文API <ATan.__init__-cn>`
+        .. _ATan.__init__-en:
+
+        The arc tangent surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
+
+        .. image:: ./_static/API/clock_driven/surrogate/ATan.*
+            :width: 100%
+        '''
         super().__init__(alpha, spiking, learnable)
-    '''
-    * :ref:`API in English <ATan.__init__-en>`
-    .. _ATan.__init__-cn:
 
-    反向传播时使用反正切函数arc tangent的梯度的脉冲发放函数。反向传播为
-
-    .. math::
-        g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
-
-    对应的原函数为
-
-    .. math::
-        g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
-
-    .. image:: ./_static/API/clock_driven/surrogate/ATan.*
-        :width: 100%
-
-    * :ref:`中文API <ATan.__init__-cn>`
-    .. _ATan.__init__-en:
-
-    The arc tangent surrogate spiking function. The gradient is defined by
-
-    .. math::
-        g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
-
-    The primitive function is defined by
-
-    .. math::
-        g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
-
-    .. image:: ./_static/API/clock_driven/surrogate/ATan.*
-        :width: 100%
-    '''
 
     @staticmethod
     def spiking_function(x, alpha):
