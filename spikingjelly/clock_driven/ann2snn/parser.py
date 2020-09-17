@@ -61,16 +61,19 @@ class ModelParser(nn.Module):
         
         遍历输入模型的模块，对不同模块类型进行不同的操作：
             1、对于Linear和Conv2d等有weight和bias的模块，保存待分析参数，加入模块队列并记录编号，便于后续BatchNorm参数吸收时搜寻模块。
+
             2、对于Softmax，使用ReLU进行替代，Softmax关于某个输入变量是单调递增的，意味着ReLU并不会对输出的正确性造成太大影响。
+
             3、对于BatchNorm，将其参数吸收进对应的参数化模块，其中：BatchNorm1d默认其上一个模块为Linear，BatchNorm2d默认其上一个模块为Conv2d。
-                假定BatchNorm的参数为 :math:`\gamma` (BatchNorm.weight)， :math:`\beta` (BatchNorm.bias)， :math:`\mu`(BatchNorm.running_mean) ， :math:`\sigma` (BatchNorm.running_var running_var开根号)。具体参数定义详见 ``torch.nn.batchnorm`` 。参数模块（例如Linear）具有参数 :math:`W` 和 :math:`b` 。BatchNorm参数吸收就是将BatchNorm的参数通过运算转移到参数模块的 :math:`W`和 :math:`b` 中，使得数据输入新模块的输出和有BatchNorm时相同。
-                对此，新模型的 :math:`\bar{W}` 和 :math:`\bar{b}` 公式表示为：
+            
+                假定BatchNorm的参数为 :math:`\\gamma` (BatchNorm.weight)， :math:`\\beta` (BatchNorm.bias)， :math:`\\mu` (BatchNorm.running_mean) ， :math:`\\sigma` (BatchNorm.running_var running_var开根号)。具体参数定义详见 ``torch.nn.batchnorm`` 。参数模块（例如Linear）具有参数 :math:`W` 和 :math:`b` 。BatchNorm参数吸收就是将BatchNorm的参数通过运算转移到参数模块的 :math:`W`和 :math:`b` 中，使得数据输入新模块的输出和有BatchNorm时相同。
+                对此，新模型的 :math:`\\bar{W}` 和 :math:`\\bar{b}` 公式表示为：
 
             .. math::
-                \bar{W} = \frac{\gamma}{\sigma}  W
+                \\bar{W} = \\frac{\\gamma}{\\sigma}  W
 
             .. math::
-                \bar{b} = \frac{\gamma}{\sigma} (b - \mu) + \beta
+                \\bar{b} = \\frac{\\gamma}{\\sigma} (b - \\mu) + \\beta
                 
             4、对于AvgPool2d、MaxPool2d、Flatten，加入模块队列
         最后将模块队列使用 ``torch.nn.Sequential`` 组成一个Pytorch神经网络，可以使用 `ModelParser.network` 对象访问
@@ -95,15 +98,15 @@ class ModelParser(nn.Module):
         
         3. For `BatchNorm`, parameters are absorbed into the corresponding module with parameters, wherein: BatchNorm1d should be after Linear; BatchNorm2d should be after Conv2d.
             
-            Assume that the parameters of BatchNorm are :math:`\gamma` (BatchNorm.weight), :math:`\beta` (BatchNorm.bias), :math:`\mu`(BatchNorm.running_mean), :math:`\sigma`(BatchNorm.running_std, square root of running_var).For specific parameter definitions, see ``torch.nn.batchnorm``. Parameter modules (such as Linear) have parameters :math:`W` and :math:`b`. Absorbing BatchNorm parameters is transfering the parameters of BatchNorm to :math:`W` and :math:`b` of the parameter module through calculation，, so that the output of the data in new module is the same as when there is BatchNorm.
+            Assume that the parameters of BatchNorm are :math:`\\gamma` (BatchNorm.weight), :math:`\\beta` (BatchNorm.bias), :math:`\\mu` (BatchNorm.running_mean), :math:`\\sigma` (BatchNorm.running_std, square root of running_var).For specific parameter definitions, see ``torch.nn.batchnorm``. Parameter modules (such as Linear) have parameters :math:`W` and :math:`b` . Absorbing BatchNorm parameters is transfering the parameters of BatchNorm to :math:`W` and :math:`b` of the parameter module through calculation, so that the output of the data in new module is the same as when there is BatchNorm.
 
-            In this regard, the new model's :math:`\bar{W}` and :math:`\bar{b}` formulas are expressed as:
-
-            .. math::
-                \bar{W} = \frac{\gamma}{\sigma}  W
+            In this regard, the new model's :math:`\\bar{W}` and :math:`\\bar{b}` formulas are expressed as:
 
             .. math::
-                \bar{b} = \frac{\gamma}{\sigma} (b - \mu) + \beta
+                \\bar{W} = \\frac{\\gamma}{\\sigma}  W
+
+            .. math::
+                \\bar{b} = \\frac{\\gamma}{\\sigma} (b - \\mu) + \\beta
     
         4. For AvgPool2d, MaxPool2d, Flatten, add to the module list
         
@@ -234,15 +237,15 @@ class ModelParser(nn.Module):
         如此便可使得模型在转换为SNN时的脉冲发放率在[0,:math:`r_max`]范围内。
         模型归一化在文献 [#f1]_ 中被提出，所提出的归一化利用权重的最大最小值。但是文献 [#f1]_ 中的方法不涉及神经网络中存在bias的情况。
         为了适应更多的神经网络，此处参考文献 [#f2]_ 实现归一化模块：通过缩放因子缩放权重和偏置项。
-        对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}` ,输出张量的最大值为 :math:`\lambda` 。那么，归一化后的权重 :math:`\hat{W}` 为：
+        对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\\lambda_{pre}` ,输出张量的最大值为 :math:`\\lambda` 。那么，归一化后的权重 :math:`\\hat{W}` 为：
 
         .. math::
-            \hat{W} = W * \frac{\lambda_{pre}}{\lambda}
+            \\hat{W} = W * \\frac{\\lambda_{pre}}{\\lambda}
 
-           归一化后的偏置 :math:`\hat{b}` 为：
+        归一化后的偏置 :math:`\\hat{b}` 为：
 
         .. math::
-            \hat{b} = b / \lambda
+            \\hat{b} = b / \\lambda
         ANN每层输出的分布虽然服从某个特定分布，但是数据中常常会存在较大的离群值，这会导致整体神经元发放率降低。
         为了解决这一问题，鲁棒归一化将缩放因子从张量的最大值调整为张量的p-分位点。 [#f2]_ 中推荐的分位点值为99.9%。
         
@@ -263,15 +266,15 @@ class ModelParser(nn.Module):
         Model normalization is proposed in  [#f1]_ , and the proposed normalization takes advantage of the maximum value of the weight.
         However, the method in  [#f1]_  does not involve bias in the neural network.
         To accommodate more neural networks, model normalization is implemented based on [#f2]_ : scaling weights and bias through scaling factors.
-        For a parameter module, assuming that the input tensor and output tensor are obtained, the maximum value of the input tensor is :math:`\lambda_{pre}`, and the maximum value of the output tensor is :math:`\lambda`. Then, the normalized weight :math:`\hat{W}` is:
+        For a parameter module, assuming that the input tensor and output tensor are obtained, the maximum value of the input tensor is :math:`\\lambda_{pre}`, and the maximum value of the output tensor is :math:`\\lambda`. Then, the normalized weight :math:`\\hat{W}` is:
 
         .. math::
-            \hat{W} = W * \frac{\lambda_{pre}}{\lambda}
+            \\hat{W} = W * \\frac{\\lambda_{pre}}{\\lambda}
 
-        The normalized bias :math:`\hat{b}` is:
+        The normalized bias :math:`\\hat{b}` is:
 
         .. math::
-            \hat{b} = b / \lambda
+            \\hat{b} = b / \\lambda
         
         Although the distribution of the output of the ANN per layer is subject to a particular distribution, there are often large outliers, which results in a decrease in the overall firing rate.
         To solve this problem, robust normalization adjusts the scaling factor from tensor's maximum value to tensor's p-percentile. The recommended p is 99.9% [#f2]_ .
