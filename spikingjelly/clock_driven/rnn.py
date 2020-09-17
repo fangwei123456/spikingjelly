@@ -463,9 +463,9 @@ class SpikingRNNBase(nn.Module):
             output = []
             for t in range(T):
                 if self.states_num() == 1:
-                    states_list[0] = self.cells[0](x[t], states_list[0])
+                    states_list[0] = self.cells[0](x[t], states_list[0].clone())
                 else:
-                    states_list[:, 0] = torch.stack(self.cells[0](x[t], states_list[:, 0]))
+                    states_list[:, 0] = torch.stack(self.cells[0](x[t], states_list[:, 0].clone()))
                 for i in range(1, self.num_layers):
                     y = states_list[0, i - 1]
                     if self.training and self.dropout_p > 0:
@@ -474,9 +474,9 @@ class SpikingRNNBase(nn.Module):
                         else:
                             y = F.dropout(y, p=self.dropout_p, training=True)
                     if self.states_num() == 1:
-                        states_list[i] = self.cells[i](y, states_list[i])
+                        states_list[i] = self.cells[i](y, states_list[i].clone())
                     else:
-                        states_list[:, i] = torch.stack(self.cells[i](y, states_list[:, i]))
+                        states_list[:, i] = torch.stack(self.cells[i](y, states_list[:, i].clone()))
                 if self.states_num() == 1:
                     output.append(states_list[-1].clone().unsqueeze(0))
                 else:
