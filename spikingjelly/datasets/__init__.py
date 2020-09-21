@@ -31,6 +31,26 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                         为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
     :return: 转化后的frames数据，是一个 ``shape = [frames_num, 2, height, width]`` 的np数组
 
+    记脉冲数据为 :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`，转换为帧数据 :math:`F(j, x, y, p), j=0,1,...,T-1`。
+
+    若划分方式 ``split_by`` 为 ``time``，则
+
+    .. math::
+
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
+        j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
+        j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
+        F(j, x, y, p) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+
+    若划分方式 ``split_by`` 为 ``number``，则
+
+    .. math::
+
+        j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
+        F(j, x, y, p) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+
+
     '''
     frames = np.zeros(shape=[frames_num, 2, height, width])
     eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
