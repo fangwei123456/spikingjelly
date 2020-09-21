@@ -59,6 +59,8 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                 frames[i] /= max(frames[i].max(), eps)
             elif normalization == 'norm':
                 frames[i] = (frames[i] - frames[i].mean()) / np.sqrt(max(frames[i].var(), eps))
+            elif normalization == 'sum':
+                frames[i] /= max(frames[i].sum(), eps)
             elif normalization is None:
                 pass
             else:
@@ -84,6 +86,8 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                 frames[i] /= max(frames[i].max(), eps)
             elif normalization == 'norm':
                 frames[i] = (frames[i] - frames[i].mean()) / np.sqrt(max(frames[i].var(), eps))
+            elif normalization == 'sum':
+                frames[i] /= max(frames[i].sum(), eps)
             elif normalization is None:
                 pass
             else:
