@@ -34,6 +34,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     '''
     frames = np.zeros(shape=[frames_num, 2, height, width])
     eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
+
     if split_by == 'time':
         # 按照脉冲的发生时刻进行等分
         events['t'] -= events['t'][0]
@@ -52,18 +53,19 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                 index_r = index_list[i]
             frames[i, events['p'][index_l:index_r], events['y'][index_l:index_r], events['x'][index_l:index_r]] \
                 += events['t'][index_l:index_r]
-            index_l = index_r
             if normalization == 'frequency':
-                frames[i] /= dt  # 表示脉冲发放的频率
+                frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
             elif normalization == 'max':
                 frames[i] /= max(frames[i].max(), eps)
             elif normalization == 'norm':
                 frames[i] = (frames[i] - frames[i].mean()) / np.sqrt(max(frames[i].var(), eps))
             elif normalization is None:
-                continue
+                pass
             else:
                 raise NotImplementedError
+            index_l = index_r
         return frames
+
     elif split_by == 'number':
         # 按照脉冲数量进行等分
         dt = events['t'].shape[0] // frames_num
@@ -77,17 +79,17 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             frames[i, events['p'][index_l:index_r], events['y'][index_l:index_r], events['x'][index_l:index_r]] \
                 += events['t'][index_l:index_r]
             if normalization == 'frequency':
-                frames[i] /= dt  # 表示脉冲发放的频率
+                frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
             elif normalization == 'max':
                 frames[i] /= max(frames[i].max(), eps)
-
             elif normalization == 'norm':
                 frames[i] = (frames[i] - frames[i].mean()) / np.sqrt(max(frames[i].var(), eps))
             elif normalization is None:
-                continue
+                pass
             else:
                 raise NotImplementedError
         return frames
+
     else:
         raise NotImplementedError
 
