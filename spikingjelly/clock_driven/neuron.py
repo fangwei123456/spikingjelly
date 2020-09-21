@@ -300,8 +300,12 @@ class LIFNode(BaseNode):
         return 'v_threshold={}, v_reset={}, tau={}'.format(
             self.v_threshold, self.v_reset, self.tau
         )
+
     def forward(self, dv: torch.Tensor):
-        self.v += (dv - (self.v - self.v_reset)) / self.tau
+        if self.v_reset is None:
+            self.v += (dv - self.v) / self.tau
+        else:
+            self.v += (dv - (self.v - self.v_reset)) / self.tau
         return self.spiking()
 
 class PLIFNode(BaseNode):
