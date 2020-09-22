@@ -151,7 +151,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             elif normalization == 'sum':
                 frames[i][0] /= max(frames[i][0].sum(), eps)
                 frames[i][1] /= max(frames[i][1].sum(), eps)
-            elif normalization is None:
+            elif normalization is None or normalization == 'None':
                 pass
             else:
                 raise NotImplementedError
@@ -181,7 +181,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             elif normalization == 'sum':
                 frames[i][0] /= max(frames[i][0].sum(), eps)
                 frames[i][1] /= max(frames[i][1].sum(), eps)
-            elif normalization is None:
+            elif normalization is None or normalization == 'None':
                 pass
             else:
                 raise NotImplementedError
