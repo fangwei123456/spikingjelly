@@ -28,13 +28,13 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     :param normalization: 归一化方法，允许的取值为 ``None, 'frequency', 'max', 'norm', 'sum'``
     :return: 转化后的frames数据，是一个 ``shape = [frames_num, 2, height, width]`` 的np数组
 
-    记脉冲数据为 :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`，转换为帧数据 :math:`F(j, p, x, y), j=0,1,...,T-1`。
+    记脉冲数据为 :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`，转换为帧数据 :math:`F(j, p, x, y), j=0,1,...,M-1`。
 
     若划分方式 ``split_by`` 为 ``'time'``，则
 
     .. math::
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
         j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
@@ -43,8 +43,8 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     .. math::
 
-        j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
-        j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
+        j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), &j < M - 1 \\cr N - 1, &j = M - 1 \\end{cases} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     其中 :math:`\\mathcal{I}` 为示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时为1，否则为0。
@@ -82,13 +82,13 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     :return: the frames data with ``shape = [frames_num, 2, height, width]``
 
     The events data are denoted by :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`, and the converted frames
-    data are denoted by :math:`F(j, p, x, y), j=0,1,...,T-1`.
+    data are denoted by :math:`F(j, p, x, y), j=0,1,...,M-1`.
 
     If ``split_by`` is ``'time'``, then
 
     .. math::
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
         j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
@@ -97,8 +97,8 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     .. math::
 
-        j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
-        j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
+        j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), &j < M - 1 \\cr N - 1, &j = M - 1 \\end{cases} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     where :math:`\\mathcal{I}` is the characteristic function，if and only if :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`,
@@ -144,11 +144,10 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             else:
                 index_r = index_list[i]
 
-            p0 = (events['p'][index_l:index_r] == 0).astype(float)
             frames[i, 0, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += p0
+                += (1 - events['p'][index_l:index_r])
             frames[i, 1, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += (1 - p0)
+                += events['p'][index_l:index_r]
 
 
             if normalization == 'frequency':
@@ -179,11 +178,10 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                 index_r = events['t'].shape[0]
             else:
                 index_r = index_l + dt
-            p0 = (events['p'][index_l:index_r] == 0).astype(float)
             frames[i, 0, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += p0
+                += (1 - events['p'][index_l:index_r])
             frames[i, 1, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += (1 - p0)
+                += events['p'][index_l:index_r]
             
             if normalization == 'frequency':
                 frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
