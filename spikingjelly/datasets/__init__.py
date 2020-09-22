@@ -37,7 +37,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
         \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
         j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
-        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     若划分方式 ``split_by`` 为 ``'number'``，则
 
@@ -45,7 +45,9 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
         j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
         j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
-        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
+
+    其中 :math:`\\mathcal{I}` 为示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时为1，否则为0。
 
     若 ``normalization`` 为 ``'frequency'`` 则
 
@@ -89,7 +91,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
         \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
         j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
-        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     If ``split_by`` is ``'number'``, then
 
@@ -97,7 +99,10 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
         j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
         j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
-        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
+
+    where :math:`\\mathcal{I}` is the characteristic function，if and only if :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`,
+    this function is identically 1 else 0.
 
     If ``normalization`` is ``'frequency'``, then
 
@@ -138,8 +143,14 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                 index_r = events['t'].shape[0]
             else:
                 index_r = index_list[i]
-            frames[i, events['p'][index_l:index_r], events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += events['t'][index_l:index_r]
+
+            p0 = (events['p'][index_l:index_r] == 0).astype(float)
+            frames[i, 0, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
+                += p0
+            frames[i, 1, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
+                += (1 - p0)
+
+
             if normalization == 'frequency':
                 frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
             elif normalization == 'max':
@@ -168,8 +179,12 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
                 index_r = events['t'].shape[0]
             else:
                 index_r = index_l + dt
-            frames[i, events['p'][index_l:index_r], events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += events['t'][index_l:index_r]
+            p0 = (events['p'][index_l:index_r] == 0).astype(float)
+            frames[i, 0, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
+                += p0
+            frames[i, 1, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
+                += (1 - p0)
+            
             if normalization == 'frequency':
                 frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
             elif normalization == 'max':
