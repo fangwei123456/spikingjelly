@@ -16,41 +16,108 @@ class FunctionThread(threading.Thread):
 
 def integrate_events_to_frames(events, height, width, frames_num=10, split_by='time', normalization=None):
     '''
+    * :ref:`API in English <integrate_events_to_frames.__init__-en>`
+
+    .. _integrate_events_to_frames.__init__-cn:
+
     :param events: 键是{'t', 'x', 'y', 'p'}，值是np数组的的字典
     :param height: 脉冲数据的高度，例如对于CIFAR10-DVS是128
     :param width: 脉冲数据的宽度，例如对于CIFAR10-DVS是128
     :param frames_num: 转换后数据的帧数
-    :param split_by: 脉冲数据转换成帧数据的累计方式。``'time'`` 或 ``'number'``。为 ``'time'`` 表示将events数据在时间上分段，例如events记录的 ``t`` 介于
-                        [0, 105]且 ``frames_num=10``，则转化得到的10帧分别为 ``t`` 属于[0, 10), [10,20), ..., [90, 105)的
-                        脉冲的累加；
-                        为 ``'number'`` 表示将events数据在数量上分段，例如events一共有105个且 ``frames_num=10``，则转化得到
-                        的10帧分别是第[0, 10), [10,20), ..., [90, 105)个脉冲的累加
-    :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；
-                        为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
-                        为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
-                        为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
+    :param split_by: 脉冲数据转换成帧数据的累计方式，允许的取值为 ``'number', 'time'``
+    :param normalization: 归一化方法，允许的取值为 ``None, 'frequency', 'max', 'norm', 'sum'``
     :return: 转化后的frames数据，是一个 ``shape = [frames_num, 2, height, width]`` 的np数组
 
-    记脉冲数据为 :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`，转换为帧数据 :math:`F(j, x, y, p), j=0,1,...,T-1`。
+    记脉冲数据为 :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`，转换为帧数据 :math:`F(j, p, x, y), j=0,1,...,T-1`。
 
-    若划分方式 ``split_by`` 为 ``time``，则
+    若划分方式 ``split_by`` 为 ``'time'``，则
 
     .. math::
 
         \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
         j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
-        F(j, x, y, p) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
 
-    若划分方式 ``split_by`` 为 ``number``，则
+    若划分方式 ``split_by`` 为 ``'number'``，则
 
     .. math::
 
         j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
         j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
-        F(j, x, y, p) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
 
+    若 ``normalization`` 为 ``'frequency'`` 则
 
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{t_{j_{r}} - t_{j_{l}}}
+
+    若 ``normalization`` 为 ``'max'`` 则
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\mathrm{max} F(j, p)}
+
+    若 ``normalization`` 为 ``'norm'`` 则
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y) - \\mathrm{E}(F(j, p))}{\\sqrt{\\mathrm{Var}(F(j, p))}}
+
+    若 ``normalization`` 为 ``'sum'`` 则
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\sum_{a, b} F(j, p, a, b)}
+
+* :ref:`中文API <integrate_events_to_frames.__init__-cn>`
+
+    .. _integrate_events_to_frames.__init__-en:
+
+    :param events: a dict with keys are {'t', 'x', 'y', 'p'} and values are numpy arrays
+    :param height: the height of events data, e.g., 128 for CIFAR10-DVS
+    :param width: the width of events data, e.g., 128 for CIFAR10-DVS
+    :param frames_num: frames number
+    :param split_by: how to split the events, can be ``'number', 'time'``
+    :param normalization: how to normalize frames, can be ``None, 'frequency', 'max', 'norm', 'sum'``
+    :return: the frames data with ``shape = [frames_num, 2, height, width]``
+
+    The events data are denoted by :math:`E_{i} = (t_{i}, x_{i}, y_{i}, p_{i}), i=0,1,...,N-1`, and the converted frames
+    data are denoted by :math:`F(j, p, x, y), j=0,1,...,T-1`.
+
+    If ``split_by`` is ``'time'``, then
+
+    .. math::
+
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{T}] \\\\
+        j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
+        j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+
+    If ``split_by`` is ``'number'``, then
+
+    .. math::
+
+        j_{l} & = [\\frac{N}{T}] \\cdot j \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{T}] \\cdot (j + 1), &j < T - 1 \\cr N - 1, &j = T - 1 \\end{cases} \\\\
+        F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} E_{i}
+
+    If ``normalization`` is ``'frequency'``, then
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{t_{j_{r}} - t_{j_{l}}}
+
+    If ``normalization`` is ``'max'``, then
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\mathrm{max} F(j, p)}
+
+    If ``normalization`` is ``'norm'``, then
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y) - \\mathrm{E}(F(j, p))}{\\sqrt{\\mathrm{Var}(F(j, p))}}
+
+    If ``normalization`` is ``'sum'``, then
+
+    .. math::
+        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\sum_{a, b} F(j, p, a, b)}
     '''
     frames = np.zeros(shape=[frames_num, 2, height, width])
     eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
@@ -76,11 +143,14 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             if normalization == 'frequency':
                 frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
             elif normalization == 'max':
-                frames[i] /= max(frames[i].max(), eps)
+                frames[i][0] /= max(frames[i][0].max(), eps)
+                frames[i][1] /= max(frames[i][1].max(), eps)
             elif normalization == 'norm':
-                frames[i] = (frames[i] - frames[i].mean()) / np.sqrt(max(frames[i].var(), eps))
+                frames[i][0] = (frames[i][0] - frames[i][0].mean()) / np.sqrt(max(frames[i][0].var(), eps))
+                frames[i][1] = (frames[i][1] - frames[i][1].mean()) / np.sqrt(max(frames[i][1].var(), eps))
             elif normalization == 'sum':
-                frames[i] /= max(frames[i].sum(), eps)
+                frames[i][0] /= max(frames[i][0].sum(), eps)
+                frames[i][1] /= max(frames[i][1].sum(), eps)
             elif normalization is None:
                 pass
             else:
@@ -103,11 +173,14 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             if normalization == 'frequency':
                 frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
             elif normalization == 'max':
-                frames[i] /= max(frames[i].max(), eps)
+                frames[i][0] /= max(frames[i][0].max(), eps)
+                frames[i][1] /= max(frames[i][1].max(), eps)
             elif normalization == 'norm':
-                frames[i] = (frames[i] - frames[i].mean()) / np.sqrt(max(frames[i].var(), eps))
+                frames[i][0] = (frames[i][0] - frames[i][0].mean()) / np.sqrt(max(frames[i][0].var(), eps))
+                frames[i][1] = (frames[i][1] - frames[i][1].mean()) / np.sqrt(max(frames[i][1].var(), eps))
             elif normalization == 'sum':
-                frames[i] /= max(frames[i].sum(), eps)
+                frames[i][0] /= max(frames[i][0].sum(), eps)
+                frames[i][1] /= max(frames[i][1].sum(), eps)
             elif normalization is None:
                 pass
             else:
