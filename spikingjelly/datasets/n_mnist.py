@@ -133,7 +133,12 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
 
         self.use_frame = use_frame
         if use_frame:
-            frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{normalization}')
+            self.normalization = normalization
+            if normalization == 'frequency':
+                dir_suffix = normalization
+            else:
+                dir_suffix = None
+            frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{dir_suffix}')
             if os.path.exists(frames_root):
                 print(f'{frames_root} already exists')
             else:
@@ -154,7 +159,10 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
 
     def __getitem__(self, index):
         if self.use_frame:
-            return self.get_frames_item(self.file_name[index])
+            frames, labels = self.get_frames_item(self.file_name[index])
+            if self.normalization is not None and self.normalization != 'frequency':
+                frames = spikingjelly.datasets.normalize_frame(frames, self.normalization)
+            return frames, labels
         else:
             return self.get_events_item(self.file_name[index])
 
