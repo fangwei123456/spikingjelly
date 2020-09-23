@@ -44,7 +44,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     .. math::
 
         j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
-        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), &j < M - 1 \\cr N - 1, &j = M - 1 \\end{cases} \\\\
+        j_{r} & = \\mathrm{min} ([\\frac{N}{M}] \\cdot (j + 1), N) \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     其中 :math:`\\mathcal{I}` 为示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时为1，否则为0。
@@ -98,7 +98,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     .. math::
 
         j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
-        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), &j < M - 1 \\cr N - 1, &j = M - 1 \\end{cases} \\\\
+        j_{r} & = \\mathrm{min} ([\\frac{N}{M}] \\cdot (j + 1), N) \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     where :math:`\\mathcal{I}` is the characteristic function，if and only if :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`,
@@ -125,83 +125,106 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
         F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\sum_{a, b} F(j, p, a, b)}
     '''
     frames = np.zeros(shape=[frames_num, 2, height, width])
+
+    frames = frames.reshape((frames_num, 2, -1))
     eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
 
+    # 创建j_{l}和j_{r}
+    j_l = np.zeros(shape=[frames_num], dtype=int)
+    j_r = np.zeros(shape=[frames_num], dtype=int)
     if split_by == 'time':
-        # 按照脉冲的发生时刻进行等分
-        events['t'] -= events['t'][0]
-        dt = events['t'][-1] // frames_num
+        events['t'] -= events['t'][0]  # 时间从0开始
+        dt = events['t'][-1] // frames_num  # 每一段的持续时间
         t_interval = np.arange(dt, frames_num * dt, dt)  # frames_num - 1个元素
         # 在时间上，可以将event划分为frames_num段，分别是
         # [0, t_interval[0]), [t_interval[0], t_interval[1]), ...,
         # [t_interval[frames_num - 3], t_interval[frames_num - 2]), [t_interval[frames_num - 2], events['t'][-1])
         # 找出t_interval对应的索引
         index_list = np.searchsorted(events['t'], t_interval).tolist()
-        index_l = 0
+
         for i in range(frames_num):
+            if i == 0:
+                j_l[i] = 0
+            else:
+                j_l[i] = j_r[i - 1]
+
             if i == frames_num - 1:
-                index_r = events['t'].shape[0]
+                j_r[i] = events['t'].shape[0]
             else:
-                index_r = index_list[i]
-
-            frames[i, 0, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += (1 - events['p'][index_l:index_r])
-            frames[i, 1, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += events['p'][index_l:index_r]
-
-
-            if normalization == 'frequency':
-                frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
-            elif normalization == 'max':
-                frames[i][0] /= max(frames[i][0].max(), eps)
-                frames[i][1] /= max(frames[i][1].max(), eps)
-            elif normalization == 'norm':
-                frames[i][0] = (frames[i][0] - frames[i][0].mean()) / np.sqrt(max(frames[i][0].var(), eps))
-                frames[i][1] = (frames[i][1] - frames[i][1].mean()) / np.sqrt(max(frames[i][1].var(), eps))
-            elif normalization == 'sum':
-                frames[i][0] /= max(frames[i][0].sum(), eps)
-                frames[i][1] /= max(frames[i][1].sum(), eps)
-            elif normalization is None or normalization == 'None':
-                pass
-            else:
-                raise NotImplementedError
-            index_l = index_r
-        return frames
+                j_r[i] = index_list[i]
 
     elif split_by == 'number':
-        # 按照脉冲数量进行等分
-        dt = events['t'].shape[0] // frames_num
+        di = events['t'].size // frames_num
         for i in range(frames_num):
-            # 将events在t维度分割成frames_num段
-            index_l = i * dt
-            if i == frames_num - 1:
-                index_r = events['t'].shape[0]
-            else:
-                index_r = index_l + dt
-            frames[i, 0, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += (1 - events['p'][index_l:index_r])
-            frames[i, 1, events['y'][index_l:index_r], events['x'][index_l:index_r]] \
-                += events['p'][index_l:index_r]
-            
-            if normalization == 'frequency':
-                frames[i] /= (events['t'][index_r - 1] - events['t'][index_l])  # 表示脉冲发放的频率
-            elif normalization == 'max':
-                frames[i][0] /= max(frames[i][0].max(), eps)
-                frames[i][1] /= max(frames[i][1].max(), eps)
-            elif normalization == 'norm':
-                frames[i][0] = (frames[i][0] - frames[i][0].mean()) / np.sqrt(max(frames[i][0].var(), eps))
-                frames[i][1] = (frames[i][1] - frames[i][1].mean()) / np.sqrt(max(frames[i][1].var(), eps))
-            elif normalization == 'sum':
-                frames[i][0] /= max(frames[i][0].sum(), eps)
-                frames[i][1] /= max(frames[i][1].sum(), eps)
-            elif normalization is None or normalization == 'None':
-                pass
-            else:
-                raise NotImplementedError
-        return frames
-
+            j_l[i] = i * di
+            j_r[i] = min(j_l[i] + di, events['t'].size)
     else:
         raise NotImplementedError
+
+    # 开始累计脉冲
+    # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
+    # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
+    # height = 3
+    # width = 3
+    # frames = np.zeros(shape=[2, height, width])
+    # events = {
+    #     'x': np.asarray([1, 2, 1, 1]),
+    #     'y': np.asarray([1, 1, 1, 2]),
+    #     'p': np.asarray([0, 1, 0, 1])
+    # }
+    #
+    # frames[0, events['y'], events['x']] += (1 - events['p'])
+    # frames[1, events['y'], events['x']] += events['p']
+    # print('wrong accumulation\n', frames)
+    #
+    # frames = np.zeros(shape=[2, height, width])
+    # for i in range(events['p'].__len__()):
+    #     frames[events['p'][i], events['y'][i], events['x'][i]] += 1
+    # print('correct accumulation\n', frames)
+    #
+    # frames = np.zeros(shape=[2, height, width])
+    # frames = frames.reshape(2, -1)
+    #
+    # mask = [events['p'] == 0]
+    # mask.append(np.logical_not(mask[0]))
+    # for i in range(2):
+    #     position = events['y'][mask[i]] * height + events['x'][mask[i]]
+    #     events_number_per_pos = np.bincount(position)
+    #     idx = np.arange(events_number_per_pos.size)
+    #     frames[i][idx] += events_number_per_pos
+    # frames = frames.reshape(2, height, width)
+    # print('correct accumulation by bincount\n', frames)
+
+    for i in range(frames_num):
+        x = events['x'][j_l[i]:j_r[i]]
+        y = events['y'][j_l[i]:j_r[i]]
+        p = events['p'][j_l[i]:j_r[i]]
+        mask = []
+        mask.append(p == 0)
+        mask.append(np.logical_not(mask[0]))
+        for j in range(2):
+            position = y[mask[j]] * height + x[mask[j]]
+            events_number_per_pos = np.bincount(position)
+            frames[i][np.arange(events_number_per_pos.size)] += events_number_per_pos
+
+        if normalization == 'frequency':
+            frames[i] /= (events['t'][j_l[i] - 1] - events['t'][j_r[i]])  # 表示脉冲发放的频率
+        elif normalization == 'max':
+            frames[i][0] /= max(frames[i][0].max(), eps)
+            frames[i][1] /= max(frames[i][1].max(), eps)
+        elif normalization == 'norm':
+            frames[i][0] = (frames[i][0] - frames[i][0].mean()) / np.sqrt(max(frames[i][0].var(), eps))
+            frames[i][1] = (frames[i][1] - frames[i][1].mean()) / np.sqrt(max(frames[i][1].var(), eps))
+        elif normalization == 'sum':
+            frames[i][0] /= max(frames[i][0].sum(), eps)
+            frames[i][1] /= max(frames[i][1].sum(), eps)
+        elif normalization is None or normalization == 'None':
+            pass
+        else:
+            raise NotImplementedError
+
+    frames = frames.reshape((frames_num, 2, height, width))
+    return frames
 
 def convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, suffix, read_function, height, width,
                                               frames_num=10, split_by='time', normalization=None, thread_num=1, compress=False):
