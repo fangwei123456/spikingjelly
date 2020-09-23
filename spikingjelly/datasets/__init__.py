@@ -34,9 +34,9 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     .. math::
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
-        j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
-        j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
+        \\Delta T & = [\\frac{t_{N-1} - t_{0} + 1}{M}] \\\\
+        j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
+        j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     若划分方式 ``split_by`` 为 ``'number'``，则
@@ -44,7 +44,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     .. math::
 
         j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
-        j_{r} & = \\mathrm{min} ([\\frac{N}{M}] \\cdot (j + 1), N) \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}\\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     其中 :math:`\\mathcal{I}` 为示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时为1，否则为0。
@@ -88,9 +88,9 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     .. math::
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
-        j_{l} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot j\\} \\\\
-        j_{r} & = \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} \\leq t_{0} + \\Delta T \\cdot (j + 1)\\} \\\\
+        \\Delta T & = [\\frac{t_{N-1} - t_{0} + 1}{M}] \\\\
+        j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
+        j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     If ``split_by`` is ``'number'``, then
@@ -98,7 +98,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     .. math::
 
         j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
-        j_{r} & = \\mathrm{min} ([\\frac{N}{M}] \\cdot (j + 1), N) \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}\\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
 
     where :math:`\\mathcal{I}` is the characteristic function，if and only if :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`,
@@ -133,30 +133,21 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     j_r = np.zeros(shape=[frames_num], dtype=int)
     if split_by == 'time':
         events['t'] -= events['t'][0]  # 时间从0开始
-        dt = events['t'][-1] // frames_num  # 每一段的持续时间
-        t_interval = np.arange(dt, frames_num * dt, dt)  # frames_num - 1个元素
-        # 在时间上，可以将event划分为frames_num段，分别是
-        # [0, t_interval[0]), [t_interval[0], t_interval[1]), ...,
-        # [t_interval[frames_num - 3], t_interval[frames_num - 2]), [t_interval[frames_num - 2], events['t'][-1])
-        # 找出t_interval对应的索引
-        index_list = np.searchsorted(events['t'], t_interval).tolist()
-
+        dt = (events['t'][-1] + 1) // frames_num  # 每一段的持续时间
+        idx = np.arange(events['t'].size)
         for i in range(frames_num):
-            if i == 0:
-                j_l[i] = 0
-            else:
-                j_l[i] = j_r[i - 1]
-
-            if i == frames_num - 1:
-                j_r[i] = events['t'].shape[0]
-            else:
-                j_r[i] = index_list[i]
+            t_l = dt * i
+            t_r = t_l + dt
+            mask = np.logical_and(events['t'] >= t_l, events['t'] < t_r)
+            idx_masked = idx[mask]
+            j_l[i] = idx_masked[0]
+            j_r[i] = idx_masked[-1] + 1 if i < frames_num - 1 else events['t'].size
 
     elif split_by == 'number':
         di = events['t'].size // frames_num
         for i in range(frames_num):
             j_l[i] = i * di
-            j_r[i] = min(j_l[i] + di, events['t'].size)
+            j_r[i] = j_l[i] + di if i < frames_num - 1 else events['t'].size
     else:
         raise NotImplementedError
 
