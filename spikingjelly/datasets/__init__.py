@@ -4,7 +4,7 @@ import numpy as np
 import threading
 import zipfile
 from torchvision.datasets import utils
-
+import torch
 class FunctionThread(threading.Thread):
     def __init__(self, f, *args, **kwargs):
         super().__init__()
@@ -127,7 +127,6 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     frames = np.zeros(shape=[frames_num, 2, height, width])
 
     frames = frames.reshape((frames_num, 2, -1))
-    eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
 
     # 创建j_{l}和j_{r}
     j_l = np.zeros(shape=[frames_num], dtype=int)
@@ -209,21 +208,29 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
         if normalization == 'frequency':
             frames[i] /= (events['t'][j_l[i] - 1] - events['t'][j_r[i]])  # 表示脉冲发放的频率
-        elif normalization == 'max':
+        # 其他的normalization方法，在数据集类读取数据的时候进行通过调用normalize_frame(frames: np.ndarray, normalization: str)
+        # 函数操作，而不是在转换数据的时候进行
+
+    frames = frames.reshape((frames_num, 2, height, width))
+    return frames
+
+def normalize_frame(frames: np.ndarray or torch.Tensor, normalization: str):
+    eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
+    for i in range(frames.shape[0]):
+        if normalization == 'max':
             frames[i][0] /= max(frames[i][0].max(), eps)
             frames[i][1] /= max(frames[i][1].max(), eps)
+
         elif normalization == 'norm':
             frames[i][0] = (frames[i][0] - frames[i][0].mean()) / np.sqrt(max(frames[i][0].var(), eps))
             frames[i][1] = (frames[i][1] - frames[i][1].mean()) / np.sqrt(max(frames[i][1].var(), eps))
+
         elif normalization == 'sum':
             frames[i][0] /= max(frames[i][0].sum(), eps)
             frames[i][1] /= max(frames[i][1].sum(), eps)
-        elif normalization is None or normalization == 'None':
-            pass
+
         else:
             raise NotImplementedError
-
-    frames = frames.reshape((frames_num, 2, height, width))
     return frames
 
 def convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, suffix, read_function, height, width,
