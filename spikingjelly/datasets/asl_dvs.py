@@ -150,8 +150,13 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
         self.data_dir = None
 
         if use_frame:
+            self.normalization = normalization
+            if normalization == 'frequency':
+                dir_suffix = normalization
+            else:
+                dir_suffix = None
             frames_root = os.path.join(root,
-                                       f'frames_num_{frames_num}_split_by_{split_by}_normalization_{normalization}')
+                                       f'frames_num_{frames_num}_split_by_{split_by}_normalization_{dir_suffix}')
             if os.path.exists(frames_root):
                 # 如果root目录下存在frames_root目录，且frames_root下有10个子文件夹，则认为数据集文件存在
                 print(f'frames data root {frames_root} already exists.')
@@ -178,7 +183,10 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
 
     def __getitem__(self, index):
         if self.use_frame:
-            return self.get_frames_item(self.file_name[index] + '.npz')
+            frames, labels = self.get_frames_item(self.file_name[index] + '.npz')
+            if self.normalization is not None and self.normalization != 'frequency':
+                frames = spikingjelly.datasets.normalize_frame(frames, self.normalization)
+            return frames, labels
         else:
             return self.get_events_item(self.file_name[index] + '.mat')
 
