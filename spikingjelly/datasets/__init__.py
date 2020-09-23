@@ -34,7 +34,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     .. math::
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0} + 1}{M}] \\\\
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
         j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
@@ -88,7 +88,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     .. math::
 
-        \\Delta T & = [\\frac{t_{N-1} - t_{0} + 1}{M}] \\\\
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
         j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases} \\\\
         F(j, p, x, y) & = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I_{p, x, y}(p_{i}, x_{i}, y_{i})}
@@ -133,7 +133,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     j_r = np.zeros(shape=[frames_num], dtype=int)
     if split_by == 'time':
         events['t'] -= events['t'][0]  # 时间从0开始
-        dt = (events['t'][-1] + 1) // frames_num  # 每一段的持续时间
+        dt = events['t'][-1] // frames_num  # 每一段的持续时间
         idx = np.arange(events['t'].size)
         for i in range(frames_num):
             t_l = dt * i
