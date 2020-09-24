@@ -44,6 +44,14 @@ spikingjelly.datasets.nav\_gesture module
    :undoc-members:
    :show-inheritance:
 
+spikingjelly.datasets.utils.module
+-----------------------------------------
+
+.. automodule:: spikingjelly.datasets.utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 
 Module contents
 ---------------

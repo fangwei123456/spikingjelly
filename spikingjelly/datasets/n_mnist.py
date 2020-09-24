@@ -1,4 +1,9 @@
-import spikingjelly.datasets
+from .utils import (
+    EventsFramesDatasetBase, 
+    convert_events_dir_to_frames_dir,
+    FunctionThread,
+    normalize_frame,
+) 
 import os
 import numpy as np
 import torch
@@ -12,7 +17,7 @@ resource = {
 }
 
 
-class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
+class NMNIST(EventsFramesDatasetBase):
 
     @staticmethod
     def get_wh():
@@ -81,8 +86,8 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
                 source_sub_dir = os.path.join(source_dir, sub_dir)
                 target_sub_dir = os.path.join(target_dir, sub_dir)
                 os.mkdir(target_sub_dir)
-                thread_list.append(spikingjelly.datasets.FunctionThread(
-                    spikingjelly.datasets.convert_events_dir_to_frames_dir,
+                thread_list.append(FunctionThread(
+                    convert_events_dir_to_frames_dir,
                     source_sub_dir, target_sub_dir, '.bin',
                     NMNIST.read_bin, height, width, frames_num, split_by, normalization))
                 thread_list[-1].start()
@@ -121,7 +126,7 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
         Neuromorphic-MNIST数据集，出自 `Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades <https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full>`_，
         数据来源于ATIS相机拍摄的显示器上的MNIST图片。原始数据的原始下载地址参见 https://www.garrickorchard.com/datasets/n-mnist。
 
-        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.integrate_events_to_frames`。
+        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
         '''
         super().__init__()
         self.train = train
@@ -161,7 +166,7 @@ class NMNIST(spikingjelly.datasets.EventsFramesDatasetBase):
         if self.use_frame:
             frames, labels = self.get_frames_item(self.file_name[index])
             if self.normalization is not None and self.normalization != 'frequency':
-                frames = spikingjelly.datasets.normalize_frame(frames, self.normalization)
+                frames = normalize_frame(frames, self.normalization)
             return frames, labels
         else:
             return self.get_events_item(self.file_name[index])

@@ -1,4 +1,9 @@
-import spikingjelly.datasets
+from .utils import (
+    EventsFramesDatasetBase, 
+    convert_events_dir_to_frames_dir,
+    FunctionThread,
+    normalize_frame,
+)
 import os
 import tqdm
 import numpy as np
@@ -38,7 +43,7 @@ resource = ['https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CA
             '8b46191acf6c1760ad3f2d2cb4380e24']
 
 
-class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
+class ASLDVS(EventsFramesDatasetBase):
     @staticmethod
     def get_wh():
         return 240, 180
@@ -96,7 +101,7 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
                 print(f'mkdir {abs_target_dir}')
             print(f'thread {thread_list.__len__()} convert events data in {abs_source_dir} to {abs_target_dir}')
             thread_list.append(
-                spikingjelly.datasets.FunctionThread(spikingjelly.datasets.convert_events_dir_to_frames_dir,
+                FunctionThread(convert_events_dir_to_frames_dir,
                                                      abs_source_dir, abs_target_dir, '.mat', ASLDVS.read_bin,
                                                      height, width, frames_num, split_by, normalization, 1, True))
             # 文件数量太多，体积太大，因此采用压缩格式
@@ -135,7 +140,7 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
         包含24个英文字母（从A到Y，排除J）的美国手语，American Sign Language (ASL)。更多信息参见 https://github.com/PIX2NVS/NVS2Graph，
         原始数据的下载地址为 https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CAa?dl=0。
 
-        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.integrate_events_to_frames`。
+        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
         '''
         super().__init__()
         self.train = train
@@ -185,7 +190,7 @@ class ASLDVS(spikingjelly.datasets.EventsFramesDatasetBase):
         if self.use_frame:
             frames, labels = self.get_frames_item(self.file_name[index] + '.npz')
             if self.normalization is not None and self.normalization != 'frequency':
-                frames = spikingjelly.datasets.normalize_frame(frames, self.normalization)
+                frames = normalize_frame(frames, self.normalization)
             return frames, labels
         else:
             return self.get_events_item(self.file_name[index] + '.mat')
