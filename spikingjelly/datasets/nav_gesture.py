@@ -1,4 +1,9 @@
-import spikingjelly
+from .utils import (
+    EventsFramesDatasetBase, 
+    convert_events_dir_to_frames_dir,
+    FunctionThread,
+    normalize_frame,
+) 
 import os
 import numpy as np
 from torchvision.datasets import utils
@@ -21,7 +26,7 @@ labels_dict = {
 }
 
 
-class NAVGesture(spikingjelly.datasets.EventsFramesDatasetBase):
+class NAVGesture(EventsFramesDatasetBase):
     @staticmethod
     def get_wh():
         return 304, 240
@@ -90,7 +95,7 @@ class NAVGesture(spikingjelly.datasets.EventsFramesDatasetBase):
                 os.mkdir(abs_target_dir)
                 print(f'mkdir {abs_target_dir}')
             print(f'thread {thread_list.__len__()} convert events data in {abs_source_dir} to {abs_target_dir}')
-            thread_list.append(spikingjelly.datasets.FunctionThread(spikingjelly.datasets.convert_events_dir_to_frames_dir,
+            thread_list.append(FunctionThread(convert_events_dir_to_frames_dir,
                 abs_source_dir, abs_target_dir, '.dat', NAVGesture.read_bin, height, width, frames_num, split_by, normalization))
             thread_list[-1].start()
         for i in range(thread_list.__len__()):
@@ -116,7 +121,7 @@ class NAVGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         NavGesture 数据集，出自 `Event-based Visual Gesture Recognition with Background Suppression running on a smart-phone <https://www.neuromorphic-vision.com/public/publications/57/publication.pdf>`_，
         数据来源于ATIS相机拍摄的手势。原始数据的原始下载地址参见 https://www.neuromorphic-vision.com/public/downloads/navgesture/。
 
-        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.integrate_events_to_frames`。
+        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
         '''
         super().__init__()
         # depend on loris
@@ -158,7 +163,7 @@ class NAVGesture(spikingjelly.datasets.EventsFramesDatasetBase):
         if self.use_frame:
             frames, labels = self.get_frames_item(self.file_name[index])
             if self.normalization is not None and self.normalization != 'frequency':
-                frames = spikingjelly.datasets.normalize_frame(frames, self.normalization)
+                frames = normalize_frame(frames, self.normalization)
             return frames, labels
         else:
             return self.get_events_item(self.file_name[index])

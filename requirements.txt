@@ -3,3 +3,6 @@ matplotlib
 numpy
 tqdm
 torchvision
+torchaudio
+loris
+scipy

@@ -24,7 +24,7 @@ copyright = '2020, PKU MLG'
 author = 'PKU MLG'
 
 # The full version, including alpha/beta/rc tags
-release = '0.2.2'
+release = '0.0.0.0.001'
 
 
 # -- General configuration ---------------------------------------------------
