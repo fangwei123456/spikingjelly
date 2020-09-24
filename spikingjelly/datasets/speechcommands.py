@@ -9,10 +9,7 @@ from torchaudio.datasets.utils import (
     extract_archive,
     walk_files
 )
-from torchvision.datasets.utils import (
-    verify_str_arg,
-    list_dir
-)
+from torchvision.datasets.utils import verify_str_arg
 
 FOLDER_IN_ARCHIVE = "SpeechCommands"
 URL = "speech_commands_v0.02"
@@ -43,17 +40,34 @@ def load_speechcommands_item(filepath: str, path: str) -> Tuple[Tensor, int, str
 
 
 class SPEECHCOMMANDS(Dataset):
-    """
-    Create a Dataset for Speech Commands. Each item is a tuple of the form:
-    waveform, sample_rate, label, speaker_id, utterance_number
-    """
-
     def __init__(self,
                  root: str,
                  url: str = URL,
                  split: str = "train",
                  folder_in_archive: str = FOLDER_IN_ARCHIVE,
                  download: bool = False) -> None:
+        '''
+        :param root: 数据集的根目录
+        :type root: str
+        :param url: 数据集版本，默认为v0.02
+        :type url: str, optional
+        :param split: 数据集划分，可以是 ``"train", "test", "val"``，默认为 ``"train"``
+        :type split: str, optional
+        :param folder_in_archive: 解压后的目录名称，默认为``"SpeechCommands"``
+        :type folder_in_archive: str, optional
+        :param download: 是否下载数据，默认为False
+        :type download: bool, optional
+
+        SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_，包含v0.01与v0.02两个版本。
+
+        数据集包含两大类指令的音频：
+
+        #. 核心单词，共10个："Yes", "No", "Up", "Down", "Left", "Right", "On", "Off", "Stop", "Go", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine".
+
+        #. 附加单词，共10个："Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
+
+        v0.01版本包含共计64,727个音频数据，v0.02版本包含共计105,829个音频数据。更详细的介绍参见前述论文，以及数据集的README。
+        '''
 
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
         

@@ -82,7 +82,7 @@ napoleon_use_ivar = True
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-#autodoc_mock_imports = ['torch', 'numpy', 'torchvision']
+autodoc_mock_imports = ['loris']
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False
