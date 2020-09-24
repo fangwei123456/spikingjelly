@@ -107,12 +107,13 @@ class ASLDVS(EventsFramesDatasetBase):
             # 文件数量太多，体积太大，因此采用压缩格式
 
         # 这个数据集的文件夹数量24，一次启动24个线程太多，因此一次只启动max_running_threads个线程
-        max_running_threads = multiprocessing.cpu_count()
+        max_running_threads = max(multiprocessing.cpu_count(), 8)
         for i in range(0, thread_list.__len__(), max_running_threads):
             for j in range(i, min(i + max_running_threads, thread_list.__len__())):
                 thread_list[j].start()
                 print(f'thread {j} start')
             for j in range(i, min(i + max_running_threads, thread_list.__len__())):
+                print('thread', j, 'join')
                 thread_list[j].join()
                 print('thread', j, 'finished')
 
