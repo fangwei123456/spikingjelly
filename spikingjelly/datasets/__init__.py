@@ -124,15 +124,14 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     .. math::
         F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\sum_{a, b} F(j, p, a, b)}
     '''
-    frames = np.zeros(shape=[frames_num, 2, height, width])
-
-    frames = frames.reshape((frames_num, 2, -1))
+    frames = np.zeros(shape=[frames_num, 2, height * width])
 
     # 创建j_{l}和j_{r}
     j_l = np.zeros(shape=[frames_num], dtype=int)
     j_r = np.zeros(shape=[frames_num], dtype=int)
     if split_by == 'time':
         events['t'] -= events['t'][0]  # 时间从0开始
+        assert events['t'][-1] > frames_num
         dt = events['t'][-1] // frames_num  # 每一段的持续时间
         idx = np.arange(events['t'].size)
         for i in range(frames_num):
@@ -195,15 +194,13 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
         for j in range(2):
             position = y[mask[j]] * height + x[mask[j]]
             events_number_per_pos = np.bincount(position)
-            frames[i][np.arange(events_number_per_pos.size)] += events_number_per_pos
+            frames[i][j][np.arange(events_number_per_pos.size)] += events_number_per_pos
 
         if normalization == 'frequency':
-            frames[i] /= (events['t'][j_l[i] - 1] - events['t'][j_r[i]])  # 表示脉冲发放的频率
+            frames[i] /= (events['t'][j_r[i] - 1] - events['t'][j_l[i]])  # 表示脉冲发放的频率
         # 其他的normalization方法，在数据集类读取数据的时候进行通过调用normalize_frame(frames: np.ndarray, normalization: str)
         # 函数操作，而不是在转换数据的时候进行
-
-    frames = frames.reshape((frames_num, 2, height, width))
-    return frames
+    return frames.reshape((frames_num, 2, height, width))
 
 def normalize_frame(frames: np.ndarray or torch.Tensor, normalization: str):
     eps = 1e-5  # 涉及到除法的地方，被除数加上eps，防止出现除以0
