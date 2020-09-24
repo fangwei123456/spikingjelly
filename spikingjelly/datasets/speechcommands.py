@@ -53,7 +53,7 @@ class SPEECHCOMMANDS(Dataset):
         :type url: str, optional
         :param split: 数据集划分，可以是 ``"train", "test", "val"``，默认为 ``"train"``
         :type split: str, optional
-        :param folder_in_archive: 解压后的目录名称，默认为``"SpeechCommands"``
+        :param folder_in_archive: 解压后的目录名称，默认为 ``"SpeechCommands"``
         :type folder_in_archive: str, optional
         :param download: 是否下载数据，默认为False
         :type download: bool, optional
@@ -62,7 +62,7 @@ class SPEECHCOMMANDS(Dataset):
 
         数据集包含两大类指令的音频：
 
-        #. 核心单词，共10个："Yes", "No", "Up", "Down", "Left", "Right", "On", "Off", "Stop", "Go", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine".
+        #. 核心单词，共20个："Yes", "No", "Up", "Down", "Left", "Right", "On", "Off", "Stop", "Go", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine".
 
         #. 附加单词，共10个："Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
 
