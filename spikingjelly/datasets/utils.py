@@ -70,7 +70,7 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     .. math::
         F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{\\sum_{a, b} F(j, p, a, b)}
 
-* :ref:`中文API <integrate_events_to_frames.__init__-cn>`
+    * :ref:`中文API <integrate_events_to_frames.__init__-cn>`
 
     .. _integrate_events_to_frames.__init__-en:
 
