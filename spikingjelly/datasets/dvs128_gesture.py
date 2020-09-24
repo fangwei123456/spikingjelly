@@ -1,4 +1,9 @@
-import spikingjelly.datasets
+from .utils import (
+    EventsFramesDatasetBase, 
+    convert_events_dir_to_frames_dir,
+    FunctionThread,
+    normalize_frame,
+)
 import os
 import tqdm
 import numpy as np
@@ -26,7 +31,7 @@ labels_dict = {
 # url md5
 resource = ['https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '8a5c71fb11e24e5ca5b11866ca6c00a1']
 
-class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
+class DVS128Gesture(EventsFramesDatasetBase):
     @staticmethod
     def get_wh():
         return 128, 128
@@ -178,12 +183,12 @@ class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
         thread_list = []
         for i in range(thread_num - 1):
 
-            thread_list.append(spikingjelly.datasets.FunctionThread(cvt_files_fun, train_list[i * block: (i + 1) * block], events_npy_train_root))
+            thread_list.append(FunctionThread(cvt_files_fun, train_list[i * block: (i + 1) * block], events_npy_train_root))
             print(f'thread {i} start')
             thread_list[-1].start()
 
         # 测试集再单独作为一个线程
-        thread_list.append(spikingjelly.datasets.FunctionThread(cvt_files_fun, test_list, events_npy_test_root))
+        thread_list.append(FunctionThread(cvt_files_fun, test_list, events_npy_test_root))
         print(f'thread {thread_num - 1} start')
         thread_list[-1].start()
 
@@ -213,7 +218,7 @@ class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
         width, height = DVS128Gesture.get_wh()
         def read_fun(file_name):
             return np.load(file_name, allow_pickle=True).item()
-        spikingjelly.datasets.convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, '.npy',
+        convert_events_dir_to_frames_dir(events_data_dir, frames_data_dir, '.npy',
                                                                read_fun, height, width, frames_num, split_by,
                                                                normalization, thread_num=4)
 
@@ -246,7 +251,7 @@ class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
         DVS128 Gesture数据集，出自 `A Low Power, Fully Event-Based Gesture Recognition System <https://openaccess.thecvf.com/content_cvpr_2017/papers/Amir_A_Low_Power_CVPR_2017_paper.pdf>`_，
         数据来源于DVS相机拍摄的手势。原始数据的原始下载地址参见 https://www.research.ibm.com/dvsgesture/。
 
-        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.integrate_events_to_frames`。
+        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
         '''
         super().__init__()
         events_npy_root = os.path.join(root, 'events_npy')
@@ -317,7 +322,7 @@ class DVS128Gesture(spikingjelly.datasets.EventsFramesDatasetBase):
         if self.use_frame:
             frames, labels = self.get_frames_item(self.file_name[index])
             if self.normalization is not None and self.normalization != 'frequency':
-                frames = spikingjelly.datasets.normalize_frame(frames, self.normalization)
+                frames = normalize_frame(frames, self.normalization)
             return frames, labels
         else:
             return self.get_events_item(self.file_name[index])
