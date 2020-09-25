@@ -50,10 +50,19 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
 
     其中 :math:`\\mathcal{I}` 为示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时为1，否则为0。
 
-    若 ``normalization`` 为 ``'frequency'`` 则
+    若 ``normalization`` 为 ``'frequency'``，
 
-    .. math::
-        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{t_{j_{r}} - t_{j_{l}}}
+        若 ``split_by`` 为 ``time`` 则
+
+            .. math::
+                F_{norm}(j, p, x, y) = \\begin{cases} \\frac{F(j, p, x, y)}{\\Delta T}, & j < M - 1
+                \\cr \\frac{F(j, p, x, y)}{\\Delta T + (t_{N-1} - t_{0}) \\bmod M}, & j = M - 1 \\end{cases}
+
+        若 ``split_by`` 为 ``number`` 则
+
+            .. math::
+                F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{t_{j_{r}} - t_{j_{l}}}
+
 
     若 ``normalization`` 为 ``'max'`` 则
 
@@ -105,10 +114,18 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
     where :math:`\\mathcal{I}` is the characteristic function，if and only if :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`,
     this function is identically 1 else 0.
 
-    If ``normalization`` is ``'frequency'``, then
+    If ``normalization`` is ``'frequency'``,
 
-    .. math::
-        F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{t_{j_{r}} - t_{j_{l}}}
+        if ``split_by`` is ``time``,
+
+            .. math::
+                F_{norm}(j, p, x, y) = \\begin{cases} \\frac{F(j, p, x, y)}{\\Delta T}, & j < M - 1
+                \\cr \\frac{F(j, p, x, y)}{\\Delta T + (t_{N-1} - t_{0}) \\bmod M}, & j = M - 1 \\end{cases}
+
+        if ``split_by`` is ``number``,
+
+            .. math::
+                F_{norm}(j, p, x, y) = \\frac{F(j, p, x, y)}{t_{j_{r}} - t_{j_{l}}}
 
     If ``normalization`` is ``'max'``, then
 
@@ -198,7 +215,17 @@ def integrate_events_to_frames(events, height, width, frames_num=10, split_by='t
             frames[i][j][np.arange(events_number_per_pos.size)] += events_number_per_pos
 
         if normalization == 'frequency':
-            frames[i] /= (events['t'][j_r[i] - 1] - events['t'][j_l[i]])  # 表示脉冲发放的频率
+            if split_by == 'time':
+                if i < frames_num - 1:
+                    frames[i] /= dt
+                else:
+                    frames[i] /= (dt + events['t'][-1] % frames_num)
+            elif split_by == 'number':
+                    frames[i] /= (events['t'][j_r[i]] - events['t'][j_l[i]])  # 表示脉冲发放的频率
+
+            else:
+                raise NotImplementedError
+
         # 其他的normalization方法，在数据集类读取数据的时候进行通过调用normalize_frame(frames: np.ndarray, normalization: str)
         # 函数操作，而不是在转换数据的时候进行
     return frames.reshape((frames_num, 2, height, width))
