@@ -28,7 +28,6 @@ TRAIN_RECORD = "training_list.txt"
 
 def load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str, str, int]:
     filepath = os.path.join(path, relpath)
-    print(filepath, relpath)
     label, filename = os.path.split(relpath)
     speaker, _ = os.path.splitext(filename)
 
