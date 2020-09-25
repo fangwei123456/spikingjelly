@@ -26,8 +26,9 @@ TEST_RECORD = "testing_list.txt"
 TRAIN_RECORD = "training_list.txt"
 
 
-def load_speechcommands_item(filepath: str, path: str) -> Tuple[Tensor, int, str, str, int]:
-    relpath = os.path.relpath(filepath, path)
+def load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str, str, int]:
+    filepath = os.path.join(path, relpath)
+    print(filepath, relpath)
     label, filename = os.path.split(relpath)
     speaker, _ = os.path.splitext(filename)
 
@@ -94,6 +95,8 @@ class SPEECHCOMMANDS(Dataset):
                     checksum = _CHECKSUMS.get(url, None)
                     download_url(url, root, hash_value=checksum, hash_type="md5")
                 extract_archive(archive, self._path)
+        elif not os.path.isdir(self._path):
+            raise FileNotFoundError("Audio data not found. Please specify \"download=True\" and try again.")
 
 
         if self.split == "train":
@@ -107,15 +110,17 @@ class SPEECHCOMMANDS(Dataset):
                 walker = filter(lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker)
                 walker = map(lambda w: os.path.relpath(w, self._path), walker)
 
+                walker = set(walker)
+
                 val_record = os.path.join(self._path, VAL_RECORD)
                 with open(val_record, 'r') as f:
-                    val_walker= list([line.rstrip('\n') for line in f])
+                    val_walker = set([line.rstrip('\n') for line in f])
 
                 test_record = os.path.join(self._path, TEST_RECORD)
                 with open(test_record, 'r') as f:
-                    test_walker = list([line.rstrip('\n') for line in f])
+                    test_walker = set([line.rstrip('\n') for line in f])
 
-                walker = filter(lambda w: w not in val_walker and w not in test_walker, walker)
+                walker = walker - val_walker - test_walker
                 self._walker = list(walker)
 
                 with open(record, 'w') as f:
