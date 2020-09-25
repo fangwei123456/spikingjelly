@@ -58,15 +58,17 @@ class SPEECHCOMMANDS(Dataset):
         :param download: 是否下载数据，默认为False
         :type download: bool, optional
 
-        SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_，包含v0.01与v0.02两个版本。
+        SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_，根据给出的测试集与验证集列表进行了划分，包含v0.01与v0.02两个版本。
 
-        数据集包含两大类指令的音频：
+        数据集包含三大类单词的音频：
 
-        #. 核心单词，共20个："Yes", "No", "Up", "Down", "Left", "Right", "On", "Off", "Stop", "Go", "Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine".
+        #. 指令单词，共10个，"Yes", "No", "Up", "Down", "Left", "Right", "On", "Off", "Stop", "Go". 对于v0.02，还额外增加了5个："Forward", "Backward", "Follow", "Learn", "Visual".
 
-        #. 附加单词，共10个："Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
+        #. 0~9的数字，共10个："One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine".
 
-        v0.01版本包含共计64,727个音频数据，v0.02版本包含共计105,829个音频数据。更详细的介绍参见前述论文，以及数据集的README。
+        #. 非关键词，可以视为干扰词，共10个："Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
+
+        v0.01版本包含共计30类，64,727个音频片段，v0.02版本包含共计35类，105,829个音频片段。更详细的介绍参见前述论文，以及数据集的README。
         '''
 
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
