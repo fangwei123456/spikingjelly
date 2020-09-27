@@ -189,5 +189,13 @@ SNN的训练代码如下，我们会保存训练过程中使得杆子持续时�
 训练好的SNN会控制CartPole的左右移动，直到游戏结束。``play`` 函数中会SNN中IF神经元在仿真期间的脉冲发放频率，以及输出层
 NonSpikingLIF神经元在最后时刻的电压：
 
-.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/0.*
+.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/max.*
+    :width: 100%
+
+下面的图片展示了训练20次、训练60次的效果：
+
+.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/20.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/60.*
     :width: 100%
