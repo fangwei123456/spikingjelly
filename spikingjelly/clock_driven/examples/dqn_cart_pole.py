@@ -207,11 +207,11 @@ def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None):
     with torch.no_grad():
         functional.set_monitor(policy_net, True)
         plt_v_lim = None
+        over_score = 1e9
         for i in count():
-            plt.clf()
+            # plt.clf()
             LIF_v = policy_net(state)  # shape=[1, 2]
             action = LIF_v.max(1)[1].view(1, 1).item()
-            plt.suptitle(f'Position={state[0][0].item(): .2f}, Velocity={state[0][1].item(): .2f}, Pole Angle={state[0][2].item(): .2f}, Pole Velocity At Tip={state[0][3].item(): .2f}, Score={i: }')
             plt.subplot2grid((2, 7), (1, 0), colspan=3)
             plt.xticks(np.arange(2), ('Left', 'Right'))
             plt.ylabel('Voltage')
@@ -231,9 +231,15 @@ def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None):
             plt.xlim(0, firing_rates.size)
             plt.ylim(0, 1.01)
             plt.bar(np.arange(firing_rates.size), firing_rates, width=0.5)
-
             functional.reset_net(policy_net)
+            subtitle = f'Position={state[0][0].item(): .2f}, Velocity={state[0][1].item(): .2f}, Pole Angle={state[0][2].item(): .2f}, Pole Velocity At Tip={state[0][3].item(): .2f}, Score={i}'
+
             state, reward, done, _ = env.step(action)
+            if done:
+                over_score = min(over_score, i)
+                subtitle = f'Game over, Score={over_score}'
+            plt.suptitle(subtitle)
+
             state = torch.from_numpy(state).float().to(device).unsqueeze(0)
             screen = env.render(mode='rgb_array').copy()
             screen[300, :, :] = 0
@@ -246,9 +252,7 @@ def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None):
             plt.pause(0.001)
             if i < save_fig_num:
                 plt.savefig(os.path.join(fig_dir, f'{i}.png'))
-            if done:
-                print('game over')
+            if done and i >= save_fig_num:
                 env.close()
                 plt.close()
                 break
-
