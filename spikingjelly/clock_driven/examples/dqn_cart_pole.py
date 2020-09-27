@@ -151,14 +151,15 @@ def train(device, root, hidden_num=128, num_episodes=256):
             memory.push(state, action, next_state, reward)
 
             state = next_state
+            if done and t + 1 > max_duration:
+                max_duration = t + 1
+                torch.save(policy_net.state_dict(), max_pt_path)
 
             optimize_model()
+
             if done:
                 print(f'i_episode={i_episode}, duration={t + 1}')
                 episode_durations.append(t + 1)
-                if t + 1 > max_duration:
-                    max_duration = t + 1
-                    torch.save(policy_net.state_dict(), max_pt_path)
                 break
         if i_episode % TARGET_UPDATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
@@ -216,7 +217,7 @@ def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None):
             plt.ylabel('Voltage')
             plt.title('Voltage of LIF neurons at last time step')
             if plt_v_lim is None:
-                plt_v_lim = LIF_v.max() + LIF_v.max() % 10
+                plt_v_lim = np.ceil(LIF_v.max() + LIF_v.max() % 10)
             plt.ylim(0, plt_v_lim)
             plt.bar(np.arange(2), LIF_v.squeeze(), color=['r', 'gray'] if action == 0 else ['gray', 'r'])
 
@@ -247,5 +248,7 @@ def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None):
                 plt.savefig(os.path.join(fig_dir, f'{i}.png'))
             if done:
                 print('game over')
+                env.close()
+                plt.close()
                 break
 
