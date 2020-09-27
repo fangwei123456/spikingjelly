@@ -901,4 +901,3 @@ class SpikingGRU(SpikingRNNBase):
     @staticmethod
     def states_num():
         return 1
-
