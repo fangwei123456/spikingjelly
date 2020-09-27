@@ -5,7 +5,6 @@ Tutorials
 .. toctree::
 
    tutorial_en.clock_driven
-   tutorial_en.ann2snn
 
 New Tutorials (not finished)
 ============================
