@@ -178,24 +178,26 @@ SNN的训练代码如下，我们会保存训练过程中使得杆子持续时�
 
 用训练好的网络玩CartPole
 ---------------------------
-我们从服务器上下载训练过程中使杆持续时间最长的模型 ``policy_net_256_max.pt``，在有图形界面的本机上运行 ``play`` 函数，用训练好
-的网络玩游戏。
+我们从服务器上下载训练过程中使杆持续时间最长的模型 ``policy_net_256_max.pt``，在有图形界面的本机上运行 ``play`` 函数，用训练了512次
+的网络来玩CartPole：
 
 .. code-block:: python
 
     >>> from spikingjelly.clock_driven.examples import dqn_cart_pole
-    >>> dqn_cart_pole.play(device='cpu', pt_path='./policy_net_256_max.pt', hidden_num=256)
+    >>> dqn_cart_pole.play(device='cpu', pt_path='./policy_net_256_max.pt', hidden_num=256, played_frames=300)
 
-训练好的SNN会控制CartPole的左右移动，直到游戏结束。``play`` 函数中会SNN中IF神经元在仿真期间的脉冲发放频率，以及输出层
-NonSpikingLIF神经元在最后时刻的电压：
+训练好的SNN会控制CartPole的左右移动，直到游戏结束或持续帧数超过 ``played_frames``。``play`` 函数中会画出SNN中IF神经元在仿真期间的脉
+冲发放频率，以及输出层NonSpikingLIF神经元在最后时刻的电压：
 
-.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/max.*
+.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/512@66.*
     :width: 100%
 
-下面的图片展示了训练20次、训练60次的效果：
+训练16次的效果：
 
-.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/20.*
+.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/16@66.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/60.*
+训练32次的效果：
+
+.. image:: ../_static/tutorials/clock_driven/\6_rl_cart_pole/32@66.*
     :width: 100%
