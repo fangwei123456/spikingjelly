@@ -191,7 +191,7 @@ def train(device, root, hidden_num=128, num_episodes=256):
     # complete
     # state_dict path is./ policy_net_256.pt
 
-def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None, figsize=(12, 6), firing_rates_plot_type='bar', heatmap_shape=None):
+def play(device, pt_path, hidden_num, played_frames=60, save_fig_num=0, fig_dir=None, figsize=(12, 6), firing_rates_plot_type='bar', heatmap_shape=None):
     import numpy as np
     from matplotlib import pyplot as plt
     import matplotlib.ticker
@@ -276,7 +276,7 @@ def play(device, pt_path, hidden_num, save_fig_num=0, fig_dir=None, figsize=(12,
             plt.pause(0.001)
             if i < save_fig_num:
                 plt.savefig(os.path.join(fig_dir, f'{i}.png'))
-            if done and i >= save_fig_num:
+            if done and i >= played_frames:
                 env.close()
                 plt.close()
                 break
