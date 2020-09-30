@@ -5,7 +5,7 @@ from spikingjelly.clock_driven import surrogate, accelerating, layer
 import math
 
 class BaseNode(nn.Module):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False, monitor_state=False):
         '''
         * :ref:`API in English <BaseNode.__init__-en>`
 
@@ -17,6 +17,8 @@ class BaseNode(nn.Module):
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离
 
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
             若为 ``True``，则 ``self.monitor`` 是一个字典，键包括 ``v`` 和 ``s``，分别记录电压和输出脉冲。
@@ -36,6 +38,10 @@ class BaseNode(nn.Module):
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
+        :param detach_reset: whether detach the computation graph of reset
+
+        :param detach_reset: whether detach the computation graph of reset 
+        
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
@@ -46,6 +52,7 @@ class BaseNode(nn.Module):
         super().__init__()
         self.v_threshold = v_threshold
         self.v_reset = v_reset
+        self.detach_reset = detach_reset
         if self.v_reset is None:
             self.v = 0
         else:
@@ -57,9 +64,7 @@ class BaseNode(nn.Module):
             self.monitor = False
 
     def extra_repr(self):
-        return 'v_threshold={}, v_reset={}'.format(
-            self.v_threshold, self.v_reset
-        )
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
 
     def set_monitor(self, monitor_state=True):
         '''
@@ -107,6 +112,7 @@ class BaseNode(nn.Module):
         Calculate out spikes of neurons and update neurons' voltage by their current voltage, threshold voltage and reset voltage.
 
         '''
+        
         spike = self.surrogate_function(self.v - self.v_threshold)
         if self.monitor:
             if self.monitor['v'].__len__() == 0:
@@ -119,16 +125,21 @@ class BaseNode(nn.Module):
             self.monitor['v'].append(self.v.data.cpu().numpy().copy())
             self.monitor['s'].append(spike.data.cpu().numpy().copy())
 
+        if self.detach_reset:
+            spike_d = spike.detach()
+        else:
+            spike_d = spike
+            
         if self.v_reset is None:
             if self.surrogate_function.spiking:
-                self.v = accelerating.soft_voltage_transform(self.v, spike, self.v_threshold)
+                self.v = accelerating.soft_voltage_transform(self.v, spike_d, self.v_threshold)
             else:
-                self.v = self.v - spike * self.v_threshold
+                self.v = self.v - spike_d * self.v_threshold
         else:
             if self.surrogate_function.spiking:
-                self.v = accelerating.hard_voltage_transform(self.v, spike, self.v_reset)
+                self.v = accelerating.hard_voltage_transform(self.v, spike_d, self.v_reset)
             else:
-                self.v = self.v * (1 - spike) + self.v_reset * spike
+                self.v = self.v * (1 - spike_d) + self.v_reset * spike_d
 
         if self.monitor:
             self.monitor['v'].append(self.v.data.cpu().numpy().copy())
@@ -190,7 +201,7 @@ class BaseNode(nn.Module):
 
 
 class IFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False, monitor_state=False):
         '''
         * :ref:`API in English <IFNode.__init__-en>`
 
@@ -202,6 +213,8 @@ class IFNode(BaseNode):
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离
 
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
             若为 ``True``，则 ``self.monitor`` 是一个字典，键包括 ``v`` 和 ``s``，分别记录电压和输出脉冲。
@@ -224,6 +237,8 @@ class IFNode(BaseNode):
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
+        :param detach_reset: whether detach the computation graph of reset
+
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
@@ -235,14 +250,14 @@ class IFNode(BaseNode):
         .. math::
             \\frac{\\mathrm{d}V(t)}{\\mathrm{d} t} = R_{m}I(t)
         '''
-        super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, monitor_state)
 
     def forward(self, dv: torch.Tensor):
         self.v += dv
         return self.spiking()
 
 class LIFNode(BaseNode):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
+    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False,
                  monitor_state=False):
         '''
         * :ref:`API in English <LIFNode.__init__-en>`
@@ -257,6 +272,8 @@ class LIFNode(BaseNode):
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离
 
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
             若为 ``True``，则 ``self.monitor`` 是一个字典，键包括 ``v`` 和 ``s``，分别记录电压和输出脉冲。
@@ -282,6 +299,8 @@ class LIFNode(BaseNode):
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
+        :param detach_reset: whether detach the computation graph of reset
+
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
@@ -293,13 +312,11 @@ class LIFNode(BaseNode):
         .. math::
             \\tau_{m} \\frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
         '''
-        super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, monitor_state)
         self.tau = tau
 
     def extra_repr(self):
-        return 'v_threshold={}, v_reset={}, tau={}'.format(
-            self.v_threshold, self.v_reset, self.tau
-        )
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, tau={self.tau}'
 
     def forward(self, dv: torch.Tensor):
         if self.v_reset is None:
@@ -342,7 +359,7 @@ class PLIFNode(BaseNode):
         return init_tau - 1
 
 
-    def __init__(self, init_tau=2.0, clamp=False, clamp_function=None, inverse_clamp_function=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(),
+    def __init__(self, init_tau=2.0, clamp=False, clamp_function=None, inverse_clamp_function=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False,
                  monitor_state=False):
         '''
         * :ref:`API in English <PLIFNode.__init__-en>`
@@ -365,6 +382,8 @@ class PLIFNode(BaseNode):
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离
 
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
             若为 ``True``，则 ``self.monitor`` 是一个字典，键包括 ``v`` 和 ``s``，分别记录电压和输出脉冲。
@@ -412,6 +431,8 @@ class PLIFNode(BaseNode):
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
+        :param detach_reset: whether detach the computation graph of reset
+
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
@@ -438,7 +459,7 @@ class PLIFNode(BaseNode):
 
             ``self.v += (dv - (self.v - self.v_reset)) * self.w``
         '''
-        super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, monitor_state)
         self.clamp = clamp
         if self.clamp:
             self.clamp_function = clamp_function
@@ -463,12 +484,10 @@ class PLIFNode(BaseNode):
             return 1 / self.w.data.item()
 
     def extra_repr(self):
-        return 'v_threshold={}, v_reset={}, tau={}, clamp={}'.format(
-            self.v_threshold, self.v_reset, self.tau(), self.clamp
-        )
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, tau={self.tau()}, clamp={self.clamp}'
 
 class RIFNode(BaseNode):
-    def __init__(self, init_w=-1e-3, amplitude=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
+    def __init__(self, init_w=-1e-3, amplitude=None, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False, monitor_state=False):
         '''
         * :ref:`API in English <RIFNode.__init__-en>`
 
@@ -487,6 +506,8 @@ class RIFNode(BaseNode):
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离
 
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
             若为 ``True``，则 ``self.monitor`` 是一个字典，键包括 ``v`` 和 ``s``，分别记录电压和输出脉冲。
@@ -518,6 +539,8 @@ class RIFNode(BaseNode):
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
 
+        :param detach_reset: whether detach the computation graph of reset
+
         :param monitor_state: whether to set a monitor to recode voltage and spikes of neurons.
             If ``True``, ``self.monitor`` will be a dictionary with key ``v`` for recording voltage and ``s`` for
             recording spikes. And the value of the dictionary is lists. To save memory, the elements in lists are ``numpy``
@@ -531,7 +554,7 @@ class RIFNode(BaseNode):
 
         :math:`w` is the self connection weight. The weight is learnable. And it is shared by all neurons in this layer.
         '''
-        super().__init__(v_threshold, v_reset, surrogate_function, monitor_state)
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, monitor_state)
         self.amplitude = amplitude
         if isinstance(self.amplitude, int):
             self.amplitude = float(self.amplitude)
@@ -570,9 +593,7 @@ class RIFNode(BaseNode):
 
     def extra_repr(self):
 
-        return 'v_threshold={}, v_reset={}, w={}'.format(
-            self.v_threshold, self.v_reset, self.w()
-        )
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, w={self.w()}'
 
     def forward(self, dv: torch.Tensor):
         if self.amplitude is None:
@@ -605,7 +626,9 @@ class AdaptThresholdNode(nn.Module):
         :type v_threshold_range: float
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；如果设置为 ``None``，则电压会被减去 ``v_threshold``，默认为0.0
         :type v_reset: float
-        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数，默认为surrogate.Erf()
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离，默认为surrogate.Erf()
         :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。若为 ``True``，则 ``self.monitor`` 是一个字典，键包括 ``v`` 和 ``s``，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量转换为 ``numpy`` 数组后的值。还需要注意，``self.reset()`` 函数会清空这些链表， 默认为False
         :type monitor_state: bool
         :param dt: 神经元的仿真间隔时间参数, 默认为1.0
@@ -643,7 +666,9 @@ class AdaptThresholdNode(nn.Module):
         :type v_threshold_range: float
         :param v_reset: Reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``, defaults to 0.0
         :type v_reset: float
-        :param surrogate_function: Surrogate function for replacing gradient of spiking functions during back-propagation, defaults to surrogate.Erf()
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+
+        :param detach_reset: whether detach the computation graph of reset, defaults to surrogate.Erf()
         :param monitor_state: Whether to turn on the monitor, defaults to False
         :type monitor_state: bool
         :param dt: Simulation interval constant of neurons, defaults to 1.0
