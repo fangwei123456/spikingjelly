@@ -535,3 +535,83 @@ class ChannelsPool(nn.Module):
     def forward(self, x: torch.Tensor):
         x_shape = x.shape
         return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
+
+class DropConnectLinear(nn.Module):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, invariant=False) -> None:
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
+        if bias:
+            self.bias = nn.Parameter(torch.Tensor(out_features))
+        else:
+            self.register_parameter('bias', None)
+
+        self.reset_parameters()
+
+        self.p = p
+        self.mask_w = None
+        self.dropped_w = None
+        if self.bias is not None:
+            self.mask_b = None
+            self.dropped_b = None
+
+        self.invariant = invariant
+
+    def reset_parameters(self) -> None:
+        nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
+        if self.bias is not None:
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
+            bound = 1 / math.sqrt(fan_in)
+            nn.init.uniform_(self.bias, -bound, bound)
+
+    def reset(self):
+        self.mask_w = None
+        self.dropped_w = None
+        if self.bias is not None:
+            self.mask_b = None
+            self.dropped_b = None
+
+    def drop(self, batch_size: int):
+        self.mask_w = (torch.rand_like(self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())) < self.p)
+        self.dropped_w = self.mask_w.to(self.weight) * self.weight  # shape = [batch_size, out_features, in_features]
+
+        if self.dropped_w.requires_grad:
+            def w_hook_fn(grad_w):
+                grad_w[self.mask_w] = 0
+
+            self.dropped_w.register_hook(w_hook_fn)
+
+        if self.bias is not None:
+            self.mask_b = (torch.rand_like(self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())) < self.p)
+            self.dropped_b = self.mask_b.to(self.bias) * self.bias
+
+            if self.dropped_b.requires_grad:
+                def b_hook_fn(grad_b):
+                    grad_b[self.mask_b] = 0
+
+                self.dropped_b.register_hook(b_hook_fn)
+
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
+        if self.training:
+            if self.invariant:
+                if self.mask_w is None:
+                    self.drop(input.shape[0])
+            else:
+                self.drop(input.shape[0])
+            if self.bias is None:
+                return torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
+            else:
+                return torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1) + self.dropped_b
+
+        else:
+            mu = self.p * F.linear(input, self.weight, self.bias)
+            if self.bias is None:
+                sigma = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square())
+            else:
+                sigma = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square(), self.bias.square())
+            dis = torch.distributions.normal.Normal(mu, sigma)
+            return dis.sample()
+
+    def extra_repr(self) -> str:
+        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
