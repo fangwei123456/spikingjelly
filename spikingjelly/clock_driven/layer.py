@@ -537,7 +537,79 @@ class ChannelsPool(nn.Module):
         return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
 
 class DropConnectLinear(nn.Module):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, invariant=False) -> None:
+    def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
+                 invariant: bool = False, activation: None or nn.Module = nn.ReLU()) -> None:
+        '''
+        * :ref:`API in English <DropConnectLinear.__init__-en>`
+
+        .. _DropConnectLinear.__init__-cn:
+
+        :param in_features: 每个输入样本的特征数
+        :type in_features: int
+        :param out_features: 每个输出样本的特征数
+        :type out_features: int
+        :param bias: 若为 ``False``，则本层不会有可学习的偏置项。
+            默认为 ``True``
+        :type bias: bool
+        :param p: 每个连接被断开的概率。默认为0.5
+        :type p: float
+        :param samples_num: 在推理时，从高斯分布中采样的数据数量。默认为1024
+        :type samples_num: int
+        :param invariant: 若为 ``True``，线性层会在第一次执行前向传播时被按概率断开，断开后的线性层会保持不变，直到 ``reset()`` 函数
+            被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为 
+            ``False``，在每一次前向传播时线性层都会被重新完全连接再按概率断开。 阅读 :ref:`layer.Dropout <Dropout.__init__-cn>` 以
+            获得更多关于此参数的信息。
+            默认为 ``False``
+        :type invariant: bool
+        :param activation: 在线性层后的激活层
+        :type activation: None or nn.Module
+
+        DropConnect，由 `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
+        一文提出。DropConnect与Dropout非常类似，区别在于DropConnect是以概率 ``p`` 断开连接，而Dropout是将输入以概率置0。
+
+        .. admonition:: Note
+
+            在使用DropConnect进行推理时，输出的tensor中的每个元素，都是先从高斯分布中采样，通过激活层激活，再在采样数量上进行平均得到的。
+            详细的流程可以在 `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
+            一文中的 `Algorithm 2` 找到。激活层 ``activation`` 在中间的步骤起作用，因此我们将其作为模块的成员。
+
+        * :ref:`中文API <DropConnectLinear.__init__-cn>`
+
+        .. _DropConnectLinear.__init__-en:
+
+        :param in_features: size of each input sample
+        :type in_features: int
+        :param out_features: size of each output sample
+        :type out_features: int
+        :param bias: If set to ``False``, the layer will not learn an additive bias.
+            Default: ``True``
+        :type bias: bool
+        :param p: probability of an connection to be zeroed. Default: 0.5
+        :type p: float
+        :param samples_num: number of samples drawn from the Gaussian during inference. Default: 1024
+        :type samples_num: int
+        :param invariant: If set to ``True``, the connections will be dropped at the first time of forward and the dropped
+            connections will remain unchanged until ``reset()`` is called and the connections recovery to fully-connected
+            status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to 
+            ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>` 
+            for more information to understand this parameter. Default: ``False``
+        :type invariant: bool
+        :param activation: the activation layer after the linear layer
+        :type activation: None or nn.Module
+
+        DropConnect, which is proposed by `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_,
+        is similar with Dropout but drop connections of a linear layer rather than the elements of the input tensor with
+        probability ``p``.
+
+        .. admonition:: Note
+            :class: note
+
+            When inference with DropConnect, every elements of the output tensor are sampled from a Gaussian distribution,
+            activated by the activation layer and averaged over the sample number ``samples_num``.
+            See `Algorithm 2` in `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
+            for more details. Note that activation is an intermediate process. This is the reason why we include
+            ``activation`` as a member variable of this module.
+        '''
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -549,16 +621,35 @@ class DropConnectLinear(nn.Module):
 
         self.reset_parameters()
 
-        self.p = p
-        self.mask_w = None
+        self.p = p  # 置0的概率
         self.dropped_w = None
         if self.bias is not None:
-            self.mask_b = None
             self.dropped_b = None
 
+        self.samples_num = samples_num
         self.invariant = invariant
+        self.activation = activation
 
     def reset_parameters(self) -> None:
+        '''
+        * :ref:`API in English <DropConnectLinear.reset_parameters-en>`
+
+        .. _DropConnectLinear.reset_parameters-cn:
+
+        :return: None
+        :rtype: None
+
+        初始化模型中的可学习参数。
+
+        * :ref:`中文API <DropConnectLinear.reset_parameters-cn>`
+
+        .. _DropConnectLinear.reset_parameters-en:
+
+        :return: None
+        :rtype: None
+
+        Initialize the learnable parameters of this module.
+        '''
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
@@ -566,52 +657,71 @@ class DropConnectLinear(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def reset(self):
-        self.mask_w = None
+        '''
+        * :ref:`API in English <DropConnectLinear.reset-en>`
+
+        .. _DropConnectLinear.reset-cn:
+
+        :return: None
+        :rtype: None
+
+        将线性层重置为完全连接的状态，若 ``self.activation`` 也是一个有状态的层，则将其也重置。
+
+        * :ref:`中文API <DropConnectLinear.reset-cn>`
+
+        .. _DropConnectLinear.reset-en:
+
+        :return: None
+        :rtype: None
+
+        Reset the linear layer to fully-connected status. If ``self.activation`` is also stateful, this function will
+        also reset it.
+        '''
         self.dropped_w = None
         if self.bias is not None:
-            self.mask_b = None
             self.dropped_b = None
+        if hasattr(self.activation, 'reset'):
+            self.activation.reset()
 
     def drop(self, batch_size: int):
-        self.mask_w = (torch.rand_like(self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())) < self.p)
-        self.dropped_w = self.mask_w.to(self.weight) * self.weight  # shape = [batch_size, out_features, in_features]
-
-        if self.dropped_w.requires_grad:
-            def w_hook_fn(grad_w):
-                grad_w[self.mask_w] = 0
-
-            self.dropped_w.register_hook(w_hook_fn)
+        mask_w = (torch.rand_like(self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())) > self.p)
+        # self.dropped_w = mask_w.to(self.weight) * self.weight  # shape = [batch_size, out_features, in_features]
+        self.dropped_w = accelerating.mul(self.weight.unsqueeze(0).repeat(batch_size, 1, 1), mask_w)
 
         if self.bias is not None:
-            self.mask_b = (torch.rand_like(self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())) < self.p)
-            self.dropped_b = self.mask_b.to(self.bias) * self.bias
-
-            if self.dropped_b.requires_grad:
-                def b_hook_fn(grad_b):
-                    grad_b[self.mask_b] = 0
-
-                self.dropped_b.register_hook(b_hook_fn)
+            mask_b = (torch.rand_like(self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())) > self.p)
+            # self.dropped_b = mask_b.to(self.bias) * self.bias
+            self.dropped_b = accelerating.mul(self.bias.unsqueeze(0).repeat(batch_size, 1), mask_b)
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.training:
             if self.invariant:
-                if self.mask_w is None:
+                if self.dropped_w is None:
                     self.drop(input.shape[0])
             else:
                 self.drop(input.shape[0])
             if self.bias is None:
-                return torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
+                ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
             else:
-                return torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1) + self.dropped_b
-
+                ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1) + self.dropped_b
+            if self.activation is None:
+                return ret
+            else:
+                return self.activation(ret)
         else:
-            mu = self.p * F.linear(input, self.weight, self.bias)
+            mu = (1 - self.p) * F.linear(input, self.weight, self.bias)  # shape = [batch_size, out_features]
             if self.bias is None:
-                sigma = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square())
+                sigma2 = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square())
             else:
-                sigma = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square(), self.bias.square())
-            dis = torch.distributions.normal.Normal(mu, sigma)
-            return dis.sample()
+                sigma2 = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square(), self.bias.square())
+            dis = torch.distributions.normal.Normal(mu, sigma2.sqrt())
+            samples = dis.sample(torch.Size([self.samples_num]))
+
+            if self.activation is None:
+                ret = samples
+            else:
+                ret = self.activation(samples)
+            return ret.mean(dim=0)
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
