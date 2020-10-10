@@ -28,10 +28,10 @@ class Net(nn.Module):
         )
         self.fc = nn.Sequential(
             nn.Flatten(),
-            layer.Dropout(0.7, behind_spiking_layer=True),
+            layer.Dropout(0.7),
             nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
             neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            layer.Dropout(0.7, behind_spiking_layer=True),
+            layer.Dropout(0.7),
             nn.Linear(128 * 3 * 3, 128, bias=False),
             neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
             nn.Linear(128, 10, bias=False),
