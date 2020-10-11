@@ -4,6 +4,8 @@ import random
 import numpy as np
 from collections import namedtuple
 from itertools import count
+import matplotlib
+import matplotlib.pyplot as plt
 
 import torch
 import torch.nn as nn
@@ -204,21 +206,21 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
     writer.close()
 
 
-def play(pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_dir=None, figsize=(12, 6), firing_rates_plot_type='bar', heatmap_shape=None):
-    import numpy as np
-    from matplotlib import pyplot as plt
-    import matplotlib.ticker
-
+def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_dir=None, figsize=(12, 6), firing_rates_plot_type='bar', heatmap_shape=None):
+    
     T = 16
 
     plt.rcParams['figure.figsize'] = figsize
     plt.ion()
+
     env = gym.make(env_name).unwrapped
+
+    device = torch.device("cuda" if use_cuda else "cpu")
 
     n_states = env.observation_space.shape[0]
     n_actions = env.action_space.n
 
-    policy_net = DQSN(hidden_size, n_states, n_actions, T).to(device)
+    policy_net = DQSN(n_states, hidden_size, n_actions, T).to(device)
     policy_net.load_state_dict(torch.load(pt_path, map_location=device))
 
     env.reset()
@@ -228,14 +230,16 @@ def play(pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_d
         functional.set_monitor(policy_net, True)
         delta_lim = 0
         over_score = 1e9
+
         for i in count():
-            # plt.clf()
             LIF_v = policy_net(state)  # shape=[1, 2]
             action = LIF_v.max(1)[1].view(1, 1).item()
+
             if firing_rates_plot_type == 'bar':
                 plt.subplot2grid((2, 9), (1, 0), colspan=3)
             elif firing_rates_plot_type == 'heatmap':
                 plt.subplot2grid((2, 3), (1, 0))
+
             plt.xticks(np.arange(2), ('Left', 'Right'))
             plt.ylabel('Voltage')
             plt.title('Voltage of LIF neurons at last time step')
@@ -246,15 +250,18 @@ def play(pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_d
             plt.text(1, LIF_v[0][1], str(round(LIF_v[0][1].item(), 2)), ha='center')
 
             plt.bar(np.arange(2), LIF_v.squeeze(), color=['r', 'gray'] if action == 0 else ['gray', 'r'], width=0.5)
+            
             if LIF_v.min() - delta_lim < 0:
                 plt.axhline(0, color='black', linewidth=0.1)
 
             IF_spikes = np.asarray(policy_net.fc[1].monitor['s'])  # shape=[16, 1, 256]
             firing_rates = IF_spikes.mean(axis=0).squeeze()
+            
             if firing_rates_plot_type == 'bar':
                 plt.subplot2grid((2, 9), (0, 4), rowspan=2, colspan=5)
             elif firing_rates_plot_type == 'heatmap':
                 plt.subplot2grid((2, 3), (0, 1), rowspan=2, colspan=2)
+            
             plt.title('Firing rates of IF neurons')
 
             if firing_rates_plot_type == 'bar':
@@ -271,10 +278,12 @@ def play(pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_d
                 plt.gca().invert_yaxis()
                 cbar = heatmap.figure.colorbar(heatmap)
                 cbar.ax.set_ylabel('Magnitude', rotation=90, va='top')
+            
             functional.reset_net(policy_net)
             subtitle = f'Position={state[0][0].item(): .2f}, Velocity={state[0][1].item(): .2f}, Pole Angle={state[0][2].item(): .2f}, Pole Velocity At Tip={state[0][3].item(): .2f}, Score={i}'
 
             state, reward, done, _ = env.step(action)
+            
             if done:
                 over_score = min(over_score, i)
                 subtitle = f'Game over, Score={over_score}'
@@ -283,23 +292,30 @@ def play(pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_d
             state = torch.from_numpy(state).float().to(device).unsqueeze(0)
             screen = env.render(mode='rgb_array').copy()
             screen[300, :, :] = 0  # 画出黑线
+            
             if firing_rates_plot_type == 'bar':
                 plt.subplot2grid((2, 9), (0, 0), colspan=3)
             elif firing_rates_plot_type == 'heatmap':
                 plt.subplot2grid((2, 3), (0, 0))
+            
             plt.xticks([])
             plt.yticks([])
             plt.title('Game screen')
             plt.imshow(screen, interpolation='bicubic')
             plt.pause(0.001)
+            
             if i < save_fig_num:
                 plt.savefig(os.path.join(fig_dir, f'{i}.png'))
+            
             if done and i >= played_frames:
                 env.close()
                 plt.close()
                 break
 
-# train(use_cuda=False, model_dir='./model/CartPole-v0/state', log_dir='./log', env_name='CartPole-v0', \
-        # hidden_size=256, num_episodes=500, seed=1)
-# play(pt_path='./model/policy_net_256_max.pt', env_name='CartPole-v0', \
-#         hidden_size=256, played_frames=300)
+'''
+train(use_cuda=False, model_dir='./model/CartPole-v0/state', log_dir='./log', env_name='CartPole-v0', \
+        hidden_size=256, num_episodes=500, seed=1)
+'''
+
+play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', \
+        hidden_size=256, played_frames=300)
