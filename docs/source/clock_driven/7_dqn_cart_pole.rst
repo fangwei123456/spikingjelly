@@ -214,7 +214,7 @@ SNN的训练代码如下，我们会保存训练过程中使得奖励最大的�
 .. image:: ../_static/tutorials/clock_driven/\7_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
     :width: 100%
 
-用相同处理方式的ANN训练500个回合的性能曲线(完整的代码可见于 `clock_driven/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/DQN_state.py>`_。)：
+用相同处理方式的ANN训练500个回合的性能曲线(完整的代码可见于 `clock_driven/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/DQN_state.py>`_)：
 
 .. image:: ../_static/tutorials/clock_driven/\7_dqn_cart_pole/DQN-state-CartPole-v0.*
     :width: 100%
