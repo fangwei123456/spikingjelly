@@ -18,3 +18,5 @@
     ./clock_driven/4_conv_fashion_mnist
     ./clock_driven/5_ann2snn
     ./clock_driven/6_rl_cart_pole
+    ./clock_driven/7_dqn_cart_pole
+    ./clock_driven/8_a2c_cart_pole
