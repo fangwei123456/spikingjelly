@@ -870,7 +870,7 @@ class SpikingGRUCell(SpikingRNNCellBase):
             c = hc[1]
 
         y_ih = torch.split(self.linear_ih(x), self.hidden_size, dim=1)
-        y_hh = torch.split(self.linear_hh(x), self.hidden_size, dim=1)
+        y_hh = torch.split(self.linear_hh(h), self.hidden_size, dim=1)
         r = self.surrogate_function1(y_ih[0] + y_hh[0])
         z = self.surrogate_function1(y_ih[1] + y_hh[1])
 
