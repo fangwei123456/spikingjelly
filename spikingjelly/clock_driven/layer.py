@@ -5,16 +5,17 @@ import math
 from spikingjelly.clock_driven import accelerating
 
 class NeuNorm(nn.Module):
-    def __init__(self, in_channels, k=0.9):
+    def __init__(self, in_channels, height, width, k=0.9):
         '''
         * :ref:`API in English <NeuNorm.__init__-en>`
 
         .. _NeuNorm.__init__-cn:
 
-        .. warning::
-            可能是错误的实现。测试的结果表明，增加NeuNorm后的收敛速度和正确率反而下降了。
-
         :param in_channels: 输入数据的通道数
+
+        :param height: 输入数据的宽
+
+        :param width: 输入数据的高
 
         :param k: 动量项系数
 
@@ -23,7 +24,7 @@ class NeuNorm(nn.Module):
 
         ``Conv2d -> LIF -> NeuNorm``
 
-        要求输入的尺寸是 ``[batch_size, in_channels, W, H]``。
+        要求输入的尺寸是 ``[batch_size, in_channels, height, width]``。
 
         ``in_channels`` 是输入到NeuNorm层的通道数，也就是论文中的 :math:`F`。
 
@@ -35,12 +36,11 @@ class NeuNorm(nn.Module):
 
         .. _NeuNorm.__init__-en:
 
-        .. admonition:: Warning
-            :class: warning
-
-            There may be some wrong in code implement. Our experiment results show that networks with NeuNorm perform worse.
-
         :param in_channels: channels of input
+
+        :param height: height of input
+
+        :param width: height of width
 
         :param k: momentum factor
 
@@ -50,7 +50,7 @@ class NeuNorm(nn.Module):
 
         ``Conv2d -> LIF -> NeuNorm``
 
-        The input should be a 4-D tensor with ``shape = [batch_size, in_channels, W, H]``.
+        The input should be a 4-D tensor with ``shape = [batch_size, in_channels, height, width]``.
 
         ``in_channels`` is the channels of input，which is :math:`F` in the paper.
 
@@ -63,11 +63,11 @@ class NeuNorm(nn.Module):
         self.x = 0
         self.k0 = k
         self.k1 = (1 - self.k0) / in_channels**2
-        self.w = nn.Parameter(torch.Tensor(in_channels, 1, 1))
+        self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
     def forward(self, in_spikes: torch.Tensor):
-        self.x = self.k0 * self.x + (self.k1 * in_spikes.sum(dim=1).unsqueeze(1))
+        self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)  # x.shape = [batch_size, 1, height, width]
         return in_spikes - self.w * self.x
 
     def reset(self):
