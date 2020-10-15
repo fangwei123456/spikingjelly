@@ -5,7 +5,7 @@ import math
 from spikingjelly.clock_driven import accelerating
 
 class NeuNorm(nn.Module):
-    def __init__(self, in_channels, height, width, k=0.9):
+    def __init__(self, in_channels, height, width, k=0.9, shared_across_channel=False):
         '''
         * :ref:`API in English <NeuNorm.__init__-en>`
 
@@ -18,6 +18,8 @@ class NeuNorm(nn.Module):
         :param width: 输入数据的高
 
         :param k: 动量项系数
+
+        :param shared_across_channel: 可学习的权重 ``w`` 是否在通道这一维度上共享。设置为 ``True`` 可以大幅度节省内存
 
         `Direct Training for Spiking Neural Networks: Faster, Larger, Better <https://arxiv.org/abs/1809.05793>`_ 中提出\\
         的NeuNorm层。NeuNorm层必须放在二维卷积层后的脉冲神经元后，例如：
@@ -44,6 +46,9 @@ class NeuNorm(nn.Module):
 
         :param k: momentum factor
 
+        :param shared_across_channel: whether the learnable parameter ``w`` is shared over channel dim. If set ``True``,
+            the consumption of memory can decrease largely
+
         The NeuNorm layer is proposed in `Direct Training for Spiking Neural Networks: Faster, Larger, Better <https://arxiv.org/abs/1809.05793>`_.
 
         It should be placed after spiking neurons behind convolution layer, e.g.,
@@ -63,7 +68,10 @@ class NeuNorm(nn.Module):
         self.x = 0
         self.k0 = k
         self.k1 = (1 - self.k0) / in_channels**2
-        self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
+        if shared_across_channel:
+            self.w = nn.Parameter(torch.Tensor(1, height, width))
+        else:
+            self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
     def forward(self, in_spikes: torch.Tensor):
