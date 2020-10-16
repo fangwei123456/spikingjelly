@@ -19,3 +19,4 @@
     ./clock_driven/5_ann2snn
     ./clock_driven/6_dqn_cart_pole
     ./clock_driven/7_a2c_cart_pole
+    ./clock_driven/8_ppo_cart_pole
