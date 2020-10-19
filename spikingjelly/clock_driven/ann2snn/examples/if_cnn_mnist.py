@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision
 import os
 import time
-import spikingjelly.clock_driven.ann2snn.utils as utils
+import spikingjelly.clock_driven.ann2snn.examples.utils as utils
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -143,7 +143,7 @@ def main(log_dir=None):
     # load default configuration, save and print
     config = utils.Config.default_config
     print('ann2snn config:\n\t', config)
-    utils.Config.store_config(os.path.join(log_dir,'default_config.json'),config)
+    utils.Config.store_config(os.path.join(log_dir, 'default_config.json'), config)
 
     ann = ANN().to(device)
     loss_function = nn.CrossEntropyLoss()
@@ -166,10 +166,11 @@ def main(log_dir=None):
             acc = utils.val_ann(net=ann,
                                 device=device,
                                 data_loader=test_data_loader,
+                                loss_function=loss_function,
                                 epoch=epoch
                                 )
             if best_acc <= acc:
-                utils.save_model(ann, log_dir, model_name+'.pkl')
+                utils.save_model(ann, log_dir, model_name + '.pkl')
             writer.add_scalar('val_accuracy', acc, epoch)
     else:
         print('Directly load model',model_name+'.pkl')
@@ -183,7 +184,7 @@ def main(log_dir=None):
 
     # ANN2SNN标准转化，直接调用可以对模型进行转化并对SNN进行仿真测试
     # ANN2SNN standard conversion, direct calling of the function can transform the model and simulate the SNN.
-    utils.standard_conversion(model_name=model_name,
+    utils.pytorch_ann2snn(model_name=model_name,
                               norm_data=norm_tensor,
                               test_data_loader=test_data_loader,
                               device=device,
@@ -193,4 +194,4 @@ def main(log_dir=None):
                               )
 
 if __name__ == '__main__':
-    main()
+    main('./log-mnist1602839987.3347948')
