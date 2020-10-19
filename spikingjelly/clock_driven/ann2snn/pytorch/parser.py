@@ -4,7 +4,7 @@ import os
 import numpy as np
 
 
-class ModelParser(nn.Module):
+class Pytorch_Parser(nn.Module):
     def __init__(self):
         '''
         * :ref:`API in English <ModelParser.__init__-en>`
