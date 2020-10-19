@@ -1,7 +1,7 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import os
-import spikingjelly.clock_driven.ann2snn.parser as parser
 import spikingjelly.clock_driven.ann2snn.simulation as sim
 import numpy as np
 import json
@@ -257,7 +257,7 @@ def train_ann(net, device, data_loader, optimizer, loss_function, epoch=None):
             total = 0.0
 
 
-def val_ann(net, device, data_loader, epoch=None):
+def val_ann(net, device, data_loader, loss_function, epoch=None):
     '''
     * :ref:`API in English <val_ann-en>`
 
@@ -287,22 +287,23 @@ def val_ann(net, device, data_loader, epoch=None):
     correct = 0.0
     total = 0.0
     losses = []
-    for batch, (img, label) in enumerate(data_loader):
-        img = img.to(device)
-        out = net(img)
-        loss = F.cross_entropy(out, label.to(device))
-        correct += (out.max(dim=1)[1] == label.to(device)).float().sum().item()
-        total += out.shape[0]
-        losses.append(loss.item())
-    acc = correct / total
-    if epoch == None:
-        print('ANN Validating Accuracy:%.3f'%(acc))
-    else:
-        print('Epoch %d [%d/%d] ANN Validating Loss:%.3f Accuracy:%.3f' % (epoch,
-                                                                           batch+1,
-                                                                           len(data_loader),
-                                                                           np.array(losses).mean(),
-                                                                           acc))
+    with torch.no_grad():
+        for batch, (img, label) in enumerate(data_loader):
+            img = img.to(device)
+            out = net(img)
+            loss = loss_function(out, label.to(device))
+            correct += (out.argmax(dim=1) == label.to(device)).float().sum().item()
+            total += out.shape[0]
+            losses.append(loss.item())
+        acc = correct / total
+        if epoch == None:
+            print('ANN Validating Accuracy:%.3f'%(acc))
+        else:
+            print('Epoch %d [%d/%d] ANN Validating Loss:%.3f Accuracy:%.3f' % (epoch,
+                                                                               batch+1,
+                                                                               len(data_loader),
+                                                                               np.array(losses).mean(),
+                                                                               acc))
     return acc
 
 
@@ -340,15 +341,15 @@ def save_model(net, log_dir, file_name):
     print('Save model to:',os.path.join(log_dir,file_name))
 
 
-def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_dir, config,
+def pytorch_ann2snn(model_name, norm_tensor, test_data_loader, device, T, log_dir, config,
                         load_state_dict=False, ann=None):
     '''
-    * :ref:`API in English <standard_conversion-en>`
+    * :ref:`API in English <pytorch_conversion-en>`
 
     .. _standard_conversion-cn:
 
     :param model_name: 模型名字，用于文件夹中寻找保存的模型
-    :param norm_data: 用于模型归一化的数据，其格式以能够作为网络输入为准。这部分数据应当从训练集抽取
+    :param norm_tensor: 用于模型归一化的数据，其格式以能够作为网络输入为准。这部分数据应当从训练集抽取
     :param test_data_loader: 测试数据加载器，用于仿真
     :param device: 运行的设备
     :param T: 仿真时长
@@ -361,12 +362,12 @@ def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_
     对加载的模型（或模型参数）进行模型转化并且对转化后SNN进行仿真，输出仿真结果
     用户自定义的转换和测试程序可以仿造此程序
 
-    * :ref:`中文API <standard_conversion-cn>`
+    * :ref:`中文API <pytorch_conversion-cn>`
 
     .. _standard_conversion-en:
 
     :param model_name: model name is used to find saved model in log_dir
-    :param norm_data: data used to normalize the model. Format of the data should be capable of being fed into the model. Norm data should be randomly choosen from training data
+    :param norm_tensor: data used to normalize the model. Format of the data should be capable of being fed into the model. Norm data should be randomly choosen from training data
     :param test_data_loader: testing data loader, used for simulating
     :param device: running device
     :param T: simulating steps
@@ -380,6 +381,9 @@ def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_
     Output the simulation process and conversion loss
     User-defined conversion and validation function can learn from this function.
     '''
+    import spikingjelly.clock_driven.ann2snn.pytorch.parser as parser
+    import spikingjelly.clock_driven.ann2snn.pytorch.converter as converter
+
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
     print('Load best model for Model:%s...' % (model_name))
@@ -391,7 +395,7 @@ def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_
 
     # 分析模型
     # Parse the model
-    parsed_ann = parser.ModelParser()
+    parsed_ann = parser.Pytorch_Parser()
     parsed_ann.parse(ann, log_dir)
 
     # 测试分析后的模型的ann性能，理论上应该和分析前模型相同
@@ -404,7 +408,7 @@ def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_
 
     # 归一化模型
     # Normalize the parsed model
-    parsed_ann.normalize_model(norm_data.to(device), log_dir, robust=config['parser']['robust_norm'])
+    parsed_ann.normalize_model(norm_tensor.to(device), log_dir, robust=config['parser']['robust_norm'])
     print('Print Parsed ANN model Structure:')
     print(parsed_ann)
 
@@ -415,9 +419,9 @@ def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_
     # 定义一个模板snn模型，并加载归一化后的模型
     # Define an empty snn model and load the normalized model into the empty snn
     if config['simulation']['reset_to_zero']:
-        snn = sim.SNN(v_reset=0.0)
+        snn = converter.PyTorch_Converter(v_reset=0.0)
     else:
-        snn = sim.SNN()
+        snn = converter.PyTorch_Converter()
     snn.load_parsed_model(parsed_model=parsed_ann,
                           avg_pool_has_neuron=config['simulation']['avg_pool']['has_neuron'],
                           max_pool_spatial_avg=config['simulation']['max_pool']['if_spatial_avg'],
@@ -432,11 +436,139 @@ def standard_conversion(model_name, norm_data, test_data_loader, device, T, log_
                                device=device,
                                data_loader=test_data_loader,
                                T=T,
-                               possion=config['simulation']['encoder']['possion'])
+                               poisson=config['simulation']['encoder']['possion'],
+                               fig_name=model_name,
+                               ann_baseline=ann_acc*100,
+                               log_dir=log_dir)
 
     # 输出Summary和转换带来的准确率损失
     # Output the conversion loss (loss on Accuracy)
     print('Summary:\tANN Accuracy:%.4f%%  \tSNN Accuracy:%.4f%% [%s %.4f%%]' % (ann_acc * 100, snn_acc * 100,
                                                                                 'Increased' if snn_acc > ann_acc else 'Decreased',
                                                                                 np.abs(ann_acc * 100 - snn_acc * 100)
+                                                                                ))
+
+
+def onnx_ann2snn(model_name, ann,device,norm_tensor, loss_function, T, log_dir, config, test_data_loader, z_score=None):
+    import spikingjelly.clock_driven.ann2snn.onnx.parser as parser
+    import spikingjelly.clock_driven.ann2snn.onnx.converter as converter
+    ann_wrapper = parser.Pytorch_Wrapper(ann, z_score).to(device)
+
+    ann_acc = val_ann(net=ann,
+                      device=device,
+                      data_loader=test_data_loader,
+                      loss_function=loss_function)
+    # all = 0
+    # sum = 0
+    # ann.to('cpu')
+    # for idx, (img, target) in enumerate(test_data_loader):
+    #     outputs = ann(img)
+    #     print(torch.argmax(outputs, dim=1), target)
+    #     sum += torch.sum(torch.argmax(outputs, dim=1) == target)
+    #     all += outputs.size(0)
+    # print(all, sum)
+
+    onnx_model_file = ann_wrapper.export_to_onnx(log_dir, model_name, norm_tensor.to(device))
+    model_parser = parser.ONNX_Parser(onnx_model_file)
+    
+    # import onnxruntime as ort
+    # ort_session = ort.InferenceSession(onnx_model_file)
+    # outputs = ort_session.run(None, {'input': norm_tensor.detach().cpu().numpy()})
+    # print(outputs)
+    model_parser.print_model()
+    #exit(-1)
+    
+    has_batchnorm = False
+    for m in ann.modules():
+        if isinstance(m,(nn.BatchNorm2d,nn.BatchNorm1d,nn.BatchNorm3d)):
+            has_batchnorm = True
+            break
+    if has_batchnorm:
+        model_parser.absorb_bn()
+
+    # model_parser.get_intermediate_output_statistics(torch.ones(1, 3, 224, 224).numpy(),
+    #                                                 channelwise=False, test=True)
+    # import copy
+    # debug_log1 = copy.copy(model_parser.output_debug)
+    
+    
+    model_parser.print_model()
+
+    use_NSIF = True # TODO add to configs
+    robust_norm = False
+    channelwise = False
+
+    onnx_model_no_bn_filename = os.path.join(log_dir, "%s_remove_bn.onnx" % (model_name))
+    model_parser.save_model(onnx_model_no_bn_filename)
+
+    model_parser.get_intermediate_output_statistics(norm_tensor.detach().cpu().numpy(),
+                                              channelwise=channelwise)
+    print(model_parser.output_statistics)
+    model_parser.normalize_model(robust_norm=robust_norm, use_NSIF=use_NSIF, channelwise=channelwise)
+
+    # verify
+    model_parser.get_intermediate_output_statistics(norm_tensor.detach().cpu().numpy(),
+                                                    channelwise=channelwise)
+    print(model_parser.output_statistics)
+
+    # print(model_parser.print_model())
+    # print(model_parser.output_statistics)
+    # model_parser.get_intermediate_output_statistics(torch.ones(1, 3, 224, 224).numpy(),
+    #                                                 channelwise=False, test=True)
+    # debug_log2 = copy.copy(model_parser.output_debug)
+    # for o in debug_log1.keys():
+    #     if o in debug_log2.keys():
+    #         print(o,' ',torch.mean(1 - torch.cosine_similarity(torch.from_numpy(debug_log1[o]),torch.from_numpy(debug_log2[o]))) )
+    #
+    # exit(-1)
+
+    onnx_normed_file = os.path.join(log_dir, "%s_normed.onnx" % (model_name))
+    model_parser.save_model(onnx_normed_file)
+
+    #onnx_normed_file = os.path.join(log_dir, "%s_normed.onnx" % (model_name))
+    model_parser = parser.ONNX_Parser(onnx_normed_file)
+    model_parser.print_model()
+    converted_pytorch_model = converter.ONNXConvertedModel(onnx_normed_file)
+    converted_pytorch_model = converted_pytorch_model.to(device)
+    converted_pytorch_model.eval()
+    converted_ann_acc = val_ann(net=converted_pytorch_model,
+                            device=device,
+                            data_loader=test_data_loader,
+                            loss_function=loss_function)
+
+    # def hook(module, input, output):
+    #     print(module.__class__.__name__)
+    #     print(torch.min(output),torch.max(output),)
+        #print(output.reshape(-1)[1:100])
+
+    # handle = []
+    # for m in converted_pytorch_model.modules():
+    #     if isinstance(m,nn.ReLU):
+    #         handle.append(m.register_forward_hook(hook))
+
+    # converted_pytorch_model.eval()
+    # converted_pytorch_model(norm_tensor[10,:,:,:].reshape(1,3,224,224).to(device))
+    #
+    # for h in handle:
+    #     h.remove()
+
+
+    torch.save(converted_pytorch_model.state_dict(), os.path.join(log_dir, "%s_ann_from_onnx.pth" % (model_name)))
+
+    converted_snn = converted_pytorch_model.convert_to_snn()
+
+    snn_acc = sim.simulate_snn(snn=converted_snn,
+                               device=device,
+                               data_loader=test_data_loader,
+                               T=T,
+                               poisson=False,
+                               online_draw=True,
+                               fig_name=model_name,
+                               ann_baseline=converted_ann_acc * 100,
+                               log_dir=log_dir)
+
+    print('Summary:\tANN Accuracy:%.4f%%  \tSNN Accuracy:%.4f%% [%s %.4f%%]' % (converted_ann_acc * 100, snn_acc * 100,
+                                                                                'Increased' if snn_acc > converted_ann_acc else 'Decreased',
+                                                                                np.abs(
+                                                                                    converted_ann_acc * 100 - snn_acc * 100)
                                                                                 ))
