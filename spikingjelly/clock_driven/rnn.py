@@ -409,13 +409,13 @@ class SpikingRNNBase(nn.Module):
             # states非None且不为tuple时，它本身就是一个tensor，例如普通RNN的状态
             states_list = states
         elif states is None:
-            # squeeze()的作用是，若states_num() == 1则去掉多余的维度
+            # squeeze(0)的作用是，若states_num() == 1则去掉多余的维度
             if self.bidirectional:
                 states_list = torch.zeros(
-                    size=[self.states_num(), self.num_layers * 2, batch_size, self.hidden_size]).to(x).squeeze()
+                    size=[self.states_num(), self.num_layers * 2, batch_size, self.hidden_size]).to(x).squeeze(0)
             else:
                 states_list = torch.zeros(size=[self.states_num(), self.num_layers, batch_size, self.hidden_size]).to(
-                    x).squeeze()
+                    x).squeeze(0)
         else:
             raise TypeError
 
