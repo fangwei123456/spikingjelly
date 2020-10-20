@@ -321,7 +321,7 @@ def plot_one_neuron_v_s(v: list, s: list, v_threshold=1.0, v_reset=0.0,
         ax0.axhline(v_reset, label='$V_{reset}$', linestyle='-.', c='g')
     ax0.legend()
     t = np.arange(0, T)
-    s_np = np.asarray(s).squeeze(0)
+    s_np = np.asarray(s).squeeze(1)
     t_spike = s_np * t
     mask = (s_np == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
     ax1 = plt.subplot2grid((3, 1), (2, 0))
