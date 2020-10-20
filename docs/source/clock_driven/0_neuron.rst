@@ -153,6 +153,7 @@ Soft方式重置方程为：
 现在让我们给与LIF神经元层持续的输入，并画出其膜电位和输出脉冲：
 
 .. code-block:: python
+
     x = torch.Tensor([2.0])
     T = 150
     for t in range(T):
