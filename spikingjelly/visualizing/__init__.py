@@ -333,4 +333,4 @@ def plot_one_neuron_v_s(v: list, s: list, v_threshold=1.0, v_reset=0.0,
     ax1.set_yticks([])
 
     ax1.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
-    return fig
+    return fig, ax0, ax1
