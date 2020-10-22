@@ -65,7 +65,7 @@ Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh
 As simple as using PyTorch.
 
 ```python
->>> net = nn.Sequential(nn.Flatten(), neuron.LIFNode(tau=tau))
+>>> net = nn.Sequential(nn.Flatten(), nn.Linear(28 * 28, 10, bias=False), neuron.LIFNode(tau=tau))
 >>> net = net.to(device) # Can be CPU or CUDA devices
 ```
 
