@@ -64,7 +64,7 @@ class Net(nn.Module):
 像使用PyTorch一样简单。
 
 ```python
->>> net = nn.Sequential(nn.Flatten(), neuron.LIFNode(tau=tau))
+>>> net = nn.Sequential(nn.Flatten(), nn.Linear(28 * 28, 10, bias=False), neuron.LIFNode(tau=tau))
 >>> net = net.to(device) # Can be CPU or CUDA devices
 ```
 
