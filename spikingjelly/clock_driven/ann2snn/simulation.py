@@ -177,7 +177,7 @@ def parallel_inference(net: nn.Module, data_loaders: list, devices: list, loss_f
     '''
     inf_threads = []
     for i in range(devices.__len__()):
-        net_c = net.to(devices[i])
+        net_c = copy.deepcopy(net).to(devices[i])
         inf_threads.append(FunctionThreadWithRet(loss_fun, net_c, data_loaders[i], devices[i], *args, **kwargs))
         print(f'start thread {i} on device {devices[i]}')
         inf_threads[-1].start()
