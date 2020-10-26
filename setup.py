@@ -13,7 +13,7 @@ with open("./README.md", "r", encoding="utf-8") as fh:
 setuptools.setup(
     install_requires=install_requires,
     name="spikingjelly",
-    version="0.0.0.0.001",
+    version="0.0.0.0.002",
     author="PKU MLG and other contributors",
     author_email="fwei@pku.edu.cn, chyq@pku.edu.cn",
     description="A Spiking Neural Networks simulator built on PyTorch.",
