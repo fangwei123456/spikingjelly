@@ -71,7 +71,7 @@ As simple as using PyTorch.
 
 ## About
 
-[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) is the main developer of SpikingJelly.
+[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 

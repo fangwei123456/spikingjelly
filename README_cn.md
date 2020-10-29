@@ -70,7 +70,7 @@ class Net(nn.Module):
 
 ## 项目信息
 
-北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 是SpikingJelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](http://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
 
 开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
 
