@@ -50,7 +50,7 @@
 
 项目信息
 -------------------------
-北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 是spikingjelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <http://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
 
 开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
 
@@ -104,7 +104,7 @@ Indices and tables
 
 About
 -------------------------
-`Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University <https://pkuml.org/>`_ is the main developer of spikingjelly.
+`Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University <https://pkuml.org/>`_ and `Peng Cheng Laboratory <http://www.szpclab.com/>`_ are the main developers of SpikingJelly.
 
 The list of developers can be found at https://github.com/fangwei123456/spikingjelly/graphs/contributors.
 
