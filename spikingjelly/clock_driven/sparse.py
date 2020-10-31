@@ -86,15 +86,15 @@ class SparseConverter:
         feats = torch.ones(size=[coords.shape[0], 1], dtype=torch.float, device=x.device)
         return coords, feats
 
-class SparseSpikesMaxPool3d(ME.MinkowskiMaxPooling):
+class SparseMaxPool3d(ME.MinkowskiMaxPooling):
     def __init__(self, kernel_size, stride=1, dilation=1):
         super().__init__(kernel_size=kernel_size, stride=stride, dilation=dilation, dimension=4)
 
-class SparseSpikesMaxPool2d(ME.MinkowskiMaxPooling):
+class SparseMaxPool2d(ME.MinkowskiMaxPooling):
     def __init__(self, kernel_size, stride=1, dilation=1):
         super().__init__(kernel_size=kernel_size, stride=stride, dilation=dilation, dimension=3)
 
-class SparseSpikesMaxPool1d(ME.MinkowskiMaxPooling):
+class SparseMaxPool1d(ME.MinkowskiMaxPooling):
     def __init__(self, kernel_size, stride=1, dilation=1):
         super().__init__(kernel_size=kernel_size, stride=stride, dilation=dilation, dimension=2)
 
