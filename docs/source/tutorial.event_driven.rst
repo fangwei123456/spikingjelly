@@ -177,7 +177,7 @@ Tempotron的膜电位定义为：
     >>> import spikingjelly.event_driven.examples.tempotron_mnist as tempotron_mnist
     >>> tempotron_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
-     input device, e.g., "cpu" or "cuda:0": cuda:15
+     input device, e.g., "cpu" or "cuda:0": cuda:5
     输入保存MNIST数据集的位置，例如“./”
      input root directory for saving MNIST dataset, e.g., "./": ./mnist
     输入batch_size，例如“64”
@@ -191,16 +191,19 @@ Tempotron的膜电位定义为：
     输入使用高斯调谐曲线编码每个像素点使用的神经元数量，例如“16”
      input neuron number for encoding a piexl in GaussianTuning encoder, e.g., "16": 16
     输入保存tensorboard日志文件的位置，例如“./”
-     input root directory for saving tensorboard logs, e.g., "./": ./logs_tempotron_mnist
+     input root directory for saving tensorboard logs, e.g., "./": ./logs
 
 
 查看训练结果
 ^^^^^^^^^^^^
 在Tesla K80上训练10个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/accuracy_curve.png
+.. image:: ./_static/examples/event_driven/tempotron_mnist/train.*
 
-测试集的正确率在78%左右，可以看出Tempotron确实实现了类似ANN中感知器的功能，具有一定的分类能力。但是与主流的多层SNN相比，性能较差。
+.. image:: ./_static/examples/event_driven/tempotron_mnist/test.*
+
+测试集的正确率67.1%左右，可以看出Tempotron确实实现了类似ANN中感知器的功能，具有一定的分类能力。但是与主流的多层SNN相比，性能较差。
+随着训练的进行，测试集正确率不断下降，过拟合比较严重。
 
 
 
