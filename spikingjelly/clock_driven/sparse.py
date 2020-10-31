@@ -40,7 +40,7 @@ def to_sparse(x: torch.Tensor):
     if x.dtype == torch.bool:
         feats = torch.ones(size=[coords.shape[0], 1], dtype=torch.float, device=x.device)
     else:
-        feats = x[mask]
+        feats = x[mask].unsqueeze_(1)
     return coords, feats
 
 class SparseConverter:
