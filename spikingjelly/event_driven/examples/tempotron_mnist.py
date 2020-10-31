@@ -118,7 +118,7 @@ def main():
         with torch.no_grad():
             correct_num = 0
             img_num = 0
-            for img, label in train_data_loader:
+            for img, label in test_data_loader:
                 img = img.view(img.shape[0], -1).unsqueeze(1)  # [batch_size, 1, 784]
 
                 in_spikes = encoder.encode(img.to(device), T)  # [batch_size, 1, 784, m]
