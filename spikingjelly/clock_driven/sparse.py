@@ -37,7 +37,10 @@ def to_sparse(x: torch.Tensor):
     # 运行到此处，coords为 [tensor([[0, 0, 1]]), tensor([[0, 2, 0]])]
 
     coords = torch.cat(coords).t().int()
-    feats = torch.ones(size=[coords.shape[0], 1], dtype=torch.float, device=x.device)
+    if x.dtype == torch.bool:
+        feats = torch.ones(size=[coords.shape[0], 1], dtype=torch.float, device=x.device)
+    else:
+        feats = x[mask]
     return coords, feats
 
 class SparseConverter:
@@ -83,7 +86,11 @@ class SparseConverter:
             # 运行到此处，coords为 [tensor([[0, 0, 1]]), tensor([[0, 2, 0]])]
 
         coords = torch.cat(coords).t().int()
-        feats = torch.ones(size=[coords.shape[0], 1], dtype=torch.float, device=x.device)
+        coords = torch.cat(coords).t().int()
+        if x.dtype == torch.bool:
+            feats = torch.ones(size=[coords.shape[0], 1], dtype=torch.float, device=x.device)
+        else:
+            feats = x[mask]
         return coords, feats
 
 class SparseMaxPool3d(ME.MinkowskiMaxPooling):
