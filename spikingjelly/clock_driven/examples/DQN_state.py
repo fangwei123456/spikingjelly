@@ -11,7 +11,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import torchvision.transforms as T
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import argparse
 
 parser = argparse.ArgumentParser(description='DQN State')
