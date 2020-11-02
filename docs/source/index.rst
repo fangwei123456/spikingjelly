@@ -30,7 +30,7 @@
 上手教程
 -------------------------
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    tutorials
 
@@ -85,7 +85,7 @@ Developers can download the latest version from GitHub and install:
 Tutorials
 -------------------------
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
    tutorials_en
 
