@@ -220,17 +220,19 @@ if IF_TRAIN:
     # x = np.load('category_lines_test.npy', allow_pickle=True)
     # xdict = x.item()
 
-
-    plt.subplot(131)
+    plt.figure()
+    plt.subplot(311)
     plt.plot(avg_losses)
-    plt.title('avg_losses')
-    plt.subplot(132)
+    plt.title('Average loss')
+    plt.subplot(312)
     plt.plot(accuracy_rec)
     plt.title('Train accuracy')
-    plt.subplot(133)
+    plt.subplot(313)
     plt.plot(test_accu_rec)
     plt.title('Test accuracy')
-    plt.savefig('Training process')
+    plt.xlabel('Epoch (*1000)')
+    plt.subplots_adjust(hspace=0.6)
+    plt.savefig('TrainingProcess.svg')
     plt.close()
 
 else:
@@ -289,9 +291,10 @@ else:
         confusion[category_i][guess_i] += 1
 
     confusion = confusion / confusion.sum(1)
+    np.save('confusion.npy', confusion)
 
     # Set up plot
-    fig = plt.figure()
+    fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111)
     cax = ax.matshow(confusion.numpy())
     fig.colorbar(cax)
@@ -303,8 +306,5 @@ else:
     ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
     # sphinx_gallery_thumbnail_number = 2
     plt.show()
-    plt.savefig('confusion_matrix.png')
+    plt.savefig('ConfusionMatrix.svg')
     plt.close()
-
-
-
