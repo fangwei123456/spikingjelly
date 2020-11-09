@@ -196,8 +196,8 @@
 
 下图展示了训练过程中损失函数、测试集准确率、测试集准确率随时间的变化。
 
-.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.svg
-    :width: 50%
+.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.*
+    :width: 100%
 
 网络测试
 ---------------------------
@@ -305,5 +305,5 @@
 下图展示了Confusion matrix。对角线越亮，表示模型对某一类别预测最好，很少产生混淆，如Arabic和Greek。
 而有的语言则较容易产生混淆，如Korean和Chinese，Spanish和Portuguese，English和Scottish。
 
-.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.svg
-    :width: 50%
+.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.*
+    :width: 100%
