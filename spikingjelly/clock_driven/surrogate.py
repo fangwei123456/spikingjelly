@@ -43,6 +43,40 @@ def heaviside(x: torch.Tensor):
     '''
     return (x >= 0).to(x.dtype)
 
+def check_manual_grad(primitive_function, spiking_function, eps=1e-5):
+    '''
+    :param primitive_function: 梯度替代函数的原函数
+    :type primitive_function: callable
+    :param spiking_function: 梯度替代函数
+    :type spiking_function: callable
+    :param eps: 最大误差
+    :type eps: float
+
+    梯度替代函数的反向传播一般是手写的，可以用此函数去检查手写梯度是否正确。
+
+    此函数检查梯度替代函数spiking_function的反向传播，与原函数primitive_function的反向传播结果是否一致。“一致”被定义为，两者的误差不超过eps。
+
+    示例代码：
+
+    .. code-block:: python
+
+        surrogate.check_manual_grad(surrogate.ATan.primitive_function, surrogate.atan.apply)
+    '''
+    alpha = torch.tensor(1.0, dtype=torch.float)
+    alpha.requires_grad_(True)
+    x = (torch.rand([4096]) - 0.5) * 64
+    x.requires_grad_(True)
+    primitive_function(x, alpha).sum().backward()
+    alpha_grad_auto = alpha.grad.clone()
+    x_grad_auto = x.grad.clone()
+    alpha.grad.zero_()
+    x.grad.zero_()
+    spiking_function(x, alpha).sum().backward()
+    alpha_grad_manual = alpha.grad.clone()
+    x_grad_manual = x.grad.clone()
+    assert (alpha_grad_manual - alpha_grad_auto).abs().max().item() <= eps, 'alpha.grad is wrong!'
+    assert (x_grad_manual - x_grad_auto).abs().max().item() <= eps, 'x.grad is wrong!'
+    print('grad check pass')
 
 class SurrogateFunctionBase(nn.Module):
     def __init__(self, alpha, spiking=True, learnable=False):
