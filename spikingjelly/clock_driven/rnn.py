@@ -53,6 +53,7 @@ def bidirectional_rnn_cell_forward(cell: nn.Module, cell_reverse: nn.Module, x: 
     for t in range(T):
         ret.append(torch.cat((output[t], output_r[T - t - 1]), dim=-1))
     return torch.stack(ret), ss, ss_r
+
 class SpikingRNNCellBase(nn.Module):
     def __init__(self, input_size: int, hidden_size: int, bias=True):
         '''
@@ -586,7 +587,6 @@ class SpikingLSTMCell(SpikingRNNCellBase):
             back-propagation, which is used for generating ``i``, ``f``, ``o``
         :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
 
-
         :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
             will be set as ``surrogate_function1``. Default: ``None``
@@ -680,6 +680,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         else:
             h = hc[0]
             c = hc[1]
+
         if self.surrogate_function2 is None:
             i, f, g, o = torch.split(self.surrogate_function1(self.linear_ih(x) + self.linear_hh(h)),
                                      self.hidden_size, dim=1)
@@ -689,8 +690,10 @@ class SpikingLSTMCell(SpikingRNNCellBase):
             f = self.surrogate_function1(f)
             g = self.surrogate_function2(g)
             o = self.surrogate_function1(o)
+
         if self.surrogate_function2 is not None:
             assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
+
         if self.surrogate_function1.spiking:
             # 可以使用针对脉冲的加速
             # c = f * c + i * g
@@ -700,6 +703,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         else:
             c = c * f + i * g
             h = c * o
+            
         return h, c
 
 class SpikingLSTM(SpikingRNNBase):
