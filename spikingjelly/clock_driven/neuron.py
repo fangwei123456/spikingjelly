@@ -125,7 +125,7 @@ class BaseNode(nn.Module):
             self.monitor['v'].append(self.v.data.cpu().numpy().copy())
             self.monitor['s'].append(spike.data.cpu().numpy().copy())
 
-        if self.detach_reset:
+        if self.training and self.detach_reset:
             spike_d = spike.detach()
         else:
             spike_d = spike
