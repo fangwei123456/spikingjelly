@@ -20,8 +20,8 @@ print('list dir', os.listdir(sys.path[0]))
 # -- Project information -----------------------------------------------------
 
 project = 'spikingjelly'
-copyright = '2020, PKU MLG'
-author = 'PKU MLG'
+copyright = '2020, PKU MLG, PCL'
+author = 'PKU MLG, PCL'
 
 # The full version, including alpha/beta/rc tags
 release = '0.0.0.0.001'
