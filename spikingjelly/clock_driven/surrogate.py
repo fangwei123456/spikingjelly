@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-
-#TODO 多个可学习参数；alpha可学习时，对其应有的限制，例如alpha>0；涉及到绝对值的计算，在0处的梯度
+# TODO 审查代码，优化，尽量用inplace操作
 def heaviside(x: torch.Tensor):
     '''
     * :ref:`API in English <heaviside.__init__-en>`
@@ -63,36 +62,24 @@ def check_manual_grad(primitive_function, spiking_function, eps=1e-5):
         surrogate.check_manual_grad(surrogate.ATan.primitive_function, surrogate.atan.apply)
     '''
     alpha = torch.tensor(1.0, dtype=torch.float)
-    alpha.requires_grad_(True)
     x = torch.arange(-16, 16, 32 / 8192)
     x.requires_grad_(True)
     primitive_function(x, alpha).sum().backward()
-    alpha_grad_auto = alpha.grad.clone()
     x_grad_auto = x.grad.clone()
-    alpha.grad.zero_()
     x.grad.zero_()
     spiking_function(x, alpha).sum().backward()
-    alpha_grad_manual = alpha.grad.clone()
     x_grad_manual = x.grad.clone()
-    assert (alpha_grad_manual - alpha_grad_auto).abs().max().item() <= eps, 'alpha.grad is wrong!'
     assert (x_grad_manual - x_grad_auto).abs().max().item() <= eps, 'x.grad is wrong!'
     print('grad check pass')
 
 class SurrogateFunctionBase(nn.Module):
-    def __init__(self, alpha, spiking=True, learnable=False):
+    def __init__(self, alpha, spiking=True):
         super().__init__()
         self.spiking = spiking
-        self.learnable = learnable
-        alpha = torch.tensor(alpha, dtype=torch.float)
-        if learnable:
-            self.alpha = nn.Parameter(alpha)
-        else:
-            self.register_buffer('alpha', alpha)
+        self.register_buffer('alpha', torch.tensor(alpha, dtype=torch.float))
 
-        if spiking:
-            self.f = self.spiking_function
-        else:
-            self.f = self.primitive_function
+    def set_spiking_mode(self, spiking: bool):
+        self.spiking = spiking
 
     def extra_repr(self):
         return f'alpha={self.alpha}, spiking={self.spiking}, learnable={self.learnable}'
@@ -107,7 +94,10 @@ class SurrogateFunctionBase(nn.Module):
 
     def forward(self, x: torch.Tensor):
         if self.training:
-            return self.f(x, self.alpha)
+            if self.spiking:
+                return self.spiking_function(x, self.alpha)
+            else:
+                return self.primitive_function(x, self.alpha)
         else:
             # 无论是否为spiking模式，只要是测试（推理）阶段，都直接使用阶跃函数
             return heaviside(x)
@@ -123,25 +113,15 @@ class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
-            x_abs = ctx.saved_tensors[0].abs()
-            shared_c = grad_output * (- ctx.saved_tensors[1] * x_abs + 1) * (x_abs <= 1 / ctx.saved_tensors[1]).to(ctx.saved_tensors[0])
-            # - ctx.saved_tensors[1] *  x_abs + 1 = - alpha * |x| + 1
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] * shared_c
-            # alpha * (- alpha * |x| + 1)
-        if ctx.needs_input_grad[1]:
-            # 由于alpha只有一个元素，因此梯度需要求和，变成标量
-            grad_alpha = (ctx.saved_tensors[0] * shared_c).sum()
-            # x * (- alpha * |x| + 1)
-
-        return grad_x, grad_alpha
+            x_abs = ctx.saved_tensors[0].abs()
+            mask = (x_abs > (1 / ctx.saved_tensors[1]))
+            grad_x = (grad_output * (- ctx.saved_tensors[1].pow(2) * x_abs + ctx.saved_tensors[1])).masked_fill(mask, 0)
+        return grad_x, None
 
 
 class PiecewiseQuadratic(SurrogateFunctionBase):
-    def __init__(self, alpha=1.0, spiking=True, learnable=False):
+    def __init__(self, alpha=1.0, spiking=True):
         '''
         * :ref:`API in English <PiecewiseQuadratic.__init__-en>`
         .. _PiecewiseQuadratic.__init__-cn:
@@ -207,7 +187,7 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         The function is used in [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
 
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
 
     @staticmethod
     def spiking_function(x, alpha):
@@ -384,29 +364,21 @@ class PiecewiseLeakyReLU(nn.Module):
 class piecewise_exp(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
-            shared_c = grad_output * (- ctx.saved_tensors[1] * ctx.saved_tensors[0].abs()).exp_() / 2
-
         if ctx.needs_input_grad[0]:
-            grad_x = shared_c * ctx.saved_tensors[1]
+            grad_x = ctx.saved_tensors[1] / 2 * (- ctx.saved_tensors[1] * ctx.saved_tensors[0].abs()).exp_() * grad_output
 
-        if ctx.needs_input_grad[1]:
-            grad_alpha = shared_c * ctx.saved_tensors[0]
-
-        return grad_x, grad_alpha
+        return grad_x, None
 
 
 class PiecewiseExp(SurrogateFunctionBase):
-    def __init__(self, alpha=1.0, spiking=True, learnable=False):
+    def __init__(self, alpha=1.0, spiking=True):
         '''
         * :ref:`API in English <PiecewiseExp.__init__-en>`
         .. _PiecewiseExp.__init__-cn:
@@ -461,7 +433,7 @@ class PiecewiseExp(SurrogateFunctionBase):
 
         The function is used in [#SLAYER]_ [#neftci2019surrogate]_ .
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
 
     @staticmethod
     def spiking_function(x, alpha):
@@ -508,23 +480,15 @@ class sigmoid(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
             sgax = (ctx.saved_tensors[0] * ctx.saved_tensors[1]).sigmoid_()
-            shared_c = grad_output * (1 - sgax) * sgax
+            grad_x = grad_output * (1 - sgax) * sgax * ctx.saved_tensors[1]
 
-        if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] * shared_c
-        if ctx.needs_input_grad[1]:
-            # 由于alpha只有一个元素，因此梯度需要求和，变成标量
-            grad_alpha = (ctx.saved_tensors[0] * shared_c).sum()
-
-        return grad_x, grad_alpha
+        return grad_x, None
 
 
 class Sigmoid(SurrogateFunctionBase):
-    def __init__(self, alpha=1.0, spiking=True, learnable=False):
+    def __init__(self, alpha=1.0, spiking=True):
         '''
         * :ref:`API in English <Sigmoid.__init__-en>`
         .. _Sigmoid.__init__-cn:
@@ -571,7 +535,7 @@ class Sigmoid(SurrogateFunctionBase):
 
         The function is used in  [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ .
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
 
 
     @staticmethod
@@ -608,29 +572,20 @@ class Sigmoid(SurrogateFunctionBase):
 class soft_sign(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
-            shared_c = grad_output / (2 * (1 + ctx.saved_tensors[0].abs() * ctx.saved_tensors[1]).pow_(2))
-
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] * shared_c
-        if ctx.needs_input_grad[1]:
-            # 由于alpha只有一个元素，因此梯度需要求和，变成标量
-            grad_alpha = (ctx.saved_tensors[0] * shared_c).sum()
-
-        return grad_x, grad_alpha
+            grad_x = grad_output / (2 * ctx.saved_tensors[1] * (1 / ctx.saved_tensors[1] + ctx.saved_tensors[0].abs()).pow_(2))
+        return grad_x, None
 
 
 class SoftSign(SurrogateFunctionBase):
-    def __init__(self, alpha=2.0, spiking=True, learnable=False):
+    def __init__(self, alpha=2.0, spiking=True):
         '''
         * :ref:`API in English <SoftSign.__init__-en>`
         .. _SoftSign.__init__-cn:
@@ -678,7 +633,7 @@ class SoftSign(SurrogateFunctionBase):
 
         The function is used in [#SuperSpike]_ [#neftci2019surrogate]_ .
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
         assert alpha > 0, 'alpha must be lager than 0'
 
     @staticmethod
@@ -715,28 +670,20 @@ class SoftSign(SurrogateFunctionBase):
 class atan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
-            shared_c = grad_output / (1 + (ctx.saved_tensors[1] * math.pi / 2 * ctx.saved_tensors[0]).square_()) / 2
+        if ctx.needs_input_grad[0]:
+            grad_x = ctx.saved_tensors[1] / 2 / (1 + (math.pi / 2 * ctx.saved_tensors[1] * ctx.saved_tensors[0]).pow_(2)) * grad_output
 
-            if ctx.needs_input_grad[0]:
-                grad_x = ctx.saved_tensors[1] * shared_c
-            if ctx.needs_input_grad[1]:
-                # 由于alpha只有一个元素，因此梯度需要求和，变成标量
-                grad_alpha = (ctx.saved_tensors[0] * shared_c).sum()
-
-        return grad_x, grad_alpha
+        return grad_x, None
 
 class ATan(SurrogateFunctionBase):
-    def __init__(self, alpha=2.0, spiking=True, learnable=False):
+    def __init__(self, alpha=2.0, spiking=True):
         '''
         * :ref:`API in English <ATan.__init__-en>`
         .. _ATan.__init__-cn:
@@ -770,7 +717,7 @@ class ATan(SurrogateFunctionBase):
         .. image:: ./_static/API/clock_driven/surrogate/ATan.*
             :width: 100%
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
 
 
     @staticmethod
@@ -807,28 +754,22 @@ class ATan(SurrogateFunctionBase):
 class nonzero_sign_log_abs(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
-            shared_c = grad_output / (1 + ctx.saved_tensors[0].abs() * ctx.saved_tensors[1])
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] * shared_c
-        if ctx.needs_input_grad[1]:
-            # 由于alpha只有一个元素，因此梯度需要求和，变成标量
-            grad_alpha = (ctx.saved_tensors[0] * shared_c).sum()
+            grad_x = grad_output / (1 / ctx.saved_tensors[1] + ctx.saved_tensors[0].abs())
 
-        return grad_x, grad_alpha
+
+        return grad_x, None
 
 
 class NonzeroSignLogAbs(SurrogateFunctionBase):
-    def __init__(self, alpha=1.0, spiking=True, learnable=False):
+    def __init__(self, alpha=1.0, spiking=True):
         '''
         * :ref:`API in English <LogAbs.__init__-en>`
         .. _LogAbs.__init__-cn:
@@ -902,7 +843,7 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
 
         The function is used in  .
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
 
 
     @staticmethod
@@ -941,7 +882,7 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
 class erf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
@@ -949,21 +890,14 @@ class erf(torch.autograd.Function):
     def backward(ctx, grad_output):
         grad_x = None
         grad_alpha = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
-            # x和alpha都需要梯度，避免重复计算，共用的部分
-
-            shared_c = grad_output * (- (ctx.saved_tensors[0] * ctx.saved_tensors[1]).pow_(2)).exp_() / math.sqrt(math.pi)
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] * shared_c
-        if ctx.needs_input_grad[1]:
-            # 由于alpha只有一个元素，因此梯度需要求和，变成标量
-            grad_alpha = (ctx.saved_tensors[0] * shared_c).sum()
+            grad_x = grad_output * (- (ctx.saved_tensors[0] * ctx.saved_tensors[1]).pow_(2)).exp_() * (ctx.saved_tensors[1] / math.sqrt(math.pi))
 
-        return grad_x, grad_alpha
+        return grad_x, None
 
 
 class Erf(SurrogateFunctionBase):
-    def __init__(self, alpha=2.0, spiking=True, learnable=False):
+    def __init__(self, alpha=2.0, spiking=True):
         '''
         * :ref:`API in English <Erf.__init__-en>`
         .. _Erf.__init__-cn:
@@ -1022,7 +956,7 @@ class Erf(SurrogateFunctionBase):
 
         The function is used in [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_.
         '''
-        super().__init__(alpha, spiking, learnable)
+        super().__init__(alpha, spiking)
 
 
     @staticmethod
