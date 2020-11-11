@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-#TODO 多个可学习参数；alpha可学习时，对其应有的限制，例如alpha>0
+#TODO 多个可学习参数；alpha可学习时，对其应有的限制，例如alpha>0；涉及到绝对值的计算，在0处的梯度
 def heaviside(x: torch.Tensor):
     '''
     * :ref:`API in English <heaviside.__init__-en>`
