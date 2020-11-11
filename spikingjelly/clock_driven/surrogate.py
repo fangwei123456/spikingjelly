@@ -83,10 +83,11 @@ class SurrogateFunctionBase(nn.Module):
         super().__init__()
         self.spiking = spiking
         self.learnable = learnable
+        alpha = torch.tensor(alpha, dtype=torch.float)
         if learnable:
-            self.alpha = nn.Parameter(torch.tensor(alpha, dtype=torch.float))
+            self.alpha = nn.Parameter(alpha)
         else:
-            self.alpha = alpha
+            self.register_buffer('alpha', alpha)
 
         if spiking:
             self.f = self.spiking_function
@@ -695,30 +696,25 @@ class SoftSign(nn.Module):
 class atan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad:
-            if isinstance(alpha, torch.Tensor):
-                ctx.save_for_backward(x, alpha)
-            else:
-                ctx.save_for_backward(x)
-                ctx.alpha = alpha
+        if x.requires_grad or alpha.requires_grad:
+            ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         grad_alpha = None
-        if ctx.saved_tensors.__len__() == 1:
-            grad_x = ctx.alpha / 2 / (1 + (ctx.alpha * math.pi / 2 * ctx.saved_tensors[0]).square()) * grad_output
-        else:
-            # 避免重复计算，共用的部分
+        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
+            # x和alpha都需要梯度，避免重复计算，共用的部分
             shared_c = grad_output / (1 + (ctx.saved_tensors[1] * math.pi / 2 * ctx.saved_tensors[0]).square())
+
             if ctx.needs_input_grad[0]:
                 grad_x = ctx.saved_tensors[1] / 2 * shared_c
             if ctx.needs_input_grad[1]:
                 # 由于alpha只有一个元素，因此梯度需要求和，变成标量
                 grad_alpha = (ctx.saved_tensors[0] / 2 * shared_c).sum()
-        return grad_x, grad_alpha
 
+        return grad_x, grad_alpha
 
 class ATan(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True, learnable=False):
