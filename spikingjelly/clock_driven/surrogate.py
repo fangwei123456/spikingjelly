@@ -122,7 +122,7 @@ class MultiArgsSurrogateFunctionBase(nn.Module):
 class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
@@ -132,7 +132,7 @@ class piecewise_quadratic(torch.autograd.Function):
         if ctx.needs_input_grad[0]:
             x_abs = ctx.saved_tensors[0].abs()
             mask = (x_abs > (1 / ctx.saved_tensors[1]))
-            grad_x = (grad_output * (- ctx.saved_tensors[1].pow(2) * x_abs + ctx.saved_tensors[1])).masked_fill(mask, 0)
+            grad_x = (grad_output * (- ctx.saved_tensors[1].pow(2) * x_abs + ctx.saved_tensors[1])).masked_fill_(mask, 0)
         return grad_x, None
 
 
@@ -211,8 +211,8 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
 
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha):
-        mask0 = (x > 1.0 / alpha).to(x)
-        mask1 = (x.abs() <= 1.0 / alpha).to(x)
+        mask0 = (x > (1.0 / alpha)).to(x)
+        mask1 = (x.abs() <= (1.0 / alpha)).to(x)
 
         return mask0 + mask1 * (-(alpha ** 2) / 2 * x.square() * x.sign() + alpha * x + 0.5)
 
@@ -237,145 +237,6 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
     # plt.show()
-
-
-class piecewise_leaky_relu(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x: torch.Tensor, w=1, c=0.01):
-        if x.requires_grad:
-            ctx.save_for_backward(x)
-            ctx.w = w
-            ctx.c = c
-        return heaviside(x)
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            mask_width = (ctx.saved_tensors[0].abs() < ctx.w)
-            mask_c = mask_width.logical_not()
-            grad_x = grad_output * ctx.saved_tensors[0].masked_fill(mask_width, 1 / ctx.w).masked_fill(mask_c, ctx.c)
-        return grad_x, None, None
-
-
-class PiecewiseLeakyReLU(nn.Module):
-    def __init__(self, w=1, c=0.01, spiking=True):
-        '''
-        * :ref:`API in English <PiecewiseLeakyReLU.__init__-en>`
-        .. _PiecewiseLeakyReLU.__init__-cn:
-
-        :param w: ``-w <= x <= w`` 时反向传播的梯度为 ``1 / 2w``
-        :param c: ``x > w`` 或 ``x < -w`` 时反向传播的梯度为 ``c``
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
-
-        分段线性的近似脉冲发放函数。梯度为
-
-        .. math::
-            g'(x) =
-            \\begin{cases}
-            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
-            c, & x < -w ~or~ x > w
-            \\end{cases}
-
-        对应的原函数为
-
-        .. math::
-            g(x) =
-            \\begin{cases}
-            cx + cw, & x < -w \\\\
-            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
-            cx - cw + 1, & x > w \\\\
-            \\end{cases}
-
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
-            :width: 100%
-
-        该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_ 中使用。
-
-        * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
-        .. _PiecewiseLeakyReLU.__init__-en:
-
-        :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
-        :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
-
-        The piecewise surrogate spiking function. The gradient is defined by
-
-        .. math::
-            g'(x) =
-            \\begin{cases}
-            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
-            c, & x < -w ~or~ x > w
-            \\end{cases}
-
-        The primitive function is defined by
-
-        .. math::
-            g(x) =
-            \\begin{cases}
-            cx + cw, & x < -w \\\\
-            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
-            cx - cw + 1, & x > w
-            \\end{cases}
-
-        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
-            :width: 100%
-
-        The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
-        '''
-        super().__init__()
-        self.w = w
-        self.c = c
-        self.spiking = spiking
-        if spiking:
-            self.f = self.spiking_function
-        else:
-            self.f = self.primitive_function
-
-    def forward(self, x):
-        return self.f(x, self.w, self.c)
-
-    @staticmethod
-    def spiking_function(x: torch.Tensor, w, c):
-        return piecewise_leaky_relu.apply(x, w, c)
-
-    @staticmethod
-    def primitive_function(x: torch.Tensor, w, c):
-        mask0 = (x < -w).to(x)
-        mask1 = (x > w).to(x)
-        mask2 = torch.ones_like(x.data) - mask0 - mask1
-        if c == 0:
-            return mask2 * (x / (2 * w) + 1 / 2) + mask1
-        else:
-            cw = c * w
-            return mask0 * (c * x + cw) + mask1 * (c * x + (- cw + 1)) \
-                   + mask2 * (x / (2 * w) + 1 / 2)
-
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $w=1, c=0.1$')
-
-    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $w=1, c=0.1$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('PiecewiseLeakyReLU surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
-
 
 class piecewise_exp(torch.autograd.Function):
     @staticmethod
@@ -489,14 +350,14 @@ class PiecewiseExp(SurrogateFunctionBase):
 class sigmoid(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
-        if x.requires_grad or alpha.requires_grad:
+        if x.requires_grad:
             ctx.save_for_backward(x, alpha)
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
+        if ctx.needs_input_grad[0]:
             sgax = (ctx.saved_tensors[0] * ctx.saved_tensors[1]).sigmoid_()
             grad_x = grad_output * (1 - sgax) * sgax * ctx.saved_tensors[1]
 
@@ -742,7 +603,7 @@ class ATan(SurrogateFunctionBase):
 
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha):
-        return (math.pi / 2 * alpha * x).atan() / math.pi + 0.5
+        return (math.pi / 2 * alpha * x).atan_() / math.pi + 0.5
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
@@ -905,7 +766,6 @@ class erf(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
-        grad_alpha = None
         if ctx.needs_input_grad[0]:
             grad_x = grad_output * (- (ctx.saved_tensors[0] * ctx.saved_tensors[1]).pow_(2)).exp_() * (ctx.saved_tensors[1] / math.sqrt(math.pi))
 
@@ -1000,6 +860,144 @@ class Erf(SurrogateFunctionBase):
     # plt.xlim(-2, 2)
     # plt.legend()
     # plt.title('Gaussian error surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
+
+
+class piecewise_leaky_relu(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, w=1, c=0.01):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.w = w
+            ctx.c = c
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = None
+        if ctx.needs_input_grad[0]:
+            mask_width = (ctx.saved_tensors[0].abs() < ctx.w)
+            mask_c = mask_width.logical_not()
+            grad_x = grad_output * ctx.saved_tensors[0].masked_fill(mask_width, 1 / ctx.w).masked_fill(mask_c, ctx.c)
+        return grad_x, None, None
+
+
+class PiecewiseLeakyReLU(nn.Module):
+    def __init__(self, w=1, c=0.01, spiking=True):
+        '''
+        * :ref:`API in English <PiecewiseLeakyReLU.__init__-en>`
+        .. _PiecewiseLeakyReLU.__init__-cn:
+
+        :param w: ``-w <= x <= w`` 时反向传播的梯度为 ``1 / 2w``
+        :param c: ``x > w`` 或 ``x < -w`` 时反向传播的梯度为 ``c``
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        分段线性的近似脉冲发放函数。梯度为
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
+            c, & x < -w ~or~ x > w
+            \\end{cases}
+
+        对应的原函数为
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            cx + cw, & x < -w \\\\
+            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
+            cx - cw + 1, & x > w \\\\
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
+            :width: 100%
+
+        该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_ 中使用。
+
+        * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
+        .. _PiecewiseLeakyReLU.__init__-en:
+
+        :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
+        :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The piecewise surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
+            c, & x < -w ~or~ x > w
+            \\end{cases}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            cx + cw, & x < -w \\\\
+            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
+            cx - cw + 1, & x > w
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/PiecewiseLeakyReLU.*
+            :width: 100%
+
+        The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
+        '''
+        super().__init__()
+        self.w = w
+        self.c = c
+        self.spiking = spiking
+        if spiking:
+            self.f = self.spiking_function
+        else:
+            self.f = self.primitive_function
+
+    def forward(self, x):
+        return self.f(x, self.w, self.c)
+
+    @staticmethod
+    def spiking_function(x: torch.Tensor, w, c):
+        return piecewise_leaky_relu.apply(x, w, c)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, w, c):
+        mask0 = (x < -w).to(x)
+        mask1 = (x > w).to(x)
+        mask2 = torch.ones_like(x.data) - mask0 - mask1
+        if c == 0:
+            return mask2 * (x / (2 * w) + 1 / 2) + mask1
+        else:
+            cw = c * w
+            return mask0 * (c * x + cw) + mask1 * (c * x + (- cw + 1)) \
+                   + mask2 * (x / (2 * w) + 1 / 2)
+
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, $w=1, c=0.1$')
+
+    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, $w=1, c=0.1$')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('PiecewiseLeakyReLU surrogate function')
     # plt.xlabel('Input')
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
