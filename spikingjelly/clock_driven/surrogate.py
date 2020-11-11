@@ -82,7 +82,7 @@ class SurrogateFunctionBase(nn.Module):
         self.spiking = spiking
 
     def extra_repr(self):
-        return f'alpha={self.alpha}, spiking={self.spiking}, learnable={self.learnable}'
+        return f'alpha={self.alpha}, spiking={self.spiking}'
 
     @staticmethod
     def spiking_function(x, alpha):
@@ -102,6 +102,22 @@ class SurrogateFunctionBase(nn.Module):
             # 无论是否为spiking模式，只要是测试（推理）阶段，都直接使用阶跃函数
             return heaviside(x)
 
+class MultiArgsSurrogateFunctionBase(nn.Module):
+    def __init__(self, spiking=True, **kwargs):
+        super().__init__()
+        self.spiking = spiking
+        for k, v in kwargs.items():
+            self.register_buffer(k, torch.tensor(v, dtype=torch.float))
+
+    def set_spiking_mode(self, spiking: bool):
+        self.spiking = spiking
+
+    def extra_repr(self):
+        estr = []
+        estr.append(f'spiking={self.spiking}')
+        for name, buf in self.named_buffers():
+            estr.append(f'{name}={buf.item()}')
+        return ', '.join(estr, )
 
 class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
