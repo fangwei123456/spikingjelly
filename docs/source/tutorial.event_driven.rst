@@ -1,4 +1,4 @@
-事件驱动 spikingjelly.event_driven
+事件驱动
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
