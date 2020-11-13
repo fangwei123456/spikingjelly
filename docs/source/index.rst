@@ -30,24 +30,26 @@
 上手教程
 -------------------------
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: 上手教程
 
-   tutorials
+    tutorial.clock_driven
+    tutorial.event_driven
+    ./clock_driven/0_neuron
+    ./clock_driven/2_encoding
+    ./clock_driven/3_fc_mnist
+    ./clock_driven/4_conv_fashion_mnist
+    ./clock_driven/5_ann2snn
+    ./clock_driven/6_dqn_cart_pole
+    ./clock_driven/7_a2c_cart_pole
+    ./clock_driven/8_ppo_cart_pole
+    ./clock_driven/9_spikingLSTM_text
 
 
 模块文档
 -------------------------
 
     * :ref:`APIs`
-
-
-C++扩展
--------------------------
-.. toctree::
-   :maxdepth: 1
-   :caption: C++扩展
-   
-   CUDA加速 <https://spikingjelly.readthedocs.io/projects/spikingjellycppext/zh/latest/>
 
 文档索引
 -------------------------
@@ -91,12 +93,12 @@ Developers can download the latest version from GitHub and install:
     cd spikingjelly
     python setup.py install
 
-Tutorials
--------------------------
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
+   :caption: Tutorials
 
-   tutorials_en
+   tutorial_en.clock_driven
+    ./clock_driven_en/5_ann2snn
 
 Modules Docs
 -------------------------
@@ -117,12 +119,19 @@ About
 
 The list of developers can be found at https://github.com/fangwei123456/spikingjelly/graphs/contributors.
 
+.. toctree::
+   :maxdepth: 1
+   :caption: C++ Extension
+   
+   spikingjellyCppExt <https://spikingjelly.readthedocs.io/projects/spikingjellycppext/zh/latest/>
+
+
 .. _APIs:
-
-APIs
-###################
-
 .. toctree::
    :maxdepth: 4
+   :caption: APIs
 
-   APIs <spikingjelly>
+   spikingjelly.clock_driven
+   spikingjelly.datasets
+   spikingjelly.event_driven
+   spikingjelly.visualizing
