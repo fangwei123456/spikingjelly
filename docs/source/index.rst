@@ -40,6 +40,15 @@
 
     * :ref:`APIs`
 
+
+C++扩展
+-------------------------
+.. toctree::
+   :maxdepth: 1
+   :caption: C++扩展
+   
+   CUDA加速 <https://spikingjelly.readthedocs.io/projects/spikingjellycppext/zh/latest/>
+
 文档索引
 -------------------------
 
