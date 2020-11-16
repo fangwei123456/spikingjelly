@@ -26,7 +26,6 @@ author = 'PKU MLG, PCL'
 # The full version, including alpha/beta/rc tags
 release = 'alpha'
 
-
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -39,7 +38,6 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon'
 ]
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
