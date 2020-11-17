@@ -1,12 +1,7 @@
 # SpikingJelly
-![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly)[![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) ![License](https://img.shields.io/github/license/fangwei123456/spikingjelly)
+![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly)
 
-<<<<<<< HEAD
 English | [中文](./README_cn.md)
-=======
-[![Documentation Status](https://readthedocs.org/projects/spikingflow/badge/?version=latest)](https://spikingflow.readthedocs.io/zh_CN/latest/?badge=latest)
-[![HitCount](http://hits.dwyl.com/fangwei123456/SpikingFlow.svg)](http://hits.dwyl.com/fangwei123456/SpikingFlow)
->>>>>>> origin/zero
 
 ![demo](demo.png)
 
@@ -27,21 +22,17 @@ pip install spikingjelly
 Developers can download and install the latest version from source codes:
 
 From [GitHub](https://github.com/fangwei123456/spikingjelly):
-
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-
 From[OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
-
 ```bash
 git clone http://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-
 ## Build SNN In An Unprecedented Simple Way
 
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
