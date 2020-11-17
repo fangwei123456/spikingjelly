@@ -1,4 +1,5 @@
-# SpikingJelly ![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) ![License](https://img.shields.io/github/license/fangwei123456/spikingjelly)
+# SpikingJelly
+![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly)
 
 [English](./README.md) | 中文
 
@@ -21,21 +22,17 @@ pip install spikingjelly
 或者对于开发者，下载源代码并安装：
 
 通过[GitHub](https://github.com/fangwei123456/spikingjelly)：
-
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-
 通过[OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
-
 ```bash
 git clone http://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
