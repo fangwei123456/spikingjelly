@@ -1,6 +1,7 @@
 Time-driven: Use convolutional SNN to identify Fashion-MNIST
 ============================================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
 In this tutorial, we will build a convolutional pulse neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
@@ -13,6 +14,7 @@ Most of the common convolutional neural networks in ANN are in the form of convo
 We also use a similar structure in SNN. Import related modules, inherit ``torch.nn.Module``, and define our network:
 
 .. code-block:: python
+
     import torch
     import torch.nn as nn
     import torch.nn.functional as F

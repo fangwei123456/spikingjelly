@@ -1,6 +1,7 @@
 Reinforcement Learning: Deep Q Learning
 =================================================
 Authors: `fangwei123456 <https://github.com/fangwei123456>`_，`lucifer2859 <https://github.com/lucifer2859>`_
+
 Translator: `LiutaoYu <https://github.com/LiutaoYu>`_
 
 This tutorial applies a spiking neural network to reproduce the PyTorch official tutorial `REINFORCEMENT LEARNING (DQN) TUTORIAL <https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html>`_.
@@ -21,15 +22,15 @@ Usually in Deep Q Learning, the neural network acts as the Q function, the outpu
 This means that the last layer of the SNN should not output spikes representing Q function as 0 and 1, which may lead to poor performance.
 There are several methods to making SNN output continuous values.
 For the classification tasks in the previous tutorials, the final output of the network is the firing rate of each neuron in the output layer,
-which is obtained by counting the number of spikes in the simulation duration and then dividing it by the simulation duration.
+which is obtained by counting the number of spikes in the simulation duration and then dividing the number by the duration.
 Through preliminary testing, we found that using firing rate as Q function can not lead to satisfying performance.
 Because after simulating  :math:`T` steps, the possible firing rates are :math:`0, \frac{1}{T}, \frac{2}{T}, ..., 1`,
 which are not enough to represent the Q function.
 
 Here, we apply a new method to make SNN output floating numbers. We set the firing threshold of a neuron to be infinity, which won't fire at all,
-and we adopt the final membrane potential to represent Q function
-(A tutorial from `Norse <https://github.com/norse/norse>`_ adopts the largest membrane potential during a simulation to represent Q function).
-It is convenient to implement such neurons in the ``SpikingJelly`` framework: just inherit from LIF neuron ``neuron.LIFNode`` and rewrite its ``forward`` function.
+and we adopt the final membrane potential to represent Q function.
+(A tutorial from `Norse <https://github.com/norse/norse>`_ adopts the largest membrane potential during a simulation to represent Q function)
+It is convenient to implement such neurons in the ``SpikingJelly`` framework: just inherit everything from LIF neuron ``neuron.LIFNode`` and rewrite its ``forward`` function.
 
 .. code-block:: python
 
@@ -213,7 +214,7 @@ and run the ``play`` function on a local machine with a graphical interface to t
 
 The trained SNN controls the left or right movement of the CartPole, until the end of the game or the number of continuous frames exceeds ``played_frames``.
 During the simulation, the ``play`` function will draw the firing rate of the IF neuron,
-and the voltage of the NonSpikingLIF neuron in the output layer at the last moment, which directly determines the movement of the CartPole.
+and the voltages of the NonSpikingLIF neurons in the output layer at the last moment, which directly determine the movement of the CartPole.
 
 .. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/512@66.*
     :width: 100%

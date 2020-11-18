@@ -1,6 +1,7 @@
 Clock_driven: Neurons
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
 This tutorial focuses on ``spikingjelly.clock_driven.neuron``, introduces spike neurons, and clock-driven
@@ -40,6 +41,7 @@ The LIF neuron layer has some construction parameters, which are explained in de
     - **surrogate_function** -- the surrogate function used to calculate the gradient of the impulse function during back propagation
 
     - **monitor_state** -- whether to set up a monitor to save the voltage and pulses of the neurons. If it is ``True``, ``self.monitor`` is a dictionary, the keys include ``v`` and ``s``, which record voltage and output pulse respectively.
+
 The corresponding value is a linked list. In order to save memory, the value stored in the list is the value of the original variable converted into a ``numpy`` array. Also note that the ``self.reset()`` function will clear these linked lists.
 
 For the ``surrogate_function`` parameter, we will not use backpropagation for the time being, so we don't care about it for now.
@@ -53,6 +55,7 @@ Therefore, neurons in ``spikingjelly.clock_driven.neuron`` have member variable 
 You can print out the membrane potential of the newly created LIF neuron layer:
 
 .. code-block:: python
+
     print(lif.v)
     # 0.0
 
