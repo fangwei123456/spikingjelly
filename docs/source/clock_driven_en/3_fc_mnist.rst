@@ -1,28 +1,29 @@
 Clock-driven: Use single-layer fully connected SNN to identify MNIST
-=============================================================================
+====================================================================
 Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`_
+
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
 This tutorial will introduce how to train a simplest MNIST classification network using encoders and alternative gradient methods.
 
 Build a simple SNN network from scratch
------------------------------------------------------------------------
+---------------------------------------------
 
 When building a neural network in PyTorch, we can simply use ``nn.Sequential`` to stack multiple network layers to get a
 feedforward network. The input data will flow through each network layer in order to get the output.
 
-The `MNIST Dateset <http://yann.lecun.com/exdb/mnist/>`__\contains several 8-bit grayscale images with a size of
-\:math:`28\times 28`\, with a total of 10 categories from 0 to 9. Taking the classification of MNIST as an example,
+The `MNIST Dateset <http://yann.lecun.com/exdb/mnist/>`__ \contains several 8-bit grayscale images with a size of
+\ :math:`28\times 28`\, with a total of 10 categories from 0 to 9. Taking the classification of MNIST as an example,
 a simple single-layer ANN network is as follows:
 
 .. code-block:: python
    :emphasize-lines: 4
-
    net = nn.Sequential(
        nn.Flatten(),
        nn.Linear(28 * 28, 10, bias=False),
        nn.Softmax()
        )
+
 We can also use SNN with a completely similar structure for classification tasks. As far as this network is concerned,
 we only need to remove all the activation functions first, and then add the neuron to the original activation
 function position. Here we choose the LIF neuron:
@@ -39,7 +40,7 @@ function position. Here we choose the LIF neuron:
 Among them, the membrane potential decay constant :math:`\tau`  needs to be set by the parameter ``tau``.
 
 Train SNN network
---------------------------------------------------
+-------------------
 
 First specify the training parameters and several other configurations
 
@@ -67,14 +68,14 @@ The writing of training code needs to follow the following three points:
 
 1. The output of the spike neuron is binary, and directly using the result of a single run for classification is
 very susceptible to interference. Therefore, it is generally considered that the output of the impulse network is
-the \ **firing**\ frequency (or firing rate) of the output layer over a period of time, and the firing rate indicates the
-response size of the category. Therefore, the network needs to run for a period of time, that is, the \**average
-distribution rate**\ after ``T`` time is used as the classification basis.
+the \ **firing** \frequency (or firing rate) of the output layer over a period of time, and the firing rate indicates the
+response size of the category. Therefore, the network needs to run for a period of time, that is, the \ **average
+distribution rate** \ after ``T`` time is used as the classification basis.
 
-2.	The desired result we hope is that except for the correct neuron firing at the \ **highest frequency**\, the other neurons
+2. The desired result we hope is that except for the correct neuron firing at the \ **highest frequency**\, the other neurons
 \ **remain silent**\. Cross-entropy loss or MSE loss is often used, and here we use MSE loss with better actual effect.
 
-3. 3.	After each network simulation is over, the network status needs to be \ **reset**\.
+3. After each network simulation is over, the network status needs to be \ **reset**\.
 
 Combining the above three points, the code of training loop is as follows:
 
@@ -122,7 +123,7 @@ unfolding in time, which will cause the gradient to be easily attenuated or expl
 In addition, because we use a Poisson encoder, a larger ``T`` is required.
 
 Training result
--------------------------------------------------
+------------------
 
 Take ``tau=2.0,T=100,batch_size=128,lr=1e-3``, after training 100 Epoch, four npy files will be output. The highest
 correct rate on the test set is 92.5%, and the correct rate curve obtained through matplotlib visualization is as follows
@@ -137,6 +138,8 @@ Select the first picture in the test set:
 Use the trained model to classify and get the classification result.
 
 .. code-block:: python
+
+   Firing rate: [[0. 0. 0. 0. 0. 0. 0. 1. 0. 0.]]
 
 The voltage and pulse of the output layer can be visualized by the function in the ``visualizing`` module as shown in the figure below
 

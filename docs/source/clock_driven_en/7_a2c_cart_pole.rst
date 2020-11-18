@@ -1,15 +1,16 @@
 Reinforcement Learning: Advantage Actor Critic (A2C)
 =============================================================
 Author: `lucifer2859 <https://github.com/lucifer2859>`_
+
 Translator: `LiutaoYu <https://github.com/LiutaoYu>`_
 
 This tutorial applies a spiking neural network to reproduce `actor-critic.py <https://github.com/lucifer2859/Policy-Gradients/blob/master/actor-critic.py>`_.
 Please make sure that you have read the original tutorial and corresponding codes before proceeding.
 
 Here, we apply the same method as the previous DQN tutorial to make SNN output floating numbers.
-We set the firing threshold of a neuron to be infinity, which won't fire at all, and we adopt the final membrane potential to represent Q function
-(A tutorial from `Norse <https://github.com/norse/norse>`_ adopts the largest membrane potential during a simulation to represent Q function).
-It is convenient to implement such neurons in the ``SpikingJelly`` framework: just inherit from LIF neuron ``neuron.LIFNode`` and rewrite its ``forward`` function.
+We set the firing threshold of a neuron to be infinity, which won't fire at all, and we adopt the final membrane potential to represent Q function.
+(A tutorial from `Norse <https://github.com/norse/norse>`_ adopts the largest membrane potential during a simulation to represent Q function)
+It is convenient to implement such neurons in the ``SpikingJelly`` framework: just inherit everything from LIF neuron ``neuron.LIFNode`` and rewrite its ``forward`` function.
 
 .. code-block:: python
 

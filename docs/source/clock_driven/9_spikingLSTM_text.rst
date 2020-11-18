@@ -2,15 +2,15 @@
 ==============================================================================
 本教程作者：`LiutaoYu <https://github.com/LiutaoYu>`_，`fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程使用Spiking LSTM重新实现PyTorch官方的 `NLP From Scratch: Classifying Names with a Character-Level RNN <https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html>`_。
+本节教程使用Spiking LSTM重新实现PyTorch的官方教程 `NLP From Scratch: Classifying Names with a Character-Level RNN <https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html>`_。
 对应的中文版教程可参见 `使用字符级别特征的RNN网络进行名字分类 <https://pytorch.apachecn.org/docs/1.0/char_rnn_classification_tutorial.html>`_。
 请确保你已经阅读了原版教程和代码，因为本教程是对原教程的扩展。本教程将构建和训练字符级的Spiking LSTM来对姓氏进行分类。
-具体而言，本教程将在18种语言构成的几千个名字的数据集上训练Spiking LSTM模型，网络可根据一个名字的拼写预测其属于哪种语言。
+具体而言，本教程将在18种语言构成的几千个姓氏的数据集上训练Spiking LSTM模型，网络可根据一个姓氏的拼写预测其属于哪种语言。
 完整代码可见于 `clock_driven/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/spiking_lstm_text.py>`_。
 
 准备数据
 ------------------------
-首先，我们参照原教程下载数据，并进行预处理。预处理后，我们可以得到一个语言对应名字列表的字典，即 ``{language: [names ...]}`` 。
+首先，我们参照原教程下载数据，并进行预处理。预处理后，我们可以得到一个语言对应姓氏列表的字典，即 ``{language: [names ...]}`` 。
 进一步地，我们将数据集按照4:1的比例划分为训练集和测试集，即 ``category_lines_train`` 和 ``category_lines_test`` 。
 这里还需要留意几个后续会经常使用的变量： ``all_categories`` 是全部语言种类的列表， ``n_categories=18`` 则是语言种类的数量，
 ``n_letters=58`` 是组成 ``names`` 的所有字母和符号的集合的元素数量。
@@ -55,7 +55,7 @@
 
 构造Spiking LSTM神经网络
 ---------------------------
-我们利用 `spikingjelly <https://github.com/fangwei123456/spikingjelly>`_ 中的rnn模块（ ``rnn.SpikingLSTM()`` ）来搭建Spiking LSTM神经网络。
+我们利用 `spikingjelly <https://github.com/fangwei123456/spikingjelly>`_ 中的rnn模块( ``rnn.SpikingLSTM()`` )来搭建Spiking LSTM神经网络。
 其工作原理可参见论文 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_ 。
 输入层神经元个数等于 ``n_letters`` ，隐藏层神经元个数 ``n_hidden`` 可自行定义，输出层神经元个数等于 ``n_categories`` 。
 我们在LSTM的输出层之后接一个全连接层，并利用softmax函数对全连接层的数据进行处理以获取类别概率。
@@ -199,7 +199,7 @@
 我们猜测是因为当前网络输入是随时间变化的，而且网络自身需要运行一段时间后才会输出分类结果，因此网络初始状态影响不显著。
 
 .. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.*
-    :width: 50%
+    :width: 100%
 
 网络测试
 ---------------------------
@@ -308,4 +308,4 @@
 而有的语言则较容易产生混淆，如Korean和Chinese，Spanish和Portuguese，English和Scottish。
 
 .. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.*
-    :width: 50%
+    :width: 100%
