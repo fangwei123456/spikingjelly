@@ -1,12 +1,13 @@
-Time driven: encoder
+Time driven: Encoder
 =======================================
 Author: `Grasshlw <https://github.com/Grasshlw>`_
+
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
 This tutorial focuses on ``spikingjelly.clock_driven.encoding`` and introduces the encoder.
 
 Encoder base class
----------------------------------------------------
+--------------------
 
 In ``spikingjelly.clock_driven``, the defined encoders are inherited from the encoder base class ``BaseEncoder``, the encoder
 inherits ``torch.nn.Module``, defines three methods, the first ``forward`` encodes the input data ``x`` into pulse.
@@ -30,7 +31,7 @@ of the encoder to the initial state.
             pass
 
 Periodic encoder
-------------------------------------------------
+-----------------
 
 Periodic encoder is an encoder that periodically outputs a given pulse sequence. Regardless of the input data, the
 class ``PeriodicEncoder`` has set the pulse sequence ``out_spike`` to be output during initialization, and can be reset by
@@ -111,7 +112,7 @@ This will cause the encoder to likely overflow because:
 
 :math:`\alpha` will increase exponentially as :math:`t_{max}` increases, eventually causing overflow.
 
-Example: Randomly generate 6 ``x``, each of which is the stimulation intensity of 6 neurons, and set the maximum pulse
+Example: Randomly generate six ``x``, each of which is the stimulation intensity of 6 neurons, and set the maximum pulse
 firing time to 20, and encode the above input data.
 
 .. code-block:: python
@@ -148,14 +149,14 @@ sequence obtained is as follows:
     :width: 100%
 
 Poisson encoder
-------------------------------------------------
+-----------------
 The Poisson encoder encodes the input data ``x`` into a pulse sequence whose firing times distribution conforms to the
 Poisson process. The Poisson process is also called Poisson flow. When a pulse flow satisfies independent increment,
 incremental stability and commonality, such a pulse flow is a poisson flow. More specifically, in the entire pulse
 stream, the number of pulses appearing in disjoint intervals is independent of each other, and in any interval,
 the number of pulses appearing has nothing to do with the starting point of the interval, but is related to the
 length of the interval. Therefore, in order to realize Poisson coding, we set the pulse firing probability of a
-time step :math:`p=x`, where :math:`x` needs to be normalized to [0,1].
+time step :math:`p=x`, where :math:`x` needs to be normalized to [0, 1].
 
 Example: The input image is `lena512.bmp <https://www.ece.rice.edu/~wakin/images/lena512.bmp>`_ , and 20 time
 steps are simulated to obtain 20 pulse matrices.
@@ -238,7 +239,7 @@ It can be seen that when the simulation step is sufficient, the original image c
 pulses obtained by the Poisson encoder are superimposed.
 
 Gaussian coordination curve encoder
--------------------------------------------------------------------
+------------------------------------
 
 For input data with ``M`` features, the Gaussian coordination curve encoder uses ``tuning_curve_num`` neurons
 to encode each feature of the input data, and encodes each feature as the pulse firing time of
@@ -260,7 +261,7 @@ In addition, for the pulses delivered at the last moment, it is considered that 
 According to the above steps, the encoding of the input data is completed.
 
 Interval encoder
---------------------------------------------------
+-------------------
 
 The interval encoder is an encoder that emits a pulse every ``T`` time steps. The encoder is relatively simple and
 will not be detailed here.

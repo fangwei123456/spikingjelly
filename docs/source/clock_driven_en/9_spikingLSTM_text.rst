@@ -4,7 +4,7 @@ Authors: `LiutaoYu <https://github.com/LiutaoYu>`_, `fangwei123456 <https://gith
 
 This tutorial applies a Spiking LSTM to reproduce the PyTorch official tutorial `NLP From Scratch: Classifying Names with a Character-Level RNN <https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html>`_.
 Please make sure that you have read the original tutorial and corresponding codes before proceeding.
-Specially, we will train a spiking LSTM to classify surnames into different languages according to their spelling, based on a dataset consisting of several thousands of surnames from 18 languages of origin.
+Specifically, we will train a spiking LSTM to classify surnames into different languages according to their spelling, based on a dataset consisting of several thousands of surnames from 18 languages of origin.
 The integrated script can be found here ( `clock_driven/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/spiking_lstm_text.py>`_).
 
 Preparing the data
@@ -194,11 +194,11 @@ We will observe the following results when executing ``%run ./spiking_lstm_text.
 The following picture shows how average loss ``avg_losses`` , training accuracy ``accuracy_rec`` and testing accuracy ``test_accu_rec`` improve with training.
 
 .. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.*
-    :width: 50%
+    :width: 100%
 
 Testing the network
 ---------------------------
-We first load the well-trained network, and conduct the following tests:
+We first load the well-trained network, and then conduct the following tests:
 1) calculate the testing accuracy of the final network;
 2) predict the language origin of the surnames provided by the user;
 3) calculate the confusion matrix, indicating for every actual language (rows) which language the network guesses (columns).
@@ -300,4 +300,4 @@ The following picture exhibits the confusion matrix, of which a brighter diagona
 However, some languages are prone to confusion, such as Korean and Chinese, English and Scottish.
 
 .. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.*
-    :width: 50%
+    :width: 100%
