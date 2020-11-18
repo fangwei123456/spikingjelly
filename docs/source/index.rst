@@ -19,13 +19,25 @@
 
     pip install spikingjelly
 
-或者对于开发者，从Github最新的源代码进行安装：
+或者对于开发者，下载源代码并安装：
+
+通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
 
 .. code-block:: bash
 
     git clone https://github.com/fangwei123456/spikingjelly.git
     cd spikingjelly
     python setup.py install
+
+通过 `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_ ：
+
+.. code-block:: bash
+
+    git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+    cd spikingjelly
+    python setup.py install
+
+
 
 .. toctree::
     :maxdepth: 1
@@ -83,7 +95,9 @@ Install from `PyPI <https://pypi.org/project/spikingjelly/>`_：
 
     pip install spikingjelly
 
-Developers can download the latest version from GitHub and install:
+Developers can download and install the latest version from source codes:
+
+From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
 .. code-block:: bash
 
@@ -91,12 +105,31 @@ Developers can download the latest version from GitHub and install:
     cd spikingjelly
     python setup.py install
 
-.. toctree::
-   :maxdepth: 1
-   :caption: Tutorials
+From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
 
-   tutorial_en.clock_driven
-    ./clock_driven_en/5_ann2snn
+.. code-block:: bash
+
+    git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+    cd spikingjelly
+    python setup.py install
+
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Tutorials
+
+    tutorial.clock_driven_en
+    /clock_driven_en/0_neuron
+    /clock_driven_en/2_encoding
+    /clock_driven_en/3_fc_mnist
+    /clock_driven_en/4_conv_fashion_mnist
+    /clock_driven_en/5_ann2snn
+    /clock_driven_en/6_dqn_cart_pole
+    /clock_driven_en/7_a2c_cart_pole
+    /clock_driven_en/8_ppo_cart_pole
+    /clock_driven_en/9_spikingLSTM_text
+
+
 
 Modules Docs
 -------------------------
