@@ -18,6 +18,7 @@ a simple single-layer ANN network is as follows:
 
 .. code-block:: python
    :emphasize-lines: 4
+
    net = nn.Sequential(
        nn.Flatten(),
        nn.Linear(28 * 28, 10, bias=False),

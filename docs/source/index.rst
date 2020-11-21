@@ -150,13 +150,6 @@ About
 
 The list of developers can be found at https://github.com/fangwei123456/spikingjelly/graphs/contributors.
 
-.. toctree::
-   :maxdepth: 1
-   :caption: C++ Extension
-   
-   spikingjellyCppExt <https://spikingjelly.readthedocs.io/projects/spikingjellycppext/zh/latest/>
-
-
 .. _APIs:
 .. toctree::
    :maxdepth: 4
@@ -166,3 +159,4 @@ The list of developers can be found at https://github.com/fangwei123456/spikingj
    spikingjelly.datasets
    spikingjelly.event_driven
    spikingjelly.visualizing
+   spikingjelly.cext
