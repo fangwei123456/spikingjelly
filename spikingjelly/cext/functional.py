@@ -48,8 +48,12 @@ def sparse_mm_dense(sparse: torch.Tensor, dense: torch.Tensor):
 
     .. warning::
 
-        代码内部的实现方式是，首先将 ``sparse`` 转换为稀疏矩阵格式，然后再调用相关库进行运算。如果 ``sparse`` 不够稀疏，则该函数的速度会比普通
-        矩阵乘法 ``torch.mm`` 慢很多。
+        代码内部的实现方式是，首先将 ``sparse`` 转换为稀疏矩阵格式，然后再调用相关库进行运算。如果 ``sparse`` 不够稀疏，则该函数的速度会比普通矩阵乘法 ``torch.mm`` 慢很多。
+
+
+    .. warning::
+
+        稀疏矩阵的乘法存在一定的计算误差，但误差并不显著，或可忽略。
 
     * :ref:`中文API <sparse_mm_dense-cn>`
 
@@ -67,8 +71,13 @@ def sparse_mm_dense(sparse: torch.Tensor, dense: torch.Tensor):
     .. admonition:: Warning
         :class: warning
 
-        This function is implemented by converting ``sparse`` to a sparse format and doing a sparse matrix multiplication.
-        If the sparsity of ``sparse`` is not high enough, the speed of this function will be slower than ``torch.mm``.
+        This function is implemented by converting ``sparse`` to a sparse format and doing a sparse matrix multiplication. If the sparsity of ``sparse`` is not high enough, the speed of this function will be slower than ``torch.mm``.
+
+
+    .. admonition:: Warning
+        :class: warning
+
+        There are some numeral errors when doing the sparse matrix multiplication. But the errors are not significant.
     '''
     return sparse_mm_dense_atf.apply(sparse, dense)
 
