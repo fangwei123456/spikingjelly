@@ -40,7 +40,7 @@ def heaviside(x: torch.Tensor):
     For more information, see `HeavisideStepFunction <https://mathworld.wolfram.com/HeavisideStepFunction.html>`_.
 
     '''
-    return (x >= 0).to(x.dtype)
+    return (x >= 0).to(x)
 
 def check_manual_grad(primitive_function, spiking_function, eps=1e-5):
     '''
