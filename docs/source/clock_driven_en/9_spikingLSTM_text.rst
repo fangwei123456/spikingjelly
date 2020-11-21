@@ -1,19 +1,18 @@
-利用Spiking LSTM实现基于文本的姓氏分类任务
+Classifying Names with a Character-level Spiking LSTM
 ==============================================================================
-本教程作者：`LiutaoYu <https://github.com/LiutaoYu>`_，`fangwei123456 <https://github.com/fangwei123456>`_
+Authors: `LiutaoYu <https://github.com/LiutaoYu>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程使用Spiking LSTM重新实现PyTorch的官方教程 `NLP From Scratch: Classifying Names with a Character-Level RNN <https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html>`_。
-对应的中文版教程可参见 `使用字符级别特征的RNN网络进行名字分类 <https://pytorch.apachecn.org/docs/1.0/char_rnn_classification_tutorial.html>`_。
-请确保你已经阅读了原版教程和代码，因为本教程是对原教程的扩展。本教程将构建和训练字符级的Spiking LSTM来对姓氏进行分类。
-具体而言，本教程将在18种语言构成的几千个姓氏的数据集上训练Spiking LSTM模型，网络可根据一个姓氏的拼写预测其属于哪种语言。
-完整代码可见于 `clock_driven/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/spiking_lstm_text.py>`_。
+This tutorial applies a Spiking LSTM to reproduce the PyTorch official tutorial `NLP From Scratch: Classifying Names with a Character-Level RNN <https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html>`_.
+Please make sure that you have read the original tutorial and corresponding codes before proceeding.
+Specifically, we will train a spiking LSTM to classify surnames into different languages according to their spelling, based on a dataset consisting of several thousands of surnames from 18 languages of origin.
+The integrated script can be found here ( `clock_driven/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/spiking_lstm_text.py>`_).
 
-准备数据
-------------------------
-首先，我们参照原教程下载数据，并进行预处理。预处理后，我们可以得到一个语言对应姓氏列表的字典，即 ``{language: [names ...]}`` 。
-进一步地，我们将数据集按照4:1的比例划分为训练集和测试集，即 ``category_lines_train`` 和 ``category_lines_test`` 。
-这里还需要留意几个后续会经常使用的变量： ``all_categories`` 是全部语言种类的列表， ``n_categories=18`` 则是语言种类的数量，
-``n_letters=58`` 是组成 ``names`` 的所有字母和符号的集合的元素数量。
+Preparing the data
+----------------------------
+First of all, we need to download and preprocess the data as the original tutorial, which produces a dictionary ``{language: [names ...]}`` .
+Then, we split the dataset into a training set and a testing set (the ratio is 4:1), i.e.,  ``category_lines_train`` and ``category_lines_test`` .
+Here, we emphasize several important variables: ``all_categories`` is the list of 18 languages, the length of which is ``n_categories=18``;
+``n_letters=58`` is the number of all characters composing the surnames.
 
 .. code-block:: python
 
@@ -28,9 +27,9 @@
         numExamplesPerCategory.append([len(category_lines[c]), len(category_lines_train[c]), len(category_lines_test[c])])
         testNumtot += len(category_lines_test[c])
 
-此外，我们改写了原教程中的 ``randomTrainingExample()`` 函数，以便在不同条件下进行使用。
-注意此处利用了原教程中定义的 ``lineToTensor()`` 和 ``randomChoice()`` 两个函数。
-前者用于将单词转化为one-hot张量，后者用于从数据集中随机抽取一个样本。
+In addition, we rephrase the function ``randomTrainingExample()``  to function ``randomPair(sampleSource)``  for different conditions.
+Here we adopt function ``lineToTensor()`` and ``randomChoice()`` from the original tutorial.
+``lineToTensor()`` converts a surname into a one-hot tensor, and ``randomChoice()`` randomly choose a sample from the dataset.
 
 .. code-block:: python
 
@@ -53,12 +52,12 @@
         line_tensor = lineToTensor(line)
         return category, line, category_tensor, line_tensor
 
-构造Spiking LSTM神经网络
----------------------------
-我们利用 `spikingjelly <https://github.com/fangwei123456/spikingjelly>`_ 中的rnn模块( ``rnn.SpikingLSTM()`` )来搭建Spiking LSTM神经网络。
-其工作原理可参见论文 `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_ 。
-输入层神经元个数等于 ``n_letters`` ，隐藏层神经元个数 ``n_hidden`` 可自行定义，输出层神经元个数等于 ``n_categories`` 。
-我们在LSTM的输出层之后接一个全连接层，并利用softmax函数对全连接层的数据进行处理以获取类别概率。
+Building a spiking LSTM network
+--------------------------------------
+We build a spiking LSTM based on the ``rnn`` module from  `spikingjelly <https://github.com/fangwei123456/spikingjelly>`_ .
+The theory can be found in the paper  `Long Short-Term Memory Spiking Networks and Their Applications <https://arxiv.org/abs/2007.04779>`_ .
+The amounts of neurons in the input layer, hidden layer and output layer are ``n_letters``, ``n_hidden`` and ``n_categories`` respectively.
+We add a fully connected layer to the output layer, and use ``softmax`` function to obtain the classification probability.
 
 .. code-block:: python
 
@@ -80,16 +79,19 @@
             output = F.softmax(output, dim=1)
             return output
 
-网络训练
----------------------------
-首先，我们初始化网络 ``net`` ，并定义训练时长 ``TRAIN_EPISODES`` 、学习率 ``learning_rate`` 等。
-这里我们采用 ``mse_loss`` 损失函数和 ``Adam`` 优化器来对训练网络。
-单个epoch的训练流程大致如下：1）从训练集中随机抽取一个样本，获取输入和标签，并转化为tensor；2）网络接收输入，进行前向过程，获取各类别的预测概率；
-3）利用 ``mse_loss`` 函数获取网络预测概率和真实标签one-hot编码之间的差距，即网络损失；4）梯度反传，并更新网络参数；
-5）判断此次预测是否正确，并累计预测正确的数量，以获取模型在训练过程中针对训练集的准确率（每隔 ``plot_every`` 个epoch计算一次）；
-6）每隔 ``plot_every`` 个epoch在测试集上测试一次，并统计测试准确率。
-此外，在训练过程中，我们会记录网络损失 ``avg_losses`` 、训练集准确率 ``accuracy_rec`` 和测试集准确率 ``test_accu_rec`` ，以便于观察训练效果，并在训练完成后绘制图片。
-在训练完成之后，我们会保存网络的最终状态以用于测试；同时，也可以保存相关变量，以便后续分析。
+Training the network
+---------------------------------------
+First of all, we initialize the ``net`` , and define parameters like ``TRAIN_EPISODES`` and ``learning_rate``.
+Here we adopt ``mse_loss`` and ``Adam`` optimizer to train the network.
+The process of one training epoch is as follows:
+1) randomly choose a sample from the training set, and convert the input and label into tensors;
+2) feed the input to the network, and obtain the classification probability through the forward process;
+3) calculate the network loss through ``mse_loss``;
+4) back-propagate the gradients, and update the training parameters;
+5) judge whether the prediction is correct or not, and count the number of correct predictions to obtain the training accuracy every ``plot_every`` epochs;
+6) evaluate the network on the testing set every ``plot_every`` epochs to obtain the testing accuracy.
+During training, we record the history of network loss ``avg_losses`` , training accuracy ``accuracy_rec`` and testing accuracy ``test_accu_rec`` , to observe the training process.
+After training, we will save the final state of the network for testing, and also some variables for later analyses.
 
 .. code-block:: python
 
@@ -119,9 +121,6 @@
         loss.backward()
         optimizer.step()
 
-        # 优化一次参数后，需要重置网络的状态。是否需要？结果差别不明显！(2020.11.3)
-        # functional.reset_net(net)
-
         current_loss += loss.data.item()
 
         guess, _ = categoryFromOutput(out_prob_log.data)
@@ -135,7 +134,7 @@
             current_loss = 0
             correct_num = 0
 
-        # 每训练一定次数即进行一次测试
+        # evaluate the network on the testing set every ``plot_every`` epochs to obtain the testing accuracy
         if epoch % plot_every == 0:  # int(TRAIN_EPISODES/1000)
             net.eval()
             with torch.no_grad():
@@ -144,8 +143,6 @@
                     category = all_categories[i]
                     for tname in category_lines_test[category]:
                         output = net(lineToTensor(tname))
-                        # 运行一次后，需要重置网络的状态。是否需要？
-                        # functional.reset_net(net)
                         guess, _ = categoryFromOutput(output.data)
                         if guess == category:
                             numCorrect += 1
@@ -160,7 +157,7 @@
     np.save('test_accu_rec.npy', np.array(test_accu_rec))
     np.save('category_lines_train.npy', category_lines_train, allow_pickle=True)
     np.save('category_lines_test.npy', category_lines_test, allow_pickle=True)
-    # x = np.load('category_lines_test.npy', allow_pickle=True)  # 读取数据的方法
+    # x = np.load('category_lines_test.npy', allow_pickle=True)  # way to loading the data
     # xdict = x.item()
 
     plt.figure()
@@ -178,7 +175,7 @@
     plt.savefig('TrainingProcess.svg')
     plt.close()
 
-设定 ``IF_TRAIN = 1`` ，在Python Console中运行 ``%run ./spiking_lstm_text.py`` ，输出如下：
+We will observe the following results when executing ``%run ./spiking_lstm_text.py`` in Python Console with ``IF_TRAIN = 1`` .
 
 .. code-block:: python
 
@@ -194,17 +191,17 @@
     Epoch 999000 99% (319m 14s); Avg_loss 0.0056; Train accuracy 0.9380; Test accuracy 0.5004
     Epoch 1000000 100% (319m 33s); Avg_loss 0.0055; Train accuracy 0.9340; Test accuracy 0.5118
 
-下图展示了训练过程中损失函数、测试集准确率、测试集准确率随时间的变化。
-值得注意的一点是，测试表明，在当前Spiking LSTM网络中是否在一次运行完成后重置网络 ``functional.reset_net(net)`` 对于结果没有显著的影响。
-我们猜测是因为当前网络输入是随时间变化的，而且网络自身需要运行一段时间后才会输出分类结果，因此网络初始状态影响不显著。
+The following picture shows how average loss ``avg_losses`` , training accuracy ``accuracy_rec`` and testing accuracy ``test_accu_rec`` improve with training.
 
 .. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.*
     :width: 100%
 
-网络测试
+Testing the network
 ---------------------------
-在测试过程中，我们首先需要导入训练完成后存储的网络，随后进行三方面的测试：（1）计算最终的测试集准确率；（2）让用户输入姓氏拼写以预测其属于哪种语言；
-（3）计算Confusion matrix，每一行表示当样本源于某一个类别时，网络预测其属于各类别的概率，即对角线表示预测正确的概率。
+We first load the well-trained network, and then conduct the following tests:
+1) calculate the testing accuracy of the final network;
+2) predict the language origin of the surnames provided by the user;
+3) calculate the confusion matrix, indicating for every actual language (rows) which language the network guesses (columns).
 
 .. code-block:: python
 
@@ -213,29 +210,26 @@
 
     net = torch.load('char_rnn_classification.pth')
 
-    # 遍历测试集计算准确率
+    # calculate the testing accuracy of the final network
     print('Calculating testing accuracy...')
     numCorrect = 0
     for i in range(n_categories):
         category = all_categories[i]
         for tname in category_lines_test[category]:
             output = net(lineToTensor(tname))
-            # 运行一次后，需要重置网络的状态。是否需要？
-            # functional.reset_net(net)
             guess, _ = categoryFromOutput(output.data)
             if guess == category:
                 numCorrect += 1
     test_accu = numCorrect / testNumtot
     print('Test accuracy: {:.3f}, Random guess: {:.3f}'.format(test_accu, 1/n_categories))
 
-    # 让用户输入姓氏以判断其属于哪种语系
+    # predict the language origin of the surnames provided by the user
     n_predictions = 3
     for j in range(3):
-        first_name = input('请输入一个姓氏以判断其属于哪种语系：')
+        first_name = input('Please input a surname to predict its language origin:')
         print('\n> %s' % first_name)
         output = net(lineToTensor(first_name))
-        # 运行一次后，需要重置网络的状态。是否需要？
-        # functional.reset_net(net)
+
         # Get top N categories
         topv, topi = output.topk(n_predictions, 1, True)
         predictions = []
@@ -246,7 +240,7 @@
             print('(%.2f) %s' % (value, all_categories[category_index]))
             predictions.append([value, all_categories[category_index]])
 
-    # 计算confusion矩阵
+    # calculate the confusion matrix
     print('Calculating confusion matrix...')
     confusion = torch.zeros(n_categories, n_categories)
     n_confusion = 10000
@@ -255,8 +249,6 @@
     for i in range(n_confusion):
         category, line, category_tensor, line_tensor = randomPair('all')
         output = net(line_tensor)
-        # 运行一次后，需要重置网络的状态。是否需要？
-        # functional.reset_net(net)
         guess, guess_i = categoryFromOutput(output.data)
         category_i = all_categories.index(category)
         confusion[category_i][guess_i] += 1
@@ -280,32 +272,32 @@
     plt.savefig('ConfusionMatrix.svg')
     plt.close()
 
-设定 ``IF_TRAIN = 0``，在Python Console中运行 ``%run ./spiking_lstm_text.py``，输出如下：
+We will observe the following results when executing ``%run ./spiking_lstm_text.py`` in Python Console with ``IF_TRAIN = 0`` .
 
 .. code-block:: python
 
     Testing...
     Calculating testing accuracy...
     Test accuracy: 0.512, Random guess: 0.056
-    请输入一个姓氏以判断其属于哪种语系:> YU
+    Please input a surname to predict its language origin:> YU
     > YU
     (0.18) Scottish
     (0.12) English
     (0.11) Italian
-    请输入一个姓氏以判断其属于哪种语系:> Yu
+    Please input a surname to predict its language origin:> Yu
     > Yu
     (0.63) Chinese
     (0.23) Korean
     (0.07) Vietnamese
-    请输入一个姓氏以判断其属于哪种语系:> Zou
+    Please input a surname to predict its language origin:> Zou
     > Zou
     (1.00) Chinese
     (0.00) Arabic
     (0.00) Polish
     Calculating confusion matrix...
 
-下图展示了Confusion matrix。对角线越亮，表示模型对某一类别预测最好，很少产生混淆，如Arabic和Greek。
-而有的语言则较容易产生混淆，如Korean和Chinese，Spanish和Portuguese，English和Scottish。
+The following picture exhibits the confusion matrix, of which a brighter diagonal element indicates better prediction, and thus less confusion, such as Arabic and Greek.
+However, some languages are prone to confusion, such as Korean and Chinese, English and Scottish.
 
 .. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.*
     :width: 100%

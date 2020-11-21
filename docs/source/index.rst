@@ -19,7 +19,9 @@
 
     pip install spikingjelly
 
-或者对于开发者，从Github最新的源代码进行安装：
+或者对于开发者，下载源代码并安装：
+
+通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
 
 .. code-block:: bash
 
@@ -27,18 +29,37 @@
     cd spikingjelly
     python setup.py install
 
-上手教程
--------------------------
-.. toctree::
-   :maxdepth: 2
+通过 `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_ ：
 
-   tutorials
+.. code-block:: bash
+
+    git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+    cd spikingjelly
+    python setup.py install
+
+
+
+.. toctree::
+    :maxdepth: 1
+    :caption: 上手教程
+
+    tutorial.clock_driven
+    tutorial.event_driven
+    /clock_driven/0_neuron
+    /clock_driven/2_encoding
+    /clock_driven/3_fc_mnist
+    /clock_driven/4_conv_fashion_mnist
+    /clock_driven/5_ann2snn
+    /clock_driven/6_dqn_cart_pole
+    /clock_driven/7_a2c_cart_pole
+    /clock_driven/8_ppo_cart_pole
+    /clock_driven/9_spikingLSTM_text
 
 
 模块文档
 -------------------------
 
-    * :ref:`APIs`
+* :ref:`APIs`
 
 文档索引
 -------------------------
@@ -74,7 +95,9 @@ Install from `PyPI <https://pypi.org/project/spikingjelly/>`_：
 
     pip install spikingjelly
 
-Developers can download the latest version from GitHub and install:
+Developers can download and install the latest version from source codes:
+
+From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
 .. code-block:: bash
 
@@ -82,17 +105,36 @@ Developers can download the latest version from GitHub and install:
     cd spikingjelly
     python setup.py install
 
-Tutorials
--------------------------
-.. toctree::
-   :maxdepth: 2
+From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
 
-   tutorials_en
+.. code-block:: bash
+
+    git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+    cd spikingjelly
+    python setup.py install
+
+
+.. toctree::
+    :maxdepth: 1
+    :caption: Tutorials
+
+    tutorial.clock_driven_en
+    /clock_driven_en/0_neuron
+    /clock_driven_en/2_encoding
+    /clock_driven_en/3_fc_mnist
+    /clock_driven_en/4_conv_fashion_mnist
+    /clock_driven_en/5_ann2snn
+    /clock_driven_en/6_dqn_cart_pole
+    /clock_driven_en/7_a2c_cart_pole
+    /clock_driven_en/8_ppo_cart_pole
+    /clock_driven_en/9_spikingLSTM_text
+
+
 
 Modules Docs
 -------------------------
 
-   * :ref:`APIs`
+* :ref:`APIs`
 
 Indices and tables
 -------------------------
@@ -109,11 +151,12 @@ About
 The list of developers can be found at https://github.com/fangwei123456/spikingjelly/graphs/contributors.
 
 .. _APIs:
-
-APIs
-###################
-
 .. toctree::
    :maxdepth: 4
+   :caption: APIs
 
-   APIs <spikingjelly>
+   spikingjelly.clock_driven
+   spikingjelly.datasets
+   spikingjelly.event_driven
+   spikingjelly.visualizing
+   spikingjelly.cext
