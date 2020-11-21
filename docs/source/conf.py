@@ -24,8 +24,7 @@ copyright = '2020, PKU MLG, PCL'
 author = 'PKU MLG, PCL'
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.0.0.001'
-
+release = 'alpha'
 
 # -- General configuration ---------------------------------------------------
 
@@ -39,7 +38,6 @@ extensions = [
     'sphinx.ext.intersphinx',
     'sphinx.ext.napoleon'
 ]
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
@@ -82,7 +80,7 @@ napoleon_use_ivar = True
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
 
-autodoc_mock_imports = ['loris']
+autodoc_mock_imports = ['loris', 'readline', 'torch.utils.cpp_extension']
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False
