@@ -1,17 +1,17 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import wrapper
-import wrapper.functional
+import spikingjelly.cext.functional
+
 import math
 import numpy as np
 import time
 class SparseLinear(nn.Linear):
     def forward(self, sparse: torch.Tensor) -> torch.Tensor:
         if self.bias is None:
-            return wrapper.functional.sparse_mm_dense(sparse, self.weight.t())
+            return spikingjelly.cext.functional.sparse_mm_dense(sparse, self.weight.t())
         else:
-            return wrapper.functional.sparse_mm_dense(sparse, self.weight.t()) + self.bias
+            return spikingjelly.cext.functional.sparse_mm_dense(sparse, self.weight.t()) + self.bias
 
 class AutoSparseLinear(nn.Linear):
     def __init__(self, in_features: int, out_features: int, bias: bool = False, in_spikes: bool = False):
@@ -36,9 +36,9 @@ class AutoSparseLinear(nn.Linear):
             return F.linear(x, self.weight, self.bias)
         else:
             if self.bias is None:
-                return wrapper.functional.sparse_mm_dense(x, self.weight)
+                return spikingjelly.cext.functional.sparse_mm_dense(x, self.weight)
             else:
-                return wrapper.functional.sparse_mm_dense(x, self.weight) + self.bias    
+                return spikingjelly.cext.functional.sparse_mm_dense(x, self.weight) + self.bias    
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, critical_sparsity={self.critical_sparsity}'
