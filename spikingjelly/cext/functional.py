@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.utils import cpp_extension
 
 cext_sparse_mm_dense_cusparse = cpp_extension.load(name='sparse_mm_dense_cusparse',
-    sources=['./spikingjelly/cext/csrc/gemm/gemm.cpp', './spikingjelly/cext/csrc/gemm/gemm.cu'], verbose=True).sparse_mm_dense_cusparse
+    sources=['./cext/csrc/gemm/gemm.cpp', './cext/csrc/gemm/gemm.cu'], verbose=True).sparse_mm_dense_cusparse
 
 class sparse_mm_dense_atf(torch.autograd.Function):
     @staticmethod
