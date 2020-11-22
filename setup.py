@@ -28,7 +28,7 @@ def get_extensions():
     
     ext_modules = list([
         extension(
-            "_C_" + ext_name,
+            '_C_' + ext_name,
             glob.glob(os.path.join(extensions_dir, ext_name, "*")),
             define_macros=define_macros,
             extra_compile_args=extra_compile_args
@@ -46,9 +46,9 @@ setup(
     install_requires=install_requires,
     name="spikingjelly",
     version="0.0.0.0.002",
-    author="PKU MLG and other contributors",
+    author="PKU MLG, PCL, and other contributors",
     author_email="fwei@pku.edu.cn, chyq@pku.edu.cn",
-    description="A Spiking Neural Networks simulator built on PyTorch.",
+    description="A deep learning framework for SNNs built on PyTorch.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/fangwei123456/spikingjelly",
@@ -58,7 +58,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
-        "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)",
+        "License :: Open-Intelligence Open Source License 1.0",
         "Operating System :: OS Independent",
     ],
     python_requires='>=3.6',
