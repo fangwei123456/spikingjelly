@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from spikingjelly.clock_driven import accelerating
+from spikingjelly.clock_driven import accelerating, functional
 
 class NeuNorm(nn.Module):
     def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False):
@@ -733,3 +733,57 @@ class DropConnectLinear(nn.Module):
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
+
+class LBLForwardSequential(nn.Sequential):
+    def __init__(self, *args):
+        '''
+        * :ref:`API in English <LBLForwardSequential.__init__-en>`
+
+        .. _LBLForwardSequential.__init__-cn:
+
+        逐层进行前反向传播的序列化容器。
+
+        * :ref:`中文API <LBLForwardSequential.__init__-cn>`
+
+        .. _LBLForwardSequential.__init__-en:
+
+        A sequential container that performs forward/backward layer by layer.
+
+        '''
+        super().__init__(*args)
+        self.stateful_flag = []
+        for module in self:
+            self.stateful_flag.append(functional.is_stateful(module))
+
+    def forward(self, x_seq: torch.Tensor):
+        # x_seq: [T, batch_size, ...]
+        T = x_seq.shape[0]
+        batch_size = x_seq.shape[1]
+
+        if self.stateful_flag[0]:
+            x = []
+            for t in range(T):
+                x.append(x_seq[t])
+        else:
+            x = x_seq.flatten(0, 1)  # [T * batch_size, ...]
+
+        for idx, module in enumerate(self):
+            if self.stateful_flag[idx]:
+                if isinstance(x, torch.Tensor):
+                    # 拆分成list
+                    x = list(torch.split(x, batch_size, 0))  # T * [batch_size, ...]
+                for t in range(T):
+                    x[t] = module(x[t])
+            else:
+                if isinstance(x, list):
+                    # 合并成tensor
+                    x = torch.cat(x, 0)
+                x = module(x)
+
+        if isinstance(x, torch.Tensor):
+            # 拆分成list
+            x = list(torch.split(x, batch_size, 0))  # T * [batch_size, ...]
+
+        for t in range(T):
+            x[t].unsqueeze_(0)  # [batch_size, ...] -> [1, batch_size, ...]
+        return torch.cat(x, 0)  # [T, batch_size, ...]
