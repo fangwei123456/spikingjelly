@@ -1,15 +1,9 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.utils import cpp_extension
 import math
-use_fast_math = True
-extra_cuda_cflags = []
-if use_fast_math:
-    extra_cuda_cflags.append('-use_fast_math')
-cext_surrogate = cpp_extension.load(name='surrogate', sources=['./spikingjelly/cext/csrc/surrogate/surrogate.cpp', './spikingjelly/cext/csrc/surrogate/surrogate.cu'],
-    extra_cuda_cflags=extra_cuda_cflags,
-    verbose=True)
+
+from _C_surrogate import surrogate as cext_surrogate 
 
 class sigmoid(torch.autograd.Function):
     @staticmethod
