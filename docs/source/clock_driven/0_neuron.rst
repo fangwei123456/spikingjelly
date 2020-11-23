@@ -48,6 +48,7 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 ``spikingjelly.clock_driven.neuron`` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的LIF神经元层的膜电位：
 
 .. code-block:: python
+
     print(lif.v)
     # 0.0
 
