@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import spikingjelly.cext.functional
-
+import warnings
 import math
 import numpy as np
 import time
@@ -112,8 +112,17 @@ class AutoSparseLinear(nn.Linear):
         self.in_spikes = in_spikes
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
+        if x.device == 'cpu':
+            # 稀疏运算暂不支持CPU
+            return F.linear(x, self.weight, self.bias)
+
         batch_size = x.shape[0]
         if batch_size not in self.critical_sparsity:
+            # 运行benchmark，获取临界稀疏度
+            self.benchmark(batch_size, x.device)
+
+        csp = self.critical_sparsity[batch_size]
+        if csp is None:
             return F.linear(x, self.weight, self.bias)
 
         else:
@@ -122,7 +131,7 @@ class AutoSparseLinear(nn.Linear):
                     sparsity = 1 - x.mean().item()
                 else:
                     sparsity = (x == 0).mean().item()
-        if sparsity < self.critical_sparsity[batch_size]:
+        if sparsity < csp:
             return F.linear(x, self.weight, self.bias)
         else:
             if self.bias is None:
@@ -133,7 +142,7 @@ class AutoSparseLinear(nn.Linear):
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, critical_sparsity={self.critical_sparsity}'
 
-    def benchmark(self, batch_size: int, device=None, run_times=1024, precision=1e-4, verbose=False):
+    def benchmark(self, batch_size: int, device=None, run_times=1024, precision=1e-4, verbose=True):
         '''
         * :ref:`API in English <AutoSparseLinear.benchmark-en>`
 
@@ -177,31 +186,33 @@ class AutoSparseLinear(nn.Linear):
 
         '''
         if self.critical_sparsity.__len__() > 4:
-            print('AutoSparseLinear: Warning: The batch size of the input has changed more than 4 times. AutoSparseLinear may waste too much time on running benchmark.')
-        if verbose:
-            print('AutoSparseLinear is running benchmark...')
+            warnings.warn('AutoSparseLinear: The batch size of the input has changed more than 4 times. AutoSparseLinear may waste too much time on running benchmark.')
+
         if device is None:
             device = self.weight.device
-        
+
+        if verbose:
+            print(f'{self} is running benchmark for batch_size={batch_size} at precision={precision} on device={device}')
+
         if self.bias is None:
             bias = False
         else:
             bias = True
-        
+
         fc_sparse = SparseLinear(self.in_features, self.out_features, bias)
         fc_sparse.to(device)
         fc_dense = nn.Linear(self.in_features, self.out_features, bias)
         fc_dense.to(device)
 
-        sparsity_r = 1.0
-        sparsity_l = 0.9
+        sparisity_r = 1.0
+        sparisity_l = 0.1
         # 二分查找临界稀疏度
-        
+
         while True:
-            sparsity = (sparsity_l + sparsity_r) / 2
+            sparisity = (sparisity_l + sparisity_r) / 2
             x = torch.rand(size=[batch_size, self.in_features], device=device)
-            sparse = (x > sparsity).to(x)
-            sparsity_a = (sparse == 0).to(x).mean().item()  # sparse的真实稀疏度
+            sparse = (x > sparisity).to(x)
+            sparisity_a = (sparse == 0).to(x).mean().item()  # sparse的真实稀疏度
 
             # 计算稀疏前反向所需时间
             t_list = []
@@ -227,22 +238,26 @@ class AutoSparseLinear(nn.Linear):
             t_list = np.asarray(t_list)
             t_dense = t_list[run_times:].sum()
             if verbose:
-                print(f'sparsity_a={sparsity_a}, t_sparse={t_sparse}, t_dense={t_dense}')
-            
+                print(f'sparisity_a={sparisity_a}, t_sparse={t_sparse}, t_dense={t_dense}')
+
             if t_sparse > t_dense:
-                sparsity_l = sparsity_a
+                sparisity_l = sparisity_a
             elif t_sparse < t_dense:
-                sparsity_r = sparsity_a
+                sparisity_r = sparisity_a
             else:
                 break
 
-            if sparsity_r - sparsity_l  < precision:
+            if sparisity_r - sparisity_l < precision:
                 break
-            
+
         if t_sparse < t_dense:
+            self.critical_sparsity[batch_size] = sparisity_a
+        else:
             # 如果搜索达到精度范围后，稀疏乘法仍然比普通乘法慢，则永远不调用稀疏乘法
-            # 所以只有t_sparse < t_dense才会记录入字典
-            self.critical_sparsity[batch_size] = sparsity_a
+            self.critical_sparsity[batch_size] = None
+        print(f'critical_sparsity[{batch_size}]={self.critical_sparsity[batch_size]}')
+        del x, sparse, fc_sparse, fc_dense
+        torch.cuda.empty_cache()
 
 
 
