@@ -119,7 +119,7 @@ class AutoSparseLinear(nn.Linear):
             There are some numeral errors when doing the sparse matrix multiplication. But the errors are not significant.
 
         .. admonition:: Warning
-        :class: warning
+            :class: warning
 
             This sparse matrix multiplication does not support to run on cpu. When this layer is on CPU, the dense matrix multiplication will be always used.
 
