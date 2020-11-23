@@ -112,7 +112,7 @@ class AutoSparseLinear(nn.Linear):
         self.in_spikes = in_spikes
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.device == 'cpu':
+        if x.get_device() < 0:
             # 稀疏运算暂不支持CPU
             return F.linear(x, self.weight, self.bias)
 
