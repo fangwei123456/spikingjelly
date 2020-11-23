@@ -54,7 +54,7 @@ class BaseNode(nn.Module):
         self.v_reset = v_reset
         self.detach_reset = detach_reset
         if self.v_reset is None:
-            self.v = 0
+            self.v = 0.0
         else:
             self.v = self.v_reset
         self.surrogate_function = surrogate_function
@@ -193,7 +193,7 @@ class BaseNode(nn.Module):
         Note that if the subclass has other stateful variables, these variables should be reset by this function.
         '''
         if self.v_reset is None:
-            self.v = 0
+            self.v = 0.0
         else:
             self.v = self.v_reset
         if self.monitor:
@@ -705,7 +705,7 @@ class AdaptThresholdNode(nn.Module):
         self.last_spike = torch.rand(neuron_shape)
 
         if self.v_reset is None:
-            self.v = 0
+            self.v = 0.0
         else:
             self.v = self.v_reset
         self.v_threshold = self.b_0
@@ -771,7 +771,7 @@ class AdaptThresholdNode(nn.Module):
     def reset(self):
 
         if self.v_reset is None:
-            self.v = 0
+            self.v = 0.0
         else:
             self.v = self.v_reset
         self.v_threshold = self.b_0
