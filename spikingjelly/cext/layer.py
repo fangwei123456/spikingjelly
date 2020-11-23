@@ -93,7 +93,7 @@ class AutoSparseLinear(nn.Linear):
 
         .. warning::
 
-            稀疏矩阵乘法不支持CPU。在CPU上运行，或在推理时，只会使用普通矩阵乘法。
+            稀疏矩阵乘法不支持CPU。在CPU上运行，只会使用普通矩阵乘法。
 
         * :ref:`中文API <AutoSparseLinear-cn>`
 
@@ -121,7 +121,7 @@ class AutoSparseLinear(nn.Linear):
         .. admonition:: Warning
         :class: warning
 
-            This sparse matrix multiplication does not support to run on cpu. When this layer is on CPU, or this layer is in eval mode, the dense matrix multiplication will be always used.
+            This sparse matrix multiplication does not support to run on cpu. When this layer is on CPU, the dense matrix multiplication will be always used.
 
         '''
         super().__init__(in_features, out_features, bias)
@@ -131,7 +131,7 @@ class AutoSparseLinear(nn.Linear):
         self.in_spikes = in_spikes
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.get_device() < 0 or not self.training:
+        if x.get_device() < 0:
             # 稀疏运算暂不支持CPU
             return F.linear(x, self.weight, self.bias)
 
@@ -205,7 +205,7 @@ class AutoSparseLinear(nn.Linear):
         when searching exceeds ``precision``, then the critical sparsity will be set to ``None``.
 
         '''
-        if self.critical_sparsity.__len__() > 2:
+        if self.critical_sparsity.__len__() > 4:
             warnings.warn('AutoSparseLinear: The batch size of the input has changed more than 4 times. AutoSparseLinear may waste too much time on running benchmark.')
 
         if device is None:
