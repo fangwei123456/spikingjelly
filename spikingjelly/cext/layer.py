@@ -29,6 +29,10 @@ class SparseLinear(nn.Linear):
 
         稀疏矩阵的乘法存在一定的计算误差，但误差并不显著，或可忽略。
 
+    .. warning::
+
+        本层不支持CPU。
+
     * :ref:`中文API <SparseLinear-cn>`
 
     .. _SparseLinear-en:
@@ -53,6 +57,11 @@ class SparseLinear(nn.Linear):
         :class: warning
 
         There are some numeral errors when doing the sparse matrix multiplication. But the errors are not significant.
+
+    .. admonition:: Warning
+        :class: warning
+
+        This layer does not support to run on cpu.
     '''
     def forward(self, sparse: torch.Tensor) -> torch.Tensor:
         if self.bias is None:
@@ -82,6 +91,10 @@ class AutoSparseLinear(nn.Linear):
 
             稀疏矩阵的乘法存在一定的计算误差，但误差并不显著，或可忽略。
 
+        .. warning::
+
+            稀疏矩阵乘法不支持CPU。在CPU上运行，或在推理时，只会使用普通矩阵乘法。
+
         * :ref:`中文API <AutoSparseLinear-cn>`
 
         .. _AutoSparseLinear-en:
@@ -104,6 +117,12 @@ class AutoSparseLinear(nn.Linear):
             :class: warning
 
             There are some numeral errors when doing the sparse matrix multiplication. But the errors are not significant.
+
+        .. admonition:: Warning
+        :class: warning
+
+            This sparse matrix multiplication does not support to run on cpu. When this layer is on CPU, or this layer is in eval mode, the dense matrix multiplication will be always used.
+
         '''
         super().__init__(in_features, out_features, bias)
         self.critical_sparsity = {}  
@@ -112,7 +131,7 @@ class AutoSparseLinear(nn.Linear):
         self.in_spikes = in_spikes
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        if x.get_device() < 0:
+        if x.get_device() < 0 or not self.training:
             # 稀疏运算暂不支持CPU
             return F.linear(x, self.weight, self.bias)
 
@@ -185,7 +204,7 @@ class AutoSparseLinear(nn.Linear):
         when searching exceeds ``precision``, then the critical sparsity will be set to ``None``.
 
         '''
-        if self.critical_sparsity.__len__() > 4:
+        if self.critical_sparsity.__len__() > 2:
             warnings.warn('AutoSparseLinear: The batch size of the input has changed more than 4 times. AutoSparseLinear may waste too much time on running benchmark.')
 
         if device is None:

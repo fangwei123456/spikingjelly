@@ -53,6 +53,10 @@ def sparse_mm_dense(sparse: torch.Tensor, dense: torch.Tensor):
 
         稀疏矩阵的乘法存在一定的计算误差，但误差并不显著，或可忽略。
 
+    .. warning::
+
+        本函数不支持CPU。
+
     * :ref:`中文API <sparse_mm_dense-cn>`
 
     .. _sparse_mm_dense-en:
@@ -76,6 +80,11 @@ def sparse_mm_dense(sparse: torch.Tensor, dense: torch.Tensor):
         :class: warning
 
         There are some numeral errors when doing the sparse matrix multiplication. But the errors are not significant.
+
+    .. admonition:: Warning
+        :class: warning
+
+        This function does not support to run on cpu.
     '''
     return sparse_mm_dense_atf.apply(sparse, dense)
 
