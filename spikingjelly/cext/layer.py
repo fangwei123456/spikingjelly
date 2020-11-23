@@ -161,6 +161,7 @@ class AutoSparseLinear(nn.Linear):
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, critical_sparsity={self.critical_sparsity}'
 
+    @torch.enable_grad()
     def benchmark(self, batch_size: int, device=None, run_times=1024, precision=1e-4, verbose=True):
         '''
         * :ref:`API in English <AutoSparseLinear.benchmark-en>`
