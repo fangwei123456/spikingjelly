@@ -232,7 +232,11 @@ class DVS128Gesture(EventsFramesDatasetBase):
 
     def __init__(self, root: str, train: bool, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         '''
-        :param root: 保存数据集的根目录
+        * :ref:`API in English <DVS128Gesture.__init__-en>`
+
+        .. _DVS128Gesture.__init__-cn:
+
+        :param root: 保存数据集的根目录。其中应该至少包含 `DvsGesture.tar.gz` 和 `gesture_mapping.csv`
         :type root: str
         :param train: 是否使用训练集
         :type train: bool
@@ -252,6 +256,28 @@ class DVS128Gesture(EventsFramesDatasetBase):
         数据来源于DVS相机拍摄的手势。原始数据的原始下载地址参见 https://www.research.ibm.com/dvsgesture/。
 
         关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
+
+        * :ref:`中文API <DVS128Gesture.__init__-cn>`
+
+        .. _DVS128Gesture.__init__-en:
+
+        :param root: root directory of dataset, which should contain `DvsGesture.tar.gz` and `gesture_mapping.csv`
+        :type root: str
+        :param train: whether use the train dataset. If `False`, use the test dataset
+        :type train: bool
+        :param use_frame: whether use the frames data. If `False`, use the events data
+        :type use_frame: bool
+        :param frames_num: the number of frames
+        :type frames_num: int
+        :param split_by: how to split the events, can be ``'number', 'time'``
+        :type split_by: str
+        :param normalization: how to normalize frames, can be ``None, 'frequency', 'max', 'norm', 'sum'``
+        :type normalization: str or None
+
+        DVS128 Gesture dataset, which is provided by `A Low Power, Fully Event-Based Gesture Recognition System <https://openaccess.thecvf.com/content_cvpr_2017/papers/Amir_A_Low_Power_CVPR_2017_paper.pdf>`, contains the gesture
+        recorded by a DVS128 camera. The origin dataset can be downloaded from https://www.research.ibm.com/dvsgesture/.
+
+        For more details about converting events to frames, see :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
         '''
         super().__init__()
         events_npy_root = os.path.join(root, 'events_npy')
