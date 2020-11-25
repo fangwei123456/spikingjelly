@@ -56,16 +56,14 @@ class multiply_spike(torch.autograd.Function):
         # y = x * spike
         assert x.shape == spike.shape, print('x.shape != spike.shape')  # 禁用广播机制
         if spike.dtype == torch.bool:
-            spike_bool = spike
+            spike_bool_not = spike.logical_not()
         else:
-            spike_bool = spike.bool()
-        if x.requires_grad and spike.requires_grad:
-            ctx.save_for_backward(spike_bool, x)
-        elif x.requires_grad and not spike.requires_grad:
-            ctx.save_for_backward(spike_bool)
-        elif not x.requires_grad and spike.requires_grad:
-            ctx.save_for_backward(x)
-        return x * spike_bool
+            spike_bool_not = spike.bool().logical_not()
+
+        if x.requires_grad or spike.requires_grad:
+            ctx.save_for_backward(x, spike_bool_not)
+
+        return x.masked_fill(spike_bool_not, 0)
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
@@ -73,12 +71,10 @@ class multiply_spike(torch.autograd.Function):
         grad_spike = None
         # grad_x = grad_output * spike
         # grad_spike = grad_output * x
-        if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            grad_x = grad_output * ctx.saved_tensors[0]
-            grad_spike = grad_output * ctx.saved_tensors[1]
-        elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            grad_x = grad_output * ctx.saved_tensors[0]
-        elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
+
+        if ctx.needs_input_grad[0]:
+            grad_x = grad_output.masked_fill(ctx.saved_tensors[1])
+        elif ctx.needs_input_grad[1]:
             grad_spike = grad_output * ctx.saved_tensors[0]
 
         return grad_x, grad_spike
