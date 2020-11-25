@@ -232,10 +232,6 @@ class DVS128Gesture(EventsFramesDatasetBase):
 
     def __init__(self, root: str, train: bool, use_frame=True, frames_num=10, split_by='number', normalization='max'):
         '''
-        * :ref:`API in English <DVS128Gesture.__init__-en>`
-
-        .. _DVS128Gesture.__init__-cn:
-
         :param root: 保存数据集的根目录。其中应该至少包含 `DvsGesture.tar.gz` 和 `gesture_mapping.csv`
         :type root: str
         :param train: 是否使用训练集
@@ -256,10 +252,6 @@ class DVS128Gesture(EventsFramesDatasetBase):
         数据来源于DVS相机拍摄的手势。原始数据的原始下载地址参见 https://www.research.ibm.com/dvsgesture/。
 
         关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
-
-        * :ref:`中文API <DVS128Gesture.__init__-cn>`
-
-        .. _DVS128Gesture.__init__-en:
 
         :param root: root directory of dataset, which should contain `DvsGesture.tar.gz` and `gesture_mapping.csv`
         :type root: str
