@@ -313,14 +313,14 @@ def plot_one_neuron_v_s(v: list, s: list, v_threshold=1.0, v_reset=0.0,
     ax0 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax0.set_title(title)
     T = s.__len__()
-    ax0.plot(np.linspace(0, T, v.__len__()), v)
+    t = np.arange(0, T)
+    ax0.plot(t, v)
     ax0.set_xlim(-0.5, T - 0.5)
     ax0.set_ylabel('voltage')
     ax0.axhline(v_threshold, label='$V_{threshold}$', linestyle='-.', c='r')
     if v_reset is not None:
         ax0.axhline(v_reset, label='$V_{reset}$', linestyle='-.', c='g')
     ax0.legend()
-    t = np.arange(0, T)
     s_np = np.asarray(s).squeeze(1)
     t_spike = s_np * t
     mask = (s_np == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出

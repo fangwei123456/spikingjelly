@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from spikingjelly.clock_driven import accelerating, functional
+from spikingjelly.clock_driven import functional
 
 class NeuNorm(nn.Module):
     def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False):
@@ -184,7 +184,7 @@ class AXAT(nn.Module):
         return x.view(x_shape)
 
 class Dropout(nn.Module):
-    def __init__(self, p=0.5, dropout_spikes=False):
+    def __init__(self, p=0.5):
         '''
         * :ref:`API in English <Dropout.__init__-en>`
 
@@ -192,8 +192,6 @@ class Dropout(nn.Module):
 
         :param p: 每个元素被设置为0的概率
         :type p: float
-        :param dropout_spikes: 本层是否作用于脉冲数据，例如放在 ``neuron.LIFNode`` 层之后。若为 ``True``，则计算会有一定的加速
-        :type dropout_spikes: bool
 
         与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -221,9 +219,6 @@ class Dropout(nn.Module):
 
         :param p: probability of an element to be zeroed
         :type p: float
-        :param dropout_spikes: whether dropout is applied to spikes, such as after ``neuron.LIFNode``. If ``True``,
-            the calculation will be accelerated
-        :type dropout_spikes: bool
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
@@ -252,7 +247,6 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
-        self.dropout_spikes = dropout_spikes
 
     def extra_repr(self):
         return 'p={}, dropout_spikes={}'.format(
@@ -266,10 +260,8 @@ class Dropout(nn.Module):
         if self.training:
             if self.mask is None:
                 self.create_mask(x)
-            if self.dropout_spikes:
-                return accelerating.mul(self.mask, x)
-            else:
-                return x * self.mask
+
+            return x * self.mask
         else:
             return x
 
@@ -694,12 +686,12 @@ class DropConnectLinear(nn.Module):
     def drop(self, batch_size: int):
         mask_w = (torch.rand_like(self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())) > self.p)
         # self.dropped_w = mask_w.to(self.weight) * self.weight  # shape = [batch_size, out_features, in_features]
-        self.dropped_w = accelerating.mul(self.weight.unsqueeze(0).repeat(batch_size, 1, 1), mask_w)
+        self.dropped_w = self.weight * mask_w
 
         if self.bias is not None:
             mask_b = (torch.rand_like(self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())) > self.p)
             # self.dropped_b = mask_b.to(self.bias) * self.bias
-            self.dropped_b = accelerating.mul(self.bias.unsqueeze(0).repeat(batch_size, 1), mask_b)
+            self.dropped_b = self.bias * mask_b
 
     def forward(self, input: torch.Tensor) -> torch.Tensor:
         if self.training:

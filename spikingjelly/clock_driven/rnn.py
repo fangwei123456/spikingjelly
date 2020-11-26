@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from spikingjelly.clock_driven import surrogate, accelerating, layer
+from spikingjelly.clock_driven import surrogate, layer
 import math
 
 def bidirectional_rnn_cell_forward(cell: nn.Module, cell_reverse: nn.Module, x: torch.Tensor,
@@ -694,15 +694,9 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         if self.surrogate_function2 is not None:
             assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
 
-        if self.surrogate_function1.spiking:
-            # 可以使用针对脉冲的加速
-            # c = f * c + i * g
-            c = accelerating.mul(c, f) + accelerating.mul(i, g, True)
-            # h = o * c
-            h = accelerating.mul(c, o)
-        else:
-            c = c * f + i * g
-            h = c * o
+
+        c = c * f + i * g
+        h = c * o
             
         return h, c
 
@@ -884,12 +878,8 @@ class SpikingGRUCell(SpikingRNNCellBase):
             assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
             n = self.surrogate_function2(y_ih[2] + r * y_hh[2])
 
-        if self.surrogate_function1.spiking:
-            # 可以使用针对脉冲的加速
-            h = accelerating.mul(accelerating.sub(torch.ones_like(z.data), z), n, True) + accelerating.mul(h, z)
-            # h不一定是脉冲数据，因此没有使用 accelerating.mul(h, True)
-        else:
-            h = (1 - z) * n + z * h
+
+        h = (1 - z) * n + z * h
         return h
 
 class SpikingGRU(SpikingRNNBase):
