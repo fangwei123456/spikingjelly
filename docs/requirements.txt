@@ -1,7 +1,6 @@
 --find-links https://download.pytorch.org/whl/torch_stable.html
 torch==1.6.0+cpu
 torchvision==0.7.0+cpu
-torchaudio==0.6.0
 scipy
 tensorboard
 matplotlib
