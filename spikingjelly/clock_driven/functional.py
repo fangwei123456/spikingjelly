@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from spikingjelly.clock_driven import neuron, accelerating
+from spikingjelly.clock_driven import neuron
 
 def reset_net(net: nn.Module):
     '''
@@ -594,4 +594,4 @@ def spike_mse_loss(x: torch.Tensor, spikes: torch.Tensor):
         compulated by this function is different with that by ``torch.nn.functional.mse_loss()``.
 
     '''
-    return (x.square() + accelerating.mul(1 - 2 * x, spikes)).mean()
+    return (x.square() + (1 - 2 * x) * spikes).mean()

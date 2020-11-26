@@ -5,7 +5,6 @@ spikingjelly.clock_driven package
    :hidden:
 
    spikingjelly.clock_driven.examples
-   spikingjelly.clock_driven.accelerating
    spikingjelly.clock_driven.encoding
    spikingjelly.clock_driven.functional
    spikingjelly.clock_driven.layer
