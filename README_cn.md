@@ -79,7 +79,7 @@ class Net(nn.Module):
 
 北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](http://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
 
-![PKU](./logo/pku.png)![PCL](./logo/pcl.png)
+![PKU](./docs/source/_static/logo/pku.png)![PCL](./docs/source/_static/logo/pcl.png)
 
 开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
 
