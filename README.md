@@ -3,7 +3,7 @@
 
 English | [中文](./README_cn.md)
 
-![demo](demo.png)
+![demo](./logo/demo.png)
 
 SpikingJelly is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
@@ -78,6 +78,8 @@ As simple as using PyTorch.
 ## About
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
+
+![PKU](./logo/pku.png)![PCL](./logo/pcl.png)
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
