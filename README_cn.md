@@ -81,6 +81,6 @@ class Net(nn.Module):
 
 ![PKU](./docs/source/_static/logo/pku.png)![PCL](./docs/source/_static/logo/pcl.png)
 
-开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
+开发人员名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
 
 欢迎各位开发者参与此框架的开发！

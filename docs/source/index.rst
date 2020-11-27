@@ -79,7 +79,7 @@
 .. image:: ../_static/logo/pcl.png
     :width: 20%
 
-开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
+开发人员名单可见于 `贡献者 <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_ 。
 
 .. _index_en:
 
@@ -160,7 +160,7 @@ About
 .. image:: ../_static/logo/pcl.png
     :width: 20%
 
-The list of developers can be found at https://github.com/fangwei123456/spikingjelly/graphs/contributors.
+The list of developers can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
 
 .. _APIs:
 .. toctree::
