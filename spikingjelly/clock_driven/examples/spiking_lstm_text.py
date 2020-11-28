@@ -4,7 +4,9 @@ import torch.nn.functional as F
 import numpy as np
 from spikingjelly.clock_driven import rnn
 # from torch.utils.tensorboard import SummaryWriter
-# import readline
+# import sys
+# if sys.platform != 'win32':
+#     import readline
 # import torchvision
 # import tqdm
 import matplotlib.pyplot as plt

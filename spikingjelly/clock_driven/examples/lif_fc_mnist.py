@@ -5,7 +5,9 @@ import torchvision
 import numpy as np
 from spikingjelly.clock_driven import neuron, encoding, functional
 from torch.utils.tensorboard import SummaryWriter
-import readline
+import sys
+if sys.platform != 'win32':
+    import readline
 from tqdm import tqdm
 
 

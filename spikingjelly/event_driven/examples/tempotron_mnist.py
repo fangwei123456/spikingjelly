@@ -5,7 +5,9 @@ import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import spikingjelly.event_driven.encoding as encoding
 import spikingjelly.event_driven.neuron as neuron
-import readline
+import sys
+if sys.platform != 'win32':
+    import readline
 import math
 
 class Net(nn.Module):
