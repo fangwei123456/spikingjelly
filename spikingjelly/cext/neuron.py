@@ -114,6 +114,55 @@ def lif_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
     pass
 
 
+def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next:torch.Tensor, v_threshold: float, v_reset: float, tau: float):
+    '''
+    * :ref:`API in English <lif_hard_reset_backward-en>`
+
+    .. _lif_hard_reset_backward-cn:
+
+    :param grad_spike: 损失对脉冲的梯度
+    :type grad_spike: torch.Tensor
+    :param grad_v_next: 损失对LIF神经元膜电位的梯度
+    :type grad_v_next: torch.Tensor
+    :param v_threshold: 神经元的阈值电压
+    :type v_threshold: float
+    :param v_reset: 神经元的重置电压
+    :type v_reset: float
+    :param tau: LIF神经元的膜时间常数
+    :type tau: float
+    :return: ``(grad_x, grad_v)``，其中 ``grad_x`` 是损失对输入 ``x`` 的梯度，``grad_v`` 是损失对上一个时刻LIF神经元膜电位的梯度
+    :rtype: tuple
+
+    :ref:`lif_hard_reset_forward-cn` 的反向传播。梯度的计算按照
+
+    .. math::
+
+
+    * :ref:`中文API <lif_hard_reset_backward-cn>`
+
+    .. _lif_hard_reset_backward-en:
+
+    :param grad_x: the input to the neuron
+    :type grad_x: torch.Tensor
+    :param grad_v_next: the membrane potential of the neuron
+    :type grad_v_next: torch.Tensor
+    :param v_threshold: the threshold voltage of the neuron
+    :type v_threshold: float
+    :param v_reset: the reset voltage of the neuron
+    :type v_reset: float
+    :param tau: the membrane time constant of the LIF neuron
+    :type tau: float
+    :return: ``(spike, v_next)``,where ``spike`` is the output spike,and ``v_next`` is the membrane potential of the LIF neuron in next time step
+    :rtype: tuple
+
+    The backward of :ref:`lif_hard_reset_forward-en`. The gradient is calculated by
+
+    .. math::
+
+    '''
+
+    pass
+
 
 
 
