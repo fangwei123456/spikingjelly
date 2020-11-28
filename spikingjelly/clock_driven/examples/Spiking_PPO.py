@@ -9,7 +9,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from common.multiprocessing_env import SubprocVecEnv
 
 from spikingjelly.clock_driven import neuron, functional
@@ -50,22 +50,12 @@ env.seed(seed)
 
 # Neural Network
 class NonSpikingLIFNode(neuron.LIFNode):
-    def forward(self, dv: torch.Tensor):
-        if self.v_reset is None:
-            self.v += (dv - self.v) / self.tau
-        else:
-            self.v += (dv - (self.v - self.v_reset)) / self.tau
-
-        if self.monitor:
-            if self.monitor['v'].__len__() == 0:
-                # 补充在0时刻的电压
-                if self.v_reset is None:
-                    self.monitor['v'].append(self.v.data.cpu().numpy().copy() * 0)
-                else:
-                    self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
-            self.monitor['v'].append(self.v.data.cpu().numpy().copy())
-
-        return self.v
+    class NonSpikingLIFNode(neuron.LIFNode):
+        def forward(self, dv: torch.Tensor):
+            self.neuronal_charge(dv)
+            # self.neuronal_fire()
+            # self.neuronal_reset()
+            return self.v
         
 class ActorCritic(nn.Module):
     def __init__(self, num_inputs, num_outputs, hidden_size, T=16, std=0.0):

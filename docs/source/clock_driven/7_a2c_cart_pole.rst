@@ -6,7 +6,7 @@
 请确保你已经阅读了原版代码以及相关论文，因为本教程是对原代码的扩展。
 
 状态输入
-同DQN一样我们使用另一种常用的使SNN输出浮点值的方法：将神经元的阈值设置成无穷大，使其不发放脉冲，用神经元最后时刻的电压作为输出值（Norse采用的是仿真过程中神经元的最大电压）。神经元实现这
+同DQN一样我们使用另一种常用的使SNN输出浮点值的方法：将神经元的阈值设置成无穷大，使其不发放脉冲，用神经元最后时刻的电压作为输出值。神经元实现这
 种神经元非常简单，只需要继承已有神经元，重写 ``forward`` 函数即可。LIF神经元的电压不像IF神经元那样是简单的积分，因此我们使用LIF
 神经元来改写：
 
@@ -14,20 +14,9 @@
 
     class NonSpikingLIFNode(neuron.LIFNode):
         def forward(self, dv: torch.Tensor):
-
-            if self.v_reset is None:
-                self.v += (dv - self.v) / self.tau
-            else:
-                self.v += (dv - (self.v - self.v_reset)) / self.tau
-            if self.monitor:
-                if self.monitor['v'].__len__() == 0:
-                    # save the voltage at t = 0
-                    # 补充在0时刻的电压
-                    if self.v_reset is None:
-                        self.monitor['v'].append(self.v.data.cpu().numpy().copy() * 0)
-                    else:
-                        self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
-                self.monitor['v'].append(self.v.data.cpu().numpy().copy())
+            self.neuronal_charge(dv)
+            # self.neuronal_fire()
+            # self.neuronal_reset()
             return self.v
 
 接下来，搭建我们的Spiking Actor-Critic Network，网络的结构非常简单，全连接-IF神经元-全连接-NonSpikingLIF神经元，全连接-IF神经元起到
