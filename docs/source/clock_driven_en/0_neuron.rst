@@ -149,7 +149,7 @@ Find the membrane potential reset code in ``neuronal_reset()`` of ``BaseNode``:
             spike = self.spike
 
         if self.v_reset is None:
-            self.v = (1 - spike) * self.v - spike * self.v_threshold
+            self.v = self.v - spike * self.v_threshold
         else:
             self.v = (1 - spike) * self.v + spike * self.v_reset
 
