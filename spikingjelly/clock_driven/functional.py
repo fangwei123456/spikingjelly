@@ -31,7 +31,7 @@ def reset_net(net: nn.Module):
 
 def is_stateful(module: nn.Module):
     for m in module.modules():
-        if hasattr(m, 'markov_property'):
+        if hasattr(m, 'unparallelizable'):
             return True
     return False
 
