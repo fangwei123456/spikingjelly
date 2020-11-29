@@ -4,13 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 from spikingjelly.clock_driven import rnn
 from torch.utils.tensorboard import SummaryWriter
-<<<<<<< HEAD
 import readline
-=======
-import sys
-if sys.platform != 'win32':
-    import readline
->>>>>>> master
 import torchvision
 import tqdm
 class Net(nn.Module):

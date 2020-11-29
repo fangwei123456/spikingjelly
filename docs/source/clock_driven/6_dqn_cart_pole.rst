@@ -18,18 +18,13 @@ Cart Position，Cart Velocity，Pole Angle和Pole Velocity At Tip，这是一个
 任务中，如果我们也使用脉冲发放频率，效果可能会很差，因此脉冲发放频率并不是非常“连续”：仿真 :math:`T` 步，可能的脉冲发放频率取
 值只能是 :math:`0, \frac{1}{T}, \frac{2}{T}, ..., 1`。
 
-<<<<<<< HEAD
 我们使用另一种常用的使SNN输出浮点值的方法：将神经元的阈值设置成无穷大，使其不发放脉冲，用神经元最后时刻的电压作为输出值（Norse采用的是仿真过程中神经元的最大电压）。神经元实现这
-=======
-我们使用另一种常用的使SNN输出浮点值的方法：将神经元的阈值设置成无穷大，使其不发放脉冲，用神经元最后时刻的电压作为输出值。神经元实现这
->>>>>>> master
 种神经元非常简单，只需要继承已有神经元，重写 ``forward`` 函数即可。LIF神经元的电压不像IF神经元那样是简单的积分，因此我们使用LIF
 神经元来改写：
 
 .. code-block:: python
 
     class NonSpikingLIFNode(neuron.LIFNode):
-<<<<<<< HEAD
         def forward(self, dv: torch.Tensor):
 
             if self.v_reset is None:
@@ -45,13 +40,6 @@ Cart Position，Cart Velocity，Pole Angle和Pole Velocity At Tip，这是一个
                     else:
                         self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
                 self.monitor['v'].append(self.v.data.cpu().numpy().copy())
-=======
-            class NonSpikingLIFNode(neuron.LIFNode):
-        def forward(self, dv: torch.Tensor):
-            self.neuronal_charge(dv)
-            # self.neuronal_fire()
-            # self.neuronal_reset()
->>>>>>> master
             return self.v
 
 接下来，搭建我们的Deep Q Spiking Network，网络的结构非常简单，全连接-IF神经元-全连接-NonSpikingLIF神经元，全连接-IF神经元起到

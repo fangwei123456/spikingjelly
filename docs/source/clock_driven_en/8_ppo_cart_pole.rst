@@ -15,7 +15,6 @@ It is convenient to implement such neurons in the ``SpikingJelly`` framework: ju
 
     class NonSpikingLIFNode(neuron.LIFNode):
         def forward(self, dv: torch.Tensor):
-<<<<<<< HEAD
 
             if self.v_reset is None:
                 self.v += (dv - self.v) / self.tau
@@ -30,11 +29,6 @@ It is convenient to implement such neurons in the ``SpikingJelly`` framework: ju
                     else:
                         self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
                 self.monitor['v'].append(self.v.data.cpu().numpy().copy())
-=======
-            self.neuronal_charge(dv)
-            # self.neuronal_fire()
-            # self.neuronal_reset()
->>>>>>> master
             return self.v
 
 The basic structure of the Spiking Actor-Critic Network is very simple: input layer, IF neuron layer, and NonSpikingLIF neuron layer,

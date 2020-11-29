@@ -4,11 +4,7 @@
 ###################################
 
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
-<<<<<<< HEAD
 网络(Spiking Neuron Network, SNN)进行深度学习的框架。
-=======
-网络(Spiking Neural Network, SNN)进行深度学习的框架。
->>>>>>> master
 
 * :ref:`Homepage in English <index_en>`
 
@@ -77,17 +73,7 @@
 -------------------------
 北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <http://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
 
-<<<<<<< HEAD
 开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
-=======
-.. image:: ./_static/logo/pku.png
-    :width: 20%
-
-.. image:: ./_static/logo/pcl.png
-    :width: 20%
-
-开发人员名单可见于 `贡献者 <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_ 。
->>>>>>> master
 
 .. _index_en:
 
@@ -162,17 +148,7 @@ About
 -------------------------
 `Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University <https://pkuml.org/>`_ and `Peng Cheng Laboratory <http://www.szpclab.com/>`_ are the main developers of SpikingJelly.
 
-<<<<<<< HEAD
 The list of developers can be found at https://github.com/fangwei123456/spikingjelly/graphs/contributors.
-=======
-.. image:: ./_static/logo/pku.png
-    :width: 20%
-
-.. image:: ./_static/logo/pcl.png
-    :width: 20%
-
-The list of developers can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
->>>>>>> master
 
 .. _APIs:
 .. toctree::

@@ -28,19 +28,14 @@ Because after simulating  :math:`T` steps, the possible firing rates are :math:`
 which are not enough to represent the Q function.
 
 Here, we apply a new method to make SNN output floating numbers. We set the firing threshold of a neuron to be infinity, which won't fire at all,
-<<<<<<< HEAD
 and we adopt the final membrane potential to represent Q function.
 (A tutorial from `Norse <https://github.com/norse/norse>`_ adopts the largest membrane potential during a simulation to represent Q function)
 It is convenient to implement such neurons in the ``SpikingJelly`` framework: just inherit everything from LIF neuron ``neuron.LIFNode`` and rewrite its ``forward`` function.
-=======
-and we adopt the final membrane potential to represent Q function. It is convenient to implement such neurons in the ``SpikingJelly`` framework: just inherit everything from LIF neuron ``neuron.LIFNode`` and rewrite its ``forward`` function.
->>>>>>> master
 
 .. code-block:: python
 
     class NonSpikingLIFNode(neuron.LIFNode):
         def forward(self, dv: torch.Tensor):
-<<<<<<< HEAD
 
             if self.v_reset is None:
                 self.v += (dv - self.v) / self.tau
@@ -55,11 +50,6 @@ and we adopt the final membrane potential to represent Q function. It is conveni
                     else:
                         self.monitor['v'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
                 self.monitor['v'].append(self.v.data.cpu().numpy().copy())
-=======
-            self.neuronal_charge(dv)
-            # self.neuronal_fire()
-            # self.neuronal_reset()
->>>>>>> master
             return self.v
 
 The structure of the Deep Q Spiking Network is very simple: input layer, IF neuron layer, and NonSpikingLIF neuron layer,

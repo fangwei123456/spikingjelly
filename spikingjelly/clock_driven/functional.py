@@ -31,11 +31,7 @@ def reset_net(net: nn.Module):
 
 def is_stateful(module: nn.Module):
     for m in module.modules():
-<<<<<<< HEAD
         if hasattr(m, 'reset'):
-=======
-        if hasattr(m, 'unparallelizable'):
->>>>>>> master
             return True
     return False
 

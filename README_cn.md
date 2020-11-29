@@ -3,15 +3,9 @@
 
 [English](./README.md) | 中文
 
-<<<<<<< HEAD
 ![demo](demo.png)
 
 [SpikingJelly](https://github.com/fangwei123456/spikingjelly) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neuron Network, SNN)进行深度学习的框架。
-=======
-![demo](./docs/source/_static/logo/demo.png)
-
-[SpikingJelly](https://github.com/fangwei123456/spikingjelly) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neural Network, SNN)进行深度学习的框架。
->>>>>>> master
 
 SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedocs.io
 
@@ -85,12 +79,6 @@ class Net(nn.Module):
 
 北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](http://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
 
-<<<<<<< HEAD
 开发人员名单可见于 https://github.com/fangwei123456/spikingjelly/graphs/contributors。
-=======
-![PKU](./docs/source/_static/logo/pku.png)![PCL](./docs/source/_static/logo/pcl.png)
-
-开发人员名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
->>>>>>> master
 
 欢迎各位开发者参与此框架的开发！

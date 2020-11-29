@@ -21,13 +21,7 @@ We also use a similar structure in SNN. Import related modules, inherit ``torch.
     import torchvision
     from spikingjelly.clock_driven import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
-<<<<<<< HEAD
     import readline
-=======
-    import sys
-    if sys.platform != 'win32':
-        import readline
->>>>>>> master
     class Net(nn.Module):
         def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
 
