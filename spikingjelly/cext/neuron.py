@@ -16,7 +16,7 @@ def hard_reset_forward_template(x: torch.Tensor, v:torch.Tensor, v_threshold: fl
     :type v_threshold: float
     :param v_reset: 神经元的重置电压
     :type v_reset: float
-    :return: ``(spike, v_next)``，其中 ``spike`` 是释放的脉冲，``v_next`` 是经过充电、放电、重置后的电压
+    :return: ``(h, spike, v_next)``，其中 ``h`` 是经过充电后的电压，``spike`` 是释放的脉冲，`v_nest` 是重置后的电压
     :rtype: tuple
 
     对神经元进行单步的电压更新，其中电压重置方式是硬重置(hard reset)。更新的方程为
@@ -42,7 +42,7 @@ def hard_reset_forward_template(x: torch.Tensor, v:torch.Tensor, v_threshold: fl
     :type v_threshold: float
     :param v_reset: the reset voltage of the neuron
     :type v_reset: float
-    :return: ``(spike, v_next)``,where ``spike`` is the output spike,and ``v_next`` is the membrane potential of the neuron in next time step
+    :return: ``(h, spike, v_next)``, where ``h`` is the membrane potential after charging, ``spike`` is the output spike,and ``v_next`` is the membrane potential of the neuron in next time step
     :rtype: tuple
 
     Update the membrane potential of the neuron by one time step with hard reset. The update is calculated by
@@ -71,7 +71,7 @@ def soft_reset_forward_template(x: torch.Tensor, v:torch.Tensor, v_threshold: fl
     :type v: torch.Tensor
     :param v_threshold: 神经元的阈值电压
     :type v_threshold: float
-    :return: ``(spike, v_next)``，其中 ``spike`` 是释放的脉冲，``v_next`` 是经过充电、放电、重置后的电压
+    :return: ``(h, spike, v_next)``，其中 ``h`` 是经过充电后的电压，``spike`` 是释放的脉冲，`v_nest` 是重置后的电压
     :rtype: tuple
 
     对神经元进行单步的电压更新，其中电压重置方式是软重置(soft reset)。更新的方程为
@@ -95,7 +95,7 @@ def soft_reset_forward_template(x: torch.Tensor, v:torch.Tensor, v_threshold: fl
     :type v: torch.Tensor
     :param v_threshold: the threshold voltage of the neuron
     :type v_threshold: float
-    :return: ``(spike, v_next)``,where ``spike`` is the output spike,and ``v_next`` is the membrane potential of the neuron in next time step
+    :return: ``(h, spike, v_next)``, where ``h`` is the membrane potential after charging, ``spike`` is the output spike,and ``v_next`` is the membrane potential of the neuron in next time step
     :rtype: tuple
 
     Update the membrane potential of the neuron by one time step with soft reset. The update is calculated by
@@ -207,10 +207,9 @@ def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Te
 
         \\frac{\\partial V_{t}}{\\partial H_{t}} & = 1 - S_{t} + (V_{reset} - H_{t})\\frac{\\partial S_{t}}{\\partial H_{t}}
 
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
 
-        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
-
+        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
     * :ref:`中文API <hard_reset_backward_template-cn>`
 
     .. _hard_reset_backward_template-en:
@@ -235,9 +234,9 @@ def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Te
 
         \\frac{\\partial V_{t}}{\\partial H_{t}} & = 1 - S_{t} + (V_{reset} - H_{t})\\frac{\\partial S_{t}}{\\partial H_{t}}
 
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
 
-        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
+        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
 
 
     '''
@@ -268,9 +267,9 @@ def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Ten
 
         \\frac{\\partial V_{t}}{\\partial H_{t}} & = 1 - V_{threshold} \\Theta'(H_{t} - V_{threshold})
 
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
 
-        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
+        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
 
     * :ref:`中文API <soft_reset_backward_template-cn>`
 
@@ -294,9 +293,9 @@ def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Ten
 
         \\frac{\\partial V_{t}}{\\partial H_{t}} & = 1 - V_{threshold} \\Theta'(H_{t} - V_{threshold})
 
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
 
-        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}} = \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
+        \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
 
 
     '''
