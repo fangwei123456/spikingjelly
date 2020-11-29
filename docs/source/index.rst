@@ -4,7 +4,7 @@
 ###################################
 
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
-网络(Spiking Neuron Network, SNN)进行深度学习的框架。
+网络(Spiking Neural Network, SNN)进行深度学习的框架。
 
 * :ref:`Homepage in English <index_en>`
 
