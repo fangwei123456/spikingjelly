@@ -248,6 +248,7 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
+        self.unparallelizable = True
 
     def extra_repr(self):
         return 'p={}, dropout_spikes={}'.format(
