@@ -4,7 +4,13 @@ import torch.nn.functional as F
 import torchvision
 from spikingjelly.clock_driven import neuron, functional, surrogate, layer
 from torch.utils.tensorboard import SummaryWriter
+<<<<<<< HEAD
 import readline
+=======
+import sys
+if sys.platform != 'win32':
+    import readline
+>>>>>>> master
 
 class Net(nn.Module):
     def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):

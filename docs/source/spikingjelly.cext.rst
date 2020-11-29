@@ -7,6 +7,10 @@ spikingjelly.cext package
    spikingjelly.cext.functional
    spikingjelly.cext.layer
    spikingjelly.cext.surrogate
+<<<<<<< HEAD
+=======
+   spikingjelly.cext.neuron
+>>>>>>> master
 
 Module contents
 ---------------

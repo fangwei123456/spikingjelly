@@ -19,7 +19,13 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
     import torchvision
     from spikingjelly.clock_driven import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
+<<<<<<< HEAD
     import readline
+=======
+    import sys
+    if sys.platform != 'win32':
+        import readline
+>>>>>>> master
     class Net(nn.Module):
         def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
 

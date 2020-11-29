@@ -56,6 +56,10 @@ class BaseNode(nn.Module):
         self.surrogate_function = surrogate_function
         self.monitor = monitor_state
         self.reset()
+<<<<<<< HEAD
+=======
+        self.unparallelizable = True
+>>>>>>> master
 
 
     @abstractmethod
@@ -124,7 +128,11 @@ class BaseNode(nn.Module):
             spike = self.spike
 
         if self.v_reset is None:
+<<<<<<< HEAD
             self.v = (1 - spike) * self.v - spike * self.v_threshold
+=======
+            self.v = self.v - spike * self.v_threshold
+>>>>>>> master
         else:
             self.v = (1 - spike) * self.v + spike * self.v_reset
 

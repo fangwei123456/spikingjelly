@@ -20,6 +20,10 @@ First import the relevant modules:
 
     import torch
     import torch.nn as nn
+<<<<<<< HEAD
+=======
+    import numpy as np
+>>>>>>> master
     from spikingjelly.clock_driven import neuron
     from spikingjelly import visualizing
     from matplotlib import pyplot as plt
@@ -40,11 +44,20 @@ The LIF neuron layer has some construction parameters, which are explained in de
 
     - **surrogate_function** -- the surrogate function used to calculate the gradient of the impulse function during back propagation
 
+<<<<<<< HEAD
     - **monitor_state** -- whether to set up a monitor to save the voltage and pulses of the neurons. If it is ``True``, ``self.monitor`` is a dictionary, the keys include ``v`` and ``s``, which record voltage and output pulse respectively.
 
 The corresponding value is a linked list. In order to save memory, the value stored in the list is the value of the original variable converted into a ``numpy`` array. Also note that the ``self.reset()`` function will clear these linked lists.
 
 For the ``surrogate_function`` parameter, we will not use backpropagation for the time being, so we don't care about it for now.
+=======
+    - **monitor_state** -- whether to set up a monitor to save the voltage and pulses of the neurons. If it is ``True``,
+``self.monitor`` is a dictionary, the keys include ``h``, ``v`` and ``s``, which record the voltage after charging, the voltage after releasing the pulse, and the released pulse respectively.
+
+The corresponding value is a linked list. In order to save memory, the value stored in the list is the value of the original variable converted into a ``numpy`` array. Also note that the ``self.reset()`` function will clear these linked lists.
+
+For the ``surrogate_function'' parameter behaves exactly the same as the step function during forward propagation; we will not use back propagation for the time being, so we don't care about back propagation for now.
+>>>>>>> master
 
 You may be curious about the number of neurons in this layer. For most neuron layers in ``spikingjelly.clock_driven.neuron``,
 the number of neurons is automatically determined according to the ``shape`` of the first received input after initialization or re-initialization by calling the ``reset()`` function.
@@ -82,8 +95,13 @@ it not only depends on the input :math:`X_{t}` at the current moment,
 but also on its membrane potential :math:`V_{t-1}` at the end of the previous moment.
 
 Usually use the sub-threshold (referring to when the membrane potential does not exceed the threshold
+<<<<<<< HEAD
 voltage ``V_{threshold}`` differential equation :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` to describe the continuous time
 spike neuron charging process. For example, for LIF neurons, the update equation is:
+=======
+voltage ``V_{threshold}`` the charging differential equation :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` to describe the continuous time
+spike neuron charging process. For example, for LIF neurons, the charging equation is:
+>>>>>>> master
 
 .. math::
     \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + X(t)
@@ -102,6 +120,7 @@ Therefore, the expression of :math:`V_{t}` can be obtained as
 .. math::
     V_{t} = f(V_{t-1}, X_{t}) = V_{t-1} + \frac{1}{\tau_{m}}(-(V_{t - 1} - V_{reset}) + X_{t})
 
+<<<<<<< HEAD
 The corresponding code can be found in ``forward()`` of ``LIFNode``:
 
 .. code-block:: python
@@ -113,6 +132,34 @@ The corresponding code can be found in ``forward()`` of ``LIFNode``:
 Another common characteristic of spike neurons is that when the membrane potential exceeds the threshold voltage,
 the neuron emits impulses. Releasing the pulse consumes the accumulation of neurons before the accumulation,
 so there will be a momentary decrease in membrane potential. In SNN, there are two ways to achieve this voltage reduction:
+=======
+The corresponding code can be found in ``neuronal_charge()`` of ``LIFNode``:
+
+.. code-block:: python
+
+    def neuronal_charge(self, dv: torch.Tensor):
+        if self.v_reset is None:
+            self.v += (dv - self.v) / self.tau
+        else:
+            self.v += (dv - (self.v - self.v_reset)) / self.tau
+
+Different neurons have different charging equations. But after the membrane potential exceeds the threshold voltage,
+the release of the pulse, and after the release of the pulse, the reset of the membrane potential is the same. Therefore,
+they all inherit from ``BaseNode`` and share the same discharge and reset equations. The code to release the pulse can
+be found in ``neuronal_fire()`` of ``BaseNode``:
+
+.. code-block:: python
+
+    def neuronal_fire(self):
+        self.spike = self.surrogate_function(self.v - self.v_threshold)
+
+``surrogate_function()`` is a step function during forward propagation, as long as the input is greater than or equal
+to 0, it will return 1, otherwise it will return 0. We regard this kind of ``tensor'' whose elements are only 0 or 1 as pulses.
+
+The release of the pulse consumes the previously accumulated electric charge of the neuron, so there will be an
+instantaneous decrease in the membrane potential, which is the reset of the membrane potential. In SNN, there are
+two ways to realize membrane potential reset:
+>>>>>>> master
 
 #. Hard method: After releasing the pulse, the membrane potential is directly set to the reset voltage::math:`V = V_{reset}`
 
@@ -121,6 +168,24 @@ so there will be a momentary decrease in membrane potential. In SNN, there are t
 It can be found that for neurons using the Soft method, there is no need to reset the voltage :math:`V_{reset}` variable.
 The neuron in ``spikingjelly.clock_driven.neuron``, in one of the constructor parameters, ``v_reset``,
 the default is ``1.0``, which means the neuron uses the Hard mode; if it is set to ``None``, the Soft mode will be used.
+<<<<<<< HEAD
+=======
+Find the membrane potential reset code in ``neuronal_reset()`` of ``BaseNode``:
+
+.. code-block:: python
+
+    def neuronal_reset(self):
+        if self.detach_reset:
+            spike = self.spike.detach()
+        else:
+            spike = self.spike
+
+        if self.v_reset is None:
+            self.v = self.v - spike * self.v_threshold
+        else:
+            self.v = (1 - spike) * self.v + spike * self.v_reset
+
+>>>>>>> master
 
 Three equations describing discrete spike neurons
 --------------------------------------------------------------
@@ -131,6 +196,18 @@ So far, we can use the three discrete equations of charge, discharge, and reset 
     H_{t} & = f(V_{t-1}, X_{t}) \\
     S_{t} & = g(H_{t} - V_{threshold}) = \Theta(H_{t} - V_{threshold})
 
+<<<<<<< HEAD
+=======
+Among them :math:`\Theta(x)` is the ``surrogate_function()`` in the constructor parameter, which is a step function:
+
+.. math::
+    \Theta(x) =
+    \begin{cases}
+    1, & x \geq 0 \\
+    0, & x < 0
+    \end{cases}
+
+>>>>>>> master
 The Hard method reset equation is:
 
 .. math::
@@ -158,6 +235,7 @@ In order to record data, need to open the ``monitor`` of the neuron layer:
 
     lif.set_monitor(True)
 
+<<<<<<< HEAD
 After turning on the monitor, the neuron layer will automatically record the voltage ``self.monitor['v']`` and
 the released pulse ``self.monitor['s']`` in the dictionary ``self.monitor`` when it is running.
 It should be noted that ``self.monitor['s']`` records the output pulses of the neuron layer after each step is run,
@@ -169,6 +247,13 @@ potential :math:`V_{t}` after discharge. Therefore, in the 0th step of the opera
 for each subsequent step, 2 voltage data are recorded. Run ``T`` step, ``self.monitor['v']`` will be a ``list`` of length ``2T + 1``.
 
 Now let us give continuous input to the LIF neuron layer and plot its membrane potential and output pulse:
+=======
+After turning on the monitor, the neuron layer will automatically record the charged membrane potential
+``self.monitor['h']'' in the dictionary ``self.monitor`` during the operation when it is running. Pulse ``self.monitor['s']``,
+and the membrane potential after discharge ``self.monitor['v']``.
+
+Now let us give continuous input to the LIF neuron layer and plot the membrane potential and output pulse after its discharge:
+>>>>>>> master
 
 .. code-block:: python
 

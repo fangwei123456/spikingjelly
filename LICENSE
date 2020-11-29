@@ -22,13 +22,21 @@ The License Notice is as follows:
 
 Copyright (c) [xxxx] [Name of Copyright owner]
 The software is released under the Open-Intelligence Open Source License V1.0.
+<<<<<<< HEAD
 [Voluntary Patent Announcement] The software is granted a patent license in a way of (   ). 
+=======
+[Voluntary Patent Announcement] The software is granted a patent license in a way of ( authorization ).
+>>>>>>> master
 The copyright owner promises to follow “Open-Intelligence Open Source Platform Management Regulation V1.0”, 
 which is provided by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA)
 
 IV.Patent License [Voluntary Patent Announcement]
 If the Licensor owns a patent  covering the Software,
+<<<<<<< HEAD
 1.He grants a license  as the following (    )to any user or distributor that does not own any patent that cover the software:
+=======
+1.He grants a license  as the following (  2  )to any user or distributor that does not own any patent that cover the software:
+>>>>>>> master
 (1)A royalty free license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND RF”);
 (2)Join a patent pool established by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA);
 (3)A license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND”);
