@@ -3,7 +3,7 @@
 
 English | [中文](./README_cn.md)
 
-![demo](./logo/demo.png)
+![demo](./docs/source/_static/logo/demo.png)
 
 SpikingJelly is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
