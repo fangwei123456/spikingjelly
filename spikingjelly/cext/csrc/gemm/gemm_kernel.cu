@@ -41,6 +41,7 @@ void resize(reCuBuffer<T>& buffer, int size)
 
 static reCuBuffer<int>   nnzPerCol_[num_device], ColInd_[num_device], RowPtr_[num_device];
 static reCuBuffer<float> csrVal_[num_device], tranBuffer_[num_device];
+static reCuBuffer<void>  dBuffer_[num_device];
 
 struct cublasHandle_
 {
@@ -53,14 +54,11 @@ void sparse_mm_dense_cusparse_backend(const int & cuda_device_id, const int & m,
 {
     assert(cuda_device_id>=0);
     cudaSetDevice(cuda_device_id);
+
     reCuBuffer<int>& nnzPerCol    = nnzPerCol_[cuda_device_id];
     reCuBuffer<int>& ColInd       = ColInd_[cuda_device_id];
     reCuBuffer<int>& RowPtr       = RowPtr_[cuda_device_id];
     reCuBuffer<float>& csrVal     = csrVal_[cuda_device_id];
-    reCuBuffer<float>& tranBuffer = tranBuffer_[cuda_device_id];
-
-    // CT = A * BT
-    resize(tranBuffer, m * p * sizeof(float));
 
     cusparseHandle_t  handle;
     CUSPARSE_CALL(cusparseCreate(&handle));
@@ -79,6 +77,12 @@ void sparse_mm_dense_cusparse_backend(const int & cuda_device_id, const int & m,
 
     CUSPARSE_CALL(cusparseSdense2csc(handle, n, m, descrX, dA, n, nnzPerCol.data, csrVal.data, ColInd.data, RowPtr.data));
 
+#if __CUDACC_VER_MAJOR__ == 10
+    reCuBuffer<float>& tranBuffer = tranBuffer_[cuda_device_id];
+
+    // CT = A * BT
+    resize(tranBuffer, m * p * sizeof(float));
+
     // B * C
     cusparseMatDescr_t descrA;
     CUSPARSE_CALL(cusparseCreateMatDescr(&descrA));
@@ -88,7 +92,8 @@ void sparse_mm_dense_cusparse_backend(const int & cuda_device_id, const int & m,
     float alpha = 1.0f;
     float beta  = 0.0f;
     CUSPARSE_CALL(cusparseScsrmm2(handle, CUSPARSE_OPERATION_NON_TRANSPOSE,CUSPARSE_OPERATION_TRANSPOSE,
-        m,p,n,total_nnz,&alpha,descrA,csrVal.data,RowPtr.data, ColInd.data,dB,p,&beta,tranBuffer.data,m));
+                  m,p,n,total_nnz,&alpha,descrA,csrVal.data,RowPtr.data, ColInd.data,dB,p,&beta,tranBuffer.data,m));
+    CUSPARSE_CALL(cusparseDestroyMatDescr(descrA));
 
     // cublasDestroy will synchronize the device
     cublasHandle_t& handle2 = handle2_[cuda_device_id].handle_;
@@ -101,8 +106,42 @@ void sparse_mm_dense_cusparse_backend(const int & cuda_device_id, const int & m,
     // C need TRANSPOSE
     cublasSgeam(handle2, CUBLAS_OP_T, CUBLAS_OP_T, p, m, &alpha, tranBuffer.data, m, &beta, tranBuffer.data, m, dC, p);
     //cublasDestroy(handle2);
+#endif
+
+#if __CUDACC_VER_MAJOR__ == 11
+    reCuBuffer<void>& dBuffer = dBuffer_[cuda_device_id];
+
+    cusparseSpMatDescr_t matA;
+    cusparseDnMatDescr_t matB, matC;
+
+    // Create sparse matrix A in CSR format
+    CUSPARSE_CALL(cusparseCreateCsr(&matA, m, n, total_nnz, RowPtr.data, ColInd.data, csrVal.data,
+                                    CUSPARSE_INDEX_32I, CUSPARSE_INDEX_32I, CUSPARSE_INDEX_BASE_ZERO, CUDA_R_32F));
+    // Create dense matrix B
+    int ldb = p;
+    CUSPARSE_CALL(cusparseCreateDnMat(&matB, n, p, ldb, dB, CUDA_R_32F, CUSPARSE_ORDER_ROW));
+    // Create dense matrix C
+    int ldc = p;
+    CUSPARSE_CALL(cusparseCreateDnMat(&matC, m, p, ldc, dC, CUDA_R_32F, CUSPARSE_ORDER_ROW));
+
+    // allocate an external buffer if needed
+    float alpha = 1.0f;
+    float beta  = 0.0f;
+    size_t bufferSize = 0;
+    CUSPARSE_CALL(cusparseSpMM_bufferSize(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                                          &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, &bufferSize));
+    resize(dBuffer, bufferSize);
+
+    // execute SpMM
+    CUSPARSE_CALL(cusparseSpMM(handle, CUSPARSE_OPERATION_NON_TRANSPOSE, CUSPARSE_OPERATION_NON_TRANSPOSE,
+                               &alpha, matA, matB, &beta, matC, CUDA_R_32F, CUSPARSE_SPMM_ALG_DEFAULT, dBuffer.data));
+
+    // destroy matrix/vector descriptors
+    CUSPARSE_CALL(cusparseDestroySpMat(matA));
+    CUSPARSE_CALL(cusparseDestroyDnMat(matB));
+    CUSPARSE_CALL(cusparseDestroyDnMat(matC));
+#endif
 
     CUSPARSE_CALL(cusparseDestroy(handle));
     CUSPARSE_CALL(cusparseDestroyMatDescr(descrX));
-    CUSPARSE_CALL(cusparseDestroyMatDescr(descrA));
 }
