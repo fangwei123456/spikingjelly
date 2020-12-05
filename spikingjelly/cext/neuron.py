@@ -182,7 +182,7 @@ def lif_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
     raise NotImplementedError
 
 
-def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, v_threshold: float, v_reset: float, *args, **kwargs):
+def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
     * :ref:`API in English <hard_reset_backward_template-en>`
 
@@ -192,10 +192,20 @@ def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Te
     :type grad_spike: torch.Tensor
     :param grad_v_next: 损失对神经元膜电位的梯度
     :type grad_v_next: torch.Tensor
+    :param h: 充电后的膜电位
+    :type h: torch.Tensor
+    :param spike: 释放的脉冲
+    :type spike: torch.Tensor
     :param v_threshold: 神经元的阈值电压
     :type v_threshold: float
     :param v_reset: 神经元的重置电压
     :type v_reset: float
+    :param alpha: 梯度替代函数的参数
+    :type alpha: float
+    :param detach_reset: 是否在反向传播的计算图中断开重置过程
+    :type detach_reset: bool
+    :param grad_surrogate_function_index: 梯度替代函数的索引
+    :type grad_surrogate_function_index: int
     :return: ``(grad_x, grad_v)``，其中 ``grad_x`` 是损失对输入 ``x`` 的梯度，``grad_v`` 是损失对上一个时刻神经元膜电位的梯度
     :rtype: tuple
 
@@ -219,10 +229,20 @@ def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Te
     :type grad_x: torch.Tensor
     :param grad_v_next: the membrane potential of the neuron
     :type grad_v_next: torch.Tensor
+    :param h: the membrane potential after charging
+    :type h: torch.Tensor
+    :param spike: the output spikes
+    :type spike: torch.Tensor
     :param v_threshold: the threshold voltage of the neuron
     :type v_threshold: float
     :param v_reset: the reset voltage of the neuron
     :type v_reset: float
+    :param alpha: argument of the gradient surrogate function
+    :type alpha: float
+    :param detach_reset: whether detach the neuronal reset during backward
+    :type detach_reset: bool
+    :param grad_surrogate_function_index: index of the gradient surrogate function
+    :type grad_surrogate_function_index: int
     :return: ``(grad_x, grad_v)``, where ``grad_x`` is the gradient of ``x`` and ``grad_v`` is the gradient of membrane potential at last time step
     :rtype: tuple
 
@@ -244,7 +264,7 @@ def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Te
 
     pass
 
-def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Tensor, v_threshold: float, *args, **kwargs):
+def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
     * :ref:`API in English <soft_reset_backward_template-en>`
 
@@ -254,8 +274,18 @@ def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Ten
     :type grad_spike: torch.Tensor
     :param grad_v_next: 损失对神经元膜电位的梯度
     :type grad_v_next: torch.Tensor
+    :param h: 充电后的膜电位
+    :type h: torch.Tensor
+    :param spike: 释放的脉冲
+    :type spike: torch.Tensor
     :param v_threshold: 神经元的阈值电压
     :type v_threshold: float
+    :param alpha: 梯度替代函数的参数
+    :type alpha: float
+    :param detach_reset: 是否在反向传播的计算图中断开重置过程
+    :type detach_reset: bool
+    :param grad_surrogate_function_index: 梯度替代函数的索引
+    :type grad_surrogate_function_index: int
     :return: ``(grad_x, grad_v)``，其中 ``grad_x`` 是损失对输入 ``x`` 的梯度，``grad_v`` 是损失对上一个时刻神经元膜电位的梯度
     :rtype: tuple
 
@@ -280,8 +310,18 @@ def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Ten
     :type grad_x: torch.Tensor
     :param grad_v_next: the membrane potential of the neuron
     :type grad_v_next: torch.Tensor
+    :param h: the membrane potential after charging
+    :type h: torch.Tensor
+    :param spike: the output spikes
+    :type spike: torch.Tensor
     :param v_threshold: the threshold voltage of the neuron
     :type v_threshold: float
+    :param alpha: argument of the gradient surrogate function
+    :type alpha: float
+    :param detach_reset: whether detach the neuronal reset during backward
+    :type detach_reset: bool
+    :param grad_surrogate_function_index: index of the gradient surrogate function
+    :type grad_surrogate_function_index: int
     :return: ``(grad_x, grad_v)``, where ``grad_x`` is the gradient of ``x`` and ``grad_v`` is the gradient of membrane potential at last time step
     :rtype: tuple
 
@@ -303,7 +343,7 @@ def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Ten
 
     pass
 
-def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next:torch.Tensor, v_threshold: float, v_reset: float, tau: float):
+def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, tau: float):
     '''
     * :ref:`API in English <lif_hard_reset_backward-en>`
 
@@ -344,46 +384,6 @@ def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next:torch.Tensor, 
 
     raise NotImplementedError
 
-def lif_soft_reset_backward(grad_spike: torch.Tensor, grad_v_next:torch.Tensor, v_threshold: float, tau: float):
-    '''
-    * :ref:`API in English <lif_soft_reset_backward-en>`
-
-    .. _lif_soft_reset_backward-cn:
-
-    :param tau: LIF神经元的膜时间常数
-    :type tau: float
-
-    其余的参数参见 :ref:`soft_reset_backward_template<soft_reset_backward_template-cn>`。
-
-    :ref:`lif_soft_reset_forward<lif_soft_reset_forward-cn>` 的反向传播。梯度的计算按照
-
-    .. math::
-        \\frac{\\partial H_{t}}{\\partial X_{t}} & = \\frac{1}{\\tau}
-
-        \\frac{\\partial H_{t}}{\\partial V_{t-1}} & = 1 - \\frac{1}{\\tau}
-
-
-
-    * :ref:`中文API <lif_soft_reset_backward-cn>`
-
-    .. _lif_soft_reset_backward-en:
-
-    :param tau: the membrane time constant of the LIF neuron
-    :type tau: float
-
-    See :ref:`soft_reset_forward_template<soft_reset_forward_template-en>` for more details about other args。
-
-    The backward of :ref:`lif_soft_reset_forward<lif_soft_reset_forward-en>`. The gradients are calculated by
-
-    .. math::
-
-        \\frac{\\partial H_{t}}{\\partial X_{t}} & = \\frac{1}{\\tau}
-
-        \\frac{\\partial H_{t}}{\\partial V_{t-1}} & = 1 - \\frac{1}{\\tau}
-
-    '''
-
-    raise NotImplementedError
 
 
 
