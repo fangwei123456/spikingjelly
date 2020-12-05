@@ -428,6 +428,21 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor
 
         \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)+\\prod_{i=0}^{T-1}M_i\\right]
 
+    实际使用迭代的计算方式：
+
+    .. math::
+            \\frac{\\partial L}{\\partial H_{t}} & = \\frac{\\partial L}{\\partial S_{t}} \\frac{\\partial S_{t}}{\\partial H_{t}} + \\frac{\\partial L}{\\partial V_{t}} \\frac{\\partial V_{t}}{\\partial H_{t}}
+
+            \\frac{\\partial S_{t}}{\\partial H_{t}} & = \\Theta'(H_{t} - V_{threshold})
+
+            \\frac{\\partial V_{t}}{\\partial H_{t}} & = 1 - S_{t} + (V_{reset} - H_{t})\\frac{\\partial S_{t}}{\\partial H_{t}}
+
+            \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial X_{t}}
+
+            \\frac{\\partial L}{\\partial V_{t-1}} &= \\frac{\\partial L}{\\partial H_{t}} \\frac{\\partial H_{t}}{\\partial V_{t-1}}
+
+    其中 :math:`\\frac{\\partial S_{t}}{\\partial H_{t}}, \\frac{\\partial V_{t}}{\\partial H_{t}}, \\frac{\\partial H_{t}}{\\partial X_{t}}, \\frac{\\partial H_{t}}{\\partial V_{t-1}}` 可以先并行求解。
+
     * :ref:`中文API <hard_reset_bptt_template-cn>`
 
     .. _hard_reset_bptt_template-en:
@@ -554,4 +569,27 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor
 
     '''
     raise NotImplementedError
+
+
+class LIFATGF(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
+        if v_reset is None:
+            raise NotImplementedError
+        h, spike, v_next = lif_hard_reset_forward(x, v, v_threshold, v_reset, tau)
+        if x.requires_grad:
+            ctx.save_for_backward(h, spike)
+            ctx.v_threshold = v_threshold
+            ctx.v_reset = v_reset
+            ctx.alpha = alpha
+            ctx.detach_reset = detach_reset
+            ctx.grad_surrogate_function_index = grad_surrogate_function_index
+            ctx.tau = tau
+        return h, spike, v_next
+
+    @staticmethod
+    def backward(ctx, grad_h, grad_spike, grad_v_next):
+        grad_x, grad_v = lif_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
+        return grad_x, grad_v, None, None, None, None, None
+
 
