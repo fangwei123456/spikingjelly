@@ -385,7 +385,7 @@ def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor,
     raise NotImplementedError
 
 
-def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
+def hard_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
     * :ref:`API in English <hard_reset_bptt_template-en>`
 
@@ -393,6 +393,8 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
 
     :param grad_spike: 损失对脉冲的梯度
     :type grad_spike: torch.Tensor
+    :param grad_v_next: 损失对 :math:`V_{T-1}` 的梯度
+    :type grad_v_next: torch.Tensor
     :param h: 充电后的膜电位
     :type h: torch.Tensor
     :param spike: 释放的脉冲
@@ -415,14 +417,16 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[(1-S_{t}+(V_{reset} - H_{t})\\Theta'(H_{t} - V_{threshold})\\right], 
 
+        M_{T-1} &= \\frac{\\partial L}{\\partial V_{T-1}}\\left[(1-S_{T-1}+(V_{reset} - H_{T-1})\\Theta'(H_{T-1} - V_{threshold})\\right],
+
         N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
 
     其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)+\\prod_{i=t}^{T-1}M_i\\right]
 
-        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)+\\prod_{i=0}^{T-1}M_i\\right]
 
     * :ref:`中文API <hard_reset_bptt_template-cn>`
 
@@ -430,6 +434,8 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
 
     :param grad_spike: the gradient of output spikes
     :type grad_spike: torch.Tensor
+    :param grad_v_next: the gradient of :math:`V_{T-1}`
+    :type grad_v_next: torch.Tensor
     :param h: the membrane potential after charging
     :type h: torch.Tensor
     :param spike: the output spikes
@@ -452,19 +458,21 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[(1-S_{t}+(V_{reset} - H_{t})\\Theta'(H_{t} - V_{threshold})\\right], 
 
+        M_{T-1} &= \\frac{\\partial L}{\\partial V_{T-1}}\\left[(1-S_{T-1}+(V_{reset} - H_{T-1})\\Theta'(H_{T-1} - V_{threshold})\\right],
+
         N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
     
     where :math:`t \\in [0,T-1]`. The gradients are calculated by
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)+\\prod_{i=t}^{T-1}M_i\\right]
 
-        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)+\\prod_{i=0}^{T-1}M_i\\right]
 
     '''
     raise NotImplementedError
 
-def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
+def soft_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
     * :ref:`API in English <soft_reset_bptt_template-en>`
 
@@ -472,6 +480,8 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
 
     :param grad_spike: 损失对脉冲的梯度
     :type grad_spike: torch.Tensor
+    :param grad_v_next: 损失对 :math:`V_{T-1}` 的梯度
+    :type grad_v_next: torch.Tensor
     :param h: 充电后的膜电位
     :type h: torch.Tensor
     :param spike: 释放的脉冲
@@ -492,14 +502,16 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[1 - V_{threshold} \\Theta'(H_{t} - V_{threshold})\\right],
 
+        M_{T-1} &= \\frac{\\partial L}{\\partial V_{T-1}}\\left[1 - V_{threshold} \\Theta'(H_{T-1} - V_{threshold})\\right],
+
         N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
 
     其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)+\\prod_{i=t}^{T-1}M_i\\right]
 
-        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)+\\prod_{i=0}^{T-1}M_i\\right]
 
     * :ref:`中文API <soft_reset_bptt_template-cn>`
 
@@ -507,6 +519,8 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
 
     :param grad_spike: the gradient of output spikes
     :type grad_spike: torch.Tensor
+    :param grad_v_next: the gradient of :math:`V_{T-1}`
+    :type grad_v_next: torch.Tensor
     :param h: the membrane potential after charging
     :type h: torch.Tensor
     :param spike: the output spikes
@@ -527,14 +541,16 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[1 - V_{threshold} \\Theta'(H_{t} - V_{threshold})\\right],
 
+        M_{T-1} &= \\frac{\\partial L}{\\partial V_{T-1}}\\left[1 - V_{threshold} \\Theta'(H_{T-1} - V_{threshold})\\right],
+
         N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
 
     where :math:`t \\in [0,T-1]`. The gradients are calculated by
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)+\\prod_{i=t}^{T-1}M_i\\right]
 
-        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)+\\prod_{i=0}^{T-1}M_i\\right]
 
     '''
     raise NotImplementedError
