@@ -415,12 +415,12 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[(1-S_{t}+(V_{reset} - H_{t})\\Theta'(H_{t} - V_{threshold})\\right], 
 
-        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}).
+        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
 
-    梯度的计算按照
+    其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
     * :ref:`中文API <hard_reset_bptt_template-cn>`
 
@@ -450,12 +450,12 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[(1-S_{t}+(V_{reset} - H_{t})\\Theta'(H_{t} - V_{threshold})\\right], 
 
-        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}).
+        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
     
-    The gradients are calculated by
+    where :math:`t \\in [0,T-1]`. The gradients are calculated by
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
     '''
     raise NotImplementedError
@@ -488,12 +488,14 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[1 - V_{threshold} \\Theta'(H_{t} - V_{threshold})\\right],
 
-        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}).
+        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
+
+    其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
     梯度的计算按照
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
     * :ref:`中文API <soft_reset_bptt_template-cn>`
 
@@ -521,12 +523,12 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     .. math::
         M_t &= \\frac{\\partial H_{t+1}}{\\partial V_{t}}\\left[1 - V_{threshold} \\Theta'(H_{t} - V_{threshold})\\right],
 
-        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}).
-    
-    The gradients are calculated by
+        N_t &= \\frac{\\partial L}{\\partial S_{t}}\\Theta'(H_{t} - V_{threshold}),
+
+    where :math:`t \\in [0,T-1]`. The gradients are calculated by
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
     '''
     raise NotImplementedError
