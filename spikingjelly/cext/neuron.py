@@ -420,7 +420,9 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
 
     * :ref:`中文API <hard_reset_bptt_template-cn>`
 
@@ -455,7 +457,9 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     where :math:`t \\in [0,T-1]`. The gradients are calculated by
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
 
     '''
     raise NotImplementedError
@@ -493,7 +497,9 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
 
     * :ref:`中文API <soft_reset_bptt_template-cn>`
 
@@ -526,7 +532,9 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
     where :math:`t \\in [0,T-1]`. The gradients are calculated by
 
     .. math::
-        \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+        \\frac{\\partial L}{\\partial X_{t}} &= \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
+
+        \\frac{\\partial L}{\\partial V_{init}} &= \\frac{\\partial H_{0}}{\\partial V_{init}}\\left[N_0+\\sum_{i=1}^{T-1}N_{i}\\left(\\prod_{j=0}^{i-1}M_j\\right)\\right]
 
     '''
     raise NotImplementedError
