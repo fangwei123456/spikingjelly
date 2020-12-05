@@ -492,8 +492,6 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
 
     其中 :math:`t \\in [0,T-1]`。梯度的计算按照
 
-    梯度的计算按照
-
     .. math::
         \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T-1}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
