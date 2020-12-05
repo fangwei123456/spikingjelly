@@ -458,6 +458,7 @@ def hard_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
         \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
     '''
+    raise NotImplementedError
 
 def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
@@ -528,4 +529,5 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, h: torch.Tensor, spike: t
         \\frac{\\partial L}{\\partial X_{t}} = \\frac{\\partial H_{t}}{\\partial X_{t}}\\left[N_t+\\sum_{i=t+1}^{T}N_{i}\\left(\\prod_{j=t}^{i-1}M_j\\right)\\right]
 
     '''
+    raise NotImplementedError
 
