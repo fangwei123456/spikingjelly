@@ -571,7 +571,7 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor
     raise NotImplementedError
 
 
-class LIFATGF(torch.autograd.Function):
+class LIFStep(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
         if v_reset is None:
