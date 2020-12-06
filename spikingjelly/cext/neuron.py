@@ -2,8 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-import _C_neuron.neuron_forward as cext_neuron_forward
-import _C_neuron.neuron_backward as cext_neuron_backward
+import _C_neuron as cext_neuron
 
 def hard_reset_forward_template(x: torch.Tensor, v:torch.Tensor, v_threshold: float, v_reset: float, *args, **kwargs):
     '''
@@ -146,7 +145,7 @@ def LIF_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
         H_{t} = V_{t-1} + \\frac{1}{\\tau}(X_{t} -(V_{t-1} - V_{reset}))
 
     '''
-    return cext_neuron_forward.LIF_hard_reset_forward(x, v, v_threshold, v_reset, tau)
+    return cext_neuron.LIF_hard_reset_forward(x, v, v_threshold, v_reset, tau)
 
 def LIF_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, tau: float):
     '''
@@ -381,7 +380,7 @@ def LIF_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor,
         \\frac{\\partial H_{t}}{\\partial V_{t-1}} & = 1 - \\frac{1}{\\tau}
 
     '''
-    return cext_neuron_backward.LIF_hard_reset_backward(grad_spike, grad_v_next, h, spike, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau)
+    return cext_neuron.LIF_hard_reset_backward(grad_spike, grad_v_next, h, spike, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau)
 
 def hard_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
@@ -573,7 +572,7 @@ class LIFStep(torch.autograd.Function):
     def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
         if v_reset is None:
             raise NotImplementedError
-        h, spike, v_next = cext_neuron_forward.LIF_hard_reset_forward(x, v, v_threshold, v_reset, tau)
+        h, spike, v_next = cext_neuron.LIF_hard_reset_forward(x, v, v_threshold, v_reset, tau)
         if x.requires_grad:
             ctx.save_for_backward(h, spike)
             ctx.v_threshold = v_threshold
@@ -586,7 +585,7 @@ class LIFStep(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_h, grad_spike, grad_v_next):
-        grad_x, grad_v = cext_neuron_backward.LIF_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
+        grad_x, grad_v = cext_neuron.LIF_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
         return grad_x, grad_v, None, None, None, None, None
 
 class LIFMultiStep(torch.autograd.Function):
@@ -594,7 +593,7 @@ class LIFMultiStep(torch.autograd.Function):
     def forward(ctx, x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
         if v_reset is None:
             raise NotImplementedError
-        h_seq, spike_seq, v_next = cext_neuron_forward.LIF_hard_reset_fptt(x_seq, v, v_threshold, v_reset, tau)
+        h_seq, spike_seq, v_next = cext_neuron.LIF_hard_reset_fptt(x_seq, v, v_threshold, v_reset, tau)
         if x_seq.requires_grad:
             ctx.save_for_backward(h_seq, spike_seq)
             ctx.v_threshold = v_threshold
@@ -607,7 +606,7 @@ class LIFMultiStep(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_h_seq, grad_spike_seq, grad_v_next_seq):
-        grad_x, grad_v = cext_neuron_backward.LIF_hard_reset_bptt(grad_spike_seq, grad_v_next_seq, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
+        grad_x, grad_v = cext_neuron.LIF_hard_reset_bptt(grad_spike_seq, grad_v_next_seq, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
         return grad_x, grad_v, None, None, None, None, None, None
 
 
@@ -616,11 +615,12 @@ surrogate_function_dict = {
     'Sigmoid': 1
 }
 class BaseNode(nn.Module):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', detach_reset=False, update_function=None):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False, update_function=None):
         super().__init__()
         self.v_threshold = v_threshold
         self.v_reset = v_reset
         self.grad_surrogate_function_index = surrogate_function_dict[surrogate_function]
+        self.alpha = alpha
         self.detach_reset = detach_reset
         self.update_function = update_function
 
@@ -636,10 +636,12 @@ class BaseNode(nn.Module):
             return spike
 
 class LIFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', detach_reset=False):
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, LIFStep.apply)
+    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
+        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset, LIFStep.apply)
+        self.tau = tau
 
 class MultiStepLIFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', detach_reset=False):
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, LIFMultiStep.apply)
+    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
+        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset, LIFMultiStep.apply)
+        self.tau = tau
 

@@ -19,17 +19,16 @@ def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     extensions_dir = os.path.join(this_dir, "spikingjelly", "cext", "csrc")
     
-    ext_list = ['gemm', 'surrogate']
+    ext_list = ['gemm', 'neuron']
     
     extra_compile_args={'cxx': ['-g'], 'nvcc': ['-use_fast_math']}
     
     extension = CUDAExtension
     define_macros = [("WITH_CUDA", None)]
-    
     ext_modules = list([
         extension(
             '_C_' + ext_name,
-            glob.glob(os.path.join(extensions_dir, ext_name, "*")),
+            glob.glob(os.path.join(extensions_dir, ext_name, '*.cpp')) + glob.glob(os.path.join(extensions_dir, ext_name, '*.cu')),
             define_macros=define_macros,
             extra_compile_args=extra_compile_args
         ) for ext_name in ext_list])
