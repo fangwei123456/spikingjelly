@@ -113,11 +113,12 @@ def soft_reset_forward_template(x: torch.Tensor, v:torch.Tensor, v_threshold: fl
 
     pass
 
-def lif_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, v_reset: float, tau: float):
+import _C_neuron.neuron_forward.LIF_hard_reset_forward as LIF_hard_reset_forward
+# def LIF_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, v_reset: float, tau: float):
     '''
-    * :ref:`API in English <lif_hard_reset_forward-en>`
+    * :ref:`API in English <LIF_hard_reset_forward-en>`
 
-    .. _lif_hard_reset_forward-cn:
+    .. _LIF_hard_reset_forward-cn:
 
     :param tau: LIF神经元的膜时间常数
     :type tau: float
@@ -129,9 +130,9 @@ def lif_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
     .. math::
         H_{t} = V_{t-1} + \\frac{1}{\\tau}(X_{t} -(V_{t-1} - V_{reset}))
 
-    * :ref:`中文API <lif_hard_reset_forward-cn>`
+    * :ref:`中文API <LIF_hard_reset_forward-cn>`
 
-    .. _lif_hard_reset_forward-en:
+    .. _LIF_hard_reset_forward-en:
 
     :param tau: the membrane time constant of the LIF neuron
     :type tau: float
@@ -145,13 +146,11 @@ def lif_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
 
     '''
 
-    raise NotImplementedError
-
-def lif_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, tau: float):
+def LIF_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, tau: float):
     '''
-    * :ref:`API in English <lif_soft_reset_forward-en>`
+    * :ref:`API in English <LIF_soft_reset_forward-en>`
 
-    .. _lif_soft_reset_forward-cn:
+    .. _LIF_soft_reset_forward-cn:
 
     :param tau: LIF神经元的膜时间常数
     :type tau: float
@@ -163,9 +162,9 @@ def lif_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
     .. math::
         H_{t} = V_{t-1} + \\frac{1}{\\tau}(X_{t} -(V_{t-1} - V_{reset}))
 
-    * :ref:`中文API <lif_soft_reset_forward-cn>`
+    * :ref:`中文API <LIF_soft_reset_forward-cn>`
 
-    .. _lif_soft_reset_forward-en:
+    .. _LIF_soft_reset_forward-en:
 
     :param tau: the membrane time constant of the LIF neuron
     :type tau: float
@@ -181,6 +180,7 @@ def lif_soft_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
 
     raise NotImplementedError
 
+import _C_neuron.neuron_forward.LIF_hard_reset_fptt as LIF_hard_reset_fptt
 
 def hard_reset_backward_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, *args, **kwargs):
     '''
@@ -343,18 +343,19 @@ def soft_reset_backward_template(grad_spike: torch.Tensor, grad_v_next:torch.Ten
 
     pass
 
-def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, tau: float):
+import _C_neuron.neuron_backward.LIF_hard_reset_backward as LIF_hard_reset_backward
+# def LIF_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, h: torch.Tensor, spike: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, tau: float):
     '''
-    * :ref:`API in English <lif_hard_reset_backward-en>`
+    * :ref:`API in English <LIF_hard_reset_backward-en>`
 
-    .. _lif_hard_reset_backward-cn:
+    .. _LIF_hard_reset_backward-cn:
 
     :param tau: LIF神经元的膜时间常数
     :type tau: float
 
     其余的参数参见 :ref:`hard_reset_backward_template<hard_reset_backward_template-cn>`。
 
-    :ref:`lif_hard_reset_forward <lif_hard_reset_forward-cn>` 的反向传播。梯度的计算按照
+    :ref:`LIF_hard_reset_forward <LIF_hard_reset_forward-cn>` 的反向传播。梯度的计算按照
 
     .. math::
         \\frac{\\partial H_{t}}{\\partial X_{t}} & = \\frac{1}{\\tau}
@@ -363,16 +364,16 @@ def lif_hard_reset_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor,
 
 
 
-    * :ref:`中文API <lif_hard_reset_backward-cn>`
+    * :ref:`中文API <LIF_hard_reset_backward-cn>`
 
-    .. _lif_hard_reset_backward-en:
+    .. _LIF_hard_reset_backward-en:
 
     :param tau: the membrane time constant of the LIF neuron
     :type tau: float
 
     See :ref:`hard_reset_forward_template <hard_reset_forward_template-en>` for more details about other args。
 
-    The backward of :ref:`lif_hard_reset_forward <lif_hard_reset_forward-en>`. The gradients are calculated by
+    The backward of :ref:`LIF_hard_reset_forward <LIF_hard_reset_forward-en>`. The gradients are calculated by
 
     .. math::
 
@@ -570,13 +571,14 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor
     '''
     raise NotImplementedError
 
+import _C_neuron.neuron_backward.LIF_hard_reset_bptt as LIF_hard_reset_bptt
 
 class LIFStep(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
         if v_reset is None:
             raise NotImplementedError
-        h, spike, v_next = lif_hard_reset_forward(x, v, v_threshold, v_reset, tau)
+        h, spike, v_next = LIF_hard_reset_forward(x, v, v_threshold, v_reset, tau)
         if x.requires_grad:
             ctx.save_for_backward(h, spike)
             ctx.v_threshold = v_threshold
@@ -589,7 +591,7 @@ class LIFStep(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_h, grad_spike, grad_v_next):
-        grad_x, grad_v = lif_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
+        grad_x, grad_v = LIF_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
         return grad_x, grad_v, None, None, None, None, None
 
 
