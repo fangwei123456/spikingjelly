@@ -632,8 +632,11 @@ class BaseNode(nn.Module):
                 self.v = torch.zeros_like(dv.data)
                 if self.v_reset != 0.0:
                     self.v.fill_(self.v_reset)
-            h, spike, v_next = self.update_function(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index)
+            h, spike, self.v = self.update_function(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index)
             return spike
+
+    def reset(self):
+        self.v = self.v_reset
 
 class LIFNode(BaseNode):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
