@@ -158,5 +158,4 @@ void LIF_hard_reset_bptt_cuda(
   );
   cudaFree(grad_s_to_h);
   cudaFree(grad_v_to_h);
-
 }

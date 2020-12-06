@@ -586,7 +586,7 @@ class LIFStep(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_h, grad_spike, grad_v_next):
         grad_x, grad_v = cext_neuron.LIF_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
-        return grad_x, grad_v, None, None, None, None, None
+        return grad_x, grad_v, None, None, None, None, None, None
 
 class LIFMultiStep(torch.autograd.Function):
     @staticmethod
@@ -609,21 +609,37 @@ class LIFMultiStep(torch.autograd.Function):
         grad_x, grad_v = cext_neuron.LIF_hard_reset_bptt(grad_spike_seq, grad_v_next_seq, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
         return grad_x, grad_v, None, None, None, None, None, None
 
+# speed up
+# Tesla V100S
+# neuron_num = 128 * 16 * 16
+# T   PyTorch CUDA CUDA-MultiStep
+# T=8 1.0 2.168202451484902 3.5046899354510046
+# T=20 1.0 2.798510299917697 5.5392424264154005
+# T=64 1.0 2.6789255367768186 14.269773224122721
+# T=128 1.0 2.5028588314108595 21.82063029389204
 
 surrogate_function_dict = {
     'ATan': 0,
     'Sigmoid': 1
 }
 class BaseNode(nn.Module):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False, update_function=None):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
         super().__init__()
         self.v_threshold = v_threshold
         self.v_reset = v_reset
         self.grad_surrogate_function_index = surrogate_function_dict[surrogate_function]
         self.alpha = alpha
         self.detach_reset = detach_reset
-        self.update_function = update_function
+        self.reset()
+    
+    def reset(self):
+        self.v = self.v_reset
 
+class LIFNode(BaseNode):
+    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
+        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset)
+        self.tau = tau
+    
     def forward(self, dv: torch.Tensor):
         if self.v_reset is None:
             raise NotImplementedError
@@ -632,19 +648,22 @@ class BaseNode(nn.Module):
                 self.v = torch.zeros_like(dv.data)
                 if self.v_reset != 0.0:
                     self.v.fill_(self.v_reset)
-            h, spike, self.v = self.update_function(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index)
+            h, spike, self.v = LIFStep.apply(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.tau)
             return spike
-
-    def reset(self):
-        self.v = self.v_reset
-
-class LIFNode(BaseNode):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
-        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset, LIFStep.apply)
-        self.tau = tau
 
 class MultiStepLIFNode(BaseNode):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
-        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset, LIFMultiStep.apply)
+        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset)
         self.tau = tau
+
+    def forward(self, dv: torch.Tensor):
+        if self.v_reset is None:
+            raise NotImplementedError
+        else:
+            if not isinstance(self.v, torch.Tensor):
+                self.v = torch.zeros_like(dv[0].data)
+                if self.v_reset != 0.0:
+                    self.v.fill_(self.v_reset)
+            h_seq, spike_seq, self.v = LIFMultiStep.apply(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.tau)
+            return spike_seq
 
