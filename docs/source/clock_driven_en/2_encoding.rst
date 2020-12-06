@@ -1,4 +1,4 @@
-Time driven: Encoder
+Clock driven: Encoder
 =======================================
 Author: `Grasshlw <https://github.com/Grasshlw>`_
 
@@ -10,9 +10,9 @@ Encoder base class
 --------------------
 
 In ``spikingjelly.clock_driven``, the defined encoders are inherited from the encoder base class ``BaseEncoder``, the encoder
-inherits ``torch.nn.Module``, defines three methods, the first ``forward`` encodes the input data ``x`` into pulse.
-The second ``step`` is for most encoders, ``x`` is encoded into a pulse sequence of a certain length, and multi-step
-output is required, ``step`` is used to obtain the pulse data of each step. The third ``reset`` sets the state variable
+inherits ``torch.nn.Module``, defines three methods, the first ``forward`` encodes the input data ``x`` into spike.
+The second ``step`` is for most encoders, ``x`` is encoded into a spike sequence of a certain length, and multi-step
+output is required, ``step`` is used to obtain the spike data of each step. The third ``reset`` sets the state variable
 of the encoder to the initial state.
 
 .. code-block:: python
@@ -33,8 +33,8 @@ of the encoder to the initial state.
 Periodic encoder
 -----------------
 
-Periodic encoder is an encoder that periodically outputs a given pulse sequence. Regardless of the input data, the
-class ``PeriodicEncoder`` has set the pulse sequence ``out_spike`` to be output during initialization, and can be reset by
+Periodic encoder is an encoder that periodically outputs a given spike sequence. Regardless of the input data, the
+class ``PeriodicEncoder`` has set the spike sequence ``out_spike`` to be output during initialization, and can be reset by
 the method ``set_out_spike`` during use.
 
 .. code-block:: python
@@ -47,8 +47,8 @@ the method ``set_out_spike`` during use.
             self.T = out_spike.shape[0]
             self.index = 0
 
-Example: Given 3 neurons and a pulse sequence with a time-step of 5, they are ``01000``, ``10000``, and ``00001`` respectively.
-Initialize the periodic encoder and output 20 time-step simulation pulse data.
+Example: Given 3 neurons and a spike sequence with a time-step of 5, they are ``01000``, ``10000``, and ``00001`` respectively.
+Initialize the periodic encoder and output 20 time-step simulation spike data.
 
 .. code-block:: python
 
@@ -58,7 +58,7 @@ Initialize the periodic encoder and output 20 time-step simulation pulse data.
     from spikingjelly.clock_driven import encoding
     from spikingjelly import visualizing
 
-    # Given pulse sequence
+    # Given spike sequence
     set_spike = torch.full((3, 5), 0, dtype=torch.bool)
     set_spike[0, 1] = 1
     set_spike[1, 0] = 1
@@ -82,12 +82,12 @@ Initialize the periodic encoder and output 20 time-step simulation pulse data.
 Delay encoder
 -------------------
 
-The delayed encoder is an encoder that delays the delivery of pulses based on the input data ``x``. When the stimulus
-intensity is greater, the firing time is earlier, and there is a maximum pulse firing time.
-Therefore, for each input data ``x``, a pulse sequence with a period of time as the maximum pulse firing time can be
-obtained, and each sequence has only one pulse firing.
+The delayed encoder is an encoder that delays the delivery of spikes based on the input data ``x``. When the stimulus
+intensity is greater, the firing time is earlier, and there is a maximum spike firing time.
+Therefore, for each input data ``x``, a spike sequence with a period of time as the maximum spike firing time can be
+obtained, and each sequence has only one spike firing.
 
-The pulse firing time :math:`t_i` and the stimulus intensity :math:`x_i` satisfy the following two formulas, when the coding type is
+The spike firing time :math:`t_i` and the stimulus intensity :math:`x_i` satisfy the following two formulas, when the coding type is
 linear (``function_type='linear'``)
 
 .. math::
@@ -98,7 +98,7 @@ When the encoding type is logarithmic (``function_type='log'`` )
 .. math::
     t_i = (t_{max} - 1) - ln(\alpha * x_i + 1)
 
-Among them, :math:`t_{max}` is the maximum pulse firing time, and :math:`x_i` needs to be normalized to :math:`[0,1]`.
+Among them, :math:`t_{max}` is the maximum spike firing time, and :math:`x_i` needs to be normalized to :math:`[0,1]`.
 
 Consider the second formula, :math:`\alpha` needs to satisfy:
 
@@ -112,7 +112,7 @@ This will cause the encoder to likely overflow because:
 
 :math:`\alpha` will increase exponentially as :math:`t_{max}` increases, eventually causing overflow.
 
-Example: Randomly generate six ``x``, each of which is the stimulation intensity of 6 neurons, and set the maximum pulse
+Example: Randomly generate six ``x``, each of which is the stimulation intensity of 6 neurons, and set the maximum spike
 firing time to 20, and encode the above input data.
 
 .. code-block:: python
@@ -123,11 +123,11 @@ firing time to 20, and encode the above input data.
     from spikingjelly.clock_driven import encoding
     from spikingjelly import visualizing
 
-    # Randomly generate stimulation intensity of 6 neurons, set the maximum pulse time to 20
+    # Randomly generate stimulation intensity of 6 neurons, set the maximum spike time to 20
     x = torch.rand(6)
     max_spike_time = 20
 
-    # Encode input data into pulse sequence
+    # Encode input data into spike sequence
     le = encoding.LatencyEncoder(max_spike_time)
     le(x)
 
@@ -142,7 +142,7 @@ firing time to 20, and encode the above input data.
                                plot_firing_rate=False)
     plt.show()
 
-When the randomly generated 6 stimulus intensities are ``0.6650``, ``0.3704``, ``0.8485``, ``0.0247``, ``0.5589``, and ``0.1030``, the pulse
+When the randomly generated 6 stimulus intensities are ``0.6650``, ``0.3704``, ``0.8485``, ``0.0247``, ``0.5589``, and ``0.1030``, the spike
 sequence obtained is as follows:
 
 .. image:: ../_static/tutorials/clock_driven/2_encoding/2.*
@@ -150,16 +150,16 @@ sequence obtained is as follows:
 
 Poisson encoder
 -----------------
-The Poisson encoder encodes the input data ``x`` into a pulse sequence whose firing times distribution conforms to the
-Poisson process. The Poisson process is also called Poisson flow. When a pulse flow satisfies independent increment,
-incremental stability and commonality, such a pulse flow is a poisson flow. More specifically, in the entire pulse
-stream, the number of pulses appearing in disjoint intervals is independent of each other, and in any interval,
-the number of pulses appearing has nothing to do with the starting point of the interval, but is related to the
-length of the interval. Therefore, in order to realize Poisson coding, we set the pulse firing probability of a
+The Poisson encoder encodes the input data ``x`` into a spike sequence whose firing times distribution conforms to the
+Poisson process. The Poisson process is also called Poisson flow. When a spike flow satisfies independent increment,
+incremental stability and commonality, such a spike flow is a poisson flow. More specifically, in the entire spike
+stream, the number of spikes appearing in disjoint intervals is independent of each other, and in any interval,
+the number of spikes appearing has nothing to do with the starting point of the interval, but is related to the
+length of the interval. Therefore, in order to realize Poisson coding, we set the spike firing probability of a
 time step :math:`p=x`, where :math:`x` needs to be normalized to [0, 1].
 
 Example: The input image is `lena512.bmp <https://www.ece.rice.edu/~wakin/images/lena512.bmp>`_ , and 20 time
-steps are simulated to obtain 20 pulse matrices.
+steps are simulated to obtain 20 spike matrices.
 
 .. code-block:: python
 
@@ -177,7 +177,7 @@ steps are simulated to obtain 20 pulse matrices.
 
     pe = encoding.PoissonEncoder()
 
-    # Simulate 20 time steps, encode the image into a pulse matrix and output
+    # Simulate 20 time steps, encode the image into a spike matrix and output
     w, h = x.shape
     out_spike = torch.full((20, w, h), 0, dtype=torch.bool)
     T = 20
@@ -192,7 +192,7 @@ steps are simulated to obtain 20 pulse matrices.
     visualizing.plot_2d_spiking_feature_map(out_spike.float().numpy(), 4, 5, 30, 'PoissonEncoder')
     plt.axis('off')
 
-The original grayscale image of Lena and the encoded 20 pulse matrix are as follows:
+The original grayscale image of Lena and the encoded 20 spike matrix are as follows:
 
 .. image:: ../_static/tutorials/clock_driven/2_encoding/3.*
     :width: 100%
@@ -200,16 +200,16 @@ The original grayscale image of Lena and the encoded 20 pulse matrix are as foll
 .. image:: ../_static/tutorials/clock_driven/2_encoding/4.*
     :width: 100%
 
-Comparing the original grayscale image and the encoded pulse matrix, it can be found that the pulse matrix is
+Comparing the original grayscale image and the encoded spike matrix, it can be found that the spike matrix is
 very close to the contour of the original grayscale image, which shows the superiority of the
 Poisson encoder performance.
 
-Also encode the Lena grayscale image, simulate 512 time steps, superimpose the pulse matrix obtained
+Also encode the Lena grayscale image, simulate 512 time steps, superimpose the spike matrix obtained
 in each step, and get the result of the superposition of steps 1, 128, 256, 384, and 512 and draw the picture:
 
 .. code-block:: python
 
-    # Simulate 512 time steps, superimpose the coded pulse matrix one by one to obtain the 1, 128, 256, 384, 512th superposition results and output
+    # Simulate 512 time steps, superimpose the coded spike matrix one by one to obtain the 1, 128, 256, 384, 512th superposition results and output
     superposition = torch.full((w, h), 0, dtype=torch.float)
     superposition_ = torch.full((5, w, h), 0, dtype=torch.float)
     T = 512
@@ -236,13 +236,13 @@ The superimposed image is as follows:
     :width: 100%
 
 It can be seen that when the simulation step is sufficient, the original image can almost be reconstructed after the
-pulses obtained by the Poisson encoder are superimposed.
+spikes obtained by the Poisson encoder are superimposed.
 
 Gaussian coordination curve encoder
 ------------------------------------
 
 For input data with ``M`` features, the Gaussian coordination curve encoder uses ``tuning_curve_num`` neurons
-to encode each feature of the input data, and encodes each feature as the pulse firing time of
+to encode each feature of the input data, and encodes each feature as the spike firing time of
 these ``tuning_curve_num`` neurons, so it can be considered that the encoder has ``M`` × ``tuning_curve_num`` neurons are working.
 
 For the :math:`i` feature :math:`X^i`, the value range is :math:`X^i_{min}<=X^i<=X^i_{max}`. According to the maximum and minimum features,
@@ -255,13 +255,13 @@ the mean and variance of ``tuning_curve_num`` Gaussian curves Gij can be calcula
 Where :math:`\beta` is usually :math:`1.5`, for the same feature, all Gaussian curves have the same shape, and the symmetry axis positions are different.
 
 After the Gaussian curve is generated, the Gaussian function value corresponding to each input is calculated, and
-these function values are linearly converted into the pulse firing time between ``[0, max_spike_time - 1]``.
-In addition, for the pulses delivered at the last moment, it is considered that there is no pulse delivery.
+these function values are linearly converted into the spike firing time between ``[0, max_spike_time - 1]``.
+In addition, for the spikes delivered at the last moment, it is considered that there is no spike delivery.
 
 According to the above steps, the encoding of the input data is completed.
 
 Interval encoder
 -------------------
 
-The interval encoder is an encoder that emits a pulse every ``T`` time steps. The encoder is relatively simple and
+The interval encoder is an encoder that emits a spike every ``T`` time steps. The encoder is relatively simple and
 will not be detailed here.
