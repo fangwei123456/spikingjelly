@@ -39,7 +39,7 @@ The LIF neuron layer has some construction parameters, which are explained in de
 
     - **v_reset** -- the reset voltage of the neuron. If it is not ``None``, when the neuron releases a spike, the voltage will be reset to ``v_reset``; if it is set to ``None``, the voltage will be subtracted from ``v_threshold``
 
-    - **surrogate_function** -- the surrogate function used to calculate the gradient of the imspike function during back propagation
+    - **surrogate_function** -- the surrogate function used to calculate the gradient of the spike function during back propagation
 
     - **monitor_state** -- whether to set up a monitor to save the voltage and spikes of the neurons. If it is ``True``,
 ``self.monitor`` is a dictionary, the keys include ``h``, ``v`` and ``s``, which record the voltage after charging, the voltage after releasing the spike, and the released spike respectively.
@@ -149,7 +149,7 @@ Find the membrane potential reset code in ``neuronal_reset()`` of ``BaseNode``:
             spike = self.spike
 
         if self.v_reset is None:
-            self.v = self.v - spike * self.v_threshold
+            self.v = (1 - spike) * self.v - spike * self.v_threshold
         else:
             self.v = (1 - spike) * self.v + spike * self.v_reset
 

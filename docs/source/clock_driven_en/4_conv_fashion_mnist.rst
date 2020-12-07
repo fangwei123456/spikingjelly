@@ -1,10 +1,10 @@
-Time-driven: Use convolutional SNN to identify Fashion-MNIST
+Clock driven: Use convolutional SNN to identify Fashion-MNIST
 ============================================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
-In this tutorial, we will build a convolutional pulse neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
+In this tutorial, we will build a convolutional spike neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
 The Fashion-MNIST data set has the same format as the MNIST data set, and both are ``1 * 28 * 28`` grayscale images.
 
 Network structure
@@ -21,9 +21,7 @@ We also use a similar structure in SNN. Import related modules, inherit ``torch.
     import torchvision
     from spikingjelly.clock_driven import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
-    import sys
-    if sys.platform != 'win32':
-        import readline
+    import readline
     class Net(nn.Module):
         def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
 
@@ -45,10 +43,10 @@ static image data without time information. We add 2 convolution-BN-pooling laye
             nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
-After the input of ``1 * 28 * 28`` undergoes such a convolutional layer, an output pulse of ``128 * 7 * 7`` is obtained.
+After the input of ``1 * 28 * 28`` undergoes such a convolutional layer, an output spike of ``128 * 7 * 7`` is obtained.
 
 Such a convolutional layer can actually function as an encoder: in the previous tutorial, in the code of MNIST
-classification, we used a Poisson encoder to encode pictures into pulses. In fact, we can directly send the picture
+classification, we used a Poisson encoder to encode pictures into spikes. In fact, we can directly send the picture
 to the SNN. In this case, the first spike neuron layer and the previous layer in the SNN can be regarded as an
 auto-encoder with learnable parameters. For example, these layers in the convolutional layer we just defined:
 
@@ -58,7 +56,7 @@ auto-encoder with learnable parameters. For example, these layers in the convolu
     nn.BatchNorm2d(128),
     neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan())
 
-This 3-layer network, which receives pictures as input and outputs pulses, can be regarded as an encoder.
+This 3-layer network, which receives pictures as input and outputs spikes, can be regarded as an encoder.
 
 Next, we define a 3-layer fully connected network and output the classification results. The fully connected
 layer generally functions as a classifier, and the performance of using ``LIFNode`` will be better. Fashion-MNIST
@@ -101,18 +99,18 @@ We can train this network directly, just like the previous MNIST classification:
             optimizer.zero_grad()
 
             # run the time of T，out_spikes_counter is the tensor of shape=[batch_size, 10]
-            # record the number of pulse firings of 10 neurons in the output layer during the entire simulation duration
+            # record the number of spike firings of 10 neurons in the output layer during the entire simulation duration
             for t in range(T):
                 if t == 0:
                     out_spikes_counter = net(encoder(img).float())
                 else:
                     out_spikes_counter += net(encoder(img).float())
 
-            # out_spikes_counter / T obtain the pulse firing frequency of 10 neurons in the output layer during the simulation time
+            # out_spikes_counter / T obtain the spike firing frequency of 10 neurons in the output layer during the simulation time
             out_spikes_counter_frequency = out_spikes_counter / T
 
-            # the loss function is the pulse firing frequency of the neurons in the output layer, and the MSE of the true category
-            # such a loss function will make the pulse firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the pulse firing frequency of other neurons will approach 0
+            # the loss function is the spike firing frequency of the neurons in the output layer, and the MSE of the true category
+            # such a loss function will make the spike firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the spike firing frequency of other neurons will approach 0
             loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
             loss.backward()
             optimizer.step()
@@ -285,7 +283,7 @@ Load the trained network from the location where the network is saved, that is, 
     encoder.eval()
 
 Next, extract a picture from the data set, send it to the encoder, and check the accumulated value :math:`\sum_{t} S_{t}` of the output
-pulse. In order to display clearly, we also normalized the pixel value of the output ``feature_map``, and linearly transformed
+spike. In order to display clearly, we also normalized the pixel value of the output ``feature_map``, and linearly transformed
 the value range to ``[0, 1]``.
 
 .. code-block:: python
@@ -315,7 +313,7 @@ the value range to ``[0, 1]``.
                     plt.title('$\\sum_{t} S_{t}$ at $t = ' + str(t) + '$', fontsize=20)
                     plt.show()
 
-The following shows two input pictures and the cumulative pulse :math:`\sum_{t} S_{t}` output by the encoder at the begin time of ``t=0`` and the end time ``t=7``:
+The following shows two input pictures and the cumulative spike :math:`\sum_{t} S_{t}` output by the encoder at the begin time of ``t=0`` and the end time ``t=7``:
 
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x0.*
     :width: 100%
@@ -335,5 +333,5 @@ The following shows two input pictures and the cumulative pulse :math:`\sum_{t} 
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y17.*
     :width: 100%
 
-Observation shows that the cumulative output pulse :math:`\sum_{t} S_{t}` of the encoder is very close to the contour of the original image.
-It seems that this kind of self-learning pulse encoder has strong coding ability.
+Observation shows that the cumulative output spike :math:`\sum_{t} S_{t}` of the encoder is very close to the contour of the original image.
+It seems that this kind of self-learning spike encoder has strong coding ability.
