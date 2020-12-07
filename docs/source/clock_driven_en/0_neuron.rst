@@ -1,4 +1,4 @@
-Clock_driven: Neurons
+Clock driven: Neurons
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
@@ -9,7 +9,7 @@ simulation methods.
 
 Spike neuron model
 -----------------------------------------------
-In ``spikingjelly``, we agree that only a pulse can be output, that is, a neuron with 0 or 1 can be called
+In ``spikingjelly``, we agree that only a spike can be output, that is, a neuron with 0 or 1 can be called
 a "spike neuron". Networks that use spiking neurons can also be called Spiking Neural Networks.
 ``spikingjelly.clock_driven.neuron`` defines various common spike neuron models.
 We take ``spikingjelly.clock_driven.neuron.LIFNode`` as an example to introduce spike neurons.
@@ -37,12 +37,12 @@ The LIF neuron layer has some construction parameters, which are explained in de
 
     - **v_threshold** -- the threshold voltage of the neuron
 
-    - **v_reset** -- the reset voltage of the neuron. If it is not ``None``, when the neuron releases a pulse, the voltage will be reset to ``v_reset``; if it is set to ``None``, the voltage will be subtracted from ``v_threshold``
+    - **v_reset** -- the reset voltage of the neuron. If it is not ``None``, when the neuron releases a spike, the voltage will be reset to ``v_reset``; if it is set to ``None``, the voltage will be subtracted from ``v_threshold``
 
-    - **surrogate_function** -- the surrogate function used to calculate the gradient of the impulse function during back propagation
+    - **surrogate_function** -- the surrogate function used to calculate the gradient of the spike function during back propagation
 
-    - **monitor_state** -- whether to set up a monitor to save the voltage and pulses of the neurons. If it is ``True``,
-``self.monitor`` is a dictionary, the keys include ``h``, ``v`` and ``s``, which record the voltage after charging, the voltage after releasing the pulse, and the released pulse respectively.
+    - **monitor_state** -- whether to set up a monitor to save the voltage and spikes of the neurons. If it is ``True``,
+``self.monitor`` is a dictionary, the keys include ``h``, ``v`` and ``s``, which record the voltage after charging, the voltage after releasing the spike, and the released spike respectively.
 
 The corresponding value is a linked list. In order to save memory, the value stored in the list is the value of the original variable converted into a ``numpy`` array. Also note that the ``self.reset()`` function will clear these linked lists.
 
@@ -115,8 +115,8 @@ The corresponding code can be found in ``neuronal_charge()`` of ``LIFNode``:
             self.v += (dv - (self.v - self.v_reset)) / self.tau
 
 Different neurons have different charging equations. But after the membrane potential exceeds the threshold voltage,
-the release of the pulse, and after the release of the pulse, the reset of the membrane potential is the same. Therefore,
-they all inherit from ``BaseNode`` and share the same discharge and reset equations. The code to release the pulse can
+the release of the spike, and after the release of the spike, the reset of the membrane potential is the same. Therefore,
+they all inherit from ``BaseNode`` and share the same discharge and reset equations. The code to release the spike can
 be found in ``neuronal_fire()`` of ``BaseNode``:
 
 .. code-block:: python
@@ -125,15 +125,15 @@ be found in ``neuronal_fire()`` of ``BaseNode``:
         self.spike = self.surrogate_function(self.v - self.v_threshold)
 
 ``surrogate_function()`` is a step function during forward propagation, as long as the input is greater than or equal
-to 0, it will return 1, otherwise it will return 0. We regard this kind of ``tensor'' whose elements are only 0 or 1 as pulses.
+to 0, it will return 1, otherwise it will return 0. We regard this kind of ``tensor'' whose elements are only 0 or 1 as spikes.
 
-The release of the pulse consumes the previously accumulated electric charge of the neuron, so there will be an
+The release of the spike consumes the previously accumulated electric charge of the neuron, so there will be an
 instantaneous decrease in the membrane potential, which is the reset of the membrane potential. In SNN, there are
 two ways to realize membrane potential reset:
 
-#. Hard method: After releasing the pulse, the membrane potential is directly set to the reset voltage::math:`V = V_{reset}`
+#. Hard method: After releasing the spike, the membrane potential is directly set to the reset voltage::math:`V = V_{reset}`
 
-#. Soft method: After the pulse is released, the membrane potential minus the threshold voltage::math:`V = V - V_{threshold}`
+#. Soft method: After the spike is released, the membrane potential minus the threshold voltage::math:`V = V - V_{threshold}`
 
 It can be found that for neurons using the Soft method, there is no need to reset the voltage :math:`V_{reset}` variable.
 The neuron in ``spikingjelly.clock_driven.neuron``, in one of the constructor parameters, ``v_reset``,
@@ -184,7 +184,7 @@ The soft method reset equation is:
 
 Where :math:`V_{t}` is the membrane potential of the neuron, :math:`X_{t}` is the external input, such as voltage increment.
 To avoid confusion, we use :math:`H_{t}` to represent the membrane potential after the neuron is charged and before
-the pulse released, :math:`V_{t}` is the membrane potential after the neuron releases the pulse, :math:`f(V(t-1), X(t))` is the
+the spike released, :math:`V_{t}` is the membrane potential after the neuron releases the spike, :math:`f(V(t-1), X(t))` is the
 state update equation of the neuron. The difference between different neurons is the update equation.
 
 Clock-driven simulation
@@ -192,7 +192,7 @@ Clock-driven simulation
 
 ``spikingjelly.clock_driven`` uses a clock-driven approach to gradually simulate SNN.
 
-Next, we will gradually give the neuron input and check its membrane potential and output pulse.
+Next, we will gradually give the neuron input and check its membrane potential and output spike.
 In order to record data, need to open the ``monitor`` of the neuron layer:
 
 .. code-block:: python
@@ -200,10 +200,10 @@ In order to record data, need to open the ``monitor`` of the neuron layer:
     lif.set_monitor(True)
 
 After turning on the monitor, the neuron layer will automatically record the charged membrane potential
-``self.monitor['h']'' in the dictionary ``self.monitor`` during the operation when it is running. Pulse ``self.monitor['s']``,
+``self.monitor['h']'' in the dictionary ``self.monitor`` during the operation when it is running. spike ``self.monitor['s']``,
 and the membrane potential after discharge ``self.monitor['v']``.
 
-Now let us give continuous input to the LIF neuron layer and plot the membrane potential and output pulse after its discharge:
+Now let us give continuous input to the LIF neuron layer and plot the membrane potential and output spike after its discharge:
 
 .. code-block:: python
 
@@ -214,12 +214,12 @@ Now let us give continuous input to the LIF neuron layer and plot the membrane p
     visualizing.plot_one_neuron_v_s(lif.monitor['v'], lif.monitor['s'], v_threshold=lif.v_threshold, v_reset=lif.v_reset, dpi=200)
     plt.show()
 
-We gave the input ``shape=[1]``, so this LIF neuron layer has only 1 neuron. Its membrane potential and output pulse change with time as follows:
+We gave the input ``shape=[1]``, so this LIF neuron layer has only 1 neuron. Its membrane potential and output spike change with time as follows:
 
 .. image:: ../_static/tutorials/clock_driven/0_neuron/0.*
     :width: 100%
 
-Below we reset the neuron layer and give the input of ``shape=[32]`` to view the membrane potential and output pulse of these 32 neurons:
+Below we reset the neuron layer and give the input of ``shape=[32]`` to view the membrane potential and output spike of these 32 neurons:
 
 .. code-block:: python
 
