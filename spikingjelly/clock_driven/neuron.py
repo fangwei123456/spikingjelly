@@ -56,7 +56,6 @@ class BaseNode(nn.Module):
         self.surrogate_function = surrogate_function
         self.monitor = monitor_state
         self.reset()
-        self.unparallelizable = True
 
 
     @abstractmethod

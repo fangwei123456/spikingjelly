@@ -73,7 +73,6 @@ class NeuNorm(nn.Module):
         else:
             self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
-        self.unparallelizable = True
 
     def forward(self, in_spikes: torch.Tensor):
         self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)  # x.shape = [batch_size, 1, height, width]
@@ -248,7 +247,6 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
-        self.unparallelizable = True
 
     def extra_repr(self):
         return 'p={}, dropout_spikes={}'.format(
@@ -458,7 +456,6 @@ class SynapseFilter(nn.Module):
         else:
             self.tau = 1 / tau
         self.out_i = 0
-        self.unparallelizable = True
 
     def extra_repr(self):
         return 'tau={}'.format(
