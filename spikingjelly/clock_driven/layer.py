@@ -73,6 +73,7 @@ class NeuNorm(nn.Module):
         else:
             self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
+        self.unparallelizable = True
 
     def forward(self, in_spikes: torch.Tensor):
         self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)  # x.shape = [batch_size, 1, height, width]
@@ -247,6 +248,7 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
+        self.unparallelizable = True
 
     def extra_repr(self):
         return 'p={}, dropout_spikes={}'.format(
@@ -286,7 +288,7 @@ class Dropout(nn.Module):
         self.mask = None
 
 class Dropout2d(Dropout):
-    def __init__(self, p=0.2, dropout_spikes=False):
+    def __init__(self, p=0.2):
         '''
         * :ref:`API in English <Dropout2d.__init__-en>`
 
@@ -294,8 +296,6 @@ class Dropout2d(Dropout):
 
         :param p: 每个元素被设置为0的概率
         :type p: float
-        :param dropout_spikes: 本层是否作用于脉冲数据，例如放在 ``neuron.LIFNode`` 层之后。若为 ``True``，则计算会有一定的加速
-        :type dropout_spikes: bool
 
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -308,16 +308,14 @@ class Dropout2d(Dropout):
 
         :param p: probability of an element to be zeroed
         :type p: float
-        :param dropout_spikes: whether dropout is applied to spikes, such as after ``neuron.LIFNode``. If ``True``,
-            the calculation will be accelerated
-        :type dropout_spikes: bool
+
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
         has been called and a new simulation is started.
 
         For more information about Dropout in SNN, refer to :ref:`layer.Dropout <Dropout.__init__-en>`.
         '''
-        super().__init__(p, dropout_spikes)
+        super().__init__(p)
 
     def create_mask(self, x: torch.Tensor):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
@@ -460,6 +458,7 @@ class SynapseFilter(nn.Module):
         else:
             self.tau = 1 / tau
         self.out_i = 0
+        self.unparallelizable = True
 
     def extra_repr(self):
         return 'tau={}'.format(

@@ -1,10 +1,10 @@
-spikingjelly.cext.surrogate package
+spikingjelly.cext.neuron package
 =========================
 
 Module contents
 ---------------
 
-.. automodule:: spikingjelly.cext.surrogate
+.. automodule:: spikingjelly.cext.neuron
    :members:
    :undoc-members:
    :show-inheritance:

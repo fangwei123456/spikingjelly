@@ -3,9 +3,9 @@
 
 [English](./README.md) | 中文
 
-![demo](demo.png)
+![demo](./docs/source/_static/logo/demo.png)
 
-[SpikingJelly](https://github.com/fangwei123456/spikingjelly) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neuron Network, SNN)进行深度学习的框架。
+[SpikingJelly](https://github.com/fangwei123456/spikingjelly) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neural Network, SNN)进行深度学习的框架。
 
 SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedocs.io
 

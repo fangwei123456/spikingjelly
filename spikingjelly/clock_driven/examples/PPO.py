@@ -9,7 +9,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 from common.multiprocessing_env import SubprocVecEnv
 
 
