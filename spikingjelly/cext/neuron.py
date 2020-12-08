@@ -569,64 +569,48 @@ def soft_reset_bptt_template(grad_spike: torch.Tensor, grad_v_next: torch.Tensor
 
 class LIFStep(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
+    def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau):
         if v_reset is None:
             raise NotImplementedError
-        h, spike, v_next = cext_neuron.LIF_hard_reset_forward(x, v, v_threshold, v_reset, tau)
-        if x.requires_grad:
-            ctx.save_for_backward(h, spike)
-            ctx.v_threshold = v_threshold
-            ctx.v_reset = v_reset
-            ctx.alpha = alpha
-            ctx.detach_reset = detach_reset
-            ctx.grad_surrogate_function_index = grad_surrogate_function_index
-            ctx.tau = tau
-        return h, spike, v_next
+
+        spike, v_next, grad_s_to_h, grad_v_to_h = cext_neuron.LIF_hard_reset_forward_with_grad(x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau)
+        ctx.save_for_backward(grad_s_to_h, grad_v_to_h)
+        ctx.reciprocal_tau = reciprocal_tau
+
+        return spike, v_next
 
     @staticmethod
-    def backward(ctx, grad_h, grad_spike, grad_v_next):
-        grad_x, grad_v = cext_neuron.LIF_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
+    def backward(ctx, grad_spike, grad_v_next):
+        grad_x, grad_v = cext_neuron.LIF_hard_reset_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.reciprocal_tau)
         return grad_x, grad_v, None, None, None, None, None, None
 
 class LIFMultiStep(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, tau):
+    def forward(ctx, x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau):
         if v_reset is None:
             raise NotImplementedError
-        h_seq, spike_seq, v_next = cext_neuron.LIF_hard_reset_fptt(x_seq, v, v_threshold, v_reset, tau)
-        if x_seq.requires_grad:
-            ctx.save_for_backward(h_seq, spike_seq)
-            ctx.v_threshold = v_threshold
-            ctx.v_reset = v_reset
-            ctx.alpha = alpha
-            ctx.detach_reset = detach_reset
-            ctx.grad_surrogate_function_index = grad_surrogate_function_index
-            ctx.tau = tau
-        return h_seq, spike_seq, v_next
+
+        spike_seq, v_next, grad_s_to_h, grad_v_to_h = cext_neuron.LIF_hard_reset_fptt_with_grad(x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau)
+        ctx.save_for_backward(grad_s_to_h, grad_v_to_h)
+        ctx.reciprocal_tau = reciprocal_tau
+        return spike_seq, v_next
 
     @staticmethod
-    def backward(ctx, grad_h_seq, grad_spike_seq, grad_v_next_seq):
-        grad_x, grad_v = cext_neuron.LIF_hard_reset_bptt(grad_spike_seq, grad_v_next_seq, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.v_threshold, ctx.v_reset, ctx.alpha, ctx.detach_reset, ctx.grad_surrogate_function_index, ctx.tau)
+    def backward(ctx, grad_spike_seq, grad_v_next):
+        grad_x, grad_v = cext_neuron.LIF_hard_reset_bptt(grad_spike_seq, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.reciprocal_tau)
         return grad_x, grad_v, None, None, None, None, None, None
-
-# speed up
-# Tesla V100S
-# neuron_num = 128 * 16 * 16
-# T   PyTorch CUDA CUDA-MultiStep
-# T=8 1.0 2.168202451484902 3.5046899354510046
-# T=20 1.0 2.798510299917697 5.5392424264154005
-# T=64 1.0 2.6789255367768186 14.269773224122721
-# T=128 1.0 2.5028588314108595 21.82063029389204
 
 surrogate_function_dict = {
     'ATan': 0,
     'Sigmoid': 1
 }
+
 class BaseNode(nn.Module):
     def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
         super().__init__()
         self.v_threshold = v_threshold
         self.v_reset = v_reset
+        self.surrogate_function = surrogate_function
         self.grad_surrogate_function_index = surrogate_function_dict[surrogate_function]
         self.alpha = alpha
         self.detach_reset = detach_reset
@@ -635,10 +619,13 @@ class BaseNode(nn.Module):
     def reset(self):
         self.v = self.v_reset
 
+    def extra_repr(self):
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, surrogate_function={self.surrogate_function}, alpha={self.alpha}'
+
 class LIFNode(BaseNode):
     def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
         super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset)
-        self.tau = tau
+        self.reciprocal_tau = 1 / tau
     
     def forward(self, dv: torch.Tensor):
         if self.v_reset is None:
@@ -648,22 +635,29 @@ class LIFNode(BaseNode):
                 self.v = torch.zeros_like(dv.data)
                 if self.v_reset != 0.0:
                     self.v.fill_(self.v_reset)
-            h, spike, self.v = LIFStep.apply(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.tau)
+            if self.training:
+                spike, self.v = LIFStep.apply(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.reciprocal_tau)
+            else:
+                spike, self.v = cext_neuron.LIF_hard_reset_forward(dv, self.v, self.v_threshold, self.v_reset, self.reciprocal_tau)
             return spike
 
-class MultiStepLIFNode(BaseNode):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0, detach_reset=False):
-        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset)
-        self.tau = tau
+    def extra_repr(self):
+        return super().extra_repr() + f' tau={1/self.reciprocal_tau}'
 
-    def forward(self, dv: torch.Tensor):
+class MultiStepLIFNode(LIFNode):
+    def forward(self, dv_seq: torch.Tensor):
         if self.v_reset is None:
             raise NotImplementedError
         else:
             if not isinstance(self.v, torch.Tensor):
-                self.v = torch.zeros_like(dv[0].data)
+                self.v = torch.zeros_like(dv_seq[0].data)
                 if self.v_reset != 0.0:
                     self.v.fill_(self.v_reset)
-            h_seq, spike_seq, self.v = LIFMultiStep.apply(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.tau)
+            if self.training:
+                spike_seq, self.v = LIFMultiStep.apply(dv_seq, self.v, self.v_threshold, self.v_reset, self.alpha,
+                                                       self.detach_reset, self.grad_surrogate_function_index, self.reciprocal_tau)
+            else:
+                spike_seq, self.v = cext_neuron.LIF_hard_reset_fptt(dv_seq, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.reciprocal_tau)
             return spike_seq
+
 

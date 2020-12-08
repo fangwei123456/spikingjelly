@@ -775,3 +775,16 @@ class LBLForwardSequential(nn.Sequential):
         for t in range(T):
             x[t].unsqueeze_(0)  # [batch_size, ...] -> [1, batch_size, ...]
         return torch.cat(x, 0)  # [T, batch_size, ...]
+
+
+class MultiStepContainer(nn.Module):
+    def __init__(self, module: nn.Module):
+        super().__init__()
+        self.module = module
+
+    def forward(self, x: torch.Tensor):
+        y = []
+        for t in range(x.shape[0]):
+            y.append(self.module(x[t]))
+            y[-1].unsqueeze_(0)
+        return torch.cat(y, 0)
