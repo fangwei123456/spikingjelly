@@ -5,7 +5,7 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
 In this tutorial, we will build a convolutional spike neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
-The Fashion-MNIST data set has the same format as the MNIST data set, and both are ``1 * 28 * 28`` grayscale images.
+The Fashion-MNIST dataset has the same format as the MNIST dataset, and both are ``1 * 28 * 28`` grayscale images.
 
 Network structure
 ----------------------------
@@ -25,8 +25,8 @@ We also use a similar structure in SNN. Import related modules, inherit ``torch.
     class Net(nn.Module):
         def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
 
-Next, we add a convolutional layer and a fully connected layer to the member variables of ``Net``. The developers of
-``SpikingJelly`` found in experiments that for neurons in the convolutional layer, it is better to use ``IFNode`` for
+Then we add a convolutional layer and a fully connected layer to the member variables of ``Net``. The developers of
+``SpikingJelly`` found in the experiments that neurons in the convolutional layer is better to use ``IFNode`` for
 static image data without time information. We add 2 convolution-BN-pooling layers:
 
 .. code-block:: python
@@ -84,7 +84,7 @@ Next, define forward propagation. Forward propagation is very simple, first go t
     def forward(self, x):
         return self.fc(self.conv(x))
 
-Avoid repeat counting
+Avoid repeat computing
 --------------------------------
 
 We can train this network directly, just like the previous MNIST classification:
@@ -135,7 +135,7 @@ layers of the network, the highlighted part of the following code:
             nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
-The input image received by these two layers does not change with ``t`` , but in the ``for`` loop, each time ``img`` will
+The input images received by these two layers does not change with ``t`` , but in the ``for`` loop, each time ``img`` will
 recalculate these two layers to get the same output. We extract these layers and encapsulate the time loop into the
 network itself to facilitate calculation. The new network structure is fully defined as:
 
@@ -271,7 +271,7 @@ modules, and redefine a data loader with ``batch_size=1``, because we want to vi
         shuffle=True,
         drop_last=False)
 
-Load the trained network from the location where the network is saved, that is, under the ``log_dir`` directory, and extract the encoder. Just run on the CPU:
+Load the trained network from the location where the network is saved, that is, under the ``log_dir`` directory. And we extract the encoder. Just run on the CPU:
 
 .. code-block:: python
 
