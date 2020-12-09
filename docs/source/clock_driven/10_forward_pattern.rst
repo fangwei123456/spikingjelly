@@ -26,9 +26,9 @@
         return used_t
 
     device = 'cuda:0'
-    lif = layer.MultiStepContainer(neuron.LIFNode(surrogate_function=surrogate.ATan(alpha=2.0)))
-    lif_cuda = layer.MultiStepContainer(cext_neuron.LIFNode(surrogate_function='ATan', alpha=2.0))
-    lif_cuda_tt = cext_neuron.MultiStepLIFNode(surrogate_function='ATan', alpha=2.0)
+    lif = layer.MultiStepContainer(neuron.LIFNode(tau=2.0, surrogate_function=surrogate.ATan(alpha=2.0)))
+    lif_cuda = layer.MultiStepContainer(cext_neuron.LIFNode(tau=2.0, surrogate_function='ATan', alpha=2.0))
+    lif_cuda_tt = cext_neuron.MultiStepLIFNode(tau=2.0, surrogate_function='ATan', alpha=2.0)
     lif.to(device)
     lif_cuda.to(device)
     lif_cuda_tt.to(device)
@@ -60,3 +60,9 @@ GeForce RTX 2080
     32 0.02146396137550255 0.008629620229385182 0.0008620421272098611
     64 0.04052260834896515 0.02441813969926443 0.0016582453868068114
     128 0.10904121043722625 0.08174578305579416 0.003309445638478792
+
+.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/1.png
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/2.png
+    :width: 100%
