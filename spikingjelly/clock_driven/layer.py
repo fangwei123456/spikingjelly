@@ -790,6 +790,6 @@ class MultiStepContainer(nn.Module):
         return torch.cat(y, 0)
 
     def reset(self):
-        if hasattr(self.m, 'reset'):
-            self.m.reset()
+        if hasattr(self.module, 'reset'):
+            self.module.reset()
 
