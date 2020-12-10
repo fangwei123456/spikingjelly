@@ -318,6 +318,26 @@ class Dropout2d(Dropout):
     def create_mask(self, x: torch.Tensor):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
 
+class MultiStepDropout(Dropout):
+    def forward(self, x_seq: torch.Tensor):
+        if self.training:
+            if self.mask is None:
+                self.create_mask(x_seq[0])
+
+            return x_seq * self.mask
+        else:
+            return x_seq
+
+class MultiStepDropout2d(Dropout2d):
+    def forward(self, x_seq: torch.Tensor):
+        if self.training:
+            if self.mask is None:
+                self.create_mask(x_seq[0])
+
+            return x_seq * self.mask
+        else:
+            return x_seq
+
 class SynapseFilter(nn.Module):
     def __init__(self, tau=100.0, learnable=False):
         '''
@@ -722,74 +742,53 @@ class DropConnectLinear(nn.Module):
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
 
-class LBLForwardSequential(nn.Sequential):
-    def __init__(self, *args):
-        '''
-        * :ref:`API in English <LBLForwardSequential.__init__-en>`
-
-        .. _LBLForwardSequential.__init__-cn:
-
-        逐层进行前反向传播的序列化容器。
-
-        * :ref:`中文API <LBLForwardSequential.__init__-cn>`
-
-        .. _LBLForwardSequential.__init__-en:
-
-        A sequential container that performs forward/backward layer by layer.
-
-        '''
-        super().__init__(*args)
-        self.stateful_flag = []
-        for module in self:
-            self.stateful_flag.append(functional.is_stateful(module))
-
-    def forward(self, x_seq: torch.Tensor):
-        # x_seq: [T, batch_size, ...]
-        T = x_seq.shape[0]
-        batch_size = x_seq.shape[1]
-
-        if self.stateful_flag[0]:
-            x = []
-            for t in range(T):
-                x.append(x_seq[t])
-        else:
-            x = x_seq.flatten(0, 1)  # [T * batch_size, ...]
-
-        for idx, module in enumerate(self):
-            if self.stateful_flag[idx]:
-                if isinstance(x, torch.Tensor):
-                    # 拆分成list
-                    x = list(torch.split(x, batch_size, 0))  # T * [batch_size, ...]
-                for t in range(T):
-                    x[t] = module(x[t])
-            else:
-                if isinstance(x, list):
-                    # 合并成tensor
-                    x = torch.cat(x, 0)
-                x = module(x)
-
-        if isinstance(x, torch.Tensor):
-            # 拆分成list
-            x = list(torch.split(x, batch_size, 0))  # T * [batch_size, ...]
-
-        for t in range(T):
-            x[t].unsqueeze_(0)  # [batch_size, ...] -> [1, batch_size, ...]
-        return torch.cat(x, 0)  # [T, batch_size, ...]
-
-
 class MultiStepContainer(nn.Module):
     def __init__(self, module: nn.Module):
         super().__init__()
         self.module = module
 
-    def forward(self, x: torch.Tensor):
-        y = []
-        for t in range(x.shape[0]):
-            y.append(self.module(x[t]))
-            y[-1].unsqueeze_(0)
-        return torch.cat(y, 0)
+    def forward(self, x_seq: torch.Tensor):
+        '''
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: torch.Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: torch.Tensor
+        '''
+        y_seq = []
+        for t in range(x_seq.shape[0]):
+            y_seq.append(self.module(x_seq[t]))
+            y_seq[-1].unsqueeze_(0)
+        return torch.cat(y_seq, 0)
 
     def reset(self):
         if hasattr(self.module, 'reset'):
             self.module.reset()
 
+class SeqToANNContainer(nn.Module):
+    def __init__(self, module: nn.Module):
+        '''
+        :param module:
+        :type module:
+
+        .. code-block:: python
+            with torch.no_grad():
+                T = 16
+                batch_size = 8
+                x = torch.rand([T, batch_size, 4])
+                fc = SeqToANNContainer(nn.Linear(4, 2))
+                print(fc(x).shape)
+        '''
+        super().__init__()
+        self.module = module
+
+    def forward(self, x_seq: torch.Tensor):
+        '''
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: torch.Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: torch.Tensor
+        '''
+        y_shape = [x_seq.shape[0], x_seq.shape[1]]
+        y_seq = self.module(x_seq.flatten(0, 1))
+        y_shape.extend(y_seq.shape[1:])
+        return y_seq.reshape(y_shape)

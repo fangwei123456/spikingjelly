@@ -2,74 +2,135 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+单步传播与多步传播
+------------------
+SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` 除外），例如 :class:`spikingjelly.clock_driven.layer.Dropout`，模块名的前缀中没有 ``MultiStep``，表示这个模块的 ``forward`` 函数定义的是单步的前向传播：
 
-CUDA加速的神经元
------------------------
+    输入 :math:`X_{t}`，输出 :math:`Y_{t}`
 
-``spikingjelly.cext.neuron`` 中的神经元与 ``spikingjelly.clock_driven.neuron`` 中的同名神经元，在前向传播和反向传播时的计算结果完全相同。但 ``spikingjelly.cext.neuron`` 将各种运算都封装到了一个CUDA内核；``spikingjelly.clock_driven.neuron`` 则是使用PyTorch来实现神经元，每一个Python函数都需要调用一次相应的CUDA后端。现在让我们通过一个简单的实验，来对比两个模块中LIF神经元的运行耗时：
+而如果前缀中含有 ``MultiStep``，例如 :class:`spikingjelly.clock_driven.layer.MultiStepDropout`，则表面这个模块的 ``forward`` 函数定义的是多步的前向传播：
+
+    输入 :math:`X_{t}, t=0,1,...,T-1`，输出 :math:`Y_{t}, t=0,1,...,T-1`
+
+一个单步传播的模块，可以很容易被封装成多步传播的模块，:class:`spikingjelly.clock_driven.layer.MultiStepContainer` 提供了非常简单的方式，将原始模块作为子模块，并在 ``forward`` 函数中实现在时间上的循环，代码如下所示：
 
 .. code-block:: python
 
-    from spikingjelly import cext
-    from spikingjelly.cext import neuron as cext_neuron
-    from spikingjelly.clock_driven import neuron, surrogate, layer
+    class MultiStepContainer(nn.Module):
+        def __init__(self, module: nn.Module):
+            super().__init__()
+            self.module = module
+
+        def forward(self, x_seq: torch.Tensor):
+            y_seq = []
+            for t in range(x_seq.shape[0]):
+                y_seq.append(self.module(x_seq[t]))
+                y_seq[-1].unsqueeze_(0)
+            return torch.cat(y_seq, 0)
+
+        def reset(self):
+            if hasattr(self.module, 'reset'):
+                self.module.reset()
+
+我们使用这种方式来包装一个IF神经元：
+
+.. code-block:: python
+
+    from spikingjelly.clock_driven import neuron, layer
     import torch
 
-    def cal_forward_t(multi_step_neuron, x, repeat_times):
-        with torch.no_grad():
-            used_t = cext.cal_fun_t(repeat_times, x.device, multi_step_neuron, x)
-            multi_step_neuron.reset()
-            return used_t * 1000
+    neuron_num = 4
+    T = 8
+    if_node = neuron.IFNode()
+    x = torch.rand([T, neuron_num]) * 2
+    for t in range(T):
+        print(f'if_node output spikes at t={t}', if_node(x[t]))
+    if_node.reset()
 
-    def forward_backward(multi_step_neuron, x):
-        multi_step_neuron(x).sum().backward()
-        multi_step_neuron.reset()
-        x.grad.zero_()
+    ms_if_node = layer.MultiStepContainer(if_node)
+    print("multi step if_node output spikes\n", ms_if_node(x))
+    ms_if_node.reset()
 
-    def cal_forward_backward_t(multi_step_neuron, x, repeat_times):
-        x.requires_grad_(True)
-        used_t = cext.cal_fun_t(repeat_times, x.device, forward_backward, multi_step_neuron, x)
-        return used_t * 1000
-
-    device = 'cuda:0'
-    lif = layer.MultiStepContainer(neuron.LIFNode(surrogate_function=surrogate.ATan(alpha=2.0)))
-    lif_cuda = layer.MultiStepContainer(cext_neuron.LIFNode(surrogate_function='ATan', alpha=2.0))
-    lif_cuda_tt = cext_neuron.MultiStepLIFNode(surrogate_function='ATan', alpha=2.0)
-    lif.to(device)
-    lif_cuda.to(device)
-    lif_cuda_tt.to(device)
-    N = 2*20
-    print('forward')
-    for T in [8, 16, 32, 64, 128]:
-        x = torch.rand(T, N, device=device)
-        print(T, cal_forward_t(lif, x, 1024), cal_forward_t(lif_cuda, x, 1024), cal_forward_t(lif_cuda_tt, x, 1024))
-
-    print('forward and backward')
-    for T in [8, 16, 32, 64, 128]:
-        x = torch.rand(T, N, device=device)
-        print(T, cal_forward_backward_t(lif, x, 1024), cal_forward_backward_t(lif_cuda, x, 1024), cal_forward_backward_t(lif_cuda_tt, x, 1024))
-
-实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。运行结果如下：
+输出为：
 
 .. code-block:: bash
 
-    forward
-    8 1.2689701984527346 0.5531465321837459 0.06358328437272576
-    16 2.5922743875526066 1.0690318631532136 0.06530838709295494
-    32 4.906598455818312 2.0490410443017026 0.06877212354083895
-    64 9.582090764070017 4.050089067732188 0.08626037742942572
-    128 19.352127595993807 7.874332742630941 0.11617418294918025
-    forward and backward
-    8 4.799259775609244 1.4362369111040607 0.2897263620980084
-    16 7.427763028317713 3.084241311171354 0.2840051633938856
-    32 15.380504060431122 5.489842319093441 0.4225145885357051
-    64 32.96750279241678 10.161389542645338 0.28885948904644465
-    128 63.52909050156086 20.467097838263726 0.2954222113658034
+    if_node output spikes at t=0 tensor([1., 1., 1., 0.])
+    if_node output spikes at t=1 tensor([0., 0., 0., 1.])
+    if_node output spikes at t=2 tensor([1., 1., 1., 1.])
+    if_node output spikes at t=3 tensor([0., 0., 1., 0.])
+    if_node output spikes at t=4 tensor([1., 1., 1., 1.])
+    if_node output spikes at t=5 tensor([1., 0., 0., 0.])
+    if_node output spikes at t=6 tensor([1., 0., 1., 1.])
+    if_node output spikes at t=7 tensor([1., 1., 1., 0.])
+    multi step if_node output spikes
+     tensor([[1., 1., 1., 0.],
+            [0., 0., 0., 1.],
+            [1., 1., 1., 1.],
+            [0., 0., 1., 0.],
+            [1., 1., 1., 1.],
+            [1., 0., 0., 0.],
+            [1., 0., 1., 1.],
+            [1., 1., 1., 0.]])
 
-将结果画出柱状图：
+两种方式的输出是完全相同的。
 
-.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/exe_time_f.*
+逐步传播与逐层传播
+-------------------
+在以往的教程和样例中，我们定义的网络在运行时，是按照 `逐步传播(step-by-step)` 的方式，例如上文中的：
+
+.. code-block:: python
+
+    if_node = neuron.IFNode()
+    x = torch.rand([T, neuron_num]) * 2
+    for t in range(T):
+        print(f'if_node output spikes at t={t}', if_node(x[t]))
+
+
+`逐步传播(step-by-step)`，指的是在前向传播时，先计算出整个网络在 :math:`t=0` 的输出 :math:`Y_{0}`，然后再计算整个网络在 :math:`t=1` 的输出 :math:`Y_{1}`，……，最终得到网络在所有时刻的输出 :math:`Y_{t}, t=0,1,...,T-1`。例如下面这份代码（假定 ``M0, M1, M2`` 都是单步传播的模块）：
+
+.. code-block:: python
+
+   net = nn.Sequential(M0, M1, M2)
+
+   for t in range(T):
+       Y[t] = net(X[t])
+
+对应的计算的顺序如下图所示：
+
+.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/step-by-step.png
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/exe_time_fb.*
+对于SNN以及RNN，前向传播既发生在空域也发生在时域，`逐步传播` 逐步计算出整个网络在不同时刻的状态，我们可以很容易联想到，还可以使用另一种顺序来计算：逐层计算出每一层网络在所有时刻的状态。例如下面这份代码（假定 ``M0, M1, M2`` 都是多步传播的模块）：
+
+.. code-block:: python
+
+   net = nn.Sequential(M0, M1, M2)
+
+   Y = net(X)
+
+对应的计算的顺序如下图所示：
+
+.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/layer-by-layer.png
     :width: 100%
+
+我们称这种方式为 `逐层传播(layer-by-layer)`。`逐层传播` 在RNN以及SNN中也被广泛使用，例如 `Low-activity supervised convolutional spiking neural networks applied to speech commands recognition <https://arxiv.org/abs/2011.06846>`_ 通过逐层计算的方式来获取每一层在所有时刻的输出，然后在时域上进行卷积，代码可见于 https://github.com/romainzimmer/s2net。
+
+`逐步传播` 与 `逐层传播` 遍历计算图的顺序不同，但计算的结果是完全相同的。但 `逐层传播` 具有更大的并行性，因为当某一层是无状态的层，例如 :class:`torch.nn.Linear`，我们可以将 ``shape=[T, batch_size, ...]`` 的输入拼接成 ``shape=[T * batch_size, ...]`` 后，再送入这一层计算，避免在时间上的循环。:class:`spikingjelly.clock_driven.layer.SeqToANNContainer` 提供了这样的功能，示例代码如下：
+
+.. code-block:: python
+
+    with torch.no_grad():
+        T = 16
+        batch_size = 8
+        x = torch.rand([T, batch_size, 4])
+        fc = layer.SeqToANNContainer(nn.Linear(4, 2))
+        print(fc(x).shape)
+
+输出为：
+
+.. code-block:: bash
+
+    torch.Size([16, 8, 2])
+
+输出仍然满足 ``shape=[T, batch_size, ...]``，可以直接送入到下一层网络。
