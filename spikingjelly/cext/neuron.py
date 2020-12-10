@@ -767,6 +767,36 @@ class LIFMultiStep(torch.autograd.Function):
         grad_x, grad_v = _C_neuron.LIF_bptt(grad_spike_seq, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.reciprocal_tau)
         return grad_x, grad_v, None, None, None, None, None, None
 
+class IFStep(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index):
+        if v_reset is None:
+            raise NotImplementedError
+
+        spike, v_next, grad_s_to_h, grad_v_to_h = _C_neuron.IF_hard_reset_forward_with_grad(x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index)
+        ctx.save_for_backward(grad_s_to_h, grad_v_to_h)
+        return spike, v_next
+
+    @staticmethod
+    def backward(ctx, grad_spike, grad_v_next):
+        grad_x, grad_v = _C_neuron.IF_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1])
+        return grad_x, grad_v, None, None, None, None, None
+
+class IFMultiStep(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index):
+        if v_reset is None:
+            raise NotImplementedError
+
+        spike_seq, v_next, grad_s_to_h, grad_v_to_h = _C_neuron.IF_hard_reset_fptt_with_grad(x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index)
+        ctx.save_for_backward(grad_s_to_h, grad_v_to_h)
+        return spike_seq, v_next
+
+    @staticmethod
+    def backward(ctx, grad_spike_seq, grad_v_next):
+        grad_x, grad_v = _C_neuron.IF_bptt(grad_spike_seq, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1])
+        return grad_x, grad_v, None, None, None, None, None
+
 surrogate_function_dict = {
     'ATan': 0,
     'Sigmoid': 1
@@ -827,3 +857,41 @@ class MultiStepLIFNode(LIFNode):
             return spike_seq
 
 
+class IFNode(BaseNode):
+    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function='ATan', alpha=2.0,
+                 detach_reset=False):
+        super().__init__(v_threshold, v_reset, surrogate_function, alpha, detach_reset)
+
+    def forward(self, dv: torch.Tensor):
+        if self.v_reset is None:
+            raise NotImplementedError
+        else:
+            if not isinstance(self.v, torch.Tensor):
+                self.v = torch.zeros_like(dv.data)
+                if self.v_reset != 0.0:
+                    self.v.fill_(self.v_reset)
+            if self.training:
+                spike, self.v = IFStep.apply(dv, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset,
+                                              self.grad_surrogate_function_index)
+            else:
+                spike, self.v = _C_neuron.IF_hard_reset_forward(dv, self.v, self.v_threshold, self.v_reset)
+            return spike
+
+
+class MultiStepIFNode(IFNode):
+    def forward(self, dv_seq: torch.Tensor):
+        if self.v_reset is None:
+            raise NotImplementedError
+        else:
+            if not isinstance(self.v, torch.Tensor):
+                self.v = torch.zeros_like(dv_seq[0].data)
+                if self.v_reset != 0.0:
+                    self.v.fill_(self.v_reset)
+            if self.training:
+                spike_seq, self.v = IFMultiStep.apply(dv_seq, self.v, self.v_threshold, self.v_reset, self.alpha,
+                                                       self.detach_reset, self.grad_surrogate_function_index)
+            else:
+                spike_seq, self.v = _C_neuron.IF_hard_reset_fptt(dv_seq, self.v, self.v_threshold, self.v_reset,
+                                                                  self.alpha, self.detach_reset,
+                                                                  self.grad_surrogate_function_index)
+            return spike_seq
