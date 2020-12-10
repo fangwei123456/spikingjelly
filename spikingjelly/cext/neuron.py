@@ -853,7 +853,7 @@ class MultiStepLIFNode(LIFNode):
             if self.training:
                 spike_seq, self.v = LIFMultiStep.apply(dv_seq, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.reciprocal_tau)
             else:
-                spike_seq, self.v = _C_neuron.LIF_hard_reset_fptt(dv_seq, self.v, self.v_threshold, self.v_reset, self.alpha, self.detach_reset, self.grad_surrogate_function_index, self.reciprocal_tau)
+                spike_seq, self.v = _C_neuron.LIF_hard_reset_fptt(dv_seq, self.v, self.v_threshold, self.v_reset, self.reciprocal_tau)
             return spike_seq
 
 
@@ -891,7 +891,5 @@ class MultiStepIFNode(IFNode):
                 spike_seq, self.v = IFMultiStep.apply(dv_seq, self.v, self.v_threshold, self.v_reset, self.alpha,
                                                        self.detach_reset, self.grad_surrogate_function_index)
             else:
-                spike_seq, self.v = _C_neuron.IF_hard_reset_fptt(dv_seq, self.v, self.v_threshold, self.v_reset,
-                                                                  self.alpha, self.detach_reset,
-                                                                  self.grad_surrogate_function_index)
+                spike_seq, self.v = _C_neuron.IF_hard_reset_fptt(dv_seq, self.v, self.v_threshold, self.v_reset)
             return spike_seq
