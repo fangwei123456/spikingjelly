@@ -5,6 +5,7 @@ import torchvision
 from spikingjelly.clock_driven import neuron, functional, surrogate, layer
 from torch.utils.tensorboard import SummaryWriter
 import sys
+import time
 if sys.platform != 'win32':
     import readline
 
@@ -125,6 +126,7 @@ def main():
     max_test_accuracy = 0
     for epoch in range(train_epoch):
         net.train()
+        t_start = time.perf_counter()
         for img, label in train_data_loader:
             img = img.to(device)
             label = label.to(device)
@@ -147,7 +149,9 @@ def main():
             if train_times % 256 == 0:
                 writer.add_scalar('train_accuracy', accuracy, train_times)
             train_times += 1
+        t_train = time.perf_counter() - t_start
         net.eval()
+        t_start = time.perf_counter()
         with torch.no_grad():
             # 每遍历一次全部数据集，就在测试集上测试一次
             test_sum = 0
@@ -160,6 +164,7 @@ def main():
                 test_sum += label.numel()
                 functional.reset_net(net)
             test_accuracy = correct_sum / test_sum
+            t_test = time.perf_counter() - t_start
             writer.add_scalar('test_accuracy', test_accuracy, epoch)
             if max_test_accuracy < test_accuracy:
                 max_test_accuracy = test_accuracy
@@ -167,10 +172,7 @@ def main():
                 torch.save(net, log_dir + '/net_max_acc.pt')
                 print('saved')
 
-        print(
-            'device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
-                device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy, train_times
-            ))
+        print('epoch={}, t_train={}, t_test={}, device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(epoch, t_train, t_test, device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy, train_times))
 
 if __name__ == '__main__':
     main()

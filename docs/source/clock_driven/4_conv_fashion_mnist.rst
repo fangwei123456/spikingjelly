@@ -194,7 +194,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
     输入保存Fashion MNIST数据集的位置，例如“./”
      input root directory for saving Fashion MNIST dataset, e.g., "./": ./fmnist
     输入batch_size，例如“64”
-     input batch_size, e.g., "64": 64
+     input batch_size, e.g., "64": 128
     输入学习率，例如“1e-3”
      input learning rate, e.g., "1e-3": 1e-3
     输入仿真时长，例如“8”
