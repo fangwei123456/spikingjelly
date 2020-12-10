@@ -54,6 +54,7 @@
     /clock_driven/7_a2c_cart_pole
     /clock_driven/8_ppo_cart_pole
     /clock_driven/9_spikingLSTM_text
+    /clock_driven/10_forward_pattern
 
 
 模块文档

@@ -2,6 +2,12 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+
+CUDA加速的神经元
+-----------------------
+
+``spikingjelly.cext.neuron`` 中的神经元与 ``spikingjelly.clock_driven.neuron`` 中的同名神经元，在前向传播和反向传播时的计算结果完全相同。但 ``spikingjelly.cext.neuron`` 将各种运算都封装到了一个CUDA内核；``spikingjelly.clock_driven.neuron`` 则是使用PyTorch来实现神经元，每一个Python函数都需要调用一次相应的CUDA后端。现在让我们通过一个简单的实验，来对比两个模块中LIF神经元的运行耗时：
+
 .. code-block:: python
 
     from spikingjelly import cext
@@ -13,7 +19,7 @@
         with torch.no_grad():
             used_t = cext.cal_fun_t(repeat_times, x.device, multi_step_neuron, x)
             multi_step_neuron.reset()
-            return used_t
+            return used_t * 1000
 
     def forward_backward(multi_step_neuron, x):
         multi_step_neuron(x).sum().backward()
@@ -23,16 +29,16 @@
     def cal_forward_backward_t(multi_step_neuron, x, repeat_times):
         x.requires_grad_(True)
         used_t = cext.cal_fun_t(repeat_times, x.device, forward_backward, multi_step_neuron, x)
-        return used_t
+        return used_t * 1000
 
     device = 'cuda:0'
-    lif = layer.MultiStepContainer(neuron.LIFNode(tau=2.0, surrogate_function=surrogate.ATan(alpha=2.0)))
-    lif_cuda = layer.MultiStepContainer(cext_neuron.LIFNode(tau=2.0, surrogate_function='ATan', alpha=2.0))
-    lif_cuda_tt = cext_neuron.MultiStepLIFNode(tau=2.0, surrogate_function='ATan', alpha=2.0)
+    lif = layer.MultiStepContainer(neuron.LIFNode(surrogate_function=surrogate.ATan(alpha=2.0)))
+    lif_cuda = layer.MultiStepContainer(cext_neuron.LIFNode(surrogate_function='ATan', alpha=2.0))
+    lif_cuda_tt = cext_neuron.MultiStepLIFNode(surrogate_function='ATan', alpha=2.0)
     lif.to(device)
     lif_cuda.to(device)
     lif_cuda_tt.to(device)
-    N = 128 * 28 * 28
+    N = 2*20
     print('forward')
     for T in [8, 16, 32, 64, 128]:
         x = torch.rand(T, N, device=device)
@@ -43,26 +49,27 @@
         x = torch.rand(T, N, device=device)
         print(T, cal_forward_backward_t(lif, x, 1024), cal_forward_backward_t(lif_cuda, x, 1024), cal_forward_backward_t(lif_cuda_tt, x, 1024))
 
-
-GeForce RTX 2080
+实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。运行结果如下：
 
 .. code-block:: bash
 
     forward
-    8 0.0017787316378417017 0.0007725339578428247 0.00015642789321645978
-    16 0.0034476295772947196 0.0014541315672431665 0.0002429631640552543
-    32 0.009004615353660483 0.003705305618041166 0.0004458090174921381
-    64 0.013518321067294892 0.0056778287248562265 0.0008845650272633065
-    128 0.03509577211070791 0.011248737328969582 0.0017893795111376676
+    8 1.2689701984527346 0.5531465321837459 0.06358328437272576
+    16 2.5922743875526066 1.0690318631532136 0.06530838709295494
+    32 4.906598455818312 2.0490410443017026 0.06877212354083895
+    64 9.582090764070017 4.050089067732188 0.08626037742942572
+    128 19.352127595993807 7.874332742630941 0.11617418294918025
     forward and backward
-    8 0.00520956037007636 0.0019439102429714694 0.00034730490142464987
-    16 0.009879665125481552 0.004046029102482862 0.00048325695388484746
-    32 0.02146396137550255 0.008629620229385182 0.0008620421272098611
-    64 0.04052260834896515 0.02441813969926443 0.0016582453868068114
-    128 0.10904121043722625 0.08174578305579416 0.003309445638478792
+    8 4.799259775609244 1.4362369111040607 0.2897263620980084
+    16 7.427763028317713 3.084241311171354 0.2840051633938856
+    32 15.380504060431122 5.489842319093441 0.4225145885357051
+    64 32.96750279241678 10.161389542645338 0.28885948904644465
+    128 63.52909050156086 20.467097838263726 0.2954222113658034
 
-.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/1.png
+将结果画出柱状图：
+
+.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/exe_time_f.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/2.png
+.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/exe_time_fb.*
     :width: 100%
