@@ -5,7 +5,7 @@ def plot_bar_and_text(x, y, width, label):
     for i in range(x.shape[0]):
         plt.text(x[i], y[i] + 0.2, str(round(y[i], 2)), ha='center')
 
-plt.style.use(['science', 'muted'])
+plt.style.use(['science'])
 fig = plt.figure(figsize=(8, 4))
 csv_array = np.loadtxt('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time.csv', delimiter=',', skiprows=1)
 T = csv_array[:, 0]
