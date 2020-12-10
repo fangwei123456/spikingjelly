@@ -62,10 +62,10 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
     self.fc = nn.Sequential(
         nn.Flatten(),
-        layer.Dropout(0.7),
+        layer.Dropout(0.5),
         nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
         neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-        layer.Dropout(0.7),
+        layer.Dropout(0.5),
         nn.Linear(128 * 3 * 3, 128, bias=False),
         neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
         nn.Linear(128, 10, bias=False),
