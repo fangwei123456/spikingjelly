@@ -63,6 +63,12 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 
 Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html) to explore more advanced networks!
 
+## CUDA-Enhanced Neuron
+
+SpikingJelly provides two versions of spiking neurons:  user-friendly PyTorch version and high-speed CUDA version. The followed figure compares execution time of different LIF neurons:
+
+<img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.svg" alt="exe_time_fb" style="zoom:150%;" />
+
 ## Device Supports
 
 -   [x] Nvidia GPU

@@ -63,6 +63,12 @@ class Net(nn.Module):
 
 阅读[spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html)以探索更多先进的神经网络！
 
+## CUDA增强的神经元
+
+SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，以及速度更快的CUDA版本。下图对比了各种类型的LIF神经元的运行时长：
+
+<img src="C:/Users/70892/Desktop/代码/spikingjelly/docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.svg" alt="exe_time_fb" style="zoom:150%;" />
+
 ## 设备支持
 
 -   [x] Nvidia GPU
