@@ -144,20 +144,33 @@ CUDA加速的神经元
 
     saving net...
     saved
-    epoch=0, t_train=25.856198568828404, t_test=1.4624664345756173, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8714, train_times=468
+    epoch=0, t_train=26.745780434459448, t_test=1.4819979975000024, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8705, train_times=468
     saving net...
     saved
-    epoch=1, t_train=25.112569484859705, t_test=1.46216244623065, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8864, train_times=936
+    epoch=1, t_train=26.087690989486873, t_test=1.502928489819169, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8913, train_times=936
     saving net...
     saved
-    epoch=2, t_train=25.061289750039577, t_test=1.4643053775653243, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9002, train_times=1404
+    epoch=2, t_train=26.281963238492608, t_test=1.4901704853400588, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8977, train_times=1404
     saving net...
     saved
-    ...
-    epoch=95, t_train=25.15247030183673, t_test=1.466654078103602, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=44928
-    epoch=96, t_train=25.165269726887345, t_test=1.4630440892651677, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=45396
-    epoch=97, t_train=25.11146777868271, t_test=1.4702007714658976, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=45864
-    epoch=98, t_train=25.194553862325847, t_test=1.4670541435480118, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=46332
-    epoch=99, t_train=25.034918897785246, t_test=1.4680998837575316, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=46800
 
-最终的正确率是94.16%，与 :doc:`../clock_driven/4_conv_fashion_mnist` 中的94.45%相差无几，性能的差异来源于网路参数的随机初始化。在日志中记录了训练和测试所需要的时间，我们可以发现，训练耗时为原始网络的61.65%，推理耗时为原始网络的58%，速度有了明显提升。
+    ...
+
+    epoch=96, t_train=26.286096683703363, t_test=1.5033660298213363, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9428, train_times=45396
+    saving net...
+    saved
+    epoch=97, t_train=26.185854725539684, t_test=1.4934641849249601, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.943, train_times=45864
+    saving net...
+    saved
+    epoch=98, t_train=26.256993867456913, t_test=1.5093903196975589, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46332
+    epoch=99, t_train=26.200945735909045, t_test=1.4959839908406138, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46800
+
+最终的正确率是94.37%，与 :doc:`../clock_driven/11_cext_neuron_with_lbl` 中的94.4%相差无几，两者在训练过程中的训练batch正确率和测试集正确率曲线如下：
+
+.. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.*
+    :width: 100%
+
+两个网络使用了完全相同的随机种子，最终的性能略有差异，可能是CUDA和PyTorch的计算数值误差导致的。在日志中记录了训练和测试所需要的时间，我们可以发现，训练耗时为原始网络的64%，推理耗时为原始网络的58%，速度有了明显提升。

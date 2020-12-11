@@ -96,7 +96,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
    for t in range(T):
        Y[t] = net(X[t])
 
-对应的计算的顺序如下图所示：
+前向传播的计算图的构建顺序如下所示：
 
 .. image:: ../_static/tutorials/clock_driven/10_forward_pattern/step-by-step.png
     :width: 100%
@@ -109,14 +109,27 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
    Y = net(X)
 
-对应的计算的顺序如下图所示：
+前向传播的计算图的构建顺序如下所示：
 
 .. image:: ../_static/tutorials/clock_driven/10_forward_pattern/layer-by-layer.png
     :width: 100%
 
 我们称这种方式为 `逐层传播(layer-by-layer)`。`逐层传播` 在RNN以及SNN中也被广泛使用，例如 `Low-activity supervised convolutional spiking neural networks applied to speech commands recognition <https://arxiv.org/abs/2011.06846>`_ 通过逐层计算的方式来获取每一层在所有时刻的输出，然后在时域上进行卷积，代码可见于 https://github.com/romainzimmer/s2net。
 
-`逐步传播` 与 `逐层传播` 遍历计算图的顺序不同，但计算的结果是完全相同的。但 `逐层传播` 具有更大的并行性，因为当某一层是无状态的层，例如 :class:`torch.nn.Linear`，我们可以将 ``shape=[T, batch_size, ...]`` 的输入拼接成 ``shape=[T * batch_size, ...]`` 后，再送入这一层计算，避免在时间上的循环。:class:`spikingjelly.clock_driven.layer.SeqToANNContainer` 提供了这样的功能，示例代码如下：
+`逐步传播` 与 `逐层传播` 遍历计算图的顺序不同，但计算的结果是完全相同的。但 `逐层传播` 具有更大的并行性，因为当某一层是无状态的层，例如 :class:`torch.nn.Linear`，`逐步传播` 会按照下述方式计算：
+
+.. code-block:: python
+
+    for t in range(T):
+        y[t] = fc(x[t])  # x.shape=[T, batch_size, in_features]
+
+而 `逐层传播` 则可以并行计算：
+
+.. code-block:: python
+
+    y = fc(x)  # x.shape=[T, batch_size, in_features]
+
+对于无状态的层，我们可以将 ``shape=[T, batch_size, ...]`` 的输入拼接成 ``shape=[T * batch_size, ...]`` 后，再送入这一层计算，避免在时间上的循环。:class:`spikingjelly.clock_driven.layer.SeqToANNContainer` 在 ``forward`` 函数中进行了这样的实现。我们可以直接使用这个模块：
 
 .. code-block:: python
 
