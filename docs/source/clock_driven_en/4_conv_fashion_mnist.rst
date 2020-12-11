@@ -190,9 +190,9 @@ additional calculations .
 
 Training network
 ----------------------------
-The complete code is located in `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/conv_fashion_mnist.py>`_.
+The complete code is located in :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`.
 It can also be run directly from the command line.The network with the highest accuracy of the test set during the
-training process will be saved in the same level directory of the ``tensorboard`` log file.
+training process will be saved in the same level directory of the ``tensorboard`` log file. The server for training this network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU.
 
 .. code-block:: python
 
@@ -203,7 +203,7 @@ training process will be saved in the same level directory of the ``tensorboard`
     输入保存Fashion MNIST数据集的位置，例如“./”
      input root directory for saving Fashion MNIST dataset, e.g., "./": ./fmnist
     输入batch_size，例如“64”
-     input batch_size, e.g., "64": 64
+     input batch_size, e.g., "64": 128
     输入学习率，例如“1e-3”
      input learning rate, e.g., "1e-3": 1e-3
     输入仿真时长，例如“8”
@@ -214,6 +214,30 @@ training process will be saved in the same level directory of the ``tensorboard`
      input training epochs, e.g., "100": 100
     输入保存tensorboard日志文件的位置，例如“./”
      input root directory for saving tensorboard logs, e.g., "./": ./logs_conv_fashion_mnist
+        saving net...
+    saved
+    epoch=0, t_train=40.46362781524658, t_test=2.511213207617402, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8731, train_times=468
+    saving net...
+    saved
+    epoch=1, t_train=40.72360018547624, t_test=2.515443243086338, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8876, train_times=936
+    saving net...
+    saved
+    epoch=2, t_train=40.710858509875834, t_test=2.5179235814139247, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8963, train_times=1404
+    saving net...
+    saved
+    epoch=3, t_train=40.72751880064607, t_test=2.525080183520913, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9042, train_times=1872
+    saving net...
+    saved
+    epoch=4, t_train=40.646613153629005, t_test=2.5134582007303834, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9071, train_times=2340
+    saving net...
+    saved
+    epoch=5, t_train=40.66655214317143, t_test=2.512007991783321, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.912, train_times=2808
+    saving net...
+    ...
+    epoch=96, t_train=40.746428611688316, t_test=2.5195972230285406, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9445, train_times=45396
+    epoch=97, t_train=40.65268817264587, t_test=2.5121205784380436, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9445, train_times=45864
+    epoch=98, t_train=40.58712053950876, t_test=2.514008779078722, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9445, train_times=46332
+    epoch=99, t_train=40.607772478833795, t_test=2.515779433771968, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9445, train_times=46800
 
 After running 100 rounds of training, the correct rates on the training batch and test set are as follows:
 
@@ -223,7 +247,7 @@ After running 100 rounds of training, the correct rates on the training batch an
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
     :width: 100%
 
-After training for 100 epochs, the highest test set accuracy rate can reach 94.3%, which is a very good performance for
+After training for 100 epochs, the highest test set accuracy rate can reach 94.45%, which is a very good performance for
 SNN, only slightly lower than the use of Normalization, random horizontal flip, random vertical flip, random translation
 in the BenchMark of `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_, ResNet18 of random rotation has a 94.9% correct rate.
 

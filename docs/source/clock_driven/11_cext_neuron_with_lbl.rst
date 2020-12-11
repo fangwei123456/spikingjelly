@@ -59,22 +59,22 @@ CUDA加速的神经元
         print(T, cal_forward_backward_t(lif, x, 1024), cal_forward_backward_t(lif_cuda, x, 1024),
               cal_forward_backward_t(lif_cuda_tt, x, 1024))
 
-实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080` 的GPU。运行结果如下：
+实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。运行结果如下：
 
 .. code-block:: bash
 
     forward
-    8 1.6701502286196046 0.44249044822208816 0.05478178627527086
-    16 3.237690732930787 0.8110604935609445 0.0550979889339942
-    32 6.348427949433244 1.538134750262543 0.055016983878886094
-    64 12.587608936428296 2.986507736295607 0.05504425234903465
-    128 25.135914108886936 5.8784374023161945 0.06540481217598426
+    8 1.2027182438032469 0.31767665768711595 0.03739786916412413
+    16 2.3161539784268825 0.5838696361024631 0.038602679524046835
+    32 4.504981370700989 1.1035655998057337 0.03964870666095521
+    64 8.957112172538473 2.1011443768657045 0.04390397953102365
+    128 17.928721825228422 4.223306857966236 0.057996856412501074
     forward and backward
-    8 4.832853653624625 1.8915147916231945 0.33051693708330276
-    16 9.511920674867724 3.5159952340109157 0.32920849980655476
-    32 18.870338058150082 6.747562522832595 0.32978799936245196
-    64 38.79206964529658 13.195514010476472 0.36697773248306476
-    128 75.05335126097634 27.016243242997007 0.3330824065415072
+    8 4.733593518722046 1.3954817559351795 0.2895549105232931
+    16 7.594537261866208 3.1417532363775535 0.5625875119221746
+    32 15.621844995621359 5.426582512882305 0.5158364547241945
+    64 32.04859962170303 11.180313862496405 0.28680579453066457
+    128 60.52553526205884 20.54842408415425 0.2843772117557819
 
 将结果画成柱状图：
 
@@ -85,3 +85,79 @@ CUDA加速的神经元
     :width: 100%
 
 可以发现，使用CUDA封装操作的 ``spikingjelly.cext.neuron`` 速度明显快于原生PyTorch的神经元实现。
+
+与原生PyTorch对比
+-----------------------
+现在让我们用CUDA封装的多步LIF神经元，重新实现 :doc:`../clock_driven/4_conv_fashion_mnist` 中的网络，并进行速度对比。我们只需要更改一下网络结构，无需进行其他的改动：
+
+.. code-block:: python
+
+    class Net(nn.Module):
+        def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
+            super().__init__()
+            self.T = T
+
+            self.static_conv = nn.Sequential(
+                nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
+                nn.BatchNorm2d(128),
+            )
+
+            self.conv = nn.Sequential(
+                cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+                layer.SeqToANNContainer(
+                    nn.Sequential(
+                        nn.MaxPool2d(2, 2),  # 14 * 14
+                        nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+                        nn.BatchNorm2d(128),
+                    )
+                ),
+                cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+            )
+            self.fc = nn.Sequential(
+                layer.SeqToANNContainer(
+                    nn.Sequential(
+                        nn.MaxPool2d(2, 2),  # 7 * 7
+                        nn.Flatten(),
+                    )
+                ),
+                layer.MultiStepDropout(0.5),
+                layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False)),
+                cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+                layer.MultiStepDropout(0.5),
+                nn.Linear(128 * 3 * 3, 128, bias=False),
+                cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+                layer.SeqToANNContainer(nn.Linear(128, 10, bias=False)),
+                cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0)
+            )
+
+
+        def forward(self, x):
+            x_seq = self.static_conv(x).unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
+            # [N, C, H, W] -> [1, N, C, H, W] -> [T, N, C, H, W]
+
+            out_spikes_counter = self.fc(self.conv(x_seq)).sum(0)
+            return out_spikes_counter / self.T
+
+完整的代码可见于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist_cuda_lbl`。我们按照与 :doc:`../clock_driven/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU）来运行，结果如下：
+
+.. code-block:: bash
+
+    saving net...
+    saved
+    epoch=0, t_train=25.856198568828404, t_test=1.4624664345756173, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8714, train_times=468
+    saving net...
+    saved
+    epoch=1, t_train=25.112569484859705, t_test=1.46216244623065, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8864, train_times=936
+    saving net...
+    saved
+    epoch=2, t_train=25.061289750039577, t_test=1.4643053775653243, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9002, train_times=1404
+    saving net...
+    saved
+    ...
+    epoch=95, t_train=25.15247030183673, t_test=1.466654078103602, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=44928
+    epoch=96, t_train=25.165269726887345, t_test=1.4630440892651677, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=45396
+    epoch=97, t_train=25.11146777868271, t_test=1.4702007714658976, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=45864
+    epoch=98, t_train=25.194553862325847, t_test=1.4670541435480118, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=46332
+    epoch=99, t_train=25.034918897785246, t_test=1.4680998837575316, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9416, train_times=46800
+
+最终的正确率是94.16%，与 :doc:`../clock_driven/4_conv_fashion_mnist` 中的94.45%相差无几，性能的差异来源于网路参数的随机初始化。在日志中记录了训练和测试所需要的时间，我们可以发现，训练耗时为原始网络的61.65%，推理耗时为原始网络的58%，速度有了明显提升。
