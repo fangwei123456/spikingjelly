@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from spikingjelly.clock_driven import neuron, functional, surrogate, layer
+from spikingjelly.clock_driven import functional, surrogate, layer
+from spikingjelly.cext import neuron as cext_neuron
 from torch.utils.tensorboard import SummaryWriter
 import sys
 import time
@@ -15,6 +16,7 @@ torch.manual_seed(_seed_)  # use torch.manual_seed() to seed the RNG for all dev
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(_seed_)
+
 class Net(nn.Module):
     def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
         super().__init__()
@@ -26,73 +28,76 @@ class Net(nn.Module):
         )
 
         self.conv = nn.Sequential(
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            nn.MaxPool2d(2, 2),  # 14 * 14
-
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            nn.MaxPool2d(2, 2)  # 7 * 7
-
+            cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+            layer.SeqToANNContainer(
+                nn.Sequential(
+                    nn.MaxPool2d(2, 2),  # 14 * 14
+                    nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+                    nn.BatchNorm2d(128),
+                )
+            ),
+            cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
         )
         self.fc = nn.Sequential(
-            nn.Flatten(),
-            layer.Dropout(0.5),
-            nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            layer.Dropout(0.5),
+            layer.SeqToANNContainer(
+                nn.Sequential(
+                    nn.MaxPool2d(2, 2),  # 7 * 7
+                    nn.Flatten(),
+                )
+            ),
+            layer.MultiStepDropout(0.5),
+            layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False)),
+            cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+            layer.MultiStepDropout(0.5),
             nn.Linear(128 * 3 * 3, 128, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            nn.Linear(128, 10, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+            layer.SeqToANNContainer(nn.Linear(128, 10, bias=False)),
+            cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0)
         )
 
 
     def forward(self, x):
-        x = self.static_conv(x)
+        x_seq = self.static_conv(x).unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
+        # [N, C, H, W] -> [1, N, C, H, W] -> [T, N, C, H, W]
 
-        out_spikes_counter = self.fc(self.conv(x))
-        for t in range(1, self.T):
-            out_spikes_counter += self.fc(self.conv(x))
-
+        out_spikes_counter = self.fc(self.conv(x_seq)).sum(0)
         return out_spikes_counter / self.T
 def main():
     '''
-    * :ref:`API in English <conv_fashion_mnist.main-en>`
+    * :ref:`API in English <conv_fashion_mnist_cuda_lbl.main-en>`
 
-    .. _conv_fashion_mnist.main-cn:
+    .. _conv_fashion_mnist_cuda_lbl.main-cn:
 
     :return: None
 
-    使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。会将训练过
-    程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。这个目录的位置，是在运行 ``main()``
-    函数时由用户输入的。
+    :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist` 的逐层传播版本。
 
     训练100个epoch，训练batch和测试集上的正确率如下：
 
-    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+    .. image:: ./_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
         :width: 100%
 
-    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+    .. image:: ./_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.*
         :width: 100%
 
-    * :ref:`中文API <conv_fashion_mnist.main-cn>`
+    * :ref:`中文API <conv_fashion_mnist_cuda_lbl.main-cn>`
 
-    .. _conv_fashion_mnist.main-en:
+    .. _conv_fashion_mnist_cuda_lbl.main-en:
 
-    The network with Conv-FC structure for classifying Fashion MNIST. This function initials the network, starts training
-    and shows accuracy on test dataset. The net with the max accuracy on test dataset will be saved in
-    the root directory for saving ``tensorboard`` logs, which is inputted by user when running the ``main()``  function.
+    The layer-by-layer version of :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`.
 
     After 100 epochs, the accuracy on train batch and test dataset is as followed:
 
-    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+    .. image:: ./_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
         :width: 100%
 
-    .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+    .. image:: ./_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.*
         :width: 100%
     '''
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
+    device = input('输入运行的GPU，例如“cuda:0”\n input GPU index, e.g., "cuda:0": ')
+    if device == 'cpu':
+        print("conv_fashion_mnist_cuda_lbl only supports GPU.")
+        exit()
     dataset_dir = input('输入保存Fashion MNIST数据集的位置，例如“./”\n input root directory for saving Fashion MNIST dataset, e.g., "./": ')
     batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
     learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
@@ -100,6 +105,14 @@ def main():
     tau = float(input('输入LIF神经元的时间常数tau，例如“2.0”\n input membrane time constant, tau, for LIF neurons, e.g., "2.0": '))
     train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
     log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+    # device = 'cuda:0'
+    # dataset_dir = './'
+    # batch_size = 128
+    # learning_rate = 1e-3
+    # T = 8
+    # tau = 2.0
+    # train_epoch = 100
+    # log_dir = './logs2'
 
 
     writer = SummaryWriter(log_dir)
@@ -178,7 +191,11 @@ def main():
                 torch.save(net, log_dir + '/net_max_acc.pt')
                 print('saved')
 
-        print('epoch={}, t_train={}, t_test={}, device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(epoch, t_train, t_test, device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy, train_times))
+        print(
+            'epoch={}, t_train={}, t_test={}, device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
+                epoch, t_train, t_test, device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy,
+                train_times))
+
 
 if __name__ == '__main__':
     main()
