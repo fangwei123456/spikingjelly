@@ -1,4 +1,4 @@
-前向传播的方式
+传播模式
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
@@ -98,7 +98,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 前向传播的计算图的构建顺序如下所示：
 
-.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/step-by-step.png
+.. image:: ../_static/tutorials/clock_driven/10_propagation_pattern/step-by-step.png
     :width: 100%
 
 对于SNN以及RNN，前向传播既发生在空域也发生在时域，`逐步传播` 逐步计算出整个网络在不同时刻的状态，我们可以很容易联想到，还可以使用另一种顺序来计算：逐层计算出每一层网络在所有时刻的状态。例如下面这份代码（假定 ``M0, M1, M2`` 都是多步传播的模块）：
@@ -111,7 +111,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 前向传播的计算图的构建顺序如下所示：
 
-.. image:: ../_static/tutorials/clock_driven/10_forward_pattern/layer-by-layer.png
+.. image:: ../_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png
     :width: 100%
 
 我们称这种方式为 `逐层传播(layer-by-layer)`。`逐层传播` 在RNN以及SNN中也被广泛使用，例如 `Low-activity supervised convolutional spiking neural networks applied to speech commands recognition <https://arxiv.org/abs/2011.06846>`_ 通过逐层计算的方式来获取每一层在所有时刻的输出，然后在时域上进行卷积，代码可见于 https://github.com/romainzimmer/s2net。

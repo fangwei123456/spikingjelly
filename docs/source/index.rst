@@ -54,7 +54,7 @@
     /clock_driven/7_a2c_cart_pole
     /clock_driven/8_ppo_cart_pole
     /clock_driven/9_spikingLSTM_text
-    /clock_driven/10_forward_pattern
+    /clock_driven/10_propagation_pattern
     /clock_driven/11_cext_neuron_with_lbl
 
 
@@ -136,7 +136,8 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /clock_driven_en/7_a2c_cart_pole
     /clock_driven_en/8_ppo_cart_pole
     /clock_driven_en/9_spikingLSTM_text
-    /clock_driven_en/10_forward_pattern
+    /clock_driven_en/10_propagation_pattern
+    /clock_driven_en/11_cext_neuron_with_lbl
 
 
 

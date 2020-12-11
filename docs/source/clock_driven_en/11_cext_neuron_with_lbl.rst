@@ -1,11 +1,11 @@
-使用CUDA增强的神经元与逐层传播进行加速
-======================================
+Accelerate with CUDA-Enhanced Neuron and Layer-by-Layer Propagation
+==================================================================
 
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 
-CUDA加速的神经元
+CUDA-Enhanced Neuron
 -----------------------
-``spikingjelly.cext.neuron`` 中的神经元与 ``spikingjelly.clock_driven.neuron`` 中的同名神经元，在前向传播和反向传播时的计算结果完全相同。但 ``spikingjelly.cext.neuron`` 将各种运算都封装到了一个CUDA内核；``spikingjelly.clock_driven.neuron`` 则是使用PyTorch来实现神经元，每一个Python函数都需要调用一次相应的CUDA后端，这种频繁的调用存在很大的开销。现在让我们通过一个简单的实验，来对比两个模块中LIF神经元的运行耗时：
+The neuron sharing the same name in ``spikingjelly.cext.neuron`` and  ``spikingjelly.clock_driven.neuron`` do the same calculation when forward and backward. However, ``spikingjelly.cext.neuron`` fuses operations in one CUDA kernel, while ``spikingjelly.clock_driven.neuron`` uses PyTorch functions to perform operations and each PyTorch function needs to call a CUDA function, which causes grate overhead for calling CUDA kernels. Let us run a simple code to compare LIF neurons in both module:
 
 .. code-block:: python
 
@@ -59,7 +59,7 @@ CUDA加速的神经元
         print(T, cal_forward_backward_t(lif, x, 1024), cal_forward_backward_t(lif_cuda, x, 1024),
               cal_forward_backward_t(lif_cuda_tt, x, 1024))
 
-实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。运行结果如下：
+The code is running at a Ubuntu server with `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU. The outputs are:
 
 .. code-block:: bash
 
@@ -76,7 +76,7 @@ CUDA加速的神经元
     64 32.04859962170303 11.180313862496405 0.28680579453066457
     128 60.52553526205884 20.54842408415425 0.2843772117557819
 
-将结果画成柱状图：
+We plot the results in a bar chart:
 
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_f.*
     :width: 100%
@@ -84,11 +84,11 @@ CUDA加速的神经元
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.*
     :width: 100%
 
-可以发现，使用CUDA封装操作的 ``spikingjelly.cext.neuron`` 速度明显快于原生PyTorch的神经元实现。
+It can be found that neurons in ``spikingjelly.cext.neuron`` are faster than naive PyTorch neuron.
 
-加速深度脉冲神经网络
+Accelerate Deep SNNs
 -----------------------
-现在让我们用CUDA封装的多步LIF神经元，重新实现 :doc:`../clock_driven/4_conv_fashion_mnist` 中的网络，并进行速度对比。我们只需要更改一下网络结构，无需进行其他的改动：
+Now let us use the CUDA-Enhanced Multi-Step neuron to re-implement the network in :doc:`../clock_driven_en/4_conv_fashion_mnist` and compare their speeds. There is no need to modify the training codes. We can only change the network's codes:
 
 .. code-block:: python
 
@@ -138,7 +138,7 @@ CUDA加速的神经元
             out_spikes_counter = self.fc(self.conv(x_seq)).sum(0)
             return out_spikes_counter / self.T
 
-完整的代码可见于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist_cuda_lbl`。我们按照与 :doc:`../clock_driven/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU）来运行，结果如下：
+The fully codes are available at :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist_cuda_lbl`. Run this example with the same arguments and devices as those in :doc:`../clock_driven_en/4_conv_fashion_mnist`. The outputs are:
 
 .. code-block:: bash
 
@@ -165,7 +165,7 @@ CUDA加速的神经元
     epoch=98, t_train=26.256993867456913, t_test=1.5093903196975589, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46332
     epoch=99, t_train=26.200945735909045, t_test=1.4959839908406138, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46800
 
-最终的正确率是94.37%，与 :doc:`../clock_driven/11_cext_neuron_with_lbl` 中的94.4%相差无几，两者在训练过程中的训练batch正确率和测试集正确率曲线如下：
+The highest accuracy on test dataset is 94.37%, which is very close to 94.4% in :doc:`../clock_driven/11_cext_neuron_with_lbl`. The accuracy curves on training batch and test dataset during training are as followed:
 
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
     :width: 100%
@@ -173,4 +173,4 @@ CUDA加速的神经元
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.*
     :width: 100%
 
-两个网络使用了完全相同的随机种子，最终的性能略有差异，可能是CUDA和PyTorch的计算数值误差导致的。在日志中记录了训练和测试所需要的时间，我们可以发现，训练耗时为原始网络的64%，推理耗时为原始网络的58%，速度有了明显提升。
+In fact, we set an identical seed in both examples, but get a different results, which maybe caused by the numerical errors between CUDA and PyTorch functions. The logs also record the execution time of training and testing. It can be found that the training execution time of the SNN with CUDA-Enhanced neurons and Layer-by-Layer propagation is 64% of the naive PyTorch SNN, and the testing execution time is 58% of the naive PyTorch SNN.

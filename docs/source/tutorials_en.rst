@@ -13,4 +13,5 @@ Tutorials
     /clock_driven_en/7_a2c_cart_pole
     /clock_driven_en/8_ppo_cart_pole
     /clock_driven_en/9_spikingLSTM_text
-    /clock_driven_en/10_forward_pattern
+    /clock_driven_en/10_propagation_pattern
+    ./clock_driven_en/11_cext_neuron_with_lbl
