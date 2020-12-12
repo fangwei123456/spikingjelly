@@ -743,9 +743,12 @@ class DropConnectLinear(nn.Module):
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
 
 class MultiStepContainer(nn.Module):
-    def __init__(self, module: nn.Module):
+    def __init__(self, *args):
         super().__init__()
-        self.module = module
+        if len(args) == 1:
+            self.module = args[0]
+        else:
+            self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
         '''
@@ -765,21 +768,51 @@ class MultiStepContainer(nn.Module):
             self.module.reset()
 
 class SeqToANNContainer(nn.Module):
-    def __init__(self, module: nn.Module):
+    def __init__(self, *args):
         '''
-        :param module:
-        :type module:
+        * :ref:`API in English <SeqToANNContainer.__init__-en>`
+
+        .. _SeqToANNContainer.__init__-cn:
+
+        :param *args: 无状态的单个或多个ANN网络层
+
+        包装无状态的ANN以处理序列数据的包装器。``shape=[T, batch_size, ...]`` 的输入会被拼接成 ``shape=[T * batch_size, ...]`` 再送入被包装的模块。输出结果会被再拆成 ``shape=[T, batch_size, ...]``。
+
+        示例代码
 
         .. code-block:: python
             with torch.no_grad():
                 T = 16
                 batch_size = 8
                 x = torch.rand([T, batch_size, 4])
-                fc = SeqToANNContainer(nn.Linear(4, 2))
+                fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
                 print(fc(x).shape)
+                # torch.Size([16, 8, 3])
+
+        * :ref:`中文API <SeqToANNContainer.__init__-cn>`
+
+        .. _SeqToANNContainer.__init__-en:
+
+        :param *args: one or many stateless ANN layers
+
+        A container that contain sataeless ANN to handle sequential data. This container will concatenate inputs ``shape=[T, batch_size, ...]`` at time dimension as ``shape=[T * batch_size, ...]``, and send the reshaped inputs to contained ANN. The output will be split to ``shape=[T, batch_size, ...]``.
+
+        Examples:
+
+        .. code-block:: python
+            with torch.no_grad():
+                T = 16
+                batch_size = 8
+                x = torch.rand([T, batch_size, 4])
+                fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
+                print(fc(x).shape)
+                # torch.Size([16, 8, 3])
         '''
         super().__init__()
-        self.module = module
+        if len(args) == 1:
+            self.module = args[0]
+        else:
+            self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
         '''

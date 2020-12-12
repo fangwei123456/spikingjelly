@@ -105,20 +105,16 @@ Now let us use the CUDA-Enhanced Multi-Step neuron to re-implement the network i
             self.conv = nn.Sequential(
                 cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
                 layer.SeqToANNContainer(
-                    nn.Sequential(
                         nn.MaxPool2d(2, 2),  # 14 * 14
                         nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
                         nn.BatchNorm2d(128),
-                    )
                 ),
                 cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
             )
             self.fc = nn.Sequential(
                 layer.SeqToANNContainer(
-                    nn.Sequential(
                         nn.MaxPool2d(2, 2),  # 7 * 7
                         nn.Flatten(),
-                    )
                 ),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False)),

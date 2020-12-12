@@ -138,13 +138,13 @@ For a stateless layer, we can concatenate inputs ``shape=[T, batch_size, ...]`` 
         T = 16
         batch_size = 8
         x = torch.rand([T, batch_size, 4])
-        fc = layer.SeqToANNContainer(nn.Linear(4, 2))
+        fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
         print(fc(x).shape)
 
 The outputs are
 
 .. code-block:: bash
 
-    torch.Size([16, 8, 2])
+    torch.Size([16, 8, 3])
 
 The outputs have ``shape=[T, batch_size, ...]`` and can be directly fed to the next layer.
