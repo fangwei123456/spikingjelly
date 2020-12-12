@@ -165,7 +165,7 @@ The fully codes are available at :class:`spikingjelly.clock_driven.examples.conv
     epoch=98, t_train=26.256993867456913, t_test=1.5093903196975589, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46332
     epoch=99, t_train=26.200945735909045, t_test=1.4959839908406138, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46800
 
-The highest accuracy on test dataset is 94.37%, which is very close to 94.4% in :doc:`../clock_driven/11_cext_neuron_with_lbl`. The accuracy curves on training batch and test dataset during training are as followed:
+The highest accuracy on test dataset is 94.37%, which is very close to 94.4% in :doc:`../clock_driven_en/11_cext_neuron_with_lbl`. The accuracy curves on training batch and test dataset during training are as followed:
 
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
     :width: 100%
