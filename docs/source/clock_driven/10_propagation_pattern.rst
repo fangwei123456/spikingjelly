@@ -137,13 +137,13 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
         T = 16
         batch_size = 8
         x = torch.rand([T, batch_size, 4])
-        fc = layer.SeqToANNContainer(nn.Linear(4, 2))
+        fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
         print(fc(x).shape)
 
 输出为：
 
 .. code-block:: bash
 
-    torch.Size([16, 8, 2])
+    torch.Size([16, 8, 3])
 
 输出仍然满足 ``shape=[T, batch_size, ...]``，可以直接送入到下一层网络。
