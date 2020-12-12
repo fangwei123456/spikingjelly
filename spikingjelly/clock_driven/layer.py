@@ -249,8 +249,8 @@ class Dropout(nn.Module):
         self.p = p
 
     def extra_repr(self):
-        return 'p={}, dropout_spikes={}'.format(
-            self.p, self.dropout_spikes
+        return 'p={}'.format(
+            self.p
         )
 
     def create_mask(self, x: torch.Tensor):
