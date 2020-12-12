@@ -1,6 +1,7 @@
 import os
-from typing import Tuple
+from typing import Callable, Tuple, Dict, Optional
 
+import torch
 import torchaudio
 from torch.utils.data import Dataset
 from torch import Tensor
@@ -9,7 +10,9 @@ from torchaudio.datasets.utils import (
     extract_archive,
     walk_files
 )
+from torchvision import transforms
 from torchvision.datasets.utils import verify_str_arg
+import numpy as np
 
 FOLDER_IN_ARCHIVE = "SpeechCommands"
 URL = "speech_commands_v0.02"
@@ -41,14 +44,20 @@ def load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str,
 
 class SPEECHCOMMANDS(Dataset):
     def __init__(self,
+                 label_dict: Dict,
                  root: str,
-                 url: str = URL,
-                 split: str = "train",
-                 folder_in_archive: str = FOLDER_IN_ARCHIVE,
-                 download: bool = False) -> None:
+                 transform: Optional[Callable] = None,
+                 url: Optional[str] = URL,
+                 split: Optional[str] = "train",
+                 folder_in_archive: Optional[str] = FOLDER_IN_ARCHIVE,
+                 download: Optional[bool] = False) -> None:
         '''
+        :param label_dict: 标签与类别的对应字典
+        :type label_dict: Dict
         :param root: 数据集的根目录
         :type root: str
+        :param transform: A function/transform that takes in a raw audio
+        :type transform: Callable, optional
         :param url: 数据集版本，默认为v0.02
         :type url: str, optional
         :param split: 数据集划分，可以是 ``"train", "test", "val"``，默认为 ``"train"``
@@ -69,9 +78,13 @@ class SPEECHCOMMANDS(Dataset):
         #. 非关键词，可以视为干扰词，共10个："Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
 
         v0.01版本包含共计30类，64,727个音频片段，v0.02版本包含共计35类，105,829个音频片段。更详细的介绍参见前述论文，以及数据集的README。
+
+        代码实现基于torchaudio并扩充了功能，同时也参考了 `原论文的实现 <https://github.com/romainzimmer/s2net/blob/b073f755e70966ef133bbcd4a8f0343354f5edcd/data.py>`_。
         '''
 
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
+        self.label_dict = label_dict
+        self.transform = transform
         
         if url in [
             "speech_commands_v0.01",
@@ -129,6 +142,11 @@ class SPEECHCOMMANDS(Dataset):
 
                 print("Training list generated!")
 
+            labels = [self.label_dict.get(os.path.split(relpath)[0]) for relpath in self._walker]
+            label_weights = 1. / np.unique(labels, return_counts=True)[1]
+            label_weights /= np.sum(label_weights)
+            self.weights = torch.DoubleTensor([label_weights[label] for label in labels])
+
         else:
             if self.split == "val":
                 record = os.path.join(self._path, VAL_RECORD)
@@ -137,9 +155,17 @@ class SPEECHCOMMANDS(Dataset):
             with open(record, 'r') as f:
                 self._walker = list([line.rstrip('\n') for line in f])
 
-    def __getitem__(self, n: int) -> Tuple[Tensor, int, str, str, int]:
+    def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         fileid = self._walker[n]
-        return load_speechcommands_item(fileid, self._path)
+        waveform, sample_rate, label, speaker_id, utterance_number = load_speechcommands_item(fileid, self._path)
+        m = waveform.abs().max()
+        if m > 0:
+            waveform /= m
+        if self.transform is not None:
+            waveform = self.transform(waveform)
+
+        label = self.label_dict.get(label)
+        return waveform, label
 
     def __len__(self) -> int:
         return len(self._walker)
