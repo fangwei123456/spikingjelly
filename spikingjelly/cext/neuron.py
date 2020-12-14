@@ -733,9 +733,10 @@ def LIF_bptt(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_h: t
 
     '''
     return _C_neuron.LIF_bptt(grad_spike, grad_v_next, grad_s_to_h, grad_v_to_h, reciprocal_tau)
-
+from torch.cuda import amp
 class LIFStep(torch.autograd.Function):
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau):
         if v_reset is None:
             raise NotImplementedError
@@ -747,12 +748,14 @@ class LIFStep(torch.autograd.Function):
         return spike, v_next
 
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def backward(ctx, grad_spike, grad_v_next):
         grad_x, grad_v = _C_neuron.LIF_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.reciprocal_tau)
         return grad_x, grad_v, None, None, None, None, None, None
 
 class LIFMultiStep(torch.autograd.Function):
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau):
         if v_reset is None:
             raise NotImplementedError
@@ -763,12 +766,14 @@ class LIFMultiStep(torch.autograd.Function):
         return spike_seq, v_next
 
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def backward(ctx, grad_spike_seq, grad_v_next):
         grad_x, grad_v = _C_neuron.LIF_bptt(grad_spike_seq, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1], ctx.reciprocal_tau)
         return grad_x, grad_v, None, None, None, None, None, None
 
 class IFStep(torch.autograd.Function):
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index):
         if v_reset is None:
             raise NotImplementedError
@@ -778,12 +783,14 @@ class IFStep(torch.autograd.Function):
         return spike, v_next
 
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def backward(ctx, grad_spike, grad_v_next):
         grad_x, grad_v = _C_neuron.IF_backward(grad_spike, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1])
         return grad_x, grad_v, None, None, None, None, None
 
 class IFMultiStep(torch.autograd.Function):
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def forward(ctx, x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index):
         if v_reset is None:
             raise NotImplementedError
@@ -793,6 +800,7 @@ class IFMultiStep(torch.autograd.Function):
         return spike_seq, v_next
 
     @staticmethod
+    @amp.custom_fwd(cast_inputs=torch.float32)
     def backward(ctx, grad_spike_seq, grad_v_next):
         grad_x, grad_v = _C_neuron.IF_bptt(grad_spike_seq, grad_v_next, ctx.saved_tensors[0], ctx.saved_tensors[1])
         return grad_x, grad_v, None, None, None, None, None
