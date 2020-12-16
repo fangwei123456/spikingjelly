@@ -27,7 +27,11 @@ __device__ const grad_surrogate_function grad_surrogate_function_pointer[2] = {
 
 __forceinline__  __device__ half grad_atan_half(const half & alpha, const half & x)
 {
+  #if __CUDACC_VER_MAJOR__ >= 11
   const half M_PI_2__alpha__x = __hmul(__hmul(__double2half(M_PI_2), alpha), x);
+  #else
+  const half M_PI_2__alpha__x = __hmul(__hmul(__float2half((float) M_PI_2), alpha), x);
+  #endif
   return __hdiv(__hdiv(alpha, __float2half(2.0f)), __hfma(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half(1.0f)));
 }
 
