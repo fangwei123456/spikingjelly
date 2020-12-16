@@ -112,15 +112,14 @@ std::vector<at::Tensor> LIF_hard_reset_forward_with_grad(torch::Tensor & x, torc
   const int threads = THREADS;
   const int blocks = (size + threads - 1) / threads;
   CHECK_CUDA_OPERATION(cudaSetDevice(x.get_device()));
-  if (x.scalar_type() == c10::ScalarType::Float)
-  {
-    LIF_hard_reset_forward_with_grad_cuda_kernel<<<blocks, threads>>>(
-      x.data_ptr<float>(), v.data_ptr<float>(), spike.data_ptr<float>(), v_next.data_ptr<float>(),
-      grad_s_to_h.data_ptr<float>(), grad_v_to_h.data_ptr<float>(),
-      v_th, v_reset, size,
-      alpha, detach_reset, grad_surrogate_function_index,
-      reciprocal_tau);
-  }
+
+  LIF_hard_reset_forward_with_grad_cuda_kernel<<<blocks, threads>>>(
+    x.data_ptr<float>(), v.data_ptr<float>(), spike.data_ptr<float>(), v_next.data_ptr<float>(),
+    grad_s_to_h.data_ptr<float>(), grad_v_to_h.data_ptr<float>(),
+    v_th, v_reset, size,
+    alpha, detach_reset, grad_surrogate_function_index,
+    reciprocal_tau);
+
   return {spike, v_next, grad_s_to_h, grad_v_to_h};
 
 }
