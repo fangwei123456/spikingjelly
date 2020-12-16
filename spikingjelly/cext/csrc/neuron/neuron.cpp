@@ -4,7 +4,7 @@
 #include "neuron_def.h"
 
 //LIF hard reset----------------------------------------------------
-std::vector<at::Tensor> LIF_hard_reset_forward(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset,
+std::vector<at::Tensor> LIF_hard_reset_forward(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset, 
     const float & reciprocal_tau);
 
 std::vector<at::Tensor> LIF_hard_reset_forward_with_grad(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset,
@@ -19,17 +19,17 @@ std::vector<at::Tensor> IF_hard_reset_forward_with_grad(torch::Tensor & x, torch
 
 
 //LIF hard reset fptt----------------------------------------------------
-std::vector<at::Tensor> LIF_hard_reset_fptt(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset,
+std::vector<at::Tensor> LIF_hard_reset_fptt(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset, 
     const float & reciprocal_tau);
-
-std::vector<at::Tensor> LIF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset,
+    
+std::vector<at::Tensor> LIF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset, 
     const float & alpha, const bool & detach_reset, const int & grad_surrogate_function_index,
     const float & reciprocal_tau);
 
 //IF hard reset fptt----------------------------------------------------
 std::vector<at::Tensor> IF_hard_reset_fptt(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset);
 
-std::vector<at::Tensor> IF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset,
+std::vector<at::Tensor> IF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset, 
     const float & alpha, const bool & detach_reset, const int & grad_surrogate_function_index);
 
 //LIF bp----------------------------------------------------
