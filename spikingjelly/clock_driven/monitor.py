@@ -4,10 +4,31 @@ from torch import nn
 from spikingjelly.clock_driven import neuron
 from spikingjelly.cext import neuron as cext_neuron
 
-from typing import Optional
-
 class Monitor:
-    def __init__(self, net: nn.Module, device: Optional[str] = None, backend: Optional[str] = 'numpy'):
+    def __init__(self, net: nn.Module, device: str = None, backend: str = 'numpy'):
+        '''
+        * :ref:`API in English <Monitor.__init__-en>`
+
+        .. _Monitor.__init__-cn:
+
+        :param net: 要监视的网络
+        :type net: nn.Module
+        :param device: 监视数据的存储和处理的设备，仅当backend为 ``'torch'`` 时有效。可以为 ``'cpu', 'cuda', 'cuda:0'`` 等，默认为 ``None``
+        :type device: str, optional
+        :param backend: 监视数据的处理后端。可以为 ``'torch', 'numpy'`` ，默认为 ``'numpy'``
+        :type backend: str, optional
+
+        * :ref:`中文API <Monitor.__init__-cn>`
+
+        .. _Monitor.__init__-en:
+
+        :param net: Network to be monitored
+        :type net: nn.Module
+        :param device: Device carrying and processing monitored data. Only take effect when backend is set to ``'torch'``. Can be ``'cpu', 'cuda', 'cuda:0'``, et al., defaults to ``None``
+        :type device: str, optional
+        :param backend: Backend processing monitored data, can be ``'torch', 'numpy'``, defaults to ``'numpy'``
+        :type backend: str, optional
+        '''
     
         super().__init__()
         self.module_dict = dict()
@@ -24,6 +45,19 @@ class Monitor:
             self.device = torch.device(device)
 
     def enable(self):
+        '''
+        * :ref:`API in English <Monitor.enable-en>`
+
+        .. _Monitor.enable-cn:
+
+        启用Monitor的监视功能，开始记录数据
+
+        * :ref:`中文API <Monitor.enable-cn>`
+
+        .. _Monitor.enable-en:
+
+        Enable Monitor. Start recording data.
+        '''
         self.handle = dict.fromkeys(self.module_dict, None)
         self.v = dict.fromkeys(self.module_dict, None)
         self.s = dict.fromkeys(self.module_dict, None)
@@ -40,6 +74,19 @@ class Monitor:
         self.reset()
 
     def disable(self):
+        '''
+        * :ref:`API in English <Monitor.disable-en>`
+
+        .. _Monitor.disable-cn:
+
+        禁用Monitor的监视功能，不再记录数据
+
+        * :ref:`中文API <Monitor.disable-cn>`
+
+        .. _Monitor.disable-en:
+
+        Disable Monitor. Stop recording data.
+        '''
         for name, module in self.net.named_modules():
             if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
                 delattr(module, 'v_list')
@@ -65,6 +112,19 @@ class Monitor:
 
 
     def reset(self):
+        '''
+        * :ref:`API in English <Monitor.reset-en>`
+
+        .. _Monitor.reset-cn:
+
+        清空之前的记录数据
+
+        * :ref:`中文API <Monitor.reset-cn>`
+
+        .. _Monitor.reset-en:
+
+        Delete previously recorded data
+        '''
 
         for v_list in self.v.values():
             v_list.clear()
@@ -76,7 +136,30 @@ class Monitor:
         self.avg_firing_rate_by_layer = dict.fromkeys(self.module_dict, None)
         self.nonfire_ratio_by_layer = dict.fromkeys(self.module_dict, None)
 
-    def get_avg_firing_rate(self, all: Optional[bool] = True, module_name: Optional[str] = None):
+    def get_avg_firing_rate(self, all: bool = True, module_name: str = None) -> torch.Tensor or float:
+        '''
+        * :ref:`API in English <Monitor.get_avg_firing_rate-en>`
+
+        .. _Monitor.get_avg_firing_rate-cn:
+
+        :param all: 是否为所有层的总平均发放率，默认为 ``True``
+        :type all: bool, optional
+        :param module_name: 层的名称，仅当all为 ``False`` 时有效
+        :type module_name: str, optional
+        :return: 所关心层的平均发放率
+        :rtype: torch.Tensor or float
+
+        * :ref:`中文API <Monitor.get_avg_firing_rate-cn>`
+
+        .. _Monitor.get_avg_firing_rate-en:
+
+        :param all: Whether needing firing rate averaged on all layers, defaults to ``True``
+        :type all: bool, optional
+        :param module_name: Name of concerned layer. Only take effect when all is ``False``
+        :type module_name: str, optional
+        :return: Averaged firing rate on concerned layers
+        :rtype: torch.Tensor or float
+        '''
         if all:
             ttl_firing_cnt = 0
             ttl_neuron_cnt = 0
@@ -108,7 +191,30 @@ class Monitor:
             return self.avg_firing_rate_by_layer[module_name]
 
 
-    def get_nonfire_ratio(self, all: Optional[bool] = True, module_name: Optional[str] = None):
+    def get_nonfire_ratio(self, all: bool = True, module_name: str = None) -> torch.Tensor or float:
+        '''
+        * :ref:`API in English <Monitor.get_nonfire_ratio-en>`
+
+        .. _Monitor.get_nonfire_ratio-cn:
+
+        :param all: 是否为所有层的静默神经元比例，默认为 ``True``
+        :type all: bool, optional
+        :param module_name: 层的名称，仅当all为 ``False`` 时有效
+        :type module_name: str, optional
+        :return: 所关心层的静默神经元比例
+        :rtype: torch.Tensor or float
+
+        * :ref:`中文API <Monitor.get_nonfire_ratio-cn>`
+
+        .. _Monitor.get_nonfire_ratio-en:
+
+        :param all: Whether needing ratio of silent neurons of all layers, defaults to ``True``
+        :type all: bool, optional
+        :param module_name: Name of concerned layer. Only take effect when all is ``False``
+        :type module_name: str, optional
+        :return: Ratio of silent neurons on concerned layers
+        :rtype: torch.Tensor or float
+        '''
         if all:
             ttl_neuron_cnt = 0
             ttl_zero_cnt = 0
