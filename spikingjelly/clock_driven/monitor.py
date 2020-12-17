@@ -2,8 +2,9 @@ import torch
 import numpy as np
 from torch import nn
 from spikingjelly.clock_driven import neuron
+from spikingjelly.cext import neuron as cext_neuron
 
-from typing import Callable, Tuple, Dict, Optional
+from typing import Optional
 
 class Monitor:
     def __init__(self, net: nn.Module, device: Optional[str] = None, backend: Optional[str] = 'numpy'):
@@ -11,7 +12,7 @@ class Monitor:
         super().__init__()
         self.module_dict = dict()
         for name, module in net.named_modules():
-            if isinstance(module, neuron.BaseNode):
+            if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
                 self.module_dict[name] = module
                 #setattr(module, 'monitor', self)
 
@@ -23,26 +24,27 @@ class Monitor:
             self.device = torch.device(device)
 
     def enable(self):
-        # 初始化前向时钩子的句柄
         self.handle = dict.fromkeys(self.module_dict, None)
         self.v = dict.fromkeys(self.module_dict, None)
         self.s = dict.fromkeys(self.module_dict, None)
 
         for name, module in self.net.named_modules():
-            if isinstance(module, neuron.BaseNode):
+            if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
                 self.v[name] = []
                 self.s[name] = []
                 setattr(module, 'v_list', self.v[name])
                 setattr(module, 's_list', self.s[name])
+                # 初始化前向时钩子的句柄
                 self.handle[name] = module.register_forward_hook(self.forward_hook)
         
         self.reset()
 
     def disable(self):
         for name, module in self.net.named_modules():
-            if isinstance(module, neuron.BaseNode):
+            if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
                 delattr(module, 'v_list')
                 delattr(module, 's_list')
+                # 删除钩子
                 self.handle[name].remove()
     
     # 暂时只监视脉冲发放
@@ -135,7 +137,7 @@ class Monitor:
             # 尽量复用已经计算出的结果
             if self.nonfire_ratio_by_layer[module_name] is None:
                 if self.backend == 'numpy':
-                    ttl_firing_times = np.concatenate(self.s[name]).sum(axis=0)
+                    ttl_firing_times = np.concatenate(self.s[module_name]).sum(axis=0)
                     self.nonfire_ratio_by_layer[module_name] = (ttl_firing_times == 0).astype(float).sum() / ttl_firing_times.size
                 elif self.backend == 'torch':
                     ttl_firing_times = torch.cat(self.s[module_name]).sum(dim=0)
