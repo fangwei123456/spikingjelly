@@ -29,7 +29,7 @@ python setup.py install
 ```
 通过[OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
-git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
