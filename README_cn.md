@@ -83,7 +83,7 @@ SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，�
 
 ## 项目信息
 
-北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](http://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](https://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
 
 ![PKU](./docs/source/_static/logo/pku.png)![PCL](./docs/source/_static/logo/pcl.png)
 

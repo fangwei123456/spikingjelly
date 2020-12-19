@@ -73,7 +73,7 @@
 
 项目信息
 -------------------------
-北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <http://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <https://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
 
 .. image:: ./_static/logo/pku.png
     :width: 20%
