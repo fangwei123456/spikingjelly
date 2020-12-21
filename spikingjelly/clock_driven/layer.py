@@ -825,3 +825,37 @@ class SeqToANNContainer(nn.Module):
         y_seq = self.module(x_seq.flatten(0, 1))
         y_shape.extend(y_seq.shape[1:])
         return y_seq.reshape(y_shape)
+
+class LinearWithSTDP(nn.Linear):
+    def __init__(self, in_features: int, out_features: int, bias: bool,
+                 tau_pre: float, tau_post: float,
+                 f_pre, f_post
+                 ) -> None:
+        super().__init__(in_features, out_features, bias)
+        self.tau_pre = tau_pre
+        self.tau_post = tau_post
+        self.trace_pre = 0
+        self.trace_post = 0
+        self.f_pre = f_pre
+        self.f_post = f_post
+
+    def reset(self):
+        self.trace_pre = 0
+        self.trace_post = 0
+
+    @torch.no_grad()
+    def stdp(self, s_pre: torch.Tensor, s_post: torch.Tensor):
+        # update trace
+        self.trace_pre = - self.trace_pre / self.tau_pre + s_pre
+        self.trace_post = - self.trace_post / self.tau_post + s_post
+
+        # update weight
+        delta_w_pre = self.f_pre(self.weight) * s_pre
+        delta_w_post = self.f_post(self.weight) * s_post.unsqueeze(1)
+        self.weight += delta_w_pre + delta_w_post
+
+
+
+
+
+
