@@ -826,12 +826,12 @@ class SeqToANNContainer(nn.Module):
         y_shape.extend(y_seq.shape[1:])
         return y_seq.reshape(y_shape)
 
-class LinearWithSTDP(nn.Linear):
-    def __init__(self, in_features: int, out_features: int, bias: bool,
+class STDPLearner(nn.Module):
+    def __init__(self,
                  tau_pre: float, tau_post: float,
                  f_pre, f_post
                  ) -> None:
-        super().__init__(in_features, out_features, bias)
+        super().__init__()
         self.tau_pre = tau_pre
         self.tau_post = tau_post
         self.trace_pre = 0
@@ -844,15 +844,19 @@ class LinearWithSTDP(nn.Linear):
         self.trace_post = 0
 
     @torch.no_grad()
-    def stdp(self, s_pre: torch.Tensor, s_post: torch.Tensor):
-        # update trace
-        self.trace_pre = - self.trace_pre / self.tau_pre + s_pre
-        self.trace_post = - self.trace_post / self.tau_post + s_post
+    def stdp(self, s_pre: torch.Tensor, s_post: torch.Tensor, module: nn.Module):
+        if isinstance(module, nn.Linear):
+            # update trace
+            self.trace_pre = - self.trace_pre / self.tau_pre + s_pre
+            self.trace_post = - self.trace_post / self.tau_post + s_post
 
-        # update weight
-        delta_w_pre = self.f_pre(self.weight) * s_pre
-        delta_w_post = self.f_post(self.weight) * s_post.unsqueeze(1)
-        self.weight += delta_w_pre + delta_w_post
+            # update weight
+            delta_w_pre = self.f_pre(module.weight) * s_pre
+            delta_w_post = self.f_post(module.weight) * s_post.unsqueeze(1)
+            self.weight += delta_w_pre + delta_w_post
+        else:
+            raise NotImplementedError
+
 
 
 
