@@ -120,7 +120,7 @@ CUDA加速的神经元
                 layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False)),
                 cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
                 layer.MultiStepDropout(0.5),
-                nn.Linear(128 * 3 * 3, 128, bias=False),
+                layer.SeqToANNContainer(nn.Linear(128 * 3 * 3, 128, bias=False)),
                 cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
                 layer.SeqToANNContainer(nn.Linear(128, 10, bias=False)),
                 cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0)
