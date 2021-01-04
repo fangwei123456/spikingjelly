@@ -74,7 +74,7 @@ class parser:
             data = data.cpu()
             model = model.cpu()
 
-            import spikingjelly.clock_driven.ann2snn.onnx_v2.onnx_kernel as onnx_kernel
+            import spikingjelly.clock_driven._ann2snn.kernels.onnx as onnx_kernel
 
             onnx_model = onnx_kernel.pytorch2onnx_model(model=model, data=data, log_dir=self.config['log_dir'])
             # onnx_kernel.print_onnx_model(onnx_model.graph)
@@ -118,20 +118,26 @@ class parser:
                 new_module = nn.Sequential(module, neuron.IFNode(v_reset=None))
                 model._modules[name] = new_module
             if "BatchNorm" in module.__class__.__name__:
-                new_module = nn.Sequential(module, neuron.NSIFNode(v_threshold=(-1.0, 1.0), v_reset=None))
+                try:
+                    new_module = nn.Sequential(module, neuron.NSIFNode(v_threshold=(-1.0, 1.0), v_reset=None))
+                except AttributeError:
+                    new_module = module
                 model._modules[name] = new_module
             if module.__class__.__name__ == "ReLU":
                 new_module = neuron.IFNode(v_reset=None)
                 model._modules[name] = new_module
-            if module.__class__.__name__ == 'PReLU':
-                p = module.weight
-                assert (p.size(0) == 1 and p != 0)
-                if -1 / p.item() > 0:
-                    model._modules[name] = neuron.NSIFNode(v_threshold=(1.0 / p.item(), 1.0),
-                                                                 bipolar=(1.0, 1.0), v_reset=None)
-                else:
-                    model._modules[name] = neuron.NSIFNode(v_threshold=(-1 / p.item(), 1.0),
-                                                                 bipolar=(-1.0, 1.0), v_reset=None)
+            try:
+                if module.__class__.__name__ == 'PReLU':
+                    p = module.weight
+                    assert (p.size(0) == 1 and p != 0)
+                    if -1 / p.item() > 0:
+                        model._modules[name] = neuron.NSIFNode(v_threshold=(1.0 / p.item(), 1.0),
+                                                                     bipolar=(1.0, 1.0), v_reset=None)
+                    else:
+                        model._modules[name] = neuron.NSIFNode(v_threshold=(-1 / p.item(), 1.0),
+                                                                     bipolar=(-1.0, 1.0), v_reset=None)
+            except AttributeError:
+                assert False, 'NSIFNode has been removed.'
             if module.__class__.__name__ == "MaxPool2d":
                 new_module = nn.AvgPool2d(
                     kernel_size=module.kernel_size,
