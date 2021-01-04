@@ -98,6 +98,8 @@ class BaseNode(nn.Module):
                     self.monitor['h'].append(self.v.data.cpu().numpy().copy() * 0)
                 else:
                     self.monitor['h'].append(self.v.data.cpu().numpy().copy() * self.v_reset)
+            else:
+                self.monitor['h'].append(self.v.data.cpu().numpy().copy())
 
         self.spike = self.surrogate_function(self.v - self.v_threshold)
         if self.monitor:
