@@ -149,7 +149,7 @@ class AutoSparseLinear(nn.Linear):
                 if self.in_spikes:
                     sparsity = 1 - x.mean().item()
                 else:
-                    sparsity = (x == 0).mean().item()
+                    sparsity = (x == 0).float().mean().item()
         if sparsity < csp:
             return F.linear(x, self.weight, self.bias)
         else:

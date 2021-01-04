@@ -5,11 +5,11 @@ from spikingjelly import visualizing
 import torch
 import torch.nn as nn
 import torchvision
-def plot_log(csv_file, title, x_label, y_label, dpi=200, plot_max=False):
+def plot_log(csv_file, title, x_label, y_label, figsize=(12, 8), plot_max=False):
     log_data = np.loadtxt(csv_file, delimiter=',', skiprows=1, usecols=(1, 2))
     x = log_data[:, 0]
     y = log_data[:, 1]
-    fig = plt.figure(dpi=dpi)
+    fig = plt.figure(figsize=figsize)
     plt.plot(x, y)
     plt.xlabel(x_label, fontsize=20)
     plt.ylabel(y_label, fontsize=20)
@@ -22,13 +22,21 @@ def plot_log(csv_file, title, x_label, y_label, dpi=200, plot_max=False):
         plt.text(x[index], y[index], '({}, {})'.format(int(x[index]), round(y[index], 3)), fontsize=14)
         plt.scatter(x[index], y[index], marker='1', alpha=0.8, linewidths=0.1, c='r')
 
-    plt.show()
+    # plt.show()
 if __name__ == '__main__':
-    # plt.style.use(['science', 'muted'])
-    # plot_log('run-logs-tag-train_accuracy.csv', 'Accuracy on train batch',
-    #          'iteration', 'accuracy')
-    # plot_log('run-logs-tag-test_accuracy.csv', 'Accuracy on test dataset',
-    #          'epoch', 'accuracy', plot_max=True)
+    plt.style.use(['science', 'muted'])
+    plot_log('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/run-logs-tag-train_accuracy.csv', 'Accuracy on train batch',
+             'iteration', 'accuracy')
+    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/train.svg')
+    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/train.pdf')
+    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/train.png')
+    plt.clf()
+    plot_log('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/run-logs-tag-test_accuracy.csv', 'Accuracy on test dataset',
+             'epoch', 'accuracy', plot_max=True)
+    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/test.svg')
+    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/test.pdf')
+    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/test.png')
+    exit()
     dataset_dir = input('输入保存Fashion MNIST数据集的位置，例如“./”\n input root directory for saving Fashion MNIST dataset, e.g., "./": ')
 
     log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')

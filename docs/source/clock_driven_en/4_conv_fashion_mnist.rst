@@ -1,11 +1,11 @@
-Time-driven: Use convolutional SNN to identify Fashion-MNIST
+Clock driven: Use convolutional SNN to identify Fashion-MNIST
 ============================================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
-In this tutorial, we will build a convolutional pulse neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
-The Fashion-MNIST data set has the same format as the MNIST data set, and both are ``1 * 28 * 28`` grayscale images.
+In this tutorial, we will build a convolutional spike neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
+The Fashion-MNIST dataset has the same format as the MNIST dataset, and both are ``1 * 28 * 28`` grayscale images.
 
 Network structure
 ----------------------------
@@ -21,14 +21,12 @@ We also use a similar structure in SNN. Import related modules, inherit ``torch.
     import torchvision
     from spikingjelly.clock_driven import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
-    import sys
-    if sys.platform != 'win32':
-        import readline
+    import readline
     class Net(nn.Module):
         def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
 
-Next, we add a convolutional layer and a fully connected layer to the member variables of ``Net``. The developers of
-``SpikingJelly`` found in experiments that for neurons in the convolutional layer, it is better to use ``IFNode`` for
+Then we add a convolutional layer and a fully connected layer to the member variables of ``Net``. The developers of
+``SpikingJelly`` found in the experiments that neurons in the convolutional layer is better to use ``IFNode`` for
 static image data without time information. We add 2 convolution-BN-pooling layers:
 
 .. code-block:: python
@@ -45,10 +43,10 @@ static image data without time information. We add 2 convolution-BN-pooling laye
             nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
-After the input of ``1 * 28 * 28`` undergoes such a convolutional layer, an output pulse of ``128 * 7 * 7`` is obtained.
+After the input of ``1 * 28 * 28`` undergoes such a convolutional layer, an output spike of ``128 * 7 * 7`` is obtained.
 
 Such a convolutional layer can actually function as an encoder: in the previous tutorial, in the code of MNIST
-classification, we used a Poisson encoder to encode pictures into pulses. In fact, we can directly send the picture
+classification, we used a Poisson encoder to encode pictures into spikes. In fact, we can directly send the picture
 to the SNN. In this case, the first spike neuron layer and the previous layer in the SNN can be regarded as an
 auto-encoder with learnable parameters. For example, these layers in the convolutional layer we just defined:
 
@@ -58,7 +56,7 @@ auto-encoder with learnable parameters. For example, these layers in the convolu
     nn.BatchNorm2d(128),
     neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan())
 
-This 3-layer network, which receives pictures as input and outputs pulses, can be regarded as an encoder.
+This 3-layer network, which receives pictures as input and outputs spikes, can be regarded as an encoder.
 
 Next, we define a 3-layer fully connected network and output the classification results. The fully connected
 layer generally functions as a classifier, and the performance of using ``LIFNode`` will be better. Fashion-MNIST
@@ -86,7 +84,7 @@ Next, define forward propagation. Forward propagation is very simple, first go t
     def forward(self, x):
         return self.fc(self.conv(x))
 
-Avoid repeat counting
+Avoid repeat computing
 --------------------------------
 
 We can train this network directly, just like the previous MNIST classification:
@@ -101,18 +99,18 @@ We can train this network directly, just like the previous MNIST classification:
             optimizer.zero_grad()
 
             # run the time of T，out_spikes_counter is the tensor of shape=[batch_size, 10]
-            # record the number of pulse firings of 10 neurons in the output layer during the entire simulation duration
+            # record the number of spike firings of 10 neurons in the output layer during the entire simulation duration
             for t in range(T):
                 if t == 0:
                     out_spikes_counter = net(encoder(img).float())
                 else:
                     out_spikes_counter += net(encoder(img).float())
 
-            # out_spikes_counter / T obtain the pulse firing frequency of 10 neurons in the output layer during the simulation time
+            # out_spikes_counter / T obtain the spike firing frequency of 10 neurons in the output layer during the simulation time
             out_spikes_counter_frequency = out_spikes_counter / T
 
-            # the loss function is the pulse firing frequency of the neurons in the output layer, and the MSE of the true category
-            # such a loss function will make the pulse firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the pulse firing frequency of other neurons will approach 0
+            # the loss function is the spike firing frequency of the neurons in the output layer, and the MSE of the true category
+            # such a loss function will make the spike firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the spike firing frequency of other neurons will approach 0
             loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
             loss.backward()
             optimizer.step()
@@ -137,7 +135,7 @@ layers of the network, the highlighted part of the following code:
             nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
-The input image received by these two layers does not change with ``t`` , but in the ``for`` loop, each time ``img`` will
+The input images received by these two layers does not change with ``t`` , but in the ``for`` loop, each time ``img`` will
 recalculate these two layers to get the same output. We extract these layers and encapsulate the time loop into the
 network itself to facilitate calculation. The new network structure is fully defined as:
 
@@ -192,9 +190,9 @@ additional calculations .
 
 Training network
 ----------------------------
-The complete code is located in `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/conv_fashion_mnist.py>`_.
+The complete code is located in :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`.
 It can also be run directly from the command line.The network with the highest accuracy of the test set during the
-training process will be saved in the same level directory of the ``tensorboard`` log file.
+training process will be saved in the same level directory of the ``tensorboard`` log file. The server for training this network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU.
 
 .. code-block:: python
 
@@ -205,7 +203,7 @@ training process will be saved in the same level directory of the ``tensorboard`
     输入保存Fashion MNIST数据集的位置，例如“./”
      input root directory for saving Fashion MNIST dataset, e.g., "./": ./fmnist
     输入batch_size，例如“64”
-     input batch_size, e.g., "64": 64
+     input batch_size, e.g., "64": 128
     输入学习率，例如“1e-3”
      input learning rate, e.g., "1e-3": 1e-3
     输入仿真时长，例如“8”
@@ -216,6 +214,31 @@ training process will be saved in the same level directory of the ``tensorboard`
      input training epochs, e.g., "100": 100
     输入保存tensorboard日志文件的位置，例如“./”
      input root directory for saving tensorboard logs, e.g., "./": ./logs_conv_fashion_mnist
+    saving net...
+    saved
+    epoch=0, t_train=41.182421264238656, t_test=2.5504338955506682, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8704, train_times=468
+    saving net...
+    saved
+    epoch=1, t_train=40.93981215544045, t_test=2.538706629537046, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8928, train_times=936
+    saving net...
+    saved
+    epoch=2, t_train=40.86129532009363, t_test=2.5383697943761945, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.899, train_times=1404
+    saving net...
+    saved
+
+    ...
+
+    epoch=95, t_train=40.98498909268528, t_test=2.558146824128926, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9425, train_times=44928
+    saving net...
+    saved
+    epoch=96, t_train=41.19765609316528, t_test=2.6626883540302515, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9426, train_times=45396
+    saving net...
+    saved
+    epoch=97, t_train=41.10238983668387, t_test=2.553960849530995, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9427, train_times=45864
+    saving net...
+    saved
+    epoch=98, t_train=40.89284007716924, t_test=2.5465594390407205, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.944, train_times=46332
+    epoch=99, t_train=40.843392613343894, t_test=2.557370903901756, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.944, train_times=46800
 
 After running 100 rounds of training, the correct rates on the training batch and test set are as follows:
 
@@ -225,7 +248,7 @@ After running 100 rounds of training, the correct rates on the training batch an
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
     :width: 100%
 
-After training for 100 epochs, the highest test set accuracy rate can reach 94.3%, which is a very good performance for
+After training for 100 epochs, the highest test set accuracy rate can reach 94.4%, which is a very good performance for
 SNN, only slightly lower than the use of Normalization, random horizontal flip, random vertical flip, random translation
 in the BenchMark of `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_, ResNet18 of random rotation has a 94.9% correct rate.
 
@@ -273,7 +296,7 @@ modules, and redefine a data loader with ``batch_size=1``, because we want to vi
         shuffle=True,
         drop_last=False)
 
-Load the trained network from the location where the network is saved, that is, under the ``log_dir`` directory, and extract the encoder. Just run on the CPU:
+Load the trained network from the location where the network is saved, that is, under the ``log_dir`` directory. And we extract the encoder. Just run on the CPU:
 
 .. code-block:: python
 
@@ -285,7 +308,7 @@ Load the trained network from the location where the network is saved, that is, 
     encoder.eval()
 
 Next, extract a picture from the data set, send it to the encoder, and check the accumulated value :math:`\sum_{t} S_{t}` of the output
-pulse. In order to display clearly, we also normalized the pixel value of the output ``feature_map``, and linearly transformed
+spike. In order to display clearly, we also normalized the pixel value of the output ``feature_map``, and linearly transformed
 the value range to ``[0, 1]``.
 
 .. code-block:: python
@@ -315,7 +338,7 @@ the value range to ``[0, 1]``.
                     plt.title('$\\sum_{t} S_{t}$ at $t = ' + str(t) + '$', fontsize=20)
                     plt.show()
 
-The following shows two input pictures and the cumulative pulse :math:`\sum_{t} S_{t}` output by the encoder at the begin time of ``t=0`` and the end time ``t=7``:
+The following shows two input pictures and the cumulative spike :math:`\sum_{t} S_{t}` output by the encoder at the begin time of ``t=0`` and the end time ``t=7``:
 
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x0.*
     :width: 100%
@@ -335,5 +358,5 @@ The following shows two input pictures and the cumulative pulse :math:`\sum_{t} 
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y17.*
     :width: 100%
 
-Observation shows that the cumulative output pulse :math:`\sum_{t} S_{t}` of the encoder is very close to the contour of the original image.
-It seems that this kind of self-learning pulse encoder has strong coding ability.
+Observation shows that the cumulative output spike :math:`\sum_{t} S_{t}` of the encoder is very close to the contour of the original image.
+It seems that this kind of self-learning spike encoder has strong coding ability.

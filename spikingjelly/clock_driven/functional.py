@@ -29,11 +29,6 @@ def reset_net(net: nn.Module):
         if hasattr(m, 'reset'):
             m.reset()
 
-def is_stateful(module: nn.Module):
-    for m in module.modules():
-        if hasattr(m, 'unparallelizable'):
-            return True
-    return False
 
 def set_monitor(net: nn.Module, monitor_state):
     '''

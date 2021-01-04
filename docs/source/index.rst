@@ -33,7 +33,7 @@
 
 .. code-block:: bash
 
-    git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+    git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
     python setup.py install
 
@@ -54,6 +54,8 @@
     /clock_driven/7_a2c_cart_pole
     /clock_driven/8_ppo_cart_pole
     /clock_driven/9_spikingLSTM_text
+    /clock_driven/10_propagation_pattern
+    /clock_driven/11_cext_neuron_with_lbl
 
 
 模块文档
@@ -71,7 +73,7 @@
 
 项目信息
 -------------------------
-北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <http://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <https://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
 
 .. image:: ./_static/logo/pku.png
     :width: 20%
@@ -115,7 +117,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
 
 .. code-block:: bash
 
-    git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+    git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
     python setup.py install
 
@@ -134,6 +136,8 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /clock_driven_en/7_a2c_cart_pole
     /clock_driven_en/8_ppo_cart_pole
     /clock_driven_en/9_spikingLSTM_text
+    /clock_driven_en/10_propagation_pattern
+    /clock_driven_en/11_cext_neuron_with_lbl
 
 
 

@@ -62,10 +62,10 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
     self.fc = nn.Sequential(
         nn.Flatten(),
-        layer.Dropout(0.7),
+        layer.Dropout(0.5),
         nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
         neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-        layer.Dropout(0.7),
+        layer.Dropout(0.5),
         nn.Linear(128 * 3 * 3, 128, bias=False),
         neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
         nn.Linear(128, 10, bias=False),
@@ -182,8 +182,8 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 训练网络
 -----------------
-完整的代码位于 `clock_driven/examples/conv_fashion_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/conv_fashion_mnist.py>`_。
-也可以通过命令行直接运行。会将训练过程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。
+完整的代码位于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`。
+也可以通过命令行直接运行。会将训练过程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。
 
 .. code-block:: python
 
@@ -194,7 +194,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
     输入保存Fashion MNIST数据集的位置，例如“./”
      input root directory for saving Fashion MNIST dataset, e.g., "./": ./fmnist
     输入batch_size，例如“64”
-     input batch_size, e.g., "64": 64
+     input batch_size, e.g., "64": 128
     输入学习率，例如“1e-3”
      input learning rate, e.g., "1e-3": 1e-3
     输入仿真时长，例如“8”
@@ -205,6 +205,31 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
      input training epochs, e.g., "100": 100
     输入保存tensorboard日志文件的位置，例如“./”
      input root directory for saving tensorboard logs, e.g., "./": ./logs_conv_fashion_mnist
+    saving net...
+    saved
+    epoch=0, t_train=41.182421264238656, t_test=2.5504338955506682, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8704, train_times=468
+    saving net...
+    saved
+    epoch=1, t_train=40.93981215544045, t_test=2.538706629537046, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8928, train_times=936
+    saving net...
+    saved
+    epoch=2, t_train=40.86129532009363, t_test=2.5383697943761945, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.899, train_times=1404
+    saving net...
+    saved
+   
+    ...
+
+    epoch=95, t_train=40.98498909268528, t_test=2.558146824128926, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9425, train_times=44928
+    saving net...
+    saved
+    epoch=96, t_train=41.19765609316528, t_test=2.6626883540302515, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9426, train_times=45396
+    saving net...
+    saved
+    epoch=97, t_train=41.10238983668387, t_test=2.553960849530995, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9427, train_times=45864
+    saving net...
+    saved
+    epoch=98, t_train=40.89284007716924, t_test=2.5465594390407205, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.944, train_times=46332
+    epoch=99, t_train=40.843392613343894, t_test=2.557370903901756, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.944, train_times=46800
 
 运行100轮训练后，训练batch和测试集上的正确率如下：
 
@@ -214,7 +239,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
     :width: 100%
 
-在训练100个epoch后，最高测试集正确率可以达到94.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_
+在训练100个epoch后，最高测试集正确率可以达到94.4%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_
 的BenchMark中使用Normalization, random horizontal flip, random vertical flip, random translation, random rotation的ResNet18的94.9%正确率。
 
 可视化编码器

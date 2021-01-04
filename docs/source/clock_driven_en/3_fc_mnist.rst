@@ -1,4 +1,4 @@
-Clock-driven: Use single-layer fully connected SNN to identify MNIST
+Clock driven: Use single-layer fully connected SNN to identify MNIST
 ====================================================================
 Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`_
 
@@ -12,8 +12,8 @@ Build a simple SNN network from scratch
 When building a neural network in PyTorch, we can simply use ``nn.Sequential`` to stack multiple network layers to get a
 feedforward network. The input data will flow through each network layer in order to get the output.
 
-The `MNIST Dateset <http://yann.lecun.com/exdb/mnist/>`__ \contains several 8-bit grayscale images with a size of
-\ :math:`28\times 28`\, with a total of 10 categories from 0 to 9. Taking the classification of MNIST as an example,
+The `MNIST Dateset <http://yann.lecun.com/exdb/mnist/>`__ \contains several 8-bit grayscale images with the size of
+\ :math:`28\times 28`\, which include total of 10 categories from 0 to 9. Taking the classification of MNIST as an example,
 a simple single-layer ANN network is as follows:
 
 .. code-block:: python
@@ -26,7 +26,7 @@ a simple single-layer ANN network is as follows:
        )
 
 We can also use SNN with a completely similar structure for classification tasks. As far as this network is concerned,
-we only need to remove all the activation functions first, and then add the neuron to the original activation
+we only need to remove all the activation functions first, and then add the neurons to the original activation
 function position. Here we choose the LIF neuron:
 
 .. code-block:: python
@@ -47,16 +47,16 @@ First specify the training parameters and several other configurations
 
 .. code:: python
 
-   device = input('Enter the operating device,e.g.:“cpu” or “cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-   dataset_dir = input('enter the location to save the MNIST data set,e.g.:“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
-   batch_size = int(input('input batch_size, e.g.:“64”\n input batch_size, e.g., "64": '))
-   learning_rate = float(input('input learning rate,e.g.:“1e-3”\n input learning rate, e.g., "1e-3": '))
-   T = int(input('enter simulation duration, e.g.:“100”\n input simulating steps, e.g., "100": '))
-   tau = float(input('input the time constant of the LIF neuron tau，e.g.:“100.0”\n input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
-   train_epoch = int(input('enter the number of training rounds, that is, the number of times to traverse the training set, e.g.:“100”\n input training epochs, e.g., "100": '))
-   log_dir = input('enter the location to save the tensorboard log file, e.g.:“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+   device = input('Enter the operating device,e.g.:"cpu" or "cuda:0"\n input device, e.g., "cpu" or "cuda:0": ')
+   dataset_dir = input('enter the location of the MNIST data set,e.g.:"./"\n input root directory for saving MNIST dataset, e.g., "./": ')
+   batch_size = int(input('input batch_size, e.g.:"64"\n input batch_size, e.g., "64": '))
+   learning_rate = float(input('input learning rate,e.g.:"1e-3"\n input learning rate, e.g., "1e-3": '))
+   T = int(input('enter simulation duration, e.g.:"100"\n input simulating steps, e.g., "100": '))
+   tau = float(input('input the time constant of the LIF neuron tau，e.g.:"100.0"\n input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
+   train_epoch = int(input('enter the number of training rounds, that is, the number of times to traverse the training set, e.g.:"100"\n input training epochs, e.g., "100": '))
+   log_dir = input('enter the location to save the tensorboard log file, e.g.:"./"\n input root directory for saving tensorboard logs, e.g., "./": ')
 
-The optimizer uses Adam and Poisson encoder to perform pulse encoding every time when a picture is input.
+The optimizer uses Adam and Poisson encoder to perform spike encoding every time when a picture is input.
 
 .. code-block:: python
 
@@ -67,14 +67,14 @@ The optimizer uses Adam and Poisson encoder to perform pulse encoding every time
 
 The writing of training code needs to follow the following three points:
 
-1. The output of the spike neuron is binary, and directly using the result of a single run for classification is
-very susceptible to interference. Therefore, it is generally considered that the output of the impulse network is
+1. The output of the spiking neuron is binary, and directly using the result of a single run for classification is
+very susceptible to interference. Therefore, it is generally considered that the output of the spike network is
 the \ **firing** \frequency (or firing rate) of the output layer over a period of time, and the firing rate indicates the
-response size of the category. Therefore, the network needs to run for a period of time, that is, the \ **average
+response strength of the category. Therefore, the network needs to run for a period of time, that is, the \ **average
 distribution rate** \ after ``T`` time is used as the classification basis.
 
-2. The desired result we hope is that except for the correct neuron firing at the \ **highest frequency**\, the other neurons
-\ **remain silent**\. Cross-entropy loss or MSE loss is often used, and here we use MSE loss with better actual effect.
+2. The desired result we hope is that except for the correct neuron firing the \ **highest frequency**\, the other neurons
+\ **remain silent**\. Cross-entropy loss or MSE loss is often used, and here we use MSE loss which have a better actual effect.
 
 3. After each network simulation is over, the network status needs to be \ **reset**\.
 
@@ -90,18 +90,18 @@ Combining the above three points, the code of training loop is as follows:
        optimizer.zero_grad()
 
        # Run time of T，out_spikes_counter is the tensor of shape=[batch_size, 10]
-       # Record the number of pulse firings of 10 neurons in the output layer during the entire simulation duration
+       # Record the number of spike firings of 10 neurons in the output layer during the entire simulation duration
        for t in range(T):
            if t == 0:
                out_spikes_counter = net(encoder(img).float())
            else:
                out_spikes_counter += net(encoder(img).float())
 
-       # out_spikes_counter / T Obtain the pulse firing frequency of 10 neurons in the output layer during the simulation time
+       # out_spikes_counter / T Obtain the spike firing frequency of 10 neurons in the output layer during the simulation time
        out_spikes_counter_frequency = out_spikes_counter / T
 
-       # The loss function is the pulse firing frequency of the neurons in the output layer, and the MSE of the true category
-       # Such a loss function will make the pulse firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the pulse firing frequency of other neurons will approach 0
+       # The loss function is the spike firing frequency of the neurons in the output layer, and the MSE of the true category
+       # Such a loss function will make the spike firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the spike firing frequency of other neurons will approach 0
        loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
        loss.backward()
        optimizer.step()
@@ -142,7 +142,7 @@ Use the trained model to classify and get the classification result.
 
    Firing rate: [[0. 0. 0. 0. 0. 0. 0. 1. 0. 0.]]
 
-The voltage and pulse of the output layer can be visualized by the function in the ``visualizing`` module as shown in the figure below
+The voltage and spike of the output layer can be visualized by the function in the ``visualizing`` module as shown in the figure below.
 
 .. image:: ../_static/tutorials/clock_driven/3_fc_mnist/1d_spikes.*
     :width: 100%
@@ -150,5 +150,5 @@ The voltage and pulse of the output layer can be visualized by the function in t
 .. image:: ../_static/tutorials/clock_driven/3_fc_mnist/2d_heatmap.*
     :width: 100%
 
-It can be seen that none of the neurons emit any pulses except for the neurons corresponding to the correct category.
+It can be seen that none of the neurons emit any spikes except for the neurons corresponding to the correct category.
 The complete training code can be found in `clock_driven/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/lif_fc_mnist.py>`_.

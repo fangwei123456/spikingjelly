@@ -29,7 +29,7 @@ python setup.py install
 ```
 From [OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
-git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
@@ -62,6 +62,12 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 ```
 
 Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html) to explore more advanced networks!
+
+## CUDA-Enhanced Neuron
+
+SpikingJelly provides two versions of spiking neurons:  user-friendly PyTorch version and high-speed CUDA version. The followed figure compares execution time of different LIF neurons:
+
+<img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
 ## Device Supports
 

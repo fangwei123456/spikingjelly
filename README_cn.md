@@ -29,7 +29,7 @@ python setup.py install
 ```
 通过[OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
-git clone http://git.openi.org.cn/OpenI/spikingjelly.git
+git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
@@ -63,6 +63,12 @@ class Net(nn.Module):
 
 阅读[spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html)以探索更多先进的神经网络！
 
+## CUDA增强的神经元
+
+SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，以及速度更快的CUDA版本。下图对比了各种类型的LIF神经元的运行时长：
+
+<img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+
 ## 设备支持
 
 -   [x] Nvidia GPU
@@ -77,7 +83,7 @@ class Net(nn.Module):
 
 ## 项目信息
 
-北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](http://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](https://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
 
 ![PKU](./docs/source/_static/logo/pku.png)![PCL](./docs/source/_static/logo/pcl.png)
 

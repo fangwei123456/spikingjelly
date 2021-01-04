@@ -73,7 +73,6 @@ class NeuNorm(nn.Module):
         else:
             self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
-        self.unparallelizable = True
 
     def forward(self, in_spikes: torch.Tensor):
         self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)  # x.shape = [batch_size, 1, height, width]
@@ -248,11 +247,10 @@ class Dropout(nn.Module):
         assert 0 < p < 1
         self.mask = None
         self.p = p
-        self.unparallelizable = True
 
     def extra_repr(self):
-        return 'p={}, dropout_spikes={}'.format(
-            self.p, self.dropout_spikes
+        return 'p={}'.format(
+            self.p
         )
 
     def create_mask(self, x: torch.Tensor):
@@ -319,6 +317,26 @@ class Dropout2d(Dropout):
 
     def create_mask(self, x: torch.Tensor):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
+
+class MultiStepDropout(Dropout):
+    def forward(self, x_seq: torch.Tensor):
+        if self.training:
+            if self.mask is None:
+                self.create_mask(x_seq[0])
+
+            return x_seq * self.mask
+        else:
+            return x_seq
+
+class MultiStepDropout2d(Dropout2d):
+    def forward(self, x_seq: torch.Tensor):
+        if self.training:
+            if self.mask is None:
+                self.create_mask(x_seq[0])
+
+            return x_seq * self.mask
+        else:
+            return x_seq
 
 class SynapseFilter(nn.Module):
     def __init__(self, tau=100.0, learnable=False):
@@ -458,7 +476,6 @@ class SynapseFilter(nn.Module):
         else:
             self.tau = 1 / tau
         self.out_i = 0
-        self.unparallelizable = True
 
     def extra_repr(self):
         return 'tau={}'.format(
@@ -725,56 +742,197 @@ class DropConnectLinear(nn.Module):
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
 
-class LBLForwardSequential(nn.Sequential):
+class MultiStepContainer(nn.Module):
     def __init__(self, *args):
-        '''
-        * :ref:`API in English <LBLForwardSequential.__init__-en>`
-
-        .. _LBLForwardSequential.__init__-cn:
-
-        逐层进行前反向传播的序列化容器。
-
-        * :ref:`中文API <LBLForwardSequential.__init__-cn>`
-
-        .. _LBLForwardSequential.__init__-en:
-
-        A sequential container that performs forward/backward layer by layer.
-
-        '''
-        super().__init__(*args)
-        self.stateful_flag = []
-        for module in self:
-            self.stateful_flag.append(functional.is_stateful(module))
+        super().__init__()
+        if len(args) == 1:
+            self.module = args[0]
+        else:
+            self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
-        # x_seq: [T, batch_size, ...]
-        T = x_seq.shape[0]
-        batch_size = x_seq.shape[1]
+        '''
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: torch.Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: torch.Tensor
+        '''
+        y_seq = []
+        for t in range(x_seq.shape[0]):
+            y_seq.append(self.module(x_seq[t]))
+            y_seq[-1].unsqueeze_(0)
+        return torch.cat(y_seq, 0)
 
-        if self.stateful_flag[0]:
-            x = []
-            for t in range(T):
-                x.append(x_seq[t])
+    def reset(self):
+        if hasattr(self.module, 'reset'):
+            self.module.reset()
+
+class SeqToANNContainer(nn.Module):
+    def __init__(self, *args):
+        '''
+        * :ref:`API in English <SeqToANNContainer.__init__-en>`
+
+        .. _SeqToANNContainer.__init__-cn:
+
+        :param *args: 无状态的单个或多个ANN网络层
+
+        包装无状态的ANN以处理序列数据的包装器。``shape=[T, batch_size, ...]`` 的输入会被拼接成 ``shape=[T * batch_size, ...]`` 再送入被包装的模块。输出结果会被再拆成 ``shape=[T, batch_size, ...]``。
+
+        示例代码
+
+        .. code-block:: python
+            with torch.no_grad():
+                T = 16
+                batch_size = 8
+                x = torch.rand([T, batch_size, 4])
+                fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
+                print(fc(x).shape)
+                # torch.Size([16, 8, 3])
+
+        * :ref:`中文API <SeqToANNContainer.__init__-cn>`
+
+        .. _SeqToANNContainer.__init__-en:
+
+        :param *args: one or many stateless ANN layers
+
+        A container that contain sataeless ANN to handle sequential data. This container will concatenate inputs ``shape=[T, batch_size, ...]`` at time dimension as ``shape=[T * batch_size, ...]``, and send the reshaped inputs to contained ANN. The output will be split to ``shape=[T, batch_size, ...]``.
+
+        Examples:
+
+        .. code-block:: python
+            with torch.no_grad():
+                T = 16
+                batch_size = 8
+                x = torch.rand([T, batch_size, 4])
+                fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
+                print(fc(x).shape)
+                # torch.Size([16, 8, 3])
+        '''
+        super().__init__()
+        if len(args) == 1:
+            self.module = args[0]
         else:
-            x = x_seq.flatten(0, 1)  # [T * batch_size, ...]
+            self.module = nn.Sequential(*args)
 
-        for idx, module in enumerate(self):
-            if self.stateful_flag[idx]:
-                if isinstance(x, torch.Tensor):
-                    # 拆分成list
-                    x = list(torch.split(x, batch_size, 0))  # T * [batch_size, ...]
-                for t in range(T):
-                    x[t] = module(x[t])
-            else:
-                if isinstance(x, list):
-                    # 合并成tensor
-                    x = torch.cat(x, 0)
-                x = module(x)
+    def forward(self, x_seq: torch.Tensor):
+        '''
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: torch.Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: torch.Tensor
+        '''
+        y_shape = [x_seq.shape[0], x_seq.shape[1]]
+        y_seq = self.module(x_seq.flatten(0, 1))
+        y_shape.extend(y_seq.shape[1:])
+        return y_seq.reshape(y_shape)
 
-        if isinstance(x, torch.Tensor):
-            # 拆分成list
-            x = list(torch.split(x, batch_size, 0))  # T * [batch_size, ...]
+class STDPLearner(nn.Module):
+    def __init__(self,
+                 tau_pre: float, tau_post: float,
+                 f_pre, f_post
+                 ) -> None:
+        '''
+        .. code-block:: python
 
-        for t in range(T):
-            x[t].unsqueeze_(0)  # [batch_size, ...] -> [1, batch_size, ...]
-        return torch.cat(x, 0)  # [T, batch_size, ...]
+            import torch
+            import torch.nn as nn
+            from spikingjelly.clock_driven import layer, neuron, functional
+            from matplotlib import pyplot as plt
+            import numpy as np
+            def f_pre(x):
+                return x.abs() + 0.1
+
+            def f_post(x):
+                return - f_pre(x)
+
+            fc = nn.Linear(1, 1, bias=False)
+
+            stdp_learner = layer.STDPLearner(100., 100., f_pre, f_post)
+            trace_pre = []
+            trace_post = []
+            w = []
+            T = 256
+            s_pre = torch.zeros([T, 1])
+            s_post = torch.zeros([T, 1])
+            s_pre[0: T // 2] = (torch.rand_like(s_pre[0: T // 2]) > 0.95).float()
+            s_post[0: T // 2] = (torch.rand_like(s_post[0: T // 2]) > 0.9).float()
+
+            s_pre[T // 2:] = (torch.rand_like(s_pre[T // 2:]) > 0.8).float()
+            s_post[T // 2:] = (torch.rand_like(s_post[T // 2:]) > 0.95).float()
+
+            for t in range(T):
+                stdp_learner.stdp(s_pre[t], s_post[t], fc, 1e-2)
+                trace_pre.append(stdp_learner.trace_pre.item())
+                trace_post.append(stdp_learner.trace_post.item())
+                w.append(fc.weight.item())
+
+            plt.style.use('science')
+            fig = plt.figure(figsize=(10, 6))
+            s_pre = s_pre[:, 0].numpy()
+            s_post = s_post[:, 0].numpy()
+            t = np.arange(0, T)
+            plt.subplot(5, 1, 1)
+            plt.eventplot((t * s_pre)[s_pre == 1.], lineoffsets=0, colors='r')
+            plt.yticks([])
+            plt.ylabel('$S_{pre}$', rotation=0, labelpad=10)
+            plt.xticks([])
+            plt.xlim(0, T)
+            plt.subplot(5, 1, 2)
+            plt.plot(t, trace_pre)
+            plt.ylabel('$tr_{pre}$', rotation=0, labelpad=10)
+            plt.xticks([])
+            plt.xlim(0, T)
+
+            plt.subplot(5, 1, 3)
+            plt.eventplot((t * s_post)[s_post == 1.], lineoffsets=0, colors='r')
+            plt.yticks([])
+            plt.ylabel('$S_{post}$', rotation=0, labelpad=10)
+            plt.xticks([])
+            plt.xlim(0, T)
+            plt.subplot(5, 1, 4)
+            plt.plot(t, trace_post)
+            plt.ylabel('$tr_{post}$', rotation=0, labelpad=10)
+            plt.xticks([])
+            plt.xlim(0, T)
+            plt.subplot(5, 1, 5)
+            plt.plot(t, w)
+            plt.ylabel('$w$', rotation=0, labelpad=10)
+            plt.xlim(0, T)
+
+            plt.show()
+
+        .. image:: ./_static/API/clock_driven/layer/STDPLearner.*
+
+        '''
+        super().__init__()
+        self.tau_pre = tau_pre
+        self.tau_post = tau_post
+        self.trace_pre = 0
+        self.trace_post = 0
+        self.f_pre = f_pre
+        self.f_post = f_post
+
+    def reset(self):
+        self.trace_pre = 0
+        self.trace_post = 0
+
+    @torch.no_grad()
+    def stdp(self, s_pre: torch.Tensor, s_post: torch.Tensor, module: nn.Module, learning_rate: float):
+        if isinstance(module, nn.Linear):
+            # update trace
+            self.trace_pre += - self.trace_pre / self.tau_pre + s_pre
+            self.trace_post += - self.trace_post / self.tau_post + s_post
+
+            # update weight
+            delta_w_pre = self.f_pre(module.weight) * s_pre
+            delta_w_post = self.f_post(module.weight) * s_post.unsqueeze(1)
+            module.weight += (delta_w_pre + delta_w_post) * learning_rate
+        else:
+            raise NotImplementedError
+
+
+
+
+
+
+

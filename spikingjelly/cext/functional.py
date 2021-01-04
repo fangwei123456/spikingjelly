@@ -1,8 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
-from _C_gemm import sparse_mm_dense_cusparse as cext_sparse_mm_dense_cusparse
+import _C_gemm
 
 class sparse_mm_dense_atf(torch.autograd.Function):
     @staticmethod
@@ -11,7 +10,7 @@ class sparse_mm_dense_atf(torch.autograd.Function):
         if sparse.requires_grad or dense.requires_grad:
             ctx.save_for_backward(sparse, dense)
         y = torch.zeros(size=[sparse.shape[0], dense.shape[1]], dtype=torch.float, device=sparse.device)
-        cext_sparse_mm_dense_cusparse(sparse, dense, y)
+        _C_gemm.sparse_mm_dense_cusparse(sparse, dense, y)
         # y = torch.mm(sparse, dense)
         return y
 
@@ -24,7 +23,7 @@ class sparse_mm_dense_atf(torch.autograd.Function):
             grad_sparse = grad_output.mm(dense.t())
         if ctx.needs_input_grad[1]:
             grad_dense = torch.zeros_like(dense.data)
-            cext_sparse_mm_dense_cusparse(sparse.t(), grad_output, grad_dense)
+            _C_gemm.sparse_mm_dense_cusparse(sparse.t(), grad_output, grad_dense)
             # grad_dense = sparse.t().mm(grad_output)
         return grad_sparse, grad_dense
 
