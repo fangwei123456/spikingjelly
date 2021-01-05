@@ -15,8 +15,8 @@ requirements = ["torch"]
 
 
 def get_extensions():
-    if os.environ.get('CUDA_PATH') is None and os.environ.get('CUDA_HOME') is None:
-        print('CUDA_PATH or CUDA_HOME is None. Install Without CUDA Extension')
+    if CUDA_HOME is None:
+        print('CUDA_HOME is None. Install Without CUDA Extension')
         return None
     else:
         print('Install With CUDA Extension')
