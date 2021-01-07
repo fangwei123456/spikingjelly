@@ -5,11 +5,11 @@
 
 //LIF hard reset----------------------------------------------------
 std::vector<at::Tensor> LIF_hard_reset_forward(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset, 
-    const float & reciprocal_tau);
+    const float & reciprocal_tau, const bool & detach_x);
 
 std::vector<at::Tensor> LIF_hard_reset_forward_with_grad(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset,
     const float & alpha, const bool & detach_reset, const int & grad_surrogate_function_index,
-    const float & reciprocal_tau);
+    const float & reciprocal_tau, const bool & detach_x);
 
 //IF hard reset----------------------------------------------------
 std::vector<at::Tensor> IF_hard_reset_forward(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset);
@@ -20,11 +20,11 @@ std::vector<at::Tensor> IF_hard_reset_forward_with_grad(torch::Tensor & x, torch
 
 //LIF hard reset fptt----------------------------------------------------
 std::vector<at::Tensor> LIF_hard_reset_fptt(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset, 
-    const float & reciprocal_tau);
+    const float & reciprocal_tau, const bool & detach_x);
     
 std::vector<at::Tensor> LIF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset, 
     const float & alpha, const bool & detach_reset, const int & grad_surrogate_function_index,
-    const float & reciprocal_tau);
+    const float & reciprocal_tau, const bool & detach_x);
 
 //IF hard reset fptt----------------------------------------------------
 std::vector<at::Tensor> IF_hard_reset_fptt(torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset);
@@ -35,7 +35,7 @@ std::vector<at::Tensor> IF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torc
 //LIF bp----------------------------------------------------
 std::vector<at::Tensor> LIF_backward(
     torch::Tensor & grad_spike, torch::Tensor & grad_v_next, torch::Tensor & grad_s_to_h, torch::Tensor & grad_v_to_h,
-    const float & reciprocal_tau);
+    const float & reciprocal_tau, const bool & detach_x);
 
 //IF bp----------------------------------------------------
 std::vector<at::Tensor> IF_backward(
@@ -45,7 +45,7 @@ std::vector<at::Tensor> IF_backward(
 std::vector<at::Tensor> LIF_bptt(
     torch::Tensor & grad_spike_seq, torch::Tensor & grad_v_next,
     torch::Tensor & grad_s_to_h, torch::Tensor & grad_v_to_h,
-    const float & reciprocal_tau);
+    const float & reciprocal_tau, const bool & detach_x);
 
 //IF bptt----------------------------------------------------
 std::vector<at::Tensor> IF_bptt(
