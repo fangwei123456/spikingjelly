@@ -1,6 +1,6 @@
 .. _index:
 
-欢迎来到SpikingJelly的文档
+欢迎来到惊蛰(SpikingJelly)的文档
 ###################################
 
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
