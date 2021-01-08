@@ -277,7 +277,7 @@ __global__ void LIF_detach_x_hard_reset_forward_with_grad_cuda_kernel_half(
   const int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index < size)
   {
-    const half h = __hfma(reciprocal_tau, __hsub(v_reset, v[index]), __hadd(v[index], x[index]));
+    const half h = __hfma(reciprocal_tau, __hsub(v_reset, v[index]), __hadd((half) v[index], (half) x[index]));
     if (__hgeu(h, v_th))
     {
       spike[index] = __float2half(1.0f);
@@ -617,7 +617,7 @@ __global__ void LIF_detach_x_hard_reset_fptt_cuda_kernel_half(
     for(int mem_offset = 0; mem_offset < size; mem_offset += neuron_num)
     {
       const int mem_index = index + mem_offset;
-      const half h = __hfma(reciprocal_tau, __hsub(v_reset, v_next[index]), __hadd(v_next[index], x_seq[mem_index]));
+      const half h = __hfma(reciprocal_tau, __hsub(v_reset, v_next[index]), __hadd((half) v_next[index], (half) x_seq[mem_index]));
 
       if (__hgeu(h, v_th))
       {
@@ -789,7 +789,7 @@ __global__ void LIF_detach_x_hard_reset_fptt_with_grad_cuda_kernel_half(
     for(int mem_offset = 0; mem_offset < size; mem_offset += neuron_num)
     {
       const int mem_index = index + mem_offset;
-      const half h = __hfma(reciprocal_tau, __hsub(v_reset, v_next[index]), __hadd(v_next[index], x_seq[mem_index]));
+      const half h = __hfma(reciprocal_tau, __hsub(v_reset, v_next[index]), __hadd((half) v_next[index], (half) x_seq[mem_index]));
 
       if (__hgeu(h, v_th))
       {
