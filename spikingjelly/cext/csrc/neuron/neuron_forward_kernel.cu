@@ -125,7 +125,7 @@ const half reciprocal_tau)
 const int index = blockIdx.x * blockDim.x + threadIdx.x;
 if (index < size)
 {
-const half h = __hfma(reciprocal_tau, __hsub(v_reset, v[index]), __hadd(v[index], x[index]));
+const half h = __hfma(reciprocal_tau, __hsub(v_reset, v[index]), __hadd((half) v[index], (half) x[index]));
 if (__hgeu(h, v_th))
 {
   spike[index] = __float2half(1.0f);
