@@ -537,7 +537,7 @@ def bptt_template(grad_spike_seq: torch.Tensor, grad_v_next: torch.Tensor, grad_
     '''
     raise NotImplementedError
 
-def LIF_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, v_reset: float, reciprocal_tau: float):
+def LIF_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, v_reset: float, reciprocal_tau: float, detach_input: bool):
     '''
     * :ref:`API in English <LIF_hard_reset_forward-en>`
 
@@ -568,9 +568,9 @@ def LIF_hard_reset_forward(x: torch.Tensor, v:torch.Tensor, v_threshold: float, 
         H_{t} = V_{t-1} + \\frac{1}{\\tau}(X_{t} -(V_{t-1} - V_{reset}))
 
     '''
-    return _C_neuron.LIF_hard_reset_forward(x, v, v_threshold, v_reset, reciprocal_tau)
+    return _C_neuron.LIF_hard_reset_forward(x, v, v_threshold, v_reset, reciprocal_tau, detach_input)
 
-def LIF_hard_reset_fptt(x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, reciprocal_tau: float):
+def LIF_hard_reset_fptt(x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, reciprocal_tau: float, detach_input: bool):
     '''
     * :ref:`API in English <LIF_hard_reset_fptt-en>`
 
@@ -594,9 +594,9 @@ def LIF_hard_reset_fptt(x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float
 
     The multi-step version of :ref:`LIF_hard_reset_forward <LIF_hard_reset_forward-en>`.
     '''
-    return _C_neuron.LIF_hard_reset_fptt(x_seq, v, v_threshold, v_reset, reciprocal_tau)
+    return _C_neuron.LIF_hard_reset_fptt(x_seq, v, v_threshold, v_reset, reciprocal_tau, detach_input)
 
-def LIF_hard_reset_forward_with_grad(x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, reciprocal_tau: float):
+def LIF_hard_reset_forward_with_grad(x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, reciprocal_tau: float, detach_input: bool):
     '''
     * :ref:`API in English <LIF_hard_reset_forward_with_grad-en>`
 
@@ -627,9 +627,9 @@ def LIF_hard_reset_forward_with_grad(x: torch.Tensor, v: torch.Tensor, v_thresho
         H_{t} = V_{t-1} + \\frac{1}{\\tau}(X_{t} -(V_{t-1} - V_{reset}))
 
     '''
-    return _C_neuron.LIF_hard_reset_forward_with_grad(x, v, v_threshold, v_reset, reciprocal_tau)
+    return _C_neuron.LIF_hard_reset_forward_with_grad(x, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau, detach_input)
 
-def LIF_hard_reset_fptt_with_grad(x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, reciprocal_tau: float):
+def LIF_hard_reset_fptt_with_grad(x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, alpha: float, detach_reset: bool, grad_surrogate_function_index: int, reciprocal_tau: float, detach_input: bool):
     '''
     * :ref:`API in English <LIF_hard_reset_fptt_with_grad-en>`
 
@@ -653,9 +653,9 @@ def LIF_hard_reset_fptt_with_grad(x_seq: torch.Tensor, v: torch.Tensor, v_thresh
 
     The multi-step version of :ref:`LIF_hard_reset_forward_with_grad <LIF_hard_reset_forward_with_grad-en>`.
     '''
-    return _C_neuron.LIF_hard_reset_fptt_with_grad(x_seq, v, v_threshold, v_reset, reciprocal_tau)
+    return _C_neuron.LIF_hard_reset_fptt_with_grad(x_seq, v, v_threshold, v_reset, alpha, detach_reset, grad_surrogate_function_index, reciprocal_tau, detach_input)
 
-def LIF_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_h: torch.Tensor, grad_v_to_h: float, reciprocal_tau: float):
+def LIF_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_h: torch.Tensor, grad_v_to_h: float, reciprocal_tau: float, detach_input: bool):
     '''
     * :ref:`API in English <LIF_backward-en>`
 
@@ -690,10 +690,10 @@ def LIF_backward(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_
         \\frac{\\partial H_{t}}{\\partial V_{t-1}} & = 1 - \\frac{1}{\\tau}
 
     '''
-    return _C_neuron.LIF_backward(grad_spike, grad_v_next, grad_s_to_h, grad_v_to_h, reciprocal_tau)
+    return _C_neuron.LIF_backward(grad_spike, grad_v_next, grad_s_to_h, grad_v_to_h, reciprocal_tau, detach_input)
 
 
-def LIF_bptt(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_h: torch.Tensor, grad_v_to_h: float, reciprocal_tau: float):
+def LIF_bptt(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_h: torch.Tensor, grad_v_to_h: float, reciprocal_tau: float, detach_input: bool):
     '''
     * :ref:`API in English <LIF_bptt-en>`
 
@@ -732,7 +732,7 @@ def LIF_bptt(grad_spike: torch.Tensor, grad_v_next: torch.Tensor, grad_s_to_h: t
         \\frac{\\partial H_{t}}{\\partial V_{t-1}} & = 1 - \\frac{1}{\\tau}
 
     '''
-    return _C_neuron.LIF_bptt(grad_spike, grad_v_next, grad_s_to_h, grad_v_to_h, reciprocal_tau)
+    return _C_neuron.LIF_bptt(grad_spike, grad_v_next, grad_s_to_h, grad_v_to_h, reciprocal_tau, detach_input)
 
 class LIFStep(torch.autograd.Function):
     @staticmethod
