@@ -186,8 +186,10 @@ class Monitor:
             if self.avg_firing_rate_by_layer[module_name] is None:
                 if self.backend == 'numpy':
                     self.avg_firing_rate_by_layer[module_name] = np.concatenate(self.s[module_name]).mean()
+                    self.neuron_cnt[module_name] = self.s[module_name][0][0].size
                 elif self.backend == 'torch':
-                    self.avg_firing_rate_by_layer[module_name] = torch.cat(self.s[module_name]).mean() 
+                    self.avg_firing_rate_by_layer[module_name] = torch.cat(self.s[module_name]).mean()
+                    self.neuron_cnt[module_name] = self.s[module_name][0][0].numel()
             return self.avg_firing_rate_by_layer[module_name]
 
 
@@ -244,8 +246,10 @@ class Monitor:
             if self.nonfire_ratio_by_layer[module_name] is None:
                 if self.backend == 'numpy':
                     ttl_firing_times = np.concatenate(self.s[module_name]).sum(axis=0)
+                    self.neuron_cnt[module_name] = self.s[module_name][0][0].size
                     self.nonfire_ratio_by_layer[module_name] = (ttl_firing_times == 0).astype(float).sum() / ttl_firing_times.size
                 elif self.backend == 'torch':
                     ttl_firing_times = torch.cat(self.s[module_name]).sum(dim=0)
+                    self.neuron_cnt[module_name] = self.s[module_name][0][0].numel()
                     self.nonfire_ratio_by_layer[module_name] = (ttl_firing_times == 0).float().sum() / ttl_firing_times.numel()
             return self.nonfire_ratio_by_layer[module_name]
