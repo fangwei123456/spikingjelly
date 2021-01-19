@@ -72,6 +72,21 @@
 * :ref:`search`
 
 
+引用
+-------------------------
+如果您在自己的工作中用到了惊蛰(SpikingJelly)，您可以按照下列格式进行引用：
+
+.. code-block::
+
+    @misc{SpikingJelly,
+      author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors}},
+      title = {SpikingJelly},
+      year = {2020},
+      publisher = {GitHub},
+      journal = {GitHub repository},
+      howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+    }
+
 项目信息
 -------------------------
 北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <https://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
@@ -154,6 +169,21 @@ Indices and tables
 * :ref:`Module Index <modindex>`
 * :ref:`Search Page <search>`
 
+Citation
+-------------------------
+
+If you use SpikingJelly in your work, please cite it as follows:
+
+.. code-block::
+
+    @misc{SpikingJelly,
+      author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors}},
+      title = {SpikingJelly},
+      year = {2020},
+      publisher = {GitHub},
+      journal = {GitHub repository},
+      howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+    }
 
 About
 -------------------------

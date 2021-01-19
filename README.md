@@ -81,6 +81,23 @@ As simple as using PyTorch.
 >>> net = net.to(device) # Can be CPU or CUDA devices
 ```
 
+## Citation
+
+If you use SpikingJelly in your work, please cite it as follows:
+
+```
+@misc{SpikingJelly,
+  author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors}},
+  title = {SpikingJelly},
+  year = {2020},
+  publisher = {GitHub},
+  journal = {GitHub repository},
+  howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+}
+```
+
+
+
 ## About
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
