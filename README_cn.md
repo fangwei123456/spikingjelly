@@ -87,7 +87,7 @@ SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，�
 
 ```
 @misc{SpikingJelly,
-  author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors}},
+  author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors},
   title = {SpikingJelly},
   year = {2020},
   publisher = {GitHub},

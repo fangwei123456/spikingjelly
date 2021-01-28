@@ -87,7 +87,7 @@ If you use SpikingJelly in your work, please cite it as follows:
 
 ```
 @misc{SpikingJelly,
-  author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors}},
+  author = {Wei Fang, Yanqi Chen, Jianhao Ding, Ding Chen, Zhaofei Yu, Huihui Zhou, Yonghong Tian and other contributors},
   title = {SpikingJelly},
   year = {2020},
   publisher = {GitHub},
