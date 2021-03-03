@@ -12,7 +12,7 @@ import inspect
 import matplotlib.pyplot as plt
 import warnings
 
-from spikingjelly.clock_driven._ann2snn.kernels.onnx import _o2p_converter as onnx2pytorch
+from spikingjelly.clock_driven.ann2snn.kernels.onnx import _o2p_converter as onnx2pytorch
 
 class parser:
     def __init__(self, name='', kernel='onnx', **kargs):
@@ -74,7 +74,7 @@ class parser:
             data = data.cpu()
             model = model.cpu()
 
-            import spikingjelly.clock_driven._ann2snn.kernels.onnx as onnx_kernel
+            import spikingjelly.clock_driven.ann2snn.kernels.onnx as onnx_kernel
 
             onnx_model = onnx_kernel.pytorch2onnx_model(model=model, data=data, log_dir=self.config['log_dir'])
             # onnx_kernel.print_onnx_model(onnx_model.graph)
