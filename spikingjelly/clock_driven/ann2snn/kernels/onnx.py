@@ -1,84 +1,17 @@
+import re
 import onnx
 import onnx.helper as helper
 import onnx.numpy_helper as numpy_helper
 import collections
+from io import BytesIO
 import numpy as np
 import torch
 import torch.nn as nn
 import os
 import tqdm
 import onnxruntime as ort
+from io import StringIO
 from collections import defaultdict
-
-
-class Mul(nn.Module):
-    def __init__(self):
-        super().__init__()
-    def forward(self, input1, input2):
-        return input1 * input2
-
-
-class Add(nn.Module):
-    def __init__(self):
-        super().__init__()
-    def forward(self,input1,input2):
-        return input1 + input2
-
-
-class Reshape(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, input1, input2):
-        return torch.reshape(input1,shape=list(input2))
-
-
-class Concat(nn.Module):
-    def __init__(self, dim=[1]):
-        super().__init__()
-        self.dim = dim
-        if not isinstance(self.dim, list):
-            self.dim = [self.dim]
-        for i, d in enumerate(self.dim):
-            if not isinstance(d, int):
-                self.dim[i] = int(d)
-
-    def forward(self, *args):
-        args = list(args)
-        for i,a in enumerate(args):
-            args[i] = a.type_as(args[0])
-        return torch.cat(args,dim=self.dim[0])
-
-class Shape(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, input):
-        return torch.IntTensor([input.size(i) for i in range(len(input.size()))])
-
-class Gather(nn.Module):
-    def __init__(self,dim=1):
-        super().__init__()
-        self.dim= int(dim)
-
-    def forward(self, input1, input2):
-        return torch.gather(input1,dim=self.dim,index=input2.cpu())
-
-class Unsqueeze(nn.Module):
-    def __init__(self, dim=[1]):
-        super().__init__()
-        self.dim = dim
-        if not isinstance(self.dim, list):
-            self.dim = [self.dim]
-        for i,d in enumerate(self.dim):
-            if not isinstance(d,int):
-                self.dim[i] = int(d)
-
-    def forward(self, input):
-        x = input
-        for i in self.dim:
-            x = torch.unsqueeze(x,dim=i)
-        return x
 
 class TopologyAnalyser:
     def __init__(self):
@@ -506,7 +439,7 @@ def get_intermediate_output_statistics(model, numpy_tensor, channelwise=False, d
         return output_statistics
 
 def normalize_model(model, output_statistics, topo_analyser, robust_norm=True, channelwise=False, eps=1e-5):
-    nodes = model.graph.node
+    node = model.graph.node
     graph = model.graph
     initializer = model.graph.initializer
     if robust_norm:
@@ -516,7 +449,7 @@ def normalize_model(model, output_statistics, topo_analyser, robust_norm=True, c
     node_scaled_range = {}
     seperate_scale = collections.OrderedDict()
     print("\nNormalizing model...\n")
-    for node_idx, node in enumerate(tqdm.tqdm(nodes)):
+    for node_idx, node in enumerate(tqdm.tqdm(node)):
         output = node.output
         input = node.input
         op = node.op_type
@@ -607,7 +540,7 @@ def normalize_model(model, output_statistics, topo_analyser, robust_norm=True, c
                     # print(output[0], op, i, input_range, output_range, demand, input_real_range, scale)
 
                     idx, _ = find_node_by_output(i, graph)
-                    if idx is not None and nodes[idx].op_type in ['Conv', 'Gemm', 'BatchNormalization']:
+                    if idx is not None and node[idx].op_type in ['Conv', 'Gemm', 'BatchNormalization']:
                         scale_node_weight_bias(topo_analyser, graph, idx, scale)
                     else:
                         scale = scale.reshape(
@@ -645,21 +578,21 @@ def normalize_model(model, output_statistics, topo_analyser, robust_norm=True, c
 
     for node_idx in reversed(seperate_scale.keys()):
         args = {}
-        for attr in nodes[node_idx].attribute:
+        for attr in node[node_idx].attribute:
             args[attr.name] = helper.get_attribute_value(attr)
         input = [str(i) if i not in seperate_scale[node_idx].keys() else seperate_scale[node_idx][i][1] \
-                 for i in nodes[node_idx].input]
+                 for i in node[node_idx].input]
 
-        output = [str(i) for i in nodes[node_idx].output]
+        output = [str(i) for i in node[node_idx].output]
 
         new_node = onnx.helper.make_node(
-            nodes[node_idx].op_type,
+            node[node_idx].op_type,
             inputs=input,
             outputs=output,
             **args
         )
-        nodes.remove(nodes[node_idx])
-        nodes.insert(node_idx, new_node)
+        node.remove(node[node_idx])
+        node.insert(node_idx, new_node)
 
         for i in seperate_scale[node_idx].keys():
             new_node = onnx.helper.make_node(
@@ -667,7 +600,7 @@ def normalize_model(model, output_statistics, topo_analyser, robust_norm=True, c
                 inputs=[seperate_scale[node_idx][i][0], i],
                 outputs=[seperate_scale[node_idx][i][1]]
             )
-            nodes.insert(node_idx, new_node)
+            node.insert(node_idx, new_node)
     print("Finished normalizing model!")
     return model
 
@@ -930,6 +863,12 @@ class _o2p_converter:
 
     @staticmethod
     def convert_shape(node, model:_pt_model):
+        class Shape(nn.Module):
+            def __init__(self):
+                super().__init__()
+
+            def forward(self, input):
+                return torch.IntTensor([input.size(i) for i in range(len(input.size()))])
         shape = Shape()
         model.module_list.append(shape)
         return len(model.module_list) - 1, node.input, node.output
@@ -943,6 +882,14 @@ class _o2p_converter:
         for att in node.attribute:
             if att.name in attr_map:
                 kwargs[attr_map[att.name]] = att.f
+        class Gather(nn.Module):
+            def __init__(self,dim=1):
+                super().__init__()
+                self.dim= int(dim)
+
+            def forward(self, input1, input2):
+                return torch.gather(input1,dim=self.dim,index=input2.cpu())
+
         gather = Gather(**kwargs)
         model.module_list.append(gather)
         return len(model.module_list) - 1, node.input, node.output
@@ -956,6 +903,22 @@ class _o2p_converter:
         for att in node.attribute:
             if att.name in attr_map:
                 kwargs[attr_map[att.name]] = att.f
+        class Unsqueeze(nn.Module):
+            def __init__(self, dim=[1]):
+                super().__init__()
+                self.dim = dim
+                if not isinstance(self.dim, list):
+                    self.dim = [self.dim]
+                for i,d in enumerate(self.dim):
+                    if not isinstance(d,int):
+                        self.dim[i] = int(d)
+
+            def forward(self, input):
+                x = input
+                for i in self.dim:
+                    x = torch.unsqueeze(x,dim=i)
+                return x
+
         unsqueeze = Unsqueeze(**kwargs)
         model.module_list.append(unsqueeze)
         return len(model.module_list) - 1, node.input, node.output
@@ -970,12 +933,34 @@ class _o2p_converter:
             if att.name in attr_map:
                 kwargs[attr_map[att.name]] = att.f
 
+        class Concat(nn.Module):
+            def __init__(self, dim=[1]):
+                super().__init__()
+                self.dim = dim
+                if not isinstance(self.dim, list):
+                    self.dim = [self.dim]
+                for i, d in enumerate(self.dim):
+                    if not isinstance(d, int):
+                        self.dim[i] = int(d)
+
+            def forward(self, *args):
+                args = list(args)
+                for i,a in enumerate(args):
+                    args[i] = a.type_as(args[0])
+                return torch.cat(args,dim=self.dim[0])
+
         concat = Concat(**kwargs)
         model.module_list.append(concat)
         return len(model.module_list) - 1, node.input, node.output
 
     @staticmethod
     def convert_reshape(node, model:_pt_model):
+        class Reshape(nn.Module):
+            def __init__(self):
+                super().__init__()
+
+            def forward(self, input1, input2):
+                return torch.reshape(input1,shape=list(input2))
         reshape = Reshape()
         model.module_list.append(reshape)
         return len(model.module_list) - 1, node.input, node.output
@@ -1030,12 +1015,22 @@ class _o2p_converter:
 
     @staticmethod
     def convert_add(node, model:_pt_model):
+        class Add(nn.Module):
+            def __init__(self):
+                super().__init__()
+            def forward(self,input1,input2):
+                return input1 + input2
         add = Add()
         model.module_list.append(add)
         return len(model.module_list)-1, node.input, node.output
 
     @staticmethod
     def convert_mul(node, model:_pt_model):
+        class Mul(nn.Module):
+            def __init__(self):
+                super().__init__()
+            def forward(self,input1,input2):
+                return input1 * input2
         mul = Mul()
         model.module_list.append(mul)
         return len(model.module_list)-1, node.input, node.output
@@ -1121,3 +1116,7 @@ class _o2p_converter:
         pad = nn.ConstantPad2d([*pads[2:4],*pads[3:5]],value)
         model.module_list.append(pad)
         return len(model.module_list)-1, node.input, node.output
+
+if __name__ == '__main__':
+    x = nn.Conv2d(1,2,3).to('cuda:0')
+    print(x.weight.get_device())
