@@ -13,7 +13,7 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-Install from [PyPI](https://pypi.org/project/spikingjelly/)：
+**Install from** [**PyPI**](https://pypi.org/project/spikingjelly/)：
 
 ```bash
 pip install spikingjelly
