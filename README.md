@@ -19,7 +19,9 @@ Install from [PyPI](https://pypi.org/project/spikingjelly/)：
 pip install spikingjelly
 ```
 
-Developers can download and install the latest version from source codes:
+Note that the CUDA extensions are not included in the PyPI package. If you want to use the CUDA extensions, please install from the source codes.
+
+Download and install the latest version from source codes:
 
 From [GitHub](https://github.com/fangwei123456/spikingjelly):
 ```bash
