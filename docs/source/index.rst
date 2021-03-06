@@ -19,7 +19,7 @@
 
     pip install spikingjelly
 
-或者对于开发者，下载源代码并安装：
+PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代码安装**：
 
 通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
 
@@ -119,7 +119,7 @@ Install from `PyPI <https://pypi.org/project/spikingjelly/>`_：
 
     pip install spikingjelly
 
-Developers can download and install the latest version from source codes:
+Note that the CUDA extensions are not included in the PyPI package. If you want to use the CUDA extensions, please **install from the source codes**:
 
 From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
