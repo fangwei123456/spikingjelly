@@ -82,6 +82,21 @@ class Unsqueeze(nn.Module):
 
 class TopologyAnalyser:
     def __init__(self):
+        '''
+        * :ref:`API in English <TopologyAnalyser.__init__-en>`
+
+        .. _TopologyAnalyser.__init__-cn:
+
+        这个类通过onnx分析模型的拓扑结构，方便后续处理
+        此处还有更多更好的实现方法，欢迎开发者不断优化
+
+        * :ref:`API in English <TopologyAnalyser.__init__-cn>`
+
+        .. _TopologyAnalyser.__init__-en:
+
+        This class analyzes the topological structure of the model through onnx to facilitate subsequent processing
+        There are better implementation methods here, developers are welcome to continue to optimize
+        '''
         self.data_nodes = []
         self.module_output = collections.OrderedDict()
         self.module_op = collections.OrderedDict()
@@ -209,6 +224,33 @@ class TopologyAnalyser:
         return module_name
 
 def pytorch2onnx_model(model: nn.Module, data, **kargs) -> onnx.ModelProto:
+    '''
+
+    * :ref:`API in English <pytorch2onnx_model-en>`
+
+    .. _pytorch2onnx_model-cn:
+
+    :param model: 待转换的PyTorch模型
+
+    :param data: 用于转换的数据（用来确定输入维度）
+
+    :param log_dir: 输出文件夹
+
+    转换PyTorch模型到onnx模型
+
+    * :ref:`API in English <pytorch2onnx_model-cn>`
+
+    .. _pytorch2onnx_model-en:
+
+    :param model: the PyTorch model to be converted
+
+    :param data: The data used for conversion (used to determine the input dimension)
+
+    :param log_dir: output folder
+
+    Convert PyTorch model to onnx model
+
+    '''
     try:
         log_dir = kargs['log_dir']
     except KeyError:
@@ -245,6 +287,42 @@ def layer_reduction(model: onnx.ModelProto) -> onnx.ModelProto:
     return model
 
 def rate_normalization(model: onnx.ModelProto, data: torch.Tensor, **kargs) -> onnx.ModelProto:
+    '''
+
+    * :ref:`API in English <rate_normalization-en>`
+
+    .. _rate_normalization-cn:
+
+    :param model: ANN模型，类型为onnx.ModelProto
+
+    :param data: 用于转换的数据，类型为torch.Tensor
+
+    :param channelwise: 如果为``True``，则控制激活幅值的统计是channelwise的；否则，控制激活幅值的统计是layerwise的
+
+    :param robust: 如果为``True``，则控制激活幅值的统计是激活的99.9百分位；否则，控制激活幅值的统计是激活的最值
+
+    :param eps: epsilon；未设置值时默认1e-5
+
+    发放率归一化
+
+    * :ref:`API in English <rate_normalization-cn>`
+
+    .. _rate_normalization-en:
+
+    :param model: ANN model, the type is onnx.ModelProto
+
+    :param data: the data used for conversion, the type is torch.Tensor
+
+    :param channelwise: If ``True`` , the statistics that control the activation amplitude are channelwise; otherwise, the statistics that control the activation amplitude are layerwise
+
+    :param robust: If ``True``, the statistic of the control activation amplitude is the 99.9th percentile of activation; otherwise, the statistic of the activation amplitude is the maximum value of activation
+
+    :param eps: epsilon; if no value is set, the default is 1e-5
+
+    normalize the firing rate
+
+    '''
+
     try:
         channelwise = kargs['channelwise']
     except KeyError:
@@ -854,26 +932,26 @@ def load_parameters(model:_pt_model, initializer):
 class _o2p_converter:
     def __init__(self):
         '''
-            * :ref:`API in English <ONNX_Converter.__init__-en>`
+        * :ref:`API in English <ONNX_Converter.__init__-en>`
 
-            .. _ONNX_Converter.__init__-cn:
+        .. _ONNX_Converter.__init__-cn:
 
-            该类主要将onnx模型转换为Pytorch的ANN模型，从而转换为SpikingJelly的SNN模型
-            链接中 [＃f1]_ 提供了一个onnx-pytorch转换的主要版本。更复杂的版本可以在这里找到。
-            大多数使用过的onnx运算符已在此处定义，但仍然有一些未被覆盖，或没有被完美实现
-            用户可以通过添加如下面例子所示的静态方法来定义您的例外情况
+        该类主要将onnx模型转换为Pytorch的ANN模型，从而转换为SpikingJelly的SNN模型
+        链接中 [＃f1]_ 提供了一个onnx-pytorch转换的主要版本。更复杂的版本可以在这里找到。
+        大多数使用过的onnx运算符已在此处定义，但仍然有一些未被覆盖，或没有被完美实现
+        用户可以通过添加如下面例子所示的静态方法来定义您的例外情况
 
-            * :ref:`API in English <ONNX_Converter.__init__-cn>`
+        * :ref:`API in English <ONNX_Converter.__init__-cn>`
 
-            .. _ONNX_Converter.__init__-en:
+        .. _ONNX_Converter.__init__-en:
 
-            This class mainly convert an onnx model to Pytorch ANN model, and thus to SpikingJelly SNN model
-            The link [#f1]_ has provided a primary version of onnx-pytorch conversion. More complex version can be found here.
-            Most used onnx operators has covered here, yet still there are some left, or not being defined perfectly
-            User can define your exceptions by adding static method like below
+        This class mainly convert an onnx model to Pytorch ANN model, and thus to SpikingJelly SNN model
+        The link [#f1]_ has provided a primary version of onnx-pytorch conversion. More complex version can be found here.
+        Most used onnx operators has covered here, yet still there are some left, or not being defined perfectly
+        User can define your exceptions by adding static method like below
 
-            .. [#f1] https://gist.github.com/qinjian623/6aa777037534c1c1dccbb66f832e93b8
-            '''
+        .. [#f1] https://gist.github.com/qinjian623/6aa777037534c1c1dccbb66f832e93b8
+        '''
         pass
 
     def add_method(self, op_name, func):

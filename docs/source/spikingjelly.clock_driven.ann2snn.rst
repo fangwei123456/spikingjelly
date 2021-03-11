@@ -11,34 +11,19 @@ Subpackages
 Submodules
 ----------
 
+spikingjelly.clock_driven.ann2snn.__init__ module
+---------------------------------
+
+.. automodule:: spikingjelly.clock_driven.ann2snn.__init__
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 spikingjelly.clock_driven.ann2snn.modules module
 ----------------------------------
 
 .. automodule:: spikingjelly.clock_driven.ann2snn.modules
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.clock_driven.ann2snn.parser module
----------------------------------
-
-.. automodule:: spikingjelly.clock_driven.ann2snn.parser
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.clock_driven.ann2snn.simulation module
--------------------------------------
-
-.. automodule:: spikingjelly.clock_driven.ann2snn.simulation
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.clock_driven.ann2snn.utils module
---------------------------------
-
-.. automodule:: spikingjelly.clock_driven.ann2snn.utils
    :members:
    :undoc-members:
    :show-inheritance:

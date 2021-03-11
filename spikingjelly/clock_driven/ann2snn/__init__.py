@@ -67,7 +67,6 @@ class parser:
             else:
                 pass
 
-
         if self.kernel.lower() == 'onnx':
             # use onnx engine
 
@@ -82,7 +81,7 @@ class parser:
             if layer_reduc:
                 onnx_model = onnx_kernel.layer_reduction(onnx_model)
             onnx.checker.check_model(onnx_model)
-            onnx_model = onnx_kernel.rate_normalization(onnx_model, data.numpy()) #**self.config['normalization']
+            onnx_model = onnx_kernel.rate_normalization(onnx_model, data.numpy(), **kargs) #**self.config['normalization']
             onnx_kernel.save_model(onnx_model,os.path.join(self.config['log_dir'],model_name+".onnx"))
 
             convert_methods = onnx2pytorch
@@ -99,7 +98,7 @@ class parser:
         else:
             # use pytorch engine
 
-            import spikingjelly.clock_driven.ann2snn.pytorch_v2.pytorch_kernel as pytorch_kernel
+            import spikingjelly.clock_driven.ann2snn.kernel.pytorch as pytorch_kernel
 
             if layer_reduc:
                 model = pytorch_kernel.layer_reduction(model)
@@ -119,6 +118,7 @@ class parser:
                 model._modules[name] = new_module
             if "BatchNorm" in module.__class__.__name__:
                 try:
+                    # NSIFNode是能够产生正负脉冲的模型，现在版本被删除
                     new_module = nn.Sequential(module, neuron.NSIFNode(v_threshold=(-1.0, 1.0), v_reset=None))
                 except AttributeError:
                     new_module = module
@@ -180,6 +180,13 @@ class simulator:
         print('simulator log_dir:',self.log_dir)
         if not os.path.isdir(self.log_dir):
             os.makedirs(self.log_dir)
+
+        try:
+            self.fig = kargs['canvas']
+            self.ax = self.fig.add_subplot(1, 1, 1)
+            plt.ion()
+        except KeyError:
+            self.fig = None
 
         try:
             encoder = kargs['encoder']
@@ -393,12 +400,12 @@ class classify_simulator(simulator):  # 一个分类任务的实例
         self.global_shared['accu_correct'] = 0.0
         self.global_shared['accu_total'] = 0.0
         self.global_shared['acc'] = 0.0
-        try:
-            self.fig = kargs['canvas']
-            self.ax = self.fig.add_subplot(1, 1, 1)
-            plt.ion()
-        except KeyError:
-            self.fig = None
+        # try:
+        #     self.fig = kargs['canvas']
+        #     self.ax = self.fig.add_subplot(1, 1, 1)
+        #     plt.ion()
+        # except KeyError:
+        #     self.fig = None
 
     @staticmethod
     def correct_num(targets, out_spike_cnt, **kargs) -> float:

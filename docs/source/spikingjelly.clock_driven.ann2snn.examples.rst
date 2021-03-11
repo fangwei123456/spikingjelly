@@ -7,7 +7,7 @@ Submodules
 spikingjelly.clock_driven.ann2snn.examples.if\_cnn\_mnist module
 --------------------------------------------------
 
-.. automodule:: spikingjelly.clock_driven.ann2snn.examples.if_cnn_mnist
+.. automodule:: spikingjelly.clock_driven.ann2snn.examples.cnn_mnist
    :members:
    :undoc-members:
    :show-inheritance:

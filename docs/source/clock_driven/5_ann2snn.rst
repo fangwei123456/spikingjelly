@@ -2,9 +2,12 @@
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingjelly.clock_driven.ann2snn``，介绍如何将训练好的前馈ANN转换SNN，并且在SpikingJelly框架上进行仿真。
+本节教程主要关注 ``spikingjelly.clock_driven.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
-目前暂时支持Pytorch中实现的包含 ``nn.Conv2d`` , ``nn.Linear`` , ``nn.MaxPool2d`` , ``nn.AvgPool2d`` , ``nn.BatchNorm1d`` , ``nn.BatchNorm2d`` , ``nn.Flatten`` , ``nn.ReLU`` 的前馈神经网络的转换，其他模块方案正在开发中...
+目前实现了两套实现：基于ONNX 和 基于PyTorch，在框架中被称为 ONNX kernel 和 PyTorch kernel。
+但是这两套实现各有特点，ONNX kernel的实现更加通用，支持更加复杂的拓扑结构（例如ResNet）；
+PyTorch kernel主要是为了简单测试，支持的模块比较有限且在现有配置下可能有很多bug。
+更多模块可以通过ONNX拓展，用户可自行实现...
 
 ANN转换SNN的理论基础
 --------------------
@@ -171,90 +174,52 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 仿真前，我们需要将原模型中的ReLU激活函数变为IF神经元。
 对于ANN中的平均池化，我们需要将其转化为空间下采样。由于IF神经元可以等效ReLU激活函数。空间下采样后增加IF神经元与否对结果的影响极小。
-对于ANN中的最大池化，目前没有非常理想的方案。目前的最佳方案为使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_ 。这也是ann2snn的默认方式。还有文献提出使用空间下采样替代Maxpool2d。
+对于ANN中的最大池化，目前没有非常理想的方案。目前的最佳方案为使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_ 。当然在ONNX kernel中没有用，不过我们在``ann2snn.modules``依然有实现。还有文献提出使用空间下采样替代Maxpool2d。此处我们依然推荐使用avgpool2d。
 
 仿真时，依照转换理论，SNN需要输入恒定的模拟输入。使用Poisson编码器将会带来准确率的降低。Poisson编码和恒定输入方式均已实现，感兴趣可通过配置进行不同实验。
 
-可选配置
+实现与可选配置
 ^^^^^^^^
 
-鉴于转换中有多种可选配置， ``ann2snn.utils`` 中实现 ``Config`` 类用来加载默认配置和保存配置。
-通过加载Config中的默认配置并修改，可以设定自己模型运行时所需要的参数。
+ann2snn框架在2020年12月进行一次较大更新。最大改动就是将参数配置回归到了模块参数，并且尽可能考虑到了用户对灵活度和渐变操作的需求。这里我们将简单介绍一下这些类和方法。
+针对理论中提到的分析和仿真两大中心，设计了parser和simulator两大类。类的定义在``spikingjelly.ann2snn.__init__``中。
 
-下面，将介绍不同参数对应的配置，可行的输入范围，以及为什么要这个配置
+◆ parser类
+1. 类初始化函数
+- kernel：转换的kernel。可选范围为'onnx'、'pytorch'，这将决定您使用的是ONNX kernel还是PyTorch kernel
+- name：模型的名字，通常您可以取一个和任务、模型相关的名字，之后的文件夹生成将可能用到这个字符串
+- z_norm：许多深度学习模型会存在数据标准化（Z normalization）。如果您ANN模型有这个操作，这个参数的数据格式为：(mean, std)，例如对于CIFAR10，z_norm可以为((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+- log_dir：保存临时文件的文件夹，如没有此参数则会根据参数name和当前时间自动生成
+- json：历史配置文件名。当您运行过一次parser后，程序会自动保存json文件到log_dir，您可以使用json文件进行parser快速初始化
 
-(1)conf['parser']['robust_norm']
+2. parse函数
+- channelwise: 如果为``True``，则控制激活幅值的统计是channelwise的；否则，控制激活幅值的统计是layerwise的
+- robust: 如果为``True``，则控制激活幅值的统计是激活的99.9百分位；否则，控制激活幅值的统计是激活的最值
+- user_methods：默认使用``spikingjelly.ann2snn.kernel.onnx._o2p_converter``；当发现ONNX kernel遇到ONNX转换PyTorch的方法缺乏的时候，可以通过用户自定义函数的形式进行转换。函数接口可见``spikingjelly.ann2snn.kernel.onnx._o2p_converter``的staticmethods
 
-可行值： ``bool`` 类型
+◆ simulator类
+1. 类初始化参数
+- snn：待仿真的转换后的SNN
+- device：仿真的设备，支持单设备（输入为字符串）和多设备（输入为list,set,tuple类型）
+- name：模型的名字，通常您可以取一个和任务、模型相关的名字，之后的文件夹生成将可能用到这个字符串
+- log_dir：保存临时文件的文件夹，如没有此参数则会根据参数name和当前时间自动生成
+- encoder：编码器，可选范围为'constant'、'poisson'
 
-说明：当设置为 ``True`` ，使用鲁棒归一化
+2. simulate函数
+- data_loader：仿真的数据集的dataloader
+- T：仿真时间
+- canvas：plt.fig类型，用于对仿真模型标量性能（例如准确率）的绘图
+- online_drawer：如果为``True``，则在线绘图；否则，仿真结束后绘图
+- func_dict：用户可以通过自己定义标量性能函数实现绘图
 
-(2)conf['simulation']['reset_to_zero']
+除此之外，用户可以通过继承simulate类进行仿真器的功能细化。
+比如``spikingjelly.ann2snn.__init__``实现了仿真分类任务的``classify_simulator``
 
-可行值： ``None`` , 浮点数
-
-说明：当设置为 ``None`` ，神经元重置的时候采用减去 :math:`V_{threshold}` 的方式；当为浮点数时，刚刚发放的神经元会被设置为 :math:`V_{reset}` 。对于需要归一化的转换模型，设置为 ``None`` 是推荐的方式，具有理论保证
-
-(3)conf['simulation']['encoder']['possion']
-
-可行值： ``bool`` 类型
-
-说明：当设置为 ``True`` ，输入采用泊松编码器；否则，采用浮点数持续的输入仿真时长T时间
-
-(4)conf['simulation']['avg_pool']['has_neuron']
-
-可行值： ``bool`` 类型
-
-说明：当设置为 ``True`` ，平均池化层被转化为空间下采样加上一层IF神经元；否则，平均池化层仅被转化为空间下采样
-
-(5)conf['simulation']['max_pool']['if_spatial_avg']
-
-可行值： ``bool`` 类型
-
-说明：当设置为``True``，最大池化层被转化为平均池化。这个方式根据文献可能会导致精度下降
-
-(6)conf['simulation']['max_pool']['if_wta']
-
-可行值： ``bool`` 类型
-
-说明：当设置为 ``True`` ，最大池化层和ANN中最大池化一样。使用ANN的最大池化意味着当感受野中一旦有脉冲即输出1
-
-(7)conf['simulation']['max_pool']['momentum']
-
-可行值： ``None`` , [0,1]内浮点数
-
-说明：最大池化层被转化为基于动量累计脉冲的门控函数控制脉冲通道。当设置为 ``None`` ，直接累计脉冲；若为[0,1]浮点数，进行脉冲动量累积
-
-默认配置为：
-
-.. code-block:: python
-
-    default_config =
-    {
-    'simulation':
-        {
-        'reset_to_zero': False,
-        'encoder':
-            {
-            'possion': False
-            },
-        'avg_pool':
-            {
-            'has_neuron': True
-            },
-        'max_pool':
-            {
-            'if_spatial_avg': False,
-            'if_wta': False,
-            'momentum': None
-            }
-        },
-    'parser':
-        {
-        'robust_norm': True
-        }
-    }
-
+3. classify_simulator.simulate函数
+除去继承的参数外，
+- ann_acc：ANN转换前的分类准确率（0-1间的小数）
+- fig_name: 仿真图像的名字
+- step_max： 如果为``True``，则图像中标明推理过程中的最大准确率
 
 
 识别MNIST
@@ -294,7 +259,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
             x = self.network(x)
             return x
 
-注意：定义的网络中，模块定义的顺序必须和前向的顺序保持一致，否则会影响网络的自动分析。最好使用 ``nn.Sequence()`` 完整定义好网络。每一个Conv2d和Linear层后，必须要放一个ReLU层，其间可以隔着一个BatchNorm层。池化层后不加ReLU。如果遇到需要将tensor展开的情况，就在网络中定义一个 ``nn.Flatten`` 模块，在forward函数中需要使用定义的Flatten而不是view函数。
+注意：如果遇到需要将tensor展开的情况，就在网络中定义一个 ``nn.Flatten`` 模块，在forward函数中需要使用定义的Flatten而不是view函数。
 
 定义我们的超参数：
 
@@ -308,15 +273,7 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
     train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“10”\n input training epochs, e.g., "10": '))
     model_name = input('输入模型名字，例如“mnist”\n input model name, for log_dir generating , e.g., "mnist": ')
 
-程序按照指定的文件夹搜寻训练好的模型存档（和 `model_name` 同名的文件），之后的所有临时文件都会储存到文件夹中。
-
-加载默认的转换配置并保存：
-
-.. code-block:: python
-
-    config = utils.Config.default_config
-    print('ann2snn config:\n\t', config)
-    utils.Config.store_config(os.path.join(log_dir,'default_config.json'),config)
+之后的所有临时文件都会储存到文件夹中。
 
 初始化数据加载器、网络、优化器、损失函数：
 
@@ -354,12 +311,12 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
         if best_acc <= acc:
             utils.save_model(ann, log_dir, model_name+'.pkl')
 
-完整的代码位于 ``ann2snn.examples.if_cnn_mnist.py`` ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在Python命令行运行它：
+完整的代码位于 ``ann2snn.examples.cnn_mnist.py`` ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在Python命令行运行它：
 
 .. code-block:: python
 
-    >>> import spikingjelly.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
-    >>> if_cnn_mnist.main()
+    >>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+    >>> cnn_mnist.main()
     输入运行的设备，例如“cpu”或“cuda:0”
      input device, e.g., "cpu" or "cuda:0": cuda:15
     输入保存MNIST数据集的位置，例如“./”
@@ -372,30 +329,23 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
      input simulating steps, e.g., "100": 100
     输入训练轮数，即遍历训练集的次数，例如“10”
      input training epochs, e.g., "10": 10
-    输入模型名字，用于自动生成日志文档，例如“mnist”
-     input model name, for log_dir generating , e.g., "mnist"
-
-    如果main函数的输入不是具有有效文件的文件夹，自动生成一个日志文件文件夹
-    If the input of the main function is not a folder with valid files, an automatic log file folder is automatically generated.
-    第一行输出为保存日志文件的位置，例如“./log-mnist1596804385.476601”
-     Terminal outputs root directory for saving logs, e.g., "./": ./log-mnist1596804385.476601
+    输入模型名字，用于自动生成日志文档，例如“cnn_mnist”
+     input model name, for log_dir generating , e.g., "cnn_mnist"
 
     Epoch 0 [1/937] ANN Training Loss:2.252 Accuracy:0.078
-    Epoch 0 [101/937] ANN Training Loss:1.424 Accuracy:0.669
+    Epoch 0 [101/937] ANN Training Loss:1.423 Accuracy:0.669
     Epoch 0 [201/937] ANN Training Loss:1.117 Accuracy:0.773
     Epoch 0 [301/937] ANN Training Loss:0.953 Accuracy:0.795
     Epoch 0 [401/937] ANN Training Loss:0.865 Accuracy:0.788
     Epoch 0 [501/937] ANN Training Loss:0.807 Accuracy:0.792
     Epoch 0 [601/937] ANN Training Loss:0.764 Accuracy:0.795
-    Epoch 0 [701/937] ANN Training Loss:0.726 Accuracy:0.834
+    Epoch 0 [701/937] ANN Training Loss:0.726 Accuracy:0.835
     Epoch 0 [801/937] ANN Training Loss:0.681 Accuracy:0.880
-    Epoch 0 [901/937] ANN Training Loss:0.641 Accuracy:0.888
-    Epoch 0 [100/100] ANN Validating Loss:0.328 Accuracy:0.881
-    Save model to: ./log-mnist1596804385.476601\mnist.pkl
-    ...
-    Epoch 9 [901/937] ANN Training Loss:0.036 Accuracy:0.990
-    Epoch 9 [100/100] ANN Validating Loss:0.042 Accuracy:0.988
-    Save model to: ./log-mnist1596804957.0179427\mnist.pkl
+    Epoch 0 [901/937] ANN Training Loss:0.641 Accuracy:0.889
+    100%|██████████| 100/100 [00:00<00:00, 116.12it/s]
+    Epoch 0 [100/100] ANN Validating Loss:0.327 Accuracy:0.881
+    Save model to: cnn_mnist-XXXXX\cnn_mnist.pkl
+    ......
 
 示例中，这个模型训练10个epoch。训练时测试集准确率变化情况如下：
 
@@ -403,115 +353,64 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 最终达到98.8%的测试集准确率。
 
-从训练集中，取出一部分数据，用于模型的归一化步骤。这里我们取的是训练数据的1/500，也就是100张图片。但是要注意，从dataset中取出的数据tensor范围为[0，255]，需要除以255变为[0.0,1.0]范围的浮点数来匹配脉冲频率的可行域。
+从训练集中，取出一部分数据，用于模型的归一化步骤。这里我们取192张图片。
 
 .. code-block:: python
 
-    norm_set_len = int(train_data_dataset.data.shape[0] / 500)
-    print('Using %d pictures as norm set'%(norm_set_len))
-    norm_set = train_data_dataset.data[:norm_set_len, :, :].float() / 255
-    norm_tensor = torch.FloatTensor(norm_set).view(-1,1,28,28)
+    # 加载用于归一化模型的数据
+    # Load the data to normalize the model
+    percentage = 0.004 # load 0.004 of the data
+    norm_data_list = []
+    for idx, (imgs, targets) in enumerate(train_data_loader):
+        norm_data_list.append(imgs)
+        if idx == int(len(train_data_loader) * percentage) - 1:
+            break
+    norm_data = torch.cat(norm_data_list)
+    print('use %d imgs to parse' % (norm_data.size(0)))
 
-调用\ ``ann2snn.utils``\ 中实现的标准转换函数\ ``standard_conversion``\ 就可以实现ANN的转换加上SNN仿真。
+
+调用\ ``ann2snn``\ 中的类parser，并使用ONNX kernel。
+
+.. code-block:: python
+    onnxparser = parser(name=model_name,
+                        log_dir=log_dir + '/parser',
+                        kernel='onnx')
+    snn = onnxparser.parse(ann, norm_data.to(parser_device))
+
+我们可以保存好我们转换好的snn模型，并且定义一个plt.figure用于绘图
 
 .. code-block:: python
 
-    utils.standard_conversion(model_name=model_name,
-                              norm_data=norm_tensor,
-                              test_data_loader=test_data_loader,
-                              device=device,
-                              T=T,
-                              log_dir=log_dir,
-                              config=config
-                              )
+    torch.save(snn, os.path.join(log_dir,'snn-'+model_name+'.pkl'))
+    fig = plt.figure('simulator')
 
-过程中，归一化后的模型结构被输出:
+现在，我们定义用于SNN的仿真器。由于我们的任务是分类，选择类``classify_simulator``
 
 .. code-block:: python
 
-    ModelParser(
-      (network): Sequential(
-        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-        (1): ReLU()
-        (2): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (3): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (4): ReLU()
-        (5): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (6): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (7): ReLU()
-        (8): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (9): Flatten()
-        (10): Linear(in_features=32, out_features=10, bias=True)
-        (11): ReLU()
-      )
-    )
-
-同时，我们也观察一下SNN的结构：
+    sim = classify_simulator(snn,
+                             log_dir=log_dir + '/simulator',
+                             device=simulator_device,
+                             canvas=fig
+                             )
+    sim.simulate(test_data_loader,
+                T=T,
+                online_drawer=True,
+                ann_acc=ann_acc,
+                fig_name=model_name,
+                step_max=True
+                )
+模型仿真由于时间较长，我们设计了tqdm的进度条用于预估仿真时间。仿真结束时会有仿真器的summary
 
 .. code-block:: python
 
-    SNN(
-      (network): Sequential(
-        (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-        (1): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-        (2): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (3): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-        (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (5): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-        (6): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (7): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-        (8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (9): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-        (10): AvgPool2d(kernel_size=2, stride=2, padding=0)
-        (11): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-        (12): Flatten()
-        (13): Linear(in_features=32, out_features=10, bias=True)
-        (14): IFNode(
-          v_threshold=1.0, v_reset=None
-          (surrogate_function): Sigmoid()
-        )
-      )
-    )
+    simulator is working on the normal mode, device: cuda:0
+    100%|██████████| 100/100 [00:46<00:00,  2.15it/s]
+    --------------------simulator summary--------------------
+    time elapsed: 46.55072790000008 (sec)
+    ---------------------------------------------------------
 
-可以看出，ANN模型中的ReLU激活被SNN的IFNode取代。每一层AvgPool2d后都跟了一层IFNode。
-
-模型仿真由于时间较长，持续输出当前准确率和仿真进度:
-
-.. code-block:: python
-
-    [SNN Simulating... 1.00%] Acc:0.990
-    [SNN Simulating... 2.00%] Acc:0.990
-    [SNN Simulating... 3.00%] Acc:0.990
-    [SNN Simulating... 4.00%] Acc:0.988
-    [SNN Simulating... 5.00%] Acc:0.990
-    ……
-    [SNN Simulating... 95.00%] Acc:0.986
-    [SNN Simulating... 96.00%] Acc:0.986
-    [SNN Simulating... 97.00%] Acc:0.986
-    [SNN Simulating... 98.00%] Acc:0.986
-    [SNN Simulating... 99.00%] Acc:0.987
-    SNN Simulating Accuracy:0.987
-    Summary:	ANN Accuracy:98.7900%  	SNN Accuracy:98.6500% [Decreased 0.1400%]
-
-通过最后的输出，可以知道，ANN的MNIST分类准确率为98.79%。转换后的SNN准确率为98.65%。转换带来了0.14%的性能下降。
+通过最后的输出，可以知道，仿真器使用了46.6s。转换后的SNN准确率可以从simulator文件夹中plot.pdf看到，最高的转换准确率为98.51%。转换带来了0.37%的性能下降。通过增加推理时间可以减少转换损失。
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.

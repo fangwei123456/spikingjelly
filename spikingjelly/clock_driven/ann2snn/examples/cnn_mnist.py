@@ -48,8 +48,8 @@ def main(log_dir=None):
 
         .. code-block:: python
 
-            >>> import spikingjelly.clock_driven.ann2snn.examples.if_cnn_mnist as if_cnn_mnist
-            >>> if_cnn_mnist.main()
+            >>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+            >>> cnn_mnist.main()
             输入运行的设备，例如“cpu”或“cuda:0”
              input device, e.g., "cpu" or "cuda:0": cuda:15
             输入保存MNIST数据集的位置，例如“./”
@@ -62,29 +62,26 @@ def main(log_dir=None):
              input simulating steps, e.g., "100": 100
             输入训练轮数，即遍历训练集的次数，例如“10”
              input training epochs, e.g., "10": 10
-            输入模型名字，用于自动生成日志文档，例如“mnist”
-             input model name, for log_dir generating , e.g., "mnist"
-
-            如果main函数的输入不是具有有效文件的文件夹，自动生成一个日志文件文件夹
-            If the input of the main function is not a folder with valid files, an automatic log file folder is automatically generated.
-            第一行输出为保存日志文件的位置，例如“./log-mnist1596804385.476601”
-             Terminal outputs root directory for saving logs, e.g., "./": ./log-mnist1596804385.476601
+            输入模型名字，用于自动生成日志文档，例如“cnn_mnist”
+             input model name, for log_dir generating , e.g., "cnn_mnist"
 
             Epoch 0 [1/937] ANN Training Loss:2.252 Accuracy:0.078
-            Epoch 0 [101/937] ANN Training Loss:1.424 Accuracy:0.669
+            Epoch 0 [101/937] ANN Training Loss:1.423 Accuracy:0.669
             Epoch 0 [201/937] ANN Training Loss:1.117 Accuracy:0.773
             Epoch 0 [301/937] ANN Training Loss:0.953 Accuracy:0.795
             Epoch 0 [401/937] ANN Training Loss:0.865 Accuracy:0.788
             Epoch 0 [501/937] ANN Training Loss:0.807 Accuracy:0.792
             Epoch 0 [601/937] ANN Training Loss:0.764 Accuracy:0.795
-            Epoch 0 [701/937] ANN Training Loss:0.726 Accuracy:0.834
+            Epoch 0 [701/937] ANN Training Loss:0.726 Accuracy:0.835
             Epoch 0 [801/937] ANN Training Loss:0.681 Accuracy:0.880
-            Epoch 0 [901/937] ANN Training Loss:0.641 Accuracy:0.888
-            Epoch 0 [100/100] ANN Validating Loss:0.328 Accuracy:0.881
-            Save model to: ./log-mnist1596804385.476601\mnist.pkl
-            ...
-            Epoch 9 [901/937] ANN Training Loss:0.036 Accuracy:0.990
-            Epoch 9 [100/100] ANN Validating Loss:0.042 Accuracy:0.988
+            Epoch 0 [901/937] ANN Training Loss:0.641 Accuracy:0.889
+            100%|██████████| 100/100 [00:00<00:00, 116.12it/s]
+            Epoch 0 [100/100] ANN Validating Loss:0.327 Accuracy:0.881
+            Save model to: cnn_mnist-XXXXX\cnn_mnist.pkl
+            ......
+            --------------------simulator summary--------------------
+            time elapsed: 46.55072790000008 (sec)
+            ---------------------------------------------------------
     '''
     torch.random.manual_seed(0)
     torch.cuda.manual_seed(0)
@@ -189,18 +186,27 @@ def main(log_dir=None):
     norm_data = torch.cat(norm_data_list)
     print('use %d imgs to parse' % (norm_data.size(0)))
 
+    # 调用parser，使用kernel为onnx
+    # Call parser, use onnx kernel
     onnxparser = parser(name=model_name,
                         log_dir=log_dir + '/parser',
                         kernel='onnx')
     snn = onnxparser.parse(ann, norm_data.to(parser_device))
 
+    # 保存转换好的SNN模型
+    # Save SNN model
     torch.save(snn, os.path.join(log_dir,'snn-'+model_name+'.pkl'))
     fig = plt.figure('simulator')
+
+    # 定义用于分类的SNN仿真器
+    # define simulator for classification task
     sim = classify_simulator(snn,
                              log_dir=log_dir + '/simulator',
                              device=simulator_device,
                              canvas=fig
                              )
+    # 仿真SNN
+    # Simulate SNN
     sim.simulate(test_data_loader,
                 T=T,
                 online_drawer=True,
