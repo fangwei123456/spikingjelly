@@ -1,4 +1,4 @@
-前馈ANN转换SNN
+ANN转换SNN
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
