@@ -13,13 +13,13 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 
 注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
 
-从 [PyPI](https://pypi.org/project/spikingjelly/) 安装：
+**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装**：
 
 ```bash
 pip install spikingjelly
 ```
 
-或者对于开发者，下载源代码并安装：
+PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代码安装**：
 
 通过[GitHub](https://github.com/fangwei123456/spikingjelly)：
 ```bash
