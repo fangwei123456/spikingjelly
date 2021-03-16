@@ -932,7 +932,34 @@ class STDPLearner(nn.Module):
 
 
 
+class PrintShapeModule(nn.Module):
+    def __init__(self, ext_str='PrintShapeModule'):
+        '''
+        * :ref:`API in English <PrintModule.__init__-en>`
 
+        .. _PrintModule.__init__-cn:
+
+        :param ext_str: 额外打印的字符串
+        :type ext_str: str
+
+        只打印 ``ext_str`` 和输入的 ``shape``，不进行任何操作的网络层，可以用于debug。
+
+        * :ref:`中文API <PrintModule.__init__-cn>`
+
+        .. _PrintModule.__init__-en:
+
+        :param ext_str: extra strings for printing
+        :type ext_str: str
+
+        This layer will not do any operation but print ``ext_str`` and the shape of input, which can be used for debugging.
+
+        '''
+        super().__init__()
+        self.ext_str = ext_str
+
+    def forward(self, x: torch.Tensor):
+        print(self.ext_str, x.shape)
+        return x
 
 
 
