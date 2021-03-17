@@ -1,6 +1,6 @@
 Clock driven: Encoder
 =======================================
-Author: `Grasshlw <https://github.com/Grasshlw>`_
+Author: `Grasshlw <https://github.com/Grasshlw>`_, `Yanqi-Chen <https://github.com/Yanqi-Chen>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
@@ -268,3 +268,26 @@ Interval encoder
 
 The interval encoder is an encoder that emits a spike every ``T`` time steps. The encoder is relatively simple and
 will not be detailed here.
+
+Weighted phase encoder
+------------------------
+
+Weighted phase encoder is based on binary representations of floats. 
+
+Inputs are decomposed to fractional bits and the spikes correspond to the binary value from the leftmost bit to the rightmost bit. Compared to rate coding, each spike in phase coding carries more information. When phase is :math:`K`, number lies in the interval :math:`[0, 1-2^{-K}]` can be encoded. Example when :math:`K=8` in original paper [#kim2018deep]_ is illustrated here:
+
++----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+| Phase (K=8)                      | 1              | 2              | 3              | 4              | 5              | 6              | 7              | 8              |
++==================================+================+================+================+================+================+================+================+================+
+| Spike weight :math:`\omega(t)`   | 2\ :sup:`-1`   | 2\ :sup:`-2`   | 2\ :sup:`-3`   | 2\ :sup:`-4`   | 2\ :sup:`-5`   | 2\ :sup:`-6`   | 2\ :sup:`-7`   | 2\ :sup:`-8`   |
++----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+| 192/256                          | 1              | 1              | 0              | 0              | 0              | 0              | 0              | 0              |
++----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+| 1/256                            | 0              | 0              | 0              | 0              | 0              | 0              | 0              | 1              |
++----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+| 128/256                          | 1              | 0              | 0              | 0              | 0              | 0              | 0              | 0              |
++----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+| 255/256                          | 1              | 1              | 1              | 1              | 1              | 1              | 1              | 1              |
++----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
+
+.. [#kim2018deep] Kim J, Kim H, Huh S, et al. Deep neural networks with weighted spikes[J]. Neurocomputing, 2018, 311: 373-386.
