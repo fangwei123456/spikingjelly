@@ -57,6 +57,7 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代
     /clock_driven/10_propagation_pattern
     /clock_driven/11_cext_neuron_with_lbl
     /clock_driven/12_monitor
+    /clock_driven/13_neuromorphic_datasets
 
 
 模块文档
@@ -154,6 +155,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /clock_driven_en/9_spikingLSTM_text
     /clock_driven_en/10_propagation_pattern
     /clock_driven_en/11_cext_neuron_with_lbl
+    /clock_driven_en/13_neuromorphic_datasets
 
 
 
