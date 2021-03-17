@@ -202,7 +202,7 @@ class DVS128Gesture(EventsFramesDatasetBase):
                     else:
                         finished_thread.append(i)
                 pbar.update(utils.list_files(events_npy_train_root, '.npy').__len__() + utils.list_files(events_npy_test_root, '.npy').__len__())
-                print('wroking thread:', working_thread)
+                print('working thread:', working_thread)
                 print('finished thread:', finished_thread)
                 if finished_thread.__len__() == thread_list.__len__():
                     return

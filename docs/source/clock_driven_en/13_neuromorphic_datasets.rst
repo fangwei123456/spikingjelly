@@ -56,7 +56,7 @@ Here are the terminal outputs:
     thread 5 start
     thread 6 start
     thread 7 start
-      0%|          | 0/122 [00:00<?, ?it/s]wroking thread: [0, 1, 2, 3, 4, 5, 6, 7]
+      0%|          | 0/122 [00:00<?, ?it/s]working thread: [0, 1, 2, 3, 4, 5, 6, 7]
     finished thread: []
 
 We have to wait for a moment because the cutting and extracting is very slow. A ``events_npy`` folder will be created and contain the train/test set:

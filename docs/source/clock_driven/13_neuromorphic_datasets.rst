@@ -57,7 +57,7 @@ DVS128 Gesture数据集可以从 https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367y
     thread 5 start
     thread 6 start
     thread 7 start
-      0%|          | 0/122 [00:00<?, ?it/s]wroking thread: [0, 1, 2, 3, 4, 5, 6, 7]
+      0%|          | 0/122 [00:00<?, ?it/s]working thread: [0, 1, 2, 3, 4, 5, 6, 7]
     finished thread: []
 
 提取各个手势类别的速度较慢，需要耐心等待。运行完成后，同级目录下会多出一个 ``events_npy`` 文件夹，其中包含训练集和测试集：
