@@ -171,14 +171,12 @@ DVS128 Gesture数据集可以从 https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367y
 
 显示效果如下图所示：
 
-.. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif
+.. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.*
     :width: 100%
 
 .. [#NMNIST] Orchard, Garrick, et al. “Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades.” Frontiers in Neuroscience, vol. 9, 2015, pp. 437–437.
 
-
 .. [#CIFAR10DVS] Li, Hongmin, et al. “CIFAR10-DVS: An Event-Stream Dataset for Object Classification.” Frontiers in Neuroscience, vol. 11, 2017, pp. 309–309.
-
 
 .. [#DVS128Gesture] Amir, Arnon, et al. “A Low Power, Fully Event-Based Gesture Recognition System.” 2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2017, pp. 7388–7397.
 
