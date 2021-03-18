@@ -56,7 +56,7 @@ Here are the terminal outputs:
     thread 5 start
     thread 6 start
     thread 7 start
-      0%|          | 0/122 [00:00<?, ?it/s]wroking thread: [0, 1, 2, 3, 4, 5, 6, 7]
+      0%|          | 0/122 [00:00<?, ?it/s]working thread: [0, 1, 2, 3, 4, 5, 6, 7]
     finished thread: []
 
 We have to wait for a moment because the cutting and extracting is very slow. A ``events_npy`` folder will be created and contain the train/test set:
@@ -168,15 +168,12 @@ Let us visualize a sample:
 
 We will get the images like:
 
-.. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif
+.. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.*
     :width: 100%
-
 
 .. [#NMNIST] Orchard, Garrick, et al. “Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades.” Frontiers in Neuroscience, vol. 9, 2015, pp. 437–437.
 
-
 .. [#CIFAR10DVS] Li, Hongmin, et al. “CIFAR10-DVS: An Event-Stream Dataset for Object Classification.” Frontiers in Neuroscience, vol. 11, 2017, pp. 309–309.
-
 
 .. [#DVS128Gesture] Amir, Arnon, et al. “A Low Power, Fully Event-Based Gesture Recognition System.” 2017 IEEE Conference on Computer Vision and Pattern Recognition (CVPR), 2017, pp. 7388–7397.
 

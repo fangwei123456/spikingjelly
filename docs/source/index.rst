@@ -1,6 +1,6 @@
 .. _index:
 
-欢迎来到惊蛰(SpikingJelly)的文档
+欢迎来到惊蜇(SpikingJelly)的文档
 ###################################
 
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
@@ -19,7 +19,7 @@
 
     pip install spikingjelly
 
-PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代码安装**：
+PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源代码安装**：
 
 通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
 
@@ -75,7 +75,7 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代
 
 引用
 -------------------------
-如果您在自己的工作中用到了惊蛰(SpikingJelly)，您可以按照下列格式进行引用：
+如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
 
 .. code-block::
 
