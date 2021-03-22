@@ -11,7 +11,7 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
     @staticmethod
     def resource_url_md5() -> list:
         '''
-        :return: a list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
+        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
         :rtype: list
         '''
         url = 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794'
@@ -25,7 +25,7 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
     @staticmethod
     def downloadable() -> bool:
         '''
-        :return: whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
+        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
         :rtype: bool
         '''
         return False
@@ -38,6 +38,8 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
         :param extract_root: Root directory path which saves extracted files from downloaded files
         :type extract_root: str
         :return: None
+
+        This function defines how to extract download files.
         '''
         fpath = os.path.join(download_root, 'DvsGesture.tar.gz')
         print(f'Extract [{fpath}] to [{extract_root}].')
@@ -47,10 +49,12 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
     @staticmethod
     def load_origin_data(file_name: str) -> Dict:
         '''
-        :param file_name: name of the events file
+        :param file_name: path of the events file
         :type file_name: str
         :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
         :rtype: Dict
+
+        This function defines how to read the origin binary data.
         '''
         return sjds.load_aedat_v3(file_name)
 
@@ -124,6 +128,15 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
 
     @staticmethod
     def create_events_np_files(extract_root: str, events_np_root: str):
+        '''
+        :param extract_root: Root directory path which saves extracted files from downloaded files
+        :type extract_root: str
+        :param events_np_root: Root directory path which saves events files in the ``npz`` format
+        :type events_np_root:
+        :return: None
+
+        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
+        '''
         aedat_dir = os.path.join(extract_root, 'DvsGesture')
         train_dir = os.path.join(events_np_root, 'train')
         test_dir = os.path.join(events_np_root, 'test')
@@ -162,10 +175,9 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
 
     @staticmethod
     def get_H_W() -> Tuple:
+        '''
+        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
+            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
+        :rtype: tuple
+        '''
         return 128, 128
-
-
-root = 'E:/datasets/DVS128Gesture'
-
-dvsg = DVS128Gesture(root, data_type='frame', split_by='number', frames_number=20)
-print(dvsg[0])
