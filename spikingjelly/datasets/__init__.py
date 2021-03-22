@@ -5,6 +5,7 @@ import scipy
 import struct
 import numpy as np
 from torchvision.datasets import utils
+import torch.utils.data
 import os
 from concurrent.futures import ThreadPoolExecutor
 import time
@@ -12,7 +13,7 @@ import multiprocessing
 from torchvision import transforms
 import torch
 from matplotlib import pyplot as plt
-
+import math
 
 def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
     '''
@@ -333,7 +334,7 @@ def integrate_events_by_fixed_frames_number(events: Dict, split_by: str, frames_
         frames[i] = integrate_events_segment_to_frame(events, H, W, j_l[i], j_r[i])
     return frames
 
-def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: str, output_dir: str, split_by: str, frames_num: int, H: int, W: int, print_save: bool = False) -> NotImplementedError:
+def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: str, output_dir: str, split_by: str, frames_num: int, H: int, W: int, print_save: bool = False) -> None:
     '''
     :param events_np_file: path of the events np file
     :type events_np_file: str
@@ -423,7 +424,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(events_np_file: str, 
     return frames.shape[0]
 
 
-def create_same_directory_structure(source_dir: str, target_dir: str):
+def create_same_directory_structure(source_dir: str, target_dir: str) -> None:
     '''
     :param source_dir: Path of the directory that be copied from
     :type source_dir: str
@@ -441,12 +442,52 @@ def create_same_directory_structure(source_dir: str, target_dir: str):
             print(f'Mkdir [{target_sub_dir}].')
             create_same_directory_structure(source_sub_dir, target_sub_dir)
 
+def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data.Dataset, num_classes: int, random_split: bool = False):
+    '''
+    :param train_ratio: split the ratio of the origin dataset as the train set
+    :type train_ratio: float
+    :param origin_dataset: the origin dataset
+    :type torch.utils.data.Dataset
+    :param num_classes: total classes number, e.g., ``10`` for the MNIST dataset
+    :type int
+    :param random_split: If ``False``, the front ratio of samples in each classes will
+            be included in train set, while the reset will be included in test set.
+            If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
+            ``numpy.randon.seed``
+    :type int
+    :return: a tuple ``(train_set, test_set)``
+    :rtype: tuple
+    '''
+    label_idx = []
+    for i in range(num_classes):
+        label_idx.append([])
+
+    for i, x, y in enumerate(origin_dataset):
+        if isinstance(y, np.ndarray) or isinstance(y, torch.Tensor):
+            y = y.item()
+        label_idx[y].append(i)
+    train_idx = []
+    test_idx = []
+    if random_split:
+        for i in range(num_classes):
+            np.random.shuffle(label_idx[i])
+
+    for i in range(num_classes):
+        pos = math.ceil(label_idx[i].__len__() * train_ratio)
+        train_idx.extend(label_idx[i][0: pos])
+        test_idx.extend(label_idx[i][pos: label_idx[i].__len__()])
+
+    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(origin_dataset, test_idx)
+
+
+
 
 
 class NeuromorphicDatasetFolder(DatasetFolder):
     def __init__(
             self,
             root: str,
+            train: bool = None,
             data_type: str = 'event',
             frames_number: int = None,
             split_by: str = None,
@@ -458,6 +499,10 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         '''
         :param root: root path of the dataset
         :type root: str
+        :param train: whether use the train set. Set ``True`` or ``False`` for those datasets provide train/test
+            division, e.g., DVS128 Gesture dataset. If the dataset does not provide train/test division, e.g., CIFAR10-DVS,
+            please set ``None`` and use :name:`~split_to_train_test_set` function to get train/test set
+        :type train: bool
         :param data_type: `event` or `frame`
         :type data_type: str
         :param frames_number: the integrated frame number
@@ -559,7 +604,11 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         H, W = self.get_H_W()
 
         if data_type == 'event':
-            super().__init__(root=events_np_root, loader=np.load, extensions='.npz', transform=transform, target_transform=target_transform)
+            _root = events_np_root
+            _loader = np.load
+            _transform = transform
+            _target_transform = target_transform
+
         elif data_type == 'frame':
             if frames_number is not None:
                 assert frames_number > 0 and isinstance(frames_number, int)
@@ -588,7 +637,10 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
-                super().__init__(root=frames_np_root, loader=load_npz_frames, extensions='.npz', transform=transform, target_transform=target_transform)
+                _root = frames_np_root
+                _loader = load_npz_frames
+                _transform = transform
+                _target_transform = target_transform
 
             elif duration is not None:
                 self.max_frames_number = 0
@@ -633,16 +685,29 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     else:
                         transform_with_padding = transforms.Compose([PadFrames(self.max_frames_number), transform])
 
-                    super().__init__(root=frames_np_root, loader=load_npz_frames, extensions='.npz', transform=transform_with_padding,
-                                 target_transform=target_transform)
+                    _root = frames_np_root
+                    _loader = load_npz_frames
+                    _transform = transform_with_padding
+                    _target_transform = target_transform
+
                 else:
-                    super().__init__(root=frames_np_root, loader=load_npz_frames, extensions='.npz', transform=transform,
-                                 target_transform=target_transform)
+                    _root = frames_np_root
+                    _loader = load_npz_frames
+                    _transform = transform
+                    _target_transform = target_transform
 
             else:
                 raise ValueError('frames_number and duration can not both be None.')
 
-    
+        if train is not None:
+            if train:
+                _root = os.path.join(_root, 'train')
+            else:
+                _root = os.path.join(_root, 'test')
+
+        super().__init__(root=_root, loader=_loader, extensions='.npz', transform=_transform,
+                         target_transform=_target_transform)
+
     @staticmethod
     @abstractmethod
     def load_origin_data(file_name: str) -> Dict:
