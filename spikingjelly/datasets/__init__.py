@@ -32,7 +32,7 @@ def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
     img_tensor[:, 2] = x[:, 1]
     if save_gif_to is None:
         for t in range(img_tensor.shape[0]):
-                plt.imshow()
+                plt.imshow(to_img(img_tensor[t]))
                 plt.pause(0.01)
     else:
         img_list = []
@@ -65,7 +65,7 @@ def load_aedat_v3(file_name: str) -> Dict:
     :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
     :rtype: Dict
 
-    This function is written by referring to https://gitlab.com/inivation/dv/dv-python .
+    This function is written by referring to https://gitlab.com/inivation/dv/dv-python . It can be used for DVS128 Gesture.
     '''
     with open(file_name, 'rb') as bin_f:
         # skip ascii header
