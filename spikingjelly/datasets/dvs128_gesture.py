@@ -8,6 +8,58 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 
 class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
+    def __init__(
+            self,
+            root: str,
+            train: bool = None,
+            data_type: str = 'event',
+            frames_number: int = None,
+            split_by: str = None,
+            duration: int = None,
+            padding_frame: bool = True,
+            transform: Optional[Callable] = None,
+            target_transform: Optional[Callable] = None,
+    ) -> None:
+        '''
+        :param root: root path of the dataset
+        :type root: str
+        :param train: whether use the train set
+        :type train: bool
+        :param data_type: `event` or `frame`
+        :type data_type: str
+        :param frames_number: the integrated frame number
+        :type frames_number: int
+        :param split_by: `time` or `number`
+        :type split_by: str
+        :param duration: the time duration of each frame
+        :type duration: int
+        :param padding_frame: whether padding the frames number to the maximum number of frames
+        :type padding_frame: bool
+        :param transform: a function/transform that takes in
+            a sample and returns a transformed version.
+            E.g, ``transforms.RandomCrop`` for images.
+        :type transform: callable
+        :param target_transform: a function/transform that takes
+            in the target and transforms it.
+        :type target_transform: callable
+
+        The base class for neuromorphic dataset. Users can define a new dataset by inheriting this class and implementing
+        all abstract methods. Users can refer to ``DVS128Gesture``.
+
+        If ``data_type == 'event'``, the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values
+            are ``numpy.ndarray``.
+
+        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``, events will be integrated to frames with fixed
+            frames number. ``split_by`` will define how to split events. See ``cal_fixed_frames_number_segment_index`` for
+            more details.
+
+        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``, events will be
+            integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample will be padded
+            to the same frames number (length), which is the maximum frames number of all frames.
+
+        '''
+        assert train is not None
+        super().__init__(root, train, data_type, frames_number, split_by, duration, padding_frame, transform, target_transform)
     @staticmethod
     def resource_url_md5() -> list:
         '''
