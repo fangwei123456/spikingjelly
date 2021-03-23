@@ -1,7 +1,7 @@
 from torchvision.datasets import DatasetFolder
 from typing import Any, Callable, cast, Dict, List, Optional, Tuple
 from abc import abstractmethod
-import scipy
+import scipy.io
 import struct
 import numpy as np
 from torchvision.datasets import utils
@@ -246,8 +246,8 @@ where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{
     # print('correct accumulation by bincount\n', frames)
 
     frame = np.zeros(shape=[2, H * W])
-    x = events['x'][j_l: j_r]
-    y = events['y'][j_l: j_r]
+    x = events['x'][j_l: j_r].astype(int)  # avoid overflow
+    y = events['y'][j_l: j_r].astype(int)
     p = events['p'][j_l: j_r]
     mask = []
     mask.append(p == 0)

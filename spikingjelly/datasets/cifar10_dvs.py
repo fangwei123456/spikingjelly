@@ -7,9 +7,6 @@ import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 
-
-# https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
-
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
 
@@ -194,6 +191,7 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
                  y=events['y'],
                  p=events['p']
                  )
+        print(f'Save [{bin_file}] to [{np_file}].')
 
     @staticmethod
     def create_events_np_files(extract_root: str, events_np_root: str):
@@ -206,6 +204,7 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
 
         This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
         '''
+        t_ckp = time.time()
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
             for class_name in os.listdir(extract_root):
                 aedat_dir = os.path.join(extract_root, class_name)
@@ -218,3 +217,4 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
                     print(f'Start to convert [{source_file}] to [{target_file}].')
                     tpe.submit(CIFAR10DVS.read_aedat_save_to_np, source_file,
                                target_file)
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
