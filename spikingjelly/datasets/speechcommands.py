@@ -1,5 +1,6 @@
 import os
 from typing import Callable, Tuple, Dict, Optional
+from pathlib import Path
 
 import torch
 import torchaudio
@@ -7,8 +8,7 @@ from torch.utils.data import Dataset
 from torch import Tensor
 from torchaudio.datasets.utils import (
     download_url,
-    extract_archive,
-    walk_files
+    extract_archive
 )
 from torchvision import transforms
 from torchvision.datasets.utils import verify_str_arg
@@ -120,7 +120,7 @@ class SPEECHCOMMANDS(Dataset):
                     self._walker = list([line.rstrip('\n') for line in f])
             else:
                 print("No training list, generating...")
-                walker = walk_files(self._path, suffix=".wav", prefix=True)
+                walker = sorted(str(p) for p in Path(self._path).glob('*/*.wav'))
                 walker = filter(lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker)
                 walker = map(lambda w: os.path.relpath(w, self._path), walker)
 
