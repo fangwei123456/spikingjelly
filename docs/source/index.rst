@@ -102,6 +102,10 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源�
 
 开发人员名单可见于 `贡献者 <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_ 。
 
+友情链接
+-------------------------
+`Visualizing a joint future of neuroscience and neuromorphic engineering <https://www.cnblogs.com/lucifer1997/p/14577674.html>>`_
+
 .. _index_en:
 
 Welcome to SpikingJelly's documentation
