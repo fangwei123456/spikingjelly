@@ -104,14 +104,14 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源�
 
 友情链接
 -------------------------
-`Visualizing a joint future of neuroscience and neuromorphic engineering <https://www.cnblogs.com/lucifer1997/p/14577674.html>`_\
-`脉冲神经网络研究进展综述 <http://kzyjc.alljournals.cn/kzyjc/article/abstract/20210101?st=search>`_\
-`A review of learning in biologically plausible spiking neural networks <https://www.cnblogs.com/lucifer1997/p/12881064.html>`_\
-`Networks of Spiking Neurons: The Third Generation of Neural Network Models <https://www.cnblogs.com/lucifer1997/p/12881064.html>`_\
-`Towards spike-based machine intelligence with neuromorphic computing <https://zhuanlan.zhihu.com/p/94556277>`_\
-`Long Short-Term Memory Spiking Networks and Their Applications <https://www.cnblogs.com/lucifer1997/p/13942659.html>`_\
-`S4NN: temporal backpropagation for spiking neural networks with one spike per neuron <https://www.cnblogs.com/lucifer1997/p/14086955.html>`_\
-`SLAYER: Spike Layer Error Reassignment in Time <https://www.cnblogs.com/lucifer1997/p/14220249.html>`_\
+* `Visualizing a joint future of neuroscience and neuromorphic engineering <https://www.cnblogs.com/lucifer1997/p/14577674.html>`_
+* `脉冲神经网络研究进展综述 <http://kzyjc.alljournals.cn/kzyjc/article/abstract/20210101?st=search>`_
+`A review of learning in biologically plausible spiking neural networks <https://www.cnblogs.com/lucifer1997/p/12881064.html>`_
+`Networks of Spiking Neurons: The Third Generation of Neural Network Models <https://www.cnblogs.com/lucifer1997/p/12881064.html>`_
+`Towards spike-based machine intelligence with neuromorphic computing <https://zhuanlan.zhihu.com/p/94556277>`_
+`Long Short-Term Memory Spiking Networks and Their Applications <https://www.cnblogs.com/lucifer1997/p/13942659.html>`_
+`S4NN: temporal backpropagation for spiking neural networks with one spike per neuron <https://www.cnblogs.com/lucifer1997/p/14086955.html>`_
+`SLAYER: Spike Layer Error Reassignment in Time <https://www.cnblogs.com/lucifer1997/p/14220249.html>`_
 `Rethinking the performance comparison between SNNS and ANNS <https://www.cnblogs.com/lucifer1997/p/13363399.html>`_
 
 .. _index_en:
