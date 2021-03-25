@@ -104,7 +104,7 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源�
 
 友情链接
 -------------------------
-`Visualizing a joint future of neuroscience and neuromorphic engineering <https://www.cnblogs.com/lucifer1997/p/14577674.html>>`_
+`Visualizing a joint future of neuroscience and neuromorphic engineering <https://www.cnblogs.com/lucifer1997/p/14577674.html>`
 
 .. _index_en:
 
