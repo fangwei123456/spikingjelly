@@ -13,7 +13,7 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-**Install from** [**PyPI**](https://pypi.org/project/spikingjelly/)：
+**Install the last stable version (0.0.0.0.4) from** [**PyPI**](https://pypi.org/project/spikingjelly/)：
 
 ```bash
 pip install spikingjelly
@@ -25,12 +25,14 @@ From [GitHub](https://github.com/fangwei123456/spikingjelly):
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
+git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
 python setup.py install
 ```
 From [OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
 git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
+git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
 python setup.py install
 ```
 ## Build SNN In An Unprecedented Simple Way

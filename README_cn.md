@@ -13,7 +13,7 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 
 注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
 
-**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装**：
+**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本(0.0.0.0.4)**：
 
 ```bash
 pip install spikingjelly
@@ -25,12 +25,14 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
+git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
 python setup.py install
 ```
 通过[OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
 git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
+git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
 python setup.py install
 ```
 ## 以前所未有的简单方式搭建SNN
