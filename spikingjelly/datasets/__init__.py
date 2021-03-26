@@ -593,7 +593,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 # print(f'Delete [{extract_root}].')
             else:
                 os.mkdir(extract_root)
-                print(f'Mkdir [{extract_root}]')
+                print(f'Mkdir [{extract_root}].')
                 self.extract_downloaded_files(download_root, extract_root)
 
             # Now let us convert the origin binary files to npz files
