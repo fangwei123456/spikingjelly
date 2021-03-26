@@ -17,10 +17,10 @@ CIFAR10-DVS等数据集支持自动下载。支持自动下载的数据集，在
     from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
 
     print('CIFAR10-DVS downloadable', CIFAR10DVS.downloadable())
-    print('resource, url, md5\n', CIFAR10DVS.resource_url_md5())
+    print('resource, url, md5/n', CIFAR10DVS.resource_url_md5())
 
     print('DVS128Gesture downloadable', DVS128Gesture.downloadable())
-    print('resource, url, md5\n', DVS128Gesture.resource_url_md5())
+    print('resource, url, md5/n', DVS128Gesture.resource_url_md5())
 
 输出为：
 
@@ -65,25 +65,25 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. code:: bash
 
-    The [D:/datasets/DVS128Gesture\download] directory for saving downloaed files already exists, check files...
-    Mkdir [D:/datasets/DVS128Gesture\extract].
-    Extract [D:/datasets/DVS128Gesture\download\DvsGesture.tar.gz] to [D:/datasets/DVS128Gesture\extract].
-    Mkdir [D:/datasets/DVS128Gesture\events_np].
-    Start to convert the origin data from [D:/datasets/DVS128Gesture\extract] to [D:/datasets/DVS128Gesture\events_np] in np.ndarray format.
-    Mkdir [('D:/datasets/DVS128Gesture\\events_np\\train', 'D:/datasets/DVS128Gesture\\events_np\\test').
-    Mkdir ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture\events_np\train] and ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture\events_np\test].
+    The [D:/datasets/DVS128Gesture/download] directory for saving downloaed files already exists, check files...
+    Mkdir [D:/datasets/DVS128Gesture/extract].
+    Extract [D:/datasets/DVS128Gesture/download/DvsGesture.tar.gz] to [D:/datasets/DVS128Gesture/extract].
+    Mkdir [D:/datasets/DVS128Gesture/events_np].
+    Start to convert the origin data from [D:/datasets/DVS128Gesture/extract] to [D:/datasets/DVS128Gesture/events_np] in np.ndarray format.
+    Mkdir [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test').
+    Mkdir ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture/events_np/train] and ['0', '1', '10', '2', '3', '4', '5', '6', '7', '8', '9'] in [D:/datasets/DVS128Gesture/events_np/test].
     Start the ThreadPoolExecutor with max workers = [8].
-    Start to split [D:/datasets/DVS128Gesture\extract\DvsGesture\user02_fluorescent.aedat] to samples.
-    [D:/datasets/DVS128Gesture\events_np\train\0\user02_fluorescent_0.npz] saved.
-    [D:/datasets/DVS128Gesture\events_np\train\1\user02_fluorescent_0.npz] saved.
+    Start to split [D:/datasets/DVS128Gesture/extract/DvsGesture/user02_fluorescent.aedat] to samples.
+    [D:/datasets/DVS128Gesture/events_np/train/0/user02_fluorescent_0.npz] saved.
+    [D:/datasets/DVS128Gesture/events_np/train/1/user02_fluorescent_0.npz] saved.
 
     ......
 
-    [D:/datasets/DVS128Gesture\events_np\test\8\user29_lab_0.npz] saved.
-    [D:/datasets/DVS128Gesture\events_np\test\9\user29_lab_0.npz] saved.
-    [D:/datasets/DVS128Gesture\events_np\test\10\user29_lab_0.npz] saved.
+    [D:/datasets/DVS128Gesture/events_np/test/8/user29_lab_0.npz] saved.
+    [D:/datasets/DVS128Gesture/events_np/test/9/user29_lab_0.npz] saved.
+    [D:/datasets/DVS128Gesture/events_np/test/10/user29_lab_0.npz] saved.
     Used time = [1017.27s].
-    All aedat files have been split to samples and saved into [('D:/datasets/DVS128Gesture\\events_np\\train', 'D:/datasets/DVS128Gesture\\events_np\\test')].
+    All aedat files have been split to samples and saved into [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test')].
 
 提取各个手势类别的速度较慢，需要耐心等待。运行完成后，同级目录下会多出一个 ``events_np`` 文件夹，其中包含训练集和测试集：
 
@@ -116,17 +116,17 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 获取Frame数据
 -----------------------
-将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i \le N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_num=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
+将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 /leq i /le N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_num=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
 为 :math:`F(j)`，在 :math`(p, x, y)` 位置的像素值为 :math:`F(j, p, x, y)`；math:`F(j)` 是从Event流中索引介于 :math:`j_{l}` 和 :math:`j_{r}` 的Event
 积分而来：
 
 .. math::
 
-    j_{l} & = \left\lfloor \frac{N}{T}\right \rfloor \cdot j \\
-	j_{r} & = \begin{cases} \left \lfloor \frac{N}{T} \right \rfloor \cdot (j + 1), & \text{if}~~ j <  T - 1 \cr N, &  \text{if} ~~j = T - 1 \end{cases}\\
-    F(j, p, x, y) &= \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+    j_{l} & = /left/lfloor /frac{N}{T}/right /rfloor /cdot j //
+	j_{r} & = /begin{cases} /left /lfloor /frac{N}{T} /right /rfloor /cdot (j + 1), & /text{if}~~ j <  T - 1 /cr N, &  /text{if} ~~j = T - 1 /end{cases}//
+    F(j, p, x, y) &= /sum_{i = j_{l}}^{j_{r} - 1} /mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
-其中 :math:`\lfloor \cdot \rfloor` 是向下取整，:math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时取值为1，否则为0。
+其中 :math:`/lfloor /cdot /rfloor` 是向下取整，:math:`/mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时取值为1，否则为0。
 
 运行下列代码，惊蜇框架就会开始进行积分，创建Frame数据集：
 
@@ -138,38 +138,38 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. code:: bash
 
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\0].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\1].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\10].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\2].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\3].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\4].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\5].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\6].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\7].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\8].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\9].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\0].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\1].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\10].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\2].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\3].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\4].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\5].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\6].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\7].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\8].
-    Mkdir [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\9].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/1].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/10].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/2].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/3].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/4].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/5].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/6].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/7].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/8].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/9].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/0].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/1].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/10].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/2].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/3].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/4].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/5].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/6].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/7].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/8].
+    Mkdir [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9].
     Start ThreadPoolExecutor with max workers = [8].
-    Start to integrate [D:/datasets/DVS128Gesture\events_np\test\0\user24_fluorescent_0.npz] to frames and save to [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\0].
-    Start to integrate [D:/datasets/DVS128Gesture\events_np\test\0\user24_fluorescent_led_0.npz] to frames and save to [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\test\0].
+    Start to integrate [D:/datasets/DVS128Gesture/events_np/test/0/user24_fluorescent_0.npz] to frames and save to [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
+    Start to integrate [D:/datasets/DVS128Gesture/events_np/test/0/user24_fluorescent_led_0.npz] to frames and save to [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/test/0].
 
     ......
 
-    Frames [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\9\user23_lab_0.npz] saved.Frames [D:/datasets/DVS128Gesture\frames_number_20_split_by_number\train\9\user23_led_0.npz] saved.
+    Frames [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9/user23_lab_0.npz] saved.Frames [D:/datasets/DVS128Gesture/frames_number_20_split_by_number/train/9/user23_led_0.npz] saved.
 
     Used time = [102.11s].
 
