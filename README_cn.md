@@ -86,7 +86,7 @@ SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，�
 ## 神经形态数据集支持
 SpikingJelly 已经将下列数据集纳入：
 
-| Dataset        | Source                                                       |
+| 数据集         | 来源                                                         |
 | -------------- | ------------------------------------------------------------ |
 | ASL-DVS        | Graph-based Object Classification for Neuromorphic Vision Sensing |
 | CIFAR10-DVS    | CIFAR10-DVS: An Event-Stream Dataset for Object Classification |
