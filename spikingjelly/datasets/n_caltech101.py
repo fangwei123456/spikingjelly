@@ -6,9 +6,9 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
-import shutil
 
-class ASLDVS(sjds.NeuromorphicDatasetFolder):
+
+class NCaltech101(sjds.NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,
@@ -56,17 +56,19 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
             to the same frames number (length), which is the maximum frames number of all frames.
 
         '''
-        super().__init__(root, None, data_type, frames_number, split_by, duration, padding_frame, transform,
-                         target_transform)
+        super().__init__(root, None, data_type, frames_number, split_by, duration, padding_frame, transform, target_transform)
     @staticmethod
     def resource_url_md5() -> list:
         '''
         :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
         :rtype: list
         '''
-        url = 'https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CAa?dl=0'
+        url = 'https://www.garrickorchard.com/datasets/n-caltech101'
         return [
-            ('ICCV2019_DVS_dataset.zip', url, '8b46191acf6c1760ad3f2d2cb4380e24')
+            ('Caltech101.zip', url, '66201824eabb0239c7ab992480b50ba3'),
+            ('Caltech101_annotations.zip', url, '25e64cea645291e368db1e70f214988e'),
+            ('ReadMe(Caltech101)-SINAPSE-G.txt', url, 'd464b81684e0af3b5773555eb1d5b95c'),
+            ('ReadMe(Caltech101).txt', url, '33632a7a5c46074c70509f960d0dd5e5')
         ]
 
     @staticmethod
@@ -88,19 +90,10 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
 
         This function defines how to extract download files.
         '''
-        temp_ext_dir = os.path.join(download_root, 'temp_ext')
-        os.mkdir(temp_ext_dir)
-        print(f'Mkdir [{temp_ext_dir}].')
-        extract_archive(os.path.join(download_root, 'ICCV2019_DVS_dataset.zip'), temp_ext_dir)
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
-            for zip_file in os.listdir(temp_ext_dir):
-                if os.path.splitext(zip_file)[1] == '.zip':
-                    zip_file = os.path.join(temp_ext_dir, zip_file)
-                    print(f'Extract [{zip_file}] to [{extract_root}].')
-                    tpe.submit(extract_archive, zip_file, extract_root)
+        zip_file = os.path.join(download_root, 'Caltech101.zip')
+        print(f'Extract [{zip_file}] to [{extract_root}].')
+        extract_archive(zip_file, extract_root)
 
-        shutil.rmtree(temp_ext_dir)
-        print(f'Rmtree [{temp_ext_dir}].')
 
     @staticmethod
     def load_origin_data(file_name: str) -> Dict:
@@ -113,7 +106,7 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         This function defines how to read the origin binary data.
         '''
 
-        return sjds.load_matlab_mat(file_name)
+        return sjds.load_ATIS_bin(file_name)
 
     @staticmethod
     def get_H_W() -> Tuple:
@@ -125,15 +118,15 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         return 180, 240
 
     @staticmethod
-    def read_mat_save_to_np(mat_file: str, np_file: str):
-        events = ASLDVS.load_origin_data(mat_file)
+    def read_bin_save_to_np(bin_file: str, np_file: str):
+        events = NCaltech101.load_origin_data(bin_file)
         np.savez(np_file,
                  t=events['t'],
                  x=events['x'],
                  y=events['y'],
                  p=events['p']
                  )
-        print(f'Save [{mat_file}] to [{np_file}].')
+        print(f'Save [{bin_file}] to [{np_file}].')
 
 
     @staticmethod
@@ -148,17 +141,19 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
         '''
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+        extract_root = os.path.join(extract_root, 'Caltech101')
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 8)) as tpe:
+            # too many threads will make the disk overload
             for class_name in os.listdir(extract_root):
-                mat_dir = os.path.join(extract_root, class_name)
+                bin_dir = os.path.join(extract_root, class_name)
                 np_dir = os.path.join(events_np_root, class_name)
                 os.mkdir(np_dir)
                 print(f'Mkdir [{np_dir}].')
-                for bin_file in os.listdir(mat_dir):
-                    source_file = os.path.join(mat_dir, bin_file)
+                for bin_file in os.listdir(bin_dir):
+                    source_file = os.path.join(bin_dir, bin_file)
                     target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
                     print(f'Start to convert [{source_file}] to [{target_file}].')
-                    tpe.submit(ASLDVS.read_mat_save_to_np, source_file,
+                    tpe.submit(NCaltech101.read_bin_save_to_np, source_file,
                                target_file)
 
 

@@ -1,38 +1,12 @@
-from .utils import (
-    EventsFramesDatasetBase, 
-    convert_events_dir_to_frames_dir,
-    FunctionThread,
-    normalize_frame,
-)
+from typing import Any, Callable, cast, Dict, List, Optional, Tuple
 import numpy as np
+import spikingjelly.datasets as sjds
+from torchvision.datasets.utils import extract_archive
 import os
-from torchvision.datasets import utils
-import torch
-labels_dict = {
-    'airplane': 0,
-    'automobile': 1,
-    'bird': 2,
-    'cat': 3,
-    'deer': 4,
-    'dog': 5,
-    'frog': 6,
-    'horse': 7,
-    'ship': 8,
-    'truck': 9
-}
-# https://figshare.com/articles/dataset/CIFAR10-DVS_New/4724671
-resource = {
-    'airplane': ('https://ndownloader.figshare.com/files/7712788', '0afd5c4bf9ae06af762a77b180354fdd'),
-    'automobile': ('https://ndownloader.figshare.com/files/7712791', '8438dfeba3bc970c94962d995b1b9bdd'),
-    'bird': ('https://ndownloader.figshare.com/files/7712794', 'a9c207c91c55b9dc2002dc21c684d785'),
-    'cat': ('https://ndownloader.figshare.com/files/7712812', '52c63c677c2b15fa5146a8daf4d56687'),
-    'deer': ('https://ndownloader.figshare.com/files/7712815', 'b6bf21f6c04d21ba4e23fc3e36c8a4a3'),
-    'dog': ('https://ndownloader.figshare.com/files/7712818', 'f379ebdf6703d16e0a690782e62639c3'),
-    'frog': ('https://ndownloader.figshare.com/files/7712842', 'cad6ed91214b1c7388a5f6ee56d08803'),
-    'horse': ('https://ndownloader.figshare.com/files/7712851', 'e7cbbf77bec584ffbf913f00e682782a'),
-    'ship': ('https://ndownloader.figshare.com/files/7712836', '41c7bd7d6b251be82557c6cce9a7d5c9'),
-    'truck': ('https://ndownloader.figshare.com/files/7712839', '89f3922fd147d9aeff89e76a2b0b70a7')
-}
+import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
+import time
+
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
 
@@ -131,33 +105,111 @@ def load_events(
     x, y, polarity = parse_raw_address(addr, **kwargs)
     return timestamp, x, y, polarity
 
+class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
+    def __init__(
+            self,
+            root: str,
+            data_type: str = 'event',
+            frames_number: int = None,
+            split_by: str = None,
+            duration: int = None,
+            padding_frame: bool = True,
+            transform: Optional[Callable] = None,
+            target_transform: Optional[Callable] = None,
+    ) -> None:
+        '''
+        :param root: root path of the dataset
+        :type root: str
+        :param data_type: `event` or `frame`
+        :type data_type: str
+        :param frames_number: the integrated frame number
+        :type frames_number: int
+        :param split_by: `time` or `number`
+        :type split_by: str
+        :param duration: the time duration of each frame
+        :type duration: int
+        :param padding_frame: whether padding the frames number to the maximum number of frames
+        :type padding_frame: bool
+        :param transform: a function/transform that takes in
+            a sample and returns a transformed version.
+            E.g, ``transforms.RandomCrop`` for images.
+        :type transform: callable
+        :param target_transform: a function/transform that takes
+            in the target and transforms it.
+        :type target_transform: callable
 
+        The base class for neuromorphic dataset. Users can define a new dataset by inheriting this class and implementing
+        all abstract methods. Users can refer to ``DVS128Gesture``.
 
-class CIFAR10DVS(EventsFramesDatasetBase):
+        If ``data_type == 'event'``, the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values
+            are ``numpy.ndarray``.
+
+        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``, events will be integrated to frames with fixed
+            frames number. ``split_by`` will define how to split events. See ``cal_fixed_frames_number_segment_index`` for
+            more details.
+
+        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``, events will be
+            integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample will be padded
+            to the same frames number (length), which is the maximum frames number of all frames.
+
+        '''
+        super().__init__(root, None, data_type, frames_number, split_by, duration, padding_frame, transform,
+                         target_transform)
     @staticmethod
-    def get_wh():
-        return 128, 128
+    def resource_url_md5() -> list:
+        '''
+        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
+        :rtype: list
+        '''
+        return [
+            ('airplane.zip', 'https://ndownloader.figshare.com/files/7712788', '0afd5c4bf9ae06af762a77b180354fdd'),
+            ('automobile.zip', 'https://ndownloader.figshare.com/files/7712791', '8438dfeba3bc970c94962d995b1b9bdd'),
+            ('bird.zip', 'https://ndownloader.figshare.com/files/7712794', 'a9c207c91c55b9dc2002dc21c684d785'),
+            ('cat.zip', 'https://ndownloader.figshare.com/files/7712812', '52c63c677c2b15fa5146a8daf4d56687'),
+            ('deer.zip', 'https://ndownloader.figshare.com/files/7712815', 'b6bf21f6c04d21ba4e23fc3e36c8a4a3'),
+            ('dog.zip', 'https://ndownloader.figshare.com/files/7712818', 'f379ebdf6703d16e0a690782e62639c3'),
+            ('frog.zip', 'https://ndownloader.figshare.com/files/7712842', 'cad6ed91214b1c7388a5f6ee56d08803'),
+            ('horse.zip', 'https://ndownloader.figshare.com/files/7712851', 'e7cbbf77bec584ffbf913f00e682782a'),
+            ('ship.zip', 'https://ndownloader.figshare.com/files/7712836', '41c7bd7d6b251be82557c6cce9a7d5c9'),
+            ('truck.zip', 'https://ndownloader.figshare.com/files/7712839', '89f3922fd147d9aeff89e76a2b0b70a7')
+        ]
 
     @staticmethod
-    def download_and_extract(download_root: str, extract_root: str):
-        for key in resource.keys():
-            file_name = os.path.join(download_root, key + '.zip')
-            if os.path.exists(file_name):
-                if utils.check_md5(file_name, resource[key][1]):
-                    print(f'extract {file_name} to {extract_root}')
-                    utils.extract_archive(file_name, extract_root)
-                else:
-                    print(f'{file_name} corrupted, re-download...')
-                    utils.download_and_extract_archive(resource[key][0], download_root, extract_root,
-                                                       filename=key + '.zip',
-                                                       md5=resource[key][1])
-            else:
-                utils.download_and_extract_archive(resource[key][0], download_root, extract_root, filename=key + '.zip',
-                                                   md5=resource[key][1])
+    def downloadable() -> bool:
+        '''
+        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
+        :rtype: bool
+        '''
+        return True
+
+    @staticmethod
+    def extract_downloaded_files(download_root: str, extract_root: str):
+        '''
+        :param download_root: Root directory path which saves downloaded dataset files
+        :type download_root: str
+        :param extract_root: Root directory path which saves extracted files from downloaded files
+        :type extract_root: str
+        :return: None
+
+        This function defines how to extract download files.
+        '''
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 10)) as tpe:
+            for zip_file in os.listdir(download_root):
+                zip_file = os.path.join(download_root, zip_file)
+                print(f'Extract [{zip_file}] to [{extract_root}].')
+                tpe.submit(extract_archive, zip_file, extract_root)
 
 
     @staticmethod
-    def read_bin(file_name: str):
+    def load_origin_data(file_name: str) -> Dict:
+        '''
+        :param file_name: path of the events file
+        :type file_name: str
+        :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+        :rtype: Dict
+
+        This function defines how to read the origin binary data.
+        '''
         with open(file_name, 'rb') as fp:
             t, x, y, p = load_events(fp,
                         x_mask=0xfE,
@@ -166,111 +218,52 @@ class CIFAR10DVS(EventsFramesDatasetBase):
                         y_shift=8,
                         polarity_mask=1,
                         polarity_shift=None)
-            return {'t': t, 'x': 127 - x, 'y': y, 'p': 1 - p.astype(int)}
-        # 原作者的代码可能有一点问题，因此不是直接返回 t x y p
+            # return {'t': t, 'x': 127 - x, 'y': y, 'p': 1 - p.astype(int)}  # this will get the same data with http://www2.imse-cnm.csic.es/caviar/MNIST_DVS/dat2mat.m
+            # see https://github.com/jackd/events-tfds/pull/1 for more details about this problem
+            return {'t': t, 'x': 127 - y, 'y': 127 - x, 'p': 1 - p.astype(int)}
 
     @staticmethod
-    def create_frames_dataset(events_data_dir: str, frames_data_dir: str, frames_num: int, split_by: str,
-                              normalization: str or None):
-        width, height = CIFAR10DVS.get_wh()
-        thread_list = []
-        for key in resource.keys():
-            source_dir = os.path.join(events_data_dir, key)
-            target_dir = os.path.join(frames_data_dir, key)
-            os.mkdir(target_dir)
-            print(f'mkdir {target_dir}')
-            print(f'convert {source_dir} to {target_dir}')
-            thread_list.append(FunctionThread(
-                convert_events_dir_to_frames_dir,
-                source_dir, target_dir, '.aedat',
-                CIFAR10DVS.read_bin, height, width, frames_num, split_by, normalization, 1, True))
-            thread_list[-1].start()
-            print(f'thread {thread_list.__len__() - 1} start')
-
-        for i in range(thread_list.__len__()):
-            thread_list[i].join()
-            print(f'thread {i} finished')
-
-    @staticmethod
-    def get_frames_item(file_name):
-        return torch.from_numpy(np.load(file_name)['arr_0']).float(), labels_dict[file_name.split('_')[-2]]
-
-    @staticmethod
-    def get_events_item(file_name):
-        return CIFAR10DVS.read_bin(file_name), labels_dict[file_name.split('_')[-2]]
-
-    def __init__(self, root: str, train: bool, split_ratio=0.9, use_frame=True, frames_num=10, split_by='number', normalization='max'):
+    def get_H_W() -> Tuple:
         '''
-        :param root: 保存数据集的根目录
-        :type root: str
-        :param train: 是否使用训练集
-        :type train: bool
-        :param split_ratio: 分割比例。每一类中前split_ratio的数据会被用作训练集，剩下的数据为测试集
-        :type split_ratio: float
-        :param use_frame: 是否将事件数据转换成帧数据
-        :type use_frame: bool
-        :param frames_num: 转换后数据的帧数
-        :type frames_num: int
-        :param split_by: 脉冲数据转换成帧数据的累计方式。``'time'`` 或 ``'number'``
-        :type split_by: str
-        :param normalization: 归一化方法，为 ``None`` 表示不进行归一化；
-                        为 ``'frequency'`` 则每一帧的数据除以每一帧的累加的原始数据数量；
-                        为 ``'max'`` 则每一帧的数据除以每一帧中数据的最大值；
-                        为 ``norm`` 则每一帧的数据减去每一帧中的均值，然后除以标准差
-        :type normalization: str or None
-
-        CIFAR10 DVS数据集，出自 `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://www.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_，
-        数据来源于DVS相机拍摄的显示器上的CIFAR10图片。原始数据的下载地址为 https://figshare.com/articles/dataset/CIFAR10-DVS_New/4724671。
-
-        关于转换成帧数据的细节，参见 :func:`~spikingjelly.datasets.utils.integrate_events_to_frames`。
+        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
+            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
+        :rtype: tuple
         '''
-        super().__init__()
-        self.train = train
-        events_root = os.path.join(root, 'events')
-        if os.path.exists(events_root):
-            print(f'{events_root} already exists')
-        else:
-            self.download_and_extract(root, events_root)
+        return 128, 128
 
-        self.use_frame = use_frame
-        if use_frame:
-            self.normalization = normalization
-            if normalization == 'frequency':
-                dir_suffix = normalization
-            else:
-                dir_suffix = None
-            frames_root = os.path.join(root, f'frames_num_{frames_num}_split_by_{split_by}_normalization_{dir_suffix}')
-            if os.path.exists(frames_root):
-                print(f'{frames_root} already exists')
-            else:
-                os.mkdir(frames_root)
-                print(f'mkdir {frames_root}')
-                self.create_frames_dataset(events_root, frames_root, frames_num, split_by, normalization)
-        self.data_dir = frames_root if use_frame else events_root
+    @staticmethod
+    def read_aedat_save_to_np(bin_file: str, np_file: str):
+        events = CIFAR10DVS.load_origin_data(bin_file)
+        np.savez(np_file,
+                 t=events['t'],
+                 x=events['x'],
+                 y=events['y'],
+                 p=events['p']
+                 )
+        print(f'Save [{bin_file}] to [{np_file}].')
 
-        self.file_name = []
-        if train:
-            index = np.arange(0, int(split_ratio * 1000))
-        else:
-            index = np.arange(int(split_ratio * 1000), 1000)
+    @staticmethod
+    def create_events_np_files(extract_root: str, events_np_root: str):
+        '''
+        :param extract_root: Root directory path which saves extracted files from downloaded files
+        :type extract_root: str
+        :param events_np_root: Root directory path which saves events files in the ``npz`` format
+        :type events_np_root:
+        :return: None
 
-        for class_name in labels_dict.keys():
-            class_dir = os.path.join(self.data_dir, class_name)
-            for i in index:
-                if self.use_frame:
-                    self.file_name.append(os.path.join(class_dir, 'cifar10_' + class_name + '_' + str(i) + '.npz'))
-                else:
-                    self.file_name.append(os.path.join(class_dir, 'cifar10_' + class_name + '_' + str(i) + '.aedat'))
-
-    def __len__(self):
-        return self.file_name.__len__()
-
-
-    def __getitem__(self, index):
-        if self.use_frame:
-            frames, labels = self.get_frames_item(self.file_name[index])
-            if self.normalization is not None and self.normalization != 'frequency':
-                frames = normalize_frame(frames, self.normalization)
-            return frames, labels
-        else:
-            return self.get_events_item(self.file_name[index])
+        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
+        '''
+        t_ckp = time.time()
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+            for class_name in os.listdir(extract_root):
+                aedat_dir = os.path.join(extract_root, class_name)
+                np_dir = os.path.join(events_np_root, class_name)
+                os.mkdir(np_dir)
+                print(f'Mkdir [{np_dir}].')
+                for bin_file in os.listdir(aedat_dir):
+                    source_file = os.path.join(aedat_dir, bin_file)
+                    target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
+                    print(f'Start to convert [{source_file}] to [{target_file}].')
+                    tpe.submit(CIFAR10DVS.read_aedat_save_to_np, source_file,
+                               target_file)
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
