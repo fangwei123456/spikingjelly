@@ -31,9 +31,10 @@ def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
     img_tensor[:, 1] = x[:, 0]
     img_tensor[:, 2] = x[:, 1]
     if save_gif_to is None:
-        for t in range(img_tensor.shape[0]):
-                plt.imshow(to_img(img_tensor[t]))
-                plt.pause(0.01)
+        while True:
+            for t in range(img_tensor.shape[0]):
+                    plt.imshow(to_img(img_tensor[t]))
+                    plt.pause(0.01)
     else:
         img_list = []
         for t in range(img_tensor.shape[0]):
@@ -238,7 +239,7 @@ where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{
     # mask = [events['p'] == 0]
     # mask.append(np.logical_not(mask[0]))
     # for i in range(2):
-    #     position = events['y'][mask[i]] * height + events['x'][mask[i]]
+    #     position = events['y'][mask[i]] * width + events['x'][mask[i]]
     #     events_number_per_pos = np.bincount(position)
     #     idx = np.arange(events_number_per_pos.size)
     #     frames[i][idx] += events_number_per_pos
@@ -253,7 +254,7 @@ where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{
     mask.append(p == 0)
     mask.append(np.logical_not(mask[0]))
     for c in range(2):
-        position = y[mask[c]] * H + x[mask[c]]
+        position = y[mask[c]] * W + x[mask[c]]
         events_number_per_pos = np.bincount(position)
         frame[c][np.arange(events_number_per_pos.size)] += events_number_per_pos
     return frame.reshape((2, H, W))
