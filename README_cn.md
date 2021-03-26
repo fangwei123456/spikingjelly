@@ -83,6 +83,28 @@ SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，�
 >>> net = net.to(device) # Can be CPU or CUDA devices
 ```
 
+## 神经形态数据集支持
+SpikingJelly 已经将下列数据集纳入：
+
+| Dataset        | Source                                                       |
+| -------------- | ------------------------------------------------------------ |
+| ASL-DVS        | Graph-based Object Classification for Neuromorphic Vision Sensing |
+| CIFAR10-DVS    | CIFAR10-DVS: An Event-Stream Dataset for Object Classification |
+| DVS128 Gesture | A Low Power, Fully Event-Based Gesture Recognition System    |
+| N-Caltech101   | Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades |
+| N-MNIST        | Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades |
+
+用户可以轻松使用事件数据，或由SpikingJelly积分生成的帧数据：
+
+```python
+from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+root_dir = 'D:/datasets/DVS128Gesture'
+event_set = DVS128Gesture(root_dir, train=True, data_type='event')
+frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
+```
+
+未来将会纳入更多数据集。
+
 ## 引用
 
 如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
