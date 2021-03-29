@@ -13,7 +13,7 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-**Install the last stable version (0.0.0.0.4) from** [**PyPI**](https://pypi.org/project/spikingjelly/)：
+**Install the last stable version (0.0.0.0.4) from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
 ```bash
 pip install spikingjelly
@@ -103,6 +103,14 @@ event_set = DVS128Gesture(root_dir, train=True, data_type='event')
 frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
 ```
 More datasets will be included in the future.
+
+## FAQ
+
+### ModuleNotFoundError:No module named '\_C\_…
+
+Please install SpikingJelly **from source** rather than the PyPI version.
+
+*…More to come later*
 
 ## Citation
 

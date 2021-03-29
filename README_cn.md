@@ -105,6 +105,14 @@ frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number
 
 未来将会纳入更多数据集。
 
+## 常见问题及解答
+
+### ModuleNotFoundError:No module named '\_C\_…
+
+请从**源代码**编译安装SpikingJelly而非直接安装PyPI的版本
+
+*……待续*
+
 ## 引用
 
 如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
