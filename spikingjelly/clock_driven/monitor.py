@@ -2,7 +2,11 @@ import torch
 import numpy as np
 from torch import nn
 from spikingjelly.clock_driven import neuron
-from spikingjelly.cext import neuron as cext_neuron
+
+try:
+    from spikingjelly.cext import neuron as cext_neuron
+except ImportError:
+    cext_neuron = None
 
 class Monitor:
     def __init__(self, net: nn.Module, device: str = None, backend: str = 'numpy'):
@@ -33,7 +37,7 @@ class Monitor:
         super().__init__()
         self.module_dict = dict()
         for name, module in net.named_modules():
-            if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
+            if (cext_neuron is not None and isinstance(module, cext_neuron.BaseNode)) or isinstance(module, neuron.BaseNode):
                 self.module_dict[name] = module
                 #setattr(module, 'monitor', self)
 
@@ -63,7 +67,7 @@ class Monitor:
         self.s = dict.fromkeys(self.module_dict, None)
 
         for name, module in self.net.named_modules():
-            if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
+            if (cext_neuron is not None and isinstance(module, cext_neuron.BaseNode)) or isinstance(module, neuron.BaseNode):
                 self.v[name] = []
                 self.s[name] = []
                 setattr(module, 'v_list', self.v[name])
@@ -88,7 +92,7 @@ class Monitor:
         Disable Monitor. Stop recording data.
         '''
         for name, module in self.net.named_modules():
-            if isinstance(module, (cext_neuron.BaseNode, neuron.BaseNode)):
+            if (cext_neuron is not None and isinstance(module, cext_neuron.BaseNode)) or isinstance(module, neuron.BaseNode):
                 delattr(module, 'v_list')
                 delattr(module, 's_list')
                 # 删除钩子
