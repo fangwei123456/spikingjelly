@@ -9,6 +9,15 @@
 
 SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedocs.io
 
+- [安装](#安装)
+- [以前所未有的简单方式搭建SNN](#以前所未有的简单方式搭建SNN)
+- [CUDA增强的神经元](#CUDA增强的神经元)
+- [设备支持](#设备支持)
+- [神经形态数据集支持](#神经形态数据集支持)
+- [常见问题](#常见问题)
+- [引用](#引用)
+- [项目信息](#项目信息)
+
 ## 安装
 
 注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
@@ -106,6 +115,12 @@ frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number
 ```
 
 未来将会纳入更多数据集。
+
+如果用户无法下载某些数据集，可以尝试从OpenI的数据集镜像下载：
+
+https://git.openi.org.cn/OpenI/spikingjelly/datasets?type=0
+
+只有原始数据集所使用的协议允许分发，或原始数据集作者已经同意分发的数据集才会被建立镜像。 
 
 ## 常见问题
 

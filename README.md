@@ -15,7 +15,6 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 - [Device Supports](#device-supports)
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
 - [Frequently Asked Questions](#frequently-asked-questions)
-  * [ModuleNotFoundError:No module named "\_C\_…"](#modulenotfounderror-no-module-named----c----)
 - [Citation](#citation)
 - [About](#about)
 
@@ -116,11 +115,19 @@ frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number
 ```
 More datasets will be included in the future.
 
+If some datasets' download link are not available for some users, the users can download from the OpenI mirror:
+
+https://git.openi.org.cn/OpenI/spikingjelly/datasets?type=0
+
+All datasets saved in the OpenI mirror are allowable by their licence or authors' agreement.
+
 ## Frequently Asked Questions
 
 ### ModuleNotFoundError:No module named "\_C\_…"
 
 "\_C\_..." modules in SpikingJelly are C/CUDA extensions, e.g., "\_C\_neuron" is the compiled C/CUDA module. Note that the CUDA extensions are not included in the PyPI package. If you need CUDA extensions, you can install from the source codes.
+
+
 
 ## Citation
 
