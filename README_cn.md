@@ -35,6 +35,8 @@ cd spikingjelly
 git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
 python setup.py install
 ```
+从源代码安装时，会检测环境中是否已经安装CUDA。如果没有安装CUDA，则CUDA扩展也不会被安装。
+
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
@@ -105,13 +107,11 @@ frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number
 
 未来将会纳入更多数据集。
 
-## 常见问题及解答
+## 常见问题
 
-### ModuleNotFoundError:No module named '\_C\_…
+### ModuleNotFoundError:No module named "\_C\_…"
 
-请从**源代码**编译安装SpikingJelly而非直接安装PyPI的版本
-
-*……待续*
+"\_C\_..."模块是SpikingJelly中的CUDA扩展，例如"\_C\_neuron"是编译出的CUDA神经元的模块。注意，PyPI的安装包不包含CUDA扩展。如果需要使用CUDA扩展模块，请从源代码安装。
 
 ## 引用
 

@@ -9,6 +9,16 @@ SpikingJelly is an open-source deep learning framework for Spiking Neural Networ
 
 The documentation of SpikingJelly is written in both English and Chinese: https://spikingjelly.readthedocs.io
 
+- [Installation](#installation)
+- [Build SNN In An Unprecedented Simple Way](#build-snn-in-an-unprecedented-simple-way)
+- [CUDA-Enhanced Neuron](#cuda-enhanced-neuron)
+- [Device Supports](#device-supports)
+- [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
+- [Frequently Asked Questions](#frequently-asked-questions)
+  * [ModuleNotFoundError:No module named "\_C\_…"](#modulenotfounderror-no-module-named----c----)
+- [Citation](#citation)
+- [About](#about)
+
 ## Installation
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
@@ -35,6 +45,8 @@ cd spikingjelly
 git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
 python setup.py install
 ```
+When install from the source codes, SpikingJelly will detect whether CUDA is installed. If not, the CUDA extensions will also not be compiled.
+
 ## Build SNN In An Unprecedented Simple Way
 
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
@@ -104,13 +116,11 @@ frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number
 ```
 More datasets will be included in the future.
 
-## FAQ
+## Frequently Asked Questions
 
-### ModuleNotFoundError:No module named '\_C\_…
+### ModuleNotFoundError:No module named "\_C\_…"
 
-Please install SpikingJelly **from source** rather than the PyPI version.
-
-*…More to come later*
+"\_C\_..." modules in SpikingJelly are C/CUDA extensions, e.g., "\_C\_neuron" is the compiled C/CUDA module. Note that the CUDA extensions are not included in the PyPI package. If you need CUDA extensions, you can install from the source codes.
 
 ## Citation
 
