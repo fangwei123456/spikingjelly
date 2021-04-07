@@ -39,7 +39,7 @@ def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
         img_list = []
         for t in range(img_tensor.shape[0]):
             img_list.append(to_img(img_tensor[t]))
-        img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:])
+        img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:], loop=0)
         print(f'Save frames to [{save_gif_to}].')
 
 
