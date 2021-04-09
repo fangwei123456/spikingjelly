@@ -11,7 +11,6 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 
 - [Installation](#installation)
 - [Build SNN In An Unprecedented Simple Way](#build-snn-in-an-unprecedented-simple-way)
-- [Fast And Handy ANN-SNN Conversion](#fast and handy ann-snn conversion)
 - [CUDA-Enhanced Neuron](#cuda-enhanced-neuron)
 - [Device Supports](#device-supports)
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
