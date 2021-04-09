@@ -11,6 +11,7 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 
 - [安装](#安装)
 - [以前所未有的简单方式搭建SNN](#以前所未有的简单方式搭建SNN)
+- [快速好用的ANN-SNN转换](#快速好用的ANN-SNN转换)
 - [CUDA增强的神经元](#CUDA增强的神经元)
 - [设备支持](#设备支持)
 - [神经形态数据集支持](#神经形态数据集支持)
@@ -75,6 +76,47 @@ class Net(nn.Module):
 ```
 
 阅读[spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html)以探索更多先进的神经网络！
+
+## 快速好用的ANN-SNN转换
+
+SpikingJelly实现了一个相对通用的ANN-SNN转换接口。用户可以通过PyTorch或ONNX软件包实现转换。此外，用户可以自定义转换模块以添加到转换中。
+
+```python
+class ANN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Conv2d(1, 32, 3, 1),
+            nn.BatchNorm2d(32, eps=1e-3),
+            nn.ReLU(),
+            nn.AvgPool2d(2, 2),
+
+            nn.Conv2d(32, 32, 3, 1),
+            nn.BatchNorm2d(32, eps=1e-3),
+            nn.ReLU(),
+            nn.AvgPool2d(2, 2),
+
+            nn.Conv2d(32, 32, 3, 1),
+            nn.BatchNorm2d(32, eps=1e-3),
+            nn.ReLU(),
+            nn.AvgPool2d(2, 2),
+
+            nn.Flatten(),
+            nn.Linear(32, 10),
+            nn.ReLU()
+        )
+
+    def forward(self,x):
+        x = self.network(x)
+        return x
+```
+
+在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
+
+```python
+>>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+>>> cnn_mnist.main()
+```
 
 ## CUDA增强的神经元
 

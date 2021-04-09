@@ -76,6 +76,47 @@ This simple network with a Poisson encoder can achieve 92% accuracy on MNIST tes
 
 Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html) to explore more advanced networks!
 
+## Fast And Handy ANN-SNN Conversion
+
+SpikingJelly implements a relatively general ANN-SNN Conversion interface. Users can realize the conversion through PyTorch or ONNX packages. What's more, users can customize the conversion module to add to the conversion. 
+
+```python
+class ANN(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Conv2d(1, 32, 3, 1),
+            nn.BatchNorm2d(32, eps=1e-3),
+            nn.ReLU(),
+            nn.AvgPool2d(2, 2),
+
+            nn.Conv2d(32, 32, 3, 1),
+            nn.BatchNorm2d(32, eps=1e-3),
+            nn.ReLU(),
+            nn.AvgPool2d(2, 2),
+
+            nn.Conv2d(32, 32, 3, 1),
+            nn.BatchNorm2d(32, eps=1e-3),
+            nn.ReLU(),
+            nn.AvgPool2d(2, 2),
+
+            nn.Flatten(),
+            nn.Linear(32, 10),
+            nn.ReLU()
+        )
+
+    def forward(self,x):
+        x = self.network(x)
+        return x
+```
+
+This simple network with analog encoding can achieve 98.51% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
+
+```python
+>>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+>>> cnn_mnist.main()
+```
+
 ## CUDA-Enhanced Neuron
 
 SpikingJelly provides two versions of spiking neurons:  user-friendly PyTorch version and high-speed CUDA version. The followed figure compares execution time of different LIF neurons:
