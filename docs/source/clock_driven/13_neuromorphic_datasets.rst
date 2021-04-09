@@ -122,9 +122,9 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. math::
 
-    j_{l} & = /left/lfloor /frac{N}{T}/right /rfloor /cdot j //
-	j_{r} & = /begin{cases} /left /lfloor /frac{N}{T} /right /rfloor /cdot (j + 1), & /text{if}~~ j <  T - 1 /cr N, &  /text{if} ~~j = T - 1 /end{cases}//
-    F(j, p, x, y) &= /sum_{i = j_{l}}^{j_{r} - 1} /mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+    j_{l} & = \left\lfloor \frac{N}{T}\right \rfloor \cdot j \\
+	j_{r} & = \begin{cases} \left \lfloor \frac{N}{T} \right \rfloor \cdot (j + 1), & \text{if}~~ j <  T - 1 \cr N, &  \text{if} ~~j = T - 1 \end{cases} \\
+    F(j, p, x, y) &= \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
 其中 :math:`/lfloor /cdot /rfloor` 是向下取整，:math:`/mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是示性函数，当且仅当 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时取值为1，否则为0。
 
