@@ -319,6 +319,27 @@ class Dropout2d(Dropout):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
 
 class MultiStepDropout(Dropout):
+    def __init__(self, p=0.5):
+        '''
+        * :ref:`API in English <MultiStepDropout.__init__-en>`
+
+        .. _MultiStepDropout.__init__-cn:
+
+        :param p: 每个元素被设置为0的概率
+        :type p: float
+
+        :class:`spikingjelly.clock_driven.layer.Dropout` 的多步版本。
+
+        * :ref:`中文API <MultiStepDropout.__init__-cn>`
+
+        .. _MultiStepDropout.__init__-en:
+
+        :param p: probability of an element to be zeroed
+        :type p: float
+
+        The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout`.
+        '''
+        super().__init__(p)
     def forward(self, x_seq: torch.Tensor):
         if self.training:
             if self.mask is None:
@@ -329,6 +350,28 @@ class MultiStepDropout(Dropout):
             return x_seq
 
 class MultiStepDropout2d(Dropout2d):
+    def __init__(self, p=0.5):
+        '''
+        * :ref:`API in English <MultiStepDropout2d.__init__-en>`
+
+        .. _MultiStepDropout2d.__init__-cn:
+
+        :param p: 每个元素被设置为0的概率
+        :type p: float
+
+        :class:`spikingjelly.clock_driven.layer.Dropout2d` 的多步版本。
+
+        * :ref:`中文API <MultiStepDropout2d.__init__-cn>`
+
+        .. _MultiStepDropout2d.__init__-en:
+
+        :param p: probability of an element to be zeroed
+        :type p: float
+
+        The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout2d`.
+        '''
+        super().__init__(p)
+
     def forward(self, x_seq: torch.Tensor):
         if self.training:
             if self.mask is None:
