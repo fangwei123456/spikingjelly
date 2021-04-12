@@ -244,7 +244,7 @@ class Dropout(nn.Module):
             time window within an iteration.
         '''
         super().__init__()
-        assert 0 < p < 1
+        assert 0 <= p < 1
         self.mask = None
         self.p = p
 
