@@ -13,8 +13,6 @@ In this tutorial, we will write codes by the new version of SpikingJelly, and ou
 
 Define The Network
 -----------------------
-原文 [#PLIF]_ 使用下图所示的通用结构表示用于各个数据集的网络。
-
 The paper [#PLIF]_ use a general structure to build SNNs for different datasets, which is shown in the following figure:
 
 
