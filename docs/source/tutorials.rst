@@ -17,3 +17,4 @@
     ./clock_driven/11_cext_neuron_with_lbl
     ./clock_driven/12_monitor
     ./clock_driven/13_neuromorphic_datasets
+    ./clock_driven/14_classify_dvsg

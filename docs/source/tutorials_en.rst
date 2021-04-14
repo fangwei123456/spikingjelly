@@ -16,3 +16,4 @@ Tutorials
     /clock_driven_en/10_propagation_pattern
     ./clock_driven_en/11_cext_neuron_with_lbl
     ./clock_driven_en/13_neuromorphic_datasets
+    ./clock_driven_en/14_classify_dvsg

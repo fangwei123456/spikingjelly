@@ -15,7 +15,8 @@ Fortunately, there is a strong correlation between the non-linear activation of 
 
 The following figure shows this correspondence: the left figure is a curve obtained by giving a constant input to an IF neuron and observing its firing over a period of time. The right one is the ReLU activation curve, which satisfies :math:`activation = max(input,0)`.
 
-.. image:: ./_static/tutorials/clock_driven/5_ann2snn/relu_if.png
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/2.*
+    :width: 100%
 
 The literature [#f1]_ provides a theoretical basis for analyzing the conversion of ANN to SNN. The theory shows that the IF neuron in SNN is an unbiased estimator of ReLU activation function over time.
 
@@ -326,7 +327,7 @@ The complete code is located in ``ann2snn.examples.if_cnn_mnist.py``, in the cod
 
 In the example, this model is trained for 10 epochs. The changes in the accuracy of the test set during training are as follows:
 
-.. image:: ./_static/tutorials/clock_driven/5_ann2snn/accuracy_curve.png
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/accuracy_curve.png
 
 In the end, the accuracy on test dataset is 98.8%.
 

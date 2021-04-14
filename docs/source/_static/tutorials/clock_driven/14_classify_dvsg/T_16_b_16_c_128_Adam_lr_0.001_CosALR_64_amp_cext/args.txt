@@ -1,0 +1,1 @@
+Namespace(T=16, T_max=64, amp=True, b=16, cext=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
