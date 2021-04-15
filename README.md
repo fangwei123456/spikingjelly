@@ -168,8 +168,9 @@ All datasets saved in the OpenI mirror are allowable by their licence or authors
 
 SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 
-| ![t0](./docs/source/_static/tutorials/clock_driven/0_neuron/0.png) | [Neurons](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/0_neuron.html) |
+| Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| ![t0](./docs/source/_static/tutorials/clock_driven/0_neuron/0.png) | [Neurons](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/0_neuron.html) |
 | ![t2](./docs/source/_static/tutorials/clock_driven/2_encoding/5.png) | [Encoder](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/2_encoding.html) |
 | ![t3](./docs/source/_static/tutorials/clock_driven/3_fc_mnist/2d_heatmap.png) | [Use single-layer fully connected SNN to identify MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/3_fc_mnist.html) |
 | ![t4](./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.png) | [Use convolutional SNN to identify Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/4_conv_fashion_mnist.html) |
