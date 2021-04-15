@@ -1,11 +1,11 @@
 spikingjelly.clock_driven.ann2snn.examples package
-====================================
+=======================================================================
 
 Submodules
 ----------
 
 spikingjelly.clock_driven.ann2snn.examples.if\_cnn\_mnist module
---------------------------------------------------
+----------------------------------------------------------------------------------------------------
 
 .. automodule:: spikingjelly.clock_driven.ann2snn.examples.cnn_mnist
    :members:

@@ -3,7 +3,7 @@ Propagation Pattern
 Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Single-Step and Multi-Step
-------------------
+------------------------------------
 Most modules in SpikingJelly (except for :class:`spikingjelly.clock_driven.rnn`), e.g., :class:`spikingjelly.clock_driven.layer.Dropout`, don't have a ``MultiStep`` prefix. These modules' ``forward`` functions define a single-step forward:
 
     Input :math:`X_{t}`, output :math:`Y_{t}`
@@ -76,7 +76,7 @@ The outputs are:
 We can find that the single-step module and the multi-step module have the identical outputs.
 
 Step-by-step and Layer-by-Layer
--------------------
+--------------------------------------
 
 In the previous tutorials and examples, we run the SNNs `step-by-step`, e.g.,:
 

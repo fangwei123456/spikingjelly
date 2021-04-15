@@ -1,5 +1,5 @@
 Clock driven: Use convolutional SNN to identify Fashion-MNIST
-============================================================
+=============================================================================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_

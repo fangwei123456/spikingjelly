@@ -1,5 +1,5 @@
 Accelerate with CUDA-Enhanced Neuron and Layer-by-Layer Propagation
-==================================================================
+============================================================================================
 
 Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 

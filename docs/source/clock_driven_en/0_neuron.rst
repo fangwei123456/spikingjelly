@@ -41,8 +41,8 @@ The LIF neuron layer has some parameters, which are explained in detail in the A
 
     - **surrogate_function** -- the surrogate function used to calculate the gradient of the spike function during back propagation
 
-    - **monitor_state** -- whether to set up a monitor to save the voltages and spikes of the neurons. If it is ``True``,
-``self.monitor`` is a dictionary, the keys include ``h``, ``v`` and ``s``, which record the voltage after charging, the voltage after releasing a spike, and the released spike respectively.
+    - **monitor_state** -- whether to set up a monitor to save the voltages and spikes of the neurons. If it is ``True``, ``self.monitor`` is a dictionary, the keys include ``h``, ``v`` and ``s``, which record the voltage after charging, the voltage after releasing a spike, and the released spike respectively.
+
 The corresponding value is a linked list. In order to save memory, the value stored in the list is the value of the original variable converted into a ``numpy`` array.
 Also note that the ``self.reset()`` function will clear these linked lists.
 

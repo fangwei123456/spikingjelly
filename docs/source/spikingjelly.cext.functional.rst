@@ -1,5 +1,5 @@
 spikingjelly.cext.functional package
-=========================
+==================================================
 
 Module contents
 ---------------

@@ -6,7 +6,7 @@ Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 ``spikingjelly.datasets`` provides frequently-used neuromorphic datasets, including N-MNIST [#NMNIST]_, CIFAR10-DVS [#CIFAR10DVS]_, DVS128 Gesture [#DVS128Gesture]_, N-Caltech101 [#NMNIST]_, ASLDVS [#ASLDVS]_, etc. All datasets are processed by SpikingJelly in the same method, which is friendly for developers to write codes for new datasets. In this tutorial, we will take DVS 128 Gesture dataset as an example to show how to use SpikingJelly to process neuromorphic datasets.
 
 Download Automatically/Manually
-------------------------------
+-------------------------------------------------------
 SpikingJelly can download some datasets (e.g., CIFAR10-DVS) automatically. When we firstly use these datasets, SpikingJelly
 will download the dataset to ``download`` in the root directory. The ``downloadable()`` function of each dataset defines
 whether this dataset can be downloaded automatically, and the ``resource_url_md5()`` function defines the download url and
