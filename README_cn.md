@@ -171,7 +171,7 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 
 | 图例                                                         | 教程                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![t0](./docs/source/_static/tutorials/clock_driven/0_neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_/0_neuron.html) |
+| ![t0](./docs/source/_static/tutorials/clock_driven/0_neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html) |
 | ![t2](./docs/source/_static/tutorials/clock_driven/2_encoding/5.png) | [编码器](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/2_encoding.html) |
 | ![t3](./docs/source/_static/tutorials/clock_driven/3_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/3_fc_mnist.html) |
 | ![t4](./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/4_conv_fashion_mnist.html) |
