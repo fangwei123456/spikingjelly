@@ -35,6 +35,8 @@ class ReplayMemory(object):
 
 
 class NonSpikingLIFNode(neuron.LIFNode):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
     def forward(self, dv: torch.Tensor):
         self.neuronal_charge(dv)
         # self.neuronal_fire()

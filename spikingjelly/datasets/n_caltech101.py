@@ -41,19 +41,17 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
             in the target and transforms it.
         :type target_transform: callable
 
-        The base class for neuromorphic dataset. Users can define a new dataset by inheriting this class and implementing
-        all abstract methods. Users can refer to ``DVS128Gesture``.
+        If ``data_type == 'event'``
+            the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``.
 
-        If ``data_type == 'event'``, the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values
-            are ``numpy.ndarray``.
-
-        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``, events will be integrated to frames with fixed
-            frames number. ``split_by`` will define how to split events. See ``cal_fixed_frames_number_segment_index`` for
+        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``
+            events will be integrated to frames with fixed frames number. ``split_by`` will define how to split events.
+            See :class:`cal_fixed_frames_number_segment_index` for
             more details.
 
-        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``, events will be
-            integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample will be padded
-            to the same frames number (length), which is the maximum frames number of all frames.
+        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
+            events will be integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample
+            will be padded to the same frames number (length), which is the maximum frames number of all frames.
 
         '''
         super().__init__(root, None, data_type, frames_number, split_by, duration, padding_frame, transform, target_transform)

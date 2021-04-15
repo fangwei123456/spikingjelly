@@ -38,8 +38,10 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-class NonSpikingLIFNode(neuron.LIFNode):
     class NonSpikingLIFNode(neuron.LIFNode):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+
         def forward(self, dv: torch.Tensor):
             self.neuronal_charge(dv)
             # self.neuronal_fire()
@@ -302,10 +304,10 @@ def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_nu
                 plt.close()
                 break
 
-'''
-train(use_cuda=False, model_dir='./model/CartPole-v0/state', log_dir='./log', env_name='CartPole-v0', \
-        hidden_size=256, num_episodes=500, seed=1)
-'''
+    '''
+    train(use_cuda=False, model_dir='./model/CartPole-v0/state', log_dir='./log', env_name='CartPole-v0', \
+            hidden_size=256, num_episodes=500, seed=1)
+    '''
 
-play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', \
-        hidden_size=256, played_frames=300)
+    play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', \
+            hidden_size=256, played_frames=300)

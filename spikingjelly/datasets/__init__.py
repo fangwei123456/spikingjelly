@@ -448,14 +448,14 @@ def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data
     :param train_ratio: split the ratio of the origin dataset as the train set
     :type train_ratio: float
     :param origin_dataset: the origin dataset
-    :type torch.utils.data.Dataset
+    :type origin_dataset: torch.utils.data.Dataset
     :param num_classes: total classes number, e.g., ``10`` for the MNIST dataset
-    :type int
+    :type num_classes: int
     :param random_split: If ``False``, the front ratio of samples in each classes will
             be included in train set, while the reset will be included in test set.
             If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
             ``numpy.randon.seed``
-    :type int
+    :type random_split: int
     :return: a tuple ``(train_set, test_set)``
     :rtype: tuple
     '''
@@ -502,7 +502,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type root: str
         :param train: whether use the train set. Set ``True`` or ``False`` for those datasets provide train/test
             division, e.g., DVS128 Gesture dataset. If the dataset does not provide train/test division, e.g., CIFAR10-DVS,
-            please set ``None`` and use :name:`~split_to_train_test_set` function to get train/test set
+            please set ``None`` and use :class:`~split_to_train_test_set` function to get train/test set
         :type train: bool
         :param data_type: `event` or `frame`
         :type data_type: str
@@ -523,18 +523,19 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type target_transform: callable
 
         The base class for neuromorphic dataset. Users can define a new dataset by inheriting this class and implementing
-        all abstract methods. Users can refer to ``DVS128Gesture``.
+        all abstract methods. Users can refer to :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture`.
 
-        If ``data_type == 'event'``, the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values
-            are ``numpy.ndarray``.
+        If ``data_type == 'event'``
+            the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``.
 
-        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``, events will be integrated to frames with fixed
-            frames number. ``split_by`` will define how to split events. See ``cal_fixed_frames_number_segment_index`` for
+        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``
+            events will be integrated to frames with fixed frames number. ``split_by`` will define how to split events.
+            See :class:`cal_fixed_frames_number_segment_index` for
             more details.
 
-        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``, events will be
-            integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample will be padded
-            to the same frames number (length), which is the maximum frames number of all frames.
+        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
+            events will be integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample
+            will be padded to the same frames number (length), which is the maximum frames number of all frames.
 
         '''
 
