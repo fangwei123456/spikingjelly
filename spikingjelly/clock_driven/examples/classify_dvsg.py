@@ -113,33 +113,41 @@ def main():
 
     用于分类DVS128 Gesture数据集的代码样例。网络结构来自于 `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_。
 
-    usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cext] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER]
-                        [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
+    .. code:: bash
 
-    Classify DVS128 Gesture
+        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cext] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER] [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -T T                  simulating time-steps
-      -device DEVICE        device
-      -b B                  batch size
-      -epochs N             number of total epochs to run
-      -j N                  number of data loading workers (default: 4)
-      -channels CHANNELS    channels of Conv2d in SNN
-      -data_dir DATA_DIR    root dir of DVS128 Gesture dataset
-      -out_dir OUT_DIR      root dir for saving logs and checkpoint
-      -resume RESUME        resume from the checkpoint path
-      -amp                  automatic mixed precision training
-      -cext                 use CUDA neuron and multi-step forward mode
-      -opt OPT              use which optimizer. SDG or Adam
-      -lr LR                learning rate
-      -momentum MOMENTUM    momentum for SGD
-      -lr_scheduler LR_SCHEDULER
-                            use which schedule. StepLR or CosALR
-      -step_size STEP_SIZE  step_size for StepLR
-      -gamma GAMMA          gamma for StepLR
-      -T_max T_MAX          T_max for CosineAnnealingLR
+        Classify DVS128 Gesture
 
+        optional arguments:
+          -h, --help            show this help message and exit
+          -T T                  simulating time-steps
+          -device DEVICE        device
+          -b B                  batch size
+          -epochs N             number of total epochs to run
+          -j N                  number of data loading workers (default: 4)
+          -channels CHANNELS    channels of Conv2d in SNN
+          -data_dir DATA_DIR    root dir of DVS128 Gesture dataset
+          -out_dir OUT_DIR      root dir for saving logs and checkpoint
+          -resume RESUME        resume from the checkpoint path
+          -amp                  automatic mixed precision training
+          -cext                 use CUDA neuron and multi-step forward mode
+          -opt OPT              use which optimizer. SDG or Adam
+          -lr LR                learning rate
+          -momentum MOMENTUM    momentum for SGD
+          -lr_scheduler LR_SCHEDULER
+                                use which schedule. StepLR or CosALR
+          -step_size STEP_SIZE  step_size for StepLR
+          -gamma GAMMA          gamma for StepLR
+          -T_max T_MAX          T_max for CosineAnnealingLR
+
+    运行示例：
+
+    .. code:: bash
+
+        python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cext -epochs 1024
+
+    阅读教程 :doc:`./clock_driven/14_classify_dvsg` 以获得更多信息。
 
     * :ref:`中文API <classify_dvsg.__init__-cn>`
 
@@ -147,32 +155,42 @@ def main():
 
     The code example for classifying the DVS128 Gesture dataset. The network structure is from `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_.
 
-        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cext] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER]
-                        [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
 
-    Classify DVS128 Gesture
+    .. code:: bash
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -T T                  simulating time-steps
-      -device DEVICE        device
-      -b B                  batch size
-      -epochs N             number of total epochs to run
-      -j N                  number of data loading workers (default: 4)
-      -channels CHANNELS    channels of Conv2d in SNN
-      -data_dir DATA_DIR    root dir of DVS128 Gesture dataset
-      -out_dir OUT_DIR      root dir for saving logs and checkpoint
-      -resume RESUME        resume from the checkpoint path
-      -amp                  automatic mixed precision training
-      -cext                 use CUDA neuron and multi-step forward mode
-      -opt OPT              use which optimizer. SDG or Adam
-      -lr LR                learning rate
-      -momentum MOMENTUM    momentum for SGD
-      -lr_scheduler LR_SCHEDULER
-                            use which schedule. StepLR or CosALR
-      -step_size STEP_SIZE  step_size for StepLR
-      -gamma GAMMA          gamma for StepLR
-      -T_max T_MAX          T_max for CosineAnnealingLR
+        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cext] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER] [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
+
+        Classify DVS128 Gesture
+
+        optional arguments:
+          -h, --help            show this help message and exit
+          -T T                  simulating time-steps
+          -device DEVICE        device
+          -b B                  batch size
+          -epochs N             number of total epochs to run
+          -j N                  number of data loading workers (default: 4)
+          -channels CHANNELS    channels of Conv2d in SNN
+          -data_dir DATA_DIR    root dir of DVS128 Gesture dataset
+          -out_dir OUT_DIR      root dir for saving logs and checkpoint
+          -resume RESUME        resume from the checkpoint path
+          -amp                  automatic mixed precision training
+          -cext                 use CUDA neuron and multi-step forward mode
+          -opt OPT              use which optimizer. SDG or Adam
+          -lr LR                learning rate
+          -momentum MOMENTUM    momentum for SGD
+          -lr_scheduler LR_SCHEDULER
+                                use which schedule. StepLR or CosALR
+          -step_size STEP_SIZE  step_size for StepLR
+          -gamma GAMMA          gamma for StepLR
+          -T_max T_MAX          T_max for CosineAnnealingLR
+
+    Running Example:
+
+    .. code:: bash
+
+        python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cext -epochs 1024
+
+    See the tutorial :doc:`./clock_driven_en/14_classify_dvsg` for more details.
     '''
     parser = argparse.ArgumentParser(description='Classify DVS128 Gesture')
     parser.add_argument('-T', default=16, type=int, help='simulating time-steps')
