@@ -102,5 +102,5 @@ def main(log_dir=None):
                  )
 
 if __name__ == '__main__':
-    utils.download__sample_pth("https://ndownloader.figshare.com/files/26676110",'./SJ-cifar10-resnet18_model-sample.pth')
+    utils.download_sample_pth("https://ndownloader.figshare.com/files/26676110",'./SJ-cifar10-resnet18_model-sample.pth')
     main('./resnet18_cifar10')
