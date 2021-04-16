@@ -75,7 +75,7 @@ def main(log_dir=None):
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
         if not os.path.exists(os.path.join(log_dir, model_name + '.pkl')):
-            print('%d has no model to load.' % (log_dir))
+            print('%s has no model to load.' % (log_dir))
             load = False
         else:
             load = True
