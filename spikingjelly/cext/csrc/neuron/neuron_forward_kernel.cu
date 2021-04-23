@@ -1048,3 +1048,386 @@ std::vector<at::Tensor> IF_hard_reset_fptt_with_grad(torch::Tensor & x_seq, torc
 
   return {spike_seq, v_next, grad_s_to_h, grad_v_to_h};
 }
+
+__global__ void ParametricLIF_hard_reset_forward_with_grad_cuda_kernel(
+    const float* __restrict__ x, const float* __restrict__ v, float* __restrict__ spike, float* __restrict__ v_next,
+    float* __restrict__ grad_s_to_h, float* __restrict__ grad_v_to_h, float* __restrict__ grad_h_to_rtau,
+    const float v_th, const float v_reset, const int size,
+    const float alpha, const bool detach_reset, const int grad_surrogate_function_index,
+    const float reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < size)
+  {
+    grad_h_to_rtau[index] = x[index] - v[index] + v_reset;
+    const float h = v[index] + reciprocal_tau * grad_h_to_rtau[index];
+    if (h >= v_th)
+    {
+      spike[index] = 1.0f;
+      v_next[index] = v_reset;
+    }
+    else
+    {
+      spike[index] = 0.0f;
+      v_next[index] = h;
+    }
+    grad_s_to_h[index] = grad_surrogate_function_pointer[grad_surrogate_function_index](alpha, h - v_th);
+    grad_v_to_h[index] = 1.0f - spike[index] + (v_reset - h) * grad_s_to_h[index] * (1.0f - (float) detach_reset);
+  }
+}
+
+__global__ void ParametricLIF_hard_reset_forward_with_grad_cuda_kernel_half(
+  const at::Half* __restrict__ x, const at::Half* __restrict__ v, at::Half* __restrict__ spike, at::Half* __restrict__ v_next,
+  at::Half* __restrict__ grad_s_to_h, at::Half* __restrict__ grad_v_to_h, at::Half* __restrict__ grad_h_to_rtau,
+  const half v_th, const half v_reset, const int size,
+  const half alpha, const bool detach_reset, const int grad_surrogate_function_index,
+  const half reciprocal_tau)
+{
+const int index = blockIdx.x * blockDim.x + threadIdx.x;
+if (index < size)
+{
+  grad_h_to_rtau[index] = __hadd(__hsub(x[index], v[index]), v_reset);
+  const half h = __hfma(reciprocal_tau, grad_h_to_rtau[index], v[index]);
+  if (__hgeu(h, v_th))
+  {
+    spike[index] = __float2half(1.0f);
+    v_next[index] = v_reset;
+  }
+  else
+  {
+    spike[index] = __float2half(0.0f);
+    v_next[index] = h;
+  }
+  grad_s_to_h[index] = grad_surrogate_function_pointer_half[grad_surrogate_function_index](alpha, __hsub(h, v_th));
+  grad_v_to_h[index] = __hfma(__hmul(__hsub(v_reset, h), grad_s_to_h[index]), __float2half(1.0f - (float) detach_reset), __hsub(__float2half(1.0f), spike[index]));
+}
+}
+//PLIF detach x
+__global__ void ParametricLIF_detach_x_hard_reset_forward_with_grad_cuda_kernel(
+  const float* __restrict__ x, const float* __restrict__ v, float* __restrict__ spike, float* __restrict__ v_next,
+  float* __restrict__ grad_s_to_h, float* __restrict__ grad_v_to_h, float* __restrict__ grad_h_to_rtau,
+  const float v_th, const float v_reset, const int size,
+  const float alpha, const bool detach_reset, const int grad_surrogate_function_index,
+  const float reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < size)
+  {
+    grad_h_to_rtau[index] = v_reset - v[index];
+    const float h = v[index] + x[index] + reciprocal_tau * grad_h_to_rtau[index];
+    if (h >= v_th)
+    {
+      spike[index] = 1.0f;
+      v_next[index] = v_reset;
+    }
+    else
+    {
+      spike[index] = 0.0f;
+      v_next[index] = h;
+    }
+    grad_s_to_h[index] = grad_surrogate_function_pointer[grad_surrogate_function_index](alpha, h - v_th);
+    grad_v_to_h[index] = 1.0f - spike[index] + (v_reset - h) * grad_s_to_h[index] * (1.0f - (float) detach_reset);
+  }
+}
+
+__global__ void ParametricLIF_detach_x_hard_reset_forward_with_grad_cuda_kernel_half(
+const at::Half* __restrict__ x, const at::Half* __restrict__ v, at::Half* __restrict__ spike, at::Half* __restrict__ v_next,
+at::Half* __restrict__ grad_s_to_h, at::Half* __restrict__ grad_v_to_h, at::Half* __restrict__ grad_h_to_rtau,
+const half v_th, const half v_reset, const int size,
+const half alpha, const bool detach_reset, const int grad_surrogate_function_index,
+const half reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < size)
+  {
+    grad_h_to_rtau[index] = __hsub(v_reset, v[index]);
+    const half h = __hfma(reciprocal_tau, grad_h_to_rtau[index], __hadd((half) v[index], (half) x[index]));
+    if (__hgeu(h, v_th))
+    {
+      spike[index] = __float2half(1.0f);
+      v_next[index] = v_reset;
+    }
+    else
+    {
+      spike[index] = __float2half(0.0f);
+      v_next[index] = h;
+    }
+    grad_s_to_h[index] = grad_surrogate_function_pointer_half[grad_surrogate_function_index](alpha, __hsub(h, v_th));
+    grad_v_to_h[index] = __hfma(__hmul(__hsub(v_reset, h), grad_s_to_h[index]), __float2half(1.0f - (float) detach_reset), __hsub(__float2half(1.0f), spike[index]));
+  }
+}
+
+std::vector<at::Tensor> ParametricLIF_hard_reset_forward_with_grad(torch::Tensor & x, torch::Tensor & v, const float & v_th, const float & v_reset,
+  const float & alpha, const bool & detach_reset, const int & grad_surrogate_function_index,
+  const float & reciprocal_tau, const bool & detach_x)
+{
+    CHECK_TENSOR(x);
+    CHECK_TENSOR(v);
+
+    auto spike = torch::zeros_like(v.data());
+    auto v_next = spike.data().clone();
+    auto grad_s_to_h = spike.data().clone();
+    auto grad_v_to_h = spike.data().clone();
+    auto grad_h_to_rtau = spike.data().clone();
+
+    CHECK_TENSOR(spike);
+    CHECK_TENSOR(v_next);
+    CHECK_TENSOR(grad_s_to_h);
+    CHECK_TENSOR(grad_v_to_h);
+    CHECK_TENSOR(grad_h_to_rtau);
+
+    const int size = x.numel();
+    const int threads = THREADS;
+    const int blocks = (size + threads - 1) / threads;
+    CHECK_CUDA_OPERATION(cudaSetDevice(x.get_device()));
+    if (x.scalar_type() == c10::ScalarType::Float)
+    {
+      if (detach_x)
+      {
+        ParametricLIF_detach_x_hard_reset_forward_with_grad_cuda_kernel<<<blocks, threads>>>(
+          x.data_ptr<float>(), v.data_ptr<float>(), spike.data_ptr<float>(), v_next.data_ptr<float>(),
+          grad_s_to_h.data_ptr<float>(), grad_v_to_h.data_ptr<float>(), grad_h_to_rtau.data_ptr<float>(),
+          v_th, v_reset, size,
+          alpha, detach_reset, grad_surrogate_function_index,
+          reciprocal_tau);
+      }
+      else
+      {
+
+        ParametricLIF_hard_reset_forward_with_grad_cuda_kernel<<<blocks, threads>>>(
+          x.data_ptr<float>(), v.data_ptr<float>(), spike.data_ptr<float>(), v_next.data_ptr<float>(),
+          grad_s_to_h.data_ptr<float>(), grad_v_to_h.data_ptr<float>(), grad_h_to_rtau.data_ptr<float>(),
+          v_th, v_reset, size,
+          alpha, detach_reset, grad_surrogate_function_index,
+          reciprocal_tau);
+      }
+
+    }
+    else if (x.scalar_type() == c10::ScalarType::Half)
+    {
+      if (detach_x)
+      {
+        ParametricLIF_detach_x_hard_reset_forward_with_grad_cuda_kernel_half<<<blocks, threads>>>(
+          x.data_ptr<at::Half>(), v.data_ptr<at::Half>(), spike.data_ptr<at::Half>(), v_next.data_ptr<at::Half>(),
+          grad_s_to_h.data_ptr<at::Half>(), grad_v_to_h.data_ptr<at::Half>(), grad_h_to_rtau.data_ptr<at::Half>(),
+          __float2half(v_th), __float2half(v_reset), size,
+          __float2half(alpha), detach_reset, grad_surrogate_function_index,
+          __float2half(reciprocal_tau));
+      }
+      else
+      {
+        ParametricLIF_hard_reset_forward_with_grad_cuda_kernel_half<<<blocks, threads>>>(
+          x.data_ptr<at::Half>(), v.data_ptr<at::Half>(), spike.data_ptr<at::Half>(), v_next.data_ptr<at::Half>(),
+          grad_s_to_h.data_ptr<at::Half>(), grad_v_to_h.data_ptr<at::Half>(), grad_h_to_rtau.data_ptr<at::Half>(),
+          __float2half(v_th), __float2half(v_reset), size,
+          __float2half(alpha), detach_reset, grad_surrogate_function_index,
+          __float2half(reciprocal_tau));
+      }
+
+    }
+    return {spike, v_next, grad_s_to_h, grad_v_to_h, grad_h_to_rtau};
+}
+
+__global__ void ParametricLIF_hard_reset_fptt_with_grad_cuda_kernel(
+  const float* __restrict__ x_seq, float* __restrict__ spike_seq, float* __restrict__ v_next,
+  float* __restrict__ grad_s_to_h, float* __restrict__ grad_v_to_h, float* __restrict__ grad_h_to_rtau,
+  const float v_th, const float v_reset, const int neuron_num, const int size,
+  const float alpha, const bool detach_reset, const int grad_surrogate_function_index,
+  const float reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < neuron_num)
+  {
+    for(int mem_offset = 0; mem_offset < size; mem_offset += neuron_num)
+    {
+      const int mem_index = index + mem_offset;
+      grad_h_to_rtau[mem_index] = x_seq[mem_index] - v_next[index] + v_reset;
+      const float h = v_next[index] + reciprocal_tau * grad_h_to_rtau[mem_index];
+      if (h >= v_th)
+      {
+        spike_seq[mem_index] = 1.0f;
+        v_next[index] = v_reset;
+      }
+      else
+      {
+        spike_seq[mem_index] = 0.0f;
+        v_next[index] = h;
+      }
+      grad_s_to_h[mem_index] = grad_surrogate_function_pointer[grad_surrogate_function_index](alpha, h - v_th);
+      grad_v_to_h[mem_index] = 1.0f - spike_seq[mem_index] + (v_reset - h) * grad_s_to_h[mem_index] * (1.0f - (float) detach_reset);
+    }
+
+  }
+}
+
+__global__ void ParametricLIF_hard_reset_fptt_with_grad_cuda_kernel_half(
+  const at::Half* __restrict__ x_seq, at::Half* __restrict__ spike_seq, at::Half* __restrict__ v_next,
+  at::Half* __restrict__ grad_s_to_h, at::Half* __restrict__ grad_v_to_h, at::Half* __restrict__ grad_h_to_rtau,
+  const half v_th, const half v_reset, const int neuron_num, const int size,
+  const half alpha, const bool detach_reset, const int grad_surrogate_function_index,
+  const half reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < neuron_num)
+  {
+    for(int mem_offset = 0; mem_offset < size; mem_offset += neuron_num)
+    {
+      const int mem_index = index + mem_offset;
+      grad_h_to_rtau[mem_index] = __hadd(__hsub(x_seq[mem_index], v_next[index]), v_reset);
+      const half h = __hfma(reciprocal_tau, grad_h_to_rtau[mem_index], v_next[index]);
+      if (__hgeu(h, v_th))
+      {
+        spike_seq[mem_index] = __float2half(1.0f);
+        v_next[index] = v_reset;
+      }
+      else
+      {
+        spike_seq[mem_index] = __float2half(0.0f);
+        v_next[index] = h;
+      }
+      grad_s_to_h[mem_index] = grad_surrogate_function_pointer_half[grad_surrogate_function_index](alpha, __hsub(h, v_th));
+      grad_v_to_h[mem_index] = __hfma(__hmul(__hsub(v_reset, h), grad_s_to_h[mem_index]), __float2half(1.0f - (float) detach_reset), __hsub(__float2half(1.0f), spike_seq[mem_index]));
+    }
+
+  }
+}
+
+//PLIF detach x
+
+__global__ void ParametricLIF_detach_x_hard_reset_fptt_with_grad_cuda_kernel(
+  const float* __restrict__ x_seq, float* __restrict__ spike_seq, float* __restrict__ v_next,
+  float* __restrict__ grad_s_to_h, float* __restrict__ grad_v_to_h, float* __restrict__ grad_h_to_rtau,
+  const float v_th, const float v_reset, const int neuron_num, const int size,
+  const float alpha, const bool detach_reset, const int grad_surrogate_function_index,
+  const float reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < neuron_num)
+  {
+    for(int mem_offset = 0; mem_offset < size; mem_offset += neuron_num)
+    {
+      const int mem_index = index + mem_offset;
+      grad_h_to_rtau[mem_index] = v_reset - v_next[index];
+      const float h = v_next[index] + x_seq[mem_index] + reciprocal_tau * grad_h_to_rtau[mem_index];
+
+      if (h >= v_th)
+      {
+        spike_seq[mem_index] = 1.0f;
+        v_next[index] = v_reset;
+      }
+      else
+      {
+        spike_seq[mem_index] = 0.0f;
+        v_next[index] = h;
+      }
+      grad_s_to_h[mem_index] = grad_surrogate_function_pointer[grad_surrogate_function_index](alpha, h - v_th);
+      grad_v_to_h[mem_index] = 1.0f - spike_seq[mem_index] + (v_reset - h) * grad_s_to_h[mem_index] * (1.0f - (float) detach_reset);
+    }
+
+  }
+}
+
+__global__ void ParametricLIF_detach_x_hard_reset_fptt_with_grad_cuda_kernel_half(
+  const at::Half* __restrict__ x_seq, at::Half* __restrict__ spike_seq, at::Half* __restrict__ v_next,
+  at::Half* __restrict__ grad_s_to_h, at::Half* __restrict__ grad_v_to_h, at::Half* __restrict__ grad_h_to_rtau,
+  const half v_th, const half v_reset, const int neuron_num, const int size,
+  const half alpha, const bool detach_reset, const int grad_surrogate_function_index,
+  const half reciprocal_tau)
+{
+  const int index = blockIdx.x * blockDim.x + threadIdx.x;
+  if (index < neuron_num)
+  {
+    for(int mem_offset = 0; mem_offset < size; mem_offset += neuron_num)
+    {
+      const int mem_index = index + mem_offset;
+      grad_h_to_rtau[mem_index] = __hsub(v_reset, v_next[index]);
+      const half h = __hfma(reciprocal_tau, grad_h_to_rtau[mem_index], __hadd((half) v_next[index], (half) x_seq[mem_index]));
+
+      if (__hgeu(h, v_th))
+      {
+        spike_seq[mem_index] = __float2half(1.0f);
+        v_next[index] = v_reset;
+      }
+      else
+      {
+        spike_seq[mem_index] = __float2half(0.0f);
+        v_next[index] = h;
+      }
+      grad_s_to_h[mem_index] = grad_surrogate_function_pointer_half[grad_surrogate_function_index](alpha, __hsub(h, v_th));
+      grad_v_to_h[mem_index] = __hfma(__hmul(__hsub(v_reset, h), grad_s_to_h[mem_index]), __float2half(1.0f - (float) detach_reset), __hsub(__float2half(1.0f), spike_seq[mem_index]));
+    }
+
+  }
+}
+
+
+std::vector<at::Tensor> ParametricLIF_hard_reset_fptt_with_grad(
+  torch::Tensor & x_seq, torch::Tensor & v, const float & v_th, const float & v_reset,
+  const float & alpha, const bool & detach_reset, const int & grad_surrogate_function_index,
+  const float & reciprocal_tau, const bool & detach_x)
+{
+    CHECK_TENSOR(x_seq);
+    CHECK_TENSOR(v);
+    auto spike_seq = torch::zeros_like(x_seq.data());
+    auto v_next = v.data().clone();
+    auto grad_s_to_h = spike_seq.data().clone();
+    auto grad_v_to_h = spike_seq.data().clone();
+    auto grad_h_to_rtau = spike_seq.data().clone();
+    CHECK_TENSOR(spike_seq);
+    CHECK_TENSOR(v_next);
+    CHECK_TENSOR(grad_s_to_h);
+    CHECK_TENSOR(grad_v_to_h);
+    CHECK_TENSOR(grad_h_to_rtau);
+
+    const int seq_len = x_seq.size(0);
+    const int size = x_seq.numel();
+    const int threads = THREADS;
+    const int neuron_num = size / seq_len;
+    const int blocks = (neuron_num + threads - 1) / threads;
+    CHECK_CUDA_OPERATION(cudaSetDevice(x_seq.get_device()));
+    if (x_seq.scalar_type() == c10::ScalarType::Float)
+    {
+      if (detach_x)
+      {
+        ParametricLIF_detach_x_hard_reset_fptt_with_grad_cuda_kernel<<<blocks, threads>>>(
+          x_seq.data_ptr<float>(), spike_seq.data_ptr<float>(), v_next.data_ptr<float>(),
+          grad_s_to_h.data_ptr<float>(), grad_v_to_h.data_ptr<float>(), grad_h_to_rtau.data_ptr<float>(),
+          v_th, v_reset, neuron_num, size,
+          alpha, detach_reset, grad_surrogate_function_index,
+          reciprocal_tau);
+      }
+      else
+      {
+        ParametricLIF_hard_reset_fptt_with_grad_cuda_kernel<<<blocks, threads>>>(
+          x_seq.data_ptr<float>(), spike_seq.data_ptr<float>(), v_next.data_ptr<float>(),
+          grad_s_to_h.data_ptr<float>(), grad_v_to_h.data_ptr<float>(), grad_h_to_rtau.data_ptr<float>(),
+          v_th, v_reset, neuron_num, size,
+          alpha, detach_reset, grad_surrogate_function_index,
+          reciprocal_tau);
+      }
+
+    }
+    else if (x_seq.scalar_type() == c10::ScalarType::Half)
+    {
+      if (detach_x)
+      {
+        ParametricLIF_detach_x_hard_reset_fptt_with_grad_cuda_kernel_half<<<blocks, threads>>>(
+          x_seq.data_ptr<at::Half>(), spike_seq.data_ptr<at::Half>(), v_next.data_ptr<at::Half>(),
+          grad_s_to_h.data_ptr<at::Half>(), grad_v_to_h.data_ptr<at::Half>(), grad_h_to_rtau.data_ptr<at::Half>(),
+          __float2half(v_th), __float2half(v_reset), neuron_num, size,
+          __float2half(alpha), detach_reset, grad_surrogate_function_index,
+          __float2half(reciprocal_tau));
+      }
+      else
+      {
+        ParametricLIF_hard_reset_fptt_with_grad_cuda_kernel_half<<<blocks, threads>>>(
+          x_seq.data_ptr<at::Half>(), spike_seq.data_ptr<at::Half>(), v_next.data_ptr<at::Half>(),
+          grad_s_to_h.data_ptr<at::Half>(), grad_v_to_h.data_ptr<at::Half>(), grad_h_to_rtau.data_ptr<at::Half>(),
+          __float2half(v_th), __float2half(v_reset), neuron_num, size,
+          __float2half(alpha), detach_reset, grad_surrogate_function_index,
+          __float2half(reciprocal_tau));
+      }
+
+    }
+    return {spike_seq, v_next, grad_s_to_h, grad_v_to_h, grad_h_to_rtau};
+}
