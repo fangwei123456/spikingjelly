@@ -1,5 +1,5 @@
 """
-.. codeauthor:: Yanqi Chen <chyq@pku.edu.cn>
+.. codeauthor:: Yanqi Chen <chyq@pku.edu.cn>, Ismail Khalfaoui Hassani <ismail.khalfaoui-hassani@univ-tlse3.fr>
 
 A reproduction of the paper `Technical report: supervised training of convolutional spiking neural networks with PyTorch <https://arxiv.org/pdf/1911.10124.pdf>`_\ .
 
@@ -14,15 +14,12 @@ import torch
 from torch import Tensor, nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
-import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms
 from torchaudio.transforms import Spectrogram
-from spikingjelly.clock_driven import layer
 from spikingjelly.cext import neuron as cext_neuron
 
-from spikingjelly.datasets import SPEECHCOMMANDS
-from spikingjelly.clock_driven import surrogate
+from spikingjelly.datasets.speechcommands import SPEECHCOMMANDS
 from spikingjelly.clock_driven.functional import reset_net
 from scipy.signal import savgol_filter
 
@@ -39,12 +36,12 @@ import argparse
 from typing import Optional
 from tqdm import tqdm
 
-label_dict = {'yes': 0, 'stop': 1, 'no': 2, 'right': 3, 'up': 4, 'left': 5, 'on': 6, 'down': 7, 'off': 8, 'go': 9, 'bed': 10, 'three': 10, 'one': 10, 'four': 10, 'two': 10, 'five': 10, 'cat': 10, 'dog': 10, 'eight': 10, 'bird': 10, 'happy': 10, 'sheila': 10, 'zero': 10, 'wow': 10, 'marvin': 10, 'house': 10, 'six': 10, 'seven': 10, 'tree': 10, 'nine': 10}
+label_dict = {'yes': 0, 'stop': 1, 'no': 2, 'right': 3, 'up': 4, 'left': 5, 'on': 6, 'down': 7, 'off': 8, 'go': 9, 'bed': 10, 'three': 10, 'one': 10, 'four': 10, 'two': 10, 'five': 10, 'cat': 10, 'dog': 10, 'eight': 10, 'bird': 10, 'happy': 10, 'sheila': 10, 'zero': 10, 'wow': 10, 'marvin': 10, 'house': 10, 'six': 10, 'seven': 10, 'tree': 10, 'nine': 10, '_silence_': 11}
 label_cnt = len(set(label_dict.values()))
 n_mels = 40
 f_max = 4000
 f_min = 20
-delta_order = 2
+delta_order = 0
 size = 16000
 
 def mel_to_hz(mels, dct_type):
@@ -220,7 +217,7 @@ class Pad(object):
 class Rescale(object):
 
     def __call__(self, input):
-        std = torch.std(input, axis=2, keepdims=True, unbiased=False) # Numpy std is calculated via the biased estimator. https://github.com/romainzimmer/s2net/blob/82c38bf80b55d16d12d0243440e34e52d237a2df/data.py#L201
+        std = torch.std(input, axis=2, keepdims=True, unbiased=False)
         std.masked_fill_(std == 0, 1)
 
         return input / std
@@ -272,17 +269,17 @@ class Net(nn.Module):
             # 101 * 40
             nn.Conv2d(in_channels=delta_order+1, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(2, 1), bias=False),
-            LIFWrapper(cext_neuron.MultiStepLIFNode(surrogate_function='Sigmoid')),
+            LIFWrapper(cext_neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function='Sigmoid', alpha=10.0)),
 
             # 102 * 40
             nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(6, 3), dilation=(4, 3), bias=False),
-            LIFWrapper(cext_neuron.MultiStepLIFNode(surrogate_function='Sigmoid')),
+            LIFWrapper(cext_neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function='Sigmoid', alpha=10.0)),
 
             # 102 * 40
                 nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(24, 9), dilation=(16, 9), bias=False),
-            LIFWrapper(cext_neuron.MultiStepLIFNode(surrogate_function='Sigmoid'), flatten=True),
+            LIFWrapper(cext_neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function='Sigmoid', alpha=10.0), flatten=True),
         )
         # [batch size, T, channel * n_mel]
         self.fc = nn.Linear(64 * 40, label_cnt)
@@ -296,13 +293,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-b', '--batch-size', type=int, default=64)
     parser.add_argument('-sr', '--sample-rate', type=int, default=16000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-3)
-    parser.add_argument('-gpu', type=str)
+    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-2)
     parser.add_argument('-dir', '--dataset-dir', type=str)
-    parser.add_argument('-e', '--epoch', type=int, default=10)
+    parser.add_argument('-e', '--epoch', type=int, default=15)
     args = parser.parse_args()
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = args.gpu
 
     sr = args.sample_rate
     n_fft = int(30e-3*sr) # 48
@@ -326,23 +320,29 @@ if __name__ == '__main__':
     print(label_cnt)
 
     train_dataset = SPEECHCOMMANDS(
-        label_dict, dataset_dir, url="speech_commands_v0.01", split="train", transform=transform, download=True)
+        label_dict, dataset_dir, silence_cnt=2300, url="speech_commands_v0.01", split="train", transform=transform, download=True)
     train_sampler = torch.utils.data.WeightedRandomSampler(
         train_dataset.weights, len(train_dataset.weights))
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=16,
                                   sampler=train_sampler, collate_fn=collate_fn)
 
+
+    # print(train_dataset[48310][0])
+    # print(pad(train_dataset[48310][0]))
+    # print(spec(pad(train_dataset[48310][0])))
+    # print(melscale(spec(pad(train_dataset[48310][0]))))
+    # print(rescale(melscale(spec(pad(train_dataset[48310][0])))))
+    # exit(0)
+
     # val_dataset = SPEECHCOMMANDS(label_dict, dataset_dir, url="speech_commands_v0.01", split="val", transform=transform, download=True)
     # val_dataloader = DataLoader(val_dataset, batch_size=batch_size, num_workers=4, collate_fn=collate_fn)
 
     test_dataset = SPEECHCOMMANDS(
-        label_dict, dataset_dir, url="speech_commands_v0.01", split="test", transform=transform, download=True)
+        label_dict, dataset_dir, silence_cnt=260, url="speech_commands_v0.01", split="test", transform=transform, download=True)
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=16, collate_fn=collate_fn, shuffle=False,
                                  drop_last=False)
 
     net = Net().cuda()
-
-    loss_fn = nn.CrossEntropyLoss()
 
     optimizer = Adam(net.parameters(), lr=lr)
     gamma = 0.85
@@ -352,11 +352,14 @@ if __name__ == '__main__':
 
     writer = SummaryWriter('./logs/')
 
+    criterion = nn.CrossEntropyLoss().cuda()
+
     for e in range(epoch):
         net.train()
         print(f'Epoch {net.epochs}')
 
         time_start = time.time()
+        ##### TRAIN #####
         for audios, labels in tqdm(train_dataloader):
             audios = audios.cuda(non_blocking=True)
             labels = labels.cuda(non_blocking=True)
@@ -365,14 +368,16 @@ if __name__ == '__main__':
 
             out_spikes_counter_frequency = net(audios)
 
-            loss = loss_fn(out_spikes_counter_frequency, labels)
+            loss = criterion(out_spikes_counter_frequency, labels)
             loss.backward()
+
+            # nn.utils.clip_grad_value_(net.parameters(), 5)
 
             optimizer.step()
 
             reset_net(net)
 
-            # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
+            # Rate-based output decoding
             correct_rate = (out_spikes_counter_frequency.argmax(
                 dim=1) == labels).float().mean().item()
 
@@ -383,8 +388,8 @@ if __name__ == '__main__':
 
         net.eval()
 
+        ##### TEST #####
         with torch.no_grad():
-            # 每遍历一次全部数据集，就在测试集上测试一次
             test_sum = 0
             correct_sum = 0
             pred = []
@@ -408,6 +413,7 @@ if __name__ == '__main__':
             pred = torch.cat(pred).cpu().numpy()
             label = torch.cat(label).cpu().numpy()
 
+            # Plot confusion matrix
             cmatrix = confusion_matrix(label, pred)
 
             plt.clf()
@@ -421,4 +427,4 @@ if __name__ == '__main__':
         net.epochs += 1
         time_end = time.time()
         print(
-            f'Test Acc: {test_accuracy} Elapse: {time_end - time_start:.2f}s')
+                f'Test Acc: {test_accuracy} Loss: {loss} Elapse: {time_end - time_start:.2f}s')
