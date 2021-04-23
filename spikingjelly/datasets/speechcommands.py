@@ -13,6 +13,7 @@ from torchaudio.datasets.utils import (
 from torchvision import transforms
 from torchvision.datasets.utils import verify_str_arg
 import numpy as np
+from random import choice
 
 FOLDER_IN_ARCHIVE = "SpeechCommands"
 URL = "speech_commands_v0.02"
@@ -46,6 +47,8 @@ class SPEECHCOMMANDS(Dataset):
     def __init__(self,
                  label_dict: Dict,
                  root: str,
+                 silence_cnt: Optional[int] = 0,
+                 silence_size: Optional[int] = 16000,
                  transform: Optional[Callable] = None,
                  url: Optional[str] = URL,
                  split: Optional[str] = "train",
@@ -56,6 +59,10 @@ class SPEECHCOMMANDS(Dataset):
         :type label_dict: Dict
         :param root: 数据集的根目录
         :type root: str
+        :param silence_cnt: Silence数据的数量
+        :type silence_cnt: int, optional
+        :param silence_size: Silence数据的尺寸
+        :type silence_size: int, optional
         :param transform: A function/transform that takes in a raw audio
         :type transform: Callable, optional
         :param url: 数据集版本，默认为v0.02
@@ -85,6 +92,13 @@ class SPEECHCOMMANDS(Dataset):
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
         self.label_dict = label_dict
         self.transform = transform
+        self.silence_cnt = silence_cnt
+        self.silence_size = silence_size
+
+        if silence_cnt < 0:
+            raise ValueError(f"Invalid silence_cnt parameter: {silence_cnt}")
+        if silence_size <= 0:
+            raise ValueError(f"Invalid silence_size parameter: {silence_size}")
         
         if url in [
             "speech_commands_v0.01",
@@ -102,6 +116,8 @@ class SPEECHCOMMANDS(Dataset):
         folder_in_archive = os.path.join(folder_in_archive, basename)
 
         self._path = os.path.join(root, folder_in_archive)
+
+        self.noise_list = sorted(str(p) for p in Path(self._path).glob('_background_noise_/*.wav'))
 
         if download:
             if not os.path.isdir(self._path):
@@ -144,8 +160,14 @@ class SPEECHCOMMANDS(Dataset):
 
             labels = [self.label_dict.get(os.path.split(relpath)[0]) for relpath in self._walker]
             label_weights = 1. / np.unique(labels, return_counts=True)[1]
-            label_weights /= np.sum(label_weights)
-            self.weights = torch.DoubleTensor([label_weights[label] for label in labels])
+            if self.silence_cnt == 0:
+                label_weights /= np.sum(label_weights)
+                self.weights = torch.DoubleTensor([label_weights[label] for label in labels])
+            else:
+                silence_weight = 1. / self.silence_cnt
+                total_weight = np.sum(label_weights) + silence_weight
+                label_weights /= total_weight
+                self.weights = torch.DoubleTensor([label_weights[label] for label in labels] + [silence_weight / total_weight] * self.silence_cnt)
 
         else:
             if self.split == "val":
@@ -156,8 +178,21 @@ class SPEECHCOMMANDS(Dataset):
                 self._walker = list([line.rstrip('\n') for line in f])
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
-        fileid = self._walker[n]
-        waveform, sample_rate, label, speaker_id, utterance_number = load_speechcommands_item(fileid, self._path)
+        if n < len(self._walker):
+            fileid = self._walker[n]
+            waveform, sample_rate, label, speaker_id, utterance_number = load_speechcommands_item(fileid, self._path)
+        else:
+            # Silence data are randomly and dynamically generated from noise data
+
+            # Load random noise
+            noisepath = os.path.join(self._path, choice(self.noise_list))
+            waveform, sample_rate = torchaudio.load(noisepath)
+
+            # Random crop
+            offset = np.random.randint(waveform.shape[1] - self.silence_size)
+            waveform = waveform[:, offset:offset + self.silence_size]
+            label = "_silence_"
+
         m = waveform.abs().max()
         if m > 0:
             waveform /= m
@@ -168,4 +203,4 @@ class SPEECHCOMMANDS(Dataset):
         return waveform, label
 
     def __len__(self) -> int:
-        return len(self._walker)
+        return len(self._walker) + self.silence_cnt
