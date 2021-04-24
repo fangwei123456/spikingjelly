@@ -124,6 +124,14 @@ spikingjelly.clock\_driven.examples.spiking\_lstm\_text module
    :undoc-members:
    :show-inheritance:
 
+spikingjelly.clock\_driven.examples.speechcommands module
+--------------------------------------------------------------
+
+.. automodule:: spikingjelly.clock_driven.examples.speechcommands
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 Module contents
 ---------------
 
