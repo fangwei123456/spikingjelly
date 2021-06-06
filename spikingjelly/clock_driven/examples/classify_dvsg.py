@@ -101,6 +101,47 @@ try:
                 MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True)
             ]
 
+    class CextNet2(nn.Module):
+            def __init__(self, channels: int, T: int, b: int):
+                super().__init__()
+                self.T, self.b = T, b
+                self.conv2d = nn.Sequential(
+                                            nn.Flatten(0,1), 
+                                            *CextNet2.block_2d(self, 2, channels),
+                                            nn.MaxPool2d(2, 2),                    
+                                            *CextNet2.block_2d(self, channels, channels),
+                                            nn.MaxPool2d(2, 2),                    
+                                            *CextNet2.block_2d(self, channels, channels),
+                                            nn.MaxPool2d(2, 2),                    
+                                            *CextNet2.block_2d(self, channels, channels),
+                                            nn.MaxPool2d(2, 2),                    
+                                            *CextNet2.block_2d(self, channels, channels),
+                                            layer.MultiStepDropout(0.5),                    
+                                            *CextNet2.block_2d(self, channels, 110), 
+                                            layer.MultiStepDropout(0.5),
+                                            nn.Unflatten(0,(T,b))                    
+                                            )
+                self.vote = VotingLayer(10)
+
+            def forward(self, x: torch.Tensor): 
+                x = x.permute(1, 0, 2, 3, 4)                 
+                x = self.conv2d(x)     
+                x = x.permute(1, 2, 0, 3, 4)                 
+                out_spikes = x.flatten(2).permute(2,0,1)   
+                return self.vote(out_spikes.mean(0))
+
+            @staticmethod
+            def block_2d(self, in_channels: int, out_channels: int):
+                return [
+                        nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
+                        nn.BatchNorm2d(out_channels),
+                        nn.Unflatten(0,(self.T,self.b)),                    
+                        MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True),
+                        nn.Flatten(0,1)                    
+                       ]
+    
+    
+                
 except ImportError:
     print('SpikingJelly is installed without CUDA extension.')
 
@@ -222,7 +263,7 @@ def main():
     print(args)
 
     if args.cext:
-        net = CextNet(channels=args.channels)
+        net = CextNet2(channels=args.channels, T = args.T, b = args.b)
     else:
         net = PythonNet(channels=args.channels)
     print(net)
