@@ -190,9 +190,8 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 	title = {SpikingJelly},
 	author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Tian, Yonghong and other contributors},
 	year = {2020},
-	publisher = {GitHub},
-	journal = {GitHub repository},
 	howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+    note = {Accessed: YYYY-MM-DD},
 }
 ```
 
