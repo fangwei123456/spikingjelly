@@ -502,7 +502,47 @@ def pad_sequence_collate(batch: list):
 
     return torch.nn.utils.rnn.pad_sequence(x_list), torch.as_tensor(y_list), torch.as_tensor(x_len_list)
 
+def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
+    '''
+    :param sequence_len: a tensor ``shape = [N]`` that contains sequences lengths of each batch element
+    :type sequence_len: torch.Tensor
+    :param T: The maximum length of sequences. If ``None``, the maximum element in ``sequence_len`` will be seen as ``T``
+    :type T: int
+    :return: a bool mask with shape = [T, N], where the padded position is ``False``
+    :rtype: torch.Tensor
 
+    Here is an example:
+
+    .. code-block:: python
+
+        x1 = torch.rand([2, 6])
+        x2 = torch.rand([3, 6])
+        x3 = torch.rand([4, 6])
+        x = torch.nn.utils.rnn.pad_sequence([x1, x2, x3])  # [T, N, *]
+        print('x.shape=', x.shape)
+        x_len = torch.as_tensor([x1.shape[0], x2.shape[0], x3.shape[0]])
+        mask = padded_sequence_mask(x_len)
+        print('mask.shape=', mask.shape)
+        print('mask=\n', mask)
+
+    And the outputs are:
+
+    .. code-block:: bash
+
+        x.shape= torch.Size([4, 3, 6])
+        mask.shape= torch.Size([4, 3])
+        mask=
+         tensor([[ True,  True,  True],
+                [ True,  True,  True],
+                [False,  True,  True],
+                [False, False,  True]])
+
+    '''
+    if T is None:
+        T = sequence_len.max().item()
+    N = sequence_len.numel()
+    t_seq = torch.arange(0, T).unsqueeze(1).repeat(1, N).to(sequence_len)  # [T, N]
+    return t_seq < sequence_len.unsqueeze(0).repeat(T, 1)
 
 class NeuromorphicDatasetFolder(DatasetFolder):
     def __init__(
