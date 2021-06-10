@@ -160,19 +160,6 @@ def load_npz_frames(file_name: str) -> np.ndarray:
     '''
     return np.load(file_name)['frames']
 
-def pad_frames(frames: np.ndarray or torch.Tensor, max_frames_number):
-    N = frames.shape[0]
-    if N < max_frames_number:
-        if isinstance(frames, np.ndarray):
-            padding_frames = np.zeros([max_frames_number - N, frames.shape[1], frames.shape[2], frames.shape[3]])
-            return np.concatenate((frames, padding_frames), 0)
-        elif isinstance(frames, torch.Tensor):
-            padding_frames = torch.zeros(
-                [max_frames_number - N, frames.shape[1], frames.shape[2], frames.shape[3]]).to(frames)
-            return torch.cat((frames, padding_frames), 0)
-    else:
-        return frames, N
-
 def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
     '''
     :param events: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
@@ -481,7 +468,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             frames_number: int = None,
             split_by: str = None,
             duration: int = None,
-            padding_frame: bool = True,
             transform: Optional[Callable] = None,
             target_transform: Optional[Callable] = None,
     ) -> None:
@@ -500,8 +486,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type split_by: str
         :param duration: the time duration of each frame
         :type duration: int
-        :param padding_frame: whether padding the frames number to the maximum number of frames
-        :type padding_frame: bool
         :param transform: a function/transform that takes in
             a sample and returns a transformed version.
             E.g, ``transforms.RandomCrop`` for images.
@@ -522,11 +506,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             more details.
 
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
-            events will be integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample
-            will be padded to the same frames number (length), which is the maximum frames number of all frames.
+            events will be integrated to frames with fixed time duration.
 
         '''
-        self.padding_frame = False
 
         events_np_root = os.path.join(root, 'events_np')
 
@@ -634,15 +616,10 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 _target_transform = target_transform
 
             elif duration is not None:
-                self.padding_frame = padding_frame
-                self.max_frames_number = 0
                 assert duration > 0 and isinstance(duration, int)
                 frames_np_root = os.path.join(root, f'duration_{duration}')
                 if os.path.exists(frames_np_root):
                     print(f'The directory [{frames_np_root}] already exists.')
-                    fn_name = os.path.join(frames_np_root, 'max_frames_number.npy')
-                    self.max_frames_number = np.load(fn_name).item()
-                    print(f'max_frames_number = [{self.max_frames_number}].')
 
                 else:
                     os.mkdir(frames_np_root)
@@ -651,7 +628,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    future_list = []
                     with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
@@ -660,15 +636,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                                 for e_file in e_files:
                                     events_np_file = os.path.join(e_root, e_file)
                                     print(f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
-                                    future_list.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration, events_np_file, output_dir, duration, H, W, True))
+                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration, events_np_file, output_dir, duration, H, W, True)
 
-                    for future in future_list:
-                        self.max_frames_number = max(self.max_frames_number, future.result())
-
-                    # save the max_frames_number in frames_np_root
-                    fn_name = os.path.join(frames_np_root, 'max_frames_number.npy')
-                    np.save(fn_name, self.max_frames_number)
-                    print(f'Save max_frames_number to [{fn_name}].')
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
                 _root = frames_np_root
@@ -756,14 +725,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :rtype: tuple
         '''
         pass
-
-    def __getitem__(self, i):
-        sample, target = super().__getitem__(i)
-        if self.padding_frame:
-            sample, frames_num = pad_frames(sample, self.max_frames_number)
-            return sample, target, frames_num
-        else:
-            return sample, target
 
 
 

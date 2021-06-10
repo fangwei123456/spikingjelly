@@ -16,7 +16,6 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
             frames_number: int = None,
             split_by: str = None,
             duration: int = None,
-            padding_frame: bool = True,
             transform: Optional[Callable] = None,
             target_transform: Optional[Callable] = None,
     ) -> None:
@@ -31,8 +30,6 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
         :type split_by: str
         :param duration: the time duration of each frame
         :type duration: int
-        :param padding_frame: whether padding the frames number to the maximum number of frames
-        :type padding_frame: bool
         :param transform: a function/transform that takes in
             a sample and returns a transformed version.
             E.g, ``transforms.RandomCrop`` for images.
@@ -50,11 +47,10 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
             more details.
 
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
-            events will be integrated to frames with fixed time duration. If ``padding_frame`` is ``True``, each sample
-            will be padded to the same frames number (length), which is the maximum frames number of all frames.
+            events will be integrated to frames with fixed time duration.
 
         '''
-        super().__init__(root, None, data_type, frames_number, split_by, duration, padding_frame, transform, target_transform)
+        super().__init__(root, None, data_type, frames_number, split_by, duration, transform, target_transform)
     @staticmethod
     def resource_url_md5() -> list:
         '''
