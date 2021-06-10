@@ -500,7 +500,7 @@ def pad_sequence_collate(batch: list):
         x_len_list.append(x.shape[0])
         y_list.append(y)
 
-    return torch.nn.utils.rnn.pad_sequence(x_list), torch.as_tensor(y_list), torch.as_tensor(x_len_list)
+    return torch.nn.utils.rnn.pad_sequence(x_list, batch_first=True), torch.as_tensor(y_list), torch.as_tensor(x_len_list)
 
 def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
     '''
