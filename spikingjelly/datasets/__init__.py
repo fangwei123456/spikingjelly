@@ -455,7 +455,52 @@ def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data
 
     return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(origin_dataset, test_idx)
 
+def pad_sequence_collate(batch: list):
+    '''
+    :param batch: a list of samples that contains ``(x, y)``, where ``x.shape=[T, *]`` and ``y`` is the label
+    :type batch: list
+    :return: batched samples, where ``x`` is padded with the same length
+    :rtype: tuple
 
+    This function can be use as the ``collate_fn`` for ``DataLoader`` to process the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with fixed duration to integrate events to frames.
+
+    Here is an example:
+
+    .. code-block:: python
+
+        class RandomLengthDataset(torch.utils.data.Dataset):
+            def __init__(self, n=1000):
+                super().__init__()
+                self.n = n
+
+            def __getitem__(self, i):
+                return torch.rand([random.randint(1, 10), 28, 28]), random.randint(0, 10)
+
+            def __len__(self):
+                return self.n
+
+        loader = torch.utils.data.DataLoader(RandomLengthDataset(n=32), batch_size=16, collate_fn=pad_sequence_collate)
+
+        for x, y, z in loader:
+            print(x.shape, y.shape, z)
+
+    And the outputs are:
+
+    .. code-block:: bash
+
+        torch.Size([10, 16, 28, 28]) torch.Size([16]) tensor([ 1,  9,  3,  4,  1,  2,  9,  7,  2,  1,  5,  7,  4, 10,  9,  5])
+    torch.Size([10, 16, 28, 28]) torch.Size([16]) tensor([ 1,  8,  7, 10,  3, 10,  6,  7,  5,  9, 10,  5,  9,  6,  7,  6])
+
+    '''
+    x_list = []
+    x_len_list = []
+    y_list = []
+    for x, y in batch:
+        x_list.append(x)
+        x_len_list.append(x.shape[0])
+        y_list.append(y)
+
+    return torch.nn.utils.rnn.pad_sequence(x_list), torch.as_tensor(y_list), torch.as_tensor(x_len_list)
 
 
 
