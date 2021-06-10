@@ -160,30 +160,18 @@ def load_npz_frames(file_name: str) -> np.ndarray:
     '''
     return np.load(file_name)['frames']
 
-
-class PadFrames:
-    def __init__(self, max_frames_number: int):
-        '''
-        :param max_frames_number: maximum frames number of the padded frames
-        :type max_frames_number: int
-
-        This transform will pad the input frame's number to ``max_frames_number``.
-
-        '''
-        super().__init__()
-        self.max_frames_number = max_frames_number
-
-    def __call__(self, frames: np.ndarray):
-        N = frames.shape[0]
-        if N < self.max_frames_number:
-            padding_frames = np.zeros([self.max_frames_number - N, frames.shape[1], frames.shape[2], frames.shape[3]])
+def pad_frames(frames: np.ndarray or torch.Tensor, max_frames_number):
+    N = frames.shape[0]
+    if N < max_frames_number:
+        if isinstance(frames, np.ndarray):
+            padding_frames = np.zeros([max_frames_number - N, frames.shape[1], frames.shape[2], frames.shape[3]])
             return np.concatenate((frames, padding_frames), 0)
-        else:
-            return frames
-
-    def __repr__(self):
-        return self.__class__.__name__ + f'(max_frames_number={self.max_frames_number})'
-
+        elif isinstance(frames, torch.Tensor):
+            padding_frames = torch.zeros(
+                [max_frames_number - N, frames.shape[1], frames.shape[2], frames.shape[3]]).to(frames)
+            return torch.cat((frames, padding_frames), 0)
+    else:
+        return frames, N
 
 def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
     '''
@@ -538,6 +526,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             will be padded to the same frames number (length), which is the maximum frames number of all frames.
 
         '''
+        self.padding_frame = False
 
         events_np_root = os.path.join(root, 'events_np')
 
@@ -645,6 +634,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 _target_transform = target_transform
 
             elif duration is not None:
+                self.padding_frame = padding_frame
                 self.max_frames_number = 0
                 assert duration > 0 and isinstance(duration, int)
                 frames_np_root = os.path.join(root, f'duration_{duration}')
@@ -681,22 +671,10 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     print(f'Save max_frames_number to [{fn_name}].')
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
-                if padding_frame:
-                    if transform is None:
-                        transform_with_padding = PadFrames(self.max_frames_number)
-                    else:
-                        transform_with_padding = transforms.Compose([transform, PadFrames(self.max_frames_number)])
-
-                    _root = frames_np_root
-                    _loader = load_npz_frames
-                    _transform = transform_with_padding
-                    _target_transform = target_transform
-
-                else:
-                    _root = frames_np_root
-                    _loader = load_npz_frames
-                    _transform = transform
-                    _target_transform = target_transform
+                _root = frames_np_root
+                _loader = load_npz_frames
+                _transform = transform
+                _target_transform = target_transform
 
             else:
                 raise ValueError('frames_number and duration can not both be None.')
@@ -778,6 +756,14 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :rtype: tuple
         '''
         pass
+
+    def __getitem__(self, i):
+        sample, target = super().__getitem__(i)
+        if self.padding_frame:
+            sample, frames_num = pad_frames(sample, self.max_frames_number)
+            return sample, target, frames_num
+        else:
+            return sample, target
 
 
 
