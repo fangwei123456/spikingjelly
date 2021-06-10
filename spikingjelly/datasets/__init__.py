@@ -685,7 +685,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     if transform is None:
                         transform_with_padding = PadFrames(self.max_frames_number)
                     else:
-                        transform_with_padding = transforms.Compose([PadFrames(self.max_frames_number), transform])
+                        transform_with_padding = transforms.Compose([transform, PadFrames(self.max_frames_number)])
 
                     _root = frames_np_root
                     _loader = load_npz_frames
