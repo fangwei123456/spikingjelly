@@ -496,7 +496,7 @@ def pad_sequence_collate(batch: list):
     x_len_list = []
     y_list = []
     for x, y in batch:
-        x_list.append(x)
+        x_list.append(torch.as_tensor(x))
         x_len_list.append(x.shape[0])
         y_list.append(y)
 
