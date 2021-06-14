@@ -5,6 +5,7 @@ python -m twine upload dist/*
 import setuptools
 import glob
 import os
+import torch
 
 from setuptools import find_packages
 from setuptools import setup
@@ -23,8 +24,8 @@ def get_extensions():
     this_dir = os.path.dirname(os.path.abspath(__file__))
     extensions_dir = os.path.join(this_dir, 'spikingjelly', 'cext', 'csrc')
 
-    if sys.platform == 'win32':
-        # win32 does not support cuSparse
+    if sys.platform == 'win32' or int(torch.version.cuda.split('.')[0]) < 11:
+        # windows and cuda<11 does not support cuSparse
         ext_list = ['neuron']
     else:
         ext_list = ['gemm', 'neuron']
