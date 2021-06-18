@@ -36,7 +36,7 @@
 
    mon.enable()
 
-给网络以随机的输入\ :math:`X\sim\mathcal{N}(1,4)`
+给网络以随机的输入\ :math:`X\sim\mathcal{U}(1,3)`
 
 .. code:: python
 
