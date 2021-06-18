@@ -342,4 +342,3 @@ class NeuronFPTT:
             s_seq, v_seq = test_cext.LIFNode_hard_reset_fptt(x_seq.half(), v.half(), v_th, v_reset, reciprocal_tau)
             print('fp16 cuda-py error',utils.max_error(s_seq_py, s_seq), utils.max_error(v_seq_py, v_seq))
 
-NeuronFPTT.test_LIFNode()
