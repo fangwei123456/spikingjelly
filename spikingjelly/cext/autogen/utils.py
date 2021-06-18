@@ -29,5 +29,6 @@ def write_str_to_file(fname: str, codes: str, append=False):
         txt_file.write(codes)
 
 
-
+def max_error(x, y):
+    return (x - y).abs().max().item()
 
