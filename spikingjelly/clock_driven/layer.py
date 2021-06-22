@@ -185,6 +185,7 @@ class Dropout(base.MemoryModule):
         数后，才会按照概率去重新决定，哪些位置被置0。
 
         .. tip::
+
             这种Dropout最早由 `Enabling Spike-based Backpropagation for Training Deep Neural Network Architectures
             <https://arxiv.org/abs/1903.06379>`_ 一文进行详细论述：
 

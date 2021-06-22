@@ -108,9 +108,15 @@ class BaseNode(base.MemoryModule):
             spike = self.spike
 
         if self.v_reset is None:
-            self.v = self.v - spike * self.v_threshold
+            if self.v_threshold == 1.:
+                self.v = self.v - spike
+            else:
+                self.v = self.v - spike * self.v_threshold
         else:
-            self.v = (1 - spike) * self.v + spike * self.v_reset
+            if self.v_reset == 0.:
+                self.v = (1. - spike) * self.v
+            else:
+                self.v = (1. - spike) * self.v + spike * self.v_reset
 
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
