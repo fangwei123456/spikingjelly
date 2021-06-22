@@ -759,12 +759,12 @@ class MultiStepContainer(nn.Module):
             self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
-        '''
+        """
         :param x_seq: shape=[T, batch_size, ...]
         :type x_seq: torch.Tensor
         :return: y_seq, shape=[T, batch_size, ...]
         :rtype: torch.Tensor
-        '''
+        """
         y_seq = []
         for t in range(x_seq.shape[0]):
             y_seq.append(self.module(x_seq[t]))
@@ -778,7 +778,7 @@ class MultiStepContainer(nn.Module):
 
 class SeqToANNContainer(nn.Module):
     def __init__(self, *args):
-        '''
+        """
         * :ref:`API in English <SeqToANNContainer.__init__-en>`
 
         .. _SeqToANNContainer.__init__-cn:
@@ -816,7 +816,7 @@ class SeqToANNContainer(nn.Module):
                 fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
                 print(fc(x).shape)
                 # torch.Size([16, 8, 3])
-        '''
+        """
         super().__init__()
         if len(args) == 1:
             self.module = args[0]
@@ -824,12 +824,12 @@ class SeqToANNContainer(nn.Module):
             self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
-        '''
+        """
         :param x_seq: shape=[T, batch_size, ...]
         :type x_seq: torch.Tensor
         :return: y_seq, shape=[T, batch_size, ...]
         :rtype: torch.Tensor
-        '''
+        """
         y_shape = [x_seq.shape[0], x_seq.shape[1]]
         y_seq = self.module(x_seq.flatten(0, 1).contiguous())
         y_shape.extend(y_seq.shape[1:])
@@ -841,7 +841,7 @@ class STDPLearner(base.MemoryModule):
                  tau_pre: float, tau_post: float,
                  f_pre, f_post
                  ) -> None:
-        '''
+        """
         .. code-block:: python
 
             import torch
@@ -913,7 +913,7 @@ class STDPLearner(base.MemoryModule):
 
         .. image:: ./_static/API/clock_driven/layer/STDPLearner.*
 
-        '''
+        """
         super().__init__()
         self.tau_pre = tau_pre
         self.tau_post = tau_post
