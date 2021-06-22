@@ -1,9 +1,11 @@
 from abc import abstractmethod
 import torch
+import torch.nn as nn
 from . import surrogate, base
+import math
 
 class BaseNode(base.MemoryModule):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+    def __init__(self, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
         """
         * :ref:`API in English <BaseNode.__init__-en>`
 
@@ -88,7 +90,7 @@ class BaseNode(base.MemoryModule):
         self.spike = self.surrogate_function(self.v - self.v_threshold)
 
     def neuronal_reset(self):
-        '''
+        """
         * :ref:`API in English <BaseNode.neuronal_reset-en>`
 
         .. _BaseNode.neuronal_reset-cn:
@@ -101,7 +103,7 @@ class BaseNode(base.MemoryModule):
 
 
         Reset the membrane potential according to neurons' output spikes.
-        '''
+        """
         if self.detach_reset:
             spike = self.spike.detach()
         else:
@@ -151,7 +153,7 @@ class BaseNode(base.MemoryModule):
         return self.spike
 
 class IFNode(BaseNode):
-    def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+    def __init__(self, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
         """
         * :ref:`API in English <IFNode.__init__-en>`
 
@@ -169,7 +171,7 @@ class IFNode(BaseNode):
         Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减。其阈下神经动力学方程为：
 
         .. math::
-            \\frac{\\mathrm{d}V(t)}{\\mathrm{d} t} = R_{m}I(t)
+            V[t] = V[t-1] + X[t]
 
         * :ref:`中文API <IFNode.__init__-cn>`
 
@@ -188,7 +190,7 @@ class IFNode(BaseNode):
         as that of the LIF neuron. The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            \\frac{\\mathrm{d}V(t)}{\\mathrm{d} t} = R_{m}I(t)
+            V[t] = V[t-1] + X[t]
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
@@ -196,8 +198,8 @@ class IFNode(BaseNode):
         self.v += dv
 
 class LIFNode(BaseNode):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), detach_reset=False):
-        '''
+    def __init__(self, tau=100., v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+        """
         * :ref:`API in English <LIFNode.__init__-en>`
 
         .. _LIFNode.__init__-cn:
@@ -217,7 +219,7 @@ class LIFNode(BaseNode):
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
         .. math::
-            \\tau_{m} \\frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
+            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -238,8 +240,9 @@ class LIFNode(BaseNode):
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            \\tau_{m} \\frac{\\mathrm{d}V(t)}{\\mathrm{d}t} = -(V(t) - V_{reset}) + R_{m}I(t)
-        '''
+            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+        """
+        assert tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_buffer('tau', torch.as_tensor(tau))
 
@@ -247,7 +250,74 @@ class LIFNode(BaseNode):
         return super().extra_repr() + f', tau={self.tau}'
 
     def neuronal_charge(self, dv: torch.Tensor):
-        if self.v_reset is None:
+        if self.v_reset is None or self.v_reset == 0.:
             self.v += (dv - self.v) / self.tau
         else:
             self.v += (dv - (self.v - self.v_reset)) / self.tau
+
+class ParametricLIFNode(BaseNode):
+    def __init__(self, init_tau=2.0, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+        """
+        * :ref:`API in English <LIFNode.__init__-en>`
+
+        .. _LIFNode.__init__-cn:
+
+        :param tau: 膜电位时间常数。``tau`` 对于这一层的所有神经元都是共享的
+
+        :param v_threshold: 神经元的阈值电压
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+
+        :param detach_reset: 是否将reset过程的计算图分离
+
+        `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`
+ 提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
+
+        .. math::
+            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+
+        其中 :math:`\frac{1}{\tau} = {\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
+
+        * :ref:`中文API <LIFNode.__init__-cn>`
+
+        .. _LIFNode.__init__-en:
+
+        :param tau: membrane time constant. ``tau`` is shared by all neurons in this layer
+
+        :param v_threshold: threshold voltage of neurons
+
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+
+        :param detach_reset: whether detach the computation graph of reset
+
+        The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>` and can be seen as a leaky integrator.
+        The subthreshold neural dynamics of it is as followed:
+
+        .. math::
+            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+
+        where :math:`\frac{1}{\tau} = {\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
+        """
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        assert init_tau > 1.
+        init_w = - math.log(init_tau - 1.)
+        self.w = nn.Parameter(torch.as_tensor(init_w))
+
+
+    def extra_repr(self):
+        with torch.no_grad():
+            tau = self.w.sigmoid()
+        return super().extra_repr() + f', tau={tau}'
+
+    def neuronal_charge(self, dv: torch.Tensor):
+        if self.v_reset is None or self.v_reset == 0.:
+            self.v += (dv - self.v) * self.w.sigmoid()
+        else:
+            self.v += (dv - (self.v - self.v_reset)) * self.w.sigmoid()
+
