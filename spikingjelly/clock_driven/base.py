@@ -1,6 +1,4 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 
 class MemoryModule(nn.Module):
@@ -74,11 +72,11 @@ class MemoryModule(nn.Module):
         else:
             return super().__getattr__(name)
         
-    def detach_(self):
+    def detach(self):
         """
-        * :ref:`API in English <MemoryModule.detach_-en>`
+        * :ref:`API in English <MemoryModule.detach-en>`
 
-        .. _MemoryModule.detach_-cn:
+        .. _MemoryModule.detach-cn:
 
         从计算图中分离所有有状态变量。
 
@@ -87,9 +85,9 @@ class MemoryModule(nn.Module):
             可以使用这个函数实现TBPTT(Truncated Back Propagation Through Time)。
 
 
-        * :ref:`中文API <MemoryModule.detach_-cn>`
+        * :ref:`中文API <MemoryModule.detach-cn>`
 
-        .. _MemoryModule.detach_-en:
+        .. _MemoryModule.detach-en:
 
         Detach all stateful variables.
 
