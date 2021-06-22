@@ -1,6 +1,5 @@
 from abc import abstractmethod
 import torch
-import torch.nn as nn
 from . import surrogate, base
 
 class BaseNode(base.MemoryModule):
