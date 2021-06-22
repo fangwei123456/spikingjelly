@@ -23,7 +23,10 @@ class MemoryModule(nn.Module):
         else:
             return super().__getattr__(name)
         
-
+    def detach(self):
+        for key in self._memory.keys():
+            if isinstance(self._memory[key], torch.Tensor):
+                self._memory[key].detach_()
 
 
 

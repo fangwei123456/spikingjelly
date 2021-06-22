@@ -220,7 +220,6 @@ class LIFNode(BaseNode):
 
         :param tau: membrane time constant. ``tau`` is shared by all neurons in this layer
 
-
         :param v_threshold: threshold voltage of neurons
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
