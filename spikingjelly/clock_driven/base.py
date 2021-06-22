@@ -28,6 +28,16 @@ class MemoryModule(nn.Module):
             if isinstance(self._memory[key], torch.Tensor):
                 self._memory[key].detach_()
 
+    def _apply(self, fn):
+        for key, value in self._memory:
+            if isinstance(value, torch.Tensor):
+                self._memory[key] = fn(value)
+
+        for key, value in self._memory_rv:
+            if isinstance(value, torch.Tensor):
+                self._memory_rv[key] = fn(value)
+        return super()._apply(fn)
+
 
 
 
