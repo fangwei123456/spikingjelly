@@ -63,18 +63,14 @@ class Monitor:
         Enable Monitor. Start recording data.
         '''
         self.handle = dict.fromkeys(self.module_dict, None)
-        self.v = dict.fromkeys(self.module_dict, None)
-        self.s = dict.fromkeys(self.module_dict, None)
+        self.neuron_cnt = dict.fromkeys(self.module_dict, None)
 
-        for name, module in self.net.named_modules():
-            if (cext_neuron is not None and isinstance(module, cext_neuron.BaseNode)) or isinstance(module, neuron.BaseNode):
-                self.v[name] = []
-                self.s[name] = []
-                setattr(module, 'v_list', self.v[name])
-                setattr(module, 's_list', self.s[name])
-                # 初始化前向时钩子的句柄
-                self.handle[name] = module.register_forward_hook(self.forward_hook)
-        
+        for name, module in self.module_dict.items():
+            setattr(module, 'neuron_cnt', self.neuron_cnt[name])
+
+            # 初始化前向时钩子的句柄
+            self.handle[name] = module.register_forward_hook(self.forward_hook)
+                
         self.reset()
 
     def disable(self):
@@ -91,28 +87,44 @@ class Monitor:
 
         Disable Monitor. Stop recording data.
         '''
-        for name, module in self.net.named_modules():
-            if (cext_neuron is not None and isinstance(module, cext_neuron.BaseNode)) or isinstance(module, neuron.BaseNode):
-                delattr(module, 'v_list')
-                delattr(module, 's_list')
-                # 删除钩子
-                self.handle[name].remove()
+        for name, module in self.module_dict.items():
+            delattr(module, 'neuron_cnt')
+            delattr(module, 'fire_mask')
+            delattr(module, 'firing_time')
+            delattr(module, 'cnt')
+
+            # 删除钩子
+            self.handle[name].remove()
     
     # 暂时只监视脉冲发放
+    @torch.no_grad()
     def forward_hook(self, module, input, output):
-        with torch.no_grad():
-            if module.__class__.__name__.startswith('MultiStep'):
-                output_shape = output.shape
-                data = output.view([-1,] + list(output_shape[2:])).clone() # 对于多步模块的输出[T, batch size, ...]的前两维进行合并
-            else:
-                data = output.clone()
+        if module.__class__.__name__.startswith('MultiStep'):
+            output_shape = output.shape
+            data = output.view([-1,] + list(output_shape[2:])).clone() # 对于多步模块的输出[T, batchsize, ...]的前两维进行合并
+        else:
+            data = output.clone()
 
-            if self.backend == 'numpy':
-                data = data.cpu().numpy()
-            else:
-                data = data.to(self.device)
+        # Numpy
+        if self.backend == 'numpy':
+            data = data.cpu().numpy()
+            if module.neuron_cnt is None:
+                module.neuron_cnt = data[0].size # 神经元数量
+            module.firing_time += np.sum(data) # data中脉冲总数量
+            module.cnt += data.size # data本身的尺寸（T*batchsize*神经元数量）
+            fire_mask = (np.sum(data, axis=0) > 0) # 各神经元位置是否发放过脉冲的mask（Bool类型）
 
-            module.s_list.append(data)
+        # PyTorch
+        else:
+            data = data.to(self.device)
+            if module.neuron_cnt is None:
+                module.neuron_cnt = data[0].numel()
+            module.firing_time += torch.sum(data)
+            module.cnt += data.numel()
+            fire_mask = (torch.sum(data, dim=0) > 0)
+        
+        # PyTorch与Numpy的Bool Tensor的logical_or操作均可以直接用|表示。并且可以直接与Python的Bool类型进行运算，但是第一个操作数必须是Bool Tensor，不能是Python的Bool类型
+        module.fire_mask = fire_mask | module.fire_mask 
 
 
     def reset(self):
@@ -129,16 +141,10 @@ class Monitor:
 
         Delete previously recorded data
         '''
-
-        for v_list in self.v.values():
-            v_list.clear()
-        
-        for s_list in self.s.values():
-            s_list.clear()
-        # 数据与字典置空
-        self.neuron_cnt = dict.fromkeys(self.module_dict, None)
-        self.avg_firing_rate_by_layer = dict.fromkeys(self.module_dict, None)
-        self.nonfire_ratio_by_layer = dict.fromkeys(self.module_dict, None)
+        for name, module in self.module_dict.items():
+            setattr(module, 'fire_mask', False)
+            setattr(module, 'firing_time', 0)
+            setattr(module, 'cnt', 0)
 
     def get_avg_firing_rate(self, all: bool = True, module_name: str = None) -> torch.Tensor or float:
         '''
@@ -165,36 +171,18 @@ class Monitor:
         :rtype: torch.Tensor or float
         '''
         if all:
-            ttl_firing_cnt = 0
-            ttl_neuron_cnt = 0
-            for name in self.module_dict.keys():
-                # 尽量复用已经计算出的结果
-                if self.avg_firing_rate_by_layer[name] is None:
-                    # 这里记录的平均发放率实际上对总样本数、仿真时间、神经元尺寸三个维度都做了平均
-                    if self.backend == 'numpy':
-                        self.avg_firing_rate_by_layer[name] = np.concatenate(self.s[name]).mean()
-                        if self.neuron_cnt[name] is None:
-                            self.neuron_cnt[name] = self.s[name][0][0].size
-                    elif self.backend == 'torch':
-                        self.avg_firing_rate_by_layer[name] = torch.cat(self.s[name]).mean()
-                        if self.neuron_cnt[name] is None:
-                            self.neuron_cnt[name] = self.s[name][0][0].numel()
-                ttl_firing_cnt += self.avg_firing_rate_by_layer[name] * self.neuron_cnt[name]
-                ttl_neuron_cnt += self.neuron_cnt[name]
-            return ttl_firing_cnt / ttl_neuron_cnt 
+            ttl_firing_time = 0
+            ttl_cnt = 0
+            for name, module in self.module_dict.items():
+                ttl_firing_time += module.firing_time
+                ttl_cnt += module.cnt
+                print(name, module.cnt)
+            return ttl_firing_time / ttl_cnt 
         else:
             if module_name not in self.module_dict.keys():
-                raise ValueError(f'invalid module_name {module_name}')
-
-            # 尽量复用已经计算出的结果
-            if self.avg_firing_rate_by_layer[module_name] is None:
-                if self.backend == 'numpy':
-                    self.avg_firing_rate_by_layer[module_name] = np.concatenate(self.s[module_name]).mean()
-                    self.neuron_cnt[module_name] = self.s[module_name][0][0].size
-                elif self.backend == 'torch':
-                    self.avg_firing_rate_by_layer[module_name] = torch.cat(self.s[module_name]).mean()
-                    self.neuron_cnt[module_name] = self.s[module_name][0][0].numel()
-            return self.avg_firing_rate_by_layer[module_name]
+                raise ValueError(f'Invalid module_name \'{module_name}\'')
+            module = self.module_dict[module_name]
+            return module.firing_time / module.cnt
 
 
     def get_nonfire_ratio(self, all: bool = True, module_name: str = None) -> torch.Tensor or float:
@@ -224,36 +212,19 @@ class Monitor:
         if all:
             ttl_neuron_cnt = 0
             ttl_zero_cnt = 0
-            for name in self.module_dict.keys():
-                # 尽量复用已经计算出的结果
-                if self.nonfire_ratio_by_layer[name] is None:
-                    # 这里记录的平均发放率实际上对总样本数、仿真时间、神经元尺寸三个维度都做了平均
-                    if self.backend == 'numpy':
-                        ttl_firing_times = np.concatenate(self.s[name]).sum(axis=0)
-                        if self.neuron_cnt[name] is None:
-                            self.neuron_cnt[name] = self.s[name][0][0].size
-                        self.nonfire_ratio_by_layer[name] = (ttl_firing_times == 0).astype(float).sum() / ttl_firing_times.size
-                    elif self.backend == 'torch':
-                        ttl_firing_times = torch.cat(self.s[name]).sum(dim=0)
-                        if self.neuron_cnt[name] is None:
-                            self.neuron_cnt[name] = self.s[name][0][0].numel()
-                        self.nonfire_ratio_by_layer[name] = (ttl_firing_times == 0).float().sum() / ttl_firing_times.numel()
-
-                ttl_neuron_cnt += self.neuron_cnt[name]
-                ttl_zero_cnt += self.nonfire_ratio_by_layer[name] * self.neuron_cnt[name]
+            for name, module in self.module_dict.items():
+                if self.backend == 'numpy':
+                    ttl_zero_cnt += np.logical_not(module.fire_mask).sum()
+                elif self.backend == 'torch':
+                    ttl_zero_cnt += torch.logical_not(module.fire_mask).sum()
+                ttl_neuron_cnt += module.neuron_cnt
             return ttl_zero_cnt / ttl_neuron_cnt
         else:
             if module_name not in self.module_dict.keys():
-                raise ValueError(f'invalid module_name \'{module_name}\'')
+                raise ValueError(f'Invalid module_name \'{module_name}\'')
 
-            # 尽量复用已经计算出的结果
-            if self.nonfire_ratio_by_layer[module_name] is None:
-                if self.backend == 'numpy':
-                    ttl_firing_times = np.concatenate(self.s[module_name]).sum(axis=0)
-                    self.neuron_cnt[module_name] = self.s[module_name][0][0].size
-                    self.nonfire_ratio_by_layer[module_name] = (ttl_firing_times == 0).astype(float).sum() / ttl_firing_times.size
-                elif self.backend == 'torch':
-                    ttl_firing_times = torch.cat(self.s[module_name]).sum(dim=0)
-                    self.neuron_cnt[module_name] = self.s[module_name][0][0].numel()
-                    self.nonfire_ratio_by_layer[module_name] = (ttl_firing_times == 0).float().sum() / ttl_firing_times.numel()
-            return self.nonfire_ratio_by_layer[module_name]
+            module = self.module_dict[module_name]
+            if self.backend == 'numpy':
+                return np.logical_not(module.fire_mask).sum() / module.neuron_cnt
+            elif self.backend == 'torch':
+                return torch.logical_not(module.fire_mask).sum() / module.neuron_cnt
