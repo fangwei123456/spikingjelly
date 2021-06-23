@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-
+import copy
 
 class MemoryModule(nn.Module):
     def __init__(self):
@@ -65,10 +65,10 @@ class MemoryModule(nn.Module):
         Reset all stateful variables.
         """
         for key in self._memories.keys():
-            self._memories[key] = self._memories_rv[key]
+            self._memories[key] = copy.deepcopy(self._memories_rv[key])
 
     def set_reset_value(self, name: str, value):
-        self._memories_rv[name] = value
+        self._memories_rv[name] = copy.deepcopy(value)
 
     def __getattr__(self, name: str):
         if '_memories' in self.__dict__:
