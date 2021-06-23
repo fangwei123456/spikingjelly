@@ -44,17 +44,17 @@ class BaseNode(base.MemoryModule):
         if v_reset is None:
             self.register_buffer('v_reset', None)
             self.register_memory('v', 0.)
-            self.register_memory('spike', None)
+            self.register_memory('spike', 0.)
         else:
             self.register_buffer('v_reset', torch.as_tensor(v_reset))
             self.register_memory('v', v_reset)
-            self.register_memory('spike', None)
+            self.register_memory('spike', 0.)
 
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
 
     @abstractmethod
-    def neuronal_charge(self, dv: torch.Tensor):
+    def neuronal_charge(self, x: torch.Tensor):
         """
          * :ref:`API in English <BaseNode.neuronal_charge-en>`
 
@@ -123,14 +123,14 @@ class BaseNode(base.MemoryModule):
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
 
-    def forward(self, dv: torch.Tensor):
+    def forward(self, x: torch.Tensor):
         """
 
         * :ref:`API in English <BaseNode.forward-en>`
 
         .. _BaseNode.forward-cn:
 
-        :param dv: 输入到神经元的电压增量
+        :param x: 输入到神经元的电压增量
 
         :return: 神经元的输出脉冲
 
@@ -140,14 +140,14 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.forward-en:
 
-        :param dv: increment of voltage inputted to neurons
+        :param x: increment of voltage inputted to neurons
 
         :return: out spikes of neurons
 
         Forward by the order of `neuronal_charge`, `neuronal_fire`, and `neuronal_reset`.
 
         """
-        self.neuronal_charge(dv)
+        self.neuronal_charge(x)
         self.neuronal_fire()
         self.neuronal_reset()
         return self.spike
@@ -194,8 +194,8 @@ class IFNode(BaseNode):
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
-    def neuronal_charge(self, dv: torch.Tensor):
-        self.v += dv
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v += x
 
 class LIFNode(BaseNode):
     def __init__(self, tau=100., v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
@@ -249,11 +249,11 @@ class LIFNode(BaseNode):
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
 
-    def neuronal_charge(self, dv: torch.Tensor):
+    def neuronal_charge(self, x: torch.Tensor):
         if self.v_reset is None or self.v_reset == 0.:
-            self.v += (dv - self.v) / self.tau
+            self.v += (x - self.v) / self.tau
         else:
-            self.v += (dv - (self.v - self.v_reset)) / self.tau
+            self.v += (x - (self.v - self.v_reset)) / self.tau
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau=2.0, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
@@ -315,9 +315,9 @@ class ParametricLIFNode(BaseNode):
             tau = self.w.sigmoid()
         return super().extra_repr() + f', tau={tau}'
 
-    def neuronal_charge(self, dv: torch.Tensor):
+    def neuronal_charge(self, x: torch.Tensor):
         if self.v_reset is None or self.v_reset == 0.:
-            self.v += (dv - self.v) * self.w.sigmoid()
+            self.v += (x - self.v) * self.w.sigmoid()
         else:
-            self.v += (dv - (self.v - self.v_reset)) * self.w.sigmoid()
+            self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
 
