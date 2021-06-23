@@ -359,7 +359,10 @@ class ParametricLIFNode(BaseNode):
         return super().extra_repr() + f', tau={tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.v_reset is None or self.v_reset == 0.:
+        if self.v_reset is None:
             self.v += (x - self.v) * self.w.sigmoid()
         else:
-            self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
+            if isinstance(self.v_reset, float) and self.v_reset == 0.:
+                self.v += (x - self.v) * self.w.sigmoid()
+            else:
+                self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
