@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from typing import Callable
 import torch
 import torch.nn as nn
 from . import surrogate, base
@@ -6,20 +7,25 @@ import math
 
 
 class BaseNode(base.MemoryModule):
-    def __init__(self, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+    def __init__(self, v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
+                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <BaseNode.__init__-en>`
 
         .. _BaseNode.__init__-cn:
 
         :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
 
         :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
 
         可微分SNN神经元的基类神经元。
 
@@ -28,15 +34,17 @@ class BaseNode(base.MemoryModule):
         .. _BaseNode.__init__-en:
 
         :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
 
         :param detach_reset: whether detach the computation graph of reset
-
-        :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
 
         This class is the base class of differentiable spiking neurons.
         """
@@ -176,20 +184,25 @@ class BaseNode(base.MemoryModule):
 
 
 class IFNode(BaseNode):
-    def __init__(self, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+    def __init__(self, v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
+                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <IFNode.__init__-en>`
 
         .. _IFNode.__init__-cn:
 
         :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
 
         :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
 
         Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减。其阈下神经动力学方程为：
 
@@ -201,13 +214,17 @@ class IFNode(BaseNode):
         .. _IFNode.__init__-en:
 
         :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
 
         :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
 
         The Integrate-and-Fire neuron, which can be seen as a ideal integrator. The voltage of the IF neuron will not decay
         as that of the LIF neuron. The subthreshold neural dynamics of it is as followed:
@@ -222,23 +239,28 @@ class IFNode(BaseNode):
 
 
 class LIFNode(BaseNode):
-    def __init__(self, tau=100., v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(),
-                 detach_reset=False):
+    def __init__(self, tau: float or torch.Tensor = 100., v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
+                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
         .. _LIFNode.__init__-cn:
 
-        :param tau: 膜电位时间常数。``tau`` 对于这一层的所有神经元都是共享的
+        :param tau: 膜电位时间常数
+        :type tau: float or torch.Tensor
 
         :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
 
         :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
 
 
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
@@ -250,16 +272,21 @@ class LIFNode(BaseNode):
 
         .. _LIFNode.__init__-en:
 
-        :param tau: membrane time constant. ``tau`` is shared by all neurons in this layer
+        :param tau: membrane time constant
+        :type tau: float or torch.Tensor
 
         :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
 
         :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
 
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
@@ -292,23 +319,28 @@ class LIFNode(BaseNode):
 
 
 class ParametricLIFNode(BaseNode):
-    def __init__(self, init_tau=2.0, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(),
-                 detach_reset=False):
+    def __init__(self, init_tau: float or torch.Tensor = 2.0, v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
+                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
         .. _LIFNode.__init__-cn:
 
-        :param tau: 膜电位时间常数。``tau`` 对于这一层的所有神经元都是共享的
+        :param init_tau: 膜电位时间常数的初始值
+        :type init_tau: float or torch.Tensor
 
         :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
 
         :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
 
         `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`
  提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
@@ -322,16 +354,21 @@ class ParametricLIFNode(BaseNode):
 
         .. _LIFNode.__init__-en:
 
-        :param tau: membrane time constant. ``tau`` is shared by all neurons in this layer
+        :param init_tau: the initial value of membrane time constant
+        :param init_tau: float or torch.Tensor
 
         :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float or torch.Tensor
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float or torch.Tensor
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
 
         :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
 
         The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>` and can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
