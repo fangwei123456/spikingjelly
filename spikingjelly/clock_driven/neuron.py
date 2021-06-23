@@ -239,8 +239,9 @@ class IFNode(BaseNode):
 
 
 class LIFNode(BaseNode):
-    def __init__(self, tau: float or torch.Tensor = 100., v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
-                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+    def __init__(self, tau: float or torch.Tensor = 100., v_threshold: float or torch.Tensor = 1.,
+                 v_reset: float or torch.Tensor = 0., surrogate_function:Callable = surrogate.Sigmoid(),
+                 detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
@@ -319,8 +320,9 @@ class LIFNode(BaseNode):
 
 
 class ParametricLIFNode(BaseNode):
-    def __init__(self, init_tau: float or torch.Tensor = 2.0, v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
-                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+    def __init__(self, init_tau: float or torch.Tensor = 2.0, v_threshold: float or torch.Tensor = 1.,
+                 v_reset: float or torch.Tensor = 0., surrogate_function:Callable = surrogate.Sigmoid(),
+                 detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
