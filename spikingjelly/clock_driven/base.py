@@ -48,7 +48,7 @@ class MemoryModule(nn.Module):
 
         """
         self._memories[name] = value
-        self._memories_rv[name] = value
+        self.set_reset_value(name, value)
 
     def reset(self):
         """
@@ -66,7 +66,10 @@ class MemoryModule(nn.Module):
         """
         for key in self._memories.keys():
             self._memories[key] = self._memories_rv[key]
-            
+
+    def set_reset_value(self, name: str, value):
+        self._memories_rv[name] = value
+
     def __getattr__(self, name: str):
         if '_memories' in self.__dict__:
             memories = self.__dict__['_memories']
@@ -85,6 +88,7 @@ class MemoryModule(nn.Module):
     def __delattr__(self, name):
         if name in self._memories:
             del self._memories[name]
+            del self._memories_rv[name]
         else:
             return super().__delattr__(name)
 
@@ -103,11 +107,11 @@ class MemoryModule(nn.Module):
         return sorted(keys)
 
     def memories(self):
-        for name, value in self._memories:
+        for name, value in self._memories.items():
             yield value
 
     def named_memories(self):
-        for name, value in self._memories:
+        for name, value in self._memories.items():
             yield name, value
 
     def detach(self):
@@ -154,8 +158,4 @@ class MemoryModule(nn.Module):
         replica = super()._replicate_for_data_parallel()
         replica._memories = self._memories.copy()
         return replica
-
-
-
-
 
