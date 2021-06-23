@@ -4,6 +4,7 @@ import torch.nn as nn
 from . import surrogate, base
 import math
 
+
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
         """
@@ -40,15 +41,19 @@ class BaseNode(base.MemoryModule):
         This class is the base class of differentiable spiking neurons.
         """
         super().__init__()
-        self.register_buffer('v_threshold', torch.as_tensor(v_threshold))
+        assert isinstance(v_reset, (float, torch.Tensor))
+        assert isinstance(v_threshold, (float, torch.Tensor))
+        assert isinstance(detach_reset, bool)
+
         if v_reset is None:
-            self.register_buffer('v_reset', None)
             self.register_memory('v', 0.)
             self.register_memory('spike', 0.)
         else:
-            self.register_buffer('v_reset', torch.as_tensor(v_reset))
             self.register_memory('v', v_reset)
             self.register_memory('spike', 0.)
+
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
 
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
@@ -110,15 +115,32 @@ class BaseNode(base.MemoryModule):
             spike = self.spike
 
         if self.v_reset is None:
-            if self.v_threshold == 1.:
-                self.v = self.v - spike
+            # soft reset
+            # self.v = self.v - spike * self.v_threshold
+
+            if isinstance(self.v_threshold, float):
+                if self.v_threshold == 1.:
+                    self.v = self.v - spike
+                else:
+                    self.v = self.v - spike * self.v_threshold
+
             else:
-                self.v = self.v - spike * self.v_threshold
+                # v_threshold is a tensor
+                self.v = torch.addcmul(self.v, spike, self.v_threshold, value=-1.)
         else:
-            if self.v_reset == 0.:
-                self.v = (1. - spike) * self.v
+            # hard reset
+            # self.v = (1. - spike) * self.v + spike * self.v_reset
+            if isinstance(self.v_reset, float):
+                if self.v_reset == 0.:
+                    # self.v = (1. - spike) * self.v = self.v - spike * self.v
+                    self.v = torch.addcmul(self.v, spike, self.v, value=-1.)
+                else:
+                    # self.v = (1. - spike) * self.v + spike * self.v_reset
+                    # = self.v - spike * self.v + spike * self.v_reset
+                    self.v = torch.addcmul(self.v, spike, self.v, value=-1.) + spike * self.v_reset
             else:
-                self.v = (1. - spike) * self.v + spike * self.v_reset
+                # v_reset is a tensor
+                self.v = torch.addcmul(torch.addcmul(self.v, spike, self.v, value=-1.), spike, self.v_reset)
 
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
@@ -151,6 +173,7 @@ class BaseNode(base.MemoryModule):
         self.neuronal_fire()
         self.neuronal_reset()
         return self.spike
+
 
 class IFNode(BaseNode):
     def __init__(self, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
@@ -197,8 +220,10 @@ class IFNode(BaseNode):
     def neuronal_charge(self, x: torch.Tensor):
         self.v += x
 
+
 class LIFNode(BaseNode):
-    def __init__(self, tau=100., v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+    def __init__(self, tau=100., v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(),
+                 detach_reset=False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
@@ -242,21 +267,33 @@ class LIFNode(BaseNode):
         .. math::
             V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
         """
-        assert tau > 1.
+        if isinstance(tau, float):
+            assert tau > 1.
+        elif isinstance(tau, torch.Tensor):
+            with torch.no_grad():
+                assert tau.min().item() > 1.
+        else:
+            raise ValueError('tau must be float or torch.Tensor')
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
-        self.register_buffer('tau', torch.as_tensor(tau))
+        self.tau = tau
 
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.v_reset is None or self.v_reset == 0.:
+        if self.v_reset is None:
             self.v += (x - self.v) / self.tau
+
         else:
-            self.v += (x - (self.v - self.v_reset)) / self.tau
+            if isinstance(self.v_reset, float) and self.v_reset == 0.:
+                self.v += (x - self.v) / self.tau
+            else:
+                self.v += (x - (self.v - self.v_reset)) / self.tau
+
 
 class ParametricLIFNode(BaseNode):
-    def __init__(self, init_tau=2.0, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(), detach_reset=False):
+    def __init__(self, init_tau=2.0, v_threshold=1., v_reset=0., surrogate_function=surrogate.Sigmoid(),
+                 detach_reset=False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
@@ -305,10 +342,16 @@ class ParametricLIFNode(BaseNode):
         where :math:`\frac{1}{\tau} = {\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
-        assert init_tau > 1.
-        init_w = - math.log(init_tau - 1.)
-        self.w = nn.Parameter(torch.as_tensor(init_w))
+        if isinstance(init_tau, float):
+            assert init_tau > 1.
+            init_w = - math.log(init_tau - 1.)
 
+        elif isinstance(init_tau, torch.Tensor):
+            with torch.no_grad():
+                assert init_tau.min().item() > 1.
+                init_w = - torch.log(init_tau - 1.)
+
+        self.w = nn.Parameter(torch.as_tensor(init_w))
 
     def extra_repr(self):
         with torch.no_grad():
@@ -320,4 +363,3 @@ class ParametricLIFNode(BaseNode):
             self.v += (x - self.v) * self.w.sigmoid()
         else:
             self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
-
