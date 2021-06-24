@@ -124,31 +124,11 @@ class BaseNode(base.MemoryModule):
 
         if self.v_reset is None:
             # soft reset
-            # self.v = self.v - spike * self.v_threshold
+            self.v = self.v - spike * self.v_threshold
 
-            if isinstance(self.v_threshold, float):
-                if self.v_threshold == 1.:
-                    self.v = self.v - spike
-                else:
-                    self.v = self.v - spike * self.v_threshold
-
-            else:
-                # v_threshold is a tensor
-                self.v = torch.addcmul(self.v, spike, self.v_threshold, value=-1.)
         else:
             # hard reset
-            # self.v = (1. - spike) * self.v + spike * self.v_reset
-            if isinstance(self.v_reset, float):
-                if self.v_reset == 0.:
-                    # self.v = (1. - spike) * self.v = self.v - spike * self.v
-                    self.v = torch.addcmul(self.v, spike, self.v, value=-1.)
-                else:
-                    # self.v = (1. - spike) * self.v + spike * self.v_reset
-                    # = self.v - spike * self.v + spike * self.v_reset
-                    self.v = torch.addcmul(self.v, spike, self.v, value=-1.) + spike * self.v_reset
-            else:
-                # v_reset is a tensor
-                self.v = torch.addcmul(torch.addcmul(self.v, spike, self.v, value=-1.), spike, self.v_reset)
+            self.v = (1. - spike) * self.v + spike * self.v_reset
 
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
