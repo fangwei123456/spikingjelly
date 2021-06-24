@@ -4,22 +4,28 @@ import torch
 import torch.nn as nn
 from . import surrogate, base
 import math
+try:
+    import cupy
+    from . import neuron_kernel, cu_kernel_opt
+except ImportError:
+    neuron_kernel = None
+
 
 
 class BaseNode(base.MemoryModule):
-    def __init__(self, v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
-                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <BaseNode.__init__-en>`
 
         .. _BaseNode.__init__-cn:
 
         :param v_threshold: 神经元的阈值电压
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -34,11 +40,11 @@ class BaseNode(base.MemoryModule):
         .. _BaseNode.__init__-en:
 
         :param v_threshold: threshold voltage of neurons
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
@@ -48,10 +54,10 @@ class BaseNode(base.MemoryModule):
 
         This class is the base class of differentiable spiking neurons.
         """
-        super().__init__()
-        assert isinstance(v_reset, (float, torch.Tensor))
-        assert isinstance(v_threshold, (float, torch.Tensor))
+        assert isinstance(v_reset, float) or v_reset is None
+        assert isinstance(v_threshold, float)
         assert isinstance(detach_reset, bool)
+        super().__init__()
 
         if v_reset is None:
             self.register_memory('v', 0.)
@@ -162,21 +168,20 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset()
         return self.spike
 
-
 class IFNode(BaseNode):
-    def __init__(self, v_threshold: float or torch.Tensor = 1., v_reset: float or torch.Tensor = 0.,
-                 surrogate_function:Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
         """
         * :ref:`API in English <IFNode.__init__-en>`
 
         .. _IFNode.__init__-cn:
 
         :param v_threshold: 神经元的阈值电压
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -194,11 +199,11 @@ class IFNode(BaseNode):
         .. _IFNode.__init__-en:
 
         :param v_threshold: threshold voltage of neurons
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
@@ -213,14 +218,94 @@ class IFNode(BaseNode):
             V[t] = V[t-1] + X[t]
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        if backend == 'cupy':
+            assert neuron_kernel is not None, 'cupy is not installed.'
+        self.backend = backend
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v += x
 
+    def forward(self, x: torch.Tensor):
+        if self.backend == 'torch':
+            return super().forward(x)
+
+        elif self.backend == 'cupy':
+            device = x.get_device()
+            if x.dtype == torch.float32:
+                cpa_dtype = cupy.float32
+            elif x.dtype == torch.float16:
+                cpa_dtype = cupy.float16
+            else:
+                raise NotImplementedError
+
+            with cupy.cuda.Device(device):
+
+                if isinstance(self.v, float):
+                    v_init = self.v
+                    self.v = torch.zeros_like(x.data)
+                    torch.fill_(self.v, v_init)
+
+                v_last = self.v.data.clone()
+
+                if isinstance(self.spike, float):
+                    self.spike = torch.zeros_like(x.data)
+
+                numel = x.numel()
+                threads = cu_kernel_opt.threads
+                blocks = cu_kernel_opt.cal_blocks(numel)
+                numel = cupy.asarray(numel)
+                h = torch.zeros_like(self.v)
+
+                v_threshold = cupy.asarray(self.v_threshold, dtype=cpa_dtype)
+
+                if self.v_reset is not None:
+                    v_reset = cupy.asarray(self.v_reset, dtype=cpa_dtype)
+
+                cu_kernel_opt.check_contiguous(x, v_last, h, self.spike, self.v)
+                cu_kernel_opt.check_device(device, x, v_last, h, self.spike, self.v)
+
+
+
+                if self.training:
+                    raise NotImplementedError
+
+                else:
+                    if self.v_reset is None:
+                        # soft reset
+                        if x.dtype == torch.float32:
+                            kernel = neuron_kernel.IFNode_forward_softReset_fp32
+                        elif x.dtype == torch.float16:
+                            kernel = neuron_kernel.IFNode_forward_softReset_fp16
+                        else:
+                            raise NotImplementedError
+                        kernel(
+                            (blocks,), (threads,),
+                            (x.data_ptr(), v_last.data_ptr(), h.data_ptr(), self.spike.data_ptr(), self.v.data_ptr(), v_threshold,
+                             numel)
+                        )
+
+                    else:
+                        # hard reset
+                        if x.dtype == torch.float32:
+                            kernel = neuron_kernel.IFNode_forward_hardReset_fp32
+                        elif x.dtype == torch.float16:
+                            kernel = neuron_kernel.IFNode_forward_hardReset_fp16
+                        else:
+                            raise NotImplementedError
+                        kernel(
+                            (blocks,), (threads,),
+                            (x.data_ptr(), v_last.data_ptr(), h.data_ptr(), self.spike.data_ptr(), self.v.data_ptr(), v_threshold,
+                             v_reset, numel)
+                        )
+
+            return self.spike
+
+
+
 
 class LIFNode(BaseNode):
-    def __init__(self, tau: float or torch.Tensor = 100., v_threshold: float or torch.Tensor = 1.,
-                 v_reset: float or torch.Tensor = 0., surrogate_function:Callable = surrogate.Sigmoid(),
+    def __init__(self, tau: float = 100., v_threshold: float = 1.,
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
@@ -228,14 +313,14 @@ class LIFNode(BaseNode):
         .. _LIFNode.__init__-cn:
 
         :param tau: 膜电位时间常数
-        :type tau: float or torch.Tensor
+        :type tau: float
 
         :param v_threshold: 神经元的阈值电压
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -254,14 +339,14 @@ class LIFNode(BaseNode):
         .. _LIFNode.__init__-en:
 
         :param tau: membrane time constant
-        :type tau: float or torch.Tensor
+        :type tau: float
 
         :param v_threshold: threshold voltage of neurons
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
@@ -275,13 +360,8 @@ class LIFNode(BaseNode):
         .. math::
             V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
         """
-        if isinstance(tau, float):
-            assert tau > 1.
-        elif isinstance(tau, torch.Tensor):
-            with torch.no_grad():
-                assert tau.min().item() > 1.
-        else:
-            raise ValueError('tau must be float or torch.Tensor')
+        assert isinstance(tau, float) and tau > 1.
+
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.tau = tau
 
@@ -300,8 +380,8 @@ class LIFNode(BaseNode):
 
 
 class ParametricLIFNode(BaseNode):
-    def __init__(self, init_tau: float or torch.Tensor = 2.0, v_threshold: float or torch.Tensor = 1.,
-                 v_reset: float or torch.Tensor = 0., surrogate_function:Callable = surrogate.Sigmoid(),
+    def __init__(self, init_tau: float = 2.0, v_threshold: float = 1.,
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
@@ -309,14 +389,14 @@ class ParametricLIFNode(BaseNode):
         .. _LIFNode.__init__-cn:
 
         :param init_tau: 膜电位时间常数的初始值
-        :type init_tau: float or torch.Tensor
+        :type init_tau: float
 
         :param v_threshold: 神经元的阈值电压
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -337,14 +417,14 @@ class ParametricLIFNode(BaseNode):
         .. _LIFNode.__init__-en:
 
         :param init_tau: the initial value of membrane time constant
-        :param init_tau: float or torch.Tensor
+        :param init_tau: float
 
         :param v_threshold: threshold voltage of neurons
-        :type v_threshold: float or torch.Tensor
+        :type v_threshold: float
 
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
-        :type v_reset: float or torch.Tensor
+        :type v_reset: float
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
@@ -360,16 +440,9 @@ class ParametricLIFNode(BaseNode):
 
         where :math:`\frac{1}{\tau} = {\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
+        assert isinstance(init_tau, float) and init_tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
-        if isinstance(init_tau, float):
-            assert init_tau > 1.
-            init_w = - math.log(init_tau - 1.)
-
-        elif isinstance(init_tau, torch.Tensor):
-            with torch.no_grad():
-                assert init_tau.min().item() > 1.
-                init_w = - torch.log(init_tau - 1.)
-
+        init_w = - math.log(init_tau - 1.)
         self.w = nn.Parameter(torch.as_tensor(init_w))
 
     def extra_repr(self):
@@ -381,7 +454,7 @@ class ParametricLIFNode(BaseNode):
         if self.v_reset is None:
             self.v += (x - self.v) * self.w.sigmoid()
         else:
-            if isinstance(self.v_reset, float) and self.v_reset == 0.:
+            if self.v_reset == 0.:
                 self.v += (x - self.v) * self.w.sigmoid()
             else:
                 self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
