@@ -231,13 +231,6 @@ class IFNode(BaseNode):
 
         elif self.backend == 'cupy':
             device = x.get_device()
-            if x.dtype == torch.float32:
-                cpa_dtype = cupy.float32
-            elif x.dtype == torch.float16:
-                cpa_dtype = cupy.float16
-            else:
-                raise NotImplementedError
-
             with cupy.cuda.Device(device):
 
                 if isinstance(self.v, float):
@@ -245,58 +238,8 @@ class IFNode(BaseNode):
                     self.v = torch.zeros_like(x.data)
                     torch.fill_(self.v, v_init)
 
-                v_last = self.v.data.clone()
 
-                if isinstance(self.spike, float):
-                    self.spike = torch.zeros_like(x.data)
-
-                numel = x.numel()
-                threads = cu_kernel_opt.threads
-                blocks = cu_kernel_opt.cal_blocks(numel)
-                numel = cupy.asarray(numel)
-                h = torch.zeros_like(self.v)
-
-                v_threshold = cupy.asarray(self.v_threshold, dtype=cpa_dtype)
-
-                if self.v_reset is not None:
-                    v_reset = cupy.asarray(self.v_reset, dtype=cpa_dtype)
-
-                cu_kernel_opt.check_contiguous(x, v_last, h, self.spike, self.v)
-                cu_kernel_opt.check_device(device, x, v_last, h, self.spike, self.v)
-
-
-
-                if self.training:
-                    raise NotImplementedError
-
-                else:
-                    if self.v_reset is None:
-                        # soft reset
-                        if x.dtype == torch.float32:
-                            kernel = neuron_kernel.IFNode_forward_softReset_fp32
-                        elif x.dtype == torch.float16:
-                            kernel = neuron_kernel.IFNode_forward_softReset_fp16
-                        else:
-                            raise NotImplementedError
-                        kernel(
-                            (blocks,), (threads,),
-                            (x.data_ptr(), v_last.data_ptr(), h.data_ptr(), self.spike.data_ptr(), self.v.data_ptr(), v_threshold,
-                             numel)
-                        )
-
-                    else:
-                        # hard reset
-                        if x.dtype == torch.float32:
-                            kernel = neuron_kernel.IFNode_forward_hardReset_fp32
-                        elif x.dtype == torch.float16:
-                            kernel = neuron_kernel.IFNode_forward_hardReset_fp16
-                        else:
-                            raise NotImplementedError
-                        kernel(
-                            (blocks,), (threads,),
-                            (x.data_ptr(), v_last.data_ptr(), h.data_ptr(), self.spike.data_ptr(), self.v.data_ptr(), v_threshold,
-                             v_reset, numel)
-                        )
+                self.spike, self.v = neuron_kernel.IFNodeATGF.apply(x, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
             return self.spike
 

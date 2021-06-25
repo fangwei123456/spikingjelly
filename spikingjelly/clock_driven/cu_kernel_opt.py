@@ -12,9 +12,12 @@ try:
         for item in args:
             item = item.contiguous()
 
-    def check_device(device, *args):
+    def check_device(device: int, *args):
         for item in args:
-            assert item.get_device() == device
+            if isinstance(item, torch.Tensor):
+                assert item.get_device() == device
+            elif isinstance(item, cupy.ndarray):
+                assert item.device.id == device
 
 
 
