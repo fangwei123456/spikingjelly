@@ -11,7 +11,6 @@ except ImportError:
     neuron_kernel = None
 
 
-
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
@@ -147,8 +146,10 @@ class BaseNode(base.MemoryModule):
         .. _BaseNode.forward-cn:
 
         :param x: 输入到神经元的电压增量
+        :type x: torch.Tensor
 
         :return: 神经元的输出脉冲
+        :rtype: torch.Tensor
 
         按照充电、放电、重置的顺序进行前向传播。
 
@@ -157,8 +158,10 @@ class BaseNode(base.MemoryModule):
         .. _BaseNode.forward-en:
 
         :param x: increment of voltage inputted to neurons
+        :type x: torch.Tensor
 
         :return: out spikes of neurons
+        :rtype: torch.Tensor
 
         Forward by the order of `neuronal_charge`, `neuronal_fire`, and `neuronal_reset`.
 
@@ -168,21 +171,6 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset()
         return self.spike
 
-class BaseMultiStepNodeExample(BaseNode):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
-        super(BaseMultiStepNodeExample, self).__init__(v_threshold, v_reset, surrogate_function, detach_reset)
-        self.register_memory('v_seq', None)
-        self.register_memory('spike_seq', None)
-
-    def forward(self, x_seq: torch.Tensor):
-        # x_seq.shape = [T, *]
-        self.v_seq = torch.zeros_like(x_seq.data)
-        self.spike_seq = torch.zeros_like(x_seq.data)
-        for t in range(x_seq.shape[0]):
-            self.spike_seq[t] = super().forward(x_seq[t]).clone()
-            self.v_seq[t] = self.v.clone()
-        return self.spike
 
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -234,6 +222,7 @@ class IFNode(BaseNode):
             V[t] = V[t-1] + X[t]
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
@@ -241,12 +230,59 @@ class IFNode(BaseNode):
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+        """
+        * :ref:`API in English <MultiStepIFNode.__init__-en>`
+
+        .. _IFNode.__init__-cn:
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
+
+        :param backend: 使用哪种计算后端，可以为 'torch' 或 'cupy'。'cupy' 速度更快，但仅支持GPU。
+        :type backend: str
+
+        多步版本的 :class:`spikingjelly.clock_driven.neuron.IFNode`。
+
+        * :ref:`中文API <MultiStepIFNode.__init__-cn>`
+
+        .. _IFNode.__init__-en:
+
+        :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float
+
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
+
+        :param backend: use which backend, 'torch' or 'cupy'. 'cupy' is faster but only supports GPU
+        :type backend: str
+
+        The multi-step version of :class:`spikingjelly.clock_driven.neuron.IFNode`.
+        """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
         assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -359,11 +395,64 @@ class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, backend='torch'):
+        """
+        * :ref:`API in English <LIFNode.__init__-en>`
+
+        .. _LIFNode.__init__-cn:
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
+
+        :param backend: 使用哪种计算后端，可以为 'torch' 或 'cupy'。'cupy' 速度更快，但仅支持GPU。
+        :type backend: str
+
+        多步版本的 :class:`spikingjelly.clock_driven.neuron.LIFNode`。
+
+        * :ref:`中文API <LIFNode.__init__-cn>`
+
+        .. _LIFNode.__init__-en:
+
+        :param tau: membrane time constant
+        :type tau: float
+
+        :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float
+
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
+
+        :param backend: use which backend, 'torch' or 'cupy'. 'cupy' is faster but only supports GPU
+        :type backend: str
+
+        The multi-step version of :class:`spikingjelly.clock_driven.neuron.LIFNode`.
+
+        """
         super().__init__(tau, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
         assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
