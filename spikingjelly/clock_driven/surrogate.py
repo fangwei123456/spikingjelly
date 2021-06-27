@@ -92,7 +92,7 @@ class SurrogateFunctionBase(nn.Module):
     def primitive_function(x, alpha):
         raise NotImplementedError
 
-    def cuda_code(self, x: str, y: str, dtype='float'):
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
         raise NotImplementedError
 
     def forward(self, x: torch.Tensor):
@@ -428,14 +428,14 @@ class Sigmoid(SurrogateFunctionBase):
     def primitive_function(x: torch.Tensor, alpha):
         return (x * alpha).sigmoid()
 
-    def cuda_code(self, x: str, y: str, dtype='float'):
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
         alpha = str(self.alpha) + 'f'
-        if dtype == 'float':
+        if dtype == 'fp32':
             code = f'''
             const float sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
             const float {y} = (1.0f - sigmoid_ax) * sigmoid_ax * {alpha};
             '''
-        elif dtype == 'half':
+        elif dtype == 'fp16':
             code = f'''
             const half alpha = __float2half({alpha});
             const half sigmoid_ax = __hdiv(__float2half(1.0f), __hadd(hexp(__hneg(__hmul(alpha, {x}))), __float2half(1.0f)));
@@ -629,14 +629,14 @@ class ATan(SurrogateFunctionBase):
     def primitive_function(x: torch.Tensor, alpha):
         return (math.pi / 2 * alpha * x).atan_() / math.pi + 0.5
 
-    def cuda_code(self, x: str, y: str, dtype='float'):
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
         alpha = str(self.alpha) + 'f'
-        if dtype == 'float':
+        if dtype == 'fp32':
             code = f'''
             const float M_PI_2__alpha__x = (float) M_PI_2 * alpha * {x};
             const float {y} = alpha / 2.0f / (1.0f + M_PI_2__alpha__x * M_PI_2__alpha__x);
             '''
-        elif dtype == 'half':
+        elif dtype == 'fp16':
             code = f'''
             const half alpha =  __float2half({alpha});
             #if __CUDACC_VER_MAJOR__ >= 11
