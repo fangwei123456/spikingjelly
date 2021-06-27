@@ -170,7 +170,7 @@ class BaseNode(base.MemoryModule):
 
 class BaseMultiStepNodeExample(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
         super(BaseMultiStepNodeExample, self).__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
@@ -269,7 +269,8 @@ class MultiStepIFNode(IFNode):
                     torch.fill_(self.v, v_init)
 
 
-            self.spike_seq, self.v_seq = neuron_kernel.MultiStepIFNodePTT.apply(x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+            self.spike_seq, self.v_seq = neuron_kernel.MultiStepIFNodePTT.apply(
+                x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
 
             self.spike = self.spike_seq[-1].clone()
@@ -437,4 +438,5 @@ class ParametricLIFNode(BaseNode):
                 self.v += (x - self.v) * self.w.sigmoid()
             else:
                 self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
+
 

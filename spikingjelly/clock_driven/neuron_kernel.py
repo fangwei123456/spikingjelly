@@ -1,8 +1,8 @@
 try:
     import cupy
     import torch
-    from . import cu_kernel_opt
-    from . import surrogate
+    from . import cu_kernel_opt, surrogate
+
 
 
 
@@ -30,36 +30,30 @@ try:
                     {
                         const int t = index + mem_offset;
                         h_seq[t] = v_v_seq[t] + x_seq[t];
+                        if (h_seq[t] >= v_threshold)
                 '''
 
                 if hard_reset:
                     code += r'''
-                        if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
                             v_v_seq[t + dt] = v_reset;
                         }
-                        else
-                        {
-                            spike_seq[t] = 0.0f;
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
                     '''
                 else:
                     code += r'''
-                        if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
                             v_v_seq[t + dt] = h_seq[t] - v_threshold;
                         }
+                    '''
+
+                code += r'''
                         else
                         {
                             spike_seq[t] = 0.0f;
                             v_v_seq[t + dt] = h_seq[t];
                         }
-                    '''
-
-                code += r'''
                     }
                 }
                 }
@@ -67,6 +61,7 @@ try:
 
             elif dtype == 'fp16':
                 code = rf'''
+                #include <cuda_fp16.h>
                 extern "C" __global__
                 void {kernel_name}(const half* x_seq, half* v_v_seq, half* h_seq, half* spike_seq, 
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
@@ -83,35 +78,31 @@ try:
                     {
                         const int t = index + mem_offset;
                         h_seq[t] = __hadd(v_v_seq[t], x_seq[t]);
+                        if (__hgeu(h_seq[t], v_threshold))
                 '''
+
                 if hard_reset:
                     code += r'''
-                        if (__hgeu(h_seq[t], v_threshold))
                         {
                             spike_seq[t] = __float2half(1.0f);
                             v_v_seq[t + dt] = v_reset;
                         }
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
                     '''
                 else:
                     code += r'''
-                        if (__hgeu(h_seq[t], v_threshold))
                         {
                             spike_seq[t] = __float2half(1.0f);
                             v_v_seq[t + dt] = __hsub(h_seq[t], v_threshold);
                         }
+
+                    '''
+
+                code += r'''
                         else
                         {
                             spike_seq[t] = __float2half(0.0f);
                             v_v_seq[t + dt] = h_seq[t];
                         }
-                    '''
-
-                code += r'''
                     }
                 }
                 }
@@ -134,7 +125,7 @@ try:
                 void {kernel_name}(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
                 float* grad_x_seq, float* grad_v_last,
-                const float & v_threshold, const float & v_reset,
+                const float & v_threshold, {'const float & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel)
                 '''
 
@@ -181,14 +172,16 @@ try:
 
             elif dtype == 'fp16':
                 code = fr'''
+                #include <cuda_fp16.h>
                 extern "C" __global__
                 void {kernel_name}(
                 const half* grad_spike_seq, const half* grad_v_seq, const half* h_seq, const half* spike_seq,
                 half* grad_x_seq, half* grad_v_last,
-                const half & v_threshold, const half & v_reset,
+                const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel)
                 '''
                 code += r'''
+                {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
                 if (index < neuron_num)
                 {   
@@ -231,9 +224,7 @@ try:
 
             else:
                 raise TypeError
-
             return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
-
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
@@ -265,9 +256,11 @@ try:
                 if v_reset is None:
                     cp_v_reset = None
                     hard_reset = False
+                    args_list = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel]
                 else:
                     cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                     hard_reset = True
+                    args_list = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel]
 
                 kernel = MultiStepIFNodePTT.create_kernel_IFNode_fptt(hard_reset, dtype)
 
@@ -276,7 +269,7 @@ try:
                     (blocks,), (threads,),
                     cu_kernel_opt.wrap_args_to_raw_kernel(
                         device,
-                        [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel]
+                        args_list
                     )
                 )
 
@@ -319,35 +312,61 @@ try:
             with cupy.cuda.Device(device):
 
                 if hard_reset:
-                    kernel(
-                        (ctx.blocks,), (ctx.threads,),
-                        cu_kernel_opt.wrap_args_to_raw_kernel(
-                            device,
-                            [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
-                        )
-                    )
+                    args_list = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
                 else:
-                    pass
+                    args_list = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
+
+                kernel(
+                    (ctx.blocks,), (ctx.threads,),
+                    cu_kernel_opt.wrap_args_to_raw_kernel(
+                        device,
+                        args_list
+                    )
+                )
 
             return grad_x_seq, grad_v_last, None, None, None, None
 
+    def check_multi_step_neuron_output_and_grad(multi_step_neuron, device):
+        @torch.no_grad()
+        def max_error(x, y):
+            return (x - y).abs().max().item()
+
+        def fbptt(m, x: torch.Tensor):
+            x = x.detach()
+            x.requires_grad_(True)
+            m(x)
+            (m.spike_seq * m.v_seq**2).sum().backward()
+            ret = (m.spike_seq.detach().clone(), m.v_seq.detach().clone(), x.grad.clone())
+            x.grad.zero_()
+            m.reset()
+            return ret
+
+        shape = [64, 4]
+        for hard_reset in [True, False]:
+            for detach_reset in [True, False]:
+                for dtype in ['fp32', 'fp16']:
+                    if dtype == 'fp32':
+                        x = torch.rand(shape, device=device)
+                    elif dtype == 'fp16':
+                        x = torch.rand(shape, device=device).half()
+                    print(f'hard_reset={hard_reset}, detach_reset={detach_reset}, dtype={dtype}')
+                    model = multi_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset)
+                    model.to(device)
+                    model.backend = 'torch'
+                    y_torch = fbptt(model, x)
+
+                    model.backend = 'cupy'
+                    y_cupy = fbptt(model, x)
+
+                    for i in range(3):
+                        print(max_error(y_torch[i], y_cupy[i]))
 
 
 
-
-
-
-
-
-
-
-
-
-
-        
 
 
 except ImportError:
     pass
+
 
 
