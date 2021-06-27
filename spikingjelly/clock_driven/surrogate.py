@@ -364,7 +364,7 @@ class sigmoid(torch.autograd.Function):
         grad_x = None
         if ctx.needs_input_grad[0]:
             sgax = (ctx.saved_tensors[0] * ctx.alpha).sigmoid_()
-            grad_x = grad_output * (1 - sgax) * sgax * ctx.alpha
+            grad_x = grad_output * (1. - sgax) * sgax * ctx.alpha
 
         return grad_x, None
 

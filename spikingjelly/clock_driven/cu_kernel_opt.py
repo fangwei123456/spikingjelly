@@ -5,19 +5,27 @@ try:
 
     threads = 1024
 
-    def cal_blocks(numel):
+    def cal_blocks(numel: int):
         return (numel + threads - 1) // threads
 
-    def check_contiguous(*args):
-        for item in args:
-            item = item.contiguous()
-
-    def check_device(device: int, *args):
-        for item in args:
+    def wrap_args_to_raw_kernel(device: int, args_list: list):
+        # check device and contiguous
+        ret_list = []
+        for item in args_list:
             if isinstance(item, torch.Tensor):
                 assert item.get_device() == device
+                item = item.contiguous()
+                ret_list.append(item.data_ptr())
             elif isinstance(item, cupy.ndarray):
                 assert item.device.id == device
+                item = cupy.ascontiguousarray(item)
+                ret_list.append(item)
+            else:
+                raise TypeError
+        return tuple(ret_list)
+
+
+
 
 
 

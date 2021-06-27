@@ -168,9 +168,25 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset()
         return self.spike
 
+class BaseMultiStepNodeExample(BaseNode):
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        super(BaseMultiStepNodeExample, self).__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
+
+    def forward(self, x_seq: torch.Tensor):
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+        for t in range(x_seq.shape[0]):
+            self.spike_seq[t] = super().forward(x_seq[t]).clone()
+            self.v_seq[t] = self.v.clone()
+        return self.spike
+
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <IFNode.__init__-en>`
 
@@ -218,30 +234,50 @@ class IFNode(BaseNode):
             V[t] = V[t-1] + X[t]
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
-        if backend == 'cupy':
-            assert neuron_kernel is not None, 'cupy is not installed.'
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + x
+
+
+class MultiStepIFNode(IFNode):
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+
+        self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
         self.backend = backend
 
-    def neuronal_charge(self, x: torch.Tensor):
-        self.v += x
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
 
-    def forward(self, x: torch.Tensor):
         if self.backend == 'torch':
-            return super().forward(x)
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t]).clone()
+                self.v_seq[t] = self.v.clone()
+            return self.spike
 
         elif self.backend == 'cupy':
-            device = x.get_device()
-            with cupy.cuda.Device(device):
-
-                if isinstance(self.v, float):
-                    v_init = self.v
-                    self.v = torch.zeros_like(x.data)
+            if isinstance(self.v, float):
+                v_init = self.v
+                self.v = torch.zeros_like(x_seq[0].data)
+                if v_init != 0.:
                     torch.fill_(self.v, v_init)
 
 
-                self.spike, self.v = neuron_kernel.IFNodeATGF.apply(x, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+            self.spike_seq, self.v_seq = neuron_kernel.MultiStepIFNodePTT.apply(x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+
+
+            self.spike = self.spike_seq[-1].clone()
+            self.v = self.v_seq[-1].clone()
 
             return self.spike
+        else:
+            raise NotImplementedError
 
 
 
@@ -401,3 +437,4 @@ class ParametricLIFNode(BaseNode):
                 self.v += (x - self.v) * self.w.sigmoid()
             else:
                 self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
+
