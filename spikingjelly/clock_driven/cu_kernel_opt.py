@@ -22,6 +22,7 @@ try:
                 ret_list.append(item)
             else:
                 raise TypeError
+
         return tuple(ret_list)
 
 

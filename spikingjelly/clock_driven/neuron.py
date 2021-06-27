@@ -280,11 +280,8 @@ class MultiStepIFNode(IFNode):
         else:
             raise NotImplementedError
 
-
-
-
 class LIFNode(BaseNode):
-    def __init__(self, tau: float = 100., v_threshold: float = 1.,
+    def __init__(self, tau: float = 2., v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
@@ -357,6 +354,48 @@ class LIFNode(BaseNode):
                 self.v += (x - self.v) / self.tau
             else:
                 self.v += (x - (self.v - self.v_reset)) / self.tau
+
+class MultiStepLIFNode(LIFNode):
+    def __init__(self, tau: float = 2., v_threshold: float = 1.,
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 detach_reset: bool = False, backend='torch'):
+        super().__init__(tau, v_threshold, v_reset, surrogate_function, detach_reset)
+        self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        self.backend = backend
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+
+        if self.backend == 'torch':
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t]).clone()
+                self.v_seq[t] = self.v.clone()
+            return self.spike
+
+        elif self.backend == 'cupy':
+            if isinstance(self.v, float):
+                v_init = self.v
+                self.v = torch.zeros_like(x_seq[0].data)
+                if v_init != 0.:
+                    torch.fill_(self.v, v_init)
+
+
+            self.spike_seq, self.v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
+                x_seq, self.v, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+
+
+            self.spike = self.spike_seq[-1].clone()
+            self.v = self.v_seq[-1].clone()
+
+            return self.spike
+        else:
+            raise NotImplementedError
 
 
 class ParametricLIFNode(BaseNode):
