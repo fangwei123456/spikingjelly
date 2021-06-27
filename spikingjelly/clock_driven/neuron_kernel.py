@@ -20,6 +20,8 @@ try:
             const int t = index + mem_offset;
             h_seq[t] = v_v_seq[t] + x_seq[t];
             // todo: use mul to replace if and check speed
+            // spike_seq[t] = float (h_seq[t] >= v_threshold);
+            // v_v_seq[t + dt] = v_reset * spike_seq[t] + (1.0f - spike_seq[t]) * h_seq[t];
             if (h_seq[t] >= v_threshold)
             {
                 spike_seq[t] = 1.0f;
