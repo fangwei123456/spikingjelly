@@ -96,14 +96,11 @@ class SurrogateFunctionBase(nn.Module):
         raise NotImplementedError
 
     def forward(self, x: torch.Tensor):
-        if self.training:
-            if self.spiking:
-                return self.spiking_function(x, self.alpha)
-            else:
-                return self.primitive_function(x, self.alpha)
+        if self.spiking:
+            return self.spiking_function(x, self.alpha)
         else:
-            # 无论是否为spiking模式，只要是测试（推理）阶段，都直接使用阶跃函数
-            return heaviside(x)
+            return self.primitive_function(x, self.alpha)
+
 
 class MultiArgsSurrogateFunctionBase(nn.Module):
     def __init__(self, spiking=True, **kwargs):

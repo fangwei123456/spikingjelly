@@ -24,7 +24,7 @@
 
 .. code-block:: python
 
-    lif = neuron.LIFNode()
+    lif = neuron.LIFNode(tau=100.)
 
 LIF神经元层有一些构造参数，在API文档中对这些参数有详细的解释：
 
@@ -61,7 +61,6 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
     lif(x)
     print('x.shape', x.shape, 'lif.v.shape', lif.v.shape)
     # x.shape torch.Size([4, 5, 6]) lif.v.shape torch.Size([4, 5, 6])
-    lif.reset()
 
 那么 :math:`V[t]` 和输入 :math:`X[t]` 的关系是什么样的？在脉冲神经元中，不仅取决于当前时刻的输入 :math:`X[t]`，还取决于它在上一个时刻末的膜电位 :math:`V[t-1]`。
 
@@ -103,9 +102,9 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 释放脉冲消耗了神经元之前积累的电荷，因此膜电位会有一个瞬间的降低，即膜电位的重置。在SNN中，对膜电位重置的实现，有2种方式：
 
-#. Hard方式：释放脉冲后，膜电位直接被设置成重置电压：:math:`V = V_{reset}`
+#. Hard方式：释放脉冲后，膜电位直接被设置成重置电压：:math:`V[t] = V_{reset}`
 
-#. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V = V - V_{threshold}`
+#. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
 可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。``spikingjelly.clock_driven.neuron`` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 ``BaseNode`` 的 ``neuronal_reset()`` 中找到膜电位重置的代码（注：实际的代码并非如下所示，但原理相同）：
 
@@ -153,23 +152,23 @@ Soft方式重置方程为：
 
 ``spikingjelly.clock_driven`` 使用时间驱动的方式，对SNN逐步进行仿真。
 
-接下来，我们将逐步给与神经元输入，并查看它的膜电位和输出脉冲。为了记录数据，只需要将神经元层的监视器 ``monitor`` 打开：
-
-.. code-block:: python
-
-    lif.set_monitor(True)
-
-在打开监视器后，神经元层在运行时，会在字典 ``self.monitor`` 中自动记录运行过程中的充电后的膜电位 ``self.monitor['h']`` ，释放的脉冲 ``self.monitor['s']``，和放电后的膜电位 ``self.monitor['v']``。
+接下来，我们将逐步给与神经元输入，并查看它的膜电位和输出脉冲。
 
 现在让我们给与LIF神经元层持续的输入，并画出其放电后的膜电位和输出脉冲：
 
 .. code-block:: python
 
-    x = torch.Tensor([2.0])
+    lif.reset()
+    x = torch.as_tensor([2.])
     T = 150
+    s_list = []
+    v_list = []
     for t in range(T):
-        lif(x)
-    visualizing.plot_one_neuron_v_s(lif.monitor['v'], lif.monitor['s'], v_threshold=lif.v_threshold, v_reset=lif.v_reset, dpi=200)
+        s_list.append(lif(x))
+        v_list.append(lif.v)
+
+    visualizing.plot_one_neuron_v_s(np.asarray(v_list), np.asarray(s_list), v_threshold=lif.v_threshold, v_reset=lif.v_reset,
+                                    dpi=200)
     plt.show()
 
 我们给与的输入 ``shape=[1]``，因此这个LIF神经元层只有1个神经元。它的膜电位和输出脉冲随着时间变化情况如下：
@@ -184,13 +183,19 @@ Soft方式重置方程为：
     lif.reset()
     x = torch.rand(size=[32]) * 4
     T = 50
+    s_list = []
+    v_list = []
     for t in range(T):
-        lif(x)
+        s_list.append(lif(x).unsqueeze(0))
+        v_list.append(lif.v.unsqueeze(0))
 
-    visualizing.plot_2d_heatmap(array=np.asarray(lif.monitor['v']).T, title='Membrane Potentials', xlabel='Simulating Step',
-                                        ylabel='Neuron Index', int_x_ticks=True, x_max=T, dpi=200)
-    visualizing.plot_1d_spikes(spikes=np.asarray(lif.monitor['s']).T, title='Membrane Potentials', xlabel='Simulating Step',
-                                        ylabel='Neuron Index', dpi=200)
+    s_list = torch.cat(s_list)
+    v_list = torch.cat(v_list)
+
+    visualizing.plot_2d_heatmap(array=np.asarray(v_list), title='Membrane Potentials', xlabel='Simulating Step',
+                                ylabel='Neuron Index', int_x_ticks=True, x_max=T, dpi=200)
+    visualizing.plot_1d_spikes(spikes=np.asarray(s_list), title='Membrane Potentials', xlabel='Simulating Step',
+                               ylabel='Neuron Index', dpi=200)
     plt.show()
 
 结果如下：
