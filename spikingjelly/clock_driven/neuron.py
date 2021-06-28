@@ -248,7 +248,7 @@ class MultiStepIFNode(IFNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-        :param backend: 使用哪种计算后端，可以为 'torch' 或 'cupy'。'cupy' 速度更快，但仅支持GPU。
+        :param backend: 使用哪种计算后端，可以为 ``'torch'`` 或 ``'cupy'``。``'cupy'`` 速度更快，但仅支持GPU。
         :type backend: str
 
         多步版本的 :class:`spikingjelly.clock_driven.neuron.IFNode`。
@@ -279,7 +279,7 @@ class MultiStepIFNode(IFNode):
         :param detach_reset: whether detach the computation graph of reset
         :type detach_reset: bool
 
-        :param backend: use which backend, 'torch' or 'cupy'. 'cupy' is faster but only supports GPU
+        :param backend: use which backend, ``'torch'`` or ``'cupy'``. ``'cupy'`` is faster but only supports GPU
         :type backend: str
 
         The multi-step version of :class:`spikingjelly.clock_driven.neuron.IFNode`.
@@ -439,7 +439,7 @@ class MultiStepLIFNode(LIFNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-        :param backend: 使用哪种计算后端，可以为 'torch' 或 'cupy'。'cupy' 速度更快，但仅支持GPU。
+        :param backend: 使用哪种计算后端，可以为 ``'torch'`` 或 ``'cupy'``。``'cupy'`` 速度更快，但仅支持GPU。
         :type backend: str
 
         多步版本的 :class:`spikingjelly.clock_driven.neuron.LIFNode`。
@@ -473,7 +473,7 @@ class MultiStepLIFNode(LIFNode):
         :param detach_reset: whether detach the computation graph of reset
         :type detach_reset: bool
 
-        :param backend: use which backend, 'torch' or 'cupy'. 'cupy' is faster but only supports GPU
+        :param backend: use which backend, ``'torch'`` or ``'cupy'``. ``'cupy'`` is faster but only supports GPU
         :type backend: str
 
         The multi-step version of :class:`spikingjelly.clock_driven.neuron.LIFNode`.
