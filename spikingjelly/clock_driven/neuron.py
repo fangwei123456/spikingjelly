@@ -253,6 +253,15 @@ class MultiStepIFNode(IFNode):
 
         多步版本的 :class:`spikingjelly.clock_driven.neuron.IFNode`。
 
+        .. tip::
+
+            对于多步神经元，输入 ``x_seq.shape = [T, *]``，不仅可以使用 ``.v`` 和 ``.spike`` 获取 ``t = T - 1`` 时刻的电压和脉冲，还能够
+            使用 ``.v_seq`` 和 ``.spike_seq`` 获取完整的 ``T`` 个时刻的电压和脉冲。
+
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
         * :ref:`中文API <MultiStepIFNode.__init__-cn>`
 
         .. _MultiStepIFNode.__init__-en:
@@ -274,6 +283,20 @@ class MultiStepIFNode(IFNode):
         :type backend: str
 
         The multi-step version of :class:`spikingjelly.clock_driven.neuron.IFNode`.
+
+        .. admonition:: Tip
+            :class: tip
+
+            The input for multi-step neurons are ``x_seq.shape = [T, *]``. We can get membrane potential and spike at
+            time-step ``t = T - 1`` by ``.v`` and ``.spike``. We can also get membrane potential and spike at all ``T``
+            time-steps by ``.v_seq`` and ``.spike_seq``.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
+
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
@@ -345,7 +368,7 @@ class LIFNode(BaseNode):
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
         .. math::
-            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -371,7 +394,7 @@ class LIFNode(BaseNode):
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
         """
         assert isinstance(tau, float) and tau > 1.
 
@@ -421,6 +444,15 @@ class MultiStepLIFNode(LIFNode):
 
         多步版本的 :class:`spikingjelly.clock_driven.neuron.LIFNode`。
 
+        .. tip::
+
+            对于多步神经元，输入 ``x_seq.shape = [T, *]``，不仅可以使用 ``.v`` 和 ``.spike`` 获取 ``t = T - 1`` 时刻的电压和脉冲，还能够
+            使用 ``.v_seq`` 和 ``.spike_seq`` 获取完整的 ``T`` 个时刻的电压和脉冲。
+
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
         * :ref:`中文API <MultiStepLIFNode.__init__-cn>`
 
         .. _MultiStepLIFNode.__init__-en:
@@ -445,6 +477,19 @@ class MultiStepLIFNode(LIFNode):
         :type backend: str
 
         The multi-step version of :class:`spikingjelly.clock_driven.neuron.LIFNode`.
+
+        .. admonition:: Tip
+            :class: tip
+
+            The input for multi-step neurons are ``x_seq.shape = [T, *]``. We can get membrane potential and spike at
+            time-step ``t = T - 1`` by ``.v`` and ``.spike``. We can also get membrane potential and spike at all ``T``
+            time-steps by ``.v_seq`` and ``.spike_seq``.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
 
         """
         super().__init__(tau, v_threshold, v_reset, surrogate_function, detach_reset)
@@ -492,9 +537,9 @@ class ParametricLIFNode(BaseNode):
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
-        * :ref:`API in English <LIFNode.__init__-en>`
+        * :ref:`API in English <ParametricLIFNode.__init__-en>`
 
-        .. _LIFNode.__init__-cn:
+        .. _ParametricLIFNode.__init__-cn:
 
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
@@ -512,17 +557,17 @@ class ParametricLIFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-        `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`
- 提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
+        `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_
+        提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
         .. math::
-            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
 
-        其中 :math:`\frac{1}{\tau} = {\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
+        其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
 
-        * :ref:`中文API <LIFNode.__init__-cn>`
+        * :ref:`中文API <ParametricLIFNode.__init__-cn>`
 
-        .. _LIFNode.__init__-en:
+        .. _ParametricLIFNode.__init__-en:
 
         :param init_tau: the initial value of membrane time constant
         :param init_tau: float
@@ -540,14 +585,15 @@ class ParametricLIFNode(BaseNode):
         :param detach_reset: whether detach the computation graph of reset
         :type detach_reset: bool
 
-        The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>` and can be seen as a leaky integrator.
+        The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ and can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            V[t] = V[t-1] + \frac{1}{\tau}(X[t] - (V[t-1] - V_{reset})
+            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
 
-        where :math:`\frac{1}{\tau} = {\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
+        where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
+
         assert isinstance(init_tau, float) and init_tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         init_w = - math.log(init_tau - 1.)

@@ -299,6 +299,10 @@ class MultiStepDropout(Dropout):
 
         :class:`spikingjelly.clock_driven.layer.Dropout` 的多步版本。
 
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
         * :ref:`中文API <MultiStepDropout.__init__-cn>`
 
         .. _MultiStepDropout.__init__-en:
@@ -307,6 +311,12 @@ class MultiStepDropout(Dropout):
         :type p: float
 
         The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout`.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
         """
         super().__init__(p)
 
@@ -332,6 +342,10 @@ class MultiStepDropout2d(Dropout2d):
 
         :class:`spikingjelly.clock_driven.layer.Dropout2d` 的多步版本。
 
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
         * :ref:`中文API <MultiStepDropout2d.__init__-cn>`
 
         .. _MultiStepDropout2d.__init__-en:
@@ -340,6 +354,12 @@ class MultiStepDropout2d(Dropout2d):
         :type p: float
 
         The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout2d`.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
         """
         super().__init__(p)
 
@@ -753,6 +773,39 @@ class DropConnectLinear(base.MemoryModule):
 
 class MultiStepContainer(nn.Module):
     def __init__(self, *args):
+        """
+        * :ref:`API in English <MultiStepContainer.reset-en>`
+
+        .. _MultiStepContainer.reset-cn:
+
+        :param args: 单个或多个网络模块
+        :type args: torch.nn.Module
+
+        将单步模块包装成多步模块的包装器。
+
+
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
+        * :ref:`中文API <MultiStepContainer.reset-cn>`
+
+        .. _MultiStepContainer.reset-en:
+
+        :param args: one or many modules
+        :type args: torch.nn.Module
+
+        A container that wraps single-step modules to a multi-step modules.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
+
+
+
+        """
         super().__init__()
         if len(args) == 1:
             self.module = args[0]
