@@ -233,7 +233,7 @@ class MultiStepIFNode(IFNode):
         """
         * :ref:`API in English <MultiStepIFNode.__init__-en>`
 
-        .. _IFNode.__init__-cn:
+        .. _MultiStepIFNode.__init__-cn:
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -255,7 +255,7 @@ class MultiStepIFNode(IFNode):
 
         * :ref:`中文API <MultiStepIFNode.__init__-cn>`
 
-        .. _IFNode.__init__-en:
+        .. _MultiStepIFNode.__init__-en:
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -396,9 +396,9 @@ class MultiStepLIFNode(LIFNode):
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, backend='torch'):
         """
-        * :ref:`API in English <LIFNode.__init__-en>`
+        * :ref:`API in English <MultiStepLIFNode.__init__-en>`
 
-        .. _LIFNode.__init__-cn:
+        .. _MultiStepLIFNode.__init__-cn:
 
         :param tau: 膜电位时间常数
         :type tau: float
@@ -421,9 +421,9 @@ class MultiStepLIFNode(LIFNode):
 
         多步版本的 :class:`spikingjelly.clock_driven.neuron.LIFNode`。
 
-        * :ref:`中文API <LIFNode.__init__-cn>`
+        * :ref:`中文API <MultiStepLIFNode.__init__-cn>`
 
-        .. _LIFNode.__init__-en:
+        .. _MultiStepLIFNode.__init__-en:
 
         :param tau: membrane time constant
         :type tau: float
