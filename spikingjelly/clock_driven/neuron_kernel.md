@@ -52,17 +52,11 @@ $$
 \end{align}
 $$
 
-S, V with arbitrary shape will be regraded shape=[numel/neuron_num, neuron_num]
+## CUDA Kernel
 
-0<= index < neuron_num
+The cuda kernel of spiking neuron will regard any input tensor with arbitrary shape as ``shape=[numel/neuron_num, neuron_num]``.
 
-mem_offset = 0, neuron_num, 2 * neuron_num, …, numel - neuron_num
-
-
-
-t = index + mem_offset
-
-
+It will calculate ``index`` where ``0<= index < neuron_num``, and do a for loop with ``mem_offset = 0, neuron_num, 2 * neuron_num, …, numel - neuron_num``. We can find that the time-step ``t`` is ``t = index + mem_offset``. The following figure shows the cuda memory layout:
 
 |                      | 0          | 1    |       ...        | neuron_num-1 |
 | -------------------- | ---------- | ---- | :--------------: | ------------ |
