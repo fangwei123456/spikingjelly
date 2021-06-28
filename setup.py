@@ -9,40 +9,9 @@ import torch
 
 from setuptools import find_packages
 from setuptools import setup
-from torch.utils.cpp_extension import CUDA_HOME, CppExtension, CUDAExtension, BuildExtension
 import sys
 
 requirements = ["torch"]
-
-
-def get_extensions():
-    if CUDA_HOME is None:
-        print('CUDA_HOME is None. Install Without CUDA Extension')
-        return None
-    else:
-        print('Install With CUDA Extension')
-    this_dir = os.path.dirname(os.path.abspath(__file__))
-    extensions_dir = os.path.join(this_dir, 'spikingjelly', 'cext', 'csrc')
-
-    if sys.platform == 'win32' or int(torch.version.cuda.split('.')[0]) < 11:
-        # windows and cuda<11 does not support cuSparse
-        ext_list = ['neuron']
-    else:
-        ext_list = ['gemm', 'neuron']
-    
-    extra_compile_args = {'cxx': ['-g'], 'nvcc': ['-use_fast_math']}
-    
-    extension = CUDAExtension
-    define_macros = [("WITH_CUDA", None)]
-    ext_modules = list([
-        extension(
-            '_C_' + ext_name,
-            glob.glob(os.path.join(extensions_dir, ext_name, '*.cpp')) + glob.glob(os.path.join(extensions_dir, ext_name, '*.cu')),
-            define_macros=define_macros,
-            extra_compile_args=extra_compile_args
-        ) for ext_name in ext_list])
-    
-    return ext_modules
 
 with open("./requirements.txt", "r", encoding="utf-8") as fh:
     install_requires = fh.read()
@@ -71,9 +40,5 @@ setup(
         "License :: Other/Proprietary License",
         "Operating System :: OS Independent",
     ],
-    python_requires='>=3.6',
-    ext_modules=get_extensions(),
-    cmdclass={
-        "build_ext": BuildExtension
-    }
+    python_requires='>=3.6'
 )
