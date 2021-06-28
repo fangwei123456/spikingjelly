@@ -2,12 +2,12 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingjelly.clock_driven.neuron``，介绍脉冲神经元，和时间驱动的仿真方法。
+本节教程主要关注 :class:`spikingjelly.clock_driven.neuron`，介绍脉冲神经元，和时间驱动的仿真方法。
 
 脉冲神经元模型
 ----------------
 在 ``spikingjelly`` 中，我们约定，只能输出脉冲，即0或1的神经元，都可以称之为“脉冲神经元”。使用脉冲神经元的网络，进而也可以称之为脉冲神经元网络(Spiking Neural Networks, SNNs)。
-``spikingjelly.clock_driven.neuron`` 中定义了各种常见的脉冲神经元模型，我们以 ``spikingjelly.clock_driven.neuron.LIFNode`` 为例来介绍脉冲神经元。
+:class:`spikingjelly.clock_driven.neuron` 中定义了各种常见的脉冲神经元模型，我们以 :class:`spikingjelly.clock_driven.neuron.LIFNode` 为例来介绍脉冲神经元。
 
 首先导入相关的模块：
 
@@ -38,16 +38,17 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 其中 ``surrogate_function`` 参数，在前向传播时的行为与阶跃函数完全相同；我们暂时不会用到反向传播，因此可以先不关心反向传播。
 
-你可能会好奇这一层神经元的数量是多少。对于 ``spikingjelly.clock_driven.neuron`` 中的绝大多数神经元层，神经元的数量是在初始化或调用 ``reset()`` 函数重新初始化后，根据第一次接收的输入的 ``shape`` 自动决定的。
+你可能会好奇这一层神经元的数量是多少。对于 :class:`spikingjelly.clock_driven.neuron.LIFNode` 中的绝大多数神经元层，神经元的数量是在初始化或调用 ``reset()`` 函数重新初始化后，根据第一次接收的输入的 ``shape`` 自动决定的。
 
-与RNN中的神经元非常类似，脉冲神经元也是有状态的，或者说是有记忆。脉冲神经元的状态变量，一般是它的膜电位 :math:`V[t]`。因此，``spikingjelly.clock_driven.neuron`` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的LIF神经元层的膜电位：
+与RNN中的神经元非常类似，脉冲神经元也是有状态的，或者说是有记忆。脉冲神经元的状态变量，一般是它的膜电位 :math:`V[t]`。因此，:class:`spikingjelly.clock_driven.neuron` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的LIF神经元层的膜电位：
 
 .. code-block:: python
 
     print(lif.v)
     # 0.0
 
-可以发现，现在的 ``v`` 是 ``0.0``，因为我们还没有给与它任何输入。我们给与几个不同的输入，观察神经元的电压的 ``shape``，它与神经元的数量是一致的：
+可以发现，现在的 ``lif.v`` 是 ``0.0``，因为我们还没有给与它任何输入。我们给与几个不同的输入，观察神经元的电压的 ``shape``，可以发现它与输入的
+数量是一致的：
 
 .. code-block:: python
 
@@ -62,16 +63,16 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
     print('x.shape', x.shape, 'lif.v.shape', lif.v.shape)
     # x.shape torch.Size([4, 5, 6]) lif.v.shape torch.Size([4, 5, 6])
 
-那么 :math:`V[t]` 和输入 :math:`X[t]` 的关系是什么样的？在脉冲神经元中，不仅取决于当前时刻的输入 :math:`X[t]`，还取决于它在上一个时刻末的膜电位 :math:`V[t-1]`。
+:math:`V[t]` 和输入 :math:`X[t]` 的关系是什么样的？在脉冲神经元中，不仅取决于当前时刻的输入 :math:`X[t]`，还取决于它在上一个时刻末的膜电位 :math:`V[t-1]`。
 
-通常使用阈下（指的是膜电位不超过阈值电压 ``V_{threshold}`` 时）充电微分方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于LIF神经元，充电方程为：
+通常使用阈下（指的是膜电位不超过阈值电压 ``V_{threshold}`` 时）神经动态方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于LIF神经元，充电方程为：
 
 .. math::
     \tau_{m} \frac{\mathrm{d}V(t)}{\mathrm{d}t} = -(V(t) - V_{reset}) + X(t)
 
 其中 :math:`\tau_{m}` 是膜电位时间常数，:math:`V_{reset}` 是重置电压。对于这样的微分方程，由于 :math:`X(t)` 并不是常量，因此难以求出显示的解析解。
 
-``spikingjelly.clock_driven.neuron`` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，LIF神经元的充电方程为：
+:class:`spikingjelly.clock_driven.neuron` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，LIF神经元的充电方程为：
 
 .. math::
     \tau_{m} (V[t] - V[t-1]) = -(V[t-1]- V_{reset}) + X[t]
@@ -81,17 +82,21 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 .. math::
     V[t] = f(V[t-1], X[t]) = V[t-1] + \frac{1}{\tau_{m}}(-(V[t - 1] - V_{reset}) + X[t])
 
-可以在 ``LIFNode`` 的 ``neuronal_charge()`` 中找到如下所示的代码（注：实际的代码并非如下所示，但原理相同）：
+可以在 :class:`spikingjelly.clock_driven.neuron.LIFNode.neuronal_charge` 中找到如下所示的代码：
 
 .. code-block:: python
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.v_reset is None:
             self.v += (x - self.v) / self.tau
-        else:
-            self.v += (x - (self.v - self.v_reset)) / self.tau
 
-不同的神经元，充电方程不尽相同。但膜电位超过阈值电压后，释放脉冲，以及释放脉冲后，膜电位的重置都是相同的。因此它们全部继承自 ``BaseNode``，共享相同的放电、重置方程。可以在 ``BaseNode`` 的 ``neuronal_fire()`` 中找到释放脉冲的代码：
+        else:
+            if isinstance(self.v_reset, float) and self.v_reset == 0.:
+                self.v += (x - self.v) / self.tau
+            else:
+                self.v += (x - (self.v - self.v_reset)) / self.tau
+
+不同的神经元，充电方程不尽相同。但膜电位超过阈值电压后，释放脉冲，以及释放脉冲后，膜电位的重置都是相同的。因此它们全部继承自 :class:`spikingjelly.clock_driven.neuron.BaseNode`，共享相同的放电、重置方程。可以在 :class:`spikingjelly.clock_driven.neuron.BaseNode.neuronal_fire` 中找到释放脉冲的代码：
 
 .. code-block:: python
 
@@ -106,11 +111,12 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 #. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。``spikingjelly.clock_driven.neuron`` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 ``BaseNode`` 的 ``neuronal_reset()`` 中找到膜电位重置的代码（注：实际的代码并非如下所示，但原理相同）：
+可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。:class:`spikingjelly.clock_driven.neuron` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.clock_driven.neuron.BaseNode.neuronal_fire.neuronal_reset` 中可以找到膜电位重置的代码：
 
 .. code-block:: python
 
     def neuronal_reset(self):
+        # ...
         if self.v_reset is None:
             self.v = self.v - self.spike * self.v_threshold
         else:
@@ -150,7 +156,7 @@ Soft方式重置方程为：
 时间驱动的仿真方式
 ----------------------
 
-``spikingjelly.clock_driven`` 使用时间驱动的方式，对SNN逐步进行仿真。
+:class:`spikingjelly.clock_driven` 使用时间驱动的方式，对SNN逐步进行仿真。
 
 接下来，我们将逐步给与神经元输入，并查看它的膜电位和输出脉冲。
 
