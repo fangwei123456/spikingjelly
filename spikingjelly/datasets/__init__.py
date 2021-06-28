@@ -602,7 +602,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             download_root = os.path.join(root, 'download')
 
             if os.path.exists(download_root):
-                print(f'The [{download_root}] directory for saving downloaed files already exists, check files...')
+                print(f'The [{download_root}] directory for saving downloaded files already exists, check files...')
                 # check files
                 resource_list = self.resource_url_md5()
                 for i in range(resource_list.__len__()):
