@@ -318,7 +318,7 @@ class MultiStepIFNode(IFNode):
             for t in range(x_seq.shape[0]):
                 self.spike_seq[t] = super().forward(x_seq[t]).clone()
                 self.v_seq[t] = self.v.clone()
-            return self.spike
+            return self.spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -335,7 +335,7 @@ class MultiStepIFNode(IFNode):
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike
+            return self.spike_seq
         else:
             raise NotImplementedError
 
@@ -510,7 +510,7 @@ class MultiStepLIFNode(LIFNode):
             for t in range(x_seq.shape[0]):
                 self.spike_seq[t] = super().forward(x_seq[t]).clone()
                 self.v_seq[t] = self.v.clone()
-            return self.spike
+            return self.spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -527,7 +527,7 @@ class MultiStepLIFNode(LIFNode):
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike
+            return self.spike_seq
         else:
             raise NotImplementedError
 
