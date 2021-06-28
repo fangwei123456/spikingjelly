@@ -93,7 +93,7 @@ class StatefulEncoder(base.MemoryModule):
         self.register_memory('spike', None)
         self.register_memory('t', 0)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor = None):
         """
         * :ref:`API in English <StatefulEncoder.forward-en>`
 
@@ -272,7 +272,13 @@ class LatencyEncoder(StatefulEncoder):
         else:
             t_f = ((self.T - 1.) * (1. - x)).round().long()
 
-        self.spike = F.one_hot(t_f, num_classes=self.max_spike_time).to(x)
+        self.spike = F.one_hot(t_f, num_classes=self.T).to(x)
+        # [*, T] -> [T, *]
+        d_seq = list(range(self.spike.ndim - 1))
+        d_seq.insert(0, self.spike.ndim - 1)
+        self.spike = self.spike.permute(d_seq)
+
+
 
 
 class PoissonEncoder(StatelessEncoder):
