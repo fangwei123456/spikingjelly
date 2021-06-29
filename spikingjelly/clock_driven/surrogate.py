@@ -630,18 +630,18 @@ class ATan(SurrogateFunctionBase):
         alpha = str(self.alpha) + 'f'
         if dtype == 'fp32':
             code = f'''
-            const float M_PI_2__alpha__x = (float) M_PI_2 * alpha * {x};
-            const float {y} = alpha / 2.0f / (1.0f + M_PI_2__alpha__x * M_PI_2__alpha__x);
+            const float M_PI_2__alpha__x = (float) M_PI_2 * {alpha} * {x};
+            const float {y} = {alpha} / 2.0f / (1.0f + M_PI_2__alpha__x * M_PI_2__alpha__x);
             '''
         elif dtype == 'fp16':
             code = f'''
             const half alpha =  __float2half({alpha});
             #if __CUDACC_VER_MAJOR__ >= 11
-            const half M_PI_2__alpha__x = __hmul(__hmul(__double2half(M_PI_2), alpha), {x});
+            const half M_PI_2__alpha__x = __hmul(__hmul(__double2half(M_PI_2), {alpha}), {x});
             #else
-            const half M_PI_2__alpha__x = __hmul(__hmul(__float2half((float) M_PI_2), alpha), {x});
+            const half M_PI_2__alpha__x = __hmul(__hmul(__float2half((float) M_PI_2), {alpha}), {x});
             #endif
-            const half {y} = __hdiv(__hdiv(alpha, __float2half(2.0f)), __hfma(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half(1.0f)));
+            const half {y} = __hdiv(__hdiv({alpha}, __float2half(2.0f)), __hfma(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half(1.0f)));
             '''
         else:
             raise NotImplementedError
