@@ -18,7 +18,7 @@
 所定义的编码器都继承自这2个编码器基类之一。
 
 无状态的编码器没有隐藏状态，输入数据 ``x[t]`` 可直接编码得到输出脉冲 ``spike[t]``；而有状态的编码器 ``encoder = StatefulEncoder(T)``，
-编码器会在首次调用 ``forward`` 时使用 ``encode`` 函数对 ``T``个时刻的输入序列 ``x` 进行编码得到 ``spike``，在第 ``t`` 次调用
+编码器会在首次调用 ``forward`` 时使用 ``encode`` 函数对 ``T`` 个时刻的输入序列 ``x`` 进行编码得到 ``spike``，在第 ``t`` 次调用
 ``forward`` 时会输出 ``spike[t % T]``，可以从其前向传播的代码 :class:`spikingjelly.clock_driven.encoding.StatefulEncoder.forward` 看到这种操作：
 
 .. code-block:: python
