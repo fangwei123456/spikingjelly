@@ -5,19 +5,18 @@
 
 CUDA加速的神经元
 -----------------------
-``spikingjelly.cext.neuron`` 中的神经元与 ``spikingjelly.clock_driven.neuron`` 中的同名神经元，在前向传播和反向传播时的计算结果完全相同。但 ``spikingjelly.cext.neuron`` 将各种运算都封装到了一个CUDA内核；``spikingjelly.clock_driven.neuron`` 则是使用PyTorch来实现神经元，每一个Python函数都需要调用一次相应的CUDA后端，这种频繁的调用存在很大的开销。现在让我们通过一个简单的实验，来对比两个模块中LIF神经元的运行耗时：
+在 :class:`spikingjelly.clock_driven.neuron` 提供了多步版本的神经元。与单步版本相比，多步神经元增加了cupy后端。cupy后端将各种运算都封装到
+了一个CUDA内核，因此速度比默认pytorch后端更快。现在让我们通过一个简单的实验，来对比两个模块中LIF神经元的运行耗时：
 
 .. code-block:: python
 
-    from spikingjelly import cext
-    from spikingjelly.cext import neuron as cext_neuron
-    from spikingjelly.clock_driven import neuron, surrogate, layer
+    from spikingjelly.clock_driven import neuron, surrogate, cu_kernel_opt
     import torch
 
 
     def cal_forward_t(multi_step_neuron, x, repeat_times):
         with torch.no_grad():
-            used_t = cext.cal_fun_t(repeat_times, x.device, multi_step_neuron, x)
+            used_t = cu_kernel_opt.cal_fun_t(repeat_times, x.device, multi_step_neuron, x)
             multi_step_neuron.reset()
             return used_t * 1000
 
@@ -30,34 +29,34 @@ CUDA加速的神经元
 
     def cal_forward_backward_t(multi_step_neuron, x, repeat_times):
         x.requires_grad_(True)
-        used_t = cext.cal_fun_t(repeat_times, x.device, forward_backward, multi_step_neuron, x)
+        used_t = cu_kernel_opt.cal_fun_t(repeat_times, x.device, forward_backward, multi_step_neuron, x)
         return used_t * 1000
 
 
     device = 'cuda:0'
-    lif = layer.MultiStepContainer(neuron.LIFNode(surrogate_function=surrogate.ATan(alpha=2.0)))
-    lif_cuda = layer.MultiStepContainer(cext_neuron.LIFNode(surrogate_function='ATan', alpha=2.0))
-    lif_cuda_tt = cext_neuron.MultiStepLIFNode(surrogate_function='ATan', alpha=2.0)
-    lif.to(device)
-    lif_cuda.to(device)
-    lif_cuda_tt.to(device)
+    repeat_times = 1024
+    ms_lif = neuron.MultiStepLIFNode(surrogate_function=surrogate.ATan(alpha=2.0))
+
+
+    ms_lif.to(device)
     N = 2 ** 20
     print('forward')
-    lif.eval()
-    lif_cuda.eval()
-    lif_cuda_tt.eval()
+    ms_lif.eval()
     for T in [8, 16, 32, 64, 128]:
         x = torch.rand(T, N, device=device)
-        print(T, cal_forward_t(lif, x, 1024), cal_forward_t(lif_cuda, x, 1024), cal_forward_t(lif_cuda_tt, x, 1024))
+        ms_lif.backend = 'torch'
+        print(T, cal_forward_t(ms_lif, x, repeat_times), end=', ')
+        ms_lif.backend = 'cupy'
+        print(cal_forward_t(ms_lif, x, repeat_times))
 
     print('forward and backward')
-    lif.train()
-    lif_cuda.train()
-    lif_cuda_tt.train()
+    ms_lif.train()
     for T in [8, 16, 32, 64, 128]:
         x = torch.rand(T, N, device=device)
-        print(T, cal_forward_backward_t(lif, x, 1024), cal_forward_backward_t(lif_cuda, x, 1024),
-              cal_forward_backward_t(lif_cuda_tt, x, 1024))
+        ms_lif.backend = 'torch'
+        print(T, cal_forward_backward_t(ms_lif, x, repeat_times), end=', ')
+        ms_lif.backend = 'cupy'
+        print(cal_forward_backward_t(ms_lif, x, repeat_times))
 
 实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。运行结果如下：
 
