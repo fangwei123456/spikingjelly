@@ -63,17 +63,17 @@ CUDA加速的神经元
 .. code-block:: bash
 
     forward
-    8 1.495931436011233 0.5668559867899603 0.23965466994013696
-    16 2.921243163427789 1.0935631946722424 0.42392046202621714
-    32 5.7503134660237265 2.1567279295595654 0.800143975766332
-    64 11.510705337741456 4.273202213653349 1.560730856454029
-    128 22.884282833274483 8.508097553431071 3.1778080651747587
+    8 1.9180845527841939, 0.8166529733273364
+    16 3.8143536958727964, 1.6002442711169351
+    32 7.6071328955436, 3.2570467449772877
+    64 15.181676714490777, 6.82808195671214
+    128 30.344632044631226, 14.053565065751172
     forward and backward
-    8 6.444244811291355 4.052604411526772 1.4819166492543445
-    16 16.360167272978288 11.785220529191065 2.8625220465983148
-    32 47.86415797116206 38.88952818761027 5.645714411912195
-    64 157.53049964018828 139.59021832943108 11.367870506774125
-    128 562.9168437742464 526.8922436650882 22.945806705592986
+    8 8.131792200288146, 1.6501817200662572
+    16 21.89934094545265, 3.210343387223702
+    32 66.34630815216269, 6.41730432241161
+    64 226.20835550819152, 13.073845567419085
+    128 827.6064751953811, 26.71502177403795
 
 将结果画成柱状图：
 
@@ -83,16 +83,17 @@ CUDA加速的神经元
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.*
     :width: 100%
 
-可以发现，使用CUDA封装操作的 ``spikingjelly.cext.neuron`` 速度明显快于原生PyTorch的神经元实现。
+可以发现，使用cupy后端速度明显快于原生pytorch后端。
 
 加速深度脉冲神经网络
 -----------------------
-现在让我们用CUDA封装的多步LIF神经元，重新实现 :doc:`../clock_driven/4_conv_fashion_mnist` 中的网络，并进行速度对比。我们只需要更改一下网络结构，无需进行其他的改动：
+现在让我们使用多步和cupy后端神经元，重新实现 :doc:`../clock_driven/4_conv_fashion_mnist` 中的网络。我们只需要更改一下网络结构，无需进行
+其他的改动：
 
 .. code-block:: python
 
-    class Net(nn.Module):
-        def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
+    class CupyNet(nn.Module):
+        def __init__(self, T):
             super().__init__()
             self.T = T
 
@@ -102,27 +103,23 @@ CUDA加速的神经元
             )
 
             self.conv = nn.Sequential(
-                cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+                neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
                 layer.SeqToANNContainer(
                         nn.MaxPool2d(2, 2),  # 14 * 14
                         nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
                         nn.BatchNorm2d(128),
                 ),
-                cext_neuron.MultiStepIFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
+                neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
+                layer.SeqToANNContainer(
+                    nn.MaxPool2d(2, 2),  # 7 * 7
+                    nn.Flatten(),
+                ),
             )
             self.fc = nn.Sequential(
-                layer.SeqToANNContainer(
-                        nn.MaxPool2d(2, 2),  # 7 * 7
-                        nn.Flatten(),
-                ),
-                layer.MultiStepDropout(0.5),
-                layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False)),
-                cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
-                layer.MultiStepDropout(0.5),
-                layer.SeqToANNContainer(nn.Linear(128 * 3 * 3, 128, bias=False)),
-                cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0),
-                layer.SeqToANNContainer(nn.Linear(128, 10, bias=False)),
-                cext_neuron.MultiStepLIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function='ATan', alpha=2.0)
+                layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False)),
+                neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
+                layer.SeqToANNContainer(nn.Linear(128 * 4 * 4, 10, bias=False)),
+                neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
             )
 
 
@@ -130,37 +127,78 @@ CUDA加速的神经元
             x_seq = self.static_conv(x).unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
             # [N, C, H, W] -> [1, N, C, H, W] -> [T, N, C, H, W]
 
-            out_spikes_counter = self.fc(self.conv(x_seq)).sum(0)
-            return out_spikes_counter / self.T
+            return self.fc(self.conv(x_seq)).mean(0)
 
-完整的代码可见于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist_cuda_lbl`。我们按照与 :doc:`../clock_driven/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU）来运行，结果如下：
+完整的代码可见于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`。我们按照与
+:doc:`../clock_driven/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU
+和 `GeForce RTX 2080 Ti` 的GPU）来运行，结果如下：
 
 .. code-block:: bash
 
-    saving net...
-    saved
-    epoch=0, t_train=26.745780434459448, t_test=1.4819979975000024, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8705, train_times=468
-    saving net...
-    saved
-    epoch=1, t_train=26.087690989486873, t_test=1.502928489819169, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8913, train_times=936
-    saving net...
-    saved
-    epoch=2, t_train=26.281963238492608, t_test=1.4901704853400588, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.8977, train_times=1404
-    saving net...
-    saved
+    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
+
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=True, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    CupyNet(
+      (static_conv): Sequential(
+        (0): Conv2d(1, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (conv): Sequential(
+        (0): MultiStepIFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+        (1): SeqToANNContainer(
+          (module): Sequential(
+            (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+            (1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+            (2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (2): MultiStepIFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+        (3): SeqToANNContainer(
+          (module): Sequential(
+            (0): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+            (1): Flatten(start_dim=1, end_dim=-1)
+          )
+        )
+      )
+      (fc): Sequential(
+        (0): SeqToANNContainer(
+          (module): Linear(in_features=6272, out_features=2048, bias=False)
+        )
+        (1): MultiStepIFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+        (2): SeqToANNContainer(
+          (module): Linear(in_features=2048, out_features=10, bias=False)
+        )
+        (3): MultiStepIFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+      )
+    )
+    Mkdir ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp_cupy.
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=True, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp_cupy
+    epoch=0, train_loss=0.028574782584865507, train_acc=0.8175080128205128, test_loss=0.020883125430345536, test_acc=0.8725, max_test_acc=0.8725, total_time=13.037598133087158
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=True, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp_cupy
 
     ...
 
-    epoch=96, t_train=26.286096683703363, t_test=1.5033660298213363, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9428, train_times=45396
-    saving net...
-    saved
-    epoch=97, t_train=26.185854725539684, t_test=1.4934641849249601, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.943, train_times=45864
-    saving net...
-    saved
-    epoch=98, t_train=26.256993867456913, t_test=1.5093903196975589, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46332
-    epoch=99, t_train=26.200945735909045, t_test=1.4959839908406138, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs2, max_test_accuracy=0.9437, train_times=46800
+    epoch=62, train_loss=0.001055751721853287, train_acc=0.9977463942307693, test_loss=0.010815625159442425, test_acc=0.934, max_test_acc=0.9346, total_time=11.059867858886719
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=True, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp_cupy
+    epoch=63, train_loss=0.0010632637413514631, train_acc=0.9980134882478633, test_loss=0.010720000202953816, test_acc=0.9324, max_test_acc=0.9346, total_time=11.128222703933716
 
-最终的正确率是94.37%，与 :doc:`../clock_driven/11_cext_neuron_with_lbl` 中的94.4%相差无几，两者在训练过程中的训练batch正确率和测试集正确率曲线如下：
+
+最终的正确率是93.46%，与 :doc:`../clock_driven/11_cext_neuron_with_lbl` 中的93.3%相差无几，两者在训练过程中的测试集正确率曲线如下：
 
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
     :width: 100%
@@ -168,4 +206,5 @@ CUDA加速的神经元
 .. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.*
     :width: 100%
 
-两个网络使用了完全相同的随机种子，最终的性能略有差异，可能是CUDA和PyTorch的计算数值误差导致的。在日志中记录了训练和测试所需要的时间，我们可以发现，训练耗时为原始网络的64%，推理耗时为原始网络的58%，速度有了明显提升。
+两个网络使用了完全相同的随机种子，最终的性能略有差异，可能是CUDA和PyTorch的计算数值误差导致的。在日志中记录了训练和测试所需要的时间，我们可以
+发现，一个epoch的耗时为原始网络的69%，速度有了明显提升。

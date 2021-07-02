@@ -4,19 +4,19 @@ import torch.nn.functional as F
 import torchvision
 from spikingjelly.clock_driven import neuron, functional, surrogate, layer
 from torch.utils.tensorboard import SummaryWriter
-import sys
+import os
 import time
-if sys.platform != 'win32':
-    import readline
+import argparse
 import numpy as np
-torch.backends.cudnn.benchmark = True
+from torch.cuda import amp
 _seed_ = 2020
 torch.manual_seed(_seed_)  # use torch.manual_seed() to seed the RNG for all devices (both CPU and CUDA)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 np.random.seed(_seed_)
-class Net(nn.Module):
-    def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
+
+class PythonNet(nn.Module):
+    def __init__(self, T):
         super().__init__()
         self.T = T
 
@@ -26,25 +26,21 @@ class Net(nn.Module):
         )
 
         self.conv = nn.Sequential(
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2),  # 14 * 14
 
             nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2)  # 7 * 7
 
         )
         self.fc = nn.Sequential(
             nn.Flatten(),
-            layer.Dropout(0.5),
-            nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            layer.Dropout(0.5),
-            nn.Linear(128 * 3 * 3, 128, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-            nn.Linear(128, 10, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
+            nn.Linear(128 * 4 * 4, 10, bias=False),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
         )
 
 
@@ -56,13 +52,73 @@ class Net(nn.Module):
             out_spikes_counter += self.fc(self.conv(x))
 
         return out_spikes_counter / self.T
+
+class CupyNet(nn.Module):
+    def __init__(self, T):
+        super().__init__()
+        self.T = T
+
+        self.static_conv = nn.Sequential(
+            nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(128),
+        )
+
+        self.conv = nn.Sequential(
+            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
+            layer.SeqToANNContainer(
+                    nn.MaxPool2d(2, 2),  # 14 * 14
+                    nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+                    nn.BatchNorm2d(128),
+            ),
+            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
+            layer.SeqToANNContainer(
+                nn.MaxPool2d(2, 2),  # 7 * 7
+                nn.Flatten(),
+            ),
+        )
+        self.fc = nn.Sequential(
+            layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False)),
+            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
+            layer.SeqToANNContainer(nn.Linear(128 * 4 * 4, 10, bias=False)),
+            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
+        )
+
+
+    def forward(self, x):
+        x_seq = self.static_conv(x).unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
+        # [N, C, H, W] -> [1, N, C, H, W] -> [T, N, C, H, W]
+
+        return self.fc(self.conv(x_seq)).mean(0)
+
 def main():
     '''
     * :ref:`API in English <conv_fashion_mnist.main-en>`
 
     .. _conv_fashion_mnist.main-cn:
 
-    :return: None
+    Classify Fashion-MNIST
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -T T                  simulating time-steps
+      -device DEVICE        device
+      -b B                  batch size
+      -epochs N             number of total epochs to run
+      -j N                  number of data loading workers (default: 4)
+      -data_dir DATA_DIR    root dir of Fashion-MNIST dataset
+      -out_dir OUT_DIR      root dir for saving logs and checkpoint
+      -resume RESUME        resume from the checkpoint path
+      -amp                  automatic mixed precision training
+      -cupy                 use cupy neuron and multi-step forward mode
+      -opt OPT              use which optimizer. SDG or Adam
+      -lr LR                learning rate
+      -momentum MOMENTUM    momentum for SGD
+      -lr_scheduler LR_SCHEDULER
+                            use which schedule. StepLR or CosALR
+      -step_size STEP_SIZE  step_size for StepLR
+      -gamma GAMMA          gamma for StepLR
+      -T_max T_MAX          T_max for CosineAnnealingLR
+
 
     使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。会将训练过
     程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。这个目录的位置，是在运行 ``main()``
@@ -92,97 +148,203 @@ def main():
     .. image:: ./_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
         :width: 100%
     '''
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('输入保存Fashion MNIST数据集的位置，例如“./”\n input root directory for saving Fashion MNIST dataset, e.g., "./": ')
-    batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-    learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-    T = int(input('输入仿真时长，例如“8”\n input simulating steps, e.g., "8": '))
-    tau = float(input('输入LIF神经元的时间常数tau，例如“2.0”\n input membrane time constant, tau, for LIF neurons, e.g., "2.0": '))
-    train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
-    log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+    parser = argparse.ArgumentParser(description='Classify Fashion-MNIST')
+    parser.add_argument('-T', default=4, type=int, help='simulating time-steps')
+    parser.add_argument('-device', default='cuda:0', help='device')
+    parser.add_argument('-b', default=128, type=int, help='batch size')
+    parser.add_argument('-epochs', default=64, type=int, metavar='N',
+                        help='number of total epochs to run')
+    parser.add_argument('-j', default=4, type=int, metavar='N',
+                        help='number of data loading workers (default: 4)')
+    parser.add_argument('-data_dir', type=str, help='root dir of Fashion-MNIST dataset')
+    parser.add_argument('-out_dir', type=str, default='./logs', help='root dir for saving logs and checkpoint')
+
+    parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
+    parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
+    parser.add_argument('-cupy', action='store_true', help='use cupy neuron and multi-step forward mode')
+
+    parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')
+    parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
+    parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
+    parser.add_argument('-lr_scheduler', default='CosALR', type=str, help='use which schedule. StepLR or CosALR')
+    parser.add_argument('-step_size', default=32, type=float, help='step_size for StepLR')
+    parser.add_argument('-gamma', default=0.1, type=float, help='gamma for StepLR')
+    parser.add_argument('-T_max', default=64, type=int, help='T_max for CosineAnnealingLR')
+    # python w1.py -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
+    # python w1.py -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
+    args = parser.parse_args()
+    print(args)
+
+    if args.cupy:
+        net = CupyNet(T=args.T)
+    else:
+        net = PythonNet(T=args.T)
+    print(net)
+    net.to(args.device)
+
+    optimizer = None
+    if args.opt == 'SGD':
+        optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum)
+    elif args.opt == 'Adam':
+        optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
+    else:
+        raise NotImplementedError(args.opt)
+
+    lr_scheduler = None
+    if args.lr_scheduler == 'StepLR':
+        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
+    elif args.lr_scheduler == 'CosALR':
+        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.T_max)
+    else:
+        raise NotImplementedError(args.lr_scheduler)
 
 
-    writer = SummaryWriter(log_dir)
-
-    # 初始化数据加载器
-    train_data_loader = torch.utils.data.DataLoader(
-        dataset=torchvision.datasets.FashionMNIST(
-            root=dataset_dir,
+    train_set = torchvision.datasets.FashionMNIST(
+            root=args.data_dir,
             train=True,
             transform=torchvision.transforms.ToTensor(),
-            download=True),
-        batch_size=batch_size,
-        shuffle=True,
-        drop_last=True)
-    test_data_loader = torch.utils.data.DataLoader(
-        dataset=torchvision.datasets.FashionMNIST(
-            root=dataset_dir,
+            download=True)
+
+    test_set = torchvision.datasets.FashionMNIST(
+            root=args.data_dir,
             train=False,
             transform=torchvision.transforms.ToTensor(),
-            download=True),
-        batch_size=batch_size,
+            download=True)
+
+    train_data_loader = torch.utils.data.DataLoader(
+        dataset=train_set,
+        batch_size=args.b,
         shuffle=True,
-        drop_last=False)
+        drop_last=True,
+        num_workers=args.j
+    )
 
-    # 初始化网络
-    net = Net(tau=tau, T=T).to(device)
-    # 使用Adam优化器
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-    train_times = 0
-    max_test_accuracy = 0
-    for epoch in range(train_epoch):
+    test_data_loader = torch.utils.data.DataLoader(
+        dataset=test_set,
+        batch_size=args.b,
+        shuffle=True,
+        drop_last=False,
+        num_workers=args.j
+    )
+
+    scaler = None
+    if args.amp:
+        scaler = amp.GradScaler()
+
+    start_epoch = 0
+    max_test_acc = 0
+
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location='cpu')
+        net.load_state_dict(checkpoint['net'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        start_epoch = checkpoint['epoch'] + 1
+        max_test_acc = checkpoint['max_test_acc']
+
+    out_dir = os.path.join(args.out_dir, f'T_{args.T}_b_{args.b}_{args.opt}_lr_{args.lr}_')
+    if args.lr_scheduler == 'CosALR':
+        out_dir += f'CosALR_{args.T_max}'
+    elif args.lr_scheduler == 'StepLR':
+        out_dir += f'StepLR_{args.step_size}_{args.gamma}'
+    else:
+        raise NotImplementedError(args.lr_scheduler)
+
+    if args.amp:
+        out_dir += '_amp'
+    if args.cupy:
+        out_dir += '_cupy'
+
+    if not os.path.exists(out_dir):
+        os.mkdir(out_dir)
+        print(f'Mkdir {out_dir}.')
+
+    with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
+        args_txt.write(str(args))
+
+    writer = SummaryWriter(os.path.join(out_dir, 'fmnist_logs'), purge_step=start_epoch)
+
+    for epoch in range(start_epoch, args.epochs):
+        start_time = time.time()
         net.train()
-        t_start = time.perf_counter()
-        for img, label in train_data_loader:
-            img = img.to(device)
-            label = label.to(device)
-            label_one_hot = F.one_hot(label, 10).float()
-
+        train_loss = 0
+        train_acc = 0
+        train_samples = 0
+        for frame, label in train_data_loader:
             optimizer.zero_grad()
+            frame = frame.float().to(args.device)
+            label = label.to(args.device)
+            label_onehot = F.one_hot(label, 10).float()
+            if args.amp:
+                with amp.autocast():
+                    out_fr = net(frame)
+                    loss = F.mse_loss(out_fr, label_onehot)
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                out_fr = net(frame)
+                loss = F.mse_loss(out_fr, label_onehot)
+                loss.backward()
+                optimizer.step()
 
-            out_spikes_counter_frequency = net(img)
+            train_samples += label.numel()
+            train_loss += loss.item() * label.numel()
+            train_acc += (out_fr.argmax(1) == label).float().sum().item()
 
-            # 损失函数为输出层神经元的脉冲发放频率，与真实类别的MSE
-            # 这样的损失函数会使，当类别i输入时，输出层中第i个神经元的脉冲发放频率趋近1，而其他神经元的脉冲发放频率趋近0
-            loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
-            loss.backward()
-            optimizer.step()
-            # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
             functional.reset_net(net)
+        train_loss /= train_samples
+        train_acc /= train_samples
 
-            # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
-            accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
-            if train_times % 256 == 0:
-                writer.add_scalar('train_accuracy', accuracy, train_times)
-            train_times += 1
-        t_train = time.perf_counter() - t_start
+        writer.add_scalar('train_loss', train_loss, epoch)
+        writer.add_scalar('train_acc', train_acc, epoch)
+        lr_scheduler.step()
+
         net.eval()
-        t_start = time.perf_counter()
+        test_loss = 0
+        test_acc = 0
+        test_samples = 0
         with torch.no_grad():
-            # 每遍历一次全部数据集，就在测试集上测试一次
-            test_sum = 0
-            correct_sum = 0
-            for img, label in test_data_loader:
-                img = img.to(device)
-                out_spikes_counter_frequency = net(img)
+            for frame, label in test_data_loader:
+                frame = frame.float().to(args.device)
+                label = label.to(args.device)
+                label_onehot = F.one_hot(label, 10).float()
+                out_fr = net(frame)
+                loss = F.mse_loss(out_fr, label_onehot)
 
-                correct_sum += (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().sum().item()
-                test_sum += label.numel()
+                test_samples += label.numel()
+                test_loss += loss.item() * label.numel()
+                test_acc += (out_fr.argmax(1) == label).float().sum().item()
                 functional.reset_net(net)
-            test_accuracy = correct_sum / test_sum
-            t_test = time.perf_counter() - t_start
-            writer.add_scalar('test_accuracy', test_accuracy, epoch)
-            if max_test_accuracy < test_accuracy:
-                max_test_accuracy = test_accuracy
-                print('saving net...')
-                torch.save(net, log_dir + '/net_max_acc.pt')
-                print('saved')
 
-        print('epoch={}, t_train={}, t_test={}, device={}, dataset_dir={}, batch_size={}, learning_rate={}, T={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(epoch, t_train, t_test, device, dataset_dir, batch_size, learning_rate, T, log_dir, max_test_accuracy, train_times))
+        test_loss /= test_samples
+        test_acc /= test_samples
+        writer.add_scalar('test_loss', test_loss, epoch)
+        writer.add_scalar('test_acc', test_acc, epoch)
+
+        save_max = False
+        if test_acc > max_test_acc:
+            max_test_acc = test_acc
+            save_max = True
+
+        checkpoint = {
+            'net': net.state_dict(),
+            'optimizer': optimizer.state_dict(),
+            'lr_scheduler': lr_scheduler.state_dict(),
+            'epoch': epoch,
+            'max_test_acc': max_test_acc
+        }
+
+        if save_max:
+            torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_max.pth'))
+
+        torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_latest.pth'))
+
+        print(args)
+        print(out_dir)
+        print(
+            f'epoch={epoch}, train_loss={train_loss}, train_acc={train_acc}, test_loss={test_loss}, test_acc={test_acc}, max_test_acc={max_test_acc}, total_time={time.time() - start_time}')
+
 
 if __name__ == '__main__':
     main()
-
-
-
-
