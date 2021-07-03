@@ -406,13 +406,13 @@ class LIFNode(BaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.v_reset is None:
-            self.v += (x - self.v) / self.tau
+            self.v = self.v + (x - self.v) / self.tau
 
         else:
             if isinstance(self.v_reset, float) and self.v_reset == 0.:
-                self.v += (x - self.v) / self.tau
+                self.v = self.v + (x - self.v) / self.tau
             else:
-                self.v += (x - (self.v - self.v_reset)) / self.tau
+                self.v = self.v + (x - (self.v - self.v_reset)) / self.tau
 
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., v_threshold: float = 1.,
@@ -606,11 +606,11 @@ class ParametricLIFNode(BaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.v_reset is None:
-            self.v += (x - self.v) * self.w.sigmoid()
+            self.v = self.v + (x - self.v) * self.w.sigmoid()
         else:
             if self.v_reset == 0.:
-                self.v += (x - self.v) * self.w.sigmoid()
+                self.v = self.v + (x - self.v) * self.w.sigmoid()
             else:
-                self.v += (x - (self.v - self.v_reset)) * self.w.sigmoid()
+                self.v = self.v + (x - (self.v - self.v_reset)) * self.w.sigmoid()
 
 
