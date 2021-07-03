@@ -15,7 +15,7 @@
 
 奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
 
-从 `PyPI <https://pypi.org/project/spikingjelly/>`_ 安装最新的稳定版本(0.0.0.0.6)：
+**从 `PyPI <https://pypi.org/project/spikingjelly/>`_ 安装最新的稳定版本(0.0.0.0.6)**：
 
 .. code-block:: bash
 
@@ -122,7 +122,7 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
 
-Install the last stable version (0.0.0.0.6) from `PyPI <https://pypi.org/project/spikingjelly/>`_：
+**Install the last stable version (0.0.0.0.6) from `PyPI <https://pypi.org/project/spikingjelly/>`_**：
 
 .. code-block:: bash
 
