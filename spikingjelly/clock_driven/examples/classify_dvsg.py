@@ -63,7 +63,7 @@ class PythonNet(nn.Module):
         ]
 
 try:
-    from spikingjelly.cext.neuron import MultiStepLIFNode
+    import cupy
 
     class CextNet(nn.Module):
         def __init__(self, channels: int):
@@ -79,10 +79,10 @@ try:
                 nn.Flatten(2),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(channels * 4 * 4, channels * 2 * 2, bias=False)),
-                MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True),
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy'),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(channels * 2 * 2, 110, bias=False)),
-                MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True)
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
             )
             self.vote = VotingLayer(10)
 
@@ -98,7 +98,7 @@ try:
                     nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
                     nn.BatchNorm2d(out_channels),
                 ),
-                MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True)
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
             ]
 
     class CextNet2(nn.Module):
@@ -136,17 +136,17 @@ try:
                         nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
                         nn.BatchNorm2d(out_channels),
                         nn.Unflatten(0,(self.T,self.b)),                    
-                        MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True),
+                        neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy'),
                         nn.Flatten(0,1)                    
                        ]
     
     
                 
 except ImportError:
-    print('SpikingJelly is installed without CUDA extension.')
+    print('Cupy is not installed.')
 
 def main():
-    # python classify_dvsg.py -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cext -epochs 1024
+    # python classify_dvsg.py -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 1024
     '''
     * :ref:`API in English <classify_dvsg.__init__-en>`
 
@@ -156,7 +156,7 @@ def main():
 
     .. code:: bash
 
-        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cext] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER] [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
+        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER] [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
 
         Classify DVS128 Gesture
 
@@ -172,7 +172,7 @@ def main():
           -out_dir OUT_DIR      root dir for saving logs and checkpoint
           -resume RESUME        resume from the checkpoint path
           -amp                  automatic mixed precision training
-          -cext                 use CUDA neuron and multi-step forward mode
+          -cupy                 use CUDA neuron and multi-step forward mode
           -opt OPT              use which optimizer. SDG or Adam
           -lr LR                learning rate
           -momentum MOMENTUM    momentum for SGD
@@ -186,7 +186,7 @@ def main():
 
     .. code:: bash
 
-        python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cext -epochs 1024
+        python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 1024
 
     阅读教程 :doc:`./clock_driven/14_classify_dvsg` 以获得更多信息。
 
@@ -199,7 +199,7 @@ def main():
 
     .. code:: bash
 
-        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cext] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER] [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
+        usage: classify_dvsg.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-channels CHANNELS] [-data_dir DATA_DIR] [-out_dir OUT_DIR] [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-lr LR] [-momentum MOMENTUM] [-lr_scheduler LR_SCHEDULER] [-step_size STEP_SIZE] [-gamma GAMMA] [-T_max T_MAX]
 
         Classify DVS128 Gesture
 
@@ -215,7 +215,7 @@ def main():
           -out_dir OUT_DIR      root dir for saving logs and checkpoint
           -resume RESUME        resume from the checkpoint path
           -amp                  automatic mixed precision training
-          -cext                 use CUDA neuron and multi-step forward mode
+          -cupy                 use CUDA neuron and multi-step forward mode
           -opt OPT              use which optimizer. SDG or Adam
           -lr LR                learning rate
           -momentum MOMENTUM    momentum for SGD
@@ -229,7 +229,7 @@ def main():
 
     .. code:: bash
 
-        python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cext -epochs 1024
+        python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 1024
 
     See the tutorial :doc:`./clock_driven_en/14_classify_dvsg` for more details.
     '''
@@ -247,7 +247,7 @@ def main():
 
     parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
     parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
-    parser.add_argument('-cext', action='store_true', help='use CUDA neuron and multi-step forward mode')
+    parser.add_argument('-cupy', action='store_true', help='use CUDA neuron and multi-step forward mode')
 
 
     parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')

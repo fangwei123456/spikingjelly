@@ -120,7 +120,7 @@
 
 .. code:: python
 
-    from spikingjelly.cext.neuron import MultiStepLIFNode
+    import cupy
 
     class CextNet(nn.Module):
         def __init__(self, channels: int):
@@ -136,12 +136,17 @@
                 nn.Flatten(2),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(channels * 4 * 4, channels * 2 * 2, bias=False)),
-                MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True),
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy'),
                 layer.MultiStepDropout(0.5),
                 layer.SeqToANNContainer(nn.Linear(channels * 2 * 2, 110, bias=False)),
-                MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True)
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
             )
             self.vote = VotingLayer(10)
+
+        def forward(self, x: torch.Tensor):
+            x = x.permute(1, 0, 2, 3, 4)  # [N, T, 2, H, W] -> [T, N, 2, H, W]
+            out_spikes = self.fc(self.conv(x))  # shape = [T, N, 110]
+            return self.vote(out_spikes.mean(0))
 
         @staticmethod
         def conv3x3(in_channels: int, out_channels):
@@ -150,7 +155,7 @@
                     nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, bias=False),
                     nn.BatchNorm2d(out_channels),
                 ),
-                MultiStepLIFNode(tau=2.0, surrogate_function='ATan', detach_reset=True)
+                neuron.MultiStepLIFNode(tau=2.0, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
             ]
 
 可以发现，网络的大致结构与逐步传播基本相同，所有的无状态的层，例如 ``Conv2d``，都会被 ``layer.SeqToANNContainer`` 包装。前向传播的实现不需要时
@@ -183,7 +188,7 @@
 
     parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
     parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
-    parser.add_argument('-cext', action='store_true', help='use CUDA neuron and multi-step forward mode')
+    parser.add_argument('-cupy', action='store_true', help='use CUDA neuron and multi-step forward mode')
 
 
     parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')
@@ -256,7 +261,7 @@
 .. code:: bash
 
     (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -epochs 1024
-    Namespace(T=16, T_max=64, amp=True, b=16, cext=False, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    Namespace(T=16, T_max=64, amp=True, b=16, cupy=False, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     PythonNet(
       (conv): Sequential(
         (0): Conv2d(2, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
@@ -317,15 +322,15 @@
     The directory [/userhome/datasets/DVS128Gesture/frames_number_16_split_by_number] already exists.
     The directory [/userhome/datasets/DVS128Gesture/frames_number_16_split_by_number] already exists.
     Mkdir ./logs/T_16_b_16_c_128_Adam_lr_0.001_CosALR_64_amp.
-    Namespace(T=16, T_max=64, amp=True, b=16, cext=False, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    Namespace(T=16, T_max=64, amp=True, b=16, cupy=False, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     epoch=0, train_loss=0.06680945929599134, train_acc=0.4032534246575342, test_loss=0.04891310722774102, test_acc=0.6180555555555556, max_test_acc=0.6180555555555556, total_time=27.759592294692993
 
 可以发现，一个epoch用时为27.76s。中断训练，让我们换成速度更快的模式：
 
 .. code:: bash
 
-    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cext -epochs 1024
-    Namespace(T=16, T_max=64, amp=True, b=16, cext=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 1024
+    Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     CextNet(
       (conv): Sequential(
         (0): SeqToANNContainer(
@@ -398,13 +403,13 @@
     )
     The directory [/userhome/datasets/DVS128Gesture/frames_number_16_split_by_number] already exists.
     The directory [/userhome/datasets/DVS128Gesture/frames_number_16_split_by_number] already exists.
-    Mkdir ./logs/T_16_b_16_c_128_Adam_lr_0.001_CosALR_64_amp_cext.
-    Namespace(T=16, T_max=64, amp=True, b=16, cext=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    Mkdir ./logs/T_16_b_16_c_128_Adam_lr_0.001_CosALR_64_amp_cupy.
+    Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     epoch=0, train_loss=0.06690179117738385, train_acc=0.4092465753424658, test_loss=0.049108295158172645, test_acc=0.6145833333333334, max_test_acc=0.6145833333333334, total_time=18.169376373291016
 
     ...
 
-    Namespace(T=16, T_max=64, amp=True, b=16, cext=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
+    Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=1024, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     epoch=255, train_loss=0.000212281955773102445, train_acc=1.0, test_loss=0.008522209396485576, test_acc=0.9375, max_test_acc=0.9618055555555556, total_time=17.49005389213562
 
 训练一个epoch耗时为18.17s，比逐步传播的27.76s快了约10s。训练256个epoch，我们可以达到最高96.18%的正确率，得到的训练曲线如下：
