@@ -2,14 +2,9 @@
 python setup.py sdist bdist_wheel
 python -m twine upload dist/*
 '''
-import setuptools
-import glob
-import os
-import torch
 
 from setuptools import find_packages
 from setuptools import setup
-import sys
 
 requirements = ["torch"]
 
@@ -24,7 +19,7 @@ with open("./README.md", "r", encoding="utf-8") as fh:
 setup(
     install_requires=install_requires,
     name="spikingjelly",
-    version="0.0.0.0.5",
+    version="0.0.0.0.6",
     author="PKU MLG, PCL, and other contributors",
     author_email="fwei@pku.edu.cn, chyq@pku.edu.cn",
     description="A deep learning framework for SNNs built on PyTorch.",

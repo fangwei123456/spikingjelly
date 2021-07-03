@@ -7,7 +7,7 @@ English | [中文](./README_cn.md)
 
 SpikingJelly is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
-The documentation of SpikingJelly is written in both English and Chinese: https://spikingjelly.readthedocs.io
+The documentation of SpikingJelly is written in both English and Chinese: https://spikingjelly.readthedocs.io.
 
 - [Installation](#installation)
 - [Build SNN In An Unprecedented Simple Way](#build-snn-in-an-unprecedented-simple-way)
@@ -17,37 +17,35 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
 - [Tutorials](#Tutorials)
 - [Citation](#citation)
-- [Frequently Asked Questions](#frequently-asked-questions)
+- [Contribution](#contribution)
 - [About](#about)
 
 ## Installation
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-**Install the last stable version (0.0.0.0.4) from** [**PyPI**](https://pypi.org/project/spikingjelly/):
+The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
+
+**Install the last stable version (0.0.0.0.6) from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
 ```bash
 pip install spikingjelly
 ```
 
-Note that the CUDA extensions are not included in the PyPI package. If you want to use the CUDA extensions, please **install from the source codes**:
+**Install the latest developing version from the source codes**:
 
 From [GitHub](https://github.com/fangwei123456/spikingjelly):
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
 python setup.py install
 ```
 From [OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
 git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
-git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
 python setup.py install
 ```
-When install from the source codes, SpikingJelly will detect whether CUDA is installed. If not, the CUDA extensions will also not be compiled.
-
 ## Build SNN In An Unprecedented Simple Way
 
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
@@ -121,9 +119,13 @@ This simple network with analog encoding can achieve 98.51% accuracy after conve
 
 ## CUDA-Enhanced Neuron
 
-SpikingJelly provides two versions of spiking neurons:  user-friendly PyTorch version and high-speed CUDA version. The followed figure compares execution time of different LIF neurons:
+SpikingJelly provides two backends for multi-step neurons (read [Tutorials](#Tutorials) for more details). You can use the user-friendly `torch` backend for easily codding and debugging, and use `cupy` backend for faster training speed.
+
+The followed figure compares execution time of two backends of Multi-Step LIF neurons:
 
 <img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+
+To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable/install.html). Note that the `cupy` backend only supports GPU, while the `torch` backend supports both CPU and GPU.
 
 ## Device Supports
 
@@ -194,11 +196,9 @@ If you use SpikingJelly in your work, please cite it as follows:
 }
 ```
 
-## Frequently Asked Questions
+## Contribution
 
-### ModuleNotFoundError:No module named "\_C\_…"
-
-"\_C\_..." modules in SpikingJelly are C/CUDA extensions, e.g., "\_C\_neuron" is the compiled C/CUDA module. Note that the CUDA extensions are not included in the PyPI package. If you need CUDA extensions, you can install from the source codes.
+You can read the issues and get the problems to be solved and latest development plans. We welcome all users to join the discussion of development plans, solve issues, and send pull requests.
 
 ## About
 
@@ -208,4 +208,3 @@ If you use SpikingJelly in your work, please cite it as follows:
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
-Any contributions to SpikingJelly is welcome!
