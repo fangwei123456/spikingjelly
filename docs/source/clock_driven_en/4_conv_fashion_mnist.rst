@@ -10,8 +10,8 @@ The Fashion-MNIST dataset has the same format as the MNIST dataset, and both are
 Network structure
 ----------------------------
 
-Most of the common convolutional neural networks in ANN are in the form of convolution + fully connected layers.
-We also use a similar structure in SNN. Import related modules, inherit ``torch.nn.Module``, and define our network:
+Most of the common convolutional neural networks in ANN are in the form of convolution + fully-connected layers.
+We also use a similar structure in SNN. Let us import modules, inherit ``torch.nn.Module`` to define our network:
 
 .. code-block:: python
 
@@ -21,104 +21,85 @@ We also use a similar structure in SNN. Import related modules, inherit ``torch.
     import torchvision
     from spikingjelly.clock_driven import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
-    import readline
-    class Net(nn.Module):
-        def __init__(self, tau, v_threshold=1.0, v_reset=0.0):
+    import os
+    import time
+    import argparse
+    import numpy as np
+    from torch.cuda import amp
+    _seed_ = 2020
+    torch.manual_seed(_seed_)  # use torch.manual_seed() to seed the RNG for all devices (both CPU and CUDA)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    np.random.seed(_seed_)
 
-Then we add a convolutional layer and a fully connected layer to the member variables of ``Net``. The developers of
-``SpikingJelly`` found in the experiments that neurons in the convolutional layer is better to use ``IFNode`` for
-static image data without time information. We add 2 convolution-BN-pooling layers:
+    class PythonNet(nn.Module):
+        def __init__(self, T):
+            super().__init__()
+            self.T = T
+
+Then we add convolutional layers and a fully-connected layers to ``PythonNet``. We add two Conv-BN-Pooling::
 
 .. code-block:: python
 
     self.conv = nn.Sequential(
             nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2),  # 14 * 14
 
             nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
-After the input of ``1 * 28 * 28`` undergoes such a convolutional layer, an output spike of ``128 * 7 * 7`` is obtained.
+The input with ``shape=[N, 1, 28, 28]`` will be converted to spikes with ``shape=[N, 128, 7, 7]``.
 
-Such a convolutional layer can actually function as an encoder: in the previous tutorial, in the code of MNIST
-classification, we used a Poisson encoder to encode pictures into spikes. In fact, we can directly send the picture
-to the SNN. In this case, the first spike neuron layer and the previous layer in the SNN can be regarded as an
-auto-encoder with learnable parameters. For example, these layers in the convolutional layer we just defined:
+Such convolutional layers can actually function as an encoder: in the previous tutorial (classify MNIST), we used a
+Poisson encoder to encode pictures into spikes. However, we can directly send the picture
+to the SNN. In this case, the first spike neurons layer (SN) and the layers before SN can be regarded as an
+auto-encoder with learnable parameters. Specifically, teh auto-encoder is composed of the following layers:
 
 .. code-block:: python
 
     nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
     nn.BatchNorm2d(128),
-    neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan())
+    neuron.IFNode(surrogate_function=surrogate.ATan())
 
-This 3-layer network, which receives pictures as input and outputs spikes, can be regarded as an encoder.
+These layers receive images as input and output spikes, which can be regarded as an encoder.
 
-Next, we define a 3-layer fully connected network and output the classification results. The fully connected
-layer generally functions as a classifier, and the performance of using ``LIFNode`` will be better. Fashion-MNIST
-has 10 categories, so the output layer is 10 neurons, in order to reduce over-fitting, we also use ``layer.Dropout``.
-For more information about it, please refer to the API documentation.
+Next, we add two fully-connected layers as the classifier. There are 10 neurons in output layer because the classes number
+in Fashion-MNIST is 10.
 
 .. code-block:: python
 
-    self.fc = nn.Sequential(
-        nn.Flatten(),
-        layer.Dropout(0.7),
-        nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
-        neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-        layer.Dropout(0.7),
-        nn.Linear(128 * 3 * 3, 128, bias=False),
-        neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-        nn.Linear(128, 10, bias=False),
-        neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-    )
+        self.fc = nn.Sequential(
+            nn.Flatten(),
+            nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
+            nn.Linear(128 * 4 * 4, 10, bias=False),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
+        )
 
-Next, define forward propagation. Forward propagation is very simple, first go through convolution and then go through full connection:
+Now let us define the forward function.
 
 .. code-block:: python
 
     def forward(self, x):
-        return self.fc(self.conv(x))
+        x = self.static_conv(x)
 
-Avoid repeat computing
+        out_spikes_counter = self.fc(self.conv(x))
+        for t in range(1, self.T):
+            out_spikes_counter += self.fc(self.conv(x))
+
+        return out_spikes_counter / self.T
+
+Avoid Duplicated Computing
 --------------------------------
 
-We can train this network directly, just like the previous MNIST classification:
-
-.. code-block:: python
-
-        for img, label in train_data_loader:
-            img = img.to(device)
-            label = label.to(device)
-            label_one_hot = F.one_hot(label, 10).float()
-
-            optimizer.zero_grad()
-
-            # run the time of T，out_spikes_counter is the tensor of shape=[batch_size, 10]
-            # record the number of spike firings of 10 neurons in the output layer during the entire simulation duration
-            for t in range(T):
-                if t == 0:
-                    out_spikes_counter = net(encoder(img).float())
-                else:
-                    out_spikes_counter += net(encoder(img).float())
-
-            # out_spikes_counter / T obtain the spike firing frequency of 10 neurons in the output layer during the simulation time
-            out_spikes_counter_frequency = out_spikes_counter / T
-
-            # the loss function is the spike firing frequency of the neurons in the output layer, and the MSE of the true category
-            # such a loss function will make the spike firing frequency of the i-th neuron in the output layer approach 1 when the category i is input, and the spike firing frequency of other neurons will approach 0
-            loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
-            loss.backward()
-            optimizer.step()
-            # after optimizing the parameters once, the state of the network needs to be reset, because the neurons of SNN have "memory"
-            functional.reset_net(net)
-
-But if we re-examine the structure of the network, we can find that some calculations are repeated, for the first 2
-layers of the network, the highlighted part of the following code:
+We can train this network directly, just like the previous MNIST classification. But if we re-examine the structure of
+the network, we can find that some calculations are duplicated. For the first two layers of the network (the highlighted
+part of the following codes):
 
 .. code-block:: python
     :emphasize-lines: 2, 3
@@ -126,23 +107,23 @@ layers of the network, the highlighted part of the following code:
     self.conv = nn.Sequential(
             nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2),  # 14 * 14
 
             nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
             nn.BatchNorm2d(128),
-            neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
             nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
-The input images received by these two layers does not change with ``t`` , but in the ``for`` loop, each time ``img`` will
-recalculate these two layers to get the same output. We extract these layers and encapsulate the time loop into the
-network itself to facilitate calculation. The new network structure is fully defined as:
+The input images are static and do not change with ``t``. But they will be involved in ``for`` loop. At each time-step,
+they will flow through the first two layers with the same calculation. We can remove them from ``for`` loop in time-steps.
+The complete codes are:
 
 .. code-block:: python
 
-    class Net(nn.Module):
-        def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
+    class PythonNet(nn.Module):
+        def __init__(self, T):
             super().__init__()
             self.T = T
 
@@ -152,25 +133,21 @@ network itself to facilitate calculation. The new network structure is fully def
             )
 
             self.conv = nn.Sequential(
-                neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
                 nn.MaxPool2d(2, 2),  # 14 * 14
 
                 nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
                 nn.BatchNorm2d(128),
-                neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
                 nn.MaxPool2d(2, 2)  # 7 * 7
 
             )
             self.fc = nn.Sequential(
                 nn.Flatten(),
-                layer.Dropout(0.7),
-                nn.Linear(128 * 7 * 7, 128 * 3 * 3, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-                layer.Dropout(0.7),
-                nn.Linear(128 * 3 * 3, 128, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
-                nn.Linear(128, 10, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+                nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
+                nn.Linear(128 * 4 * 4, 10, bias=False),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
             )
 
 
@@ -183,62 +160,94 @@ network itself to facilitate calculation. The new network structure is fully def
 
             return out_spikes_counter / self.T
 
-
-For SNN whose input does not change with time, although the SNN is stateful as a whole, the first few layers of the
-network may not be stateful. We can extract these layers separately and put them out of the time loop to avoid
-additional calculations .
+We put these stateless layers to ``self.static_conv`` to avoid duplicated calculations.
 
 Training network
 ----------------------------
-The complete code is located in :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`.
-It can also be run directly from the command line.The network with the highest accuracy of the test set during the
-training process will be saved in the same level directory of the ``tensorboard`` log file. The server for training this network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU.
+The complete codes are available at :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`. The tarining arguments are:
 
-.. code-block:: python
+.. code-block:: bash
 
-    >>> from spikingjelly.clock_driven.examples import conv_fashion_mnist
-    >>> conv_fashion_mnist.main()
-    输入运行的设备，例如“cpu”或“cuda:0”
-     input device, e.g., "cpu" or "cuda:0": cuda:9
-    输入保存Fashion MNIST数据集的位置，例如“./”
-     input root directory for saving Fashion MNIST dataset, e.g., "./": ./fmnist
-    输入batch_size，例如“64”
-     input batch_size, e.g., "64": 128
-    输入学习率，例如“1e-3”
-     input learning rate, e.g., "1e-3": 1e-3
-    输入仿真时长，例如“8”
-     input simulating steps, e.g., "8": 8
-    输入LIF神经元的时间常数tau，例如“2.0”
-     input membrane time constant, tau, for LIF neurons, e.g., "2.0": 2.0
-    输入训练轮数，即遍历训练集的次数，例如“100”
-     input training epochs, e.g., "100": 100
-    输入保存tensorboard日志文件的位置，例如“./”
-     input root directory for saving tensorboard logs, e.g., "./": ./logs_conv_fashion_mnist
-    saving net...
-    saved
-    epoch=0, t_train=41.182421264238656, t_test=2.5504338955506682, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8704, train_times=468
-    saving net...
-    saved
-    epoch=1, t_train=40.93981215544045, t_test=2.538706629537046, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.8928, train_times=936
-    saving net...
-    saved
-    epoch=2, t_train=40.86129532009363, t_test=2.5383697943761945, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.899, train_times=1404
-    saving net...
-    saved
+    Classify Fashion-MNIST
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      -T T                  simulating time-steps
+      -device DEVICE        device
+      -b B                  batch size
+      -epochs N             number of total epochs to run
+      -j N                  number of data loading workers (default: 4)
+      -data_dir DATA_DIR    root dir of Fashion-MNIST dataset
+      -out_dir OUT_DIR      root dir for saving logs and checkpoint
+      -resume RESUME        resume from the checkpoint path
+      -amp                  automatic mixed precision training
+      -cupy                 use cupy neuron and multi-step forward mode
+      -opt OPT              use which optimizer. SDG or Adam
+      -lr LR                learning rate
+      -momentum MOMENTUM    momentum for SGD
+      -lr_scheduler LR_SCHEDULER
+                            use which schedule. StepLR or CosALR
+      -step_size STEP_SIZE  step_size for StepLR
+      -gamma GAMMA          gamma for StepLR
+      -T_max T_MAX          T_max for CosineAnnealingLR
+
+The checkpoint will be saved in the same level directory of the ``tensorboard`` log file. The server for training this
+network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU.
+
+.. code-block:: bash
+
+    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
+
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    PythonNet(
+      (static_conv): Sequential(
+        (0): Conv2d(1, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      )
+      (conv): Sequential(
+        (0): IFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+        (1): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+        (2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
+        (3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+        (4): IFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+        (5): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False)
+      )
+      (fc): Sequential(
+        (0): Flatten(start_dim=1, end_dim=-1)
+        (1): Linear(in_features=6272, out_features=2048, bias=False)
+        (2): IFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+        (3): Linear(in_features=2048, out_features=10, bias=False)
+        (4): IFNode(
+          v_threshold=1.0, v_reset=0.0, detach_reset=False
+          (surrogate_function): ATan(alpha=2.0, spiking=True)
+        )
+      )
+    )
+    Mkdir ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp.
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp
+    epoch=0, train_loss=0.028124165828697957, train_acc=0.8188267895299145, test_loss=0.023525000348687174, test_acc=0.8633, max_test_acc=0.8633, total_time=16.86261749267578
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp
+    epoch=1, train_loss=0.018544567498163536, train_acc=0.883613782051282, test_loss=0.02161250041425228, test_acc=0.8745, max_test_acc=0.8745, total_time=16.618073225021362
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
 
     ...
 
-    epoch=95, t_train=40.98498909268528, t_test=2.558146824128926, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9425, train_times=44928
-    saving net...
-    saved
-    epoch=96, t_train=41.19765609316528, t_test=2.6626883540302515, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9426, train_times=45396
-    saving net...
-    saved
-    epoch=97, t_train=41.10238983668387, t_test=2.553960849530995, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.9427, train_times=45864
-    saving net...
-    saved
-    epoch=98, t_train=40.89284007716924, t_test=2.5465594390407205, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.944, train_times=46332
-    epoch=99, t_train=40.843392613343894, t_test=2.557370903901756, device=cuda:0, dataset_dir=./fmnist, batch_size=128, learning_rate=0.001, T=8, log_dir=./logs_conv_fashion_mnist, max_test_accuracy=0.944, train_times=46800
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp
+    epoch=62, train_loss=0.0010829827882937538, train_acc=0.997512686965812, test_loss=0.011441250185668468, test_acc=0.9316, max_test_acc=0.933, total_time=15.976636171340942
+    Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
+    ./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp
+    epoch=63, train_loss=0.0010746361010835525, train_acc=0.9977463942307693, test_loss=0.01154562517106533, test_acc=0.9296, max_test_acc=0.933, total_time=15.83976149559021
 
 After running 100 rounds of training, the correct rates on the training batch and test set are as follows:
 
@@ -248,21 +257,19 @@ After running 100 rounds of training, the correct rates on the training batch an
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
     :width: 100%
 
-After training for 100 epochs, the highest test set accuracy rate can reach 94.4%, which is a very good performance for
-SNN, only slightly lower than the use of Normalization, random horizontal flip, random vertical flip, random translation
-in the BenchMark of `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_, ResNet18 of random rotation has a 94.9% correct rate.
+After training for 64 epochs, the highest test set accuracy rate can reach 93.3%, which is a very good accuracy for
+SNN. It is only slightly lower than ResNet18 (93.3%) with Normalization, random horizontal flip, random vertical flip,
+random translation and random rotation in the BenchMark `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_.
 
-Visual encoder
+Visual Encoder
 ------------------------------------
-
-As we said in the previous article, if the data is directly fed into the SNN, the first spike neuron layer and the layers
-before it can be regarded as a learnable encoder. Specifically, it is the highlighted part of our network as shown below:
+As we said in the above text, the first spike neurons layer (SN) and the layers before SN can be regarded as an auto-encoder with learnable parameters. Specifically, it is the highlighted part of our network shown below:
 
 .. code-block:: python
     :emphasize-lines: 5, 6, 10
 
     class Net(nn.Module):
-        def __init__(self, tau, T, v_threshold=1.0, v_reset=0.0):
+        def __init__(self, T):
             ...
             self.static_conv = nn.Sequential(
                 nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
@@ -270,17 +277,17 @@ before it can be regarded as a learnable encoder. Specifically, it is the highli
             )
 
             self.conv = nn.Sequential(
-                neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate.ATan()),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
             ...
 
-Now let's take a look at the coding effect of the trained encoder. Let's create a new python file, import related
-modules, and redefine a data loader with ``batch_size=1``, because we want to view one picture by one:
+Now let's take a look at the output spikes of the trained encoder. Let's create a new python file, import related
+modules, and redefine a data loader with ``batch_size=1``, because we want to view pictures one by one:
 
 .. code-block:: python
 
     from matplotlib import pyplot as plt
     import numpy as np
-    from spikingjelly.clock_driven.examples.conv_fashion_mnist import Net
+    from spikingjelly.clock_driven.examples.conv_fashion_mnist import PythonNet
     from spikingjelly import visualizing
     import torch
     import torch.nn as nn
@@ -296,20 +303,18 @@ modules, and redefine a data loader with ``batch_size=1``, because we want to vi
         shuffle=True,
         drop_last=False)
 
-Load the trained network from the location where the network is saved, that is, under the ``log_dir`` directory. And we extract the encoder. Just run on the CPU:
+We load net from the checkpoint:
 
 .. code-block:: python
 
-    net = torch.load('./logs_conv_fashion_mnist/net_max_acc.pt', 'cpu')
+    net = torch.load('./logs/T_4_b_128_SGD_lr_0.1_CosALR_64_amp/checkpoint_max.pth', 'cpu')['net']
     encoder = nn.Sequential(
         net.static_conv,
         net.conv[0]
     )
     encoder.eval()
 
-Next, extract a picture from the data set, send it to the encoder, and check the accumulated value :math:`\sum_{t} S_{t}` of the output
-spike. In order to display clearly, we also normalized the pixel value of the output ``feature_map``, and linearly transformed
-the value range to ``[0, 1]``.
+Let us extract a image from the data set, send it to the encoder, and check the accumulated value :math:`\sum_{t} S_{t}` of the output spikes. In order to show clearly, we also normalize the pixel values of the output ``feature_map`` with linearly transformation to ``[0, 1]``.
 
 .. code-block:: python
 
@@ -338,7 +343,7 @@ the value range to ``[0, 1]``.
                     plt.title('$\\sum_{t} S_{t}$ at $t = ' + str(t) + '$', fontsize=20)
                     plt.show()
 
-The following shows two input pictures and the cumulative spike :math:`\sum_{t} S_{t}` output by the encoder at the begin time of ``t=0`` and the end time ``t=7``:
+The following figure shows two input iamges and the cumulative spikes :math:`\sum_{t} S_{t}` encoded by the encoder at ``t=0`` and ``t=7``:
 
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x0.*
     :width: 100%
@@ -358,5 +363,4 @@ The following shows two input pictures and the cumulative spike :math:`\sum_{t} 
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y17.*
     :width: 100%
 
-Observation shows that the cumulative output spike :math:`\sum_{t} S_{t}` of the encoder is very close to the contour of the original image.
-It seems that this kind of self-learning spike encoder has strong coding ability.
+It can be found that the cumulative spikes :math:`\sum_{t} S_{t}` are very similar to the origin images, indicating that the encoder has strong coding ability.

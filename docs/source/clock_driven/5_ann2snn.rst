@@ -30,7 +30,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
     import numpy as np
 
     plt.rcParams['figure.dpi'] = 200
-    if_node = neuron.IFNode(v_reset=None, monitor_state=True)
+    if_node = neuron.IFNode(v_reset=None)
     T = 128
     x = torch.arange(-0.2, 1.2, 0.04)
     plt.scatter(torch.arange(x.shape[0]), x)
@@ -47,9 +47,11 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 
 .. code-block:: python
 
+    s_list = []
     for t in range(T):
-        if_node(x)
-    out_spikes = np.asarray(if_node.monitor['s']).T
+        s_list.append(if_node(x).unsqueeze(0))
+
+    out_spikes = np.asarray(torch.cat(s_list))
     visualizing.plot_1d_spikes(out_spikes, 'IF neurons\' spikes and firing rates', 't', 'Neuron index $i$')
     plt.show()
 

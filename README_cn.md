@@ -7,7 +7,7 @@
 
 [SpikingJelly](https://github.com/fangwei123456/spikingjelly) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neural Network, SNN)进行深度学习的框架。
 
-SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedocs.io
+SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedocs.io。
 
 - [安装](#安装)
 - [以前所未有的简单方式搭建SNN](#以前所未有的简单方式搭建SNN)
@@ -17,37 +17,35 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 - [神经形态数据集支持](#神经形态数据集支持)
 - [教程](#教程)
 - [引用](#引用)
-- [常见问题](#常见问题)
+- [贡献](#贡献)
 - [项目信息](#项目信息)
 
 ## 安装
 
 注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
 
-**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本(0.0.0.0.4)**：
+奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
+
+**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本(0.0.0.0.6)**：
 
 ```bash
 pip install spikingjelly
 ```
 
-PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请**从源代码安装**：
+**从源代码安装最新的开发版**：
 
 通过[GitHub](https://github.com/fangwei123456/spikingjelly)：
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
 python setup.py install
 ```
 通过[OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
 ```bash
 git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
-git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
 python setup.py install
 ```
-从源代码安装时，会检测环境中是否已经安装CUDA。如果没有安装CUDA，则CUDA扩展也不会被安装。
-
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
@@ -121,9 +119,13 @@ class ANN(nn.Module):
 
 ## CUDA增强的神经元
 
-SpikingJelly 提供了2种版本的神经元：用户友好的PyTorch版本，以及速度更快的CUDA版本。下图对比了各种类型的LIF神经元的运行时长：
+SpikingJelly为多步神经元（阅读[教程](#教程)以获取更多信息）提供给了2种后端。可以使用对用户友好的`torch`后端进行快速开发，并使用`cupy`后端进行高效训练。
+
+下图对比了2种后端的多步LIF神经元的运行时长：
 
 <img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+
+若想使用`cupy`后端，请安装 [CuPy](https://docs.cupy.dev/en/stable/install.html)。`cupy`后端仅支持GPU，而`torch`后端同时支持CPU和GPU。
 
 ## 设备支持
 
@@ -195,11 +197,9 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 }
 ```
 
-## 常见问题
+## 贡献
 
-### ModuleNotFoundError:No module named "\_C\_…"
-
-"\_C\_..."模块是SpikingJelly中的CUDA扩展，例如"\_C\_neuron"是编译出的CUDA神经元的模块。注意，PyPI的安装包不包含CUDA扩展。如果需要使用CUDA扩展模块，请从源代码安装。
+可以通过阅读issues来获取目前尚未解决的问题和开发计划。我们非常欢迎各位用户参与讨论、解决问题和提交pull requests。
 
 ## 项目信息
 
@@ -209,4 +209,3 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 
 开发人员名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
 
-欢迎各位开发者参与此框架的开发！

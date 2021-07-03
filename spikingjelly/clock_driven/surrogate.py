@@ -76,7 +76,7 @@ class SurrogateFunctionBase(nn.Module):
     def __init__(self, alpha, spiking=True):
         super().__init__()
         self.spiking = spiking
-        self.register_buffer('alpha', torch.tensor(alpha, dtype=torch.float))
+        self.alpha = alpha
 
     def set_spiking_mode(self, spiking: bool):
         self.spiking = spiking
@@ -92,15 +92,15 @@ class SurrogateFunctionBase(nn.Module):
     def primitive_function(x, alpha):
         raise NotImplementedError
 
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        raise NotImplementedError
+
     def forward(self, x: torch.Tensor):
-        if self.training:
-            if self.spiking:
-                return self.spiking_function(x, self.alpha)
-            else:
-                return self.primitive_function(x, self.alpha)
+        if self.spiking:
+            return self.spiking_function(x, self.alpha)
         else:
-            # 无论是否为spiking模式，只要是测试（推理）阶段，都直接使用阶跃函数
-            return heaviside(x)
+            return self.primitive_function(x, self.alpha)
+
 
 class MultiArgsSurrogateFunctionBase(nn.Module):
     def __init__(self, spiking=True, **kwargs):
@@ -131,8 +131,8 @@ class piecewise_quadratic(torch.autograd.Function):
         grad_x = None
         if ctx.needs_input_grad[0]:
             x_abs = ctx.saved_tensors[0].abs()
-            mask = (x_abs > (1 / ctx.saved_tensors[1]))
-            grad_x = (grad_output * (- ctx.saved_tensors[1].pow(2) * x_abs + ctx.saved_tensors[1])).masked_fill_(mask, 0)
+            mask = (x_abs > (1 / ctx.alpha))
+            grad_x = (grad_output * (- (ctx.alpha ** 2) * x_abs + ctx.alpha)).masked_fill_(mask, 0)
         return grad_x, None
 
 
@@ -242,14 +242,15 @@ class piecewise_exp(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] / 2 * (- ctx.saved_tensors[1] * ctx.saved_tensors[0].abs()).exp_() * grad_output
+            grad_x = ctx.alpha / 2 * (- ctx.alpha * ctx.saved_tensors[0].abs()).exp_() * grad_output
 
         return grad_x, None
 
@@ -351,15 +352,16 @@ class sigmoid(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            sgax = (ctx.saved_tensors[0] * ctx.saved_tensors[1]).sigmoid_()
-            grad_x = grad_output * (1 - sgax) * sgax * ctx.saved_tensors[1]
+            sgax = (ctx.saved_tensors[0] * ctx.alpha).sigmoid_()
+            grad_x = grad_output * (1. - sgax) * sgax * ctx.alpha
 
         return grad_x, None
 
@@ -423,6 +425,23 @@ class Sigmoid(SurrogateFunctionBase):
     def primitive_function(x: torch.Tensor, alpha):
         return (x * alpha).sigmoid()
 
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        alpha = str(self.alpha) + 'f'
+        if dtype == 'fp32':
+            code = f'''
+            const float sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
+            const float {y} = (1.0f - sigmoid_ax) * sigmoid_ax * {alpha};
+            '''
+        elif dtype == 'fp16':
+            code = f'''
+            const half alpha = __float2half({alpha});
+            const half sigmoid_ax = __hdiv(__float2half(1.0f), __hadd(hexp(__hneg(__hmul(alpha, {x}))), __float2half(1.0f)));
+            const half {y} = __hmul(__hmul(__hsub(__float2half(1.0f), sigmoid_ax), sigmoid_ax), alpha);
+            '''
+        else:
+            raise NotImplementedError
+        return code
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -450,14 +469,15 @@ class soft_sign(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = grad_output / (2 * ctx.saved_tensors[1] * (1 / ctx.saved_tensors[1] + ctx.saved_tensors[0].abs()).pow_(2))
+            grad_x = grad_output / (2 * ctx.alpha * (1 / ctx.alpha + ctx.saved_tensors[0].abs()).pow_(2))
         return grad_x, None
 
 
@@ -548,14 +568,15 @@ class atan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = ctx.saved_tensors[1] / 2 / (1 + (math.pi / 2 * ctx.saved_tensors[1] * ctx.saved_tensors[0]).pow_(2)) * grad_output
+            grad_x = ctx.alpha / 2 / (1 + (math.pi / 2 * ctx.alpha * ctx.saved_tensors[0]).pow_(2)) * grad_output
 
         return grad_x, None
 
@@ -605,6 +626,27 @@ class ATan(SurrogateFunctionBase):
     def primitive_function(x: torch.Tensor, alpha):
         return (math.pi / 2 * alpha * x).atan_() / math.pi + 0.5
 
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        alpha = str(self.alpha) + 'f'
+        if dtype == 'fp32':
+            code = f'''
+            const float M_PI_2__alpha__x = ((float) 1.57079632679489661923) * {alpha} * {x};
+            const float {y} = {alpha} / 2.0f / (1.0f + M_PI_2__alpha__x * M_PI_2__alpha__x);
+            '''
+        elif dtype == 'fp16':
+            code = f'''
+            const half alpha =  __float2half({alpha});
+            #if __CUDACC_VER_MAJOR__ >= 11
+            const half M_PI_2__alpha__x = __hmul(__hmul(__double2half(1.57079632679489661923), {alpha}), {x});
+            #else
+            const half M_PI_2__alpha__x = __hmul(__hmul(__float2half((float) 1.57079632679489661923), {alpha}), {x});
+            #endif
+            const half {y} = __hdiv(__hdiv({alpha}, __float2half(2.0f)), __hfma(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half(1.0f)));
+            '''
+        else:
+            raise NotImplementedError
+        return code
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -632,14 +674,15 @@ class nonzero_sign_log_abs(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = grad_output / (1 / ctx.saved_tensors[1] + ctx.saved_tensors[0].abs())
+            grad_x = grad_output / (1 / ctx.alpha + ctx.saved_tensors[0].abs())
 
 
         return grad_x, None
@@ -760,14 +803,15 @@ class erf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
         grad_x = None
         if ctx.needs_input_grad[0]:
-            grad_x = grad_output * (- (ctx.saved_tensors[0] * ctx.saved_tensors[1]).pow_(2)).exp_() * (ctx.saved_tensors[1] / math.sqrt(math.pi))
+            grad_x = grad_output * (- (ctx.saved_tensors[0] * ctx.alpha).pow_(2)).exp_() * (ctx.alpha / math.sqrt(math.pi))
 
         return grad_x, None
 

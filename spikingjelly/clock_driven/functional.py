@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from spikingjelly.clock_driven import neuron
+from . import neuron
 
 def reset_net(net: nn.Module):
     '''
@@ -28,33 +28,6 @@ def reset_net(net: nn.Module):
     for m in net.modules():
         if hasattr(m, 'reset'):
             m.reset()
-
-
-def set_monitor(net: nn.Module, monitor_state):
-    '''
-    * :ref:`API in English <set_monitor-en>`
-
-    .. _set_monitor-cn:
-
-    :param net: 任何属于 ``nn.Module`` 子类的网络
-    :param bool monitor_state: 表示开启或关闭monitor
-    :return: None
-
-    将 ``net`` 中的所有含有监视器的模块，监视器状态设置为\ ``monitor_state``。
-
-    * :ref:`中文API <set_monitor-cn>`
-
-    .. _set_monitor-en:
-
-    :param net: Any network inherits from ``nn.Module``
-    :param bool monitor_state: Indicating whether to turn on the monitor
-    :return: None
-
-    Set states of all monitors in modules of ``net`` to ``monitor_state``.
-    '''
-    for m in net.modules():
-        if hasattr(m, 'set_monitor'):
-            m.set_monitor(monitor_state)
 
 def spike_cluster(v: torch.Tensor, v_threshold, T_in: int):
     '''

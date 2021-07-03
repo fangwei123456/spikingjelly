@@ -2,11 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from spikingjelly.clock_driven import functional
+from . import base
 
-class NeuNorm(nn.Module):
+
+class NeuNorm(base.MemoryModule):
     def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False):
-        '''
+        """
         * :ref:`API in English <NeuNorm.__init__-en>`
 
         .. _NeuNorm.__init__-cn:
@@ -63,11 +64,11 @@ class NeuNorm(nn.Module):
 
         :math:`\\frac{v}{F}` will be calculated by :math:`k_{\\tau 2} + vF = 1` autonomously.
 
-        '''
+        """
         super().__init__()
-        self.x = 0
+        self.register_memory('x', 0.)
         self.k0 = k
-        self.k1 = (1 - self.k0) / in_channels**2
+        self.k1 = (1. - self.k0) / in_channels ** 2
         if shared_across_channels:
             self.w = nn.Parameter(torch.Tensor(1, height, width))
         else:
@@ -75,32 +76,17 @@ class NeuNorm(nn.Module):
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
     def forward(self, in_spikes: torch.Tensor):
-        self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1, keepdim=True)  # x.shape = [batch_size, 1, height, width]
+        self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1,
+                                                            keepdim=True)  # x.shape = [batch_size, 1, height, width]
         return in_spikes - self.w * self.x
 
-    def reset(self):
-        '''
-        * :ref:`API in English <NeuNorm.reset-en>`
+    def extra_repr(self) -> str:
+        return f'shape={self.w.shape}'
 
-        .. _NeuNorm.reset-cn:
-
-        :return: None
-
-        本层是一个有状态的层。此函数重置本层的状态变量。
-
-        * :ref:`中文API <NeuNorm.reset-cn>`
-
-        .. _NeuNorm.reset-en:
-
-        :return: None
-
-        This layer is stateful. This function will reset all stateful variables.
-        '''
-        self.x = 0
 
 class DCT(nn.Module):
     def __init__(self, kernel_size):
-        '''
+        """
         * :ref:`API in English <DCT.__init__-en>`
 
         .. _DCT.__init__-cn:
@@ -122,7 +108,7 @@ class DCT(nn.Module):
         DCT will only applied in the last two dimensions. ``W`` and ``H`` should be divisible by ``kernel_size``.
 
         Note that ``DCT`` is a special case of ``AXAT``.
-        '''
+        """
         super().__init__()
         self.kernel = torch.zeros(size=[kernel_size, kernel_size])
         for i in range(0, kernel_size):
@@ -141,12 +127,14 @@ class DCT(nn.Module):
         for i in range(0, x_shape[-2], self.kernel.shape[0]):
             for j in range(0, x_shape[-1], self.kernel.shape[0]):
                 ret[:, i:i + self.kernel.shape[0], j:j + self.kernel.shape[0]] \
-                    = self.kernel.matmul(x[:, i:i + self.kernel.shape[0], j:j + self.kernel.shape[0]]).matmul(self.kernel.t())
+                    = self.kernel.matmul(x[:, i:i + self.kernel.shape[0], j:j + self.kernel.shape[0]]).matmul(
+                    self.kernel.t())
         return ret.view(x_shape)
+
 
 class AXAT(nn.Module):
     def __init__(self, in_features, out_features):
-        '''
+        """
         * :ref:`API in English <AXAT.__init__-en>`
 
         .. _AXAT.__init__-cn:
@@ -169,11 +157,10 @@ class AXAT(nn.Module):
         Apply :math:`AXA^{T}` transform on input :math:`X` at the last two dimensions. :math:`A` is a tensor with ``shape = [out_features, in_features]``.
 
         The input will be regarded as a batch of tensors with ``shape = [in_features, in_features]``.
-        '''
+        """
         super().__init__()
         self.A = nn.Parameter(torch.Tensor(out_features, in_features))
         nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
-
 
     def forward(self, x: torch.Tensor):
         x_shape = list(x.shape)
@@ -183,9 +170,10 @@ class AXAT(nn.Module):
         x_shape[-2] = x.shape[-2]
         return x.view(x_shape)
 
-class Dropout(nn.Module):
+
+class Dropout(base.MemoryModule):
     def __init__(self, p=0.5):
-        '''
+        """
         * :ref:`API in English <Dropout.__init__-en>`
 
         .. _Dropout.__init__-cn:
@@ -197,6 +185,7 @@ class Dropout(nn.Module):
         数后，才会按照概率去重新决定，哪些位置被置0。
 
         .. tip::
+
             这种Dropout最早由 `Enabling Spike-based Backpropagation for Training Deep Neural Network Architectures
             <https://arxiv.org/abs/1903.06379>`_ 一文进行详细论述：
 
@@ -242,16 +231,14 @@ class Dropout(nn.Module):
             iteration. Then, the dropout effect would fade-out once the output error is propagated backward and the parameters
             are updated at the last time step. Therefore, we need to keep the set of randomly connected units for the entire
             time window within an iteration.
-        '''
+        """
         super().__init__()
         assert 0 <= p < 1
-        self.mask = None
+        self.register_memory('mask', None)
         self.p = p
 
     def extra_repr(self):
-        return 'p={}'.format(
-            self.p
-        )
+        return f'p={self.p}'
 
     def create_mask(self, x: torch.Tensor):
         self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True)
@@ -265,29 +252,10 @@ class Dropout(nn.Module):
         else:
             return x
 
-    def reset(self):
-        '''
-        * :ref:`API in English <Dropout.reset-en>`
-
-        .. _Dropout.reset-cn:
-
-        :return: None
-
-        本层是一个有状态的层。此函数重置本层的状态变量。
-
-        * :ref:`中文API <Dropout.reset-cn>`
-
-        .. _Dropout.reset-en:
-
-        :return: None
-
-        This layer is stateful. This function will reset all stateful variables.
-        '''
-        self.mask = None
 
 class Dropout2d(Dropout):
     def __init__(self, p=0.2):
-        '''
+        """
         * :ref:`API in English <Dropout2d.__init__-en>`
 
         .. _Dropout2d.__init__-cn:
@@ -312,15 +280,16 @@ class Dropout2d(Dropout):
         has been called and a new simulation is started.
 
         For more information about Dropout in SNN, refer to :ref:`layer.Dropout <Dropout.__init__-en>`.
-        '''
+        """
         super().__init__(p)
 
     def create_mask(self, x: torch.Tensor):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
 
+
 class MultiStepDropout(Dropout):
     def __init__(self, p=0.5):
-        '''
+        """
         * :ref:`API in English <MultiStepDropout.__init__-en>`
 
         .. _MultiStepDropout.__init__-cn:
@@ -330,6 +299,10 @@ class MultiStepDropout(Dropout):
 
         :class:`spikingjelly.clock_driven.layer.Dropout` 的多步版本。
 
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
         * :ref:`中文API <MultiStepDropout.__init__-cn>`
 
         .. _MultiStepDropout.__init__-en:
@@ -338,8 +311,15 @@ class MultiStepDropout(Dropout):
         :type p: float
 
         The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout`.
-        '''
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
+        """
         super().__init__(p)
+
     def forward(self, x_seq: torch.Tensor):
         if self.training:
             if self.mask is None:
@@ -349,9 +329,10 @@ class MultiStepDropout(Dropout):
         else:
             return x_seq
 
+
 class MultiStepDropout2d(Dropout2d):
     def __init__(self, p=0.5):
-        '''
+        """
         * :ref:`API in English <MultiStepDropout2d.__init__-en>`
 
         .. _MultiStepDropout2d.__init__-cn:
@@ -361,6 +342,10 @@ class MultiStepDropout2d(Dropout2d):
 
         :class:`spikingjelly.clock_driven.layer.Dropout2d` 的多步版本。
 
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
         * :ref:`中文API <MultiStepDropout2d.__init__-cn>`
 
         .. _MultiStepDropout2d.__init__-en:
@@ -369,7 +354,13 @@ class MultiStepDropout2d(Dropout2d):
         :type p: float
 
         The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout2d`.
-        '''
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
+        """
         super().__init__(p)
 
     def forward(self, x_seq: torch.Tensor):
@@ -381,9 +372,10 @@ class MultiStepDropout2d(Dropout2d):
         else:
             return x_seq
 
-class SynapseFilter(nn.Module):
+
+class SynapseFilter(base.MemoryModule):
     def __init__(self, tau=100.0, learnable=False):
-        '''
+        """
         * :ref:`API in English <LowPassSynapse.__init__-en>`
 
         .. _LowPassSynapse.__init__-cn:
@@ -441,7 +433,7 @@ class SynapseFilter(nn.Module):
         `Exploiting Neuron and Synapse Filter Dynamics in Spatial Temporal Learning of Deep Spiking Neural Network <https://arxiv.org/abs/2003.02944>`_
 
         另一种视角是将其视为一种输入为脉冲，并输出其电压的LIF神经元。并且该神经元的发放阈值为 :math:`+\\infty` 。
-        
+
         神经元最后累计的电压值一定程度上反映了该神经元在整个仿真过程中接收脉冲的数量，从而替代了传统的直接对输出脉冲计数（即发放频率）来表示神经元活跃程度的方法。因此通常用于最后一层，在以下文章中使用：
 
         `Enabling spike-based backpropagation for training deep neural network architectures <https://arxiv.org/abs/1903.06379>`_
@@ -512,46 +504,40 @@ class SynapseFilter(nn.Module):
 
         `Enabling spike-based backpropagation for training deep neural network architectures <https://arxiv.org/abs/1903.06379>`_
 
-        '''
+        """
         super().__init__()
+        self.learnable = learnable
+        assert tau > 1
         if learnable:
-            self.tau = nn.Parameter(torch.ones(size=[1]) / tau)
+            init_w = - math.log(tau - 1)
+            self.w = nn.Parameter(torch.as_tensor(init_w))
         else:
-            self.tau = 1 / tau
-        self.out_i = 0
+            self.tau = tau
+
+        self.register_memory('out_i', 0.)
 
     def extra_repr(self):
-        return 'tau={}'.format(
-            1 / self.tau
-        )
+        if self.learnable:
+            with torch.no_grad():
+                tau = 1. / self.w.sigmoid()
+        else:
+            tau = self.tau
+
+        return f'tau={tau}, learnable={self.learnable}'
 
     def forward(self, in_spikes: torch.Tensor):
-        self.out_i = self.out_i - (1 - in_spikes) * self.out_i * self.tau + in_spikes
+        if self.learnable:
+            inv_tau = self.w.sigmoid()
+        else:
+            inv_tau = 1. / self.tau
+
+        self.out_i = self.out_i - (1 - in_spikes) * self.out_i * inv_tau + in_spikes
+
         return self.out_i
-
-    def reset(self):
-        '''
-        * :ref:`API in English <LowPassSynapse.reset-en>`
-
-        .. _LowPassSynapse.reset-cn:
-
-        :return: None
-
-        本层是一个有状态的层。此函数重置本层的状态变量。
-
-        * :ref:`中文API <LowPassSynapse.reset-cn>`
-
-        .. _LowPassSynapse.reset-en:
-
-        :return: None
-
-        This layer is stateful. This function will reset all stateful variables.
-        '''
-        self.out_i = 0
 
 class ChannelsPool(nn.Module):
     def __init__(self, pool: nn.MaxPool1d or nn.AvgPool1d):
-        '''
+        """
         * :ref:`API in English <ChannelsPool.__init__-en>`
 
         .. _ChannelsPool.__init__-cn:
@@ -587,7 +573,7 @@ class ChannelsPool(nn.Module):
             >>> y = cp(x)
             >>> y.shape
             torch.Size([2, 4, 4, 4])
-        '''
+        """
         super().__init__()
         self.pool = pool
 
@@ -595,10 +581,11 @@ class ChannelsPool(nn.Module):
         x_shape = x.shape
         return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
 
-class DropConnectLinear(nn.Module):
+
+class DropConnectLinear(base.MemoryModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
                  invariant: bool = False, activation: None or nn.Module = nn.ReLU()) -> None:
-        '''
+        """
         * :ref:`API in English <DropConnectLinear.__init__-en>`
 
         .. _DropConnectLinear.__init__-cn:
@@ -615,7 +602,7 @@ class DropConnectLinear(nn.Module):
         :param samples_num: 在推理时，从高斯分布中采样的数据数量。默认为1024
         :type samples_num: int
         :param invariant: 若为 ``True``，线性层会在第一次执行前向传播时被按概率断开，断开后的线性层会保持不变，直到 ``reset()`` 函数
-            被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为 
+            被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为
             ``False``，在每一次前向传播时线性层都会被重新完全连接再按概率断开。 阅读 :ref:`layer.Dropout <Dropout.__init__-cn>` 以
             获得更多关于此参数的信息。
             默认为 ``False``
@@ -649,8 +636,8 @@ class DropConnectLinear(nn.Module):
         :type samples_num: int
         :param invariant: If set to ``True``, the connections will be dropped at the first time of forward and the dropped
             connections will remain unchanged until ``reset()`` is called and the connections recovery to fully-connected
-            status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to 
-            ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>` 
+            status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to
+            ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>`
             for more information to understand this parameter. Default: ``False``
         :type invariant: bool
         :param activation: the activation layer after the linear layer
@@ -668,7 +655,7 @@ class DropConnectLinear(nn.Module):
             See `Algorithm 2` in `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
             for more details. Note that activation is an intermediate process. This is the reason why we include
             ``activation`` as a member variable of this module.
-        '''
+        """
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
@@ -681,16 +668,16 @@ class DropConnectLinear(nn.Module):
         self.reset_parameters()
 
         self.p = p  # 置0的概率
-        self.dropped_w = None
+        self.register_memory('dropped_w', None)
         if self.bias is not None:
-            self.dropped_b = None
+            self.register_memory('dropped_b', None)
 
         self.samples_num = samples_num
         self.invariant = invariant
         self.activation = activation
 
     def reset_parameters(self) -> None:
-        '''
+        """
         * :ref:`API in English <DropConnectLinear.reset_parameters-en>`
 
         .. _DropConnectLinear.reset_parameters-cn:
@@ -708,7 +695,7 @@ class DropConnectLinear(nn.Module):
         :rtype: None
 
         Initialize the learnable parameters of this module.
-        '''
+        """
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         if self.bias is not None:
             fan_in, _ = nn.init._calculate_fan_in_and_fan_out(self.weight)
@@ -716,7 +703,7 @@ class DropConnectLinear(nn.Module):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def reset(self):
-        '''
+        """
         * :ref:`API in English <DropConnectLinear.reset-en>`
 
         .. _DropConnectLinear.reset-cn:
@@ -735,10 +722,8 @@ class DropConnectLinear(nn.Module):
 
         Reset the linear layer to fully-connected status. If ``self.activation`` is also stateful, this function will
         also reset it.
-        '''
-        self.dropped_w = None
-        if self.bias is not None:
-            self.dropped_b = None
+        """
+        super().reset()
         if hasattr(self.activation, 'reset'):
             self.activation.reset()
 
@@ -785,8 +770,42 @@ class DropConnectLinear(nn.Module):
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
 
+
 class MultiStepContainer(nn.Module):
     def __init__(self, *args):
+        """
+        * :ref:`API in English <MultiStepContainer.reset-en>`
+
+        .. _MultiStepContainer.reset-cn:
+
+        :param args: 单个或多个网络模块
+        :type args: torch.nn.Module
+
+        将单步模块包装成多步模块的包装器。
+
+
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
+        * :ref:`中文API <MultiStepContainer.reset-cn>`
+
+        .. _MultiStepContainer.reset-en:
+
+        :param args: one or many modules
+        :type args: torch.nn.Module
+
+        A container that wraps single-step modules to a multi-step modules.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
+
+
+
+        """
         super().__init__()
         if len(args) == 1:
             self.module = args[0]
@@ -794,12 +813,12 @@ class MultiStepContainer(nn.Module):
             self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
-        '''
+        """
         :param x_seq: shape=[T, batch_size, ...]
         :type x_seq: torch.Tensor
         :return: y_seq, shape=[T, batch_size, ...]
         :rtype: torch.Tensor
-        '''
+        """
         y_seq = []
         for t in range(x_seq.shape[0]):
             y_seq.append(self.module(x_seq[t]))
@@ -810,9 +829,10 @@ class MultiStepContainer(nn.Module):
         if hasattr(self.module, 'reset'):
             self.module.reset()
 
+
 class SeqToANNContainer(nn.Module):
     def __init__(self, *args):
-        '''
+        """
         * :ref:`API in English <SeqToANNContainer.__init__-en>`
 
         .. _SeqToANNContainer.__init__-cn:
@@ -850,7 +870,7 @@ class SeqToANNContainer(nn.Module):
                 fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
                 print(fc(x).shape)
                 # torch.Size([16, 8, 3])
-        '''
+        """
         super().__init__()
         if len(args) == 1:
             self.module = args[0]
@@ -858,23 +878,24 @@ class SeqToANNContainer(nn.Module):
             self.module = nn.Sequential(*args)
 
     def forward(self, x_seq: torch.Tensor):
-        '''
+        """
         :param x_seq: shape=[T, batch_size, ...]
         :type x_seq: torch.Tensor
         :return: y_seq, shape=[T, batch_size, ...]
         :rtype: torch.Tensor
-        '''
+        """
         y_shape = [x_seq.shape[0], x_seq.shape[1]]
         y_seq = self.module(x_seq.flatten(0, 1).contiguous())
         y_shape.extend(y_seq.shape[1:])
         return y_seq.view(y_shape)
 
-class STDPLearner(nn.Module):
+
+class STDPLearner(base.MemoryModule):
     def __init__(self,
                  tau_pre: float, tau_post: float,
                  f_pre, f_post
                  ) -> None:
-        '''
+        """
         .. code-block:: python
 
             import torch
@@ -946,18 +967,15 @@ class STDPLearner(nn.Module):
 
         .. image:: ./_static/API/clock_driven/layer/STDPLearner.*
 
-        '''
+        """
         super().__init__()
         self.tau_pre = tau_pre
         self.tau_post = tau_post
-        self.trace_pre = 0
-        self.trace_post = 0
+
+        self.register_memory('trace_pre', 0.)
+        self.register_memory('trace_post', 0.)
         self.f_pre = f_pre
         self.f_post = f_post
-
-    def reset(self):
-        self.trace_pre = 0
-        self.trace_post = 0
 
     @torch.no_grad()
     def stdp(self, s_pre: torch.Tensor, s_post: torch.Tensor, module: nn.Module, learning_rate: float):
@@ -974,10 +992,9 @@ class STDPLearner(nn.Module):
             raise NotImplementedError
 
 
-
 class PrintShapeModule(nn.Module):
     def __init__(self, ext_str='PrintShapeModule'):
-        '''
+        """
         * :ref:`API in English <PrintModule.__init__-en>`
 
         .. _PrintModule.__init__-cn:
@@ -996,13 +1013,10 @@ class PrintShapeModule(nn.Module):
 
         This layer will not do any operation but print ``ext_str`` and the shape of input, which can be used for debugging.
 
-        '''
+        """
         super().__init__()
         self.ext_str = ext_str
 
     def forward(self, x: torch.Tensor):
         print(self.ext_str, x.shape)
         return x
-
-
-

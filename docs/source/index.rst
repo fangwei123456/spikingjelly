@@ -13,13 +13,15 @@
 
 注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装spikingjelly。
 
-从 `PyPI <https://pypi.org/project/spikingjelly/>`_ 安装最新的稳定版本(0.0.0.0.4)：
+奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
+
+**从 `PyPI <https://pypi.org/project/spikingjelly/>`_ 安装最新的稳定版本(0.0.0.0.6)**：
 
 .. code-block:: bash
 
     pip install spikingjelly
 
-PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源代码安装**：
+**从源代码安装最新的开发版**：
 
 通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
 
@@ -27,7 +29,6 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源�
 
     git clone https://github.com/fangwei123456/spikingjelly.git
     cd spikingjelly
-    git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
     python setup.py install
 
 通过 `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_ ：
@@ -36,10 +37,7 @@ PyPI的安装包不包含CUDA扩展。如果想使用CUDA扩展，请 **从源�
 
     git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
-    git checkout 0.0.0.0.4  # 如果你不想使用master版本，则用此命令切换到最新的稳定版本
     python setup.py install
-
-
 
 .. toctree::
     :maxdepth: 1
@@ -122,13 +120,15 @@ Installation
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-Install the last stable version (0.0.0.0.4) from `PyPI <https://pypi.org/project/spikingjelly/>`_：
+The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
+
+**Install the last stable version (0.0.0.0.6) from `PyPI <https://pypi.org/project/spikingjelly/>`_**：
 
 .. code-block:: bash
 
     pip install spikingjelly
 
-Note that the CUDA extensions are not included in the PyPI package. If you want to use the CUDA extensions, please **install from the source codes**:
+**Install the latest developing version from the source codes**:
 
 From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
@@ -136,7 +136,6 @@ From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
     git clone https://github.com/fangwei123456/spikingjelly.git
     cd spikingjelly
-    git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
     python setup.py install
 
 From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
@@ -145,7 +144,6 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
 
     git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
-    git checkout 0.0.0.0.4  # switch to the last stable version if you do not want to use the master version
     python setup.py install
 
 
