@@ -438,7 +438,8 @@ def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data
     for i in range(num_classes):
         label_idx.append([])
 
-    for i, x, y in enumerate(origin_dataset):
+    for i, item in enumerate(origin_dataset):
+        y = item[1]
         if isinstance(y, np.ndarray) or isinstance(y, torch.Tensor):
             y = y.item()
         label_idx[y].append(i)
