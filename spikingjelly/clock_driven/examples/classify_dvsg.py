@@ -332,8 +332,8 @@ def main():
 
     if args.amp:
         out_dir += '_amp'
-    if args.cext:
-        out_dir += '_cext'
+    if args.cupy:
+        out_dir += '_cupy'
 
 
     if not os.path.exists(out_dir):
