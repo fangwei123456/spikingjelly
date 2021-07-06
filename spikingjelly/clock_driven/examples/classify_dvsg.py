@@ -262,8 +262,8 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    if args.cext:
-        net = CextNet2(channels=args.channels, T = args.T, b = args.b)
+    if args.cupy:
+        net = CextNet(channels=args.channels)
     else:
         net = PythonNet(channels=args.channels)
     print(net)
