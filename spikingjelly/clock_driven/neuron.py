@@ -601,7 +601,7 @@ class ParametricLIFNode(BaseNode):
 
     def extra_repr(self):
         with torch.no_grad():
-            tau = self.w.sigmoid()
+            tau = 1. / self.w.sigmoid()
         return super().extra_repr() + f', tau={tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
