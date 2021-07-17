@@ -196,13 +196,13 @@ Tempotron的膜电位定义为：
 
 查看训练结果
 ^^^^^^^^^^^^
-在Tesla K80上训练10个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
+在Tesla K80上训练100个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
 
 .. image:: ./_static/examples/event_driven/tempotron_mnist/train.*
 
 .. image:: ./_static/examples/event_driven/tempotron_mnist/test.*
 
-测试集的正确率67.1%左右，可以看出Tempotron确实实现了类似ANN中感知器的功能，具有一定的分类能力。但是与主流的多层SNN相比，性能较差。
+测试集的正确率63.9%左右，可以看出Tempotron确实实现了类似ANN中感知器的功能，具有一定的分类能力。但是与主流的多层SNN相比，性能较差。
 随着训练的进行，测试集正确率不断下降，过拟合比较严重。
 
 
