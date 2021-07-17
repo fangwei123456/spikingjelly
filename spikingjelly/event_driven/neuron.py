@@ -26,7 +26,7 @@ class Tempotron(nn.Module):
 
         # v0要求使psp_kernel的最大值为v_threshold，通过求极值点，计算出最值
         t_max = (tau * tau_s * math.log(tau / tau_s)) / (tau - tau_s)
-        self.v0 = self.v_threshold / math.exp(-t_max / tau) - math.exp(-t_max / tau_s)
+        self.v0 = self.v_threshold / (math.exp(-t_max / tau) - math.exp(-t_max / tau_s))
 
     @staticmethod
     def psp_kernel(t: torch.Tensor, tau, tau_s):
