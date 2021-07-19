@@ -80,7 +80,7 @@ class parser:
             onnx.checker.check_model(onnx_model)
             if layer_reduc:
                 onnx_model = onnx_kernel.layer_reduction(onnx_model)
-            onnx.checker.check_model(onnx_model)
+            # onnx.checker.check_model(onnx_model)
             onnx_model = onnx_kernel.rate_normalization(onnx_model, data.numpy(), **kargs) #**self.config['normalization']
             onnx_kernel.save_model(onnx_model,os.path.join(self.config['log_dir'],model_name+".onnx"))
 
@@ -105,11 +105,6 @@ class parser:
             model = pytorch_kernel.rate_normalization(model, data)#, **self.config['normalization']
 
         self.ann_filename = os.path.join(self.config['log_dir'], model_name + ".pth")
-        # print(model(torch.rand(4,3,32,32)))
-        # print(model(torch.rand(4,3,32,32)))
-
-        # print(model.module_list.state_dict().keys())
-        # print(model.state_dict().keys())
         torch.save(model, os.path.join(self.config['log_dir'], "debug.pth"))
         torch.save(model, self.ann_filename)
         model = self.to_snn(model)
