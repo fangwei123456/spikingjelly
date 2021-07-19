@@ -9,6 +9,7 @@ import os
 import tqdm
 import onnxruntime as ort
 from collections import defaultdict
+import json
 
 
 class Mul(nn.Module):
@@ -646,7 +647,7 @@ def normalize_model(model, output_statistics, topo_analyser, robust_norm=True, c
             # weight_ = weight * node_scaled_range[output[0]]
             # bias_ = bias / lamda
 
-            print(output_statistics[output[0]])
+            # print(output_statistics[output[0]])
             input_real_range = node_scaled_range[input[0]]
             input_range = output_statistics[input[0]][statistic_key]
             output_range = output_statistics[output[0]][statistic_key]
@@ -820,14 +821,14 @@ class _pt_model(nn.Module):
                 #     op = 'Gemm'
                 (op_idx, inputs, outputs) = getattr(_converter, 'convert_' + op.lower())(node, self)
                 for out_seq, output in enumerate(outputs):
-                    # self.op_tree[output] = (op_idx, inputs, out_seq)
-                    self.op_tree[output] = (op_idx, inputs, out_seq)
+                    self.op_tree[str(output)] = (int(op_idx), [str(i) for i in inputs], out_seq)
                 for output in outputs:
                     for input in inputs:
                         self.graph[input].append(output)
                 # self.V.update(inputs)
                 # self.V.update(outputs)
             # print(self.V)
+            self.op_tree = json.dumps(self.op_tree)
 
             self.input_name = [i.name for i in onnx_model.graph.input]
             self.output_name = [i.name for i in onnx_model.graph.output]
@@ -853,7 +854,6 @@ class _pt_model(nn.Module):
 
             self.compute_seq = TopologicalSort(self.graph)
             # print(self.compute_seq)
-
             # self.tensors = {}
 
             for k in self.loaded_weights.keys():
@@ -864,7 +864,7 @@ class _pt_model(nn.Module):
                     self.register_buffer('P' + k.replace('.', '@'), self.loaded_weights[k])
 
             self.reserved_tensors_name = list(self.loaded_weights.keys())
-            # print(self.reserved_tensors_name)
+            # print('reserve', self.reserved_tensors_name)
             # print(self.tensors)
 
     def refresh_running_tensor(self):
@@ -875,32 +875,46 @@ class _pt_model(nn.Module):
             else:
                 self.tensors[k] = getattr(self, 'P' + k.replace('.', '@'))
 
+
     def forward(self, input):
-        self.refresh_running_tensor()
+        op_tree = json.loads(self.op_tree)
+
+        tensors = {}
+        for k in set(tensors.keys()) | set(self.reserved_tensors_name):
+            if k not in self.reserved_tensors_name:
+                del tensors[k]
+            else:
+                tensors[k] = getattr(self, 'P' + k.replace('.', '@'))
+        
+        # self.refresh_running_tensor()
         if not isinstance(input, list) or not isinstance(input, tuple):
             input = [input]
         for i, n in enumerate(self.input_name):
-            self.tensors[n] = input[i]
+            tensors[n] = input[i]
         for name in self.compute_seq:
-            if name in self.op_tree.keys():
-                op_idx, inputs, out_seq = self.op_tree[name]
-                # print(name,op_idx, inputs)
+            if name in op_tree.keys():
+                op_idx, inputs, out_seq = op_tree[name]
+                # print(name,op_idx, inputs,out_seq)
                 args = []
                 for input in inputs:
-                    args.append(self.tensors[input])
+                    args.append(tensors[input])
                 # print(len(args))
+                # print(type(args[0]))
                 result = self.module_list[op_idx](*args)
+                
                 if not isinstance(result, tuple):
-                    self.tensors[name] = result
+                    tensors[name] = result
+                    # print('    %s = self.module_list[%d] (%s)'%(name,op_idx,inputs))
                 else:
-                    self.tensors[name] = result[out_seq]
+                    tensors[name] = result[out_seq]
+                    # print('    %s = self.module_list[%d] (%s)[%d]'%(name,op_idx,inputs,out_seq) )
 
         if len(self.output_name) == 1:
-            return self.tensors[self.output_name[0]]
+            return tensors[self.output_name[0]]
         else:
             ret = []
             for output in self.output_name:
-                ret.append(self.tensors[output])
+                ret.append(tensors[output])
             return ret
 
     def reduce(self):

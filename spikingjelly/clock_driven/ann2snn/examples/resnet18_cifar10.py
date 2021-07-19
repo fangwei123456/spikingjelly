@@ -59,7 +59,7 @@ def main(log_dir=None):
         download=True)
     test_data_loader = torch.utils.data.DataLoader(
         dataset=test_data_dataset,
-        batch_size=batch_size,
+        batch_size=50,
         shuffle=True,
         drop_last=False)
 
