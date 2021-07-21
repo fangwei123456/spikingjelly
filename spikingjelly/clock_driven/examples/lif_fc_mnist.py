@@ -135,28 +135,29 @@ def main():
         print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={learning_rate}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
     
     # 保存绘图用数据
-    net.eval()
-    functional.set_monitor(net, True)
-    with torch.no_grad():
-        img, label = test_dataset[0]        
-        img = img.to(device)
-        for t in range(T):
-            if t == 0:
-                out_spikes_counter = net(encoder(img).float())
-            else:
-                out_spikes_counter += net(encoder(img).float())
-        out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
-        print(f'Firing rate: {out_spikes_counter_frequency}')
-        output_layer = net[-1] # 输出层
-        v_t_array = np.asarray(output_layer.monitor['v']).squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
-        np.save("v_t_array.npy",v_t_array)
-        s_t_array = np.asarray(output_layer.monitor['s']).squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
-        np.save("s_t_array.npy",s_t_array)
-
-    train_accs = np.array(train_accs)
-    np.save('train_accs.npy', train_accs)
-    test_accs = np.array(test_accs)
-    np.save('test_accs.npy', test_accs)
+    # todo: plot without monitor
+    # net.eval()
+    # functional.set_monitor(net, True)
+    # with torch.no_grad():
+    #     img, label = test_dataset[0]
+    #     img = img.to(device)
+    #     for t in range(T):
+    #         if t == 0:
+    #             out_spikes_counter = net(encoder(img).float())
+    #         else:
+    #             out_spikes_counter += net(encoder(img).float())
+    #     out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
+    #     print(f'Firing rate: {out_spikes_counter_frequency}')
+    #     output_layer = net[-1] # 输出层
+    #     v_t_array = np.asarray(output_layer.monitor['v']).squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
+    #     np.save("v_t_array.npy",v_t_array)
+    #     s_t_array = np.asarray(output_layer.monitor['s']).squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
+    #     np.save("s_t_array.npy",s_t_array)
+    #
+    # train_accs = np.array(train_accs)
+    # np.save('train_accs.npy', train_accs)
+    # test_accs = np.array(test_accs)
+    # np.save('test_accs.npy', test_accs)
 
 
 if __name__ == '__main__':
