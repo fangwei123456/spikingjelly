@@ -80,7 +80,7 @@ class parser:
             onnx.checker.check_model(onnx_model)
             if layer_reduc:
                 onnx_model = onnx_kernel.layer_reduction(onnx_model)
-            onnx.checker.check_model(onnx_model)
+            # onnx.checker.check_model(onnx_model)
             onnx_model = onnx_kernel.rate_normalization(onnx_model, data.numpy(), **kargs) #**self.config['normalization']
             onnx_kernel.save_model(onnx_model,os.path.join(self.config['log_dir'],model_name+".onnx"))
 
@@ -98,13 +98,14 @@ class parser:
         else:
             # use pytorch engine
 
-            import spikingjelly.clock_driven.ann2snn.kernel.pytorch as pytorch_kernel
+            import spikingjelly.clock_driven.ann2snn.kernels.pytorch as pytorch_kernel
 
             if layer_reduc:
                 model = pytorch_kernel.layer_reduction(model)
             model = pytorch_kernel.rate_normalization(model, data)#, **self.config['normalization']
 
         self.ann_filename = os.path.join(self.config['log_dir'], model_name + ".pth")
+        torch.save(model, os.path.join(self.config['log_dir'], "debug.pth"))
         torch.save(model, self.ann_filename)
         model = self.to_snn(model)
         return model
@@ -336,7 +337,7 @@ class simulator:
         functional.reset_net(snn)
         with torch.no_grad():
             for t in range(T):
-                enc = self.encoder(data).float()
+                enc = self.encoder(data).float().to(device)
                 out = snn(enc)
                 if t == 0:
                     counter = out
