@@ -17,7 +17,7 @@ class Monitor:
 
         :param net: 要监视的网络
         :type net: nn.Module
-        :param device: 监视数据的存储和处理的设备，仅当backend为 ``'torch'`` 时有效。可以为 ``'cpu', 'cuda', 'cuda:0'`` 等，默认为 ``None``
+        :param device: 监视数据的存储和处理的设备，仅当backend为 ``'torch'`` 时有效。可以为 ``'cpu', 'cuda', 'cuda:0'`` 字符串或者 ``torch.device`` 类型，默认为 ``None``
         :type device: str, optional
         :param backend: 监视数据的处理后端。可以为 ``'torch', 'numpy'`` ，默认为 ``'numpy'``
         :type backend: str, optional
@@ -28,7 +28,7 @@ class Monitor:
 
         :param net: Network to be monitored
         :type net: nn.Module
-        :param device: Device carrying and processing monitored data. Only take effect when backend is set to ``'torch'``. Can be ``'cpu', 'cuda', 'cuda:0'``, et al., defaults to ``None``
+        :param device: Device carrying and processing monitored data. Only take effect when backend is set to ``'torch'``. Can be string ``'cpu', 'cuda', 'cuda:0'`` or ``torch.device``, defaults to ``None``
         :type device: str, optional
         :param backend: Backend processing monitored data, can be ``'torch', 'numpy'``, defaults to ``'numpy'``
         :type backend: str, optional
@@ -45,8 +45,12 @@ class Monitor:
         self.net = net
         self.backend = backend
 
-        if self.backend == 'torch':
+        if isinstance(device, str) and self.backend == 'torch':
             self.device = torch.device(device)
+        elif isinstance(device, torch.device):
+            self.device = device
+        else:
+            raise ValueError('Expected a cuda or cpu device, but got: {}'.format(device))
 
     def enable(self):
         '''
@@ -176,7 +180,6 @@ class Monitor:
             for name, module in self.module_dict.items():
                 ttl_firing_time += module.firing_time
                 ttl_cnt += module.cnt
-                print(name, module.cnt)
             return ttl_firing_time / ttl_cnt 
         else:
             if module_name not in self.module_dict.keys():
