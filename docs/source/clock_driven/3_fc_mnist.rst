@@ -37,18 +37,7 @@
 训练SNN网络
 -----------
 
-首先指定好训练参数以及若干其他配置
-
-.. code:: python
-
-   device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-   dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
-   batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-   learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-   T = int(input('输入仿真时长，例如“100”\n input simulating steps, e.g., "100": '))
-   tau = float(input('输入LIF神经元的时间常数tau，例如“100.0”\n input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
-   train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
-   log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+首先指定好训练参数如学习率等以及若干其他配置
 
 优化器使用Adam，以及使用泊松编码器，在每次输入图片时进行脉冲编码
 
@@ -97,12 +86,28 @@
        # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
        functional.reset_net(net)
 
-完整的代码位于\ ``clock_driven.examples.lif_fc_mnist.py``\ ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在Python命令行运行它：
+完整的代码位于\ ``clock_driven.examples.lif_fc_mnist.py``\ ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在命令行运行它：
 
-.. code-block:: python
-
-   >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
-   >>> lif_fc_mnist.main()
+.. code:: shell
+    $ python <PATH>/lif_fc_mnist.py --help
+    usage: lif_fc_mnist.py [-h] [--device DEVICE] [--dataset-dir DATASET_DIR] [--log-dir LOG_DIR] [-b BATCH_SIZE] [-T T] [--lr LR] [--gpu GPU]
+                        [--tau TAU] [-N EPOCH]
+    
+    spikingjelly MNIST Training
+    
+    optional arguments:
+    -h, --help            show this help message and exit
+    --device DEVICE       运行的设备，例如“cpu”或“cuda:0” Device, e.g., "cpu" or "cuda:0"
+    --dataset-dir DATASET_DIR
+                            保存MNIST数据集的位置，例如“./” Root directory for saving MNIST dataset, e.g., "./"
+    --log-dir LOG_DIR     保存tensorboard日志文件的位置，例如“./” Root directory for saving tensorboard logs, e.g., "./"
+    -b BATCH_SIZE, --batch-size BATCH_SIZE
+    -T T, --timesteps T   仿真时长，例如“100” Simulating timesteps, e.g., "100"
+    --lr LR, --learning-rate LR
+                            学习率，例如“1e-3” Learning rate, e.g., "1e-3":
+    --gpu GPU             GPU id to use.
+    --tau TAU             LIF神经元的时间常数tau，例如“100.0” Membrane time constant, tau, for LIF neurons, e.g., "100.0"
+    -N EPOCH, --epoch EPOCH
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致梯度的传递容易衰减或爆炸。

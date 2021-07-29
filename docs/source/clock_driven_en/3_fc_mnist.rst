@@ -43,18 +43,7 @@ Among them, the membrane potential decay constant :math:`\tau`  needs to be set 
 Train SNN network
 -------------------
 
-First specify the training parameters and several other configurations
-
-.. code:: python
-
-   device = input('Enter the operating device,e.g.:"cpu" or "cuda:0"\n input device, e.g., "cpu" or "cuda:0": ')
-   dataset_dir = input('enter the location of the MNIST data set,e.g.:"./"\n input root directory for saving MNIST dataset, e.g., "./": ')
-   batch_size = int(input('input batch_size, e.g.:"64"\n input batch_size, e.g., "64": '))
-   learning_rate = float(input('input learning rate,e.g.:"1e-3"\n input learning rate, e.g., "1e-3": '))
-   T = int(input('enter simulation duration, e.g.:"100"\n input simulating steps, e.g., "100": '))
-   tau = float(input('input the time constant of the LIF neuron tau，e.g.:"100.0"\n input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
-   train_epoch = int(input('enter the number of training rounds, that is, the number of times to traverse the training set, e.g.:"100"\n input training epochs, e.g., "100": '))
-   log_dir = input('enter the location to save the tensorboard log file, e.g.:"./"\n input root directory for saving tensorboard logs, e.g., "./": ')
+First specify the training parameters such as learning rate and several other configurations
 
 The optimizer uses Adam and Poisson encoder to perform spike encoding every time when a picture is input.
 
@@ -109,12 +98,28 @@ Combining the above three points, the code of training loop is as follows:
        functional.reset_net(net)
 
 The complete code is located in ``clock_driven.examples.lif_fc_mnist.py``. In the code, we also use Tensorboard to
-save training logs. You can run it directly on the Python command line:
+save training logs. You can run it directly on the command line:
 
-.. code-block:: python
-
-   >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
-   >>> lif_fc_mnist.main()
+.. code:: shell
+    $ python <PATH>/lif_fc_mnist.py --help
+    usage: lif_fc_mnist.py [-h] [--device DEVICE] [--dataset-dir DATASET_DIR] [--log-dir LOG_DIR] [-b BATCH_SIZE] [-T T] [--lr LR] [--gpu GPU]
+                        [--tau TAU] [-N EPOCH]
+    
+    spikingjelly MNIST Training
+    
+    optional arguments:
+    -h, --help            show this help message and exit
+    --device DEVICE       运行的设备，例如“cpu”或“cuda:0” Device, e.g., "cpu" or "cuda:0"
+    --dataset-dir DATASET_DIR
+                            保存MNIST数据集的位置，例如“./” Root directory for saving MNIST dataset, e.g., "./"
+    --log-dir LOG_DIR     保存tensorboard日志文件的位置，例如“./” Root directory for saving tensorboard logs, e.g., "./"
+    -b BATCH_SIZE, --batch-size BATCH_SIZE
+    -T T, --timesteps T   仿真时长，例如“100” Simulating timesteps, e.g., "100"
+    --lr LR, --learning-rate LR
+                            学习率，例如“1e-3” Learning rate, e.g., "1e-3":
+    --gpu GPU             GPU id to use.
+    --tau TAU             LIF神经元的时间常数tau，例如“100.0” Membrane time constant, tau, for LIF neurons, e.g., "100.0"
+    -N EPOCH, --epoch EPOCH
 
 It should be noted that for training such an SNN, the amount of video memory required is linearly related to the
 simulation duration ``T``. A longer ``T`` is equivalent to using a smaller simulation step, and the training is more "fine",
