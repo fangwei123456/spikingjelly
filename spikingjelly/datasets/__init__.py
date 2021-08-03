@@ -158,7 +158,7 @@ def load_npz_frames(file_name: str) -> np.ndarray:
     :return: frames
     :rtype: np.ndarray
     '''
-    return np.load(file_name)['frames']
+    return np.load(file_name, allow_pickle=True)['frames']
 
 def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
     '''
