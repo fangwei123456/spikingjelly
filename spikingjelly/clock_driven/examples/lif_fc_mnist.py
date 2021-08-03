@@ -1,3 +1,4 @@
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -9,6 +10,22 @@ import sys
 if sys.platform != 'win32':
     import readline
 from tqdm import tqdm
+
+parser = argparse.ArgumentParser(description='spikingjelly MNIST Training')
+parser.add_argument('--device', default='cuda:0',
+					help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
+parser.add_argument('--dataset-dir', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
+parser.add_argument('--log-dir', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
+parser.add_argument('-b', '--batch-size', default=128, type=int)
+parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T',
+					help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
+parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
+					metavar='LR', help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ', dest='lr')
+parser.add_argument('--gpu', default=None, type=int,
+					help='GPU id to use.')
+parser.add_argument('--tau', default=2.0, type=float,
+					help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
+parser.add_argument('-N', '--epoch', default=100, type=int)
 
 
 def main():
@@ -28,14 +45,17 @@ def main():
     The network with FC-LIF-FC-LIF structure for classifying MNIST. This function initials the network, starts training
     and shows accuracy on test dataset.
     '''
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
-    batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-    learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-    T = int(input('输入仿真时长，例如“100”\n input simulating steps, e.g., "100": '))
-    tau = float(input('输入LIF神经元的时间常数tau，例如“100.0”\n input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
-    train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
-    log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+    
+    args = parser.parse_args()
+
+    device = args.device
+    dataset_dir = args.dataset_dir
+    batch_size = args.batch_size 
+    lr = args.lr
+    T = args.T
+    tau = args.tau
+    train_epoch = args.epoch
+    log_dir = args.log_dir
 
 
     writer = SummaryWriter(log_dir)
@@ -68,7 +88,7 @@ def main():
     )
     net = net.to(device)
     # 使用Adam优化器
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     # 使用泊松编码器
     encoder = encoding.PoissonEncoder()
     train_times = 0
@@ -132,32 +152,30 @@ def main():
             writer.add_scalar('test_accuracy', test_accuracy, epoch)
             test_accs.append(test_accuracy)
             max_test_accuracy = max(max_test_accuracy, test_accuracy)
-        print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={learning_rate}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
+        print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={lr}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
     
     # 保存绘图用数据
-    # todo: plot without monitor
-    # net.eval()
-    # functional.set_monitor(net, True)
-    # with torch.no_grad():
-    #     img, label = test_dataset[0]
-    #     img = img.to(device)
-    #     for t in range(T):
-    #         if t == 0:
-    #             out_spikes_counter = net(encoder(img).float())
-    #         else:
-    #             out_spikes_counter += net(encoder(img).float())
-    #     out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
-    #     print(f'Firing rate: {out_spikes_counter_frequency}')
-    #     output_layer = net[-1] # 输出层
-    #     v_t_array = np.asarray(output_layer.monitor['v']).squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
-    #     np.save("v_t_array.npy",v_t_array)
-    #     s_t_array = np.asarray(output_layer.monitor['s']).squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
-    #     np.save("s_t_array.npy",s_t_array)
-    #
-    # train_accs = np.array(train_accs)
-    # np.save('train_accs.npy', train_accs)
-    # test_accs = np.array(test_accs)
-    # np.save('test_accs.npy', test_accs)
+    net.eval()
+    with torch.no_grad():
+        img, label = test_dataset[0]        
+        img = img.to(device)
+        for t in range(T):
+            if t == 0:
+                out_spikes_counter = net(encoder(img).float())
+            else:
+                out_spikes_counter += net(encoder(img).float())
+        out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
+        print(f'Firing rate: {out_spikes_counter_frequency}')
+        output_layer = net[-1] # 输出层
+        v_t_array = output_layer.v.numpy().squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
+        np.save("v_t_array.npy",v_t_array)
+        s_t_array = output_layer.spike.numpy().squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
+        np.save("s_t_array.npy",s_t_array)
+
+    train_accs = np.array(train_accs)
+    np.save('train_accs.npy', train_accs)
+    test_accs = np.array(test_accs)
+    np.save('test_accs.npy', test_accs)
 
 
 if __name__ == '__main__':
