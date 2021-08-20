@@ -103,21 +103,13 @@ class SurrogateFunctionBase(nn.Module):
 
 
 class MultiArgsSurrogateFunctionBase(nn.Module):
-    def __init__(self, spiking=True, **kwargs):
+    def __init__(self, spiking: bool, *args, **kwargs):
         super().__init__()
         self.spiking = spiking
-        for k, v in kwargs.items():
-            self.register_buffer(k, torch.tensor(v, dtype=torch.float))
 
     def set_spiking_mode(self, spiking: bool):
         self.spiking = spiking
 
-    def extra_repr(self):
-        estr = []
-        estr.append(f'spiking={self.spiking}')
-        for name, buf in self.named_buffers():
-            estr.append(f'{name}={buf.item()}')
-        return ', '.join(estr, )
 
 class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
@@ -929,8 +921,8 @@ class piecewise_leaky_relu(torch.autograd.Function):
         return grad_x, None, None
 
 
-class PiecewiseLeakyReLU(nn.Module):
-    def __init__(self, w=1, c=0.01, spiking=True):
+class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
+    def __init__(self, w=1., c=0.01, spiking=True):
         '''
         * :ref:`API in English <PiecewiseLeakyReLU.__init__-en>`
         .. _PiecewiseLeakyReLU.__init__-cn:
@@ -997,7 +989,8 @@ class PiecewiseLeakyReLU(nn.Module):
 
         The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
         '''
-        super().__init__()
+        super().__init__(spiking)
+        assert w > 0.
         self.w = w
         self.c = c
         self.spiking = spiking
@@ -1024,6 +1017,52 @@ class PiecewiseLeakyReLU(nn.Module):
             cw = c * w
             return mask0 * (c * x + cw) + mask1 * (c * x + (- cw + 1)) \
                    + mask2 * (x / (2 * w) + 1 / 2)
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        w = str(self.w) + 'f'
+        w_inv = str(1. / self.w) + 'f'
+        c = str(self.c) + 'f'
+        code = ''
+        if dtype == 'fp32':
+
+
+            code += f'const float x_abs = fabsf({x});'
+            code += f'float {y};'
+
+            code += f'if (x_abs > {w})'
+            code += '{'
+
+            code += f'{y} = {c};'
+
+            code += '}'
+
+            code += f'else'
+            code += '{'
+
+            code += f'{y} = {w_inv};'
+
+            code += '}'
+
+        elif dtype == 'fp16':
+
+            code += f'const half x_abs = __habs({x});'
+            code += f'half {y};'
+            code += f'if (__hge(x_abs, __float2half({w})))'
+            code += '{'
+
+            code += f'{y} = __float2half({c});'
+
+            code += '}'
+
+            code += f'else'
+            code += '{'
+
+            code += f'{y} = __float2half({w_inv});'
+
+            code += '}'
+        else:
+            raise NotImplementedError
+        return code
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)

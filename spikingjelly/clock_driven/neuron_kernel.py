@@ -651,7 +651,7 @@ try:
             return grad_x_seq, grad_v_last, None, None, None, None, None
 
 
-    def check_multi_step_neuron_output_and_grad(multi_step_neuron, device):
+    def check_multi_step_neuron_output_and_grad(device, multi_step_neuron, *neu_args, **neu_kwargs):
         @torch.no_grad()
         def max_error(x, y):
             return (x - y).abs().max().item()
@@ -675,7 +675,7 @@ try:
                     elif dtype == 'fp16':
                         x = torch.rand(shape, device=device).half()
                     print(f'hard_reset={hard_reset}, detach_reset={detach_reset}, dtype={dtype}')
-                    model = multi_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset)
+                    model = multi_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset, *neu_args, **neu_kwargs)
                     print(model)
                     model.to(device)
                     model.backend = 'torch'
