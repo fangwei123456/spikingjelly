@@ -563,3 +563,38 @@ def spike_mse_loss(x: torch.Tensor, spikes: torch.Tensor):
 
     '''
     return (x.square() + (1 - 2 * x) * spikes).mean()
+
+
+def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module):
+    """
+    :param x_seq: shape=[T, batch_size, ...]
+    :type x_seq: torch.Tensor
+    :param multi_step_module: a multi-step module
+    :type multi_step_module: torch.nn.Module
+    :return: y_seq, shape=[T, batch_size, ...]
+    :rtype: torch.Tensor
+
+    See :class:`spikingjelly.clock_driven.layer.MultiStepContainer` for more details.
+    """
+    y_seq = []
+    for t in range(x_seq.shape[0]):
+        y_seq.append(multi_step_module(x_seq[t]))
+        y_seq[-1].unsqueeze_(0)
+    return torch.cat(y_seq, 0)
+
+def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module):
+    """
+    :param x_seq: shape=[T, batch_size, ...]
+    :type x_seq: torch.Tensor
+    :param multi_step_module: a stateless module, e.g., 'torch.nn.Conv2d'
+    :type multi_step_module: torch.nn.Module
+    :return: y_seq, shape=[T, batch_size, ...]
+    :rtype: torch.Tensor
+
+    See :class:`spikingjelly.clock_driven.layer.SeqToANNContainer` for more details.
+    """
+    y_shape = [x_seq.shape[0], x_seq.shape[1]]
+    y_seq = stateless_module(x_seq.flatten(0, 1).contiguous())
+    y_shape.extend(y_seq.shape[1:])
+    return y_seq.view(y_shape)
+
