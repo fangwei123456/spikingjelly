@@ -771,7 +771,7 @@ class DropConnectLinear(base.MemoryModule):
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
 
 
-class MultiStepContainer(nn.Module):
+class MultiStepContainer(nn.Sequential):
     def __init__(self, *args):
         """
         * :ref:`API in English <MultiStepContainer.reset-en>`
@@ -806,11 +806,7 @@ class MultiStepContainer(nn.Module):
 
 
         """
-        super().__init__()
-        if len(args) == 1:
-            self.module = args[0]
-        else:
-            self.module = nn.Sequential(*args)
+        super().__init__(*args)
 
     def forward(self, x_seq: torch.Tensor):
         """
@@ -821,16 +817,12 @@ class MultiStepContainer(nn.Module):
         """
         y_seq = []
         for t in range(x_seq.shape[0]):
-            y_seq.append(self.module(x_seq[t]))
+            y_seq.append(super().forward(x_seq[t]))
             y_seq[-1].unsqueeze_(0)
         return torch.cat(y_seq, 0)
 
-    def reset(self):
-        if hasattr(self.module, 'reset'):
-            self.module.reset()
 
-
-class SeqToANNContainer(nn.Module):
+class SeqToANNContainer(nn.Sequential):
     def __init__(self, *args):
         """
         * :ref:`API in English <SeqToANNContainer.__init__-en>`
@@ -871,11 +863,7 @@ class SeqToANNContainer(nn.Module):
                 print(fc(x).shape)
                 # torch.Size([16, 8, 3])
         """
-        super().__init__()
-        if len(args) == 1:
-            self.module = args[0]
-        else:
-            self.module = nn.Sequential(*args)
+        super().__init__(*args)
 
     def forward(self, x_seq: torch.Tensor):
         """
@@ -885,7 +873,7 @@ class SeqToANNContainer(nn.Module):
         :rtype: torch.Tensor
         """
         y_shape = [x_seq.shape[0], x_seq.shape[1]]
-        y_seq = self.module(x_seq.flatten(0, 1).contiguous())
+        y_seq = super().forward(x_seq.flatten(0, 1))
         y_shape.extend(y_seq.shape[1:])
         return y_seq.view(y_shape)
 
