@@ -303,9 +303,9 @@ class SpikingRNNBase(nn.Module):
 
         else:
             cells = []
-            cells.append(SpikingLSTMCell(self.input_size, self.hidden_size, self.bias, *args, **kwargs))
+            cells.append(self.base_cell()(self.input_size, self.hidden_size, self.bias, *args, **kwargs))
             for i in range(self.num_layers - 1):
-                cells.append(SpikingLSTMCell(self.hidden_size, self.hidden_size, self.bias, *args, **kwargs))
+                cells.append(self.base_cell()(self.hidden_size, self.hidden_size, self.bias, *args, **kwargs))
             return nn.Sequential(*cells)
 
     @staticmethod
@@ -859,13 +859,10 @@ class SpikingGRUCell(SpikingRNNCellBase):
             assert self.surrogate_function1.spiking == self.surrogate_function2.spiking
 
         self.reset_parameters()
-    def forward(self, x: torch.Tensor, hc=None):
-        if hc is None:
+
+    def forward(self, x: torch.Tensor, h=None):
+        if h is None:
             h = torch.zeros(size=[x.shape[0], self.hidden_size], dtype=torch.float, device=x.device)
-            c = torch.zeros_like(h)
-        else:
-            h = hc[0]
-            c = hc[1]
 
         y_ih = torch.split(self.linear_ih(x), self.hidden_size, dim=1)
         y_hh = torch.split(self.linear_hh(h), self.hidden_size, dim=1)
@@ -879,7 +876,7 @@ class SpikingGRUCell(SpikingRNNCellBase):
             n = self.surrogate_function2(y_ih[2] + r * y_hh[2])
 
 
-        h = (1 - z) * n + z * h
+        h = (1. - z) * n + z * h
         return h
 
 class SpikingGRU(SpikingRNNBase):
