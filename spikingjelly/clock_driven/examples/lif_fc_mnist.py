@@ -2,6 +2,7 @@ import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.data as data
 import torchvision
 import numpy as np
 from spikingjelly.clock_driven import neuron, encoding, functional
@@ -11,11 +12,13 @@ if sys.platform != 'win32':
     import readline
 from tqdm import tqdm
 
+
 parser = argparse.ArgumentParser(description='spikingjelly MNIST Training')
 parser.add_argument('--device', default='cuda:0',
 					help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
 parser.add_argument('--dataset-dir', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
 parser.add_argument('--log-dir', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
+parser.add_argument("--model-output-dir", help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
 parser.add_argument('-b', '--batch-size', default=128, type=int)
 parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T',
 					help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
@@ -50,13 +53,13 @@ def main():
 
     device = args.device
     dataset_dir = args.dataset_dir
+    log_dir = args.log_dir
+    model_output_dir = args.model_output_dir
     batch_size = args.batch_size 
     lr = args.lr
     T = args.T
     tau = args.tau
     train_epoch = args.epoch
-    log_dir = args.log_dir
-
 
     writer = SummaryWriter(log_dir)
 
@@ -69,12 +72,12 @@ def main():
     )
     test_dataset = torchvision.datasets.MNIST(root=dataset_dir,train=False,transform=torchvision.transforms.ToTensor(),download=True)
 
-    train_data_loader = torch.utils.data.DataLoader(
+    train_data_loader = data.DataLoader(
         dataset=train_dataset,
         batch_size=batch_size,
         shuffle=True,
         drop_last=True)
-    test_data_loader = torch.utils.data.DataLoader(
+    test_data_loader = data.DataLoader(
         dataset=test_dataset,
         batch_size=batch_size,
         shuffle=False,
@@ -154,6 +157,11 @@ def main():
             max_test_accuracy = max(max_test_accuracy, test_accuracy)
         print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={lr}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
     
+    # 保存模型
+    torch.save(net, model_output_dir + "/snn_mnist.ckpt")
+    # 读取模型
+    # net = torch.load(model_output_dir + "/snn_mnist.ckpt")
+
     # 保存绘图用数据
     net.eval()
     with torch.no_grad():
@@ -167,9 +175,9 @@ def main():
         out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
         print(f'Firing rate: {out_spikes_counter_frequency}')
         output_layer = net[-1] # 输出层
-        v_t_array = output_layer.v.numpy().squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
+        v_t_array = output_layer.v.cpu().numpy().squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
         np.save("v_t_array.npy",v_t_array)
-        s_t_array = output_layer.spike.numpy().squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
+        s_t_array = output_layer.spike.cpu().numpy().squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
         np.save("s_t_array.npy",s_t_array)
 
     train_accs = np.array(train_accs)
@@ -180,7 +188,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
-
-
