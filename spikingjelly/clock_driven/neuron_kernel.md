@@ -107,7 +107,8 @@ $$
 \begin{align}
 \frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}(1 - \frac{1}{\tau}))\frac{\partial V[t]}{\partial H[t]}\\
 \frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]} \frac{1}{\tau}\\
-\frac{\partial L}{\partial \frac{1}{\tau}} &= \frac{\partial L}{\partial H[t]} (X[t] - (V[t - 1] - V_{reset}))\\
+\frac{\partial L}{\partial \frac{1}{\tau}} &= \sum_{t} \frac{\partial L}{\partial H[t]} (X[t] - (V[t - 1] - V_{reset}))=\sum_{t} \frac{\partial L}{\partial H[t]}(H[t]-V[t-1])\tau\\
 \frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
+
