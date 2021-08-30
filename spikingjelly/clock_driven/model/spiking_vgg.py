@@ -492,14 +492,3 @@ def multi_step_spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: cal
 
     return _multi_step_spiking_vgg('vgg19', 'D', True, pretrained, progress, norm_layer, multi_step_neuron, **kwargs)
 
-
-if __name__ == "__main__":
-    pass
-    # from spikingjelly.clock_driven import neuron
-    # x = torch.rand(11,3,32,32)
-    # model = multi_step_spiking_vgg11(num_classes=10,multi_step_neuron=neuron.MultiStepIFNode)
-    # print(model)
-#     print(model(x, T=20).shape)
-#     print(isinstance(model.features[1],neuron.BaseNode))
-#     print(model.features[11:16])
-#     print(model.classifier[:-1])
