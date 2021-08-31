@@ -116,7 +116,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
     max_test_acc5 = -1.
 
 
-    for epoch in (start_epoch, max_epoch):
+    for epoch in range(start_epoch, max_epoch):
         print(f'epoch={epoch}, args={args}')
         acc1, acc5, loss = train_one_epoch(model, criterion, optimizer, train_data_loader, args.device, amp_scaler)
         if tb_writer is not None:
