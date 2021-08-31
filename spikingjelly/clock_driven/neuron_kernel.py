@@ -787,7 +787,7 @@ try:
                     if (index < neuron_num)
                     {   
                         float grad_h = 0.0f;  // grad_h will be used recursively
-                        float grad_rtau_sum = 0.0f;
+                        sdata[threadIdx.x] = 0.0f;
                         for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                         {
                             const int t = index + mem_offset;
@@ -817,10 +817,9 @@ try:
                 code += r'''
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
-                    grad_rtau_sum += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
+                    sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     }
                 grad_v_last[index] = grad_x_seq[index] * one_sub_reciprocal_tau;
-                sdata[threadIdx.x] = grad_rtau_sum;
                 }
                 else
                 {
@@ -866,7 +865,7 @@ try:
                 if (index < neuron_num)
                 {   
                     half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    half grad_rtau_sum = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
                         const int t = index + mem_offset;
@@ -897,10 +896,9 @@ try:
                 code += r'''                        
                         grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        grad_rtau_sum = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), grad_rtau_sum);
+                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
                     }
                 grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
-                sdata[threadIdx.x] = grad_rtau_sum;
                 }
                 else
                 {
@@ -927,7 +925,7 @@ try:
 
             else:
                 raise TypeError
-            print(code)
+
             return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
 
         @staticmethod
@@ -1047,8 +1045,8 @@ try:
             (m.spike_seq * m.v_seq**2).sum().backward()
             ret = [m.spike_seq.detach().clone(), m.v_seq.detach().clone(), x.grad.clone()]
             for param in m.parameters():
-                print(m.backend, param.grad)
                 ret.append(param.grad.detach().clone())
+                param.grad.zero_()
             x.grad.zero_()
             m.reset()
             return ret
