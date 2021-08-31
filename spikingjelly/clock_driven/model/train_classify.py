@@ -58,7 +58,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
     train_acc5 /= samples_number
     train_loss /= samples_number
 
-    print(f'train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
+    print(f'Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return train_acc1, train_acc5, train_loss
 
 def evaluate(model, criterion, data_loader, device):
@@ -87,7 +87,7 @@ def evaluate(model, criterion, data_loader, device):
     test_acc5 /= samples_number
     test_loss /= samples_number
 
-    print(f'Test:  test_acc1={test_acc1:.3f}, train_acc5={test_acc5:.3f}, train_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
+    print(f'Test: test_acc1={test_acc1:.3f}, train_acc5={test_acc5:.3f}, train_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return test_acc1, test_acc5, test_loss
 
 def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
@@ -162,7 +162,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
             test_acc5_at_max_test_acc1 = acc5
             if pt_dir is not None:
                 torch.save(checkpoint, os.path.join(pt_dir, 'ckp_max_test_acc1.pt'))
-        print(f'Train: max_test_acc1={max_test_acc1}, max_test_acc5={max_test_acc5}, test_acc5_at_max_test_acc1={test_acc5_at_max_test_acc1}')
+        print(f'Test: max_test_acc1={max_test_acc1}, max_test_acc5={max_test_acc5}, test_acc5_at_max_test_acc1={test_acc5_at_max_test_acc1}')
 
 
 
