@@ -90,8 +90,9 @@ def evaluate(model, criterion, data_loader, device):
     print(f'test_acc1={test_acc1}, train_acc5={test_acc5}, train_loss={test_loss}, samples/s={samples_number / (time.time() - start_time)}')
     return test_acc1, test_acc5, test_loss
 
-def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, start_epoch, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
+def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
 
+    start_epoch = 0
     if resume_pt is not None:
         checkpoint = torch.load(resume_pt, map_location='cpu')
         model.load_state_dict(checkpoint['model'])
