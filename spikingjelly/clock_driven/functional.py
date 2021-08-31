@@ -538,12 +538,12 @@ def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module):
         y_seq[-1].unsqueeze_(0)
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list):
+def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list or tuple):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: torch.Tensor
     :param multi_step_module: a stateless module, e.g., 'torch.nn.Conv2d' or a list contains stateless modules, e.g., '[torch.nn.Conv2d, torch.nn.BatchNorm2d]
-    :type multi_step_module: torch.nn.Module or list
+    :type multi_step_module: torch.nn.Module or list or tuple
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: torch.Tensor
 
@@ -551,7 +551,7 @@ def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list)
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
     y = x_seq.flatten(0, 1)
-    if isinstance(stateless_module, list):
+    if isinstance(stateless_module, (list, tuple)):
         for m in stateless_module:
             y = m(y)
     else:
