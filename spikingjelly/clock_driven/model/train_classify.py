@@ -3,6 +3,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda import amp
 import os
+import datetime
 from .. import functional
 
 def cal_correct(output, target, topk=(1,)):
@@ -120,6 +121,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
 
 
     for epoch in range(start_epoch, max_epoch):
+        start_time = time.time()
         print(f'epoch={epoch}, args={args}')
         acc1, acc5, loss = train_one_epoch(model, criterion, optimizer, train_data_loader, args.device, amp_scaler)
         if tb_writer is not None:
@@ -165,7 +167,9 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
             test_acc5_at_max_test_acc1 = acc5
             if pt_dir is not None:
                 torch.save(checkpoint, os.path.join(pt_dir, 'ckp_max_test_acc1.pt'))
-        print(f'Test: max_test_acc1={max_test_acc1}, max_test_acc5={max_test_acc5}, test_acc5_at_max_test_acc1={test_acc5_at_max_test_acc1}')
+        used_time = time.time() - start_time
+        print(f'Test: max_test_acc1={max_test_acc1:.3f}, max_test_acc5={max_test_acc5:.3f}, test_acc5_at_max_test_acc1={test_acc5_at_max_test_acc1:.3f}')
+        print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}')
 
 
 
