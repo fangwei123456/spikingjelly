@@ -169,7 +169,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
                 torch.save(checkpoint, os.path.join(pt_dir, 'ckp_max_test_acc1.pt'))
         used_time = time.time() - start_time
         print(f'Test: max_test_acc1={max_test_acc1:.3f}, max_test_acc5={max_test_acc5:.3f}, test_acc5_at_max_test_acc1={test_acc5_at_max_test_acc1:.3f}')
-        print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}')
+        print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
 
 
 
