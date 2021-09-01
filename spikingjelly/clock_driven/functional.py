@@ -521,21 +521,29 @@ def first_spike_index(spikes: torch.Tensor):
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
-def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module):
+def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module or list or tuple):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: torch.Tensor
-    :param multi_step_module: a multi-step module
-    :type multi_step_module: torch.nn.Module
+    :param multi_step_module: a multi-step module, or a list/tuple that contains multi-step modules
+    :type multi_step_module: torch.nn.Module or list or tuple
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: torch.Tensor
 
     See :class:`spikingjelly.clock_driven.layer.MultiStepContainer` for more details.
     """
     y_seq = []
-    for t in range(x_seq.shape[0]):
-        y_seq.append(multi_step_module(x_seq[t]))
-        y_seq[-1].unsqueeze_(0)
+    if isinstance(multi_step_module, (list, tuple)):
+        for t in range(x_seq.shape[0]):
+            x_seq_t = x_seq[t]
+            for m in multi_step_module:
+                x_seq_t = m(x_seq_t)
+            y_seq.append(x_seq_t)
+            y_seq[-1].unsqueeze_(0)
+    else:
+        for t in range(x_seq.shape[0]):
+            y_seq.append(multi_step_module(x_seq[t]))
+            y_seq[-1].unsqueeze_(0)
     return torch.cat(y_seq, 0)
 
 def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list or tuple):
