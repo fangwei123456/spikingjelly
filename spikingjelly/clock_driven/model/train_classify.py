@@ -46,15 +46,18 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
             optimizer.step()
         functional.reset_net(model)
 
-        acc1, acc5 = cal_correct(output, target, topk=(1, 5))
-        train_acc1 += acc1
-        train_acc5 += acc5
-        train_loss += loss.item()
+        correct1, correct5 = cal_correct(output, target, topk=(1, 5))
+        train_acc1 += correct1
+        train_acc5 += correct5
+        train_loss += loss.item() * image.shape[0]
         samples_number += image.shape[0]
 
     train_acc1 /= samples_number
     train_acc5 /= samples_number
+    train_acc1 *= 100.
+    train_acc5 *= 100.
     train_loss /= samples_number
+
 
     print(f'Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return train_acc1, train_acc5, train_loss
@@ -75,17 +78,19 @@ def evaluate(model, criterion, data_loader, device):
 
         functional.reset_net(model)
 
-        acc1, acc5 = cal_correct(output, target, topk=(1, 5))
-        test_acc1 += acc1
-        test_acc5 += acc5
-        test_loss += loss.item()
+        correct1, correct5 = cal_correct(output, target, topk=(1, 5))
+        test_acc1 += correct1
+        test_acc5 += correct5
+        test_loss += loss.item() * image.shape[0]
         samples_number += image.shape[0]
 
     test_acc1 /= samples_number
     test_acc5 /= samples_number
+    test_acc1 *= 100.
+    test_acc5 *= 100.
     test_loss /= samples_number
 
-    print(f'Test: test_acc1={test_acc1:.3f}, train_acc5={test_acc5:.3f}, train_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
+    print(f'Test: test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, train_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return test_acc1, test_acc5, test_loss
 
 def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
