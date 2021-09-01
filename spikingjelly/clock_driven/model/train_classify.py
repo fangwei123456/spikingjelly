@@ -5,12 +5,10 @@ from torch.cuda import amp
 import os
 from .. import functional
 
-def cal_accuracy(output, target, topk=(1,)):
-    # https://github.com/pytorch/vision/blob/main/references/classification/utils.py
-    """Computes the accuracy over the k top predictions for the specified values of k"""
+def cal_correct(output, target, topk=(1,)):
+    # modified by def accuracy() in https://github.com/pytorch/vision/blob/main/references/classification/utils.py
     with torch.no_grad():
         maxk = max(topk)
-        batch_size = target.size(0)
 
         _, pred = output.topk(maxk, 1, True, True)
         pred = pred.t()
@@ -19,7 +17,7 @@ def cal_accuracy(output, target, topk=(1,)):
         res = []
         for k in topk:
             correct_k = correct[:k].flatten().sum(dtype=torch.float32).item()
-            res.append(correct_k * (100.0 / batch_size))
+            res.append(correct_k)
         return res
 
 def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler=None):
@@ -48,7 +46,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
             optimizer.step()
         functional.reset_net(model)
 
-        acc1, acc5 = cal_accuracy(output, target, topk=(1, 5))
+        acc1, acc5 = cal_correct(output, target, topk=(1, 5))
         train_acc1 += acc1
         train_acc5 += acc5
         train_loss += loss.item()
@@ -77,7 +75,7 @@ def evaluate(model, criterion, data_loader, device):
 
         functional.reset_net(model)
 
-        acc1, acc5 = cal_accuracy(output, target, topk=(1, 5))
+        acc1, acc5 = cal_correct(output, target, topk=(1, 5))
         test_acc1 += acc1
         test_acc5 += acc5
         test_loss += loss.item()
