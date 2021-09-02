@@ -9,6 +9,7 @@ spikingjelly.clock_driven package
    spikingjelly.clock_driven.functional
    spikingjelly.clock_driven.layer
    spikingjelly.clock_driven.neuron
+   spikingjelly.clock_driven.model
    spikingjelly.clock_driven.monitor
    spikingjelly.clock_driven.rnn
    spikingjelly.clock_driven.surrogate

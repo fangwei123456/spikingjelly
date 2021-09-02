@@ -521,80 +521,50 @@ def first_spike_index(spikes: torch.Tensor):
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
-def spike_mse_loss(x: torch.Tensor, spikes: torch.Tensor):
-    '''
-    * :ref:`API in English <spike_mse_loss-en>`
-
-    .. _spike_mse_loss-cn:
-
-    :param x: 任意tensor
-    :param spikes: 脉冲tensor。要求 ``spikes`` 中的元素只能为 ``0`` 和 ``1``，或只为 ``False`` 和 ``True``，且 ``spikes.shape`` 必须与 ``x.shape`` 相同
-    :return: ``x`` 和 ``spikes`` 逐元素的均方误差（L2范数的平方）
-
-    这个函数与 ``torch.nn.functional.mse_loss()`` 相比，针对脉冲数据进行了加速。其计算按照
-
-    .. math::
-        (x - s)^{2} = x^{2} + s^{2} - 2xs = x^{2} + (1 - 2x)s
-
-    .. note::
-        由于计算图已经改变，此函数计算出的梯度 :math:`\\frac{\\partial L}{\\partial s}` 与 ``torch.nn.functional.mse_loss()`` 计算出
-        的是不一样的。
-
-    * :ref:`中文API <spike_mse_loss-cn>`
-
-    .. _spike_mse_loss-en:
-
-    :param x: an arbitrary tensor
-    :param spikes: spiking tensor. The elements in ``spikes`` must be ``0`` and ``1`` or ``False`` and ``True``, and ``spikes.shape`` should be same
-        with ``x.shape``
-    :return: the mean squared error (squared L2 norm) between each element in ``x`` and ``spikes``
-
-    This function is faster than ``torch.nn.functional.mse_loss()`` for its optimization on spiking data. The compulation
-    is carried out as
-
-    .. math::
-        (x - s)^{2} = x^{2} + s^{2} - 2xs = x^{2} + (1 - 2x)s
-
-    .. admonition:: Note
-        :class: note
-
-        The computation graph of this function is different with the standard MSE. So :math:`\\frac{\\partial L}{\\partial s}`
-        compulated by this function is different with that by ``torch.nn.functional.mse_loss()``.
-
-    '''
-    return (x.square() + (1 - 2 * x) * spikes).mean()
-
-
-def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module):
+def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module or list or tuple):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: torch.Tensor
-    :param multi_step_module: a multi-step module
-    :type multi_step_module: torch.nn.Module
+    :param multi_step_module: a multi-step module, or a list/tuple that contains multi-step modules
+    :type multi_step_module: torch.nn.Module or list or tuple
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: torch.Tensor
 
     See :class:`spikingjelly.clock_driven.layer.MultiStepContainer` for more details.
     """
     y_seq = []
-    for t in range(x_seq.shape[0]):
-        y_seq.append(multi_step_module(x_seq[t]))
-        y_seq[-1].unsqueeze_(0)
+    if isinstance(multi_step_module, (list, tuple)):
+        for t in range(x_seq.shape[0]):
+            x_seq_t = x_seq[t]
+            for m in multi_step_module:
+                x_seq_t = m(x_seq_t)
+            y_seq.append(x_seq_t)
+            y_seq[-1].unsqueeze_(0)
+    else:
+        for t in range(x_seq.shape[0]):
+            y_seq.append(multi_step_module(x_seq[t]))
+            y_seq[-1].unsqueeze_(0)
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module):
+def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list or tuple):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: torch.Tensor
-    :param multi_step_module: a stateless module, e.g., 'torch.nn.Conv2d'
-    :type multi_step_module: torch.nn.Module
+    :param multi_step_module: a stateless module, e.g., 'torch.nn.Conv2d' or a list contains stateless modules, e.g., '[torch.nn.Conv2d, torch.nn.BatchNorm2d]
+    :type multi_step_module: torch.nn.Module or list or tuple
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: torch.Tensor
 
     See :class:`spikingjelly.clock_driven.layer.SeqToANNContainer` for more details.
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
-    y_seq = stateless_module(x_seq.flatten(0, 1).contiguous())
-    y_shape.extend(y_seq.shape[1:])
-    return y_seq.view(y_shape)
+    y = x_seq.flatten(0, 1)
+    if isinstance(stateless_module, (list, tuple)):
+        for m in stateless_module:
+            y = m(y)
+    else:
+        y = stateless_module(y)
+    y_shape.extend(y.shape[1:])
+    return y.view(y_shape)
+
 
