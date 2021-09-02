@@ -33,14 +33,15 @@ def main():
 
     .. _lif_fc_mnist.main-cn:
 
-    使用全连接-LIF的网络结构，进行MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
+    使用全连接-LIF的网络结构，进行MNIST识别。\n
+    这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
 
     * :ref:`API in English <lif_fc_mnist.main-en>`
 
     .. _lif_fc_mnist.main-en:
 
-    The network with FC-LIF structure for classifying MNIST. This function initials the network, starts training
-    and shows accuracy on test dataset.
+    The network with FC-LIF structure for classifying MNIST.\n
+    This function initials the network, starts trainingand shows accuracy on test dataset.
     '''
     
     args = parser.parse_args()
