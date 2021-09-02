@@ -148,3 +148,83 @@ The outputs are
     torch.Size([16, 8, 3])
 
 The outputs have ``shape=[T, batch_size, ...]`` and can be directly fed to the next layer.
+
+Wrap Forward Propagation
+-------------------------------
+After we use ``SeqToANNContainer`` to wrap stateless ANN's layers, the ``.keys()`` of network's ``state_dict`` will change
+because we introduce an external wrapper. Here is an example:
+
+.. code-block:: python
+
+    net_step_by_step = nn.Sequential(
+        nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+        nn.BatchNorm2d(16),
+        neuron.IFNode()
+    )
+
+    net_layer_by_layer = nn.Sequential(
+        layer.SeqToANNContainer(
+            nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(16),
+        ),
+        neuron.MultiStepIFNode()
+    )
+
+    print('net_step_by_step.state_dict:', net_step_by_step.state_dict().keys())
+    print('net_layer_by_layer.state_dict:', net_layer_by_layer.state_dict().keys())
+
+The outputs are:
+
+.. code-block:: bash
+
+    net_step_by_step.state_dict: odict_keys(['0.weight', '1.weight', '1.bias', '1.running_mean', '1.running_var', '1.num_batches_tracked'])
+    net_layer_by_layer.state_dict: odict_keys(['0.0.weight', '0.1.weight', '0.1.bias', '0.1.running_mean', '0.1.running_var', '0.1.num_batches_tracked'])
+
+We can find that keys have been changed, which causes some trouble to load model's weights. For example, if we want to build
+a multi-step Spiking ResNet-18 (:class:`spikingjelly.clock_driven.model.spiking_resnet.spiking_resnet18`), and we want to
+load the pre-train model's weights from ANN. If the network is built by ``SeqToANNContainer``, it wil be not able to load
+weights from ANN because keys of ``state_dict`` are different. To avoid such problems, we can wrap forward propagation,
+rather than wrap layers. Here is an example:
+
+.. code-block:: python
+
+    class NetStepByStep(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False)
+            self.bn = nn.BatchNorm2d(16)
+            self.sn = neuron.IFNode()
+
+        def forward(self, x):
+            # x.shape = [N, C, H, W]
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.sn(x)
+            return x
+
+
+    class NetLayerByLayer1(NetStepByStep):
+
+        def forward(self, x_seq):
+            # x_seq.shape = [T, N, C, H, W]
+            x_seq = functional.seq_to_ann_forward(x_seq, [self.conv, self.bn])
+            x_seq = functional.multi_step_forward(x_seq, self.sn)
+            return x_seq
+
+
+    class NetLayerByLayer2(NetStepByStep):
+        def __init__(self):
+            super().__init__()
+
+            # replace single-step neuron to multi-step neuron
+            del self.sn
+            self.sn = neuron.MultiStepIFNode()
+
+        def forward(self, x_seq):
+            # x_seq.shape = [T, N, C, H, W]
+            x_seq = functional.seq_to_ann_forward(x_seq, [self.conv, self.bn])
+            x_seq = self.sn(x_seq)
+            return x_seq
+
+``state_dict.keys()`` of ``NetStepByStep, NetLayerByLayer1, NetLayerByLayer2`` are identical, and they can load model weights
+from each others.

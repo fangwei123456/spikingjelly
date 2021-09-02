@@ -147,3 +147,79 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
     torch.Size([16, 8, 3])
 
 输出仍然满足 ``shape=[T, batch_size, ...]``，可以直接送入到下一层网络。
+
+包装前向传播
+-------------------
+使用 ``SeqToANNContainer`` 对无状态的ANN层进行包装后，网络的 ``state_dict`` 中层的名字 ``.keys()`` 会发生变化，因为我们额外引入了一个包装器。例如：
+
+.. code-block:: python
+
+    net_step_by_step = nn.Sequential(
+        nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+        nn.BatchNorm2d(16),
+        neuron.IFNode()
+    )
+
+    net_layer_by_layer = nn.Sequential(
+        layer.SeqToANNContainer(
+            nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(16),
+        ),
+        neuron.MultiStepIFNode()
+    )
+
+    print('net_step_by_step.state_dict:', net_step_by_step.state_dict().keys())
+    print('net_layer_by_layer.state_dict:', net_layer_by_layer.state_dict().keys())
+
+输出为：
+
+.. code-block:: bash
+
+    net_step_by_step.state_dict: odict_keys(['0.weight', '1.weight', '1.bias', '1.running_mean', '1.running_var', '1.num_batches_tracked'])
+    net_layer_by_layer.state_dict: odict_keys(['0.0.weight', '0.1.weight', '0.1.bias', '0.1.running_mean', '0.1.running_var', '0.1.num_batches_tracked'])
+
+名称不一样，会给加载模型权重带来麻烦。例如，我们想构建一个多步版本的Spiking ResNet-18 (:class:`spikingjelly.clock_driven.model.spiking_resnet.spiking_resnet18`)，
+且希望这个网络能够加载ANN的预训练模型权重。直接使用 ``SeqToANNContainer`` 构建出的网络，``state_dict`` 与ANN的并不相同，无法直接加载。为了避免
+这种问题，我们可以不使用 ``SeqToANNContainer`` 对ANN层包装，而是转为包装ANN层的前向传播代码。下面是示例代码：
+
+.. code-block:: python
+
+    class NetStepByStep(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False)
+            self.bn = nn.BatchNorm2d(16)
+            self.sn = neuron.IFNode()
+
+        def forward(self, x):
+            # x.shape = [N, C, H, W]
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.sn(x)
+            return x
+
+
+    class NetLayerByLayer1(NetStepByStep):
+
+        def forward(self, x_seq):
+            # x_seq.shape = [T, N, C, H, W]
+            x_seq = functional.seq_to_ann_forward(x_seq, [self.conv, self.bn])
+            x_seq = functional.multi_step_forward(x_seq, self.sn)
+            return x_seq
+
+
+    class NetLayerByLayer2(NetStepByStep):
+        def __init__(self):
+            super().__init__()
+
+            # replace single-step neuron to multi-step neuron
+            del self.sn
+            self.sn = neuron.MultiStepIFNode()
+
+        def forward(self, x_seq):
+            # x_seq.shape = [T, N, C, H, W]
+            x_seq = functional.seq_to_ann_forward(x_seq, [self.conv, self.bn])
+            x_seq = self.sn(x_seq)
+            return x_seq
+
+``NetStepByStep, NetLayerByLayer1, NetLayerByLayer2`` 的 ``state_dict.keys()`` 完全相同的，模型权重可以互相加载。
