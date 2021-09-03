@@ -827,7 +827,7 @@ class QIFNode(BaseNode):
         self.a0 = a0
 
     def extra_repr(self):
-        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a}'
+        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}, v_rest={self.v_rest}'
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
