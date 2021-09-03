@@ -870,7 +870,7 @@ class EIFNode(BaseNode):
         Exponential Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，是由HH神经元模型(Hodgkin-Huxley model)简化后推导出的一维模型。在 :math:`\\Delta_T\\to 0` 时退化为LIF模型。其阈下神经动力学方程为：
 
         .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_rh}{\\Delta_T}\\right))
+            V[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
 
         * :ref:`中文API <EIFNode.__init__-cn>`
 
@@ -905,7 +905,7 @@ class EIFNode(BaseNode):
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_rh}{\\Delta_T}\\right))
+            V[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
         """
                  
         assert isinstance(tau, float) and tau > 1.
