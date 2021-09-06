@@ -924,6 +924,9 @@ class EIFNode(BaseNode):
         return super().extra_repr() + f', tau={self.tau}, delta_T={self.delta_T}, theta_rh={self.theta_rh}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        if not torch.is_tensor(self.v):
-            self.v = torch.tensor(self.v)
-        self.v = self.v + (self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
+        
+        with torch.no_grad():
+            if not isinstance(self.v, torch.Tensor):
+                self.v = torch.as_tensor(self.v, device=x.device)
+        
+        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
