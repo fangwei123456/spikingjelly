@@ -7,46 +7,41 @@ import torchvision
 import numpy as np
 from spikingjelly.clock_driven import neuron, encoding, functional
 from torch.utils.tensorboard import SummaryWriter
-import sys
-if sys.platform != 'win32':
-    import readline
 from tqdm import tqdm
 
 
-parser = argparse.ArgumentParser(description='spikingjelly MNIST Training')
-parser.add_argument('--device', default='cuda:0',
-					help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
+parser = argparse.ArgumentParser(description='spikingjelly LIF MNIST Training')
+
+parser.add_argument('--device', default='cuda:0', help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
+
 parser.add_argument('--dataset-dir', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
 parser.add_argument('--log-dir', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
-parser.add_argument("--model-output-dir", help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
+parser.add_argument('--model-output-dir', help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
+
 parser.add_argument('-b', '--batch-size', default=128, type=int)
-parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T',
-					help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
-parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float,
-					metavar='LR', help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ', dest='lr')
-parser.add_argument('--gpu', default=None, type=int,
-					help='GPU id to use.')
-parser.add_argument('--tau', default=2.0, type=float,
-					help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
-parser.add_argument('-N', '--epoch', default=100, type=int)
+parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T', help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
+parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, metavar='LR', help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ', dest='lr')
+parser.add_argument('--tau', default=2.0, type=float, help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
+parser.add_argument('-N', '--epoch', default=100, type=int, help='训练epoch，例如“100”\n Training epoch, e.g., "100"')
 
 
 def main():
     '''
-    * :ref:`API in English <lif_fc_mnist.main-en>`
-
-    .. _lif_fc_mnist.main-cn:
-
     :return: None
-
-    使用全连接-LIF-全连接-LIF的网络结构，进行MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
 
     * :ref:`中文API <lif_fc_mnist.main-cn>`
 
+    .. _lif_fc_mnist.main-cn:
+
+    使用全连接-LIF的网络结构，进行MNIST识别。\n
+    这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
+
+    * :ref:`API in English <lif_fc_mnist.main-en>`
+
     .. _lif_fc_mnist.main-en:
 
-    The network with FC-LIF-FC-LIF structure for classifying MNIST. This function initials the network, starts training
-    and shows accuracy on test dataset.
+    The network with FC-LIF structure for classifying MNIST.\n
+    This function initials the network, starts trainingand shows accuracy on test dataset.
     '''
     
     args = parser.parse_args()
@@ -158,9 +153,9 @@ def main():
         print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={lr}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
     
     # 保存模型
-    torch.save(net, model_output_dir + "/snn_mnist.ckpt")
+    torch.save(net, model_output_dir + "/lif_snn_mnist.ckpt")
     # 读取模型
-    # net = torch.load(model_output_dir + "/snn_mnist.ckpt")
+    # net = torch.load(model_output_dir + "/lif_snn_mnist.ckpt")
 
     # 保存绘图用数据
     net.eval()

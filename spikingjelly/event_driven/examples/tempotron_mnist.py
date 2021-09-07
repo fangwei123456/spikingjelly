@@ -1,76 +1,85 @@
+import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch.utils.data as data
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
 import spikingjelly.event_driven.encoding as encoding
 import spikingjelly.event_driven.neuron as neuron
-import sys
-if sys.platform != 'win32':
-    import readline
-import math
+
+
+parser = argparse.ArgumentParser(description='spikingjelly Tempotron MNIST Training')
+
+parser.add_argument('--device', default='cuda:0', help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
+
+parser.add_argument('--dataset-dir', default='', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
+parser.add_argument('--log-dir', default='', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
+parser.add_argument('--model-output-dir', default='', help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
+
+parser.add_argument('-b', '--batch-size', default=128, type=int, help='Batch 大小，例如“64”\n Batch size, e.g., "64"')
+parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T', help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
+parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, metavar='LR', help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ', dest='lr')
+# parser.add_argument('--tau', default=2.0, type=float, help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
+parser.add_argument('-N', '--epoch', default=100, type=int, help='训练epoch，例如“100”\n Training epoch, e.g., "100"')
+parser.add_argument('-m', default=16, type=int, help='使用高斯调谐曲线编码每个像素点使用的神经元数量，例如“16”\n input neuron number for encoding a piexl in GaussianTuning encoder, e.g., "16"')
+
 
 class Net(nn.Module):
     def __init__(self, m, T):
         # m是高斯调谐曲线编码器编码一个像素点所使用的神经元数量
         super().__init__()
-        self.tempotron = neuron.Tempotron(784*m, 10, T)
+        self.tempotron = neuron.Tempotron(28*28*m, 10, T)     # mnist 28*28=784
+    
+    
     def forward(self, x: torch.Tensor):
         # 返回的是输出层10个Tempotron在仿真时长内的电压峰值
         return self.tempotron(x, 'v_max')
+
 
 def main():
     '''
     :return: None
 
-    使用高斯调谐曲线编码器编码图像为脉冲，单层Tempotron进行MNIST识别。运行示例：
-    
-    .. code-block:: python
+    * :ref:`中文API <tempotron_mnist.main-cn>`
 
-        >>> import spikingjelly.event_driven.examples.tempotron_mnist as tempotron_mnist
-        >>> tempotron_mnist.main()
-        输入运行的设备，例如“cpu”或“cuda:0”
-         input device, e.g., "cpu" or "cuda:0": cuda:15
-        输入保存MNIST数据集的位置，例如“./”
-         input root directory for saving MNIST dataset, e.g., "./": ./mnist
-        输入batch_size，例如“64”
-         input batch_size, e.g., "64": 64
-        输入学习率，例如“1e-3”
-         input learning rate, e.g., "1e-3": 1e-3
-        输入仿真时长，例如“100”
-         input simulating steps, e.g., "100": 100
-        输入训练轮数，即遍历训练集的次数，例如“100”
-         input training epochs, e.g., "100": 10
-        输入使用高斯调谐曲线编码每个像素点使用的神经元数量，例如“16”
-         input neuron number for encoding a piexl in GaussianTuning encoder, e.g., "16": 16
-        输入保存tensorboard日志文件的位置，例如“./”
-         input root directory for saving tensorboard logs, e.g., "./": ./logs_tempotron_mnist
-        cuda:15 ./mnist 64 0.001 100 100 16 ./logs_tempotron_mnist
-        train_acc 0.09375 0
-        cuda:15 ./mnist 64 0.001 100 100 16 ./logs_tempotron_mnist
-        train_acc 0.78125 512
-        ...
+    .. _tempotron_mnist.main-cn:
 
+    使用高斯调谐曲线编码器编码图像为脉冲，单层Tempotron进行MNIST识别。\n
+    这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
 
+    * :ref:`API in English <tempotron_mnist.main-en>`
 
+    .. _tempotron_mnist.main-en:
+
+    Use Gaussian tuned activation function encoder to encode the images to spikes.\n
+    The network with single Tempotron structure for classifying MNIST.\n
+    This function initials the network, starts training and shows accuracy on test dataset.
     '''
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
-    batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-    learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-    T = int(input('输入仿真时长，例如“100”\n input simulating steps, e.g., "100": '))
-    train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
-    m = int(input('输入使用高斯调谐曲线编码每个像素点使用的神经元数量，例如“16”\n input neuron number for encoding a piexl in GaussianTuning encoder, e.g., "16": '))
-    log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+
+    args = parser.parse_args()
+
+    device = args.device
+
+    dataset_dir = args.dataset_dir
+    log_dir = args.log_dir
+    model_output_dir = args.model_output_dir
+
+    batch_size = args.batch_size
+    T = args.T
+    learning_rate = args.lr
+    train_epoch = args.epoch
+    m = args.m
+
+    print(device, dataset_dir, batch_size, learning_rate, T, train_epoch, m, log_dir)
 
     # 每个像素点用m个神经元来编码
     encoder = encoding.GaussianTuning(n=1, m=m, x_min=torch.zeros(size=[1]).to(device), x_max=torch.ones(size=[1]).to(device))
 
     writer = SummaryWriter(log_dir)
 
-
     # 初始化数据加载器
-    train_data_loader = torch.utils.data.DataLoader(
+    train_data_loader = data.DataLoader(
         dataset=torchvision.datasets.MNIST(
             root=dataset_dir,
             train=True,
@@ -79,7 +88,7 @@ def main():
         batch_size=batch_size,
         shuffle=True,
         drop_last=True)
-    test_data_loader = torch.utils.data.DataLoader(
+    test_data_loader = data.DataLoader(
         dataset=torchvision.datasets.MNIST(
             root=dataset_dir,
             train=False,
@@ -89,13 +98,10 @@ def main():
         shuffle=True,
         drop_last=False)
 
-
-
     # 初始化网络
     net = Net(m, T).to(device)
     # 使用Adam优化器
     optimizer = torch.optim.SGD(net.parameters(), lr=learning_rate)
-
 
     train_times = 0
     for epoch in range(train_epoch):
@@ -110,7 +116,6 @@ def main():
             if train_times % 256 == 0:
                 writer.add_scalar('train_acc', train_acc, train_times)
             if train_times % 512 == 0:
-                print(device, dataset_dir, batch_size, learning_rate, T, train_epoch, m, log_dir)
                 print('train_acc', train_acc, train_times)
             loss = neuron.Tempotron.mse_loss(v_max, net.tempotron.v_threshold, label.to(device), 10)
             loss.backward()
@@ -130,16 +135,13 @@ def main():
                 img_num += img.shape[0]
             test_acc = correct_num / img_num
             writer.add_scalar('test_acc', test_acc, epoch)
-            print('test_acc', test_acc, train_times, log_dir)
-
-
-
-
+            print('test_acc', test_acc, train_times)
+    
+    # 保存模型
+    torch.save(net, model_output_dir + "/tempotron_snn_mnist.ckpt")
+    # 读取模型
+    # net = torch.load(model_output_dir + "/tempotron_snn_mnist.ckpt")
 
 
 if __name__ == '__main__':
     main()
-
-
-
-
