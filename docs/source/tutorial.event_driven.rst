@@ -216,11 +216,11 @@ Tempotron的膜电位定义为：
 
 在Tesla K80上训练100个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/train_batch_acc_scale.svg
+.. image:: ./_static/examples/event_driven/tempotron_mnist/train_batch_acc_scale.*
     :width: 100%
     
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/test_accuracy_scale.svg
+.. image:: ./_static/examples/event_driven/tempotron_mnist/test_accuracy_scale.*
     :width: 100%
 
 
