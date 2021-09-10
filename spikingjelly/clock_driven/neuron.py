@@ -739,3 +739,194 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         else:
             raise NotImplementedError
 
+class QIFNode(BaseNode):
+    def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        """
+        * :ref:`API in English <QIFNode.__init__-en>`
+
+        .. _QIFNode.__init__-cn:
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+
+        :param v_c: 关键电压
+        :type v_c: float
+
+        :param a0: 
+        :type a0: float
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_rest: 静息电位
+        :type v_rest: float
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
+
+
+        Quadratic Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，也是指数积分发放神经元(Exponential Integrate-and-Fire)的近似版本。其阈下神经动力学方程为：
+
+        .. math::
+            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
+
+        * :ref:`中文API <QIFNode.__init__-cn>`
+
+        .. _QIFNode.__init__-en:
+
+        :param tau: membrane time constant
+        :type tau: float
+
+        :param v_c: critical voltage
+        :type v_c: float
+
+        :param a0: 
+        :type a0: float
+
+        :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float
+
+        :param v_rest: resting potential
+        :type v_rest: float
+
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
+
+        The Quadratic Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an approximation of the Exponential Integrate-and-Fire model.
+        The subthreshold neural dynamics of it is as followed:
+
+        .. math::
+            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
+        """
+                 
+        assert isinstance(tau, float) and tau > 1.
+        if v_reset is not None:
+            assert v_threshold > v_reset
+            assert v_rest >= v_reset
+        assert a0 > 0
+
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        self.tau = tau
+        self.v_c = v_c
+        self.v_rest = v_rest
+        self.a0 = a0
+
+    def extra_repr(self):
+        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}, v_rest={self.v_rest}'
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
+
+
+class EIFNode(BaseNode):
+    def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        """
+        * :ref:`API in English <EIFNode.__init__-en>`
+
+        .. _EIFNode.__init__-cn:
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+
+        :param delta_T: 陡峭度参数
+        :type delta_T: float
+
+        :param theta_rh: 基强度电压阈值
+        :type theta_rh: float
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_rest: 静息电位
+        :type v_rest: float
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
+
+
+        Exponential Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，是由HH神经元模型(Hodgkin-Huxley model)简化后推导出的一维模型。在 :math:`\\Delta_T\\to 0` 时退化为LIF模型。其阈下神经动力学方程为：
+
+        .. math::
+            V[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
+
+        * :ref:`中文API <EIFNode.__init__-cn>`
+
+        .. _EIFNode.__init__-en:
+
+        :param tau: membrane time constant
+        :type tau: float
+
+        :param delta_T: sharpness parameter
+        :type delta_T: float
+
+        :param theta_rh: rheobase threshold
+        :type theta_rh: float
+
+        :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float
+
+        :param v_rest: resting potential
+        :type v_rest: float
+
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
+
+        The Exponential Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an one-dimensional model derived from the Hodgkin-Huxley model. It degenerates to the LIF model when :math:`\\Delta_T\\to 0`
+        The subthreshold neural dynamics of it is as followed:
+
+        .. math::
+            V[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
+        """
+                 
+        assert isinstance(tau, float) and tau > 1.
+        if v_reset is not None:
+            assert v_threshold > v_reset
+            assert v_rest >= v_reset
+        assert delta_T > 0
+
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        self.tau = tau
+        self.delta_T = delta_T
+        self.v_rest = v_rest
+        self.theta_rh = theta_rh
+
+    def extra_repr(self):
+        return super().extra_repr() + f', tau={self.tau}, delta_T={self.delta_T}, theta_rh={self.theta_rh}'
+
+    def neuronal_charge(self, x: torch.Tensor):
+        
+        with torch.no_grad():
+            if not isinstance(self.v, torch.Tensor):
+                self.v = torch.as_tensor(self.v, device=x.device)
+        
+        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
