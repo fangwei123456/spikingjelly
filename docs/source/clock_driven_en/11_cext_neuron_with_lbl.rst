@@ -131,7 +131,7 @@ Now let us use the CUDA-Enhanced Multi-Step neuron to re-implement the network i
 
 The fully codes are available at :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`. Run this example with the same arguments and devices as those in :doc:`../clock_driven_en/4_conv_fashion_mnist`. The outputs are:
 
-.. code-block:: bash
+.. code-block:: shell
 
     (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
 

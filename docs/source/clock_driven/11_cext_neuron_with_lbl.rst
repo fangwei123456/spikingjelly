@@ -133,7 +133,7 @@ CUDA加速的神经元
 :doc:`../clock_driven/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU
 和 `GeForce RTX 2080 Ti` 的GPU）来运行，结果如下：
 
-.. code-block:: bash
+.. code-block:: shell
 
     (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
 

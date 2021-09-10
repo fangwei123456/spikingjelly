@@ -52,7 +52,7 @@ SNN之于RNN
 重置表示电压重置过程：发放脉冲，则电压重置为 :math:`V_{reset}`；没有发放脉冲，则电压不变。
 
 梯度替代法
--------------
+----------
 RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :math:`g(x)=\Theta(x)` 显然是不可微分的，这就导致了SNN虽然一定程度上\
 与RNN非常相似，但不能用梯度下降、反向传播来训练。但我们可以用一个形状与 :math:`g(x)=\Theta(x)` 非常相似，但可微分的门控函数\
 :math:`\sigma(x)` 去替换它。
@@ -70,21 +70,31 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :ma
 
 .. code-block:: python
 
-    class BaseNode(nn.Module):
-        def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
-            '''
+    class BaseNode(base.MemoryModule):
+        def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                    surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+            """
             :param v_threshold: 神经元的阈值电压
-            :param v_reset: 神经元的重置电压。如果不为None，当神经元释放脉冲后，电压会被重置为v_reset；如果设置为None，则电压会被减去阈值
+            :type v_threshold: float
+
+            :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+                如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            :type v_reset: float
+
             :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-            :param monitor_state: 是否设置监视器来保存神经元的电压和释放的脉冲。
-                            若为True，则self.monitor是一个字典，键包括'v'和's'，分别记录电压和输出脉冲。对应的值是一个链表。为了节省显存（内存），列表中存入的是原始变量
-                            转换为numpy数组后的值。还需要注意，self.reset()函数会清空这些链表
+            :type surrogate_function: Callable
+
+            :param detach_reset: 是否将reset过程的计算图分离
+            :type detach_reset: bool
+
+            可微分SNN神经元的基类神经元。
+            """
 
 如果想要自定义新的近似门控函数，可以参考 ``clock_driven.surrogate`` 中的代码实现。通常是定义 ``torch.autograd.Function``，然后\
 将其封装成一个 ``torch.nn.Module`` 的子类。
 
 将脉冲神经元嵌入到深度网络
-------------------------
+--------------------------
 解决了脉冲神经元的微分问题后，我们的脉冲神经元可以像激活函数那样，嵌入到使用PyTorch搭建的任意网络中，使得网络成为一个SNN。在 ``clock_driven.neuron`` 中\
 已经实现了一些经典神经元，可以很方便地搭建各种网络，例如一个简单的全连接网络：\
 
@@ -95,50 +105,75 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :ma
             neuron.LIFNode(tau=100.0, v_threshold=1.0, v_reset=5.0)
             )
 
-使用双层全连接网络进行MNIST分类
------------------------------
-现在我们使用 ``clock_driven.neuron`` 中的LIF神经元，搭建一个双层全连接网络，对MNIST数据集进行分类。
+示例：使用单层全连接网络进行MNIST分类
+-------------------------------------
+现在我们使用 ``clock_driven.neuron`` 中的LIF神经元，搭建一个单层全连接网络，对MNIST数据集进行分类。
 
-首先定义我们的网络结构：
-
-.. code-block:: python
-
-    class Net(nn.Module):
-        def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
-            super().__init__()
-            # 网络结构，简单的双层全连接网络，每一层之后都是LIF神经元
-            self.fc = nn.Sequential(
-                nn.Flatten(),
-                nn.Linear(28 * 28, 14 * 14, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-                nn.Linear(14 * 14, 10, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
-            )
-
-        def forward(self, x):
-            return self.fc(x)
-
-定义我们的超参数：
+首先确定所需超参数：
 
 .. code-block:: python
 
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
-    batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-    learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-    T = int(input('输入仿真时长，例如“100”\n input simulating steps, e.g., "100": '))
-    tau = float(input('输入LIF神经元的时间常数tau，例如“100.0”\n input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
-    train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
-    log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+    parser.add_argument('--device', default='cuda:0', help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
 
-初始化数据加载器、网络、优化器，以及编码器（我们使用泊松编码器，将MNIST图像编码成脉冲序列）：
+    parser.add_argument('--dataset-dir', default='./', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
+    parser.add_argument('--log-dir', default='./', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
+    parser.add_argument('--model-output-dir', default='./', help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
+
+    parser.add_argument('-b', '--batch-size', default=64, type=int, help='Batch 大小，例如“64”\n Batch size, e.g., "64"')
+    parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T', help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
+    parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, metavar='LR', help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ', dest='lr')
+    parser.add_argument('--tau', default=2.0, type=float, help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
+    parser.add_argument('-N', '--epoch', default=100, type=int, help='训练epoch，例如“100”\n Training epoch, e.g., "100"')
+
+初始化数据加载器：
 
 .. code-block:: python
 
-    # 初始化网络
-    net = Net(tau=tau).to(device)
+    # 初始化数据加载器
+    train_dataset = torchvision.datasets.MNIST(
+        root=dataset_dir,
+        train=True,
+        transform=torchvision.transforms.ToTensor(),
+        download=True
+    )
+    test_dataset = torchvision.datasets.MNIST(
+        root=dataset_dir,
+        train=False,
+        transform=torchvision.transforms.ToTensor(),
+        download=True
+    )
+
+    train_data_loader = data.DataLoader(
+        dataset=train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True
+    )
+    test_data_loader = data.DataLoader(
+        dataset=test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False
+    )
+
+定义并初始化网络：
+
+.. code-block:: python
+
+    # 定义并初始化网络
+    net = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau)
+    )
+    net = net.to(device)
+
+初始化优化器、编码器（我们使用泊松编码器，将MNIST图像编码成脉冲序列）：
+
+.. code-block:: python
+
     # 使用Adam优化器
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     # 使用泊松编码器
     encoder = encoding.PoissonEncoder()
 
@@ -150,8 +185,13 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :ma
 这可以通过调用 ``clock_driven.functional.reset_net(net)`` 来实现。训练的代码如下：
 
 .. code-block:: python
-
-    for img, label in train_data_loader:
+    
+    print("Epoch {}:".format(epoch))
+    print("Training...")
+    train_correct_sum = 0
+    train_sum = 0
+    net.train()
+    for img, label in tqdm(train_data_loader):
         img = img.to(device)
         label = label.to(device)
         label_one_hot = F.one_hot(label, 10).float()
@@ -177,16 +217,28 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :ma
         # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
         functional.reset_net(net)
 
+        # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
+        train_correct_sum += (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().sum().item()
+        train_sum += label.numel()
+
+        train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
+        writer.add_scalar('train_batch_accuracy', train_batch_accuracy, train_times)
+        train_accs.append(train_batch_accuracy)
+
+        train_times += 1
+    train_accuracy = train_correct_sum / train_sum
+
 测试的代码与训练代码相比更为简单：
 
 .. code-block:: python
 
+    print("Testing...")
     net.eval()
     with torch.no_grad():
         # 每遍历一次全部数据集，就在测试集上测试一次
         test_sum = 0
         correct_sum = 0
-        for img, label in test_data_loader:
+        for img, label in tqdm(test_data_loader):
             img = img.to(device)
             for t in range(T):
                 if t == 0:
@@ -197,40 +249,73 @@ RNN使用可微分的门控函数，例如tanh函数。而SNN的脉冲函数 :ma
             correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
             test_sum += label.numel()
             functional.reset_net(net)
+        test_accuracy = correct_sum / test_sum
+        writer.add_scalar('test_accuracy', test_accuracy, epoch)
+        test_accs.append(test_accuracy)
+        max_test_accuracy = max(max_test_accuracy, test_accuracy)
+    print("Epoch {}: train_acc={}, test_acc={}, max_test_acc={}, train_times={}".format(epoch, train_accuracy, test_accuracy, max_test_accuracy, train_times))
+    print()
 
-        writer.add_scalar('test_accuracy', correct_sum / test_sum, epoch)
+完整的代码位于 ``clock_driven.examples.lif_fc_mnist.py``，在代码中我们还使用了Tensorboard来保存训练日志。
+可设置的（超）参数如下：
 
-完整的代码位于 ``clock_driven.examples.lif_fc_mnist.py``，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在Python命令行运行它：
+.. code-block:: shell
 
-    .. code-block:: python
+    $ python <PATH>/lif_fc_mnist.py --help
+    usage: lif_fc_mnist.py [-h] [--device DEVICE] [--dataset-dir DATASET_DIR] [--log-dir LOG_DIR] [--model-output-dir MODEL_OUTPUT_DIR] [-b BATCH_SIZE] [-T T] [--lr LR] [--tau TAU] [-N EPOCH]
 
-        >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
-        >>> lif_fc_mnist.main()
-        输入运行的设备，例如“cpu”或“cuda:0”
-         input device, e.g., "cpu" or "cuda:0": cuda:15
-        输入保存MNIST数据集的位置，例如“./”
-         input root directory for saving MNIST dataset, e.g., "./": ./mnist
-        输入batch_size，例如“64”
-         input batch_size, e.g., "64": 128
-        输入学习率，例如“1e-3”
-         input learning rate, e.g., "1e-3": 1e-3
-        输入仿真时长，例如“100”
-         input simulating steps, e.g., "100": 50
-        输入LIF神经元的时间常数tau，例如“100.0”
-         input membrane time constant, tau, for LIF neurons, e.g., "100.0": 100.0
-        输入训练轮数，即遍历训练集的次数，例如“100”
-         input training epochs, e.g., "100": 100
-        输入保存tensorboard日志文件的位置，例如“./”
-         input root directory for saving tensorboard logs, e.g., "./": ./logs_lif_fc_mnist
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 0 train_accuracy 0.109375
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 1024 train_accuracy 0.5078125
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 2048 train_accuracy 0.7890625
-        ...
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 46080 train_accuracy 0.9296875
+    spikingjelly LIF MNIST Training
+
+    optional arguments:
+    -h, --help            show this help message and exit
+    --device DEVICE       运行的设备，例如“cpu”或“cuda:0” Device, e.g., "cpu" or "cuda:0"
+    --dataset-dir DATASET_DIR
+                            保存MNIST数据集的位置，例如“./” Root directory for saving MNIST dataset, e.g., "./"
+    --log-dir LOG_DIR     保存tensorboard日志文件的位置，例如“./” Root directory for saving tensorboard logs, e.g., "./"
+    --model-output-dir MODEL_OUTPUT_DIR
+                            模型保存路径，例如“./” Model directory for saving, e.g., "./"
+    -b BATCH_SIZE, --batch-size BATCH_SIZE
+                            Batch 大小，例如“64” Batch size, e.g., "64"
+    -T T, --timesteps T   仿真时长，例如“100” Simulating timesteps, e.g., "100"
+    --lr LR, --learning-rate LR
+                            学习率，例如“1e-3” Learning rate, e.g., "1e-3":
+    --tau TAU             LIF神经元的时间常数tau，例如“100.0” Membrane time constant, tau, for LIF neurons, e.g., "100.0"
+    -N EPOCH, --epoch EPOCH
+                            训练epoch，例如“100” Training epoch, e.g., "100"
+
+也可以直接在Python命令行运行它：
+
+.. code-block:: shell
+
+    $ python
+    >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+    >>> lif_fc_mnist.main()
+    ########## Configurations ##########
+    device=cuda:0
+    dataset_dir=./
+    log_dir=./
+    model_output_dir=./
+    batch_size=64
+    T=100
+    lr=0.001
+    tau=2.0
+    epoch=100
+    ####################################
+    Epoch 0:
+    Training...
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 937/937 [01:26<00:00, 10.89it/s]
+    Testing...
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 157/157 [00:05<00:00, 28.79it/s]
+    Epoch 0: train_acc = 0.8641775613660619, test_acc=0.9071, max_test_acc=0.9071, train_times=937
+
+保存和读取模型：
+
+.. code-block:: python
+    
+    # 保存模型
+    torch.save(net, model_output_dir + "/lif_snn_mnist.ckpt")
+    # 读取模型
+    # net = torch.load(model_output_dir + "/lif_snn_mnist.ckpt")
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，\
 但训练效果不一定更好，因此 ``T`` 太大，SNN在时间上展开后就会变成一个非常深的网络，梯度的传递容易衰减或爆炸。由于我们使用了泊松\

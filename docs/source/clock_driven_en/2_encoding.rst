@@ -174,6 +174,7 @@ linear (``function_type='linear'``)
 
 .. math::
     t_f(x) = (T - 1)(1 - x)
+    
 When the encoding type is logarithmic (``function_type='log'`` )
 
 .. math::

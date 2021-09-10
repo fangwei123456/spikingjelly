@@ -12,7 +12,7 @@ We set the firing threshold of a neuron to be infinity, which won't fire at all,
 
 .. code-block:: python
 
-        class NonSpikingLIFNode(neuron.LIFNode):
+    class NonSpikingLIFNode(neuron.LIFNode):
         def forward(self, dv: torch.Tensor):
             self.neuronal_charge(dv)
             # self.neuronal_fire()

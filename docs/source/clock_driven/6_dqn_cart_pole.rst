@@ -25,7 +25,6 @@ Cart Position，Cart Velocity，Pole Angle和Pole Velocity At Tip，这是一个
 .. code-block:: python
 
     class NonSpikingLIFNode(neuron.LIFNode):
-            class NonSpikingLIFNode(neuron.LIFNode):
         def forward(self, dv: torch.Tensor):
             self.neuronal_charge(dv)
             # self.neuronal_fire()

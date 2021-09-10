@@ -177,7 +177,7 @@ After training, we will save the final state of the network for testing, and als
 
 We will observe the following results when executing ``%run ./spiking_lstm_text.py`` in Python Console with ``IF_TRAIN = 1`` .
 
-.. code-block:: python
+.. code-block:: shell
 
     Backend Qt5Agg is interactive backend. Turning interactive mode on.
     Training...
@@ -274,7 +274,7 @@ We first load the well-trained network, and then conduct the following tests:
 
 We will observe the following results when executing ``%run ./spiking_lstm_text.py`` in Python Console with ``IF_TRAIN = 0`` .
 
-.. code-block:: python
+.. code-block:: shell
 
     Testing...
     Calculating testing accuracy...

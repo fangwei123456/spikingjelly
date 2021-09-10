@@ -11,7 +11,7 @@ Neftci E, Mostafa H, Zenke F, et al. Surrogate Gradient Learning in Spiking Neur
 The download address for this article can be found at `arXiv <https://arxiv.org/abs/1901.09948>`_ .
 
 SNN Compared with RNN
-----------
+---------------------
 The neuron in SNN can be regarded as a kind of RNN, and its input is the voltage increment (or the product of current and membrane resistance, but for convenience, ``clock_driven.neuron`` uses voltage increment). The hidden state is the membrane voltage, and the output is a spike. Such spiking neurons are Markovian: the output at the current time is only related to the input at the current time and the state of the neuron itself.
 
 You can use three discrete equations —— Charge, Discharge, Reset —— to describe any discrete spiking neuron:
@@ -49,7 +49,7 @@ In the Discharge equation, :math:`S(t)` is a spike fired by a neuron, :math:`g(x
 Reset means the reset process of the voltage: when a spike is fired, the voltage is reset to :math:`V_{reset}`; If no spike is fired, the voltage remains unchanged.
 
 Surrogate Gradient Method
--------------
+-------------------------
 RNN uses differentiable gating functions, such as the tanh function. Obviously, the spiking function of SNN :math:`g(x)=\Theta(x)` is not differentiable, which leads to the fact that SNN is very similar to RNN to a certain extent, but it cannot be trained by gradient descent and back-propagation. We can use a gating function that is very similar to :math:`g(x)=\Theta(x)` , but differentiable :math:`\sigma(x)` to replace it.
 
 The core idea of ​​this method is: when forwarding, using :math:`g(x)=\Theta(x)`, the output of the neuron is discrete 0 and 1, and our network is still SNN; When back-propagation, the gradient of the surrogate gradient function :math:`g'(x)=\sigma'(x)` is used to replace the gradient of the spiking function. The most common surrogate gradient function is the sigmoid function :math:`\sigma(\alpha x)=\frac{1}{1 + exp(-\alpha x)}`. :math:`\alpha` can control the smoothness of the function. The function with larger :math:`\alpha` will be closer to :math:`\Theta(x)`. But when it gets closer to :math:`x=0`, the gradient will be more likely to explode. And when it gets farther to :math:`x=0`, the gradient will be more likely to disappear. This makes the network more difficult to train. The following figure shows the shape of the surrogate gradient function and the corresponding Reset equation for different :math:`\alpha`:
@@ -61,18 +61,30 @@ The surrogate gradient function is one of the parameters of the neuron construct
 
 .. code-block:: python
 
-    class BaseNode(nn.Module):
-        def __init__(self, v_threshold=1.0, v_reset=0.0, surrogate_function=surrogate.Sigmoid(), monitor_state=False):
-            '''
-            :param v_threshold: The threshold voltage of the neuron
-            :param v_reset: The reset voltage of the neuron. If it is not None, when the neuron fires the spike, the voltage will be reset to v_reset; if it is set to None, the voltage will be subtracted from the threshold
-            :param surrogate_function: Surrogate function used to calculate the gradient of the spiking function during back-propagation
-            :param monitor_state: Whether to set up a monitor to save the voltage of the neurons and the spikes fired. If True, self.monitor is a dictionary, whose keys include 'v' and 's', recording voltage and output spike respectively. The corresponding value is a linked list. In order to save video memory (memory), what is stored in the list is the value of the original variable converted into a numpy array. Also note that the self.reset() function will clear these linked lists
+    class BaseNode(base.MemoryModule):
+        def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                    surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+            """
+            :param v_threshold: threshold voltage of neurons
+            :type v_threshold: float
+
+            :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+                ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+            :type v_reset: float
+
+            :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+            :type surrogate_function: Callable
+
+            :param detach_reset: whether detach the computation graph of reset
+            :type detach_reset: bool
+
+            This class is the base class of differentiable spiking neurons.
+            """
 
 If you want to customize the new approximate gating function, you can refer to the code in ``clock_driven.surrogate``. Usually we define it as ``torch.autograd.Function``, and then encapsulate it into a subclass of ``torch.nn.Module``.
 
 Embed Spiking Neurons into Deep Networks
-------------------------
+----------------------------------------
 After solving the differential problem of spiking neurons, our spiking neurons can be embedded into any network built using PyTorch like an activation function, making the network an SNN. Some classic neurons have been implemented in ``clock_driven.neuron``, which can easily build various networks, such as a simple fully connected network:
 
 .. code-block:: python
@@ -82,50 +94,75 @@ After solving the differential problem of spiking neurons, our spiking neurons c
             neuron.LIFNode(tau=100.0, v_threshold=1.0, v_reset=5.0)
             )
 
-MNIST classification using a double-layer fully connected network
------------------------------
-Now we use the LIF neurons in ``clock_driven.neuron`` to build a two-layer fully connected network to classify the MNIST dataset.
+Example: MNIST classification using a single-layer fully connected network
+--------------------------------------------------------------------------
+Now we use the LIF neurons in ``clock_driven.neuron`` to build a one-layer fully connected network to classify the MNIST dataset.
 
-First we define our network structure:
-
-.. code-block:: python
-
-    class Net(nn.Module):
-        def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
-            super().__init__()
-            # Network structure, a simple two-layer fully connected network, each layer is followed by LIF neurons
-            self.fc = nn.Sequential(
-                nn.Flatten(),
-                nn.Linear(28 * 28, 14 * 14, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-                nn.Linear(14 * 14, 10, bias=False),
-                neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
-            )
-
-        def forward(self, x):
-            return self.fc(x)
-
-Define our hyperparameters:
+Firstly, we confirm hyperparameters we needed:
 
 .. code-block:: python
 
-    device = input('Enter the input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('Enter the input root directory for saving MNIST dataset, e.g., "./": ')
-    batch_size = int(input('Enter the input batch_size, e.g., "64": '))
-    learning_rate = float(input('Enter the input learning rate, e.g., "1e-3": '))
-    T = int(input('Enter the input simulating steps, e.g., "100": '))
-    tau = float(input('Enter the input membrane time constant, tau, for LIF neurons, e.g., "100.0": '))
-    train_epoch = int(input('Enter the input training epochs, e.g., "100": '))
-    log_dir = input('Enter the input root directory for saving tensorboard logs, e.g., "./": ')
+    parser.add_argument('--device', default='cuda:0', help='Device, e.g., "cpu" or "cuda:0"')
 
-Initialize the data loader, network, optimizer, and encoder (we use a Poisson encoder to encode the MNIST image into spike trains):
+    parser.add_argument('--dataset-dir', default='./', help='Root directory for saving MNIST dataset, e.g., "./"')
+    parser.add_argument('--log-dir', default='./', help='Root directory for saving tensorboard logs, e.g., "./"')
+    parser.add_argument('--model-output-dir', default='./', help='Model directory for saving, e.g., "./"')
+
+    parser.add_argument('-b', '--batch-size', default=64, type=int, help='Batch size, e.g., "64"')
+    parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T', help='Simulating timesteps, e.g., "100"')
+    parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, metavar='LR', help='Learning rate, e.g., "1e-3": ', dest='lr')
+    parser.add_argument('--tau', default=2.0, type=float, help='Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
+    parser.add_argument('-N', '--epoch', default=100, type=int, help='Training epoch, e.g., "100"')
+
+Initialize the DataLoader:
 
 .. code-block:: python
 
-    # Initialize the network
-    net = Net(tau=tau).to(device)
-    # Use Adam Optimizer
-    optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
+    # Initialize the DataLoader
+    train_dataset = torchvision.datasets.MNIST(
+        root=dataset_dir,
+        train=True,
+        transform=torchvision.transforms.ToTensor(),
+        download=True
+    )
+    test_dataset = torchvision.datasets.MNIST(
+        root=dataset_dir,
+        train=False,
+        transform=torchvision.transforms.ToTensor(),
+        download=True
+    )
+
+    train_data_loader = data.DataLoader(
+        dataset=train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        drop_last=True
+    )
+    test_data_loader = data.DataLoader(
+        dataset=test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        drop_last=False
+    )
+
+Define our network structure:
+
+.. code-block:: python
+
+    # Define SNN
+    net = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau)
+    )
+    net = net.to(device)
+
+Initialize the optimizer and encoder (we use a Poisson encoder to encode the MNIST image into spike trains):
+
+.. code-block:: python
+
+    # Use Adam optimizer
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
     # Use Poisson encoder
     encoder = encoding.PoissonEncoder()
 
@@ -133,7 +170,12 @@ The training of the network is simple. Run the network for ``T`` time steps to a
 
 .. code-block:: python
 
-    for img, label in train_data_loader:
+    print("Epoch {}:".format(epoch))
+    print("Training...")
+    train_correct_sum = 0
+    train_sum = 0
+    net.train()
+    for img, label in tqdm(train_data_loader):
         img = img.to(device)
         label = label.to(device)
         label_one_hot = F.one_hot(label, 10).float()
@@ -159,16 +201,28 @@ The training of the network is simple. Run the network for ``T`` time steps to a
         # After optimizing the parameters once, the state of the network needs to be reset, because the SNN neurons have "memory"
         functional.reset_net(net)
 
+        # Calculation of accuracy. The index of the neuron with max frequency in the output layer is the classification result.
+        train_correct_sum += (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().sum().item()
+        train_sum += label.numel()
+
+        train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
+        writer.add_scalar('train_batch_accuracy', train_batch_accuracy, train_times)
+        train_accs.append(train_batch_accuracy)
+
+        train_times += 1
+    train_accuracy = train_correct_sum / train_sum
+
 The test code is simpler than the training code:
 
 .. code-block:: python
-
+    
+    print("Testing...")
     net.eval()
     with torch.no_grad():
         # Each time through the entire data set, test once on the test set
         test_sum = 0
         correct_sum = 0
-        for img, label in test_data_loader:
+        for img, label in tqdm(test_data_loader):
             img = img.to(device)
             for t in range(T):
                 if t == 0:
@@ -179,32 +233,73 @@ The test code is simpler than the training code:
             correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
             test_sum += label.numel()
             functional.reset_net(net)
+        test_accuracy = correct_sum / test_sum
+        writer.add_scalar('test_accuracy', test_accuracy, epoch)
+        test_accs.append(test_accuracy)
+        max_test_accuracy = max(max_test_accuracy, test_accuracy)
+    print("Epoch {}: train_acc={}, test_acc={}, max_test_acc={}, train_times={}".format(epoch, train_accuracy, test_accuracy, max_test_accuracy, train_times))
+    print()
 
-        writer.add_scalar('test_accuracy', correct_sum / test_sum, epoch)
+The complete code is located at ``clock_driven.examples.lif_fc_mnist.py``. In the code, we also use Tensorboard to save the training log.
+Here are the (hyper)parameters you can configure:
 
-The complete code is located at ``clock_driven.examples.lif_fc_mnist.py``. In the code, we also use Tensorboard to save the training log. You can run it directly on the Python command line:
+.. code-block:: shell
 
-    .. code-block:: python
+    $ python <PATH>/lif_fc_mnist.py --help
+    usage: lif_fc_mnist.py [-h] [--device DEVICE] [--dataset-dir DATASET_DIR] [--log-dir LOG_DIR] [--model-output-dir MODEL_OUTPUT_DIR] [-b BATCH_SIZE] [-T T] [--lr LR] [--tau TAU] [-N EPOCH]
 
-        >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
-        >>> lif_fc_mnist.main()
-        Enter the input device, e.g., "cpu" or "cuda:0": cuda:15
-        Enter the input root directory for saving MNIST dataset, e.g., "./": ./mnist
-        Enter the input batch_size, e.g., "64": 128
-        Enter the input learning rate, e.g., "1e-3": 1e-3
-        Enter the input simulating steps, e.g., "100": 50
-        Enter the input membrane time constant, tau, for LIF neurons, e.g., "100.0": 100.0
-        Enter the input training epochs, e.g., "100": 100
-        Enter the input root directory for saving tensorboard logs, e.g., "./": ./logs_lif_fc_mnist
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 0 train_accuracy 0.109375
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 1024 train_accuracy 0.5078125
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 2048 train_accuracy 0.7890625
-        ...
-        cuda:15 ./mnist 128 0.001 50 100.0 100 ./logs_lif_fc_mnist
-        train_times 46080 train_accuracy 0.9296875
+    spikingjelly LIF MNIST Training
+
+    optional arguments:
+    -h, --help            show this help message and exit
+    --device DEVICE       运行的设备，例如“cpu”或“cuda:0” Device, e.g., "cpu" or "cuda:0"
+    --dataset-dir DATASET_DIR
+                            保存MNIST数据集的位置，例如“./” Root directory for saving MNIST dataset, e.g., "./"
+    --log-dir LOG_DIR     保存tensorboard日志文件的位置，例如“./” Root directory for saving tensorboard logs, e.g., "./"
+    --model-output-dir MODEL_OUTPUT_DIR
+                            模型保存路径，例如“./” Model directory for saving, e.g., "./"
+    -b BATCH_SIZE, --batch-size BATCH_SIZE
+                            Batch 大小，例如“64” Batch size, e.g., "64"
+    -T T, --timesteps T   仿真时长，例如“100” Simulating timesteps, e.g., "100"
+    --lr LR, --learning-rate LR
+                            学习率，例如“1e-3” Learning rate, e.g., "1e-3":
+    --tau TAU             LIF神经元的时间常数tau，例如“100.0” Membrane time constant, tau, for LIF neurons, e.g., "100.0"
+    -N EPOCH, --epoch EPOCH
+                            训练epoch，例如“100” Training epoch, e.g., "100"
+
+You can also run it directly on the Python command line:
+
+.. code-block:: shell
+
+    $ python
+    >>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+    >>> lif_fc_mnist.main()
+    ########## Configurations ##########
+    device=cuda:0
+    dataset_dir=./
+    log_dir=./
+    model_output_dir=./
+    batch_size=64
+    T=100
+    lr=0.001
+    tau=2.0
+    epoch=100
+    ####################################
+    Epoch 0:
+    Training...
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 937/937 [01:26<00:00, 10.89it/s]
+    Testing...
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 157/157 [00:05<00:00, 28.79it/s]
+    Epoch 0: train_acc = 0.8641775613660619, test_acc=0.9071, max_test_acc=0.9071, train_times=937
+
+Save and load model：
+
+.. code-block:: python
+    
+    # Save model
+    torch.save(net, model_output_dir + "/lif_snn_mnist.ckpt")
+    # Load model
+    # net = torch.load(model_output_dir + "/lif_snn_mnist.ckpt")
 
 It should be noted that the amount of memory required to train such an SNN is linearly related to the simulation time ``T``. A longer ``T`` is equivalent to using a smaller simulation step size and training is more "fine", however, the training effect is not necessarily better. So if ``T`` is too large, the SNN will become a very deep network after being expanded in time, and the gradient is easy to decay or explode. Since we use a Poisson encoder, a larger ``T`` is required.
 

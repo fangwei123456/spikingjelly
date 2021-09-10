@@ -14,11 +14,11 @@ parser = argparse.ArgumentParser(description='spikingjelly LIF MNIST Training')
 
 parser.add_argument('--device', default='cuda:0', help='运行的设备，例如“cpu”或“cuda:0”\n Device, e.g., "cpu" or "cuda:0"')
 
-parser.add_argument('--dataset-dir', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
-parser.add_argument('--log-dir', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
-parser.add_argument('--model-output-dir', help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
+parser.add_argument('--dataset-dir', default='./', help='保存MNIST数据集的位置，例如“./”\n Root directory for saving MNIST dataset, e.g., "./"')
+parser.add_argument('--log-dir', default='./', help='保存tensorboard日志文件的位置，例如“./”\n Root directory for saving tensorboard logs, e.g., "./"')
+parser.add_argument('--model-output-dir', default='./', help='模型保存路径，例如“./”\n Model directory for saving, e.g., "./"')
 
-parser.add_argument('-b', '--batch-size', default=128, type=int)
+parser.add_argument('-b', '--batch-size', default=64, type=int, help='Batch 大小，例如“64”\n Batch size, e.g., "64"')
 parser.add_argument('-T', '--timesteps', default=100, type=int, dest='T', help='仿真时长，例如“100”\n Simulating timesteps, e.g., "100"')
 parser.add_argument('--lr', '--learning-rate', default=1e-3, type=float, metavar='LR', help='学习率，例如“1e-3”\n Learning rate, e.g., "1e-3": ', dest='lr')
 parser.add_argument('--tau', default=2.0, type=float, help='LIF神经元的时间常数tau，例如“100.0”\n Membrane time constant, tau, for LIF neurons, e.g., "100.0"')
@@ -29,14 +29,14 @@ def main():
     '''
     :return: None
 
-    * :ref:`中文API <lif_fc_mnist.main-cn>`
+    * :ref:`API in English <lif_fc_mnist.main-en>`
 
     .. _lif_fc_mnist.main-cn:
 
     使用全连接-LIF的网络结构，进行MNIST识别。\n
     这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。
 
-    * :ref:`API in English <lif_fc_mnist.main-en>`
+    * :ref:`中文API <lif_fc_mnist.main-cn>`
 
     .. _lif_fc_mnist.main-en:
 
@@ -45,6 +45,9 @@ def main():
     '''
     
     args = parser.parse_args()
+    print("########## Configurations ##########")
+    print('\n'.join(f'{k}={v}' for k, v in vars(args).items()))
+    print("####################################")
 
     device = args.device
     dataset_dir = args.dataset_dir
@@ -65,18 +68,25 @@ def main():
         transform=torchvision.transforms.ToTensor(),
         download=True
     )
-    test_dataset = torchvision.datasets.MNIST(root=dataset_dir,train=False,transform=torchvision.transforms.ToTensor(),download=True)
+    test_dataset = torchvision.datasets.MNIST(
+        root=dataset_dir,
+        train=False,
+        transform=torchvision.transforms.ToTensor(),
+        download=True
+    )
 
     train_data_loader = data.DataLoader(
         dataset=train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        drop_last=True)
+        drop_last=True
+    )
     test_data_loader = data.DataLoader(
         dataset=test_dataset,
         batch_size=batch_size,
         shuffle=False,
-        drop_last=False)
+        drop_last=False
+    )
 
     # 定义并初始化网络
     net = nn.Sequential(
@@ -96,6 +106,10 @@ def main():
     train_accs = []
 
     for epoch in range(train_epoch):
+        print("Epoch {}:".format(epoch))
+        print("Training...")
+        train_correct_sum = 0
+        train_sum = 0
         net.train()
         for img, label in tqdm(train_data_loader):
             img = img.to(device)
@@ -124,18 +138,23 @@ def main():
             functional.reset_net(net)
 
             # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
-            accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
-            
-            writer.add_scalar('train_accuracy', accuracy, train_times)
-            train_accs.append(accuracy)
+            train_correct_sum += (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().sum().item()
+            train_sum += label.numel()
+
+            train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
+            writer.add_scalar('train_batch_accuracy', train_batch_accuracy, train_times)
+            train_accs.append(train_batch_accuracy)
 
             train_times += 1
+        train_accuracy = train_correct_sum / train_sum
+
+        print("Testing...")
         net.eval()
         with torch.no_grad():
             # 每遍历一次全部数据集，就在测试集上测试一次
+            test_correct_sum = 0
             test_sum = 0
-            correct_sum = 0
-            for img, label in test_data_loader:
+            for img, label in tqdm(test_data_loader):
                 img = img.to(device)
                 for t in range(T):
                     if t == 0:
@@ -143,14 +162,15 @@ def main():
                     else:
                         out_spikes_counter += net(encoder(img).float())
 
-                correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
+                test_correct_sum += (out_spikes_counter.max(1)[1] == label.to(device)).float().sum().item()
                 test_sum += label.numel()
                 functional.reset_net(net)
-            test_accuracy = correct_sum / test_sum
+            test_accuracy = test_correct_sum / test_sum
             writer.add_scalar('test_accuracy', test_accuracy, epoch)
             test_accs.append(test_accuracy)
             max_test_accuracy = max(max_test_accuracy, test_accuracy)
-        print(f'Epoch {epoch}: device={device}, dataset_dir={dataset_dir}, batch_size={batch_size}, learning_rate={lr}, T={T}, log_dir={log_dir}, max_test_accuracy={max_test_accuracy}, train_times={train_times}')
+        print("Epoch {}: train_acc = {}, test_acc={}, max_test_acc={}, train_times={}".format(epoch, train_accuracy, test_accuracy, max_test_accuracy, train_times))
+        print()
     
     # 保存模型
     torch.save(net, model_output_dir + "/lif_snn_mnist.ckpt")

@@ -123,8 +123,6 @@ net in the layer-by-layer mode with CUDA neurons:
 
 .. code:: python
 
-.. code:: python
-
     import cupy
 
     class CextNet(nn.Module):
