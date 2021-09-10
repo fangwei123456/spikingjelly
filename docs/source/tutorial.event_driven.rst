@@ -1,11 +1,13 @@
 事件驱动
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingjelly.event_driven``，介绍事件驱动概念、Tempotron神经元。
+本节教程主要关注 ``spikingjelly.event_driven`` ，介绍事件驱动概念、Tempotron神经元。
 
 事件驱动的SNN仿真
 -----------------
+
 ``clock_driven`` 使用时间驱动的方法对SNN进行仿真，因此在代码中都能够找到在时间上的循环，例如：
 
 .. code-block:: python
@@ -20,13 +22,13 @@
 可以异步计算，不需要在时钟上保持同步。
 
 脉冲响应模型(Spike response model, SRM)
---------------------------------------
+-----------------------------------------------
 
 在脉冲响应模型(Spike response model, SRM)中，使用显式的 :math:`V-t` 方程来描述神经元的活动，而不是用微分方程去描述神经元的充\
 电过程。由于 :math:`V-t` 是已知的，因此给与任何输入 :math:`X(t)`，神经元的响应 :math:`V(t)` 都可以被直接算出。
 
 Tempotron神经元
----------------
+---------------------
 
 Tempotron神经元是 [#f1]_ 提出的一种SNN神经元，其命名来源于ANN中的感知器（Perceptron）。感知器是最简单的ANN神经元，对输入数据\
 进行加权求和，输出二值0或1来表示数据的分类结果。Tempotron可以看作是SNN领域的感知器，它同样对输入数据进行加权求和，并输出二分类\
@@ -66,7 +68,8 @@ Tempotron的膜电位定义为：
 从Tempotron的输出结果也能看出，Tempotron只能发放不超过1个脉冲。单个Tempotron只能做二分类，但多个Tempotron就可以做多分类。
 
 如何训练Tempotron
------------------
+--------------------
+
 使用Tempotron的SNN网络，通常是“全连接层 + Tempotron”的形式，网络的参数即为全连接层的权重。使用梯度下降法来优化网络参数。
 
 以二分类为例，损失函数被定义为仅在分类错误的情况下存在。当实际类别是1而实际输出是0，损失为 :math:`V_{threshold} - V_{t_{max}}`;\
@@ -86,19 +89,22 @@ Tempotron的膜电位定义为：
 
 并行实现
 --------
+
 如前所述，对于脉冲响应模型，一旦输入给定，神经元的响应方程已知，任意时刻的神经元状态都可以求解。此外，计算 :math:`t` 时刻的电\
 压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 ``spikingjelly/event_driven/neuron.py`` 中\
 实现了集成全连接层、并行计算的Tempotron，将时间看作是一个单独的维度，整个网络在 :math:`t=0, 1, ..., T-1` 时刻的状态全都被并
 行地计算出。读者如有兴趣可以直接阅读源代码。
 
-识别MNIST
----------
-我们使用Tempotron搭建一个简单的SNN网络，识别MNIST数据集。首先我们需要考虑如何将MNIST数据集转化为脉冲输入。在 ``clock_driven``中\
+示例：识别MNIST
+---------------
+
+我们使用Tempotron搭建一个简单的SNN网络，识别MNIST数据集。首先我们需要考虑如何将MNIST数据集转化为脉冲输入。在 ``clock_driven`` 中\
 的泊松编码器，在伴随着整个网络的for循环中，不断地生成脉冲；但在使用Tempotron时，我们使用高斯调谐曲线编码器 [#f2]_，这一编码器\
 可以在时间维度上并行地将输入数据转化为脉冲发放时刻。
 
 高斯调谐曲线编码器
-^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 假设我们要编码的数据有 :math:`n` 个特征，对于MNIST图像，因其是单通道图像，可以认为 :math:`n=1`。高斯调谐曲线编码器，使\
 用 :math:`m (m>2)` 个神经元去编码每个特征，并将每个特征编码成这 :math:`m` 个神经元的脉冲发放时刻，因此可以认为编码器内\
 共有 :math:`nm` 个神经元。
@@ -129,7 +135,7 @@ Tempotron的膜电位定义为：
 .. image:: ./_static/tutorials/event_driven/1.png
 
 定义网络、损失函数、分类结果
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 网络的结构非常简单，单层的Tempotron，输出层是10个神经元，因为MNIST图像共有10类：
 
@@ -139,7 +145,8 @@ Tempotron的膜电位定义为：
         def __init__(self, m, T):
             # m是高斯调谐曲线编码器编码一个像素点所使用的神经元数量
             super().__init__()
-            self.tempotron = neuron.Tempotron(784*m, 10, T)
+            self.tempotron = neuron.Tempotron(28*28*m, 10, T)     # mnist 28*28=784
+        
         def forward(self, x: torch.Tensor):
             # 返回的是输出层10个Tempotron在仿真时长内的电压峰值
             return self.tempotron(x, 'v_max')
@@ -148,7 +155,7 @@ Tempotron的膜电位定义为：
 
 .. code-block:: python
 
-    train_acc = (v_max.argmax(dim=1) == label.to(device)).float().mean().item()
+    train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
 
 我们使用的损失函数与 [#f1]_ 中的类似，但所有不同。对于分类错误的神经元，误差为其峰值电压与阈值电压之差的平方，损失函数可以\
 在 ``event_driven.neuron`` 中找到源代码：
@@ -172,38 +179,52 @@ Tempotron的膜电位定义为：
 
 下面我们直接运行代码。完整的源代码位于 ``spikingjelly/event_driven/examples/tempotron_mnist.py``：
 
-.. code-block:: python
+.. code-block:: shell
 
+    $ python
     >>> import spikingjelly.event_driven.examples.tempotron_mnist as tempotron_mnist
     >>> tempotron_mnist.main()
-    输入运行的设备，例如“cpu”或“cuda:0”
-     input device, e.g., "cpu" or "cuda:0": cuda:5
-    输入保存MNIST数据集的位置，例如“./”
-     input root directory for saving MNIST dataset, e.g., "./": ./mnist
-    输入batch_size，例如“64”
-     input batch_size, e.g., "64": 64
-    输入学习率，例如“1e-3”
-     input learning rate, e.g., "1e-3": 1e-3
-    输入仿真时长，例如“100”
-     input simulating steps, e.g., "100": 10
-    输入训练轮数，即遍历训练集的次数，例如“100”
-     input training epochs, e.g., "100": 100
-    输入使用高斯调谐曲线编码每个像素点使用的神经元数量，例如“16”
-     input neuron number for encoding a piexl in GaussianTuning encoder, e.g., "16": 16
-    输入保存tensorboard日志文件的位置，例如“./”
-     input root directory for saving tensorboard logs, e.g., "./": ./logs
+    ########## Configurations ##########
+    device=cuda:0
+    dataset_dir=./
+    log_dir=./
+    model_output_dir=./
+    batch_size=64
+    T=100
+    lr=0.001
+    epoch=100
+    m=16
+    ####################################
+    Epoch 0:
+    Training...
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 937/937 [01:07<00:00, 13.91it/s]
+    Testing...
+    100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 157/157 [00:10<00:00, 14.50it/s]
+    Epoch 0: train_acc = 0.49112860192102453, test_acc=0.6316, max_test_acc=0.6316, train_times=937
 
+保存和读取模型：
+
+.. code-block:: python
+    
+    # 保存模型
+    torch.save(net, model_output_dir + "/tempotron_snn_mnist.ckpt")
+    # 读取模型
+    # net = torch.load(model_output_dir + "/tempotron_snn_mnist.ckpt")
 
 查看训练结果
 ^^^^^^^^^^^^
+
 在Tesla K80上训练100个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/train.*
+.. image:: ./_static/examples/event_driven/tempotron_mnist/train_batch_acc_scale.svg
+    :width: 100%
+    
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/test.*
+.. image:: ./_static/examples/event_driven/tempotron_mnist/test_accuracy_scale.svg
+    :width: 100%
 
-测试集的正确率63.9%左右，可以看出Tempotron确实实现了类似ANN中感知器的功能，具有一定的分类能力。但是与主流的多层SNN相比，性能较差。
-随着训练的进行，测试集正确率不断下降，过拟合比较严重。
+
+训练100个Epoch，测试集的正确率为84.19%，可以看出Tempotron实现了感知器的功能，具有一定的分类能力。
 
 
 

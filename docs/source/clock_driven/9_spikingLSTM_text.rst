@@ -180,7 +180,7 @@
 
 设定 ``IF_TRAIN = 1`` ，在Python Console中运行 ``%run ./spiking_lstm_text.py`` ，输出如下：
 
-.. code-block:: python
+.. code-block:: shell
 
     Backend Qt5Agg is interactive backend. Turning interactive mode on.
     Training...
@@ -282,7 +282,7 @@
 
 设定 ``IF_TRAIN = 0``，在Python Console中运行 ``%run ./spiking_lstm_text.py``，输出如下：
 
-.. code-block:: python
+.. code-block:: shell
 
     Testing...
     Calculating testing accuracy...

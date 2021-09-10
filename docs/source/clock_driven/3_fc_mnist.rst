@@ -13,24 +13,22 @@
 `MNIST数据集 <http://yann.lecun.com/exdb/mnist/>`__\ 包含若干尺寸为\ :math:`28\times 28`\ 的8位灰度图像，总共有0~9共10个类别。以MNIST的分类为例，一个简单的单层ANN网络如下：
 
 .. code-block:: python
-   :emphasize-lines: 4
 
-   net = nn.Sequential(
-       nn.Flatten(),
-       nn.Linear(28 * 28, 10, bias=False),
-       nn.Softmax()
-       )
+    net = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(28 * 28, 10, bias=False),
+        nn.Softmax()
+        )
 
 我们也可以用完全类似结构的SNN来进行分类任务。就这个网络而言，只需要先去掉所有的激活函数，再将神经元添加到原来激活函数的位置，这里我们选择的是LIF神经元：
 
 .. code-block:: python
-   :emphasize-lines: 4
 
-   net = nn.Sequential(
-       nn.Flatten(),
-       nn.Linear(28 * 28, 10, bias=False),
-       neuron.LIFNode(tau=tau)
-       )
+    net = nn.Sequential(
+        nn.Flatten(),
+        nn.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau)
+        )
 
 其中膜电位衰减常数\ :math:`\tau`\ 需要通过参数\ ``tau``\ 设置。
 
@@ -43,10 +41,10 @@
 
 .. code-block:: python
 
-   # 使用Adam优化器
-   optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
-   # 使用泊松编码器
-   encoder = encoding.PoissonEncoder()
+    # 使用Adam优化器
+    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
+    # 使用泊松编码器
+    encoder = encoding.PoissonEncoder()
 
 训练代码的编写需要遵循以下三个要点：
 
@@ -60,54 +58,68 @@
 
 .. code-block:: python
 
-   for img, label in train_data_loader:
-       img = img.to(device)
-       label = label.to(device)
-       label_one_hot = F.one_hot(label, 10).float()
+    net.train()
+    print("Epoch {}:".format(epoch))
+    print("Training...")
+    for img, label in tqdm(train_data_loader):
+        img = img.to(device)
+        label = label.to(device)
+        label_one_hot = F.one_hot(label, 10).float()
 
-       optimizer.zero_grad()
+        optimizer.zero_grad()
 
-       # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
-       # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
-       for t in range(T):
-           if t == 0:
-               out_spikes_counter = net(encoder(img).float())
-           else:
-               out_spikes_counter += net(encoder(img).float())
+        # 运行T个时长，out_spikes_counter是shape=[batch_size, 10]的tensor
+        # 记录整个仿真时长内，输出层的10个神经元的脉冲发放次数
+        for t in range(T):
+            if t == 0:
+                out_spikes_counter = net(encoder(img).float())
+            else:
+                out_spikes_counter += net(encoder(img).float())
 
-       # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
-       out_spikes_counter_frequency = out_spikes_counter / T
+        # out_spikes_counter / T 得到输出层10个神经元在仿真时长内的脉冲发放频率
+        out_spikes_counter_frequency = out_spikes_counter / T
 
-       # 损失函数为输出层神经元的脉冲发放频率，与真实类别的MSE
-       # 这样的损失函数会使，当类别i输入时，输出层中第i个神经元的脉冲发放频率趋近1，而其他神经元的脉冲发放频率趋近0
-       loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
-       loss.backward()
-       optimizer.step()
-       # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
-       functional.reset_net(net)
+        # 损失函数为输出层神经元的脉冲发放频率，与真实类别的MSE
+        # 这样的损失函数会使，当类别i输入时，输出层中第i个神经元的脉冲发放频率趋近1，而其他神经元的脉冲发放频率趋近0
+        loss = F.mse_loss(out_spikes_counter_frequency, label_one_hot)
+        loss.backward()
+        optimizer.step()
+        # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
+        functional.reset_net(net)
+
+        # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
+        train_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
+        
+        writer.add_scalar('train_accuracy', train_accuracy, train_times)
+        train_accs.append(train_accuracy)
+
+        train_times += 1
 
 完整的代码位于\ ``clock_driven.examples.lif_fc_mnist.py``\ ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在命令行运行它：
 
-.. code:: shell
+.. code-block:: shell
+
     $ python <PATH>/lif_fc_mnist.py --help
-    usage: lif_fc_mnist.py [-h] [--device DEVICE] [--dataset-dir DATASET_DIR] [--log-dir LOG_DIR] [-b BATCH_SIZE] [-T T] [--lr LR] [--gpu GPU]
-                        [--tau TAU] [-N EPOCH]
-    
-    spikingjelly MNIST Training
-    
+    usage: lif_fc_mnist.py [-h] [--device DEVICE] [--dataset-dir DATASET_DIR] [--log-dir LOG_DIR] [--model-output-dir MODEL_OUTPUT_DIR] [-b BATCH_SIZE] [-T T] [--lr LR] [--tau TAU] [-N EPOCH]
+
+    spikingjelly LIF MNIST Training
+
     optional arguments:
     -h, --help            show this help message and exit
     --device DEVICE       运行的设备，例如“cpu”或“cuda:0” Device, e.g., "cpu" or "cuda:0"
     --dataset-dir DATASET_DIR
                             保存MNIST数据集的位置，例如“./” Root directory for saving MNIST dataset, e.g., "./"
     --log-dir LOG_DIR     保存tensorboard日志文件的位置，例如“./” Root directory for saving tensorboard logs, e.g., "./"
+    --model-output-dir MODEL_OUTPUT_DIR
+                            模型保存路径，例如“./” Model directory for saving, e.g., "./"
     -b BATCH_SIZE, --batch-size BATCH_SIZE
+                            Batch 大小，例如“64” Batch size, e.g., "64"
     -T T, --timesteps T   仿真时长，例如“100” Simulating timesteps, e.g., "100"
     --lr LR, --learning-rate LR
                             学习率，例如“1e-3” Learning rate, e.g., "1e-3":
-    --gpu GPU             GPU id to use.
     --tau TAU             LIF神经元的时间常数tau，例如“100.0” Membrane time constant, tau, for LIF neurons, e.g., "100.0"
     -N EPOCH, --epoch EPOCH
+                            训练epoch，例如“100” Training epoch, e.g., "100"
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致梯度的传递容易衰减或爆炸。
@@ -128,7 +140,7 @@
 
 用训好的模型进行分类，得到分类结果
 
-.. code-block:: python
+.. code-block:: shell
 
    Firing rate: [[0. 0. 0. 0. 0. 0. 0. 1. 0. 0.]]
 

@@ -1,10 +1,11 @@
 Clock driven: Use convolutional SNN to identify Fashion-MNIST
 =============================================================================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
-In this tutorial, we will build a convolutional spike neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset.
+In this tutorial, we will build a convolutional spike neural network to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__ dataset.
 The Fashion-MNIST dataset has the same format as the MNIST dataset, and both are ``1 * 28 * 28`` grayscale images.
 
 Network structure
@@ -42,15 +43,15 @@ Then we add convolutional layers and a fully-connected layers to ``PythonNet``. 
 .. code-block:: python
 
     self.conv = nn.Sequential(
-            nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            neuron.IFNode(surrogate_function=surrogate.ATan()),
-            nn.MaxPool2d(2, 2),  # 14 * 14
+        nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
+        nn.BatchNorm2d(128),
+        neuron.IFNode(surrogate_function=surrogate.ATan()),
+        nn.MaxPool2d(2, 2),  # 14 * 14
 
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            neuron.IFNode(surrogate_function=surrogate.ATan()),
-            nn.MaxPool2d(2, 2)  # 7 * 7
+        nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
+        nn.BatchNorm2d(128),
+        neuron.IFNode(surrogate_function=surrogate.ATan()),
+        nn.MaxPool2d(2, 2)  # 7 * 7
         )
 
 The input with ``shape=[N, 1, 28, 28]`` will be converted to spikes with ``shape=[N, 128, 7, 7]``.
@@ -166,7 +167,7 @@ Training network
 ----------------------------
 The complete codes are available at :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`. The tarining arguments are:
 
-.. code-block:: bash
+.. code-block:: shell
 
     Classify Fashion-MNIST
 
@@ -194,7 +195,7 @@ The complete codes are available at :class:`spikingjelly.clock_driven.examples.c
 The checkpoint will be saved in the same level directory of the ``tensorboard`` log file. The server for training this
 network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU.
 
-.. code-block:: bash
+.. code-block:: shell
 
     (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
 
@@ -259,7 +260,7 @@ After running 100 rounds of training, the correct rates on the training batch an
 
 After training for 64 epochs, the highest test set accuracy rate can reach 93.3%, which is a very good accuracy for
 SNN. It is only slightly lower than ResNet18 (93.3%) with Normalization, random horizontal flip, random vertical flip,
-random translation and random rotation in the BenchMark `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_.
+random translation and random rotation in the BenchMark `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__.
 
 Visual Encoder
 ------------------------------------
@@ -279,6 +280,7 @@ As we said in the above text, the first spike neurons layer (SN) and the layers 
             self.conv = nn.Sequential(
                 neuron.IFNode(surrogate_function=surrogate.ATan()),
             ...
+            )
 
 Now let's take a look at the output spikes of the trained encoder. Let's create a new python file, import related
 modules, and redefine a data loader with ``batch_size=1``, because we want to view pictures one by one:

@@ -2,7 +2,7 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-在本节教程中，我们将搭建一个卷积脉冲神经网络，对 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ 数据集进行
+在本节教程中，我们将搭建一个卷积脉冲神经网络，对 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__ 数据集进行
 分类。Fashion-MNIST数据集，与MNIST数据集的格式相同，均为 ``1 * 28 * 28`` 的灰度图片。
 
 网络结构
@@ -161,7 +161,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 -----------------
 完整的代码位于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`，训练命令如下：
 
-.. code-block:: bash
+.. code-block:: shell
 
     Classify Fashion-MNIST
 
@@ -190,7 +190,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 检查点会被保存在 ``tensorboard`` 日志文件的同级目录下。实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。
 
-.. code-block:: bash
+.. code-block:: shell
 
     (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
 
@@ -253,7 +253,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 .. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
     :width: 100%
 
-在训练64个epoch后，最高测试集正确率可以达到93.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_
+在训练64个epoch后，最高测试集正确率可以达到93.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__
 的BenchMark中使用Normalization, random horizontal flip, random vertical flip, random translation, random rotation的ResNet18的94.9%正确率。
 
 可视化编码器
@@ -276,6 +276,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
             self.conv = nn.Sequential(
                 neuron.IFNode(surrogate_function=surrogate.ATan()),
             ...
+            )
 
 现在让我们来查看一下，训练好的编码器，编码效果如何。让我们新建一个python文件，导入相关的模块，并重新定义一个 ``batch_size=1`` 的数据加载器，因为我们想要一
 张图片一张图片的查看：

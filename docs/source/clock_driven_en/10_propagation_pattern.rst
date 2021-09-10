@@ -53,7 +53,7 @@ Let us use :class:`spikingjelly.clock_driven.layer.MultiStepContainer` to implem
 
 The outputs are:
 
-.. code-block:: bash
+.. code-block:: shell
 
     if_node output spikes at t=0 tensor([1., 1., 1., 0.])
     if_node output spikes at t=1 tensor([0., 0., 0., 1.])
@@ -143,7 +143,7 @@ For a stateless layer, we can concatenate inputs ``shape=[T, batch_size, ...]`` 
 
 The outputs are
 
-.. code-block:: bash
+.. code-block:: shell
 
     torch.Size([16, 8, 3])
 
@@ -175,7 +175,7 @@ because we introduce an external wrapper. Here is an example:
 
 The outputs are:
 
-.. code-block:: bash
+.. code-block:: shell
 
     net_step_by_step.state_dict: odict_keys(['0.weight', '1.weight', '1.bias', '1.running_mean', '1.running_var', '1.num_batches_tracked'])
     net_layer_by_layer.state_dict: odict_keys(['0.0.weight', '0.1.weight', '0.1.bias', '0.1.running_mean', '0.1.running_var', '0.1.num_batches_tracked'])
