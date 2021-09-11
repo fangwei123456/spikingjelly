@@ -49,7 +49,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchvision.transforms
 from torchaudio.transforms import Spectrogram
-from spikingjelly.cext import neuron as cext_neuron
+from spikingjelly.clock_driven import neuron, surrogate
 
 from spikingjelly.datasets.speechcommands import SPEECHCOMMANDS
 from spikingjelly.clock_driven.functional import reset_net
@@ -300,17 +300,17 @@ class Net(nn.Module):
             # 101 * 40
             nn.Conv2d(in_channels=delta_order+1, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(2, 1), bias=False),
-            LIFWrapper(cext_neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function='Sigmoid', alpha=10.0)),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy')),
 
             # 102 * 40
             nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(6, 3), dilation=(4, 3), bias=False),
-            LIFWrapper(cext_neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function='Sigmoid', alpha=10.0)),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy')),
 
             # 102 * 40
                 nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(24, 9), dilation=(16, 9), bias=False),
-            LIFWrapper(cext_neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function='Sigmoid', alpha=10.0), flatten=True),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy'), flatten=True),
         )
         # [batch size, T, channel * n_mel]
         self.fc = nn.Linear(64 * 40, label_cnt)
