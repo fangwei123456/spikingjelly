@@ -115,6 +115,8 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
     else:
         tb_writer = None
 
+    if pt_dir is not None and not os.path.exists(pt_dir):
+        os.makedirs(pt_dir)
     max_test_acc1 = -1.
     test_acc5_at_max_test_acc1 = -1.
     max_test_acc5 = -1.
