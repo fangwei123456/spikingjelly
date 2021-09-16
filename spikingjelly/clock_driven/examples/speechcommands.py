@@ -327,6 +327,7 @@ if __name__ == '__main__':
     parser.add_argument('-lr', '--learning-rate', type=float, default=1e-2)
     parser.add_argument('-dir', '--dataset-dir', type=str)
     parser.add_argument('-e', '--epoch', type=int, default=50)
+    parser.add_argument('-d', '--device', type=str, default='cuda:0')
     args = parser.parse_args()
 
     sr = args.sample_rate
@@ -336,6 +337,7 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     lr = args.learning_rate
     epoch = args.epoch
+    device = args.device
 
     pad = Pad(size)
     spec = Spectrogram(n_fft=n_fft, hop_length=hop_length)
@@ -362,7 +364,7 @@ if __name__ == '__main__':
     test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=16, collate_fn=collate_fn, shuffle=False,
                                  drop_last=False)
 
-    net = Net().cuda()
+    net = Net().to(device)
 
     optimizer = Adam(net.parameters(), lr=lr)
     gamma = 0.85
@@ -372,7 +374,7 @@ if __name__ == '__main__':
 
     writer = SummaryWriter('./logs/')
 
-    criterion = nn.CrossEntropyLoss().cuda()
+    criterion = nn.CrossEntropyLoss().to(device)
 
     for e in range(epoch):
         net.train()
@@ -381,8 +383,8 @@ if __name__ == '__main__':
         time_start = time.time()
         ##### TRAIN #####
         for audios, labels in tqdm(train_dataloader):
-            audios = audios.cuda(non_blocking=True)
-            labels = labels.cuda(non_blocking=True)
+            audios = audios.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
 
             optimizer.zero_grad()
 
