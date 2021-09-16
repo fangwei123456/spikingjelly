@@ -34,18 +34,34 @@ try:
     def cal_blocks(numel: int):
         return (numel + threads - 1) // threads
 
-    def wrap_args_to_raw_kernel(device: int, args_list: list):
-        # check device and contiguous
+    def get_contiguous(*args):
         ret_list = []
-        for i in range(args_list.__len__()):
-            if isinstance(args_list[i], torch.Tensor):
-                assert args_list[i].get_device() == device
-                args_list[i] = args_list[i].contiguous()
-                ret_list.append(args_list[i].data_ptr())
-            elif isinstance(args_list[i], cupy.ndarray):
-                assert args_list[i].device.id == device
-                args_list[i] = cupy.ascontiguousarray(args_list[i])
-                ret_list.append(args_list[i])
+        for item in args:
+            if isinstance(item, torch.Tensor):
+                ret_list.append(item.contiguous())
+
+            elif isinstance(item, cupy.ndarray):
+                ret_list.append(cupy.ascontiguousarray(item))
+
+            else:
+                raise TypeError
+        return ret_list
+
+    def wrap_args_to_raw_kernel(device: int, *args):
+        # note that the input must be contiguous
+        # check device and get data_ptr from tensor
+        ret_list = []
+        for item in args:
+            if isinstance(item, torch.Tensor):
+                assert item.get_device() == device
+                assert item.is_contiguous()
+                ret_list.append(item.data_ptr())
+
+            elif isinstance(item, cupy.ndarray):
+                assert item.device.id == device
+                assert item.flags['C_CONTIGUOUS']
+                ret_list.append(item)
+
             else:
                 raise TypeError
 
