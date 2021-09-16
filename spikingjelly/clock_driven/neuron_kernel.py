@@ -224,6 +224,7 @@ try:
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+            requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
@@ -272,7 +273,7 @@ try:
                     )
                 )
 
-            if x_seq.requires_grad or v_last.requires_grad:
+            if requires_grad:
                 ctx.save_for_backward(h_seq, spike_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
@@ -555,6 +556,7 @@ try:
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+            requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
@@ -603,7 +605,7 @@ try:
                     )
                 )
 
-            if x_seq.requires_grad or v_last.requires_grad:
+            if requires_grad:
                 ctx.save_for_backward(h_seq, spike_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
@@ -939,6 +941,7 @@ try:
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, reciprocal_tau: torch.Tensor, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+            requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
@@ -988,7 +991,7 @@ try:
                     )
                 )
 
-            if x_seq.requires_grad or v_last.requires_grad:
+            if requires_grad:
                 ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
