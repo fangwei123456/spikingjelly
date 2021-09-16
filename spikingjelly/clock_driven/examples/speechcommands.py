@@ -74,7 +74,7 @@ n_mels = 40
 f_max = 4000
 f_min = 20
 delta_order = 0
-size = 1600
+size = 16000
 
 def mel_to_hz(mels, dct_type):
     if dct_type == 'htk':
