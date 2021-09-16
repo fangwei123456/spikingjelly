@@ -56,13 +56,10 @@ from spikingjelly.clock_driven.functional import reset_net
 from scipy.signal import savgol_filter
 
 from sklearn.metrics import confusion_matrix
-import matplotlib.pyplot as plt
 
-import scipy
 import numpy as np
 
 import math
-import os
 import time
 import argparse
 from typing import Optional
@@ -75,6 +72,12 @@ f_max = 4000
 f_min = 20
 delta_order = 0
 size = 16000
+try:
+    import cupy
+    backend = 'cupy'
+except ModuleNotFoundError:
+    backend = 'torch'
+    print('Cupy is not intalled. Using torch backend for neurons.')
 
 def mel_to_hz(mels, dct_type):
     if dct_type == 'htk':
@@ -300,17 +303,17 @@ class Net(nn.Module):
             # 101 * 40
             nn.Conv2d(in_channels=delta_order+1, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(2, 1), bias=False),
-            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy')),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend=backend)),
 
             # 102 * 40
             nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(6, 3), dilation=(4, 3), bias=False),
-            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy')),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend=backend)),
 
             # 102 * 40
                 nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(24, 9), dilation=(16, 9), bias=False),
-            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy'), flatten=True),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend=backend), flatten=True),
         )
         # [batch size, T, channel * n_mel]
         self.fc = nn.Linear(64 * 40, label_cnt)
