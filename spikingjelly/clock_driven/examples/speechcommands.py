@@ -300,17 +300,17 @@ class Net(nn.Module):
             # 101 * 40
             nn.Conv2d(in_channels=delta_order+1, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(2, 1), bias=False),
-            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='torch')),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy')),
 
             # 102 * 40
             nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(6, 3), dilation=(4, 3), bias=False),
-            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='torch')),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy')),
 
             # 102 * 40
                 nn.Conv2d(in_channels=64, out_channels=64,
                       kernel_size=(4, 3), stride=1, padding=(24, 9), dilation=(16, 9), bias=False),
-            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='torch'), flatten=True),
+            LIFWrapper(neuron.MultiStepLIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend='cupy'), flatten=True),
         )
         # [batch size, T, channel * n_mel]
         self.fc = nn.Linear(64 * 40, label_cnt)
