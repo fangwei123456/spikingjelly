@@ -321,7 +321,6 @@ class MultiStepIFNode(IFNode):
             return self.spike_seq
 
         elif self.backend == 'cupy':
-            x_seq = x_seq.contiguous()
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
@@ -514,7 +513,6 @@ class MultiStepLIFNode(LIFNode):
             return self.spike_seq
 
         elif self.backend == 'cupy':
-            x_seq = x_seq.contiguous()
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
@@ -723,7 +721,6 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
             return self.spike_seq
 
         elif self.backend == 'cupy':
-            x_seq = x_seq.contiguous()
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
