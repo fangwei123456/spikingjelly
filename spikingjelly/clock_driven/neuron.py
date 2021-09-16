@@ -316,8 +316,8 @@ class MultiStepIFNode(IFNode):
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t]).clone()
-                self.v_seq[t] = self.v.clone()
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
             return self.spike_seq
 
         elif self.backend == 'cupy':
@@ -513,8 +513,8 @@ class MultiStepLIFNode(LIFNode):
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t]).clone()
-                self.v_seq[t] = self.v.clone()
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
             return self.spike_seq
 
         elif self.backend == 'cupy':
@@ -725,8 +725,8 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t]).clone()
-                self.v_seq[t] = self.v.clone()
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
             return self.spike_seq
 
         elif self.backend == 'cupy':
