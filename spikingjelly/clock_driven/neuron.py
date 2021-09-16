@@ -321,7 +321,7 @@ class MultiStepIFNode(IFNode):
             return self.spike_seq
 
         elif self.backend == 'cupy':
-            x_seq_shape = list(x_seq.shape)
+            x_seq_shape = x_seq.shape
             x_seq = x_seq.flatten(1)
             if isinstance(self.v, float):
                 v_init = self.v
@@ -334,7 +334,7 @@ class MultiStepIFNode(IFNode):
                 x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
             self.spike_seq = self.spike_seq.reshape(x_seq_shape)
-            self.v_seq = self.v_seq.reshape([x_seq_shape[0] + 1] + x_seq_shape[1:])
+            self.v_seq = self.v_seq.reshape(x_seq_shape)
 
 
             self.spike = self.spike_seq[-1].clone()
@@ -518,7 +518,7 @@ class MultiStepLIFNode(LIFNode):
             return self.spike_seq
 
         elif self.backend == 'cupy':
-            x_seq_shape = list(x_seq.shape)
+            x_seq_shape = x_seq.shape
             x_seq = x_seq.flatten(1)
             if isinstance(self.v, float):
                 v_init = self.v
@@ -531,7 +531,7 @@ class MultiStepLIFNode(LIFNode):
                 x_seq, self.v, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
             self.spike_seq = self.spike_seq.reshape(x_seq_shape)
-            self.v_seq = self.v_seq.reshape([x_seq_shape[0] + 1] + x_seq_shape[1:])
+            self.v_seq = self.v_seq.reshape(x_seq_shape)
 
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
@@ -730,7 +730,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
             return self.spike_seq
 
         elif self.backend == 'cupy':
-            x_seq_shape = list(x_seq.shape)
+            x_seq_shape = x_seq.shape
             x_seq = x_seq.flatten(1)
             if isinstance(self.v, float):
                 v_init = self.v
@@ -743,7 +743,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
                 x_seq, self.v, self.w.sigmoid(), self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
             self.spike_seq = self.spike_seq.reshape(x_seq_shape)
-            self.v_seq = self.v_seq.reshape([x_seq_shape[0] + 1] + x_seq_shape[1:])
+            self.v_seq = self.v_seq.reshape(x_seq_shape)
 
 
             self.spike = self.spike_seq[-1].clone()
