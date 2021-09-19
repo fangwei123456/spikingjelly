@@ -149,16 +149,19 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        //const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        //const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h) * grad_v_to_h;
+                    //grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h) * grad_v_to_h;
+                    grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
                 grad_v_last[index] = grad_x_seq[index];
@@ -480,16 +483,19 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        //const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        //const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+                    //grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+                    grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
                 grad_v_last[index] = grad_x_seq[index] * one_sub_reciprocal_tau;
@@ -687,7 +693,8 @@ try:
 
                 if hard_reset:
                     code += r'''
-                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
+                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
+                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t] + v_reset, v_v_seq[t]);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -696,7 +703,8 @@ try:
                     '''
                 else:
                     code += r'''
-                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
+                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
+                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t], v_v_seq[t]);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -817,16 +825,19 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        //const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        //const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        const float grad_v_to_h = fmaf(-v_threshold, grad_s_to_h, 1.0f);
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+                    //grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+                    grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     }
@@ -1058,9 +1069,13 @@ try:
             x.requires_grad_(True)
             m(x)
             (m.spike_seq * m.v_seq**2).sum().backward()
-            ret = [m.spike_seq.detach().clone(), m.v_seq.detach().clone(), x.grad.clone()]
-            for param in m.parameters():
-                ret.append(param.grad.detach().clone())
+            ret = {
+                'spike_seq': m.spike_seq.detach().clone(),
+                'v_seq': m.v_seq.detach().clone(),
+                'x.grad': x.grad.clone()
+            }
+            for i, param in enumerate(m.parameters()):
+                ret[f'param_{i}.grad'] = param.grad.detach().clone()
                 param.grad.zero_()
             x.grad.zero_()
             m.reset()
@@ -1076,7 +1091,7 @@ try:
                         x = torch.rand(shape, device=device).half()
                     print(f'hard_reset={hard_reset}, detach_reset={detach_reset}, dtype={dtype}')
                     model = multi_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset, *neu_args, **neu_kwargs)
-                    print(model)
+                    # print(model)
                     model.to(device)
                     model.backend = 'torch'
                     y_torch = fbptt(model, x)
@@ -1084,8 +1099,11 @@ try:
                     model.backend = 'cupy'
                     y_cupy = fbptt(model, x)
 
-                    for i in range(y_torch.__len__()):
-                        print(max_error(y_torch[i], y_cupy[i]))
+                    for key in y_torch.keys():
+                        print(key, 'max error', max_error(y_torch[key], y_cupy[key]))
+                    print('\n')
+
+
 
 
 
