@@ -426,9 +426,9 @@ class Sigmoid(SurrogateFunctionBase):
             '''
         elif dtype == 'fp16':
             code = f'''
-            const half alpha = __float2half({alpha});
-            const half sigmoid_ax = __hdiv(__float2half(1.0f), __hadd(hexp(__hneg(__hmul(alpha, {x}))), __float2half(1.0f)));
-            const half {y} = __hmul(__hmul(__hsub(__float2half(1.0f), sigmoid_ax), sigmoid_ax), alpha);
+            const half2 alpha = __float2half2_rn({alpha});
+            const half2 sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(alpha, {x}))), __float2half2_rn(1.0f)));
+            const half2 {y} = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sigmoid_ax), sigmoid_ax), alpha);
             '''
         else:
             raise NotImplementedError
@@ -627,13 +627,9 @@ class ATan(SurrogateFunctionBase):
             '''
         elif dtype == 'fp16':
             code = f'''
-            const half alpha =  __float2half({alpha});
-            #if __CUDACC_VER_MAJOR__ >= 11
-            const half M_PI_2__alpha__x = __hmul(__hmul(__double2half(1.57079632679489661923), {alpha}), {x});
-            #else
-            const half M_PI_2__alpha__x = __hmul(__hmul(__float2half((float) 1.57079632679489661923), {alpha}), {x});
-            #endif
-            const half {y} = __hdiv(__hdiv({alpha}, __float2half(2.0f)), __hfma(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half(1.0f)));
+            const half2 alpha =  __float2half2_rn({alpha});
+            const half2 M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), alpha), {x});
+            const half2 {y} = __h2div(__h2div(alpha, __float2half2_rn(2.0f)), __hfma2(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             '''
         else:
             raise NotImplementedError
@@ -1045,21 +1041,10 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
 
         elif dtype == 'fp16':
 
-            code += f'const half x_abs = __habs({x});'
-            code += f'half {y};'
-            code += f'if (__hge(x_abs, __float2half({w})))'
-            code += '{'
-
-            code += f'{y} = __float2half({c});'
-
-            code += '}'
-
-            code += f'else'
-            code += '{'
-
-            code += f'{y} = __float2half({w_inv});'
-
-            code += '}'
+            code += f'const half2 x_abs = __habs2({x});'
+            code += f'half2 {y};'
+            code += f'const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn({w}));'
+            code += f'{y} = __hadd2(__hmul2(__float2half2_rn({c}),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn({w_inv})));'
         else:
             raise NotImplementedError
         return code
