@@ -1473,6 +1473,8 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
@@ -1714,6 +1716,8 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
@@ -1953,6 +1957,8 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
@@ -2194,6 +2200,8 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
@@ -2447,6 +2455,8 @@ grad_s_to_h = 1.0f;
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
@@ -2700,6 +2710,8 @@ grad_s_to_h = 1.0f;
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);

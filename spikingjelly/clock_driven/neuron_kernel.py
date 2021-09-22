@@ -484,6 +484,8 @@ try:
                     '''
 
                 code += r'''
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
                         v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
