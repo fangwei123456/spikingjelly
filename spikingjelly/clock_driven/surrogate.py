@@ -1022,29 +1022,28 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
         if dtype == 'fp32':
 
 
-            code += f'const float x_abs = fabsf({x});'
-            code += f'float {y};'
+            code += f'const float x_abs = fabsf({x});\n'
+            code += f'float {y};\n'
 
-            code += f'if (x_abs > {w})'
-            code += '{'
+            code += f'if (x_abs > {w})\n'
+            code += '{\n'
 
-            code += f'{y} = {c};'
+            code += f'{y} = {c};\n'
 
-            code += '}'
+            code += '}\n'
 
-            code += f'else'
-            code += '{'
+            code += 'else\n'
+            code += '{\n'
 
-            code += f'{y} = {w_inv};'
+            code += f'{y} = {w_inv};\n'
 
-            code += '}'
+            code += '}\n'
 
         elif dtype == 'fp16':
 
-            code += f'const half2 x_abs = __habs2({x});'
-            code += f'half2 {y};'
-            code += f'const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn({w}));'
-            code += f'{y} = __hadd2(__hmul2(__float2half2_rn({c}),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn({w_inv})));'
+            code += f'const half2 x_abs = __habs2({x});\n'
+            code += f'const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn({w}));\n'
+            code += f'half2 {y} = __hadd2(__hmul2(__float2half2_rn({c}),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn({w_inv})));\n'
         else:
             raise NotImplementedError
         return code
