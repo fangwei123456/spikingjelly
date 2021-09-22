@@ -72,7 +72,13 @@ try:
                 if (index < stride)
                 {
                     const half2 v_threshold_half2 = __half2half2(v_threshold);
-                    
+                '''
+                if hard_reset:
+                    code += r'''
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    '''
+
+                code += r'''
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
                         const int ta = index + mem_offset;
@@ -88,7 +94,7 @@ try:
 
                 if hard_reset:
                     code += r'''
-                        const half2 v_v_seq_t_next = __hadd2(__hmul2(spike_seq_t, __half2half2(v_reset)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        const half2 v_v_seq_t_next = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     '''
                 else:
                     code += r'''
