@@ -195,20 +195,20 @@ try:
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half grad_v_to_h = __float2half(1.0f);
                         '''
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
                         '''
 
                 code += code_grad_v_to_h
@@ -530,20 +530,20 @@ try:
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half grad_v_to_h = __float2half(1.0f);
                         '''
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
                         '''
 
                 code += code_grad_v_to_h
@@ -898,20 +898,20 @@ try:
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half grad_v_to_h = __float2half(1.0f);
                         '''
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
                         '''
 
                 code += code_grad_v_to_h
