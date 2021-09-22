@@ -80,11 +80,12 @@ try:
                     '''
 
                 code += r'''
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
                         const int ta = index + mem_offset;
                         const int tb = ta + stride;
-                        const half2 h_seq_t = __hadd2(__halves2half2(v_v_seq[ta], v_v_seq[tb]), __halves2half2(x_seq[ta], x_seq[tb]));
+                        const half2 h_seq_t = __hadd2(v_v_seq_t, __halves2half2(x_seq[ta], x_seq[tb]));
                         h_seq[ta] = __low2half(h_seq_t);
                         h_seq[tb] = __high2half(h_seq_t);
                         
@@ -95,16 +96,16 @@ try:
 
                 if hard_reset:
                     code += r'''
-                        const half2 v_v_seq_t_next = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     '''
                 else:
                     code += r'''
-                        const half2 v_v_seq_t_next = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     '''
 
                 code += r'''
-                    v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t_next);
-                    v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t_next);
+                    v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                    v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
 
                     }
                 }
