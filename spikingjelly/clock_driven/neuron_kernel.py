@@ -864,8 +864,8 @@ try:
                 #include <cuda_fp16.h>
                 extern "C" __global__
                 void {kernel_name}(
-                const half* grad_spike_seq, const half* grad_v_seq, const half* h_seq, const half* spike_seq, const half* v_v_seq,
-                half* grad_x_seq, half* grad_v_last,  half* grad_reciprocal_tau,
+                const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
+                half2* grad_x_seq, half2* grad_v_last,  half* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel)
@@ -894,17 +894,11 @@ try:
 
                     half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
                     sdata[threadIdx.x] = __float2half2_rn(0.0f);
-                    for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
+                    for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
                     {
-                        const int ta = index + mem_offset;
-                        const int tb = ta + stride;
-                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
-                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
-                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
-                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
-                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        const int t = index + mem_offset;
 
-                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+                        const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
 
                 '''
                 code += code_grad_s_to_h
@@ -912,7 +906,7 @@ try:
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq_t);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
@@ -921,7 +915,7 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq_t),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq_t));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
@@ -930,16 +924,12 @@ try:
 
                 code += code_grad_v_to_h
                 code += r'''                        
-                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
-                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
-                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
-                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
-                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
+                        grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq[t], v_v_seq[t])), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                const int index_b = index + stride;
-                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
-                grad_v_last[index] = __low2half(grad_v_last_ab);
-                grad_v_last[index_b] = __high2half(grad_v_last_ab);
+
+                grad_v_last[index] = __hmul2(grad_x_seq[index], one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
