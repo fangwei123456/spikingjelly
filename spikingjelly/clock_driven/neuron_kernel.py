@@ -61,7 +61,7 @@ try:
                 code = rf'''
                 #include <cuda_fp16.h>
                 extern "C" __global__
-                void {kernel_name}(const half* x_seq, half* v_v_seq, half* h_seq, half* spike_seq, 
+                void {kernel_name}(const half2* x_seq, half2* v_v_seq, half2* h_seq, half2* spike_seq, 
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel) 
                 '''
@@ -72,6 +72,7 @@ try:
                 const int stride = neuron_num >> 1;
                 if (index < stride)
                 {
+                    const int numel_2 = numel >> 1;
                     const half2 v_threshold_half2 = __half2half2(v_threshold);
                 '''
 
@@ -81,33 +82,24 @@ try:
                     '''
 
                 code += r'''
-                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
-                    for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
+                    for(int mem_offset = 0; mem_offset < numel_2; mem_offset += stride)
                     {
-                        const int ta = index + mem_offset;
-                        const int tb = ta + stride;
-                        const half2 h_seq_t = __hadd2(v_v_seq_t, __halves2half2(x_seq[ta], x_seq[tb]));
-                        h_seq[ta] = __low2half(h_seq_t);
-                        h_seq[tb] = __high2half(h_seq_t);
+                        const int t = index + mem_offset;
+                        h_seq[t] = __hadd2(v_v_seq[t], x_seq[t]);
 
-                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
-                        spike_seq[ta] = __low2half(spike_seq_t);
-                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        spike_seq[t] = __hgeu2(h_seq[t], v_threshold_half2);
                 '''
 
                 if hard_reset:
                     code += r'''
-                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
                     '''
                 else:
                     code += r'''
-                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], __hsub2(h_seq[t], v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
                     '''
 
                 code += r'''
-                    v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
-                    v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
-
                     }
                 }
                 }
@@ -183,8 +175,8 @@ try:
                 #include <cuda_fp16.h>
                 extern "C" __global__
                 void {kernel_name}(
-                const half* grad_spike_seq, const half* grad_v_seq, const half* h_seq, const half* spike_seq,
-                half* grad_x_seq, half* grad_v_last,
+                const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
+                half2* grad_x_seq, half2* grad_v_last,
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel)
                 '''
@@ -204,20 +196,17 @@ try:
 
                 code += r'''
                     half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
-                    for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
+                    for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
                     {
-                        const int ta = index + mem_offset;
-                        const int tb = ta + stride;
-                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
-                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
-                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+                        const int t = index + mem_offset;
+                        const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
                 '''
                 code += code_grad_s_to_h
 
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq_t);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
@@ -226,7 +215,7 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq_t), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq_t));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]), grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
@@ -235,12 +224,10 @@ try:
 
                 code += code_grad_v_to_h
                 code += r'''
-                        grad_h = __hfma2(__hadd2(__halves2half2(grad_v_seq[ta], grad_v_seq[tb]), grad_h), grad_v_to_h, __hmul2(__halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]), grad_s_to_h));
-                        grad_x_seq[ta] = __low2half(grad_h);
-                        grad_x_seq[tb] = __high2half(grad_h);
+                        grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
+                        grad_x_seq[t] = grad_h;
                         }
                 grad_v_last[index] = grad_x_seq[index];
-                grad_v_last[index + stride] = grad_x_seq[index + stride];
                 }
                 }
                 '''
