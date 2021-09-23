@@ -112,3 +112,17 @@ $$
 \end{align}
 $$
 
+## Exponential Integrate-and-Fire Neuron (EIF Neuron)
+
+For the EIF neuron, the charge function is 
+$$
+H[t] = V[t - 1] + \frac{1}{\tau}\left(X[t] - (V[t - 1] - V_{rest}) + \Delta_T\exp\left(\frac{V[t-1] - \theta_{rh}}{\Delta_T}\right)\right)
+$$
+Then the gradients are
+$$
+\begin{align}
+\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}(1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[t] - \theta_{rh}}{\Delta_T})))\frac{\partial V[t]}{\partial H[t]}\\
+\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]} \frac{1}{\tau}\\
+\frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]} (1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[0] - \theta_{rh}}{\Delta_T}))
+\end{align}
+$$
