@@ -150,19 +150,19 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        //const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
-                        const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
+                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        // const float grad_v_to_h = fmaf(grad_s_to_h, v_reset - h_seq[t], 1.0f - spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        //const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
-                        const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
+                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                    //grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h) * grad_v_to_h;
-                    grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
+                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h) * grad_v_to_h;
+                    // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
                 grad_v_last[index] = grad_x_seq[index];
@@ -526,19 +526,19 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        //const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
-                        const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
+                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        // const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        //const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
-                        const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
+                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                    //grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
-                    grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
+                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+                    // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
                 grad_v_last[index] = grad_x_seq[index] * one_sub_reciprocal_tau;
@@ -818,19 +818,19 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        //const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
-                        const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
+                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                        // const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        //const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
-                        const float grad_v_to_h = fmaf(-v_threshold, grad_s_to_h, 1.0f);
+                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                        // const float grad_v_to_h = fmaf(-v_threshold, grad_s_to_h, 1.0f);
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                    //grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
-                    grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
+                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+                    // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     }
