@@ -27,7 +27,7 @@ try:
         return t_list[n:].mean()
 
 
-    nvcc_options = ('--use_fast_math',)
+    nvcc_options = ('-use_fast_math',)
 
     threads = 1024
 

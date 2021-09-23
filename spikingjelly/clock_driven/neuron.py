@@ -568,7 +568,7 @@ class ParametricLIFNode(BaseNode):
         .. _ParametricLIFNode.__init__-en:
 
         :param init_tau: the initial value of membrane time constant
-        :param init_tau: float
+        :type init_tau: float
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -659,7 +659,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         .. _MultiStepParametricLIFNode.__init__-en:
 
         :param init_tau: the initial value of membrane time constant
-        :param init_tau: float
+        :type init_tau: float
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -898,7 +898,7 @@ class EIFNode(BaseNode):
         :param detach_reset: whether detach the computation graph of reset
         :type detach_reset: bool
 
-        The Exponential Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an one-dimensional model derived from the Hodgkin-Huxley model. It degenerates to the LIF model when :math:`\\Delta_T\\to 0`
+        The Exponential Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an one-dimensional model derived from the Hodgkin-Huxley model. It degenerates to the LIF model when :math:`\\Delta_T\\to 0`.
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
@@ -921,9 +921,137 @@ class EIFNode(BaseNode):
         return super().extra_repr() + f', tau={self.tau}, delta_T={self.delta_T}, theta_rh={self.theta_rh}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        
+
         with torch.no_grad():
             if not isinstance(self.v, torch.Tensor):
                 self.v = torch.as_tensor(self.v, device=x.device)
         
         self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
+
+class MultiStepEIFNode(EIFNode):
+    def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+        """
+        * :ref:`API in English <MultiStepEIFNode.__init__-en>`
+
+        .. _MultiStepEIFNode.__init__-cn:
+
+        ::param tau: 膜电位时间常数
+        :type tau: float
+
+        :param delta_T: 陡峭度参数
+        :type delta_T: float
+
+        :param theta_rh: 基强度电压阈值
+        :type theta_rh: float
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_rest: 静息电位
+        :type v_rest: float
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
+
+        多步版本的 :class:`spikingjelly.clock_driven.neuron.EIFNode`。
+
+        .. tip::
+
+        对于多步神经元，输入 ``x_seq.shape = [T, *]``，不仅可以使用 ``.v`` 和 ``.spike`` 获取 ``t = T - 1`` 时刻的电压和脉冲，还能够
+        使用 ``.v_seq`` 和 ``.spike_seq`` 获取完整的 ``T`` 个时刻的电压和脉冲。
+
+        .. tip::
+
+            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
+
+        * :ref:`中文API <MultiStepEIFNode.__init__-cn>`
+
+        .. _MultiStepEIFNode.__init__-en:
+
+        :param tau: membrane time constant
+        :type tau: float
+
+        :param delta_T: sharpness parameter
+        :type delta_T: float
+
+        :param theta_rh: rheobase threshold
+        :type theta_rh: float
+
+        :param v_threshold: threshold voltage of neurons
+        :type v_threshold: float
+
+        :param v_rest: resting potential
+        :type v_rest: float
+
+        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
+            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether detach the computation graph of reset
+        :type detach_reset: bool
+
+        :param backend: use which backend, ``'torch'`` or ``'cupy'``. ``'cupy'`` is faster but only supports GPU
+        :type backend: str
+
+        .. admonition:: Tip
+            :class: tip
+
+            The input for multi-step neurons are ``x_seq.shape = [T, *]``. We can get membrane potential and spike at
+            time-step ``t = T - 1`` by ``.v`` and ``.spike``. We can also get membrane potential and spike at all ``T``
+            time-steps by ``.v_seq`` and ``.spike_seq``.
+
+        .. admonition:: Tip
+            :class: tip
+
+            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
+            and multi-step propagation.
+        """
+        super().__init__(tau, delta_T, theta_rh, v_threshold, v_rest, v_reset,
+                 surrogate_function, detach_reset)
+        self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        self.backend = backend
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+
+        if self.backend == 'torch':
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
+            return self.spike_seq
+
+        elif self.backend == 'cupy':
+            if isinstance(self.v, float):
+                v_init = self.v
+                self.v = torch.zeros_like(x_seq[0].data)
+                if v_init != 0.:
+                    torch.fill_(self.v, v_init)
+
+
+            self.spike_seq, self.v_seq = neuron_kernel.MultiStepEIFNodePTT.apply(
+                x_seq, self.v, self.tau, self.v_threshold, self.v_reset, self.v_rest, self.theta_rh, self.delta_T, self.detach_reset, self.surrogate_function.cuda_code)
+
+            self.spike = self.spike_seq[-1].clone()
+            self.v = self.v_seq[-1].clone()
+
+            return self.spike_seq
+        else:
+            raise NotImplementedError
