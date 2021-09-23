@@ -338,6 +338,9 @@ class MultiStepIFNode(IFNode):
         else:
             raise NotImplementedError
 
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
+
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
@@ -529,6 +532,8 @@ class MultiStepLIFNode(LIFNode):
         else:
             raise NotImplementedError
 
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau: float = 2.0, v_threshold: float = 1.,
@@ -735,6 +740,9 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
             return self.spike_seq
         else:
             raise NotImplementedError
+
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
 
 class QIFNode(BaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
@@ -1055,3 +1063,6 @@ class MultiStepEIFNode(EIFNode):
             return self.spike_seq
         else:
             raise NotImplementedError
+
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
