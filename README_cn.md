@@ -121,9 +121,11 @@ class ANN(nn.Module):
 
 SpikingJelly为多步神经元（阅读[教程](#教程)以获取更多信息）提供给了2种后端。可以使用对用户友好的`torch`后端进行快速开发，并使用`cupy`后端进行高效训练。
 
-下图对比了2种后端的多步LIF神经元的运行时长：
+下图对比了2种后端的多步LIF神经元 (`float32`) 的运行时长：
 
 <img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+
+`cupy`后端同样接支持`float16`，并且可以在[自动混合精度训练](https://pytorch.org/docs/stable/notes/amp_examples.html)中使用。
 
 若想使用`cupy`后端，请安装 [CuPy](https://docs.cupy.dev/en/stable/install.html)。`cupy`后端仅支持GPU，而`torch`后端同时支持CPU和GPU。
 

@@ -121,9 +121,11 @@ This simple network with analog encoding can achieve 98.51% accuracy after conve
 
 SpikingJelly provides two backends for multi-step neurons (read [Tutorials](#Tutorials) for more details). You can use the user-friendly `torch` backend for easily codding and debugging, and use `cupy` backend for faster training speed.
 
-The followed figure compares execution time of two backends of Multi-Step LIF neurons:
+The followed figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
 
 <img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+
+`float16` is also provided by the `cupy` backend and can be used in [automatic mixed precision training](https://pytorch.org/docs/stable/notes/amp_examples.html).
 
 To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable/install.html). Note that the `cupy` backend only supports GPU, while the `torch` backend supports both CPU and GPU.
 
