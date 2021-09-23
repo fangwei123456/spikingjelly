@@ -4,6 +4,7 @@ try:
     import torch.nn.functional as F
     from . import cu_kernel_opt, surrogate
 
+
     class MultiStepIFNodePTT(torch.autograd.Function):
         @staticmethod
         def create_fptt_kernel(hard_reset: bool, dtype: str):
@@ -88,7 +89,7 @@ try:
                         const half2 h_seq_t = __hadd2(v_v_seq_t, __halves2half2(x_seq[ta], x_seq[tb]));
                         h_seq[ta] = __low2half(h_seq_t);
                         h_seq[tb] = __high2half(h_seq_t);
-                        
+
                         const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
                         spike_seq[ta] = __low2half(spike_seq_t);
                         spike_seq[tb] = __high2half(spike_seq_t); 
@@ -248,7 +249,8 @@ try:
             return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
 
         @staticmethod
-        def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+        def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, v_threshold: float, v_reset: float,
+                    detach_reset: bool, sg_cuda_code_fun):
             requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
@@ -267,7 +269,6 @@ try:
                 use_pad = True
                 x_seq = F.pad(x_seq, (0, 1))  # [T, *, N] -> [T, *, N + 1]
                 v_last = F.pad(v_last, (0, 1))  # [*, N] -> [*, N + 1]
-
 
             v_seq = torch.zeros_like(x_seq.data)
             h_seq = torch.zeros_like(x_seq.data)
@@ -292,17 +293,18 @@ try:
                 if v_reset is None:
                     cp_v_reset = None
                     hard_reset = False
-                    x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel)
+                    x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                        x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel)
                     kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel]
                 else:
                     cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                     hard_reset = True
-                    x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel)
-                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel]
-
+                    x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                        x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel)
+                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num,
+                                   cp_numel]
 
                 kernel = MultiStepIFNodePTT.create_fptt_kernel(hard_reset, dtype)
-
 
                 kernel(
                     (blocks,), (threads,),
@@ -344,8 +346,6 @@ try:
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
-
-
             if ctx.cp_v_reset is None:
                 hard_reset = False
             else:
@@ -363,11 +363,17 @@ try:
             with cupy.cuda.Device(device):
 
                 if hard_reset:
-                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
-                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
+                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                        grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold,
+                        ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
+                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
+                                   ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
                 else:
-                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
-                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
+                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                        grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold,
+                        ctx.cp_neuron_num, ctx.cp_numel)
+                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
+                                   ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
 
                 kernel(
                     (ctx.blocks,), (ctx.threads,),
@@ -441,7 +447,7 @@ try:
                 code = rf'''
                 #include <cuda_fp16.h>
                 extern "C" __global__
-                void {kernel_name}(const half* x_seq, half* v_v_seq, half* h_seq, half* spike_seq,
+                void {kernel_name}(const half2* x_seq, half2* v_v_seq, half2* h_seq, half2* spike_seq,
                 const half & reciprocal_tau, 
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel) 
@@ -453,6 +459,7 @@ try:
                 const int stride = neuron_num >> 1;
                 if (index < stride)
                 {
+                    const int numel_2 = numel >> 1;
                     const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
                     const half2 v_threshold_half2 = __half2half2(v_threshold);
                 '''
@@ -463,33 +470,24 @@ try:
                     '''
 
                 code += r'''
-                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
-                    for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
+                    for(int mem_offset = 0; mem_offset < numel_2; mem_offset += stride)
                     {
-                        const int ta = index + mem_offset;
-                        const int tb = ta + stride;
-                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
+                        const int t = index + mem_offset;
                 '''
                 if hard_reset:
                     code += r'''
-                        const half2 h_seq_t = __hfma2(__hadd2(__hsub2(x_seq_t, v_v_seq_t), v_reset_half2), reciprocal_tau_half2, v_v_seq_t);
-                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
-                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        h_seq[t] = __hfma2(__hadd2(__hsub2(x_seq[t], v_v_seq[t]), v_reset_half2), reciprocal_tau_half2, v_v_seq[t]);
+                        spike_seq[t] = __hgeu2(h_seq[t], v_threshold_half2);
+                        v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
                     '''
                 else:
                     code += r'''
-                        const half2 h_seq_t = __hfma2(__hsub2(x_seq_t, v_v_seq_t), reciprocal_tau_half2, v_v_seq_t);
-                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
-                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
+                        h_seq[t] = __hfma2(__hsub2(x_seq[t], v_v_seq[t]), reciprocal_tau_half2, v_v_seq[t]);
+                        spike_seq[t] = __hgeu2(h_seq[t], v_threshold_half2);
+                        v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], __hsub2(h_seq[t], v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
                     '''
 
                 code += r'''
-                        h_seq[ta] = __low2half(h_seq_t);
-                        h_seq[tb] = __high2half(h_seq_t);
-                        spike_seq[ta] = __low2half(spike_seq_t);
-                        spike_seq[tb] = __high2half(spike_seq_t); 
-                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
-                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -566,8 +564,8 @@ try:
                 #include <cuda_fp16.h>
                 extern "C" __global__
                 void {kernel_name}(
-                const half* grad_spike_seq, const half* grad_v_seq, const half* h_seq, const half* spike_seq,
-                half* grad_x_seq, half* grad_v_last,
+                const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
+                half2* grad_x_seq, half2* grad_v_last,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
                 const int & neuron_num, const int & numel)
@@ -590,16 +588,11 @@ try:
 
                 code += r'''
                     half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
-                    for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
+                    for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
                     {
-                        const int ta = index + mem_offset;
-                        const int tb = ta + stride;
-                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
-                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
-                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
-                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
-                        
-                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+                        const int t = index + mem_offset;
+
+                        const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
                 '''
 
                 code += code_grad_s_to_h
@@ -607,7 +600,7 @@ try:
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq_t);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
@@ -616,7 +609,7 @@ try:
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq_t),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq_t));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
@@ -625,15 +618,10 @@ try:
 
                 code += code_grad_v_to_h
                 code += r'''                        
-                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
-                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
-                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
-                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
+                        grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                const int index_b = index + stride;
-                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
-                grad_v_last[index] = __low2half(grad_v_last_ab);
-                grad_v_last[index_b] = __high2half(grad_v_last_ab);
+                grad_v_last[index] = __hmul2(grad_x_seq[index], one_sub_reciprocal_tau_half2);
                 }
                 }
                 '''
@@ -643,7 +631,8 @@ try:
             return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
 
         @staticmethod
-        def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+        def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float,
+                    detach_reset: bool, sg_cuda_code_fun):
             requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
@@ -684,19 +673,24 @@ try:
                 cp_numel = cupy.asarray(numel)
                 cp_neuron_num = cupy.asarray(neuron_num)
                 cp_v_threshold = cupy.asarray(v_threshold, dtype=cp_dtype)
-                cp_reciprocal_tau = cupy.asarray(1./tau, dtype=cp_dtype)
-                cp_one_sub_reciprocal_tau = cupy.asarray(1. - 1./tau, dtype=cp_dtype)
+                cp_reciprocal_tau = cupy.asarray(1. / tau, dtype=cp_dtype)
+                cp_one_sub_reciprocal_tau = cupy.asarray(1. - 1. / tau, dtype=cp_dtype)
 
                 if v_reset is None:
                     cp_v_reset = None
                     hard_reset = False
-                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel)
-                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel]
+                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                        x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel)
+                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num,
+                                   cp_numel]
                 else:
                     cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                     hard_reset = True
-                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel)
-                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel]
+                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                        x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num,
+                        cp_numel)
+                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset,
+                                   cp_neuron_num, cp_numel]
 
                 kernel = MultiStepLIFNodePTT.create_fptt_kernel(hard_reset, dtype)
 
@@ -759,12 +753,20 @@ try:
             with cupy.cuda.Device(device):
 
                 if hard_reset:
-                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
-                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
+                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                        grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau,
+                        ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num,
+                        ctx.cp_numel)
+                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
+                                   ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
+                                   ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
                 else:
-                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
-                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
-
+                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                        grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau,
+                        ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
+                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
+                                   ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
+                                   ctx.cp_neuron_num, ctx.cp_numel]
 
                 kernel(
                     (ctx.blocks,), (ctx.threads,),
@@ -777,6 +779,7 @@ try:
                 return grad_x_seq[..., :-1], grad_v_last[..., :-1], None, None, None, None, None
             else:
                 return grad_x_seq, grad_v_last, None, None, None, None, None
+
 
     class MultiStepParametricLIFNodePTT(torch.autograd.Function):
         @staticmethod
@@ -884,7 +887,7 @@ try:
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
                 const int stride = neuron_num >> 1;
-                
+
                 '''
                 code += f'__shared__ half2 sdata[{cu_kernel_opt.threads}];'
                 code += r'''
@@ -901,7 +904,7 @@ try:
                     '''
 
                 code += r'''
-                    
+
                     half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
                     sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
@@ -913,7 +916,7 @@ try:
                         const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
                         const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
                         const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
-                        
+
                         const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
 
                 '''
@@ -980,7 +983,8 @@ try:
             return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
 
         @staticmethod
-        def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, reciprocal_tau: torch.Tensor, v_threshold: float, v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+        def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, reciprocal_tau: torch.Tensor, v_threshold: float,
+                    v_reset: float, detach_reset: bool, sg_cuda_code_fun):
             requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
@@ -1022,19 +1026,24 @@ try:
                 cp_numel = cupy.asarray(numel)
                 cp_neuron_num = cupy.asarray(neuron_num)
                 cp_v_threshold = cupy.asarray(v_threshold, dtype=cp_dtype)
-                cp_reciprocal_tau = cupy.asarray(1./tau, dtype=cp_dtype)
-                cp_one_sub_reciprocal_tau = cupy.asarray(1. - 1./tau, dtype=cp_dtype)
+                cp_reciprocal_tau = cupy.asarray(1. / tau, dtype=cp_dtype)
+                cp_one_sub_reciprocal_tau = cupy.asarray(1. - 1. / tau, dtype=cp_dtype)
 
                 if v_reset is None:
                     cp_v_reset = None
                     hard_reset = False
-                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel)
-                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel]
+                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                        x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel)
+                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num,
+                                   cp_numel]
                 else:
                     cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                     hard_reset = True
-                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel)
-                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel]
+                    x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                        x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num,
+                        cp_numel)
+                    kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset,
+                                   cp_neuron_num, cp_numel]
 
                 kernel = MultiStepParametricLIFNodePTT.create_fptt_kernel(hard_reset, dtype)
 
@@ -1093,16 +1102,27 @@ try:
             else:
                 raise NotImplementedError
 
-            kernel = MultiStepParametricLIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, hard_reset, ctx.detach_reset, dtype)
+            kernel = MultiStepParametricLIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, hard_reset,
+                                                                      ctx.detach_reset, dtype)
 
             with cupy.cuda.Device(device):
 
                 if hard_reset:
-                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
-                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
+                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                        grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last,
+                        grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
+                        ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
+                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last,
+                                   grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau,
+                                   ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
                 else:
-                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
-                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
+                    grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                        grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last,
+                        grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
+                        ctx.cp_neuron_num, ctx.cp_numel)
+                    kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last,
+                                   grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau,
+                                   ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
 
                 kernel(
                     (ctx.blocks,), (ctx.threads,),
@@ -1127,7 +1147,7 @@ try:
             x = x.detach()
             x.requires_grad_(True)
             m(x)
-            (m.spike_seq * m.v_seq**2).sum().backward()
+            (m.spike_seq * m.v_seq ** 2).sum().backward()
             ret = {
                 'spike_seq': m.spike_seq.detach().clone(),
                 'v_seq': m.v_seq.detach().clone(),
@@ -1148,7 +1168,8 @@ try:
                     if dtype == 'fp16':
                         x = x.half()
                     print(f'hard_reset={hard_reset}, detach_reset={detach_reset}, dtype={dtype}')
-                    model = multi_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset, *neu_args, **neu_kwargs)
+                    model = multi_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset, *neu_args,
+                                              **neu_kwargs)
                     # print(model)
                     model.to(device)
                     model.backend = 'torch'
@@ -1171,13 +1192,15 @@ try:
                 for sg in [surrogate.ATan, surrogate.Sigmoid, surrogate.PiecewiseLeakyReLU]:
                     for hard_reset in [True, False]:
                         for dtype in ['fp32', 'fp16']:
-                            cu_file.write(f'\n// {ms_neu.__name__} fptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}\n')
+                            cu_file.write(
+                                f'\n// {ms_neu.__name__} fptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}\n')
                             fp_codes = ms_neu.create_fptt_kernel(hard_reset, dtype).code
                             cu_file.write(fp_codes)
                             for detach_reset in [True, False]:
                                 cu_file.write(
                                     f'\n// {ms_neu.__name__} bptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}, detach_reset={detach_reset}\n')
-                                bp_codes = ms_neu.create_bptt_kernel(sg().cuda_code, hard_reset, detach_reset, dtype).code
+                                bp_codes = ms_neu.create_bptt_kernel(sg().cuda_code, hard_reset, detach_reset,
+                                                                     dtype).code
                                 cu_file.write(bp_codes)
 
 
