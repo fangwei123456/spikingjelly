@@ -2837,8 +2837,7 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                     {
                         const int t = index + mem_offset;
                 
-                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
-                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t] + v_reset, v_v_seq[t]);
+                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -2979,25 +2978,31 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
-                        const int t = index + mem_offset;
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
                 
-                        h_seq[t] = __hfma(__hadd(__hsub(x_seq[t], v_v_seq[t]), v_reset), reciprocal_tau, v_v_seq[t]); 
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
-                            v_v_seq[t + dt] = v_reset;
-                        }
+                        const half2 h_seq_t = __hfma2(__hadd2(__hsub2(x_seq_t, v_v_seq_t), v_reset_half2), reciprocal_tau_half2, v_v_seq_t);
+                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
+                        spike_seq[ta] = __low2half(spike_seq_t);
+                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -3015,32 +3020,53 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha =  __float2half2_rn(2.0f);
             const half2 M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), alpha), over_th);
             const half2 grad_s_to_h = __h2div(__h2div(alpha, __float2half2_rn(2.0f)), __hfma2(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq_t);
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3050,13 +3076,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3073,32 +3099,53 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha =  __float2half2_rn(2.0f);
             const half2 M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), alpha), over_th);
             const half2 grad_s_to_h = __h2div(__h2div(alpha, __float2half2_rn(2.0f)), __hfma2(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq_t),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq_t));
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3108,13 +3155,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3135,8 +3182,7 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                     {
                         const int t = index + mem_offset;
                 
-                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
-                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t], v_v_seq[t]);
+                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -3277,26 +3323,29 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
-                        const int t = index + mem_offset;
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
                 
-                        h_seq[t] = __hfma(__hsub(x_seq[t], v_v_seq[t]), reciprocal_tau, v_v_seq[t]); 
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
-                            v_v_seq[t + dt] = __hsub(h_seq[t], v_threshold);
-                        }
-
+                        const half2 h_seq_t = __hfma2(__hsub2(x_seq_t, v_v_seq_t), reciprocal_tau_half2, v_v_seq_t);
+                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
+                        spike_seq[ta] = __low2half(spike_seq_t);
+                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -3314,32 +3363,51 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha =  __float2half2_rn(2.0f);
             const half2 M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), alpha), over_th);
             const half2 grad_s_to_h = __h2div(__h2div(alpha, __float2half2_rn(2.0f)), __hfma2(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half2 grad_v_to_h = __float2half2_rn(1.0f);
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3349,13 +3417,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3372,32 +3440,51 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha =  __float2half2_rn(2.0f);
             const half2 M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), alpha), over_th);
             const half2 grad_s_to_h = __h2div(__h2div(alpha, __float2half2_rn(2.0f)), __hfma2(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3407,13 +3494,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3434,8 +3521,7 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                     {
                         const int t = index + mem_offset;
                 
-                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
-                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t] + v_reset, v_v_seq[t]);
+                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -3576,25 +3662,31 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
-                        const int t = index + mem_offset;
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
                 
-                        h_seq[t] = __hfma(__hadd(__hsub(x_seq[t], v_v_seq[t]), v_reset), reciprocal_tau, v_v_seq[t]); 
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
-                            v_v_seq[t + dt] = v_reset;
-                        }
+                        const half2 h_seq_t = __hfma2(__hadd2(__hsub2(x_seq_t, v_v_seq_t), v_reset_half2), reciprocal_tau_half2, v_v_seq_t);
+                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
+                        spike_seq[ta] = __low2half(spike_seq_t);
+                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -3612,32 +3704,53 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha = __float2half2_rn(1.0f);
             const half2 sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(alpha, over_th))), __float2half2_rn(1.0f)));
             const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sigmoid_ax), sigmoid_ax), alpha);
             
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq_t);
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3647,13 +3760,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3670,32 +3783,53 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha = __float2half2_rn(1.0f);
             const half2 sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(alpha, over_th))), __float2half2_rn(1.0f)));
             const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sigmoid_ax), sigmoid_ax), alpha);
             
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq_t),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq_t));
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3705,13 +3839,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3732,8 +3866,7 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                     {
                         const int t = index + mem_offset;
                 
-                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
-                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t], v_v_seq[t]);
+                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -3874,26 +4007,29 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
-                        const int t = index + mem_offset;
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
                 
-                        h_seq[t] = __hfma(__hsub(x_seq[t], v_v_seq[t]), reciprocal_tau, v_v_seq[t]); 
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
-                            v_v_seq[t + dt] = __hsub(h_seq[t], v_threshold);
-                        }
-
+                        const half2 h_seq_t = __hfma2(__hsub2(x_seq_t, v_v_seq_t), reciprocal_tau_half2, v_v_seq_t);
+                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
+                        spike_seq[ta] = __low2half(spike_seq_t);
+                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -3911,32 +4047,51 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha = __float2half2_rn(1.0f);
             const half2 sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(alpha, over_th))), __float2half2_rn(1.0f)));
             const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sigmoid_ax), sigmoid_ax), alpha);
             
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half2 grad_v_to_h = __float2half2_rn(1.0f);
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -3946,13 +4101,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -3969,32 +4124,51 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 
             const half2 alpha = __float2half2_rn(1.0f);
             const half2 sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(alpha, over_th))), __float2half2_rn(1.0f)));
             const half2 grad_s_to_h = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sigmoid_ax), sigmoid_ax), alpha);
             
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -4004,13 +4178,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -4031,8 +4205,7 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                     {
                         const int t = index + mem_offset;
                 
-                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
-                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t] + v_reset, v_v_seq[t]);
+                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -4187,25 +4360,31 @@ grad_s_to_h = 1.0f;
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
-                        const int t = index + mem_offset;
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
                 
-                        h_seq[t] = __hfma(__hadd(__hsub(x_seq[t], v_v_seq[t]), v_reset), reciprocal_tau, v_v_seq[t]); 
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
-                            v_v_seq[t + dt] = v_reset;
-                        }
+                        const half2 h_seq_t = __hfma2(__hadd2(__hsub2(x_seq_t, v_v_seq_t), v_reset_half2), reciprocal_tau_half2, v_v_seq_t);
+                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
+                        spike_seq[ta] = __low2half(spike_seq_t);
+                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -4223,31 +4402,52 @@ grad_s_to_h = 1.0f;
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 const half2 x_abs = __habs2(over_th);
 const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn(1.0f));
 half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn(1.0f)));
 
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq_t);
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -4257,13 +4457,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -4280,31 +4480,52 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 const half2 x_abs = __habs2(over_th);
 const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn(1.0f));
 half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn(1.0f)));
 
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq_t),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq_t));
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -4314,13 +4535,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -4341,8 +4562,7 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                     {
                         const int t = index + mem_offset;
                 
-                        //h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
-                        h_seq[t] = fmaf(reciprocal_tau, x_seq[t] - v_v_seq[t], v_v_seq[t]);
+                        h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
                         if (h_seq[t] >= v_threshold)
                         {
                             spike_seq[t] = 1.0f;
@@ -4497,26 +4717,29 @@ grad_s_to_h = 1.0f;
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    half2 v_v_seq_t = __halves2half2(v_v_seq[index], v_v_seq[index + stride]);
                     for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
                     {
-                        const int t = index + mem_offset;
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 x_seq_t = __halves2half2(x_seq[ta], x_seq[tb]);
                 
-                        h_seq[t] = __hfma(__hsub(x_seq[t], v_v_seq[t]), reciprocal_tau, v_v_seq[t]); 
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
-                            v_v_seq[t + dt] = __hsub(h_seq[t], v_threshold);
-                        }
-
+                        const half2 h_seq_t = __hfma2(__hsub2(x_seq_t, v_v_seq_t), reciprocal_tau_half2, v_v_seq_t);
+                        const half2 spike_seq_t = __hgeu2(h_seq_t, v_threshold_half2);
+                        v_v_seq_t = __hadd2(__hmul2(spike_seq_t, __hsub2(h_seq_t, v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq_t), h_seq_t));
                     
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
+                        h_seq[ta] = __low2half(h_seq_t);
+                        h_seq[tb] = __high2half(h_seq_t);
+                        spike_seq[ta] = __low2half(spike_seq_t);
+                        spike_seq[tb] = __high2half(spike_seq_t); 
+                        v_v_seq[ta + neuron_num] = __low2half(v_v_seq_t);
+                        v_v_seq[tb + neuron_num] = __high2half(v_v_seq_t);
                     }
                 }
                 }
@@ -4534,31 +4757,50 @@ grad_s_to_h = 1.0f;
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 const half2 x_abs = __habs2(over_th);
 const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn(1.0f));
 half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn(1.0f)));
 
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half2 grad_v_to_h = __float2half2_rn(1.0f);
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -4568,13 +4810,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
@@ -4591,31 +4833,50 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                const int stride = neuron_num >> 1;
                 
-                __shared__ half sdata[1024];
-                if (index < neuron_num)
+                __shared__ half2 sdata[1024];
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                
+                    
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                     for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
                     {
-                        const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+                        const int ta = index + mem_offset;
+                        const int tb = ta + stride;
+                        const half2 h_seq_t = __halves2half2(h_seq[ta], h_seq[tb]);
+                        const half2 v_v_seq_t = __halves2half2(v_v_seq[ta], v_v_seq[tb]);
+                        const half2 spike_seq_t = __halves2half2(spike_seq[ta], spike_seq[tb]);
+                        const half2 grad_spike_seq_t = __halves2half2(grad_spike_seq[ta], grad_spike_seq[tb]);
+                        const half2 grad_v_seq_t = __halves2half2(grad_v_seq[ta], grad_v_seq[tb]);
+                        
+                        const half2 over_th = __hsub2(h_seq_t, v_threshold_half2);
+
                 const half2 x_abs = __habs2(over_th);
 const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn(1.0f));
 half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn(1.0f)));
 
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                                                 
-                        grad_h = __hfma(__hfma(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
-                        sdata[threadIdx.x] = __hadd(__hdiv(__hmul(grad_h, __hsub(h_seq[t], v_v_seq[t])), reciprocal_tau), sdata[threadIdx.x]);
+                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq_t), grad_v_to_h, __hmul2(grad_spike_seq_t, grad_s_to_h));
+                        const half2 grad_x_seq_t = __hmul2(grad_h, reciprocal_tau_half2);
+                        grad_x_seq[ta] = __low2half(grad_x_seq_t);
+                        grad_x_seq[tb] = __high2half(grad_x_seq_t);
+                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq_t, v_v_seq_t)), reciprocal_tau_half2), sdata[threadIdx.x]);
                     }
-                grad_v_last[index] = __hmul(grad_x_seq[index], one_sub_reciprocal_tau);
+                const int index_b = index + stride;
+                const half2 grad_v_last_ab = __hmul2(__halves2half2(grad_x_seq[index], grad_x_seq[index_b]), one_sub_reciprocal_tau_half2);
+                grad_v_last[index] = __low2half(grad_v_last_ab);
+                grad_v_last[index_b] = __high2half(grad_v_last_ab);
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half(0.0f);
+                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -4625,13 +4886,13 @@ half2 grad_s_to_h = __hadd2(__hmul2(__float2half2_rn(0.01f),  x_abs_ge_w), __hmu
                 __syncthreads();
                 if (threadIdx.x < stride)
                 {
-                  sdata[threadIdx.x] = __hadd(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
                 {
-                grad_reciprocal_tau[0] = sdata[0];
+                grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
                 }
                 }
                 
