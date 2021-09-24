@@ -1238,7 +1238,7 @@ try:
                 code = rf'''
                 #include <cuda_fp16.h>
                 extern "C" __global__
-                void {kernel_name}(const half* x_seq, half* v_v_seq, half* h_seq, half* spike_seq,
+                void {kernel_name}(const half2* x_seq, half2* v_v_seq, half2* h_seq, half2* spike_seq,
                 const half & reciprocal_tau, 
                 const half & delta_T,
                 const half & theta_rh,
@@ -1250,34 +1250,41 @@ try:
                 code += r'''
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {
-                    const int dt = neuron_num;
-                    for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
+                    const int numel_2 = numel >> 1;
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 delta_T_half2 = __half2half2(delta_T);
+                    const half2 theta_rh_half2 = __half2half2(theta_rh);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                    const half2 v_rest_half2 = __half2half2(v_rest);
+                '''
+
+                if hard_reset:
+                    code += r'''
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    '''
+
+                code += r'''
+                    for(int mem_offset = 0; mem_offset < numel_2; mem_offset += stride)
                     {
                         const int t = index + mem_offset;
-                        h_seq[t] = __hfma(__hfma(hexp(__hdiv(__hsub(v_v_seq[t], theta_rh), delta_T)), delta_T, __hadd(__hsub(x_seq[t], v_v_seq[t]), v_rest)), reciprocal_tau, v_v_seq[t]);
-                        if (__hgeu(h_seq[t], v_threshold))
-                        {
-                            spike_seq[t] = __float2half(1.0f);
+                        h_seq[t] = __hfma2(__hfma2(h2exp(__h2div(__hsub2(v_v_seq[t], theta_rh_half2), delta_T_half2)), delta_T_half2, __hadd2(__hsub2(x_seq[t], v_v_seq[t]), v_rest_half2)), reciprocal_tau_half2, v_v_seq[t]);
+
+                        spike_seq[t] = __hgeu2(h_seq[t], v_threshold_half2);
                 '''
                 
                 if hard_reset:
                     code += r'''
-                            v_v_seq[t + dt] = v_reset;
+                        v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
                     '''
                 else:
                     code += r'''
-                            v_v_seq[t + dt] = __hsub(h_seq[t], v_threshold);
+                        v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], __hsub2(h_seq[t], v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
                     '''
 
                 code += r'''
-                        }
-                        else
-                        {
-                            spike_seq[t] = __float2half(0.0f);
-                            v_v_seq[t + dt] = h_seq[t];
-                        }
                     }
                 }
                 }
@@ -1352,8 +1359,8 @@ try:
                 #include <cuda_fp16.h>
                 extern "C" __global__
                 void {kernel_name}(
-                const half* grad_spike_seq, const half* grad_v_seq, const half* h_seq, const half* spike_seq, const half* v_v_seq,
-                half* grad_x_seq, half* grad_v_last,
+                const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
+                half2* grad_x_seq, half2* grad_v_last,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
@@ -1362,41 +1369,56 @@ try:
                 code += r'''
                 {
                 const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < neuron_num)
+                const int stride = neuron_num >> 1;
+                if (index < stride)
                 {   
-                    half grad_h = __float2half(0.0f);  // grad_h will be used recursively
-                    for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
+                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+                    const half2 reciprocal_delta_T_half2 = __half2half2(reciprocal_delta_T);
+                    const half2 theta_rh_half2 = __half2half2(theta_rh);
+                    const half2 v_threshold_half2 = __half2half2(v_threshold);
+                '''
+
+                if hard_reset:
+                    code += r'''
+                        const half2 v_reset_half2 = __half2half2(v_reset);
+                    '''
+
+                code += r'''
+                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+                    for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
                     {
                         const int t = index + mem_offset;
-                        const half over_th = __hsub(h_seq[t], v_threshold);
+
+                        const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
                 '''
                 code += code_grad_s_to_h
 
                 if detach_reset:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), spike_seq[t]);
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __float2half(1.0f);
+                        const half2 grad_v_to_h = __float2half2_rn(1.0f);
                         '''
                 else:
                     if hard_reset:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hfma(__hsub(v_reset, h_seq[t]),  grad_s_to_h, __hsub(__float2half(1.0f), spike_seq[t]));
+                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
                         '''
                     else:
                         code_grad_v_to_h = r'''
-                        const float grad_v_to_h = __hsub(__float2half(1.0f), __hmul(v_threshold, grad_s_to_h));
+                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
                         '''
 
                 code += code_grad_v_to_h
                 code += r'''
-                        grad_h = __hfma(__hfma(__hfma(hexp(__hmul(__hsub(v_v_seq[t + neuron_num], theta_rh), reciprocal_delta_T)), reciprocal_tau, one_sub_reciprocal_tau), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul(grad_spike_seq[t], grad_s_to_h));                      
-                        grad_x_seq[t] = __hmul(grad_h, reciprocal_tau);
+                        grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
+                        grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul(__hfma(hexp(__hmul(__hsub(v_v_seq[index], theta_rh), reciprocal_delta_T)), reciprocal_tau, one_sub_reciprocal_tau), grad_x_seq[index]);
+                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 '''
@@ -1406,6 +1428,7 @@ try:
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float, v_rest: float, theta_rh: float, delta_T: float, detach_reset: bool, sg_cuda_code_fun):
+            requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
@@ -1415,6 +1438,14 @@ try:
                 cp_dtype = cupy.float16
             else:
                 raise NotImplementedError
+
+            use_pad = False
+            if dtype == 'fp16' and v_last.numel() % 2 != 0:
+                # only fp16 needs even numel because we use half2 to accelerate
+                # when numel is odd, we will pad x_seq
+                use_pad = True
+                x_seq = F.pad(x_seq, (0, 1))  # [T, *, N] -> [T, *, N + 1]
+                v_last = F.pad(v_last, (0, 1))  # [*, N] -> [*, N + 1]
 
             v_seq = torch.zeros_like(x_seq.data)
             h_seq = torch.zeros_like(x_seq.data)
@@ -1427,7 +1458,12 @@ try:
                 neuron_num = numel // x_seq.shape[0]
 
                 threads = cu_kernel_opt.threads
-                blocks = cu_kernel_opt.cal_blocks(neuron_num)
+                if dtype == 'fp16':
+                    assert neuron_num % 2 == 0
+                    blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
+                    # we will take two neurons to calculate as one neuron in cuda half2
+                else:
+                    blocks = cu_kernel_opt.cal_blocks(neuron_num)
                 
                 cp_numel = cupy.asarray(numel)
                 cp_neuron_num = cupy.asarray(neuron_num)
@@ -1461,7 +1497,8 @@ try:
                     )
                 )
 
-            if x_seq.requires_grad or v_last.requires_grad:
+            if requires_grad:
+                ctx.use_pad = use_pad
                 ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
@@ -1476,10 +1513,21 @@ try:
                 ctx.detach_reset = detach_reset
                 ctx.sg_cuda_code_fun = sg_cuda_code_fun
 
-            return spike_seq, v_v_seq[1:, ]
+            if use_pad:
+                return spike_seq[..., :-1], v_v_seq[1:, ..., :-1]
+            else:
+                return spike_seq, v_v_seq[1:, ]
 
         @staticmethod
         def backward(ctx, grad_spike_seq, grad_v_seq):
+            if ctx.use_pad:
+                # grad_spike_seq.shape = [T, *, N]
+                # grad_v_seq.shape = [T, *, N]
+                # h_seq.shape = [T, *, N + 1]
+                # spike_seq.shape = [T, *, N + 1]
+                grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
+                grad_v_seq = F.pad(grad_v_seq, (0, 1))
+
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             grad_x_seq = torch.zeros_like(grad_spike_seq)
@@ -1515,8 +1563,10 @@ try:
                         *kernel_args
                     )
                 )
-
-            return grad_x_seq, grad_v_last, None, None, None, None, None, None, None, None
+            if ctx.use_pad:
+                return grad_x_seq[..., :-1], grad_v_last[..., :-1], None, None, None, None, None, None, None, None
+            else:
+                return grad_x_seq, grad_v_last, None, None, None, None, None, None, None, None
 
 
 
