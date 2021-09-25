@@ -327,9 +327,12 @@ class MultiStepIFNode(IFNode):
                 if v_init != 0.:
                     torch.fill_(self.v, v_init)
 
-
             self.spike_seq, self.v_seq = neuron_kernel.MultiStepIFNodePTT.apply(
-                x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+                x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+
+            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            self.v_seq = self.v_seq.reshape(x_seq.shape)
+
 
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
@@ -523,7 +526,10 @@ class MultiStepLIFNode(LIFNode):
 
 
             self.spike_seq, self.v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
-                x_seq, self.v, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+                x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+
+            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            self.v_seq = self.v_seq.reshape(x_seq.shape)
 
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
@@ -732,7 +738,10 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
 
 
             self.spike_seq, self.v_seq = neuron_kernel.MultiStepParametricLIFNodePTT.apply(
-                x_seq, self.v, self.w.sigmoid(), self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+                x_seq.flatten(1), self.v.flatten(0), self.w.sigmoid(), self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+
+            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            self.v_seq = self.v_seq.reshape(x_seq.shape)
 
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
@@ -1055,7 +1064,10 @@ class MultiStepEIFNode(EIFNode):
 
 
             self.spike_seq, self.v_seq = neuron_kernel.MultiStepEIFNodePTT.apply(
-                x_seq, self.v, self.tau, self.v_threshold, self.v_reset, self.v_rest, self.theta_rh, self.delta_T, self.detach_reset, self.surrogate_function.cuda_code)
+                x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest, self.theta_rh, self.delta_T, self.detach_reset, self.surrogate_function.cuda_code)
+
+            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            self.v_seq = self.v_seq.reshape(x_seq.shape)
 
             self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()

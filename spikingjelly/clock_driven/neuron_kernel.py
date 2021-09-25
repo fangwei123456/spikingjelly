@@ -254,8 +254,8 @@ try:
                 # only fp16 needs even numel because we use half2 to accelerate
                 # when numel is odd, we will pad x_seq
                 use_pad = True
-                x_seq = F.pad(x_seq, (0, 1))  # [T, *, N] -> [T, *, N + 1]
-                v_last = F.pad(v_last, (0, 1))  # [*, N] -> [*, N + 1]
+                x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
+                v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
             v_seq = torch.zeros_like(x_seq.data)
             h_seq = torch.zeros_like(x_seq.data)
@@ -321,10 +321,10 @@ try:
         @staticmethod
         def backward(ctx, grad_spike_seq, grad_v_seq):
             if ctx.use_pad:
-                # grad_spike_seq.shape = [T, *, N]
-                # grad_v_seq.shape = [T, *, N]
-                # h_seq.shape = [T, *, N + 1]
-                # spike_seq.shape = [T, *, N + 1]
+                # grad_spike_seq.shape = [T, N]
+                # grad_v_seq.shape = [T, N]
+                # h_seq.shape = [T, N + 1]
+                # spike_seq.shape = [T, N + 1]
                 grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
                 grad_v_seq = F.pad(grad_v_seq, (0, 1))
 
@@ -636,8 +636,8 @@ try:
                 # only fp16 needs even numel because we use half2 to accelerate
                 # when numel is odd, we will pad x_seq
                 use_pad = True
-                x_seq = F.pad(x_seq, (0, 1))  # [T, *, N] -> [T, *, N + 1]
-                v_last = F.pad(v_last, (0, 1))  # [*, N] -> [*, N + 1]
+                x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
+                v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
             v_seq = torch.zeros_like(x_seq.data)
             h_seq = torch.zeros_like(x_seq.data)
@@ -711,10 +711,10 @@ try:
         @staticmethod
         def backward(ctx, grad_spike_seq, grad_v_seq):
             if ctx.use_pad:
-                # grad_spike_seq.shape = [T, *, N]
-                # grad_v_seq.shape = [T, *, N]
-                # h_seq.shape = [T, *, N + 1]
-                # spike_seq.shape = [T, *, N + 1]
+                # grad_spike_seq.shape = [T, N]
+                # grad_v_seq.shape = [T, N]
+                # h_seq.shape = [T, N + 1]
+                # spike_seq.shape = [T, N + 1]
                 grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
                 grad_v_seq = F.pad(grad_v_seq, (0, 1))
 
@@ -978,8 +978,8 @@ try:
                 # only fp16 needs even numel because we use half2 to accelerate
                 # when numel is odd, we will pad x_seq
                 use_pad = True
-                x_seq = F.pad(x_seq, (0, 1))  # [T, *, N] -> [T, *, N + 1]
-                v_last = F.pad(v_last, (0, 1))  # [*, N] -> [*, N + 1]
+                x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
+                v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
             v_seq = torch.zeros_like(x_seq.data)
             h_seq = torch.zeros_like(x_seq.data)
@@ -1054,10 +1054,10 @@ try:
         @staticmethod
         def backward(ctx, grad_spike_seq, grad_v_seq):
             if ctx.use_pad:
-                # grad_spike_seq.shape = [T, *, N]
-                # grad_v_seq.shape = [T, *, N]
-                # h_seq.shape = [T, *, N + 1]
-                # spike_seq.shape = [T, *, N + 1]
+                # grad_spike_seq.shape = [T, N]
+                # grad_v_seq.shape = [T, N]
+                # h_seq.shape = [T, N + 1]
+                # spike_seq.shape = [T, N + 1]
                 grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
                 grad_v_seq = F.pad(grad_v_seq, (0, 1))
 
@@ -1444,8 +1444,8 @@ try:
                 # only fp16 needs even numel because we use half2 to accelerate
                 # when numel is odd, we will pad x_seq
                 use_pad = True
-                x_seq = F.pad(x_seq, (0, 1))  # [T, *, N] -> [T, *, N + 1]
-                v_last = F.pad(v_last, (0, 1))  # [*, N] -> [*, N + 1]
+                x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
+                v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
             v_seq = torch.zeros_like(x_seq.data)
             h_seq = torch.zeros_like(x_seq.data)
@@ -1521,10 +1521,10 @@ try:
         @staticmethod
         def backward(ctx, grad_spike_seq, grad_v_seq):
             if ctx.use_pad:
-                # grad_spike_seq.shape = [T, *, N]
-                # grad_v_seq.shape = [T, *, N]
-                # h_seq.shape = [T, *, N + 1]
-                # spike_seq.shape = [T, *, N + 1]
+                # grad_spike_seq.shape = [T, N]
+                # grad_v_seq.shape = [T, N]
+                # h_seq.shape = [T, N + 1]
+                # spike_seq.shape = [T, N + 1]
                 grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
                 grad_v_seq = F.pad(grad_v_seq, (0, 1))
 
