@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-# TODO 审查代码，优化，尽量用inplace操作
+tab4_str = '\t\t\t\t'  # used for aligning code
+curly_bracket_l = '{'
+curly_bracket_r = '}'
+
 def heaviside(x: torch.Tensor):
     '''
     * :ref:`API in English <heaviside.__init__-en>`
@@ -95,6 +98,12 @@ class SurrogateFunctionBase(nn.Module):
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         raise NotImplementedError
 
+    def cuda_code_start_comments(self):
+        return f'// start: spikingjelly.clock_driven.surrogate.{self._get_name()}.cuda_code'
+
+    def cuda_code_end_comments(self):
+        return f'// end: spikingjelly.clock_driven.surrogate.{self._get_name()}.cuda_code'
+
     def forward(self, x: torch.Tensor):
         if self.spiking:
             return self.spiking_function(x, self.alpha)
@@ -109,6 +118,15 @@ class MultiArgsSurrogateFunctionBase(nn.Module):
 
     def set_spiking_mode(self, spiking: bool):
         self.spiking = spiking
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        raise NotImplementedError
+
+    def cuda_code_start_comments(self):
+        return f'// start: spikingjelly.clock_driven.surrogate.{self._get_name()}.cuda_code'
+
+    def cuda_code_end_comments(self):
+        return f'// end: spikingjelly.clock_driven.surrogate.{self._get_name()}.cuda_code'
 
 
 class piecewise_quadratic(torch.autograd.Function):
@@ -418,20 +436,28 @@ class Sigmoid(SurrogateFunctionBase):
         return (x * alpha).sigmoid()
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
         alpha = str(self.alpha) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
         if dtype == 'fp32':
-            code = f'''
-            const float sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
-            const float {y} = (1.0f - sigmoid_ax) * sigmoid_ax * {alpha};
+            code += f'''
+            {tab4_str}const float {sg_name}_sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
+            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha};
             '''
         elif dtype == 'fp16':
-            code = f'''
-            const half2 alpha = __float2half2_rn({alpha});
-            const half2 sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2(alpha, {x}))), __float2half2_rn(1.0f)));
-            const half2 {y} = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), sigmoid_ax), sigmoid_ax), alpha);
+            code += f'''
+            {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
+            {tab4_str}const half2 {sg_name}_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2({sg_name}_alpha, {x}))), __float2half2_rn(1.0f)));
+            {tab4_str}const half2 {y} = __hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha);
             '''
         else:
             raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
         return code
 
     # plt.style.use(['science', 'muted', 'grid'])
@@ -619,20 +645,27 @@ class ATan(SurrogateFunctionBase):
         return (math.pi / 2 * alpha * x).atan_() / math.pi + 0.5
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
         alpha = str(self.alpha) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
         if dtype == 'fp32':
-            code = f'''
-            const float M_PI_2__alpha__x = ((float) 1.57079632679489661923) * {alpha} * {x};
-            const float {y} = {alpha} / 2.0f / (1.0f + M_PI_2__alpha__x * M_PI_2__alpha__x);
+            code += f'''
+            {tab4_str}const float {sg_name}_M_PI_2__alpha__x = ((float) 1.57079632679489661923) * {alpha} * {x};
+            {tab4_str}const float {y} = {alpha} / 2.0f / (1.0f + {sg_name}_M_PI_2__alpha__x * {sg_name}_M_PI_2__alpha__x);
             '''
         elif dtype == 'fp16':
-            code = f'''
-            const half2 alpha =  __float2half2_rn({alpha});
-            const half2 M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), alpha), {x});
-            const half2 {y} = __h2div(__h2div(alpha, __float2half2_rn(2.0f)), __hfma2(M_PI_2__alpha__x, M_PI_2__alpha__x, __float2half2_rn(1.0f)));
+            code += f'''
+            {tab4_str}const half2 {sg_name}_alpha =  __float2half2_rn({alpha});
+            {tab4_str}const half2 {sg_name}_M_PI_2__alpha__x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), {sg_name}_alpha), {x});
+            {tab4_str}const half2 {y} = __h2div(__h2div({sg_name}_alpha, __float2half2_rn(2.0f)), __hfma2({sg_name}_M_PI_2__alpha__x, {sg_name}_M_PI_2__alpha__x, __float2half2_rn(1.0f)));
             '''
         else:
             raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
         return code
 
     # plt.style.use(['science', 'muted', 'grid'])
@@ -1015,37 +1048,38 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
                    + mask2 * (x / (2 * w) + 1 / 2)
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
         w = str(self.w) + 'f'
         w_inv = str(1. / self.w) + 'f'
         c = str(self.c) + 'f'
-        code = ''
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
         if dtype == 'fp32':
-
-
-            code += f'const float x_abs = fabsf({x});\n'
-            code += f'float {y};\n'
-
-            code += f'if (x_abs > {w})\n'
-            code += '{\n'
-
-            code += f'{y} = {c};\n'
-
-            code += '}\n'
-
-            code += 'else\n'
-            code += '{\n'
-
-            code += f'{y} = {w_inv};\n'
-
-            code += '}\n'
-
+            code += f'''
+            {tab4_str}const float {sg_name}_x_abs = fabsf({x});
+            float {y};
+            if ({sg_name}_x_abs > {w})
+            {curly_bracket_l}
+                {y} = {c};
+            {curly_bracket_r}
+            else
+            {curly_bracket_l}
+                {y} = {w_inv};
+            {curly_bracket_r}
+            '''
         elif dtype == 'fp16':
-
-            code += f'const half2 x_abs = __habs2({x});\n'
-            code += f'const half2 x_abs_ge_w = __hge2(x_abs, __float2half2_rn({w}));\n'
-            code += f'half2 {y} = __hadd2(__hmul2(__float2half2_rn({c}),  x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), x_abs_ge_w), __float2half2_rn({w_inv})));\n'
+            code += f'''
+            {tab4_str}const half2 {sg_name}_x_abs = __habs2({x});
+            {tab4_str}const half2 {sg_name}_x_abs_ge_w = __hge2({sg_name}_x_abs, __float2half2_rn({w}));
+            {tab4_str}half2 {y} = __hadd2(__hmul2(__float2half2_rn({c}),  {sg_name}_x_abs_ge_w), __hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_x_abs_ge_w), __float2half2_rn({w_inv})));
+            '''
         else:
             raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
         return code
 
     # plt.style.use(['science', 'muted', 'grid'])
