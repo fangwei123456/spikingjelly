@@ -48,7 +48,7 @@ def load_matlab_mat(file_name: str) -> Dict:
     '''
     :param file_name: path of the matlab's mat file
     :type file_name: str
-    :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+    :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: Dict
     '''
     events = scipy.io.loadmat(file_name)
@@ -64,7 +64,7 @@ def load_aedat_v3(file_name: str) -> Dict:
     '''
     :param file_name: path of the aedat v3 file
     :type file_name: str
-    :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+    :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: Dict
 
     This function is written by referring to https://gitlab.com/inivation/dv/dv-python . It can be used for DVS128 Gesture.
@@ -129,16 +129,21 @@ def load_ATIS_bin(file_name: str) -> Dict:
     '''
     :param file_name: path of the aedat v3 file
     :type file_name: str
-    :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+    :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: Dict
 
     This function is written by referring to https://github.com/jackd/events-tfds .
 
     Each ATIS binary example is a separate binary file consisting of a list of events. Each event occupies 40 bits as described below:
+
     bit 39 - 32: Xaddress (in pixels)
+
     bit 31 - 24: Yaddress (in pixels)
+
     bit 23: Polarity (0 for OFF, 1 for ON)
+
     bit 22 - 0: Timestamp (in microseconds)
+
     '''
     with open(file_name, 'rb') as bin_f:
         # `& 128` 是取一个8位二进制数的最高位
@@ -163,7 +168,7 @@ def load_npz_frames(file_name: str) -> np.ndarray:
 
 def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
     '''
-    :param events: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+    :param events: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :type events: Dict
     :param H: height of the frame
     :type H: int
@@ -178,11 +183,11 @@ def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0
 
     Denote a two channels frame as :math:`F` and a pixel at :math:`(p, x, y)` as :math:`F(p, x, y)`, the pixel value is integrated from the events data whose indices are in :math:`[j_{l}, j_{r})`:
 
-.. math::
+    .. math::
 
-    F(p, x, y) &= \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+        F(p, x, y) = \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
-where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
+    where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
     '''
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
     # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
@@ -290,7 +295,7 @@ def cal_fixed_frames_number_segment_index(events_t: np.ndarray, split_by: str, f
 
 def integrate_events_by_fixed_frames_number(events: Dict, split_by: str, frames_num: int, H: int, W: int) -> np.ndarray:
     '''
-    :param events: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+    :param events: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :type events: Dict
     :param split_by: 'time' or 'number'
     :type split_by: str
@@ -303,7 +308,7 @@ def integrate_events_by_fixed_frames_number(events: Dict, split_by: str, frames_
     :return: frames
     :rtype: np.ndarray
 
-    Integrate events to frames by fixed frames number. See ``cal_fixed_frames_number_segment_index`` and ``integrate_events_segment_to_frame`` for more details.
+    Integrate events to frames by fixed frames number. See :class:`cal_fixed_frames_number_segment_index` and :class:`integrate_events_segment_to_frame` for more details.
     '''
     j_l, j_r = cal_fixed_frames_number_segment_index(events['t'], split_by, frames_num)
     frames = np.zeros([frames_num, 2, H, W])
@@ -329,7 +334,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: 
     :type print_save: bool
     :return: None
 
-    Integrate a events file to frames by fixed frames number and save it. See ``cal_fixed_frames_number_segment_index`` and ``integrate_events_segment_to_frame`` for more details.
+    Integrate a events file to frames by fixed frames number and save it. See :class:`cal_fixed_frames_number_segment_index` and :class:`integrate_events_segment_to_frame` for more details.
     '''
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
     np.savez(fname, frames=integrate_events_by_fixed_frames_number(np.load(events_np_file), split_by, frames_num, H, W))
@@ -340,7 +345,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: 
 
 def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: int) -> np.ndarray:
     '''
-    :param events: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+    :param events: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :type events: Dict
     :param duration: the time duration of each frame
     :type duration: int
@@ -585,7 +590,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         all abstract methods. Users can refer to :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture`.
 
         If ``data_type == 'event'``
-            the sample in this dataset is a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``.
+            the sample in this dataset is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``.
 
         If ``data_type == 'frame'`` and ``frames_number`` is not ``None``
             events will be integrated to frames with fixed frames number. ``split_by`` will define how to split events.
@@ -750,7 +755,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         '''
         :param file_name: path of the events file
         :type file_name: str
-        :return: a dict whose keys are ['t', 'x', 'y', 'p'] and values are ``numpy.ndarray``
+        :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
         :rtype: Dict
 
         This function defines how to read the origin binary data.
@@ -807,7 +812,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @abstractmethod
     def get_H_W() -> Tuple:
         '''
-        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
+        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W`` is the weight of the data.
             For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
         :rtype: tuple
         '''
