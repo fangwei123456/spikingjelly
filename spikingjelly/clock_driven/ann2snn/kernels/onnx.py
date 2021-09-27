@@ -1072,16 +1072,16 @@ class _o2p_converter:
         model.module_list.append(reshape)
         return len(model.module_list) - 1, node.input, node.output
 
-    # @staticmethod
-    # def convert_matmul(node, model:_pt_model):
-    #     class MatMul(nn.Module):
-    #         def __init__(self):
-    #             super().__init__()
-    #         def forward(self,input1,input2):
-    #             return input1 @ input2
-    #     mul = MatMul()
-    #     model.module_list.append(mul)
-    #     return len(model.module_list)-1, node.input, node.output
+    @staticmethod
+    def convert_matmul(node, model:_pt_model):
+        class MatMul(nn.Module):
+            def __init__(self):
+                super().__init__()
+            def forward(self,input1,input2):
+                return input1 @ input2
+        mul = MatMul()
+        model.module_list.append(mul)
+        return len(model.module_list)-1, node.input, node.output
 
 
     @staticmethod
