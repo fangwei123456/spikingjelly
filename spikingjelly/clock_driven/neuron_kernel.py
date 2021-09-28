@@ -3,6 +3,15 @@ try:
     import torch
     import torch.nn.functional as F
     from . import cu_kernel_opt, surrogate
+    import sys as _sys
+
+    if _sys.version_info >= (3, 7):
+        cp_float16 = cupy.float16
+        cp_float32 = cupy.float32
+    else:
+        import numpy as np
+        cp_float16 = np.half
+        cp_float32 = np.float
 
 
     class MultiStepIFNodePTT(torch.autograd.Function):
@@ -242,10 +251,10 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = cupy.float32
+                cp_dtype = cp_float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
-                cp_dtype = cupy.float16
+                cp_dtype = cp_float16
             else:
                 raise NotImplementedError
 
@@ -624,10 +633,10 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = cupy.float32
+                cp_dtype = cp_float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
-                cp_dtype = cupy.float16
+                cp_dtype = cp_float16
             else:
                 raise NotImplementedError
 
@@ -966,10 +975,10 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = cupy.float32
+                cp_dtype = cp_float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
-                cp_dtype = cupy.float16
+                cp_dtype = cp_float16
             else:
                 raise NotImplementedError
 
@@ -1432,10 +1441,10 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = cupy.float32
+                cp_dtype = cp_float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
-                cp_dtype = cupy.float16
+                cp_dtype = cp_float16
             else:
                 raise NotImplementedError
 
