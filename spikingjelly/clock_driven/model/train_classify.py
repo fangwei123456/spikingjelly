@@ -1,11 +1,27 @@
 import time
 import torch
+import torch.utils.data
+import torch.distributed as dist
 from torch.utils.tensorboard import SummaryWriter
 from torch.cuda import amp
 import os
 import datetime
 from .. import functional
-from . import utils
+
+def use_dist():
+    # whether use distributed training
+    if not dist.is_available():
+        return False
+    if not dist.is_initialized():
+        return False
+    return True
+
+def on_master():
+    if use_dist():
+        return dist.get_rank() == 0
+    else:
+        return True
+
 
 def cal_correct(output, target, topk=(1,)):
     # modified by def accuracy() in https://github.com/pytorch/vision/blob/main/references/classification/utils.py
@@ -54,6 +70,23 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
         train_loss += loss.item() * image.shape[0]
         samples_number += image.shape[0]
 
+    if use_dist():
+        train_acc1 = torch.as_tensor(train_acc1, dtype=torch.float64, device=device)
+        train_acc5 = torch.as_tensor(train_acc5, dtype=torch.float64, device=device)
+        train_loss = torch.as_tensor(train_loss, dtype=torch.float64, device=device)
+        samples_number = torch.as_tensor(samples_number, dtype=torch.float64, device=device)
+        dist.barrier()
+
+        dist.all_reduce(train_acc1)
+        dist.all_reduce(train_acc5)
+        dist.all_reduce(train_loss)
+        dist.all_reduce(samples_number)
+
+        train_acc1 = train_acc1.item()
+        train_acc5 = train_acc5.item()
+        train_loss = train_loss.item()
+        samples_number = samples_number.item()
+
     train_acc1 /= samples_number
     train_acc5 /= samples_number
     train_acc1 *= 100.
@@ -86,6 +119,24 @@ def evaluate(model, criterion, data_loader, device):
         test_loss += loss.item() * image.shape[0]
         samples_number += image.shape[0]
 
+        if use_dist():
+            test_acc1 = torch.as_tensor(test_acc1, dtype=torch.float64, device=device)
+            test_acc5 = torch.as_tensor(test_acc5, dtype=torch.float64, device=device)
+            test_loss = torch.as_tensor(test_loss, dtype=torch.float64, device=device)
+            samples_number = torch.as_tensor(samples_number, dtype=torch.float64, device=device)
+
+            dist.barrier()
+
+            dist.all_reduce(test_acc1)
+            dist.all_reduce(test_acc5)
+            dist.all_reduce(test_loss)
+            dist.all_reduce(samples_number)
+
+            test_acc1 = test_acc1.item()
+            test_acc5 = test_acc5.item()
+            test_loss = test_loss.item()
+            samples_number = samples_number.item()
+
     test_acc1 /= samples_number
     test_acc5 /= samples_number
     test_acc1 *= 100.
@@ -94,13 +145,15 @@ def evaluate(model, criterion, data_loader, device):
 
     print(f'Test: test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, train_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return test_acc1, test_acc5, test_loss
-
-def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
+def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
 
     start_epoch = 0
     if resume_pt is not None:
         checkpoint = torch.load(resume_pt, map_location='cpu')
-        model.load_state_dict(checkpoint['model'])
+        if isinstance(model, torch.nn.parallel.DistributedDataParallel):
+            model.module.load_state_dict(checkpoint['model'])
+        else:
+            model.load_state_dict(checkpoint['model'])
         optimizer.load_state_dict(checkpoint['optimizer'])
         if lr_scheduler is not None:
             lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
@@ -111,12 +164,12 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
     else:
         amp_scaler = None
 
-    if tb_log_dir is not None:
+    if on_master() and tb_log_dir is not None:
         tb_writer = SummaryWriter(tb_log_dir, purge_step=start_epoch)
     else:
         tb_writer = None
 
-    if pt_dir is not None and not os.path.exists(pt_dir):
+    if on_master() and pt_dir is not None and not os.path.exists(pt_dir):
         os.makedirs(pt_dir)
     max_test_acc1 = -1.
     test_acc5_at_max_test_acc1 = -1.
@@ -126,7 +179,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
     for epoch in range(start_epoch, max_epoch):
         start_time = time.time()
         print(f'epoch={epoch}, args={args}')
-        acc1, acc5, loss = train_one_epoch(model, criterion, optimizer, train_data_loader, args.device, amp_scaler)
+        acc1, acc5, loss = train_one_epoch(model, criterion, optimizer, train_data_loader, device, amp_scaler)
         if tb_writer is not None:
             tb_writer.add_scalar('train_loss', loss, epoch)
             tb_writer.add_scalar('train_acc1', acc1, epoch)
@@ -135,17 +188,21 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
         if lr_scheduler is not None:
             lr_scheduler.step()
 
-        acc1, acc5, loss = evaluate(model, criterion, test_data_loader, args.device)
+        acc1, acc5, loss = evaluate(model, criterion, test_data_loader, device)
 
         if tb_writer is not None:
             tb_writer.add_scalar('test_loss', loss, epoch)
             tb_writer.add_scalar('test_acc1', acc1, epoch)
             tb_writer.add_scalar('test_acc5', acc5, epoch)
 
-        if pt_dir is not None:
+        if on_master() and pt_dir is not None:
+            if isinstance(model, torch.nn.parallel.DistributedDataParallel):
+                model_state_dict = model.module.state_dict()
+            else:
+                model_state_dict = model.state_dict()
             if lr_scheduler is not None:
                 checkpoint = {
-                    'model': model.state_dict(),
+                    'model': model_state_dict,
                     'optimizer': optimizer.state_dict(),
                     'lr_scheduler': lr_scheduler.state_dict(),
                     'epoch': epoch,
@@ -155,7 +212,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
                 }
             else:
                 checkpoint = {
-                    'model': model.state_dict(),
+                    'model': model_state_dict,
                     'optimizer': optimizer.state_dict(),
                     'epoch': epoch,
                     'args': args,
@@ -168,7 +225,7 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
         if acc1 > max_test_acc1:
             max_test_acc1 = acc1
             test_acc5_at_max_test_acc1 = acc5
-            if pt_dir is not None:
+            if on_master() and pt_dir is not None:
                 torch.save(checkpoint, os.path.join(pt_dir, 'ckp_max_test_acc1.pt'))
         used_time = time.time() - start_time
         print(f'Test: max_test_acc1={max_test_acc1:.3f}, max_test_acc5={max_test_acc5:.3f}, test_acc5_at_max_test_acc1={test_acc5_at_max_test_acc1:.3f}')
@@ -177,6 +234,15 @@ def train_eval_loop(args, model, criterion, optimizer, lr_scheduler, train_data_
         if pt_dir is not None:
             print('pt dir=', pt_dir)
         print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
+
+
+
+
+
+
+
+
+
 
 
 
