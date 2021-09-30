@@ -5,6 +5,7 @@ from torch.cuda import amp
 import os
 import datetime
 from .. import functional
+from . import utils
 
 def cal_correct(output, target, topk=(1,)):
     # modified by def accuracy() in https://github.com/pytorch/vision/blob/main/references/classification/utils.py
@@ -64,7 +65,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
     return train_acc1, train_acc5, train_loss
 
 def evaluate(model, criterion, data_loader, device):
-    model.train()
+    model.eval()
     test_acc1 = 0.
     test_acc5 = 0.
     test_loss = 0.
