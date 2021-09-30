@@ -16,7 +16,7 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 - [Device Supports](#device-supports)
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
 - [Tutorials](#Tutorials)
-- [Publications and Citation](#publications and citation)
+- [Publications and Citation](#publications-and-citation)
 - [Contribution](#contribution)
 - [About](#about)
 
