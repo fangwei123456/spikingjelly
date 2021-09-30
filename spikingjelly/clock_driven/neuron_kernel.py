@@ -244,7 +244,7 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = np.float
+                cp_dtype = np.float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
                 cp_dtype = np.half
@@ -626,7 +626,7 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = np.float
+                cp_dtype = np.float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
                 cp_dtype = np.half
@@ -968,7 +968,7 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = np.float
+                cp_dtype = np.float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
                 cp_dtype = np.half
@@ -1434,7 +1434,7 @@ try:
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
                 dtype = 'fp32'
-                cp_dtype = np.float
+                cp_dtype = np.float32
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
                 cp_dtype = np.half
