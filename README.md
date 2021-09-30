@@ -16,7 +16,7 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 - [Device Supports](#device-supports)
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
 - [Tutorials](#Tutorials)
-- [Citation](#citation)
+- [Publications and Citation](#publications and citation)
 - [Contribution](#contribution)
 - [About](#about)
 
@@ -184,7 +184,9 @@ SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 | ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/13_neuromorphic_datasets.html) |
 | ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/test_acc.png) | [Classify DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/14_classify_dvsg.html) |
 
-## Citation
+## Publications and Citation
+
+Publications using SpikingJelly are recorded in [Publications](./publications.md). If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
 If you use SpikingJelly in your work, please cite it as follows:
 

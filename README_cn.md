@@ -16,7 +16,7 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 - [设备支持](#设备支持)
 - [神经形态数据集支持](#神经形态数据集支持)
 - [教程](#教程)
-- [引用](#引用)
+- [出版物与引用](#出版物与引用)
 - [贡献](#贡献)
 - [项目信息](#项目信息)
 
@@ -185,7 +185,9 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 | ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/13_neuromorphic_datasets.html) |
 | ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/test_acc.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/14_classify_dvsg.html) |
 
-## 引用
+## 出版物与引用
+
+[出版物列表](./publications.md)中保存了已知的使用惊蜇(SpikingJelly)的出版物。如果你的文章也使用了惊蜇(SpikingJelly)，可以通过提交pull request的方式来更新出版物列表。
 
 如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
 
