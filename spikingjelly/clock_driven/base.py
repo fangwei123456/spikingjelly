@@ -47,6 +47,7 @@ class MemoryModule(nn.Module):
         Register the variable to memory dict, which saves stateful variables (e.g., the membrane potential of a spiking neuron). The reset value of this variable will be ``value``.
 
         """
+        assert not hasattr(self, name), f'{name} has been set as a member variable'
         self._memories[name] = value
         self.set_reset_value(name, value)
 
