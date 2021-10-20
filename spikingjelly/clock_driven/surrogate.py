@@ -1103,3 +1103,100 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
     # plt.show()
+
+
+class squarewave_fourier_series(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, n: int, T_period: float):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.n = n
+            ctx.T_period = T_period
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = 0.
+        x = ctx.saved_tensors[0]
+        w = math.pi * 2. / ctx.T_period
+        for i in range(1, ctx.n):
+            grad_x += torch.cos_((2 * i - 1.) * w * x)
+
+        grad_x *= 4. / ctx.T_period
+        grad_x *= grad_output
+
+        return grad_x, None, None
+
+
+class SquarewaveFourierSeries(MultiArgsSurrogateFunctionBase):
+    def __init__(self, n: int = 2, T_period: float = 8, spiking=True):
+        super().__init__(spiking)
+        assert isinstance(n, int) and T_period > 0.
+        self.n = n
+        self.T_period = T_period
+        self.spiking = spiking
+        if spiking:
+            self.f = self.spiking_function
+        else:
+            self.f = self.primitive_function
+
+    def forward(self, x):
+        return self.f(x, self.n, self.T_period)
+
+    @staticmethod
+    def spiking_function(x: torch.Tensor, w, c):
+        return squarewave_fourier_series.apply(x, w, c)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, n: int, T_period: float):
+        w = math.pi * 2. / T_period
+        ret = torch.zeros_like(x.data)
+        for i in range(1, n):
+            c = (2 * i - 1.)
+            ret += torch.sin(c * w * x) / c
+
+        return 0.5 + 2. / math.pi * ret
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
+        w = str(self.w) + 'f'
+        w_inv = str(1. / self.w) + 'f'
+        c = str(self.c) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
+        if dtype == 'fp32':
+            raise NotImplementedError
+        elif dtype == 'fp16':
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
+
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
+        return code
+
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200)
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, $w=1, c=0.1$')
+
+    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, $w=1, c=0.1$')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('PiecewiseLeakyReLU surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.show()
+
