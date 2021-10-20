@@ -1178,25 +1178,48 @@ class SquarewaveFourierSeries(MultiArgsSurrogateFunctionBase):
         '''
         return code
 
+    # import torch
+    # from spikingjelly.clock_driven import surrogate
+    # from matplotlib import pyplot as plt
     # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
+    # fig = plt.figure(dpi=200, figsize=(6, 4))
     # x = torch.arange(-2.5, 2.5, 0.001)
     # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $w=1, c=0.1$')
-
-    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $w=1, c=0.1$')
+    #
+    # c_list = []
+    # for n in [2, 4, 8]:
+    #     surrogate_function = surrogate.SquarewaveFourierSeries(n=n, T_period=8, spiking=False)
+    #     y = surrogate_function(x)
+    #     plt.plot(x.data, y.data, label=f'Primitive, $n={n}$')
+    #     c_list.append(plt.gca().lines[-1].get_color())
+    #
     # plt.xlim(-2, 2)
     # plt.legend()
-    # plt.title('PiecewiseLeakyReLU surrogate function')
+    # plt.title(f'SquarewaveFourierSeries surrogate function')
     # plt.xlabel('Input')
     # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
+    # # plt.grid(linestyle='--')
+    # plt.savefig('./docs/source/_static/API/clock_driven/surrogate/SquarewaveFourierSeries1.pdf')
+    # plt.savefig('./docs/source/_static/API/clock_driven/surrogate/SquarewaveFourierSeries1.svg')
+    # plt.clf()
+    # for i, n in enumerate([2, 4, 8]):
+    #     surrogate_function = surrogate.SquarewaveFourierSeries(n=n, T_period=8, spiking=True)
+    #     x = x.detach()
+    #     x.requires_grad_(True)
+    #     y = surrogate_function(x)
+    #     z = y.sum()
+    #     z.backward()
+    #     plt.plot(x.data, x.grad, label=f'Gradient, $n={n}$', c=c_list[i])
+    #     x.grad.zero_()
+    #
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title(f'SquarewaveFourierSeries surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # # plt.grid(linestyle='--')
+    # plt.savefig('./docs/source/_static/API/clock_driven/surrogate/SquarewaveFourierSeries2.pdf')
+    # plt.savefig('./docs/source/_static/API/clock_driven/surrogate/SquarewaveFourierSeries2.svg')
+
+
 
