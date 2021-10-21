@@ -16,6 +16,28 @@ from matplotlib import pyplot as plt
 import math
 import tqdm
 
+try:
+    import cupy
+    from spikingjelly.clock_driven import cu_kernel_opt
+
+    padded_sequence_mask_kernel_code = r'''
+    extern "C" __global__
+            void padded_sequence_mask_kernel(const int* sequence_len, bool *mask, const int &T, const int &N)
+            {
+                const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                if (index < N)
+                {
+                    for(int i=0; i < sequence_len[index]; i++)
+                    {
+                        mask[i * N + index] = true;
+                    }
+                }
+            }
+    '''
+except ImportError:
+    cupy = None
+    pass
+
 def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
     '''
     :param x: frames with ``shape=[T, 2, H, W]``
@@ -530,7 +552,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
         x_len = torch.as_tensor([x1.shape[0], x2.shape[0], x3.shape[0]])
         mask = padded_sequence_mask(x_len)
         print('mask.shape=', mask.shape)
-        print('mask=\n', mask)
+        print('mask=\\n', mask)
 
     And the outputs are:
 
@@ -548,8 +570,29 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
     if T is None:
         T = sequence_len.max().item()
     N = sequence_len.numel()
-    t_seq = torch.arange(0, T).unsqueeze(1).repeat(1, N).to(sequence_len)  # [T, N]
-    return t_seq < sequence_len.unsqueeze(0).repeat(T, 1)
+    device_id = sequence_len.get_device()
+
+    if device_id >= 0 and cupy is not None:
+        mask = torch.zeros([T, N], dtype=bool, device=sequence_len.device)
+        with cupy.cuda.Device(device_id):
+            T = cupy.asarray(T)
+            N = cupy.asarray(N)
+            sequence_len, mask, T, N = cu_kernel_opt.get_contiguous(sequence_len.to(torch.int), mask, T, N)
+            kernel_args = [sequence_len, mask, T, N]
+            kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=cu_kernel_opt.nvcc_options)
+            blocks = cu_kernel_opt.cal_blocks(N)
+            kernel(
+                (blocks,), (cu_kernel_opt.threads,),
+                cu_kernel_opt.wrap_args_to_raw_kernel(
+                    device_id,
+                    *kernel_args
+                )
+            )
+            return mask
+
+    else:
+        t_seq = torch.arange(0, T).unsqueeze(1).repeat(1, N).to(sequence_len)  # [T, N]
+        return t_seq < sequence_len.unsqueeze(0).repeat(T, 1)
 
 class NeuromorphicDatasetFolder(DatasetFolder):
     def __init__(
