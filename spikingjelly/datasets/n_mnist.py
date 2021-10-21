@@ -6,6 +6,7 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
+from ..configure import max_threads_number_for_datasets_preprocess
 
 
 class NMNIST(sjds.NeuromorphicDatasetFolder):
@@ -174,7 +175,7 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
         This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
         '''
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 8)) as tpe:
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
             # too many threads will make the disk overload
             for train_test_dir in ['Train', 'Test']:
                 source_dir = os.path.join(extract_root, train_test_dir)

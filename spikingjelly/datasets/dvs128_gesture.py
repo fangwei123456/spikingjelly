@@ -6,6 +6,8 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
+from ..configure import max_threads_number_for_datasets_preprocess
+
 
 class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
     def __init__(
@@ -232,7 +234,7 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
                 os.path.join(aedat_dir, 'trials_to_test.txt')) as trials_to_test_txt:
             # use multi-thread to accelerate
             t_ckp = time.time()
-            with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+            with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
                 print(f'Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
 
                 for fname in trials_to_train_txt.readlines():

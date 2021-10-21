@@ -3,6 +3,7 @@ try:
     import torch
     import time
     import numpy as np
+    from ..configure import cuda_threads, cuda_compiler_options
 
 
     def cal_fun_t(n, device, f, *args, **kwargs):
@@ -26,13 +27,8 @@ try:
         t_list = np.asarray(t_list)
         return t_list[n:].mean()
 
-
-    nvcc_options = ('-use_fast_math',)
-
-    threads = 1024
-
     def cal_blocks(numel: int):
-        return (numel + threads - 1) // threads
+        return (numel + cuda_threads - 1) // cuda_threads
 
     def get_contiguous(*args):
         ret_list = []
@@ -66,15 +62,6 @@ try:
                 raise TypeError
 
         return tuple(ret_list)
-
-
-
-
-
-
-
-
-
 
 except ImportError:
     pass

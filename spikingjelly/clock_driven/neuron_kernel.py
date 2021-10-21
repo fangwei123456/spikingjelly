@@ -3,6 +3,7 @@ try:
     import torch
     import torch.nn.functional as F
     from . import cu_kernel_opt, surrogate
+    from ..configure import cuda_threads, cuda_compiler_options, cuda_compiler_backend
     import numpy as np
         
 
@@ -109,7 +110,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str):
@@ -235,7 +236,7 @@ try:
                 '''
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, v_threshold: float, v_reset: float,
@@ -269,7 +270,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cu_kernel_opt.threads
+                threads = cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -484,7 +485,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str):
@@ -617,7 +618,7 @@ try:
 
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float,
@@ -651,7 +652,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cu_kernel_opt.threads
+                threads = cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -796,7 +797,7 @@ try:
                 {
                     const int index = blockIdx.x * blockDim.x + threadIdx.x;
                 '''
-                code += f'__shared__ float sdata[{cu_kernel_opt.threads}];'
+                code += f'__shared__ float sdata[{cuda_threads}];'
                 code += r'''
                     if (index < neuron_num)
                     {   
@@ -878,7 +879,7 @@ try:
                 const int stride = neuron_num >> 1;
 
                 '''
-                code += f'__shared__ half2 sdata[{cu_kernel_opt.threads}];'
+                code += f'__shared__ half2 sdata[{cuda_threads}];'
                 code += r'''
                 if (index < stride)
                 {   
@@ -959,7 +960,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, reciprocal_tau: torch.Tensor, v_threshold: float,
@@ -994,7 +995,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cu_kernel_opt.threads
+                threads = cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -1294,7 +1295,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str):
@@ -1426,7 +1427,7 @@ try:
                 '''
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cu_kernel_opt.nvcc_options)
+            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float, v_rest: float, theta_rh: float, delta_T: float, detach_reset: bool, sg_cuda_code_fun):
@@ -1459,7 +1460,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cu_kernel_opt.threads
+                threads = cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)

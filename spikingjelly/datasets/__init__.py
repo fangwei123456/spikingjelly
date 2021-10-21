@@ -15,6 +15,7 @@ import torch
 from matplotlib import pyplot as plt
 import math
 import tqdm
+from ..configure import max_threads_number_for_datasets_preprocess, cuda_threads, cuda_compiler_options, cuda_compiler_backend
 
 try:
     import cupy
@@ -582,10 +583,10 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
             N = cupy.asarray(N)
             sequence_len, mask, T, N = cu_kernel_opt.get_contiguous(sequence_len.to(torch.int), mask, T, N)
             kernel_args = [sequence_len, mask, T, N]
-            kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=cu_kernel_opt.nvcc_options)
+            kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=cuda_compiler_options, backend=cuda_compiler_backend)
             blocks = cu_kernel_opt.cal_blocks(N)
             kernel(
-                (blocks,), (cu_kernel_opt.threads,),
+                (blocks,), (cuda_threads,),
                 cu_kernel_opt.wrap_args_to_raw_kernel(
                     device_id,
                     *kernel_args
@@ -770,7 +771,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -800,7 +801,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -831,7 +832,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:

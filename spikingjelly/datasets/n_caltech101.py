@@ -6,6 +6,7 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
+from ..configure import max_threads_number_for_datasets_preprocess
 
 
 class NCaltech101(sjds.NeuromorphicDatasetFolder):
@@ -170,7 +171,7 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
         '''
         t_ckp = time.time()
         extract_root = os.path.join(extract_root, 'Caltech101')
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 8)) as tpe:
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
             # too many threads will make the disk overload
             for class_name in os.listdir(extract_root):
                 bin_dir = os.path.join(extract_root, class_name)
