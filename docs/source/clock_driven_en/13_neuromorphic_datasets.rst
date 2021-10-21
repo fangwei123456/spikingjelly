@@ -203,6 +203,52 @@ We will get the images like:
 .. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.*
     :width: 100%
 
+Custom Integrating Method
+-----------------------
+SpikingJelly provides user-defined integrating method. The user should provide a function ``custom_integrate_function`` and
+the name of directory ``custom_integrated_frames_dir_name`` for saving frames.
+
+``custom_integrate_function`` is a user-defined function that inputs are ``events, H, W``.
+``events`` is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``. ``H`` is the height of the
+data and ``W`` is the weight of the data. For example, H=128 and W=128 for the DVS128 Gesture dataset. The function should
+return frames.
+
+``custom_integrated_frames_dir_name`` can be ``None``, and then the the name of directory for saving frames will be set to ``custom_integrate_function.__name__``.
+
+For example, if we want to split events to two parts randomly, and integrate two parts to two frames, we can define such
+a function:
+
+.. code:: python
+
+    import spikingjelly.datasets as sjds
+    def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
+        index_split = np.random.randint(low=0, high=events['t'].__len__())
+        frames = np.zeros([2, 2, H, W])
+        frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
+        frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
+        return frames
+
+Now let us use this function to create frames dataset:
+
+.. code:: python
+
+    train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
+
+After the process finished, there will be a ``integrate_events_to_2_frames_randomly`` directory in ``root_dir``. And the
+``integrate_events_to_2_frames_randomly`` directory will save our frames integrated by the custom integrating function.
+
+
+Now let us visualize the frames:
+
+.. code:: python
+
+    from spikingjelly.datasets import play_frame
+    frame, label = train_set[500]
+    play_frame(frame)
+
+.. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg2.*
+    :width: 100%
+
 SpikingJelly provides more methods to integrate events to frames. Read the API doc for more details.
 
 .. [#NMNIST] Orchard, Garrick, et al. “Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades.” Frontiers in Neuroscience, vol. 9, 2015, pp. 437–437.

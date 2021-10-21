@@ -202,6 +202,46 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 .. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.*
     :width: 100%
 
+自定义积分方法
+-----------------------
+惊蜇框架支持用户自定义积分方法。用户只需要提供积分函数 ``custom_integrate_function`` 以及保存frames的文件夹名 ``custom_integrated_frames_dir_name``。
+``custom_integrate_function`` 是用户定义的函数，输入是 ``events, H, W``，其中 ``events`` 是一个pythono字典，键为
+``['t', 'x', 'y', 'p']`` 值为 ``numpy.ndarray`` 类型。``H`` 是数据高度，``W`` 是数据宽度。例如，对于DVS手势数据集，H=128, W=128。
+这个函数的返回值应该是frames。
+
+``custom_integrated_frames_dir_name`` 可以为 ``None``，在这种情况下，保存frames的文件夹名会被设置成 ``custom_integrate_function.__name__``。
+
+
+例如，我们定义这样一种积分方式：随机将全部events一分为二，然后积分成2帧。我们可定义如下函数：
+
+.. code:: python
+
+    import spikingjelly.datasets as sjds
+    def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
+        index_split = np.random.randint(low=0, high=events['t'].__len__())
+        frames = np.zeros([2, 2, H, W])
+        frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
+        frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
+        return frames
+
+接下来创建数据集：
+
+.. code:: python
+
+    train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
+
+运行完毕后，在 ``root_dir`` 目录下出现了 ``integrate_events_to_2_frames_randomly`` 文件夹，保存了我们的frame数据。
+
+查看一下我们积分得到的数据：
+
+.. code:: python
+
+    from spikingjelly.datasets import play_frame
+    frame, label = train_set[500]
+    play_frame(frame)
+
+.. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg2.*
+    :width: 100%
 
 惊蜇框架还支持其他的积分方式，阅读API文档以获取更多信息。
 

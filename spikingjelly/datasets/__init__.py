@@ -427,6 +427,9 @@ def integrate_events_file_to_frames_file_by_fixed_duration(events_np_file: str, 
         print(f'Frames [{fname}] saved.')
     return frames.shape[0]
 
+def save_frames_to_npz_and_print(fname: str, frames):
+    np.savez(fname, frames=frames)
+    print(f'Frames [{fname}] saved.')
 
 def create_same_directory_structure(source_dir: str, target_dir: str) -> None:
     '''
@@ -603,6 +606,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             frames_number: int = None,
             split_by: str = None,
             duration: int = None,
+            custom_integrate_function: Callable = None,
+            custom_integrated_frames_dir_name: str = None,
             transform: Optional[Callable] = None,
             target_transform: Optional[Callable] = None,
     ) -> None:
@@ -621,6 +626,15 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type split_by: str
         :param duration: the time duration of each frame
         :type duration: int
+        :param custom_integrate_function: a user-defined function that inputs are ``events, H, W``.
+            ``events`` is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
+            ``H`` is the height of the data and ``W`` is the weight of the data.
+            For example, H=128 and W=128 for the DVS128 Gesture dataset.
+            The user should define how to integrate events to frames, and return frames.
+        :type custom_integrate_function: Callable
+        :param custom_integrated_frames_dir_name: The name of directory for saving frames integrating by ``custom_integrate_function``.
+            If ``custom_integrated_frames_dir_name`` is ``None``, it will be set to ``custom_integrate_function.__name__``
+        :type custom_integrated_frames_dir_name: str or None
         :param transform: a function/transform that takes in
             a sample and returns a transformed version.
             E.g, ``transforms.RandomCrop`` for images.
@@ -643,6 +657,29 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
             events will be integrated to frames with fixed time duration.
 
+        If ``data_type == 'frame'``, ``frames_number`` is ``None``, ``duration`` is ``None``, and ``custom_integrate_function`` is not ``None``:
+            events will be integrated by the user-defined function and saved to the ``custom_integrated_frames_dir_name`` directory in ``root`` directory.
+            Here is an example from SpikingJelly's tutorials:
+
+            .. code-block:: python
+
+                from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+                from typing import Dict
+                import numpy as np
+                import spikingjelly.datasets as sjds
+                def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
+                    index_split = np.random.randint(low=0, high=events['t'].__len__())
+                    frames = np.zeros([2, 2, H, W])
+                    frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
+                    frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
+                    return frames
+
+                root_dir = 'D:/datasets/DVS128Gesture'
+                train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
+
+                from spikingjelly.datasets import play_frame
+                frame, label = train_set[500]
+                play_frame(frame)
         '''
 
         events_np_root = os.path.join(root, 'events_np')
@@ -780,8 +817,41 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 _transform = transform
                 _target_transform = target_transform
 
+            elif custom_integrate_function is not None:
+                if custom_integrated_frames_dir_name is None:
+                    custom_integrated_frames_dir_name = custom_integrate_function.__name__
+
+                frames_np_root = os.path.join(root, custom_integrated_frames_dir_name)
+                if os.path.exists(frames_np_root):
+                    print(f'The directory [{frames_np_root}] already exists.')
+                else:
+                    os.mkdir(frames_np_root)
+                    print(f'Mkdir [{frames_np_root}].')
+                    # create the same directory structure
+                    create_same_directory_structure(events_np_root, frames_np_root)
+                    # use multi-thread to accelerate
+                    t_ckp = time.time()
+                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 64)) as tpe:
+                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                        for e_root, e_dirs, e_files in os.walk(events_np_root):
+                            if e_files.__len__() > 0:
+                                output_dir = os.path.join(frames_np_root, os.path.relpath(e_root, events_np_root))
+                                for e_file in e_files:
+                                    events_np_file = os.path.join(e_root, e_file)
+                                    print(
+                                        f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
+                                    tpe.submit(save_frames_to_npz_and_print, os.path.join(output_dir, os.path.basename(events_np_file)), custom_integrate_function(np.load(events_np_file), H, W))
+
+                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+                _root = frames_np_root
+                _loader = load_npz_frames
+                _transform = transform
+                _target_transform = target_transform
+
+
             else:
-                raise ValueError('frames_number and duration can not both be None.')
+                raise ValueError('At least one of "frames_number", "duration" and "custom_integrate_function" should not be None.')
 
         if train is not None:
             if train:
