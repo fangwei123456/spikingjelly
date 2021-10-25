@@ -1,3 +1,5 @@
+
+
 # neuron_kernel
 
 This md file shows how we define cuda kernel for neuronal forward and backward.
@@ -21,15 +23,15 @@ S[1,2,...,T], V[1,2,...,T] = F_{fp}(X[1,2,...,T], V[0])
 $$
 Thus, we need to define the backward as
 $$
-\frac{\partial L}{\partial X[1,2,...,T]},\frac{\partial L}{\partial V[0]} = F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]})
+\frac{\mathrm{d} L}{\mathrm{d} X[1,2,...,T]},\frac{\mathrm{d} L}{\mathrm{d} V[0]} = F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]})
 $$
 According to the forward function, we can get
 $$
 \begin{align}
-	\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]} \frac{\partial H[t]}{\partial X[t]}\\
-	\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}\frac{\partial H[t+1]}{\partial V[t]})\frac{\partial V[t]}{\partial H[t]}\\
-	\frac{\partial S[t]}{\partial H[t]} &= \Theta'(H[t] - V_{th})\\
-	\frac{\partial V[t]}{\partial H[t]} &= 
+	\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
+	\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]} &= 
 	\begin{cases}
 		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Hard~Reset\\
 		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Soft~Reset\\
@@ -46,9 +48,9 @@ $$
 Finally, we will calculate gradients as
 $$
 \begin{align}
-\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}\frac{\partial H[t+1]}{\partial V[t]})\frac{\partial V[t]}{\partial H[t]}\\
-\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]}\frac{\partial H[t]}{\partial X[t]}\\
-\frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]}
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d}H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
 \end{align}
 $$
 
@@ -76,9 +78,9 @@ $$
 Then the gradients are
 $$
 \begin{align}
-\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]})\frac{\partial V[t]}{\partial H[t]}\\
-\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]}\\
-\frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]}
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
 \end{align}
 $$
 ## Leaky-Integrate-and-Fire Neuron (LIF Neuron)
@@ -90,9 +92,9 @@ $$
 Then the gradients are
 $$
 \begin{align}
-\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}(1 - \frac{1}{\tau}))\frac{\partial V[t]}{\partial H[t]}\\
-\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]} \frac{1}{\tau}\\
-\frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]} (1 - \frac{1}{\tau})
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
 
@@ -105,10 +107,10 @@ $$
 Then the gradients are
 $$
 \begin{align}
-\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}(1 - \frac{1}{\tau}))\frac{\partial V[t]}{\partial H[t]}\\
-\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]} \frac{1}{\tau}\\
-\frac{\partial L}{\partial \frac{1}{\tau}} &= \sum_{t} \frac{\partial L}{\partial H[t]} (X[t] - (V[t - 1] - V_{reset}))=\sum_{t} \frac{\partial L}{\partial H[t]}(H[t]-V[t-1])\tau\\
-\frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]} (1 - \frac{1}{\tau})
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} \frac{1}{\tau}} &= \sum_{t} \frac{\mathrm{d} L}{\mathrm{d} H[t]} (X[t] - (V[t - 1] - V_{reset}))=\sum_{t} \frac{\mathrm{d} L}{\mathrm{d} H[t]}(H[t]-V[t-1])\tau\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
 
@@ -121,8 +123,8 @@ $$
 Then the gradients are
 $$
 \begin{align}
-\frac{\partial L}{\partial H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\partial S[t]}{\partial H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\partial L}{\partial H[t+1]}(1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[t] - \theta_{rh}}{\Delta_T})))\frac{\partial V[t]}{\partial H[t]}\\
-\frac{\partial L}{\partial X[t]} &= \frac{\partial L}{\partial H[t]} \frac{1}{\tau}\\
-\frac{\partial L}{\partial V[0]} &= \frac{\partial L}{\partial H[1]} (1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[0] - \theta_{rh}}{\Delta_T}))
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[t] - \theta_{rh}}{\Delta_T})))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[0] - \theta_{rh}}{\Delta_T}))
 \end{align}
 $$
