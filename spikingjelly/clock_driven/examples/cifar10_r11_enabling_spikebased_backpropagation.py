@@ -233,7 +233,7 @@ def main():
 	args = parser.parse_args()
 
 	torch.cuda.set_device(args.gpu)  
-	learning_rate = args.learning_rate
+	learning_rate = args.lr
 	batch_size = args.batch_size
 	T = args.timesteps
 
