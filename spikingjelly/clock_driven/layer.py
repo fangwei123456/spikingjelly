@@ -818,7 +818,9 @@ class MultiStepContainer(nn.Sequential):
         y_seq = []
         for t in range(x_seq.shape[0]):
             y_seq.append(super().forward(x_seq[t]))
-            y_seq[-1].unsqueeze_(0)
+
+        for t in range(y_seq.__len__()):
+            y_seq[t].unsqueeze_(0)
         return torch.cat(y_seq, 0)
 
 
