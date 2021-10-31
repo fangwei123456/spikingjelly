@@ -97,7 +97,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
     print(f'Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return train_acc1, train_acc5, train_loss
 
-@torch.no_grad
+@torch.no_grad()
 def evaluate(model, criterion, data_loader, device):
     model.eval()
     test_acc1 = 0.
