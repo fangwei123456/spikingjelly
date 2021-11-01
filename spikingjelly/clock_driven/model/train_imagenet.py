@@ -128,6 +128,16 @@ def load_data(traindir, valdir, cache_dataset, distributed):
     return train_set, val_set, train_sampler, val_sampler
 
 def main(model: nn.Module, args):
+    args.distributed = True
+    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+        pass
+    elif 'SLURM_PROCID' in os.environ:
+        raise NotImplementedError
+    elif hasattr(args, "rank"):
+        pass
+    else:
+        args.distributed = False
+
     if args.distributed:
         device = f'cuda:{args.local_rank}'
         model.to(device)
