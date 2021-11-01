@@ -237,6 +237,21 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
         print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
 
 
+def distributed_training_init(model, backend='nccl', sync_bn=False):
+    if sync_bn:
+        model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+
+    rank = int(os.environ['RANK'])
+    world_size = int(os.environ['WORLD_SIZE'])
+    gpu = int(os.environ['LOCAL_RANK'])
+    torch.distributed.init_process_group(backend, world_size=world_size,
+                                         rank=rank, init_method='env://')
+
+    print('gpu', gpu)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
+    return model
+
+
 
 
 
