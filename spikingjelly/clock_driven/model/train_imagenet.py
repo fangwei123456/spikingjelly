@@ -180,12 +180,12 @@ def main(model: nn.Module, args):
     pt_dir = os.path.join(args.output_dir, dir_prefix + '_pt')
 
     criterion = nn.CrossEntropyLoss()
-    if args.opt == 'SGD':
+    if args.opt == 'sgd':
         optimizer = torch.optim.SGD(params=model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
-    elif args.opt == 'Adam':
+    elif args.opt == 'adam':
         optimizer = torch.optim.Adam(params=model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f'Please implement the codes with args.opt')
 
     if args.lrs == 'step':
         lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.step_gamma)
