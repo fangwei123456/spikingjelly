@@ -150,7 +150,7 @@ def evaluate(model, criterion, data_loader, device):
 def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
 
     start_epoch = 0
-    if resume_pt is not None:
+    if resume_pt is not None and resume_pt != '':
         checkpoint = torch.load(resume_pt, map_location='cpu')
         if isinstance(model, torch.nn.parallel.DistributedDataParallel):
             model.module.load_state_dict(checkpoint['model'])
