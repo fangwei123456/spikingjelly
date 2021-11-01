@@ -62,6 +62,7 @@ def parse_args():
     parser.add_argument('--tb', action='store_true',
                         help='Use TensorBoard to record logs')
     parser.add_argument('--T', default=None, type=int, help='simulation steps')
+    parser.add_argument('--local-rank', default=None, type=int)
     args = parser.parse_args()
     return args
 
