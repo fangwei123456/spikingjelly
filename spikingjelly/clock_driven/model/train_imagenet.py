@@ -6,6 +6,7 @@ import hashlib
 from . import train_classify
 import os
 import torch.utils.data
+from torchvision import transforms
 
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch Classification Training')
