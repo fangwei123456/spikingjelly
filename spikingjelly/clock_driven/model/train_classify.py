@@ -240,18 +240,32 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
         print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
 
 
-def distributed_training_init(model, backend='nccl', sync_bn=False):
-    if sync_bn:
+def distributed_training_init(args, model):
+    if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
+        args.rank = int(os.environ["RANK"])
+        args.world_size = int(os.environ['WORLD_SIZE'])
+        args.device = int(os.environ['LOCAL_RANK'])
+    elif 'SLURM_PROCID' in os.environ:
+        args.rank = int(os.environ['SLURM_PROCID'])
+        args.device = args.rank % torch.cuda.device_count()
+    elif hasattr(args, "rank"):
+        pass
+    else:
+        print('Not using distributed mode')
+        args.distributed = False
+        model.to(args.device)
+        return model
+    model.to(args.device)
+    args.distributed = True
+    args.dist_backend = 'nccl'
+    print('| distributed init (rank {}): {}'.format(
+        args.rank, args.dist_url), flush=True)
+    torch.distributed.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
+                                         world_size=args.world_size, rank=args.rank)
+    if args.distributed and args.sync_bn:
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-
-    rank = int(os.environ['RANK'])
-    world_size = int(os.environ['WORLD_SIZE'])
-    gpu = int(os.environ['LOCAL_RANK'])
-    torch.distributed.init_process_group(backend, world_size=world_size,
-                                         rank=rank, init_method='env://')
-
-    print('gpu', gpu)
-    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
+    if args.distributed:
+        model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.device])
     return model
 
 
