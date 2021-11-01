@@ -1066,16 +1066,14 @@ class ConvBatchNorm2d(nn.Module):
     def forward(self, x: torch.Tensor):
         return self.bn(self.conv(x))
 
-    @torch.no_grad()
     def get_fused_weight(self):
         """
         :return: the weight of this fused module
         :rtype: torch.Tensor
         """
-        return (self.conv.weight.data.transpose(0, 3) * self.bn.weight / (
+        return (self.conv.weight.transpose(0, 3) * self.bn.weight / (
                     self.bn.running_var + self.bn.eps).sqrt()).transpose(0, 3)
 
-    @torch.no_grad()
     def get_fused_bias(self):
         """
         :return: the bias of this fused module
