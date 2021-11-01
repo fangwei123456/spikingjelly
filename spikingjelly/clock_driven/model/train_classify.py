@@ -146,6 +146,7 @@ def evaluate(model, criterion, data_loader, device):
 
     print(f'Test: test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, test_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return test_acc1, test_acc5, test_loss
+
 def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
 
     start_epoch = 0
@@ -166,6 +167,8 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
         amp_scaler = None
 
     if on_master() and tb_log_dir is not None:
+        if not os.path.exists(tb_log_dir):
+            os.makedirs(pt_dir)
         tb_writer = SummaryWriter(tb_log_dir, purge_step=start_epoch)
     else:
         tb_writer = None
