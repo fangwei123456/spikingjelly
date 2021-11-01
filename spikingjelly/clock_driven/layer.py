@@ -1082,31 +1082,35 @@ class ConvBatchNorm2d(nn.Module):
         return self.bn.bias - self.bn.running_mean * self.bn.weight / (self.bn.running_var + self.bn.eps).sqrt()
 
     @torch.no_grad()
-    def scale_fused_weight(self, k, b):
+    def scale_fused_weight(self, k=None, b=None):
         """
         :param k: scale factor
-        :type k: float
+        :type k: float or None
         :param b: bias factor
-        :type b: float
+        :type b: float or None
 
         Set the `weight` of this fused module to `weight * k + b`
         """
-        self.conv.weight.data *= k
-        self.conv.weight.data += b
+        if k is not None:
+            self.conv.weight.data *= k
+        if b is not None:
+            self.conv.weight.data += b
 
     @torch.no_grad()
-    def scale_fused_bias(self, k, b):
+    def scale_fused_bias(self, k=None, b=None):
         """
         :param k: scale factor
-        :type k: float
+        :type k: float or None
         :param b: bias factor
-        :type b: float
+        :type b: float or None
 
         Set the `bias` of this fused module to `bias * k + b`
         """
-        self.bn.bias.data += b / k
-        self.bn.bias.data *= k
-        self.bn.running_mean *= k
+        if k is not None:
+            self.bn.bias.data *= k
+            self.bn.running_mean *= k
+        if b is not None:
+            self.bn.bias.data += b
 
     def get_fused_conv(self):
         conv = nn.Conv2d(in_channels=self.conv.in_channels, out_channels=self.conv.out_channels,
