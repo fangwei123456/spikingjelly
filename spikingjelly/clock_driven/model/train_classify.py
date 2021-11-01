@@ -239,6 +239,19 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
             print('pt dir=', pt_dir)
         print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=used_time * (max_epoch - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
 
+def setup_for_distributed(is_master):
+    """
+    This function disables printing when not in master process
+    """
+    import builtins as __builtin__
+    builtin_print = __builtin__.print
+
+    def print(*args, **kwargs):
+        force = kwargs.pop('force', False)
+        if is_master or force:
+            builtin_print(*args, **kwargs)
+
+    __builtin__.print = print
 
 def distributed_training_init(args, model):
     if 'RANK' in os.environ and 'WORLD_SIZE' in os.environ:
@@ -266,6 +279,7 @@ def distributed_training_init(args, model):
         model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     if args.distributed:
         model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.device])
+    setup_for_distributed(args.rank == 0)
     return model
 
 
