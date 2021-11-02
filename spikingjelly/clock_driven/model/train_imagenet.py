@@ -201,6 +201,18 @@ def main(model: nn.Module, args):
     train_classify.train_eval_loop(args=args, device=args.device, model=model, criterion=criterion, optimizer=optimizer, lr_scheduler=lr_scheduler, train_data_loader=train_data_loader, test_data_loader=test_data_loader, max_epoch=args.epochs, use_amp=args.amp, tb_log_dir=tb_dir, pt_dir=pt_dir, resume_pt=args.resume)
 
 
+'''
+from spikingjelly.clock_driven.model import train_imagenet, spiking_resnet
+from spikingjelly.clock_driven import neuron, surrogate
+
+if __name__ == '__main__':
+    # python -m torch.distributed.launch --nproc_per_node=2 w1.py --data-path /gdata/ImageNet2012 -j 8 --opt sgd
+    net = spiking_resnet.multi_step_spiking_resnet18(T=4, multi_step_neuron=neuron.MultiStepIFNode, surrogate_function=surrogate.ATan(), detach_reset=True, backend='cupy')
+    args = train_imagenet.parse_args()
+    train_imagenet.main(net, args)
+'''
+
+
 
 
 

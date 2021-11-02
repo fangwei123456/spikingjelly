@@ -97,23 +97,24 @@ def sequential_forward(sequential, x_seq):
 
 
 class MultiStepSpikingVGG(SpikingVGG):
-    def __init__(self, cfg, batch_norm=False, norm_layer=None, num_classes=1000, init_weights=True,
+    def __init__(self, cfg, batch_norm=False, norm_layer=None, num_classes=1000, init_weights=True, T: int = None,
                  multi_step_neuron: callable = None, **kwargs):
+        self.T = T
         super().__init__(cfg, batch_norm, norm_layer, num_classes, init_weights,
                  multi_step_neuron, **kwargs)
 
-    def _forward_impl(self, x: torch.Tensor, T: int=None):
+    def _forward_impl(self, x: torch.Tensor):
         # See note [TorchScript super()]
         x_seq = None
         if x.dim() == 5:
             # x.shape = [T, N, C, H, W]
             x_seq = functional.seq_to_ann_forward(x, self.features[0])
         else:
-            assert T is not None, 'When x.shape is [N, C, H, W], T can not be None.'
+            assert self.T is not None, 'When x.shape is [N, C, H, W], self.T can not be None.'
             # x.shape = [N, C, H, W]
             x = self.features[0](x)
             x.unsqueeze_(0)
-            x_seq = x.repeat(T, 1, 1, 1, 1)
+            x_seq = x.repeat(self.T, 1, 1, 1, 1)
         x_seq = sequential_forward(self.features[1:], x_seq)
         x_seq = functional.seq_to_ann_forward(x_seq, self.avgpool)
         x_seq = torch.flatten(x_seq, 2)
@@ -123,13 +124,10 @@ class MultiStepSpikingVGG(SpikingVGG):
         return x_seq
 
 
-    def forward(self, x, T:int=None):
+    def forward(self, x):
         """
         :param x: the input with `shape=[N, C, H, W]` or `[*, N, C, H, W]`
         :type x: torch.Tensor
-        :param T: When x.shape is `[N, C, H, W]`, the forward function will repeat `bn1(conv1(x))` to `[T, N, C, H, W]`.
-                When x.shape is `[*, N, C, H, W]`, this param will not be used.
-        :type T: int or None
         :return: output
         :rtype: torch.Tensor
         """
@@ -159,14 +157,14 @@ def _spiking_vgg(arch, cfg, batch_norm, pretrained, progress, norm_layer: callab
         model.load_state_dict(state_dict)
     return model
 
-def _multi_step_spiking_vgg(arch, cfg, batch_norm, pretrained, progress, norm_layer: callable = None, multi_step_neuron: callable = None, **kwargs):
+def _multi_step_spiking_vgg(arch, cfg, batch_norm, pretrained, progress, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
     if pretrained:
         kwargs['init_weights'] = False
     if batch_norm:
         norm_layer = norm_layer
     else:
         norm_layer = None
-    model = MultiStepSpikingVGG(cfg=cfgs[cfg], batch_norm=batch_norm, norm_layer=norm_layer, multi_step_neuron=multi_step_neuron, **kwargs)
+    model = MultiStepSpikingVGG(cfg=cfgs[cfg], batch_norm=batch_norm, norm_layer=norm_layer, T=T, multi_step_neuron=multi_step_neuron, **kwargs)
     if pretrained:
         state_dict = load_state_dict_from_url(model_urls[arch],
                                               progress=progress)
@@ -193,23 +191,25 @@ def spiking_vgg11(pretrained=False, progress=True, single_step_neuron: callable 
     return _spiking_vgg('vgg11', 'A', False, pretrained, progress, None, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg11(pretrained=False, progress=True, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg11(pretrained=False, progress=True, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-11 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-11 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-11 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-11 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg11', 'A', False, pretrained, progress, None, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg11', 'A', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg11_bn(pretrained=False, progress=True, norm_layer: callable = None, single_step_neuron: callable = None, **kwargs):
@@ -233,25 +233,27 @@ def spiking_vgg11_bn(pretrained=False, progress=True, norm_layer: callable = Non
     return _spiking_vgg('vgg11', 'A', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg11_bn(pretrained=False, progress=True, norm_layer: callable = None, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg11_bn(pretrained=False, progress=True, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param norm_layer: a batch norm layer
-        :type norm_layer: callable
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-11 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param norm_layer: a batch norm layer
+    :type norm_layer: callable
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-11 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-11-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-11-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg11', 'A', True, pretrained, progress, norm_layer, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg11', 'A', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
 
 def spiking_vgg13(pretrained=False, progress=True, single_step_neuron: callable = None, **kwargs):
     """
@@ -272,23 +274,25 @@ def spiking_vgg13(pretrained=False, progress=True, single_step_neuron: callable 
     return _spiking_vgg('vgg13', 'B', False, pretrained, progress, None, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg13(pretrained=False, progress=True, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg13(pretrained=False, progress=True, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-13 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-13 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-13 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-13 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg13', 'B', False, pretrained, progress, None, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg13', 'B', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg13_bn(pretrained=False, progress=True, norm_layer: callable = None, single_step_neuron: callable = None, **kwargs):
@@ -312,25 +316,27 @@ def spiking_vgg13_bn(pretrained=False, progress=True, norm_layer: callable = Non
     return _spiking_vgg('vgg13', 'B', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg13_bn(pretrained=False, progress=True, norm_layer: callable = None, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg13_bn(pretrained=False, progress=True, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param norm_layer: a batch norm layer
-        :type norm_layer: callable
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-13 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param norm_layer: a batch norm layer
+    :type norm_layer: callable
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-13 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-13-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-13-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg13', 'B', True, pretrained, progress, norm_layer, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg13', 'B', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg16(pretrained=False, progress=True, single_step_neuron: callable = None, **kwargs):
@@ -352,23 +358,25 @@ def spiking_vgg16(pretrained=False, progress=True, single_step_neuron: callable 
     return _spiking_vgg('vgg16', 'C', False, pretrained, progress, None, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg16(pretrained=False, progress=True, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg16(pretrained=False, progress=True, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-16 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-16 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-16 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-16 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg16', 'C', False, pretrained, progress, None, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg16', 'C', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = None, single_step_neuron: callable = None, **kwargs):
@@ -392,25 +400,27 @@ def spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = Non
     return _spiking_vgg('vgg16', 'C', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = None, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param norm_layer: a batch norm layer
-        :type norm_layer: callable
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-16 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param norm_layer: a batch norm layer
+    :type norm_layer: callable
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-16 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-16-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-16-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg16', 'C', True, pretrained, progress, norm_layer, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg16', 'C', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg19(pretrained=False, progress=True, single_step_neuron: callable = None, **kwargs):
@@ -432,12 +442,14 @@ def spiking_vgg19(pretrained=False, progress=True, single_step_neuron: callable 
     return _spiking_vgg('vgg19', 'D', False, pretrained, progress, None, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg19(pretrained=False, progress=True, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg19(pretrained=False, progress=True, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
         :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
         :type pretrained: bool
         :param progress: If True, displays a progress bar of the download to stderr
         :type progress: bool
+:param T: total time-steps
+:type T: int
         :param multi_step_neuron: a multi_step neuron
         :type multi_step_neuron: callable
         :param kwargs: kwargs for `single_step_neuron`
@@ -448,47 +460,49 @@ def multi_step_spiking_vgg19(pretrained=False, progress=True, multi_step_neuron:
         A multi-step spiking version of VGG-19 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg19', 'D', False, pretrained, progress, None, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg19', 'D', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = None, single_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param norm_layer: a batch norm layer
-        :type norm_layer: callable
-        :param single_step_neuron: a single-step neuron
-        :type single_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-19 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param norm_layer: a batch norm layer
+    :type norm_layer: callable
+    :param single_step_neuron: a single-step neuron
+    :type single_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-19 with norm layer
+    :rtype: torch.nn.Module
 
-        A spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
     return _spiking_vgg('vgg19', 'D', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
 
 
-def multi_step_spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = None, multi_step_neuron: callable = None, **kwargs):
+def multi_step_spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
     """
-        :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-        :type pretrained: bool
-        :param progress: If True, displays a progress bar of the download to stderr
-        :type progress: bool
-        :param norm_layer: a batch norm layer
-        :type norm_layer: callable
-        :param multi_step_neuron: a multi_step neuron
-        :type multi_step_neuron: callable
-        :param kwargs: kwargs for `single_step_neuron`
-        :type kwargs: dict
-        :return: Spiking VGG-19 with norm layer
-        :rtype: torch.nn.Module
+    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    :type pretrained: bool
+    :param progress: If True, displays a progress bar of the download to stderr
+    :type progress: bool
+    :param norm_layer: a batch norm layer
+    :type norm_layer: callable
+    :param T: total time-steps
+    :type T: int
+    :param multi_step_neuron: a multi_step neuron
+    :type multi_step_neuron: callable
+    :param kwargs: kwargs for `single_step_neuron`
+    :type kwargs: dict
+    :return: Spiking VGG-19 with norm layer
+    :rtype: torch.nn.Module
 
-        A multi-step spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    A multi-step spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg19', 'D', True, pretrained, progress, norm_layer, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg19', 'D', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
 
