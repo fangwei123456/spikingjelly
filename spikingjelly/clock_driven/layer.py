@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from . import base
+from . import base, functional
 from torch.nn.common_types import _size_2_t
 
 
@@ -1071,15 +1071,14 @@ class ConvBatchNorm2d(nn.Module):
         :return: the weight of this fused module
         :rtype: torch.Tensor
         """
-        return (self.conv.weight.transpose(0, 3) * self.bn.weight / (
-                    self.bn.running_var + self.bn.eps).sqrt()).transpose(0, 3)
+        return functional.fused_conv2d_weight_of_convbn2d(self.conv, self.bn)
 
     def get_fused_bias(self):
         """
         :return: the bias of this fused module
         :rtype: torch.Tensor
         """
-        return self.bn.bias - self.bn.running_mean * self.bn.weight / (self.bn.running_var + self.bn.eps).sqrt()
+        return functional.fused_conv2d_bias_of_convbn2d(self.conv, self.bn)
 
     @torch.no_grad()
     def scale_fused_weight(self, k=None, b=None):
@@ -1091,10 +1090,7 @@ class ConvBatchNorm2d(nn.Module):
 
         Set the `weight` of this fused module to `weight * k + b`
         """
-        if k is not None:
-            self.conv.weight.data *= k
-        if b is not None:
-            self.conv.weight.data += b
+        functional.scale_fused_conv2d_weight_of_convbn2d(self.conv, self.bn, k, b)
 
     @torch.no_grad()
     def scale_fused_bias(self, k=None, b=None):
@@ -1106,21 +1102,10 @@ class ConvBatchNorm2d(nn.Module):
 
         Set the `bias` of this fused module to `bias * k + b`
         """
-        if k is not None:
-            self.bn.bias.data *= k
-            self.bn.running_mean *= k
-        if b is not None:
-            self.bn.bias.data += b
+        functional.scale_fused_conv2d_bias_of_convbn2d(self.conv, self.bn, k, b)
 
     def get_fused_conv(self):
-        conv = nn.Conv2d(in_channels=self.conv.in_channels, out_channels=self.conv.out_channels,
-                         kernel_size=self.conv.kernel_size,
-                         stride=self.conv.stride, padding=self.conv.padding, dilation=self.conv.dilation,
-                         groups=self.conv.groups, bias=True,
-                         padding_mode=self.conv.padding_mode)
-        conv.weight.data = self.get_fused_weight()
-        conv.bias.data = self.get_fused_bias()
-        return conv
+        return functional.fuse_convbn2d(self.conv, self.bn)
 
 
 

@@ -568,4 +568,122 @@ def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list 
     y_shape.extend(y.shape[1:])
     return y.view(y_shape)
 
+def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
+    """
+    :param conv2d: a Conv2d layer
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: a BatchNorm2d layer
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: torch.Tensor
 
+    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    This function returns the weight of this fused module.
+
+    .. admonition:: Note
+        :class: note
+
+        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+
+    """
+    assert conv2d.bias is None
+    return (conv2d.weight.transpose(0, 3) * bn2d.weight / (
+                    bn2d.running_var + bn2d.eps).sqrt()).transpose(0, 3)
+
+
+def fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
+    """
+    :param conv2d: a Conv2d layer
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: a BatchNorm2d layer
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the bias of this fused module
+    :rtype: torch.Tensor
+
+    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    This function returns the bias of this fused module.
+
+    .. admonition:: Note
+        :class: note
+
+        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+
+    """
+    assert conv2d.bias is None
+    return bn2d.bias - bn2d.running_mean * bn2d.weight / (bn2d.running_var + bn2d.eps).sqrt()
+
+
+@torch.no_grad()
+def scale_fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
+    """
+    :param conv2d: a Conv2d layer
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: a BatchNorm2d layer
+    :type bn2d: torch.nn.BatchNorm2d
+
+    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    This function sets the weight of this fused module to `weight * k + b`.
+
+    .. admonition:: Note
+        :class: note
+
+        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+
+    """
+    assert conv2d.bias is None
+    if k is not None:
+        conv2d.weight.data *= k
+    if b is not None:
+        conv2d.weight.data += b
+        
+
+@torch.no_grad()
+def scale_fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
+    """
+    :param conv2d: a Conv2d layer
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: a BatchNorm2d layer
+    :type bn2d: torch.nn.BatchNorm2d
+
+    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    This function sets the bias of this fused module to `bias * k + b`.
+
+    .. admonition:: Note
+        :class: note
+
+        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+
+    """
+    assert conv2d.bias is None
+    if k is not None:
+        bn2d.bias.data *= k
+        bn2d.running_mean *= k
+    if b is not None:
+        bn2d.bias.data += b
+
+@torch.no_grad()
+def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
+    """
+    :param conv2d: a Conv2d layer
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: a BatchNorm2d layer
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the fused Conv2d layer
+    :rtype: torch.nn.Conv2d
+
+    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    This function returns the fused module.
+
+    .. admonition:: Note
+        :class: note
+
+        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+    """
+    fused_conv = nn.Conv2d(in_channels=conv2d.in_channels, out_channels=conv2d.out_channels,
+                     kernel_size=conv2d.kernel_size,
+                     stride=conv2d.stride, padding=conv2d.padding, dilation=conv2d.dilation,
+                     groups=conv2d.groups, bias=True,
+                     padding_mode=conv2d.padding_mode)
+    fused_conv.weight.data = fused_conv2d_weight_of_convbn2d(conv2d, bn2d)
+    fused_conv.bias.data = fused_conv2d_bias_of_convbn2d(conv2d, bn2d)
+    return fused_conv
