@@ -687,3 +687,54 @@ def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
     fused_conv.weight.data = fused_conv2d_weight_of_convbn2d(conv2d, bn2d)
     fused_conv.bias.data = fused_conv2d_bias_of_convbn2d(conv2d, bn2d)
     return fused_conv
+
+def temporal_efficient_training_cross_entropy(x_seq: torch.Tensor, target: torch.LongTensor):
+    """
+    :param x_seq: ``shape=[T, N, C, *]``, where ``C`` is the number of classes
+    :type x_seq: torch.Tensor
+    :param target: ``shape=[N]``, where ``0 <= target[i] <= C-1``
+    :type target: torch.LongTensor
+    :return: the temporal efficient training cross entropy
+    :rtype: torch.Tensor
+
+    The temporal efficient training (TET) cross entropy, which is the mean of cross entropy of each time-step.
+
+    Codes example:
+
+    .. code-block:: python
+
+        def tet_ct_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
+        loss = 0.
+        for t in range(x_seq.shape[0]):
+            loss += F.cross_entropy(x_seq[t], target)
+        return loss / x_seq.shape[0]
+
+        T = 8
+        N = 4
+        C = 10
+        x_seq = torch.rand([T, N, C])
+        target = torch.randint(low=0, high=C-1, size=[N])
+        print(tet_ct_for_loop_version(x_seq, target))
+        print(temporal_efficient_training_cross_entropy(x_seq, target))
+
+
+    .. admonition:: Tip
+        :class: tip
+
+        The TET cross entropy is proposed by `Temporal Efficient Training of Spiking Neural Network via Gradient Re-weighting <https://openreview.net/forum?id=_XNtisL32jv>`_.
+    """
+    x_seq = x_seq.transpose(0, 1).transpose(1, 2)  # [N, C, T, *]
+    N, C, T = x_seq.shape[0], x_seq.shape[1], x_seq.shape[2]
+    if x_seq.dim() == 3:
+        # x_seq.shape = [N, C, T]
+        # target.shape = [N]
+        target = target.unsqueeze(1).repeat(1, T)  # [N, T]
+    else:
+        # x_seq.shape = [N, C, T, d1, d2, ..., dk]
+        # target.shape = [N, d1, d2, ..., dk]
+        rep_shape = [1, T]
+        rep_shape.extend([1] * (x_seq.dim() - 3))
+        target = target.unsqueeze(1).repeat(rep_shape)
+
+    loss = F.cross_entropy(x_seq, target)
+    return loss
