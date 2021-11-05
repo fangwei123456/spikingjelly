@@ -704,10 +704,10 @@ def temporal_efficient_training_cross_entropy(x_seq: torch.Tensor, target: torch
     .. code-block:: python
 
         def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
-        loss = 0.
-        for t in range(x_seq.shape[0]):
-            loss += F.cross_entropy(x_seq[t], target)
-        return loss / x_seq.shape[0]
+            loss = 0.
+            for t in range(x_seq.shape[0]):
+                loss += F.cross_entropy(x_seq[t], target)
+            return loss / x_seq.shape[0]
 
         T = 8
         N = 4
