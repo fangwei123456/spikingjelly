@@ -7,6 +7,7 @@ from torch.cuda import amp
 import os
 import datetime
 from .. import functional
+from typing import Callable
 
 def use_dist():
     # whether use distributed training
@@ -23,8 +24,9 @@ def on_master():
         return True
 
 
-def cal_correct(output, target, topk=(1,)):
-    # modified by def accuracy() in https://github.com/pytorch/vision/blob/main/references/classification/utils.py
+def default_cal_acc1_acc5(output, target):
+    # modified by ``def accuracy()`` in https://github.com/pytorch/vision/blob/main/references/classification/utils.py
+    topk = (1, 5)
     with torch.no_grad():
         maxk = max(topk)
 
@@ -38,7 +40,7 @@ def cal_correct(output, target, topk=(1,)):
             res.append(correct_k)
         return res
 
-def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler=None):
+def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler=None, cal_acc1_acc5: Callable=default_cal_acc1_acc5):
     model.train()
     train_acc1 = 0.
     train_acc5 = 0.
@@ -64,7 +66,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
             optimizer.step()
         functional.reset_net(model)
 
-        correct1, correct5 = cal_correct(output, target, topk=(1, 5))
+        correct1, correct5 = cal_acc1_acc5(output, target)
         train_acc1 += correct1
         train_acc5 += correct5
         train_loss += loss.item() * image.shape[0]
@@ -98,7 +100,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
     return train_acc1, train_acc5, train_loss
 
 @torch.no_grad()
-def evaluate(model, criterion, data_loader, device):
+def evaluate(model, criterion, data_loader, device, cal_acc1_acc5: Callable=default_cal_acc1_acc5):
     model.eval()
     test_acc1 = 0.
     test_acc5 = 0.
@@ -114,7 +116,7 @@ def evaluate(model, criterion, data_loader, device):
 
         functional.reset_net(model)
 
-        correct1, correct5 = cal_correct(output, target, topk=(1, 5))
+        correct1, correct5 = cal_acc1_acc5(output, target, topk=(1, 5))
         test_acc1 += correct1
         test_acc5 += correct5
         test_loss += loss.item() * image.shape[0]
@@ -147,7 +149,7 @@ def evaluate(model, criterion, data_loader, device):
     print(f'Test: test_acc1={test_acc1:.3f}, test_acc5={test_acc5:.3f}, test_loss={test_loss:.6f}, samples/s={samples_number / (time.time() - start_time):.3f}')
     return test_acc1, test_acc5, test_loss
 
-def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt :str=None):
+def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, train_data_loader, test_data_loader, max_epoch, use_amp=False, tb_log_dir: str=None, pt_dir: str=None, resume_pt: str=None, cal_acc1_acc5: Callable=default_cal_acc1_acc5):
 
     start_epoch = 0
     if resume_pt is not None and resume_pt != '':
@@ -183,7 +185,7 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
     for epoch in range(start_epoch, max_epoch):
         start_time = time.time()
         print(f'epoch={epoch}, args={args}')
-        acc1, acc5, loss = train_one_epoch(model, criterion, optimizer, train_data_loader, device, amp_scaler)
+        acc1, acc5, loss = train_one_epoch(model, criterion, optimizer, train_data_loader, device, amp_scaler, cal_acc1_acc5)
         if tb_writer is not None:
             tb_writer.add_scalar('train_loss', loss, epoch)
             tb_writer.add_scalar('train_acc1', acc1, epoch)
@@ -192,7 +194,7 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
         if lr_scheduler is not None:
             lr_scheduler.step()
 
-        acc1, acc5, loss = evaluate(model, criterion, test_data_loader, device)
+        acc1, acc5, loss = evaluate(model, criterion, test_data_loader, device, cal_acc1_acc5)
 
         if tb_writer is not None:
             tb_writer.add_scalar('test_loss', loss, epoch)
