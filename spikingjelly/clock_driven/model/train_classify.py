@@ -116,7 +116,7 @@ def evaluate(model, criterion, data_loader, device, cal_acc1_acc5: Callable=defa
 
         functional.reset_net(model)
 
-        correct1, correct5 = cal_acc1_acc5(output, target, topk=(1, 5))
+        correct1, correct5 = cal_acc1_acc5(output, target)
         test_acc1 += correct1
         test_acc5 += correct5
         test_loss += loss.item() * image.shape[0]
