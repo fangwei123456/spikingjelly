@@ -1109,3 +1109,57 @@ class ConvBatchNorm2d(nn.Module):
 
 
 
+class SelfConnectedContainer(base.MemoryModule):
+    def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True) -> None:
+        '''
+        :param sub_module: the contained module
+        :type sub_module: torch.nn.Module
+        :param in_features: size of each input sample
+        :type in_features: int
+        :param out_features: size of each output sample
+        :type out_features: int
+        :param bias: If set to ``False``, the layer will not learn an additive bias
+        :type bias: bool
+
+        A container that use a recurrent connection. The inputs of ``sub_module`` at time-step ``t`` is ``[x[t], y[t-1]``,
+        where ``y[t]`` is the outputs of ``sub_module`` at time-step ``t``. We set ``y[-1]`` as a zero tensor.
+
+        ``x[t]`` should have the shape ``[N, *, in_features]``, and ``y[t]`` has the shape ``[N, *, out_features]``.
+
+        .. code-block:: python
+
+            in_features = 4
+            out_features = 2
+            T = 8
+            N = 2
+            net = SelfConnectedContainer(neuron.LIFNode(), in_features, out_features)
+            print(net)
+            x = torch.rand([T, N, in_features])
+            for t in range(T):
+                print(t, net(x[t]))
+
+            functional.reset_net(net)
+
+        .. admonition:: Tip
+            :class: tip
+
+            The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, out_features, bias)``.
+
+        '''
+        super(SelfConnectedContainer, self).__init__()
+        self.rc = nn.Linear(in_features + out_features, out_features, bias)
+        self.sub_module = sub_module
+        self.register_memory('y', None)
+
+    def forward(self, x: torch.Tensor):
+        if self.y is None:
+            if x.ndim == 2:
+                self.y = torch.zeros([x.shape[0], self.rc.out_features]).to(x)
+            else:
+                out_shape = [x.shape[0]]
+                out_shape.extend(x.shape[1:-1])
+                out_shape.append(self.rc.out_features)
+                self.y = torch.zeros(out_shape).to(x)
+        x = torch.cat((x, self.y), dim=-1)
+        self.y = self.sub_module(self.rc(x))
+        return self.y
