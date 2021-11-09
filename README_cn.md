@@ -185,6 +185,8 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 | ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/13_neuromorphic_datasets.html) |
 | ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/test_acc.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/14_classify_dvsg.html) |
 
+其他没有列出在此处的教程可以在文档https://spikingjelly.readthedocs.io中获取。
+
 ## 出版物与引用
 
 [出版物列表](./publications.md)中保存了已知的使用惊蜇(SpikingJelly)的出版物。如果你的文章也使用了惊蜇(SpikingJelly)，可以通过提交pull request的方式来更新出版物列表。

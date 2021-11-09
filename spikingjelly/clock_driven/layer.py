@@ -4,7 +4,7 @@ import torch.nn.functional as F
 import math
 from . import base, functional
 from torch.nn.common_types import _size_2_t
-
+from typing import Callable
 
 class NeuNorm(base.MemoryModule):
     def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False):
@@ -1107,11 +1107,55 @@ class ConvBatchNorm2d(nn.Module):
     def get_fused_conv(self):
         return functional.fuse_convbn2d(self.conv, self.bn)
 
+class ElementWiseRecurrentContainer(base.MemoryModule):
+    def __init__(self, sub_module: nn.Module, element_wise_function: Callable):
+        """
+        :param sub_module: the contained module
+        :type sub_module: torch.nn.Module
+        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(x, y)``
+        :type element_wise_function: Callable
 
+        A container that use a element-wise recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
+        and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
+        :math:`x[t]`, then
 
-class SelfConnectedContainer(base.MemoryModule):
+        .. math::
+
+            i[t] = f(x[t], y[t-1])
+
+        where :math:`f` is the user-defined element-wise function. We set :math:`y[-1] = 0`.
+
+        Codes example:
+
+        .. code-block:: python
+
+            T = 8
+            net = ElementWiseRecurrentContainer(neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y)
+            print(net)
+            x = torch.zeros([T])
+            x[0] = 1.5
+            for t in range(T):
+                print(t, f'x[t]={x[t]}, s[t]={net(x[t])}')
+
+            functional.reset_net(net)
+        """
+        super().__init__()
+        self.sub_module = sub_module
+        self.element_wise_function = element_wise_function
+        self.register_memory('y', None)
+
+    def forward(self, x: torch.Tensor):
+        if self.y is None:
+            self.y = torch.zeros_like(x.data)
+        self.y = self.sub_module(self.element_wise_function(self.y, x))
+        return self.y
+
+    def extra_repr(self) -> str:
+        return f'element-wise function={self.element_wise_function}'
+
+class LinearRecurrentContainer(base.MemoryModule):
     def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True) -> None:
-        '''
+        """
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
         :param in_features: size of each input sample
@@ -1121,10 +1165,27 @@ class SelfConnectedContainer(base.MemoryModule):
         :param bias: If set to ``False``, the layer will not learn an additive bias
         :type bias: bool
 
-        A container that use a recurrent connection. The inputs of ``sub_module`` at time-step ``t`` is ``[x[t], y[t-1]``,
-        where ``y[t]`` is the outputs of ``sub_module`` at time-step ``t``. We set ``y[-1]`` as a zero tensor.
+        A container that use a linear recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
+        and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
+        :math:`x[t]`, then
 
-        ``x[t]`` should have the shape ``[N, *, in_features]``, and ``y[t]`` has the shape ``[N, *, out_features]``.
+        .. math::
+
+            i[t] = \\begin{pmatrix} x[t] \\\\ y[t-1]\\end{pmatrix} W^{T} + b
+
+        where :math:`W, b` are the weight and bias of the linear connection. We set :math:`y[-1] = 0`.
+
+        :math:`x[t]` should have the shape ``[N, *, in_features]``, and :math:`y[t]` has the shape ``[N, *, out_features]``.
+
+        .. admonition:: Tip
+            :class: tip
+
+            The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, out_features, bias)``.
+
+        .. admonition:: Note
+            :class: note
+
+            The shape inputs and outputs of ``sub_module`` muust be the same.
 
         .. code-block:: python
 
@@ -1132,7 +1193,7 @@ class SelfConnectedContainer(base.MemoryModule):
             out_features = 2
             T = 8
             N = 2
-            net = SelfConnectedContainer(neuron.LIFNode(), in_features, out_features)
+            net = LinearRecurrentContainer(neuron.LIFNode(), in_features, out_features)
             print(net)
             x = torch.rand([T, N, in_features])
             for t in range(T):
@@ -1140,13 +1201,8 @@ class SelfConnectedContainer(base.MemoryModule):
 
             functional.reset_net(net)
 
-        .. admonition:: Tip
-            :class: tip
-
-            The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, out_features, bias)``.
-
-        '''
-        super(SelfConnectedContainer, self).__init__()
+        """
+        super().__init__()
         self.rc = nn.Linear(in_features + out_features, out_features, bias)
         self.sub_module = sub_module
         self.register_memory('y', None)

@@ -59,6 +59,7 @@
     /clock_driven/12_monitor
     /clock_driven/13_neuromorphic_datasets
     /clock_driven/14_classify_dvsg
+    /clock_driven/15_recurrent_connection_and_stateful_synapse
 
 
 模块文档
@@ -165,6 +166,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /clock_driven_en/11_cext_neuron_with_lbl
     /clock_driven_en/13_neuromorphic_datasets
     /clock_driven_en/14_classify_dvsg
+    /clock_driven_en/15_recurrent_connection_and_stateful_synapse
 
 
 
