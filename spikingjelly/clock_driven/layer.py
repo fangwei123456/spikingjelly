@@ -1125,6 +1125,11 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
         where :math:`f` is the user-defined element-wise function. We set :math:`y[-1] = 0`.
 
+        .. admonition:: Note
+            :class: note
+
+            The shape inputs and outputs of ``sub_module`` muust be the same.
+
         Codes example:
 
         .. code-block:: python
@@ -1181,11 +1186,6 @@ class LinearRecurrentContainer(base.MemoryModule):
             :class: tip
 
             The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, out_features, bias)``.
-
-        .. admonition:: Note
-            :class: note
-
-            The shape inputs and outputs of ``sub_module`` muust be the same.
 
         .. code-block:: python
 
