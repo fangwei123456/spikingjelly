@@ -10,5 +10,7 @@
 | [StereoSpike: Depth Learning with a Spiking Neural Network](https://arxiv.org/abs/2109.13751) | https://github.com/urancon/StereoSpike                       |
 | [An Odor Recognition Algorithm of Electronic Noses Based on Convolutional Spiking Neural Network for Spoiled Food Identification](https://iopscience.iop.org/article/10.1149/1945-7111/ac1699/meta) |                                                              |
 | [Cascade Spiking Neuron Network For Event-based Image Classification In Noisy Environment](https://www.techrxiv.org/articles/preprint/Cascade_Spiking_Neuron_Network_For_Event-based_Image_Classification_In_Noisy_Environment/16571043) |                                                              |
+| [Keys to Accurate Feature Extraction Using Residual Spiking Neural Networks](https://arxiv.org/abs/2111.05955) | https://github.com/VicenteAlex/Spiking_ResNet                |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
+
