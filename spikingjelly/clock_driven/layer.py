@@ -1185,7 +1185,7 @@ class LinearRecurrentContainer(base.MemoryModule):
         .. admonition:: Tip
             :class: tip
 
-            The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, out_features, bias)``.
+            The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, in_features, bias)``.
 
         .. code-block:: python
 
@@ -1193,7 +1193,12 @@ class LinearRecurrentContainer(base.MemoryModule):
             out_features = 2
             T = 8
             N = 2
-            net = LinearRecurrentContainer(neuron.LIFNode(), in_features, out_features)
+            net = LinearRecurrentContainer(
+                nn.Sequential(
+                    nn.Linear(in_features, out_features),
+                    neuron.LIFNode(),
+                ),
+                in_features, out_features)
             print(net)
             x = torch.rand([T, N, in_features])
             for t in range(T):
@@ -1203,18 +1208,19 @@ class LinearRecurrentContainer(base.MemoryModule):
 
         """
         super().__init__()
-        self.rc = nn.Linear(in_features + out_features, out_features, bias)
+        self.sub_module_out_features = out_features
+        self.rc = nn.Linear(in_features + out_features, in_features, bias)
         self.sub_module = sub_module
         self.register_memory('y', None)
 
     def forward(self, x: torch.Tensor):
         if self.y is None:
             if x.ndim == 2:
-                self.y = torch.zeros([x.shape[0], self.rc.out_features]).to(x)
+                self.y = torch.zeros([x.shape[0], self.sub_module_out_features]).to(x)
             else:
                 out_shape = [x.shape[0]]
                 out_shape.extend(x.shape[1:-1])
-                out_shape.append(self.rc.out_features)
+                out_shape.append(self.sub_module_out_features)
                 self.y = torch.zeros(out_shape).to(x)
         x = torch.cat((x, self.y), dim=-1)
         self.y = self.sub_module(self.rc(x))
