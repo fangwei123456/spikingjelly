@@ -544,7 +544,8 @@ def multi_step_forward(x_seq: torch.Tensor, multi_step_module: nn.Module or list
             y_seq.append(multi_step_module(x_seq[t]))
 
     for t in range(y_seq.__len__()):
-        y_seq[t].unsqueeze_(0)
+        # y_seq[t].unsqueeze_(0)
+        y_seq[t] = y_seq[t].unsqueeze(0)
     return torch.cat(y_seq, 0)
 
 def seq_to_ann_forward(x_seq: torch.Tensor, stateless_module: nn.Module or list or tuple):
