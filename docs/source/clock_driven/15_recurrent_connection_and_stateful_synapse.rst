@@ -64,7 +64,7 @@
     6 x[t]=0.0, s[t]=1.0
     7 x[t]=0.0, s[t]=1.0
 
-可以发现，由于存在自连接，即便 :math:`t \geu 1` 时 :math:`x[t]=0`，由于输出的脉冲能传回到输入，神经元也能持续释放脉冲。
+可以发现，由于存在自连接，即便 :math:`t \ge 1` 时 :math:`x[t]=0`，由于输出的脉冲能传回到输入，神经元也能持续释放脉冲。
 
 可以使用 :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` 实现更复杂的全连接形式的自连接。
 
