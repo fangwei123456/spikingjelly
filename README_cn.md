@@ -186,7 +186,7 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 | ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/14_classify_dvsg.html) |
 | ![t15](./docs/source/_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/15_recurrent_connection_and_stateful_synapse.html) |
 
-其他没有列出在此处的教程可以在文档https://spikingjelly.readthedocs.io中获取。
+其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 
 ## 出版物与引用
 
