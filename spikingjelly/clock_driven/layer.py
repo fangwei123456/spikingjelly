@@ -1129,7 +1129,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         .. admonition:: Note
             :class: note
 
-            The shape inputs and outputs of ``sub_module`` muust be the same.
+            The shape inputs and outputs of ``sub_module`` must be the same.
 
         Codes example:
 
