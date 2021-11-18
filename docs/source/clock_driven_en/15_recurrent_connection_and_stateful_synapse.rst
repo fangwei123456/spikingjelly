@@ -66,7 +66,7 @@ The outputs are:
     6 x[t]=0.0, s[t]=1.0
     7 x[t]=0.0, s[t]=1.0
 
-We can find that due to the recurrent connection, even if :math:`x[t]=0` when :math:`t \\geu 1`, the neuron can still fire
+We can find that due to the recurrent connection, even if :math:`x[t]=0` when :math:`t \geu 1`, the neuron can still fire
 because its output spike is fed back as input.
 
 We can use :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` to implement a more complex recurrent connections.
