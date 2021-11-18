@@ -252,7 +252,7 @@ We can also resume from a check point:
 
 Star Training
 ----------------------
-The complete codes are available at :download:`classify_dvsg.py <../../../spikingjelly/clock_driven/examples/classify_dvsg.py>`.
+The complete codes are available at `spikingjelly.clock_driven.examples.classify_dvsg <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/classify_dvsg.py>`_.
 
 We train the net in a linux server with `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU. We
 use almost the same hyper-parameters with those in the paper [#PLIF]_ with little difference, which is we use ``T=16``
@@ -431,4 +431,4 @@ logs curves during training are:
     :width: 100%
 
 
-.. [#PLIF] Fang, Wei, et al. “Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks.” ArXiv: Neural and Evolutionary Computing, 2020.
+.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of the IEEE/CVF International Conference on Computer Vision. 2021.

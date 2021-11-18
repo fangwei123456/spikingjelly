@@ -250,7 +250,7 @@
 
 运行训练
 ----------------------
-完整的代码位于 :download:`classify_dvsg.py <../../../spikingjelly/clock_driven/examples/classify_dvsg.py>`。
+完整的代码位于 `spikingjelly.clock_driven.examples.classify_dvsg <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/classify_dvsg.py>`_。
 
 我们在`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU上运行网络。我们使用的超参数几乎与原文 [#PLIF]_
 一致，但略有区别：我们使用 ``T=16`` 而原文 [#PLIF]_ 使用 ``T=20``，因为 `GeForce RTX 2080 Ti` 的12G显存不够使用 ``T=20``；此外，我们还
@@ -427,4 +427,4 @@
     :width: 100%
 
 
-.. [#PLIF] Fang, Wei, et al. “Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks.” ArXiv: Neural and Evolutionary Computing, 2020.
+.. [#PLIF] Fang, Wei, et al. "Incorporating learnable membrane time constant to enhance learning of spiking neural networks." Proceedings of the IEEE/CVF International Conference on Computer Vision. 2021.
