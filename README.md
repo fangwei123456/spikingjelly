@@ -182,7 +182,8 @@ SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 | ![t6](./docs/source/_static/tutorials/clock_driven/6_dqn_cart_pole/512@66.gif) | [Reinforcement Learning: Deep Q Learning](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/6_dqn_cart_pole.html) |
 | ![t10](./docs/source/_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png) | [Propagation Pattern](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/10_propagation_pattern.html) |
 | ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/13_neuromorphic_datasets.html) |
-| ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/test_acc.png) | [Classify DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/14_classify_dvsg.html) |
+| ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/network.png) | [Classify DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/14_classify_dvsg.html) |
+| ![t15](./docs/source/_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [Recurrent Connections and Stateful Synapses](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/15_recurrent_connection_and_stateful_synapse.html) |
 
 Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
 

@@ -81,6 +81,185 @@
         SynapseFilter(tau=100, learnable=True)
     )
 
+Sequential FashionMNIST上的对比实验
+-------------------------------------
+接下来让我们在Sequential FashionMNIST上做一个简单的实验，验证自连接和有状态突触是否有助于改善网络的记忆能力。Sequential FashionMNIST指的是
+将原始的FashionMNIST图片一行一行或者一列一列，而不是整个图片，作为输入。在这种情况下，网络必须具有一定的记忆能力，才能做出正确的分类。我们将会把
+图片一列一列的输入，这样对网络而言，就像是从左到右“阅读”一样，如下图所示：
+
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.gif
+    :width: 50%
+
+下图中展示了被读入的列：
+
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.gif
+    :width: 50%
+
+首先导入相关的包：
+
+.. code:: python
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    import torchvision.datasets
+    from spikingjelly.clock_driven.model import train_classify
+    from spikingjelly.clock_driven import neuron, surrogate, layer
+    from spikingjelly.clock_driven.functional import seq_to_ann_forward
+    from torchvision import transforms
+    import os, argparse
+
+    try:
+        import cupy
+        backend = 'cupy'
+    except ImportError:
+        backend = 'torch'
+
+我们定义一个普通的前馈网络 ``Net``：
+
+.. code:: python
+
+    class Net(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc1 = nn.Linear(28, 32)
+            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.fc2 = nn.Linear(32, 10)
+            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+
+        def forward(self, x: torch.Tensor):
+            # x.shape = [N, C, H, W]
+            x.squeeze_(1)  # [N, H, W]
+            x = x.permute(2, 0, 1)  # [W, N, H]
+            x = seq_to_ann_forward(x, self.fc1)
+            x = self.sn1(x)
+            x = seq_to_ann_forward(x, self.fc2)
+            x = self.sn2(x)
+            return x.mean(0)
+
+我们在 ``Net`` 的第一层脉冲神经元后增加一个 :class:`spikingjelly.clock_driven.layer.SynapseFilter`，得到一个新的网络 ``StatefulSynapseNet``：
+
+.. code:: python
+
+    class StatefulSynapseNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc1 = nn.Linear(28, 32)
+            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.sy1 = layer.MultiStepContainer(layer.SynapseFilter(tau=2., learnable=True))
+            self.fc2 = nn.Linear(32, 10)
+            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+
+        def forward(self, x: torch.Tensor):
+            # x.shape = [N, C, H, W]
+            x.squeeze_(1)  # [N, H, W]
+            x = x.permute(2, 0, 1)  # [W, N, H]
+            x = self.fc1(x)
+            x = self.sn1(x)
+            x = self.sy1(x)
+            x = self.fc2(x)
+            x = self.sn2(x)
+            return x.mean(0)
+
+我们给 ``Net`` 的第一层脉冲神经元增加一个反馈连接 :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` 得到 ``FeedBackNet``：
+
+.. code:: python
+
+    class FeedBackNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc1 = nn.Linear(28, 32)
+            self.sn1 = layer.MultiStepContainer(
+                layer.LinearRecurrentContainer(
+                    neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
+                    32, 32
+                )
+            )
+            self.fc2 = nn.Linear(32, 10)
+            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+
+        def forward(self, x: torch.Tensor):
+            # x.shape = [N, C, H, W]
+            x.squeeze_(1)  # [N, H, W]
+            x = x.permute(2, 0, 1)  # [W, N, H]
+            x = seq_to_ann_forward(x, self.fc1)
+            x = self.sn1(x)
+            x = seq_to_ann_forward(x, self.fc2)
+            x = self.sn2(x)
+            return x.mean(0)
+
+下图展示了3种网络的结构：
+
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
+    :width: 100%
+
+完整的代码位于 `spikingjelly.clock_driven.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/rsnn_sequential_fmnist.py>`_。我们可以通过命令行直接运行。运行参数为：
+
+.. code:: shell
+
+    (pytorch-env) PS C:/Users/fw> python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --h
+    usage: rsnn_sequential_fmnist.py [-h] [--data-path DATA_PATH] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N]
+                                     [--lr LR] [--opt OPT] [--lrs LRS] [--step-size STEP_SIZE] [--step-gamma STEP_GAMMA]
+                                     [--cosa-tmax COSA_TMAX] [--momentum M] [--wd W] [--output-dir OUTPUT_DIR]
+                                     [--resume RESUME] [--start-epoch N] [--cache-dataset] [--amp] [--tb] [--model MODEL]
+
+    PyTorch Classification Training
+
+    optional arguments:
+      -h, --help            show this help message and exit
+      --data-path DATA_PATH
+                            dataset
+      --device DEVICE       device
+      -b BATCH_SIZE, --batch-size BATCH_SIZE
+      --epochs N            number of total epochs to run
+      -j N, --workers N     number of data loading workers (default: 16)
+      --lr LR               initial learning rate
+      --opt OPT             optimizer (sgd or adam)
+      --lrs LRS             lr schedule (cosa(CosineAnnealingLR), step(StepLR)) or None
+      --step-size STEP_SIZE
+                            step_size for StepLR
+      --step-gamma STEP_GAMMA
+                            gamma for StepLR
+      --cosa-tmax COSA_TMAX
+                            T_max for CosineAnnealingLR. If none, it will be set to epochs
+      --momentum M          Momentum for SGD
+      --wd W, --weight-decay W
+                            weight decay (default: 0)
+      --output-dir OUTPUT_DIR
+                            path where to save
+      --resume RESUME       resume from checkpoint
+      --start-epoch N       start epoch
+      --cache-dataset       Cache the datasets for quicker initialization. It also serializes the transforms
+      --amp                 Use AMP training
+      --tb                  Use TensorBoard to record logs
+      --model MODEL         "plain", "feedback", or "stateful-synapse"
+
+分别训练3个模型：
+
+.. code:: shell
+
+    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:0 --amp --model plain
+
+    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:1 --amp --model feedback
+
+    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:2 --amp --model stateful-synapse
+
+训练集损失为：
+
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/train_loss.*
+    :width: 100%
+
+训练集正确率为：
+
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/train_acc.*
+    :width: 100%
+
+测试集正确率为：
+
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/test_acc.*
+    :width: 100%
+
+可以发现，``feedback`` 和 ``stateful-synapse`` 的性能都高于 ``plain``，表明自连接和有状态突触都有助于提升网络的记忆能力。
 
 .. [#Effective] Yin B, Corradi F, Bohté S M. Effective and efficient computation with multiple-timescale spiking recurrent neural networks[C]//International Conference on Neuromorphic Systems 2020. 2020: 1-8.
 

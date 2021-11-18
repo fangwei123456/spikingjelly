@@ -183,7 +183,8 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 | ![t6](./docs/source/_static/tutorials/clock_driven/6_dqn_cart_pole/512@66.gif) | [强化学习DQN](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/6_dqn_cart_pole.html) |
 | ![t10](./docs/source/_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png) | [传播模式](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/10_propagation_pattern.html) |
 | ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/13_neuromorphic_datasets.html) |
-| ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/test_acc.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/14_classify_dvsg.html) |
+| ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/14_classify_dvsg.html) |
+| ![t15](./docs/source/_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/15_recurrent_connection_and_stateful_synapse.html) |
 
 其他没有列出在此处的教程可以在文档https://spikingjelly.readthedocs.io中获取。
 
