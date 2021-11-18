@@ -91,12 +91,12 @@ promote the network's temporal information fitting ability. Sequential FashionMN
 only when it can learn long-term dependencies. We will feed the image column-by-column, which is same with reading texts
 from left to right. Here is the example:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.gif
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 The following gif shows the column being read:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.gif
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 First, let us import packages:

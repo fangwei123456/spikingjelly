@@ -87,12 +87,12 @@ Sequential FashionMNIST上的对比实验
 将原始的FashionMNIST图片一行一行或者一列一列，而不是整个图片，作为输入。在这种情况下，网络必须具有一定的记忆能力，才能做出正确的分类。我们将会把
 图片一列一列的输入，这样对网络而言，就像是从左到右“阅读”一样，如下图所示：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.gif
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 下图中展示了被读入的列：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.gif
+.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 首先导入相关的包：
