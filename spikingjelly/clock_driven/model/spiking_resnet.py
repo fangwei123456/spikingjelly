@@ -381,7 +381,7 @@ class MultiStepSpikingResNet(nn.Module):
 
         x_seq = torch.flatten(x_seq, 2)
         # x_seq = self.fc(x_seq.mean(0))
-        x_seq = functional.seq_to_ann_forward(self.fc, x_seq)
+        x_seq = functional.seq_to_ann_forward(x_seq, self.fc)
         return x_seq
 
     def forward(self, x):
