@@ -9,7 +9,7 @@ import torch.utils.data
 from torchvision import transforms
 import time
 import torchvision
-
+# reference: https://github.com/pytorch/vision/blob/main/references/classification/train.py
 def parse_args():
     parser = argparse.ArgumentParser(description='PyTorch Classification Training')
 
@@ -130,7 +130,7 @@ def load_data(traindir, valdir, cache_dataset, distributed):
 
     return train_set, val_set, train_sampler, val_sampler
 
-def main(model: nn.Module, args):
+def main(model: nn.Module, criterion, args):
     model = train_classify.distributed_training_init(args, model)
 
     dir_prefix = f'b{args.batch_size}_e{args.epochs}_{args.opt}_lr{args.lr}_wd{args.weight_decay}'
@@ -167,7 +167,6 @@ def main(model: nn.Module, args):
 
     pt_dir = os.path.join(args.output_dir, dir_prefix + '_pt')
 
-    criterion = nn.CrossEntropyLoss()
     if args.opt == 'sgd':
         optimizer = torch.optim.SGD(params=model.parameters(), lr=args.lr, momentum=args.momentum, weight_decay=args.weight_decay)
     elif args.opt == 'adam':
