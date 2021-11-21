@@ -119,7 +119,8 @@ class MultiStepSpikingVGG(SpikingVGG):
         x_seq = functional.seq_to_ann_forward(x_seq, self.avgpool)
         x_seq = torch.flatten(x_seq, 2)
         x_seq = sequential_forward(self.classifier[:-1], x_seq)
-        x_seq = self.classifier[-1](x_seq.mean(0))
+        # x_seq = self.classifier[-1](x_seq.mean(0))
+        x_seq = functional.seq_to_ann_forward(self.classifier[-1], x_seq)
 
         return x_seq
 
