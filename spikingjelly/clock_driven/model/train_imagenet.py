@@ -130,7 +130,7 @@ def load_data(traindir, valdir, cache_dataset, distributed):
 
     return train_set, val_set, train_sampler, val_sampler
 
-def main(model: nn.Module, criterion, args):
+def main(model: nn.Module, criterion, args, cal_acc1_acc5):
     model = train_classify.distributed_training_init(args, model)
 
     dir_prefix = f'b{args.batch_size}_e{args.epochs}_{args.opt}_lr{args.lr}_wd{args.weight_decay}'
@@ -195,7 +195,7 @@ def main(model: nn.Module, criterion, args):
         sampler=val_sampler, num_workers=args.workers, pin_memory=True)
 
 
-    train_classify.train_eval_loop(args=args, device=args.device, model=model, criterion=criterion, optimizer=optimizer, lr_scheduler=lr_scheduler, train_data_loader=train_data_loader, test_data_loader=test_data_loader, max_epoch=args.epochs, use_amp=args.amp, tb_log_dir=tb_dir, pt_dir=pt_dir, resume_pt=args.resume)
+    train_classify.train_eval_loop(args=args, device=args.device, model=model, criterion=criterion, optimizer=optimizer, lr_scheduler=lr_scheduler, train_data_loader=train_data_loader, test_data_loader=test_data_loader, max_epoch=args.epochs, use_amp=args.amp, tb_log_dir=tb_dir, pt_dir=pt_dir, resume_pt=args.resume, cal_acc1_acc5=cal_acc1_acc5)
 
 
 '''
