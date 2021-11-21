@@ -183,8 +183,6 @@ def main(model: nn.Module, criterion, args):
     else:
         raise NotImplementedError
 
-    criterion = nn.CrossEntropyLoss()
-
     train_dir = os.path.join(args.data_path, 'train')
     val_dir = os.path.join(args.data_path, 'val')
 
