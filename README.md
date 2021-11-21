@@ -26,7 +26,7 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
 
-**Install the last stable version (0.0.0.0.6) from** [**PyPI**](https://pypi.org/project/spikingjelly/):
+**Install the last stable version (0.0.0.0.8) from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
 ```bash
 pip install spikingjelly

@@ -26,7 +26,7 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 
 奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
 
-**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本(0.0.0.0.6)**：
+**从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本(0.0.0.0.8)**：
 
 ```bash
 pip install spikingjelly
