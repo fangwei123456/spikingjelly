@@ -60,6 +60,7 @@
     /clock_driven/13_neuromorphic_datasets
     /clock_driven/14_classify_dvsg
     /clock_driven/15_recurrent_connection_and_stateful_synapse
+    /clock_driven/16_train_large_scale_snn
 
 
 模块文档
@@ -167,6 +168,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /clock_driven_en/13_neuromorphic_datasets
     /clock_driven_en/14_classify_dvsg
     /clock_driven_en/15_recurrent_connection_and_stateful_synapse
+    /clock_driven_en/16_train_large_scale_snn
 
 
 
