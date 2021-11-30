@@ -93,9 +93,10 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
         :rtype: list
         '''
+        print('The ICCV2019_DVS_dataset.zip is packed by dropbox. We find that the MD5 of this zip file can change. So, MD5 check will not be used for this ASL-DVS dataset.')
         url = 'https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CAa?dl=0'
         return [
-            ('ICCV2019_DVS_dataset.zip', url, '8b46191acf6c1760ad3f2d2cb4380e24')
+            ('ICCV2019_DVS_dataset.zip', url, None)
         ]
 
     @staticmethod
