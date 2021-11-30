@@ -739,3 +739,30 @@ def temporal_efficient_training_cross_entropy(x_seq: torch.Tensor, target: torch
 
     loss = F.cross_entropy(x_seq, target)
     return loss
+
+def kaiming_normal_conv_linear_weight(net: nn.Module):
+    '''
+    * :ref:`API in English <kaiming_normal_conv_linear_weight-en>`
+
+    .. _reset_net-cn:
+
+    :param net: 任何属于 ``nn.Module`` 子类的网络
+
+    :return: None
+
+    使用kaiming normal初始化 `net` 中的所有 :class:`torch.nn._ConvNd` 和 `:class:`torch.nn.Linear` 的权重（不包括偏置项）。参见 :class:`torch.nn.init.kaiming_normal_`。
+
+    * :ref:`中文API <kaiming_normal_conv_linear_weight-cn>`
+
+    .. _reset_net-en:
+
+    :param net: Any network inherits from ``nn.Module``
+
+    :return: None
+
+    initialize all weights (not including bias) of :class:`torch.nn._ConvNd` and `:class:`torch.nn.Linear` in `net` by the kaiming normal. See :class:`torch.nn.init.kaiming_normal_`
+    for more details.
+    '''
+    for m in net.modules():
+        if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
+            nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
