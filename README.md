@@ -203,6 +203,8 @@ If you use SpikingJelly in your work, please cite it as follows:
 }
 ```
 
+Note: To specify the version of framework you are using, the default value `YYYY-MM-DD` in the `note` field should be replaced with the date of the last change of the framework you are using, i.e. the date of the latest commit.
+
 ## Contribution
 
 You can read the issues and get the problems to be solved and latest development plans. We welcome all users to join the discussion of development plans, solve issues, and send pull requests.
