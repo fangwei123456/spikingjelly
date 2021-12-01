@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import math
 from . import neuron
 
 def reset_net(net: nn.Module):
