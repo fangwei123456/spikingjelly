@@ -16,24 +16,24 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 .. code-block:: python
 
-class MultiStepContainer(nn.Sequential):
-    def __init__(self, *args):
-        super().__init__(*args)
+    class MultiStepContainer(nn.Sequential):
+        def __init__(self, *args):
+            super().__init__(*args)
 
-    def forward(self, x_seq: torch.Tensor):
-        """
-        :param x_seq: shape=[T, batch_size, ...]
-        :type x_seq: torch.Tensor
-        :return: y_seq, shape=[T, batch_size, ...]
-        :rtype: torch.Tensor
-        """
-        y_seq = []
-        for t in range(x_seq.shape[0]):
-            y_seq.append(super().forward(x_seq[t]))
+        def forward(self, x_seq: torch.Tensor):
+            """
+            :param x_seq: shape=[T, batch_size, ...]
+            :type x_seq: torch.Tensor
+            :return: y_seq, shape=[T, batch_size, ...]
+            :rtype: torch.Tensor
+            """
+            y_seq = []
+            for t in range(x_seq.shape[0]):
+                y_seq.append(super().forward(x_seq[t]))
 
-        for t in range(y_seq.__len__()):
-            y_seq[t] = y_seq[t].unsqueeze(0)
-        return torch.cat(y_seq, 0)
+            for t in range(y_seq.__len__()):
+                y_seq[t] = y_seq[t].unsqueeze(0)
+            return torch.cat(y_seq, 0)
 
 
 我们使用这种方式来包装一个IF神经元：
