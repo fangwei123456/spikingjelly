@@ -16,27 +16,31 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 .. code-block:: python
 
-    class MultiStepContainer(nn.Module):
-        def __init__(self, module: nn.Module):
-            super().__init__()
-            self.module = module
+class MultiStepContainer(nn.Sequential):
+    def __init__(self, *args):
+        super().__init__(*args)
 
-        def forward(self, x_seq: torch.Tensor):
-            y_seq = []
-            for t in range(x_seq.shape[0]):
-                y_seq.append(self.module(x_seq[t]))
-                y_seq[-1].unsqueeze_(0)
-            return torch.cat(y_seq, 0)
+    def forward(self, x_seq: torch.Tensor):
+        """
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: torch.Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: torch.Tensor
+        """
+        y_seq = []
+        for t in range(x_seq.shape[0]):
+            y_seq.append(super().forward(x_seq[t]))
 
-        def reset(self):
-            if hasattr(self.module, 'reset'):
-                self.module.reset()
+        for t in range(y_seq.__len__()):
+            y_seq[t] = y_seq[t].unsqueeze(0)
+        return torch.cat(y_seq, 0)
+
 
 我们使用这种方式来包装一个IF神经元：
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import neuron, layer
+    from spikingjelly.clock_driven import neuron, layer, functional
     import torch
 
     neuron_num = 4
@@ -45,11 +49,11 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
     x = torch.rand([T, neuron_num]) * 2
     for t in range(T):
         print(f'if_node output spikes at t={t}', if_node(x[t]))
-    if_node.reset()
+    functional.reset_net(if_node)
 
     ms_if_node = layer.MultiStepContainer(if_node)
     print("multi step if_node output spikes\n", ms_if_node(x))
-    ms_if_node.reset()
+    functional.reset_net(ms_if_node)
 
 输出为：
 
