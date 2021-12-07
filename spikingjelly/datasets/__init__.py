@@ -860,7 +860,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             else:
                 _root = os.path.join(_root, 'test')
 
-        super().__init__(root=_root, loader=_loader, extensions='.npz', transform=_transform,
+        super().__init__(root=_root, loader=_loader, extensions=('.npz', ), transform=_transform,
                          target_transform=_target_transform)
 
     @staticmethod
