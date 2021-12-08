@@ -7,7 +7,7 @@ import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from ..configure import max_threads_number_for_datasets_preprocess
-
+from spikingjelly.datasets import np_savez
 
 class NMNIST(sjds.NeuromorphicDatasetFolder):
     def __init__(
@@ -154,7 +154,7 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
     @staticmethod
     def read_bin_save_to_np(bin_file: str, np_file: str):
         events = NMNIST.load_origin_data(bin_file)
-        np.savez(np_file,
+        np_savez(np_file,
                  t=events['t'],
                  x=events['x'],
                  y=events['y'],

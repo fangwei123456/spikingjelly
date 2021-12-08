@@ -7,7 +7,7 @@ import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from ..configure import max_threads_number_for_datasets_preprocess
-
+from spikingjelly.datasets import np_savez
 
 class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
     def __init__(
@@ -163,7 +163,7 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
             t_end = csv_data[i][2]
             mask = np.logical_and(events['t'] >= t_start, events['t'] < t_end)
             file_name = os.path.join(output_dir, str(label), f'{fname}_{label_file_num[label]}.npz')
-            np.savez(file_name,
+            np_savez(file_name,
                      t=events['t'][mask],
                      x=events['x'][mask],
                      y=events['y'][mask],

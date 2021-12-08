@@ -7,7 +7,7 @@ import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from ..configure import max_threads_number_for_datasets_preprocess
-
+from spikingjelly.datasets import np_savez
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
 
@@ -263,7 +263,7 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
     @staticmethod
     def read_aedat_save_to_np(bin_file: str, np_file: str):
         events = CIFAR10DVS.load_origin_data(bin_file)
-        np.savez(np_file,
+        np_savez(np_file,
                  t=events['t'],
                  x=events['x'],
                  y=events['y'],

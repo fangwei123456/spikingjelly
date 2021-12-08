@@ -15,7 +15,8 @@ import torch
 from matplotlib import pyplot as plt
 import math
 import tqdm
-from ..configure import max_threads_number_for_datasets_preprocess, cuda_threads, cuda_compiler_options, cuda_compiler_backend
+from ..configure import max_threads_number_for_datasets_preprocess, cuda_threads, cuda_compiler_options, cuda_compiler_backend, save_datasets_compressed
+np_savez = np.savez_compressed if save_datasets_compressed else np.savez
 
 try:
     import cupy
@@ -360,7 +361,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: 
     Integrate a events file to frames by fixed frames number and save it. See :class:`cal_fixed_frames_number_segment_index` and :class:`integrate_events_segment_to_frame` for more details.
     '''
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
-    np.savez(fname, frames=integrate_events_by_fixed_frames_number(np.load(events_np_file), split_by, frames_num, H, W))
+    np_savez(fname, frames=integrate_events_by_fixed_frames_number(np.load(events_np_file), split_by, frames_num, H, W))
     if print_save:
         print(f'Frames [{fname}] saved.')
 
@@ -423,13 +424,13 @@ def integrate_events_file_to_frames_file_by_fixed_duration(events_np_file: str, 
     frames = integrate_events_by_fixed_duration(np.load(events_np_file), duration, H, W)
     fname, _ = os.path.splitext(os.path.basename(events_np_file))
     fname = os.path.join(output_dir, f'{fname}_{frames.shape[0]}.npz')
-    np.savez(fname, frames=frames)
+    np_savez(fname, frames=frames)
     if print_save:
         print(f'Frames [{fname}] saved.')
     return frames.shape[0]
 
 def save_frames_to_npz_and_print(fname: str, frames):
-    np.savez(fname, frames=frames)
+    np_savez(fname, frames=frames)
     print(f'Frames [{fname}] saved.')
 
 def create_same_directory_structure(source_dir: str, target_dir: str) -> None:

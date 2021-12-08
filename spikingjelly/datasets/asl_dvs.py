@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import shutil
 from ..configure import max_threads_number_for_datasets_preprocess
+from spikingjelly.datasets import np_savez
 
 class ASLDVS(sjds.NeuromorphicDatasetFolder):
     def __init__(
@@ -157,7 +158,7 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
     @staticmethod
     def read_mat_save_to_np(mat_file: str, np_file: str):
         events = ASLDVS.load_origin_data(mat_file)
-        np.savez(np_file,
+        np_savez(np_file,
                  t=events['t'],
                  x=events['x'],
                  y=events['y'],

@@ -1,7 +1,7 @@
 # This py file defines some variables used in SpikingJelly.
 # The user can change them and install SpikingJelly manually.
 
-max_threads_number_for_datasets_preprocess = 8
+max_threads_number_for_datasets_preprocess = 4
 '''
 `max_threads_number_for_datasets_preprocess` defines the maximum threads for datasets preprocessing, which is 
 1. reading binary events and saving them to numpy format
@@ -34,5 +34,11 @@ cuda_compiler_backend = 'nvrtc'
 It can be set to 'nvcc' or 'nvrtc'.
 '''
 
+save_datasets_compressed = True
+'''
+If `save_datasets_compressed == True`, events and frames in spikingjelly.datasets will be saved in compressed npz format.
+
+The compressed npz file consumes less memory in disk but more time in reading.
+'''
 
 
