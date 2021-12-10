@@ -1157,7 +1157,7 @@ try:
             m.reset()
             return ret
 
-        shape = [65, 15, 7]
+        shape = [65, 15, 2047]
         for hard_reset in [True, False]:
             for detach_reset in [False, True]:
                 for dtype in ['fp32', 'fp16']:
