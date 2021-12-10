@@ -46,6 +46,8 @@ git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
+If you use an old version of SpikingJelly, you may meet some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
+
 ## Build SNN In An Unprecedented Simple Way
 
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:

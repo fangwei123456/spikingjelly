@@ -46,6 +46,8 @@ git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
+如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。
+
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
