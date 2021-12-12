@@ -977,9 +977,10 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
                 [16, 17, 20, 22, 23],
                 [24, 25, 28, 30, 31]])
     """
-
-    # x_seq.shape = [T, N, *]
-    sec_list = np.random.choice(x_seq.shape[1], T_remain, replace=False)
+    if batch_first:
+        sec_list = np.random.choice(x_seq.shape[1], T_remain, replace=False)
+    else:
+        sec_list = np.random.choice(x_seq.shape[0], T_remain, replace=False)
     sec_list.sort()
     if batch_first:
         return x_seq[:, sec_list]
