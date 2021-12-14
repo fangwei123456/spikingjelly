@@ -463,7 +463,7 @@ def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data
     :param random_split: If ``False``, the front ratio of samples in each classes will
             be included in train set, while the reset will be included in test set.
             If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
-            ``numpy.randon.seed``
+            ``numpy.random.seed``
     :type random_split: int
     :return: a tuple ``(train_set, test_set)``
     :rtype: tuple
