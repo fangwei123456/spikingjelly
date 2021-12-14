@@ -170,7 +170,7 @@ def train_eval_loop(args, device, model, criterion, optimizer, lr_scheduler, tra
 
     if on_master() and tb_log_dir is not None:
         if not os.path.exists(tb_log_dir):
-            os.makedirs(pt_dir)
+            os.makedirs(tb_log_dir)
         tb_writer = SummaryWriter(tb_log_dir, purge_step=start_epoch)
     else:
         tb_writer = None
