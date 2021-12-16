@@ -49,7 +49,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, amp_scaler
     start_time = time.time()
 
     for image, target in data_loader:
-        image, target = image.to(device), target.to(device)
+        image, target = image.to(device, non_blocking=True), target.to(device, non_blocking=True)
         optimizer.zero_grad()
 
         if amp_scaler is not None:
@@ -109,7 +109,7 @@ def evaluate(model, criterion, data_loader, device, cal_acc1_acc5: Callable=defa
     start_time = time.time()
 
     for image, target in data_loader:
-        image, target = image.to(device), target.to(device)
+        image, target = image.to(device, non_blocking=True), target.to(device, non_blocking=True)
 
         output = model(image)
         loss = criterion(output, target)
