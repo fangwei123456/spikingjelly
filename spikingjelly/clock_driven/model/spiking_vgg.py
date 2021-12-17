@@ -132,7 +132,7 @@ class MultiStepSpikingVGG(SpikingVGG):
         :return: output
         :rtype: torch.Tensor
         """
-        return self._forward_impl(x, T)
+        return self._forward_impl(x)
 
 
 
