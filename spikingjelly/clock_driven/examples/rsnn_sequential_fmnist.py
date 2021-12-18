@@ -146,7 +146,7 @@ def main(args):
         transforms.Normalize(0.2860, 0.3530),
     ])
     train_set = torchvision.datasets.FashionMNIST(root=args.data_path, train=True, transform=transform_train)
-    test_set = torchvision.datasets.FashionMNIST(root=args.data_path, train=True, transform=transform_test)
+    test_set = torchvision.datasets.FashionMNIST(root=args.data_path, train=False, transform=transform_test)
 
     train_data_loader = torch.utils.data.DataLoader(
         train_set, batch_size=args.batch_size,
