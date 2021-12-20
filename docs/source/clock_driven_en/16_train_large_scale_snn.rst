@@ -375,6 +375,7 @@ Setting ``T`` when building:
 Or setting ``T`` after building:
 
 .. code:: python
+
     net_ms = spiking_resnet.multi_step_spiking_resnet18(pretrained=False, progress=True, multi_step_neuron=neuron.MultiStepIFNode, v_threshold=1., surrogate_function=surrogate.ATan(), backend='torch')
     net_ms.T = 4
 
