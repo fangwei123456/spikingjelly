@@ -377,7 +377,7 @@ class sigmoid(torch.autograd.Function):
 
 
 class Sigmoid(SurrogateFunctionBase):
-    def __init__(self, alpha=1.0, spiking=True):
+    def __init__(self, alpha=4.0, spiking=True):
         '''
         * :ref:`API in English <Sigmoid.__init__-en>`
         .. _Sigmoid.__init__-cn:
