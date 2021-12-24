@@ -16,6 +16,7 @@ import torch
 from matplotlib import pyplot as plt
 import math
 import tqdm
+import shutil
 from ..configure import max_threads_number_for_datasets_preprocess, cuda_threads, cuda_compiler_options, cuda_compiler_backend, save_datasets_compressed
 np_savez = np.savez_compressed if save_datasets_compressed else np.savez
 
@@ -1007,3 +1008,41 @@ class RandomTemporalDelete(torch.nn.Module):
         return random_temporal_delete(x_seq, self.T_remain, self.batch_first)
 
 
+def create_sub_dataset(source_dir: str, target_dir:str, ratio: float, use_soft_link=True, randomly=False):
+    """
+    :param source_dir: the directory path of the origin dataset
+    :type source_dir: str
+    :param target_dir: the directory path of the sub dataset
+    :type target_dir: str
+    :param ratio: the ratio of samples sub dataset will copy from the origin dataset
+    :type ratio: float
+    :param use_soft_link: if ``True``, the sub dataset will use soft link to copy; else, the sub dataset will copy files
+    :type use_soft_link: bool
+    :param randomly: if ``True``, the files copy from the origin dataset will be picked up randomly. The randomness is controlled by
+            ``numpy.random.seed``
+    :type randomly: bool
+
+    Create a sub dataset with copy ``ratio`` of samples from the origin dataset.
+    """
+    if not os.path.exists(target_dir):
+        os.makedirs(target_dir)
+        print(f'Mkdir [{target_dir}].')
+    create_same_directory_structure(source_dir, target_dir)
+    for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
+        if e_files.__len__() > 0:
+            output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
+            samples_number = int(ratio * e_files.__len__())
+            if randomly:
+                np.random.shuffle(e_files)
+            for i, e_file in enumerate(e_files):
+                if i >= samples_number:
+                    break
+                source_file = os.path.join(e_root, e_file)
+                target_file = os.path.join(output_dir, os.path.basename(source_file))
+                if use_soft_link:
+                    os.symlink(source_file, target_file)
+                    # print(f'symlink {source_file} -> {target_file}')
+                else:
+                    shutil.copyfile(source_file, target_file)
+                    # print(f'copyfile {source_file} -> {target_file}')
+            print(f'[{samples_number}] files in [{e_root}] have been copied to [{output_dir}].')
