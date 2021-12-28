@@ -354,6 +354,9 @@ class LIFNode(BaseNode):
         :param tau: 膜电位时间常数
         :type tau: float
 
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
+
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
@@ -367,11 +370,17 @@ class LIFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+        若 ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -379,6 +388,9 @@ class LIFNode(BaseNode):
 
         :param tau: membrane time constant
         :type tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -396,8 +408,16 @@ class LIFNode(BaseNode):
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+        IF ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        IF ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
         """
         assert isinstance(tau, float) and tau > 1.
 
@@ -433,6 +453,9 @@ class MultiStepLIFNode(LIFNode):
         :param tau: 膜电位时间常数
         :type tau: float
 
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
+
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
@@ -466,6 +489,9 @@ class MultiStepLIFNode(LIFNode):
 
         :param tau: membrane time constant
         :type tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -555,6 +581,9 @@ class ParametricLIFNode(BaseNode):
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
 
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
+
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
@@ -571,8 +600,15 @@ class ParametricLIFNode(BaseNode):
         `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_
         提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
+        若 ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
 
@@ -582,6 +618,9 @@ class ParametricLIFNode(BaseNode):
 
         :param init_tau: the initial value of membrane time constant
         :type init_tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -599,8 +638,15 @@ class ParametricLIFNode(BaseNode):
         The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ and can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
+        IF ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        IF ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
@@ -640,6 +686,9 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
 
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
+
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
@@ -676,6 +725,9 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
 
         :param init_tau: the initial value of membrane time constant
         :type init_tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
