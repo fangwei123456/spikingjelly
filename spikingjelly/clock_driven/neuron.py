@@ -171,7 +171,6 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset()
         return self.spike
 
-
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
@@ -225,7 +224,6 @@ class IFNode(BaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
-
 
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -345,7 +343,7 @@ class MultiStepIFNode(IFNode):
         return super().extra_repr() + f', backend={self.backend}'
 
 class LIFNode(BaseNode):
-    def __init__(self, tau: float = 2., v_threshold: float = 1.,
+    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
@@ -355,6 +353,9 @@ class LIFNode(BaseNode):
 
         :param tau: 膜电位时间常数
         :type tau: float
+
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -369,11 +370,17 @@ class LIFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
+        若 ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -381,6 +388,9 @@ class LIFNode(BaseNode):
 
         :param tau: membrane time constant
         :type tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -398,29 +408,41 @@ class LIFNode(BaseNode):
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
+        IF ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        IF ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
         """
         assert isinstance(tau, float) and tau > 1.
 
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.tau = tau
+        self.decay_input = decay_input
 
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.v_reset is None:
-            self.v = self.v + (x - self.v) / self.tau
-
-        else:
-            if isinstance(self.v_reset, float) and self.v_reset == 0.:
+        if self.decay_input:
+            if self.v_reset is None or self.v_reset == 0.:
                 self.v = self.v + (x - self.v) / self.tau
             else:
                 self.v = self.v + (x - (self.v - self.v_reset)) / self.tau
 
+        else:
+            if self.v_reset is None or self.v_reset == 0.:
+                self.v = self.v * (1. - 1. / self.tau) + x
+            else:
+                self.v = self.v - (self.v - self.v_reset) / self.tau + x
+
 class MultiStepLIFNode(LIFNode):
-    def __init__(self, tau: float = 2., v_threshold: float = 1.,
+    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, backend='torch'):
         """
@@ -430,6 +452,9 @@ class MultiStepLIFNode(LIFNode):
 
         :param tau: 膜电位时间常数
         :type tau: float
+
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -465,6 +490,9 @@ class MultiStepLIFNode(LIFNode):
         :param tau: membrane time constant
         :type tau: float
 
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
+
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
@@ -497,7 +525,7 @@ class MultiStepLIFNode(LIFNode):
             and multi-step propagation.
 
         """
-        super().__init__(tau, v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
@@ -526,7 +554,7 @@ class MultiStepLIFNode(LIFNode):
 
 
             self.spike_seq, self.v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
-                x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+                x_seq.flatten(1), self.v.flatten(0), self.decay_input, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
             self.spike_seq = self.spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
@@ -542,7 +570,7 @@ class MultiStepLIFNode(LIFNode):
         return super().extra_repr() + f', backend={self.backend}'
 
 class ParametricLIFNode(BaseNode):
-    def __init__(self, init_tau: float = 2.0, v_threshold: float = 1.,
+    def __init__(self, init_tau: float = 2.0, decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
@@ -552,6 +580,9 @@ class ParametricLIFNode(BaseNode):
 
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
+
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -569,8 +600,15 @@ class ParametricLIFNode(BaseNode):
         `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_
         提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
+        若 ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
 
@@ -580,6 +618,9 @@ class ParametricLIFNode(BaseNode):
 
         :param init_tau: the initial value of membrane time constant
         :type init_tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
 
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
@@ -597,14 +638,22 @@ class ParametricLIFNode(BaseNode):
         The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ and can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
 
-        .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset})
+        IF ``decay_input == True``:
+
+            .. math::
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        IF ``decay_input == False``:
+
+            .. math::
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
 
         assert isinstance(init_tau, float) and init_tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        self.decay_input = decay_input
         init_w = - math.log(init_tau - 1.)
         self.w = nn.Parameter(torch.as_tensor(init_w))
 
@@ -614,17 +663,19 @@ class ParametricLIFNode(BaseNode):
         return super().extra_repr() + f', tau={tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.v_reset is None:
-            self.v = self.v + (x - self.v) * self.w.sigmoid()
-        else:
-            if self.v_reset == 0.:
+        if self.decay_input:
+            if self.v_reset is None or self.v_reset == 0.:
                 self.v = self.v + (x - self.v) * self.w.sigmoid()
             else:
                 self.v = self.v + (x - (self.v - self.v_reset)) * self.w.sigmoid()
-
+        else:
+            if self.v_reset is None or self.v_reset == 0.:
+                self.v = self.v * (1. - self.w.sigmoid()) + x
+            else:
+                self.v = self.v - (self.v - self.v_reset) * self.w.sigmoid() + x
 
 class MultiStepParametricLIFNode(ParametricLIFNode):
-    def __init__(self, init_tau: float = 2., v_threshold: float = 1.,
+    def __init__(self, init_tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, backend='torch'):
         """
@@ -634,6 +685,9 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
 
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
+
+        :param decay_input: 输入是否会衰减
+        :type decay_input: bool
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -672,6 +726,9 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         :param init_tau: the initial value of membrane time constant
         :type init_tau: float
 
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
+
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
@@ -709,7 +766,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
             Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
             and multi-step propagation.
         """
-        super().__init__(init_tau, v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(init_tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
@@ -738,7 +795,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
 
 
             self.spike_seq, self.v_seq = neuron_kernel.MultiStepParametricLIFNodePTT.apply(
-                x_seq.flatten(1), self.v.flatten(0), self.w.sigmoid(), self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
+                x_seq.flatten(1), self.v.flatten(0), self.w.sigmoid(), self.decay_input, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
             self.spike_seq = self.spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
