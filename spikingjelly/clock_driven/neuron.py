@@ -1078,3 +1078,63 @@ class MultiStepEIFNode(EIFNode):
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
+
+class GeneralNode(BaseNode):
+    def __init__(self, a: float or torch.Tensor, b: float or torch.Tensor, c: float or torch.Tensor = 0., v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        self.a = self.register_buffer('a', torch.as_tensor(a))
+        self.b = self.register_buffer('b', torch.as_tensor(b))
+        self.c = self.register_buffer('c', torch.as_tensor(c))
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.a * self.v + self.b * x + self.c
+
+class MultiStepGeneralNode(GeneralNode):
+    def __init__(self, a: float, b: float, c: float, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+
+        self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+
+        self.backend = backend
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+
+        if self.backend == 'torch':
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
+            return self.spike_seq
+
+        elif self.backend == 'cupy':
+            if isinstance(self.v, float):
+                v_init = self.v
+                self.v = torch.zeros_like(x_seq[0].data)
+                if v_init != 0.:
+                    torch.fill_(self.v, v_init)
+
+            raise NotImplementedError
+
+            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            self.v_seq = self.v_seq.reshape(x_seq.shape)
+
+
+            self.spike = self.spike_seq[-1].clone()
+            self.v = self.v_seq[-1].clone()
+
+            return self.spike_seq
+        else:
+            raise NotImplementedError
+
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
