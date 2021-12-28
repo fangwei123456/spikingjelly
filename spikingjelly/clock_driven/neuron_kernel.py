@@ -1,3 +1,5 @@
+import math
+
 try:
     import cupy
     import torch
@@ -826,201 +828,6 @@ try:
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, decay_input: bool, hard_reset: bool, detach_reset: bool, dtype: str):
-            print('decay_input=', decay_input)
-            kernel_name = f'ParametricLIFNode_bptt_{"hard" if hard_reset else "soft"}Reset_{"detachReset" if detach_reset else ""}_{dtype}'
-
-            code_grad_s_to_h = sg_cuda_code_fun(x='over_th', y='grad_s_to_h', dtype=dtype)
-
-            if dtype == 'fp32':
-                code = fr'''
-                extern "C" __global__
-                void {kernel_name}(
-                const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
-                const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
-                const float & v_threshold, {'const float & v_reset,' if hard_reset else ''}
-                const int & neuron_num, const int & numel)
-                '''
-                code += r'''
-                {
-                    const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                '''
-                code += f'__shared__ float sdata[{cuda_threads}];'
-                code += r'''
-                    if (index < neuron_num)
-                    {   
-                        float grad_h = 0.0f;  // grad_h will be used recursively
-                        sdata[threadIdx.x] = 0.0f;
-                        for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
-                        {
-                            const int t = index + mem_offset;
-                            const float over_th = h_seq[t] - v_threshold;
-                '''
-                code += code_grad_s_to_h
-                if detach_reset:
-                    if hard_reset:
-                        code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - spike_seq[t];
-                        '''
-                    else:
-                        code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f;
-                        '''
-                else:
-                    if hard_reset:
-                        code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
-                        // const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
-                        '''
-                    else:
-                        code_grad_v_to_h = r'''
-                        const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
-                        // const float grad_v_to_h = fmaf(-v_threshold, grad_s_to_h, 1.0f);
-                        '''
-
-                code += code_grad_v_to_h
-                code += r'''
-                    grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
-                    // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
-                    grad_x_seq[t] = grad_h * reciprocal_tau;
-                    sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
-                    }
-                grad_v_last[index] = grad_x_seq[index] * one_sub_reciprocal_tau;
-                }
-                else
-                {
-                    sdata[threadIdx.x] = 0.0f;
-                }
-                int threadx = blockDim.x;
-                #pragma unroll
-                for (int stride = threadx >> 1; stride > 0; stride = stride >> 1)
-                {
-                // Synchronize all thread before next loop
-                __syncthreads();
-                if (threadIdx.x < stride)
-                {
-                  sdata[threadIdx.x] += sdata[threadIdx.x + stride];
-                }
-                }
-                __syncthreads();
-                if (threadIdx.x == 0)
-                {
-                atomicAdd(grad_reciprocal_tau, sdata[0]);
-                }
-                }
-                '''
-
-            elif dtype == 'fp16':
-                code = fr'''
-                #include <cuda_fp16.h>
-                extern "C" __global__
-                void {kernel_name}(
-                const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  half* grad_reciprocal_tau,
-                const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
-                const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
-                const int & neuron_num, const int & numel)
-                '''
-                code += r'''
-                {
-                const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                const int stride = neuron_num >> 1;
-                '''
-                code += f'__shared__ half2 sdata[{cuda_threads}];'
-                code += r'''
-                if (index < stride)
-                {   
-                    const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
-                    const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
-                    const half2 v_threshold_half2 = __half2half2(v_threshold);
-                '''
-
-                if hard_reset:
-                    code += r'''
-                        const half2 v_reset_half2 = __half2half2(v_reset);
-                    '''
-
-                code += r'''
-                    half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
-                    for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
-                    {
-                        const int t = index + mem_offset;
-                        const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
-                '''
-                code += code_grad_s_to_h
-
-                if detach_reset:
-                    if hard_reset:
-                        code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
-                        '''
-                    else:
-                        code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __float2half2_rn(1.0f);
-                        '''
-                else:
-                    if hard_reset:
-                        code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
-                        '''
-                    else:
-                        code_grad_v_to_h = r'''
-                        const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
-                        '''
-
-                code += code_grad_v_to_h
-                code += r'''                        
-                        grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
-                        grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
-                        sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq[t], v_v_seq[t])), reciprocal_tau_half2), sdata[threadIdx.x]);
-                    }
-                grad_v_last[index] = __hmul2(grad_x_seq[index], one_sub_reciprocal_tau_half2);
-                }
-                else
-                {
-                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
-                }
-                int threadx = blockDim.x;
-                #pragma unroll
-                for (int stride = threadx >> 1; stride > 0; stride = stride >> 1)
-                {
-                // Synchronize all thread before next loop
-                __syncthreads();
-                if (threadIdx.x < stride)
-                {
-                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
-                }
-                }
-                __syncthreads();
-                if (threadIdx.x == 0)
-                {
-                //grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
-
-                /*
-                The 32-bit floating-point version of atomicAdd() is only supported by devices of compute capability 2.x and higher.
-                The 64-bit floating-point version of atomicAdd() is only supported by devices of compute capability 6.x and higher.
-
-                The 32-bit __half2 floating-point version of atomicAdd() is only supported by devices of compute capability 6.x and higher. The atomicity of the __half2 or __nv_bfloat162 add operation is guaranteed separately for each of the two __half or __nv_bfloat16 elements; the entire __half2 or __nv_bfloat162 is not guaranteed to be atomic as a single 32-bit access.
-
-                The 16-bit __half floating-point version of atomicAdd() is only supported by devices of compute capability 7.x and higher.
-
-                The 16-bit __nv_bfloat16 floating-point version of atomicAdd() is only supported by devices of compute capability 8.x and higher.
-                */
-
-                atomicAdd(grad_reciprocal_tau, __hadd(__low2half(sdata[0]), __high2half(sdata[0])));
-
-                }
-                }
-                '''
-
-            else:
-                raise TypeError
-
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
-
-
-
             kernel_name = f'ParametricLIFNode_bptt_decayInput{decay_input}_{"hard" if hard_reset else "soft"}Reset_{"detachReset" if detach_reset else ""}_{dtype}'
 
             code_grad_s_to_h = sg_cuda_code_fun(x='over_th', y='grad_s_to_h', dtype=dtype)
@@ -1213,13 +1020,13 @@ try:
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
-                for (int stride = threadx >> 1; stride > 0; stride = stride >> 1)
+                for (int i = threadx >> 1; i > 0; i = i >> 1)
                 {
                 // Synchronize all thread before next loop
                 __syncthreads();
-                if (threadIdx.x < stride)
+                if (threadIdx.x < i)
                 {
-                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + stride]);
+                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + i]);
                 }
                 }
                 __syncthreads();
@@ -1358,7 +1165,7 @@ try:
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
-            grad_reciprocal_tau = torch.as_tensor(0.).to(grad_spike_seq)
+            grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device).to(grad_spike_seq)
 
             if ctx.cp_v_reset is None:
                 hard_reset = False
@@ -1408,7 +1215,7 @@ try:
                 return grad_x_seq, grad_v_last, grad_reciprocal_tau, None, None, None, None, None
 
 
-    def check_multi_step_neuron_output_and_grad(device, multi_step_neuron, *neu_args, **neu_kwargs):
+    def check_multi_step_neuron_output_and_grad(device, multi_step_neuron, shape = [65, 15, 511], *neu_args, **neu_kwargs):
         @torch.no_grad()
         def max_error(x, y):
             return (x - y).abs().max().item()
@@ -1430,7 +1237,6 @@ try:
             m.reset()
             return ret
 
-        shape = [65, 15, 2047]
         for hard_reset in [True, False]:
             for detach_reset in [False, True]:
                 for dtype in ['fp32', 'fp16']:
@@ -1442,6 +1248,8 @@ try:
                                               **neu_kwargs)
                     # print(model)
                     model.to(device)
+                    if dtype == 'fp16':
+                        model = model.half()
                     model.backend = 'torch'
                     y_torch = fbptt(model, x)
 
@@ -1449,7 +1257,10 @@ try:
                     y_cupy = fbptt(model, x)
 
                     for key in y_torch.keys():
-                        print(key, 'max error', max_error(y_torch[key], y_cupy[key]))
+                        me = max_error(y_torch[key], y_cupy[key])
+                        print(key, 'max error', me)
+                        # if me > 0.5:
+                        #     print(f'y_torch[{key}]={y_torch[key]}, y_cupy[{key}]={y_cupy[key]}')
                     print('\n')
 
 
