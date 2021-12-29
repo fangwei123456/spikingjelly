@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable
+from typing import Callable, overload
 import torch
 import torch.nn as nn
 from . import surrogate, base
@@ -170,6 +170,44 @@ class BaseNode(base.MemoryModule):
         self.neuronal_fire()
         self.neuronal_reset()
         return self.spike
+
+class AdaptiveBaseNode(BaseNode):
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                 v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        # b: jump amplitudes
+        # a: subthreshold coupling
+        assert isinstance(w_rest, float)
+        assert isinstance(v_rest, float)
+        assert isinstance(tau_w, float)
+        assert isinstance(a, float)
+        assert isinstance(b, float)
+
+        super.__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+
+        self.register_memory('w', w_rest)
+
+        self.w_rest = w_rest
+        self.v_rest = v_rest
+        self.tau_w = tau_w
+        self.a = a
+        self.b = b
+
+
+    def neuronal_adaptation(self):
+        self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * self.spike
+
+    def extra_repr(self):
+        return super.extra_repr + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
+
+    @overload
+    def forward(self, x: torch.Tensor):
+        self.neuronal_charge(x)
+        self.neuronal_fire()
+        self.neuronal_adaptation()
+        self.neuronal_reset()
+        return self.spike
+
 
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
