@@ -63,6 +63,9 @@ class BaseNode(base.MemoryModule):
         assert isinstance(v_rest, float)
         assert isinstance(v_threshold, float)
         assert isinstance(detach_reset, bool)
+        if v_reset is not None:
+            assert v_threshold > v_reset
+            assert v_rest >= v_reset
         super().__init__()
 
         self.register_memory('v', v_rest)
@@ -175,7 +178,7 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset()
         return self.spike
 
-class AdaptiveBaseNode(BaseNode):
+class AdaptBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
@@ -936,9 +939,6 @@ class QIFNode(BaseNode):
         """
                  
         assert isinstance(tau, float) and tau > 1.
-        if v_reset is not None:
-            assert v_threshold > v_reset
-            assert v_rest >= v_reset
         assert a0 > 0
 
         super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
@@ -1029,9 +1029,6 @@ class EIFNode(BaseNode):
         """
                  
         assert isinstance(tau, float) and tau > 1.
-        if v_reset is not None:
-            assert v_threshold > v_reset
-            assert v_rest >= v_reset
         assert delta_T > 0
 
         super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
@@ -1043,7 +1040,6 @@ class EIFNode(BaseNode):
         return super().extra_repr() + f', tau={self.tau}, delta_T={self.delta_T}, theta_rh={self.theta_rh}'
 
     def neuronal_charge(self, x: torch.Tensor):
-
         with torch.no_grad():
             if not isinstance(self.v, torch.Tensor):
                 self.v = torch.as_tensor(self.v, device=x.device)
@@ -1243,3 +1239,69 @@ class MultiStepGeneralNode(GeneralNode):
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
+
+class AdaptLIFNode(AdaptBaseNode):
+    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
+                 v_reset: float = 0., v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0., 
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        assert isinstance(tau, float) and tau > 1.
+
+        super().__init__(v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function, detach_reset)
+        self.tau = tau
+        self.decay_input = decay_input
+
+    def extra_repr(self):
+        return super().extra_repr() + f', tau={self.tau}'
+
+    def neuronal_charge(self, x: torch.Tensor):
+        if self.decay_input:
+            if self.v_rest == 0.:
+                self.v = self.v + (x - self.v) / self.tau
+            else:
+                self.v = self.v + (x - (self.v - self.v_rest)) / self.tau
+
+        else:
+            if self.v_rest == 0.:
+                self.v = self.v * (1. - 1. / self.tau) + x
+            else:
+                self.v = self.v - (self.v - self.v_rest) / self.tau + x
+
+class IzhikevichNode(AdaptBaseNode):
+    def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
+                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0., 
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        assert isinstance(tau, float) and tau > 1.
+        assert a0 > 0
+
+        super().__init__(v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function, detach_reset)
+        self.tau = tau
+        self.v_c = v_c
+        self.a0 = a0
+
+    def extra_repr(self):
+        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}'
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
+
+class AdExNode(AdaptBaseNode):
+    def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1.,
+                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0., 
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+        assert isinstance(tau, float) and tau > 1.
+        assert delta_T > 0
+
+        super().__init__(v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function, detach_reset)
+        self.tau = tau
+        self.delta_T = delta_T
+        self.theta_rh = theta_rh
+
+    def extra_repr(self):
+        return super().extra_repr() + f', tau={self.tau}, delta_T={self.delta_T}, theta_rh={self.theta_rh}'
+
+    def neuronal_charge(self, x: torch.Tensor):
+        with torch.no_grad():
+            if not isinstance(self.v, torch.Tensor):
+                self.v = torch.as_tensor(self.v, device=x.device)
+        
+        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
