@@ -12,7 +12,7 @@ except ImportError:
 
 
 class BaseNode(base.MemoryModule):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0., v_rest: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <BaseNode.__init__-en>`
@@ -25,6 +25,9 @@ class BaseNode(base.MemoryModule):
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
         :type v_reset: float
+
+        :param v_rest: 神经元的静息电位
+        :type v_rest: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -41,6 +44,9 @@ class BaseNode(base.MemoryModule):
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
+        :param v_rest: resting potential of neurons
+        :type v_rest: float
+
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
         :type v_reset: float
@@ -54,19 +60,17 @@ class BaseNode(base.MemoryModule):
         This class is the base class of differentiable spiking neurons.
         """
         assert isinstance(v_reset, float) or v_reset is None
+        assert isinstance(v_rest, float)
         assert isinstance(v_threshold, float)
         assert isinstance(detach_reset, bool)
         super().__init__()
 
-        if v_reset is None:
-            self.register_memory('v', 0.)
-            self.register_memory('spike', 0.)
-        else:
-            self.register_memory('v', v_reset)
-            self.register_memory('spike', 0.)
+        self.register_memory('v', v_rest)
+        self.register_memory('spike', 0.)
 
         self.v_threshold = v_threshold
         self.v_reset = v_reset
+        self.v_rest = v_rest
 
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
@@ -136,7 +140,7 @@ class BaseNode(base.MemoryModule):
             self.v = (1. - spike) * self.v + spike * self.v_reset
 
     def extra_repr(self):
-        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, v_rest={self.v_rest}, detach_reset={self.detach_reset}'
 
     def forward(self, x: torch.Tensor):
         """
@@ -178,29 +182,25 @@ class AdaptiveBaseNode(BaseNode):
         # b: jump amplitudes
         # a: subthreshold coupling
         assert isinstance(w_rest, float)
-        assert isinstance(v_rest, float)
         assert isinstance(tau_w, float)
         assert isinstance(a, float)
         assert isinstance(b, float)
 
-        super.__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super.__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
 
         self.register_memory('w', w_rest)
 
         self.w_rest = w_rest
-        self.v_rest = v_rest
         self.tau_w = tau_w
         self.a = a
         self.b = b
-
 
     def neuronal_adaptation(self):
         self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * self.spike
 
     def extra_repr(self):
-        return super.extra_repr + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
+        return super.extra_repr + f', w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
 
-    @overload
     def forward(self, x: torch.Tensor):
         self.neuronal_charge(x)
         self.neuronal_fire()
@@ -210,7 +210,7 @@ class AdaptiveBaseNode(BaseNode):
 
 
 class IFNode(BaseNode):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0., v_rest: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <IFNode.__init__-en>`
@@ -223,6 +223,9 @@ class IFNode(BaseNode):
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
         :type v_reset: float
+
+        :param v_rest: 神经元的静息电位
+        :type v_rest: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -242,6 +245,9 @@ class IFNode(BaseNode):
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
+        :param v_rest: resting potential of neurons
+        :type v_rest: float        
+
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
         :type v_reset: float
@@ -258,7 +264,7 @@ class IFNode(BaseNode):
         .. math::
             V[t] = V[t-1] + X[t]
         """
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
@@ -382,7 +388,7 @@ class MultiStepIFNode(IFNode):
 
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float = 0., v_rest: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
@@ -402,6 +408,9 @@ class LIFNode(BaseNode):
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
         :type v_reset: float
 
+        :param v_rest: 神经元的静息电位
+        :type v_rest: float
+
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
@@ -413,12 +422,12 @@ class LIFNode(BaseNode):
         若 ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{rest}))
 
         若 ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{rest}) + X[t]
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -437,6 +446,9 @@ class LIFNode(BaseNode):
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
         :type v_reset: float
 
+        :param v_rest: resting potential of neurons
+        :type v_rest: float 
+
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
 
@@ -449,17 +461,17 @@ class LIFNode(BaseNode):
         IF ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{rest}))
 
         IF ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{rest}) + X[t]
 
         """
         assert isinstance(tau, float) and tau > 1.
 
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
         self.tau = tau
         self.decay_input = decay_input
 
@@ -468,16 +480,16 @@ class LIFNode(BaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.:
+            if self.v_rest == 0.:
                 self.v = self.v + (x - self.v) / self.tau
             else:
-                self.v = self.v + (x - (self.v - self.v_reset)) / self.tau
+                self.v = self.v + (x - (self.v - self.v_rest)) / self.tau
 
         else:
-            if self.v_reset is None or self.v_reset == 0.:
+            if self.v_rest == 0.:
                 self.v = self.v * (1. - 1. / self.tau) + x
             else:
-                self.v = self.v - (self.v - self.v_reset) / self.tau + x
+                self.v = self.v - (self.v - self.v_rest) / self.tau + x
 
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
@@ -609,7 +621,7 @@ class MultiStepLIFNode(LIFNode):
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau: float = 2.0, decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float = 0., v_rest: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False):
         """
         * :ref:`API in English <ParametricLIFNode.__init__-en>`
@@ -641,12 +653,12 @@ class ParametricLIFNode(BaseNode):
         若 ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{rest}))
 
         若 ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{rest}) + X[t]
 
         其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
 
@@ -679,18 +691,18 @@ class ParametricLIFNode(BaseNode):
         IF ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{rest}))
 
         IF ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{rest}) + X[t]
 
         where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
 
         assert isinstance(init_tau, float) and init_tau > 1.
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
         self.decay_input = decay_input
         init_w = - math.log(init_tau - 1.)
         self.w = nn.Parameter(torch.as_tensor(init_w))
@@ -702,15 +714,15 @@ class ParametricLIFNode(BaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.decay_input:
-            if self.v_reset is None or self.v_reset == 0.:
+            if self.v_rest == 0.:
                 self.v = self.v + (x - self.v) * self.w.sigmoid()
             else:
-                self.v = self.v + (x - (self.v - self.v_reset)) * self.w.sigmoid()
+                self.v = self.v + (x - (self.v - self.v_rest)) * self.w.sigmoid()
         else:
-            if self.v_reset is None or self.v_reset == 0.:
+            if self.v_rest == 0.:
                 self.v = self.v * (1. - self.w.sigmoid()) + x
             else:
-                self.v = self.v - (self.v - self.v_reset) * self.w.sigmoid() + x
+                self.v = self.v - (self.v - self.v_rest) * self.w.sigmoid() + x
 
 class MultiStepParametricLIFNode(ParametricLIFNode):
     def __init__(self, init_tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
@@ -849,7 +861,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         return super().extra_repr() + f', backend={self.backend}'
 
 class QIFNode(BaseNode):
-    def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
+    def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1., v_reset: float = -0.1, v_rest: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <QIFNode.__init__-en>`
@@ -868,12 +880,12 @@ class QIFNode(BaseNode):
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
-        :param v_rest: 静息电位
-        :type v_rest: float
-
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
         :type v_reset: float
+
+        :param v_rest: 静息电位
+        :type v_rest: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -903,12 +915,12 @@ class QIFNode(BaseNode):
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
-        :param v_rest: resting potential
-        :type v_rest: float
-
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
         :type v_reset: float
+
+        :param v_rest: resting potential
+        :type v_rest: float
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
@@ -929,21 +941,20 @@ class QIFNode(BaseNode):
             assert v_rest >= v_reset
         assert a0 > 0
 
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
         self.tau = tau
         self.v_c = v_c
-        self.v_rest = v_rest
         self.a0 = a0
 
     def extra_repr(self):
-        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}, v_rest={self.v_rest}'
+        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}'
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
 
 
 class EIFNode(BaseNode):
-    def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
+    def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_reset: float = -0.1, v_rest: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         """
         * :ref:`API in English <EIFNode.__init__-en>`
@@ -962,12 +973,12 @@ class EIFNode(BaseNode):
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
-        :param v_rest: 静息电位
-        :type v_rest: float
-
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，则电压会被减去 ``v_threshold``
         :type v_reset: float
+
+        :param v_rest: 静息电位
+        :type v_rest: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -997,12 +1008,12 @@ class EIFNode(BaseNode):
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
-        :param v_rest: resting potential
-        :type v_rest: float
-
         :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
             ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
         :type v_reset: float
+
+        :param v_rest: resting potential
+        :type v_rest: float
 
         :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
         :type surrogate_function: Callable
@@ -1023,10 +1034,9 @@ class EIFNode(BaseNode):
             assert v_rest >= v_reset
         assert delta_T > 0
 
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
         self.tau = tau
         self.delta_T = delta_T
-        self.v_rest = v_rest
         self.theta_rh = theta_rh
 
     def extra_repr(self):
