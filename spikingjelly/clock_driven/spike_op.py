@@ -93,7 +93,7 @@ class spike_convolution(torch.autograd.Function):
                                                                                True))
 
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            spike, _ = ctx.saved_tensors[0]
+            spike, _ = ctx.saved_tensors
             spike = spike.to(ctx.spike_dtype)
             grad_weight = cpp_wrapper.cudnn_convolution_backward_weight(ctx.weight_shape, grad_output, spike, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
@@ -102,7 +102,7 @@ class spike_convolution(torch.autograd.Function):
                                                                                torch.backends.cudnn.allow_tf32)
 
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            _, weight = ctx.saved_tensors[0]
+            _, weight = ctx.saved_tensors
             grad_spike = cpp_wrapper.cudnn_convolution_backward_input(ctx.spike_shape, grad_output, weight.to(grad_output.dtype), ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
