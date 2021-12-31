@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
+from torch.cuda.amp import custom_fwd, custom_bwd
 cpp_wrapper = load_inline(
         name='cpp_wrapper',
         cpp_sources='',
@@ -51,6 +52,7 @@ class spike_convolution(torch.autograd.Function):
     # Pytorch only provides cudnn_convolution without bias.
     # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
     @staticmethod
+    @custom_fwd
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             ctx.save_for_backward(
@@ -74,6 +76,7 @@ class spike_convolution(torch.autograd.Function):
 
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_output):
         grad_spike = None
         grad_weight = None
@@ -114,6 +117,7 @@ class spike_convolution(torch.autograd.Function):
 
 class spike_linear(torch.autograd.Function):
     @staticmethod
+    @custom_fwd
     def forward(ctx, spike, weight, bias=None):
         # spike.shape = [N, *, in_features]
         # weight.shape = [out_features, in_features]
@@ -126,6 +130,7 @@ class spike_linear(torch.autograd.Function):
         return F.linear(spike, weight, bias)
 
     @staticmethod
+    @custom_bwd
     def backward(ctx, grad_output):
         # grad_output.shape = [N, *, out_features]
         spike, weight = ctx.saved_tensors
