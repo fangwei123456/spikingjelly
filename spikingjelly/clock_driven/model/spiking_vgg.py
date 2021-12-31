@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from spikingjelly.clock_driven import functional, neuron
-from torchvision.models.utils import load_state_dict_from_url
-
+try:
+    from torchvision.models.utils import load_state_dict_from_url
+except ImportError:
+    from torchvision._internally_replaced_utils import load_state_dict_from_url
 
 __all__ = [
     'SpikingVGG', 'MultiStepSpikingVGG',

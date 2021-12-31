@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
 from .. import functional
-from torchvision.models.utils import load_state_dict_from_url
-
+try:
+    from torchvision.models.utils import load_state_dict_from_url
+except ImportError:
+    from torchvision._internally_replaced_utils import load_state_dict_from_url
 __all__ = ['SEWResNet', 'sew_resnet18', 'sew_resnet34', 'sew_resnet50', 'sew_resnet101',
            'sew_resnet152', 'sew_resnext50_32x4d', 'sew_resnext101_32x8d',
            'sew_wide_resnet50_2', 'sew_wide_resnet101_2',
