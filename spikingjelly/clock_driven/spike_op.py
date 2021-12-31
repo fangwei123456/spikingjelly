@@ -84,7 +84,7 @@ class spike_convolution(torch.autograd.Function):
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             spike, weight = ctx.saved_tensors
             spike = spike.to(ctx.spike_dtype)
-            grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(spike, grad_output, weight, ctx.padding,
+            grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(spike, grad_output, weight.to(grad_output.dtype), ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
                                                                                torch.backends.cudnn.deterministic,
@@ -103,7 +103,7 @@ class spike_convolution(torch.autograd.Function):
 
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
             _, weight = ctx.saved_tensors[0]
-            grad_spike = cpp_wrapper.cudnn_convolution_backward_input(ctx.spike_shape, grad_output, weight, ctx.padding,
+            grad_spike = cpp_wrapper.cudnn_convolution_backward_input(ctx.spike_shape, grad_output, weight.to(grad_output.dtype), ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
                                                                                torch.backends.cudnn.deterministic,
@@ -137,7 +137,7 @@ class spike_linear(torch.autograd.Function):
         grad_spike = grad_weight = grad_bias = None
 
         if ctx.needs_input_grad[0]:
-            grad_spike = F.linear(grad_output, weight.t(), bias=None)
+            grad_spike = F.linear(grad_output, weight.t().to(grad_output.dtype), bias=None)
         if ctx.needs_input_grad[1]:
             in_features = spike.shape[-1]
             out_features = grad_output.shape[-1]
