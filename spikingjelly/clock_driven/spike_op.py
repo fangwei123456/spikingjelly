@@ -65,6 +65,7 @@ class spike_convolution(torch.autograd.Function):
             ctx.stride = stride
             ctx.dilation = dilation
             ctx.groups = groups
+            ctx.weight_shape = weight.shape
 
         if spike.dim() == 3:
             return F.conv1d(input=spike, weight=weight, bias=bias, stride=stride, padding=padding, dilation=dilation, groups=groups)
