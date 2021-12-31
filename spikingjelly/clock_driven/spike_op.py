@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
-from torch.cuda.amp import custom_fwd, custom_bwd
 cpp_wrapper = load_inline(
         name='cpp_wrapper',
         cpp_sources='using namespace at;',
@@ -52,7 +51,6 @@ class spike_convolution(torch.autograd.Function):
     # Pytorch only provides cudnn_convolution without bias.
     # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
     @staticmethod
-    @custom_fwd
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             ctx.save_for_backward(
@@ -77,7 +75,6 @@ class spike_convolution(torch.autograd.Function):
 
 
     @staticmethod
-    @custom_bwd
     def backward(ctx, grad_output):
         grad_spike = None
         grad_weight = None
@@ -85,7 +82,7 @@ class spike_convolution(torch.autograd.Function):
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             spike, weight = ctx.saved_tensors
             spike = spike.to(ctx.spike_dtype)
-            grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(spike.to(grad_output.dtype), grad_output, weight.to(grad_output.dtype), ctx.padding,
+            grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(spike, grad_output, weight, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
                                                                                torch.backends.cudnn.deterministic,
@@ -96,7 +93,7 @@ class spike_convolution(torch.autograd.Function):
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             spike, _ = ctx.saved_tensors
             spike = spike.to(ctx.spike_dtype)
-            grad_weight = cpp_wrapper.cudnn_convolution_backward_weight(ctx.weight_shape, grad_output, spike.to(grad_output.dtype), ctx.padding,
+            grad_weight = cpp_wrapper.cudnn_convolution_backward_weight(ctx.weight_shape, grad_output, spike, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
                                                                                torch.backends.cudnn.deterministic,
@@ -104,7 +101,7 @@ class spike_convolution(torch.autograd.Function):
 
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
             _, weight = ctx.saved_tensors
-            grad_spike = cpp_wrapper.cudnn_convolution_backward_input(ctx.spike_shape, grad_output, weight.to(grad_output.dtype), ctx.padding,
+            grad_spike = cpp_wrapper.cudnn_convolution_backward_input(ctx.spike_shape, grad_output, weight, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
                                                                                torch.backends.cudnn.deterministic,
@@ -118,7 +115,6 @@ class spike_convolution(torch.autograd.Function):
 
 class spike_linear(torch.autograd.Function):
     @staticmethod
-    @custom_fwd
     def forward(ctx, spike, weight, bias=None):
         # spike.shape = [N, *, in_features]
         # weight.shape = [out_features, in_features]
@@ -131,14 +127,13 @@ class spike_linear(torch.autograd.Function):
         return F.linear(spike, weight, bias)
 
     @staticmethod
-    @custom_bwd
     def backward(ctx, grad_output):
         # grad_output.shape = [N, *, out_features]
         spike, weight = ctx.saved_tensors
         grad_spike = grad_weight = grad_bias = None
 
         if ctx.needs_input_grad[0]:
-            grad_spike = F.linear(grad_output, weight.t().to(grad_output.dtype), bias=None)
+            grad_spike = F.linear(grad_output, weight.t(), bias=None)
         if ctx.needs_input_grad[1]:
             in_features = spike.shape[-1]
             out_features = grad_output.shape[-1]
