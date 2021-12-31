@@ -110,7 +110,7 @@ class spike_convolution(torch.autograd.Function):
         if ctx.needs_input_grad[2]:
             # grad_output.shape = [N, C, *]
             out_channels = grad_output.shape[1]
-            grad_bias = grad_output.transpose(0, 1).view(out_channels, -1).sum(1)
+            grad_bias = grad_output.transpose(0, 1).reshape(out_channels, -1).sum(1)
         return grad_spike, grad_weight, grad_bias, None, None, None, None
 
 class spike_linear(torch.autograd.Function):
@@ -137,11 +137,11 @@ class spike_linear(torch.autograd.Function):
         if ctx.needs_input_grad[1]:
             in_features = spike.shape[-1]
             out_features = grad_output.shape[-1]
-            # grad_output.view(-1, out_features).t().shape = [out_features, N*]
-            # spike.view(-1, in_features).shape = [N*, in_features]
-            grad_weight = torch.mm(grad_output.view(-1, out_features).t(), spike.view(-1, in_features).to(ctx.spike_dtype))
+            # grad_output.reshape(-1, out_features).t().shape = [out_features, N*]
+            # spike.reshape(-1, in_features).shape = [N*, in_features]
+            grad_weight = torch.mm(grad_output.reshape(-1, out_features).t(), spike.reshape(-1, in_features).to(ctx.spike_dtype))
         if ctx.needs_input_grad[2]:
             out_features = grad_output.shape[-1]
-            grad_bias = grad_output.view(-1, out_features).sum(0)
+            grad_bias = grad_output.reshape(-1, out_features).sum(0)
 
         return grad_spike, grad_weight, grad_bias
