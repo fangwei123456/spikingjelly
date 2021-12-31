@@ -308,7 +308,8 @@ try:
 
             if requires_grad:
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq)
+                ctx.save_for_backward(h_seq, spike_seq.bool())
+                ctx.spike_seq_dtype = spike_seq.dtype
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -335,6 +336,7 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
+            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -744,7 +746,8 @@ try:
             if requires_grad:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq)
+                ctx.save_for_backward(h_seq, spike_seq.bool())
+                ctx.spike_seq_dtype = spike_seq.dtype
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -773,6 +776,7 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
+            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -1134,7 +1138,8 @@ try:
             if requires_grad:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
+                ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
+                ctx.spike_seq_dtype = spike_seq.dtype
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -1163,6 +1168,7 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
+            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
             grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device).to(grad_spike_seq)
@@ -1603,7 +1609,8 @@ try:
 
             if requires_grad:
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
+                ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
+                ctx.spike_seq_dtype = spike_seq.dtype
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -1634,6 +1641,7 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
+            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
