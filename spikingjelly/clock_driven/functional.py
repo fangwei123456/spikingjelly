@@ -845,7 +845,7 @@ def spike_conv1d(spike: Tensor, weight: Tensor, bias: Tensor=None, stride: Union
     if spike.get_device() < 0:
         return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
     else:
-        return spike_op.spike_convolution(spike, weight, bias, stride, padding, dilation, groups)
+        return spike_op.spike_convolution.apply(spike, weight, bias, stride, padding, dilation, groups)
 
 def spike_conv2d(spike: Tensor, weight: Tensor, bias: Optional[Tensor]=None, stride: Union[_int, _size]=1, padding: str="valid", dilation: Union[_int, _size]=1, groups: _int=1) -> Tensor:
     """
@@ -882,7 +882,7 @@ def spike_conv2d(spike: Tensor, weight: Tensor, bias: Optional[Tensor]=None, str
     if spike.get_device() < 0:
         return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
     else:
-        return spike_op.spike_convolution(spike, weight, bias, stride, padding, dilation, groups)
+        return spike_op.spike_convolution.apply(spike, weight, bias, stride, padding, dilation, groups)
 
 def spike_conv3d(spike: Tensor, weight: Tensor, bias: Optional[Tensor]=None, stride: Union[_int, _size]=1, padding: str="valid", dilation: Union[_int, _size]=1, groups: _int=1) -> Tensor:
     """
@@ -919,4 +919,4 @@ def spike_conv3d(spike: Tensor, weight: Tensor, bias: Optional[Tensor]=None, str
     if spike.get_device() < 0:
         return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
     else:
-        return spike_op.spike_convolution(spike, weight, bias, stride, padding, dilation, groups)
+        return spike_op.spike_convolution.apply(spike, weight, bias, stride, padding, dilation, groups)
