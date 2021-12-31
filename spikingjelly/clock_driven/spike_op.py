@@ -5,11 +5,11 @@ from torch.utils.cpp_extension import load_inline
 from torch.cuda.amp import custom_fwd, custom_bwd
 cpp_wrapper = load_inline(
         name='cpp_wrapper',
-        cpp_sources='',
+        cpp_sources='using namespace at;',
         functions=[
-            'at::cudnn_convolution_backward',
-            'at::cudnn_convolution_backward_input',
-            'at::cudnn_convolution_backward_weight'
+            'cudnn_convolution_backward',
+            'cudnn_convolution_backward_input',
+            'cudnn_convolution_backward_weight'
         ],
         with_cuda=True
 )
