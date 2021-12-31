@@ -4,4 +4,3 @@ numpy
 tqdm
 torchvision
 scipy
-onnx==1.8.0
