@@ -51,7 +51,7 @@ class spike_convolution(torch.autograd.Function):
     # Pytorch only provides cudnn_convolution without bias.
     # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
     @staticmethod
-    def forward(ctx, spike, weight, bias, padding, stride, dilation, groups):
+    def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             ctx.save_for_backward(
                 spike.bool() if ctx.needs_input_grad[1] else None,
