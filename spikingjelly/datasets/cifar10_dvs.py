@@ -181,6 +181,12 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
                 from spikingjelly.datasets import play_frame
                 frame, label = train_set[500]
                 play_frame(frame)
+
+        .. admonition:: Tip
+            :class: tip
+
+            CIFAR10-DVS does not provide the spilt of train/test set. Use :class:`spikingjelly.datasets.split_to_train_test_set`
+            to split this dataset to get train and test set.
         '''
         super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform,
                          target_transform)
