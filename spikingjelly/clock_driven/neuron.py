@@ -60,10 +60,8 @@ class BaseNode(base.MemoryModule):
 
         if v_reset is None:
             self.register_memory('v', 0.)
-            self.register_memory('spike', 0.)
         else:
             self.register_memory('v', v_reset)
-            self.register_memory('spike', 0.)
 
         self.v_threshold = v_threshold
         self.v_reset = v_reset
@@ -105,9 +103,9 @@ class BaseNode(base.MemoryModule):
         Calculate out spikes of neurons by their current membrane potential and threshold voltage.
         """
 
-        self.spike = self.surrogate_function(self.v - self.v_threshold)
+        spike = self.surrogate_function(self.v - self.v_threshold)
 
-    def neuronal_reset(self):
+    def neuronal_reset(self, spike):
         """
         * :ref:`API in English <BaseNode.neuronal_reset-en>`
 
@@ -123,17 +121,17 @@ class BaseNode(base.MemoryModule):
         Reset the membrane potential according to neurons' output spikes.
         """
         if self.detach_reset:
-            spike = self.spike.detach()
+            spike_d = spike.detach()
         else:
-            spike = self.spike
+            spike_d = spike
 
         if self.v_reset is None:
             # soft reset
-            self.v = self.v - spike * self.v_threshold
+            self.v = self.v - spike_d * self.v_threshold
 
         else:
             # hard reset
-            self.v = (1. - spike) * self.v + spike * self.v_reset
+            self.v = (1. - spike_d) * self.v + spike_d * self.v_reset
 
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
@@ -167,9 +165,9 @@ class BaseNode(base.MemoryModule):
 
         """
         self.neuronal_charge(x)
-        self.neuronal_fire()
-        self.neuronal_reset()
-        return self.spike
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return spike
 
 class AdaptiveBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -194,8 +192,8 @@ class AdaptiveBaseNode(BaseNode):
         self.b = b
 
 
-    def neuronal_adaptation(self):
-        self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * self.spike
+    def neuronal_adaptation(self, spike):
+        self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * spike
 
     def extra_repr(self):
         return super.extra_repr + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
@@ -203,10 +201,10 @@ class AdaptiveBaseNode(BaseNode):
     @overload
     def forward(self, x: torch.Tensor):
         self.neuronal_charge(x)
-        self.neuronal_fire()
-        self.neuronal_adaptation()
-        self.neuronal_reset()
-        return self.spike
+        spike = self.neuronal_fire()
+        self.neuronal_adaptation(spike)
+        self.neuronal_reset(spike)
+        return spike
 
 
 class IFNode(BaseNode):
@@ -337,7 +335,6 @@ class MultiStepIFNode(IFNode):
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
         self.register_memory('v_seq', None)
-        self.register_memory('spike_seq', None)
 
         assert backend == 'torch' or backend == 'cupy'
         assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
@@ -348,13 +345,13 @@ class MultiStepIFNode(IFNode):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
         self.v_seq = torch.zeros_like(x_seq.data)
-        self.spike_seq = torch.zeros_like(x_seq.data)
+        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t])
+                spike_seq[t] = super().forward(x_seq[t])
                 self.v_seq[t] = self.v
-            return self.spike_seq
+            return spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -363,17 +360,15 @@ class MultiStepIFNode(IFNode):
                 if v_init != 0.:
                     torch.fill_(self.v, v_init)
 
-            self.spike_seq, self.v_seq = neuron_kernel.MultiStepIFNodePTT.apply(
+            spike_seq, self.v_seq = neuron_kernel.MultiStepIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
-            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            spike_seq = spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
 
-
-            self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike_seq
+            return spike_seq
         else:
             raise NotImplementedError
 
@@ -575,13 +570,13 @@ class MultiStepLIFNode(LIFNode):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
         self.v_seq = torch.zeros_like(x_seq.data)
-        self.spike_seq = torch.zeros_like(x_seq.data)
+        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t])
+                spike_seq[t] = super().forward(x_seq[t])
                 self.v_seq[t] = self.v
-            return self.spike_seq
+            return spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -591,16 +586,15 @@ class MultiStepLIFNode(LIFNode):
                     torch.fill_(self.v, v_init)
 
 
-            self.spike_seq, self.v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
+            spike_seq, self.v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.decay_input, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
-            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            spike_seq = spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
 
-            self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike_seq
+            return spike_seq
         else:
             raise NotImplementedError
 
@@ -816,13 +810,13 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
         self.v_seq = torch.zeros_like(x_seq.data)
-        self.spike_seq = torch.zeros_like(x_seq.data)
+        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t])
+                spike_seq[t] = super().forward(x_seq[t])
                 self.v_seq[t] = self.v
-            return self.spike_seq
+            return spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -832,16 +826,15 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
                     torch.fill_(self.v, v_init)
 
 
-            self.spike_seq, self.v_seq = neuron_kernel.MultiStepParametricLIFNodePTT.apply(
+            spike_seq, self.v_seq = neuron_kernel.MultiStepParametricLIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.w.sigmoid(), self.decay_input, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
-            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            spike_seq = spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
 
-            self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike_seq
+            return spike_seq
         else:
             raise NotImplementedError
 
@@ -1142,13 +1135,13 @@ class MultiStepEIFNode(EIFNode):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
         self.v_seq = torch.zeros_like(x_seq.data)
-        self.spike_seq = torch.zeros_like(x_seq.data)
+        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t])
+                spike_seq[t] = super().forward(x_seq[t])
                 self.v_seq[t] = self.v
-            return self.spike_seq
+            return spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -1158,16 +1151,15 @@ class MultiStepEIFNode(EIFNode):
                     torch.fill_(self.v, v_init)
 
 
-            self.spike_seq, self.v_seq = neuron_kernel.MultiStepEIFNodePTT.apply(
+            spike_seq, self.v_seq = neuron_kernel.MultiStepEIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest, self.theta_rh, self.delta_T, self.detach_reset, self.surrogate_function.cuda_code)
 
-            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            spike_seq = spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
 
-            self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike_seq
+            return spike_seq
         else:
             raise NotImplementedError
 
@@ -1203,13 +1195,13 @@ class MultiStepGeneralNode(GeneralNode):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
         self.v_seq = torch.zeros_like(x_seq.data)
-        self.spike_seq = torch.zeros_like(x_seq.data)
+        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
             for t in range(x_seq.shape[0]):
-                self.spike_seq[t] = super().forward(x_seq[t])
+                spike_seq[t] = super().forward(x_seq[t])
                 self.v_seq[t] = self.v
-            return self.spike_seq
+            return spike_seq
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -1220,14 +1212,12 @@ class MultiStepGeneralNode(GeneralNode):
 
             raise NotImplementedError
 
-            self.spike_seq = self.spike_seq.reshape(x_seq.shape)
+            spike_seq = spike_seq.reshape(x_seq.shape)
             self.v_seq = self.v_seq.reshape(x_seq.shape)
 
-
-            self.spike = self.spike_seq[-1].clone()
             self.v = self.v_seq[-1].clone()
 
-            return self.spike_seq
+            return spike_seq
         else:
             raise NotImplementedError
 
