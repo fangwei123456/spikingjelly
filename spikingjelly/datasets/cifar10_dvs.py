@@ -6,7 +6,7 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
-from ..configure import max_threads_number_for_datasets_preprocess
+from .. import configure
 from spikingjelly.datasets import np_savez
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
@@ -289,7 +289,7 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
         This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
         '''
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), max_threads_number_for_datasets_preprocess)) as tpe:
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
             for class_name in os.listdir(extract_root):
                 aedat_dir = os.path.join(extract_root, class_name)
                 np_dir = os.path.join(events_np_root, class_name)

@@ -3,8 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from . import base, functional
+from torch import Tensor
+from typing import Optional
+from torch.nn.modules.utils import _single, _pair, _triple
 from torch.nn.common_types import _size_2_t
 from typing import Callable
+
 
 class NeuNorm(base.MemoryModule):
     def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False):
@@ -71,12 +75,12 @@ class NeuNorm(base.MemoryModule):
         self.k0 = k
         self.k1 = (1. - self.k0) / in_channels ** 2
         if shared_across_channels:
-            self.w = nn.Parameter(torch.Tensor(1, height, width))
+            self.w = nn.Parameter(Tensor(1, height, width))
         else:
-            self.w = nn.Parameter(torch.Tensor(in_channels, height, width))
+            self.w = nn.Parameter(Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
-    def forward(self, in_spikes: torch.Tensor):
+    def forward(self, in_spikes: Tensor):
         self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1,
                                                             keepdim=True)  # x.shape = [batch_size, 1, height, width]
         return in_spikes - self.w * self.x
@@ -119,7 +123,7 @@ class DCT(nn.Module):
                 else:
                     self.kernel[i][j] = math.sqrt(2 / kernel_size) * math.cos((j + 0.5) * math.pi * i / kernel_size)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         if self.kernel.device != x.device:
             self.kernel = self.kernel.to(x.device)
         x_shape = x.shape
@@ -160,10 +164,10 @@ class AXAT(nn.Module):
         The input will be regarded as a batch of tensors with ``shape = [in_features, in_features]``.
         """
         super().__init__()
-        self.A = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.A = nn.Parameter(Tensor(out_features, in_features))
         nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         x_shape = list(x.shape)
         x = x.view(-1, x_shape[-2], x_shape[-1])
         x = self.A.matmul(x).matmul(self.A.t())
@@ -241,10 +245,10 @@ class Dropout(base.MemoryModule):
     def extra_repr(self):
         return f'p={self.p}'
 
-    def create_mask(self, x: torch.Tensor):
+    def create_mask(self, x: Tensor):
         self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         if self.training:
             if self.mask is None:
                 self.create_mask(x)
@@ -284,7 +288,7 @@ class Dropout2d(Dropout):
         """
         super().__init__(p)
 
-    def create_mask(self, x: torch.Tensor):
+    def create_mask(self, x: Tensor):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
 
 
@@ -321,7 +325,7 @@ class MultiStepDropout(Dropout):
         """
         super().__init__(p)
 
-    def forward(self, x_seq: torch.Tensor):
+    def forward(self, x_seq: Tensor):
         if self.training:
             if self.mask is None:
                 self.create_mask(x_seq[0])
@@ -364,7 +368,7 @@ class MultiStepDropout2d(Dropout2d):
         """
         super().__init__(p)
 
-    def forward(self, x_seq: torch.Tensor):
+    def forward(self, x_seq: Tensor):
         if self.training:
             if self.mask is None:
                 self.create_mask(x_seq[0])
@@ -526,7 +530,7 @@ class SynapseFilter(base.MemoryModule):
 
         return f'tau={tau}, learnable={self.learnable}'
 
-    def forward(self, in_spikes: torch.Tensor):
+    def forward(self, in_spikes: Tensor):
         if self.learnable:
             inv_tau = self.w.sigmoid()
         else:
@@ -578,7 +582,7 @@ class ChannelsPool(nn.Module):
         super().__init__()
         self.pool = pool
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         x_shape = x.shape
         return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
 
@@ -660,9 +664,9 @@ class DropConnectLinear(base.MemoryModule):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = nn.Parameter(torch.Tensor(out_features, in_features))
+        self.weight = nn.Parameter(Tensor(out_features, in_features))
         if bias:
-            self.bias = nn.Parameter(torch.Tensor(out_features))
+            self.bias = nn.Parameter(Tensor(out_features))
         else:
             self.register_parameter('bias', None)
 
@@ -738,7 +742,7 @@ class DropConnectLinear(base.MemoryModule):
             # self.dropped_b = mask_b.to(self.bias) * self.bias
             self.dropped_b = self.bias * mask_b
 
-    def forward(self, input: torch.Tensor) -> torch.Tensor:
+    def forward(self, input: Tensor) -> Tensor:
         if self.training:
             if self.invariant:
                 if self.dropped_w is None:
@@ -809,12 +813,12 @@ class MultiStepContainer(nn.Sequential):
         """
         super().__init__(*args)
 
-    def forward(self, x_seq: torch.Tensor):
+    def forward(self, x_seq: Tensor):
         """
         :param x_seq: shape=[T, batch_size, ...]
-        :type x_seq: torch.Tensor
+        :type x_seq: Tensor
         :return: y_seq, shape=[T, batch_size, ...]
-        :rtype: torch.Tensor
+        :rtype: Tensor
         """
         y_seq = []
         for t in range(x_seq.shape[0]):
@@ -869,12 +873,12 @@ class SeqToANNContainer(nn.Sequential):
         """
         super().__init__(*args)
 
-    def forward(self, x_seq: torch.Tensor):
+    def forward(self, x_seq: Tensor):
         """
         :param x_seq: shape=[T, batch_size, ...]
-        :type x_seq: torch.Tensor
+        :type x_seq: Tensor
         :return: y_seq, shape=[T, batch_size, ...]
-        :rtype: torch.Tensor
+        :rtype: Tensor
         """
         y_shape = [x_seq.shape[0], x_seq.shape[1]]
         y_seq = super().forward(x_seq.flatten(0, 1))
@@ -970,7 +974,7 @@ class STDPLearner(base.MemoryModule):
         self.f_post = f_post
 
     @torch.no_grad()
-    def stdp(self, s_pre: torch.Tensor, s_post: torch.Tensor, module: nn.Module, learning_rate: float):
+    def stdp(self, s_pre: Tensor, s_post: Tensor, module: nn.Module, learning_rate: float):
         if isinstance(module, nn.Linear):
             # update trace
             self.trace_pre += - self.trace_pre / self.tau_pre + s_pre
@@ -1009,7 +1013,7 @@ class PrintShapeModule(nn.Module):
         super().__init__()
         self.ext_str = ext_str
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         print(self.ext_str, x.shape)
         return x
 
@@ -1064,20 +1068,20 @@ class ConvBatchNorm2d(nn.Module):
         self.bn = nn.BatchNorm2d(num_features=out_channels, eps=eps, momentum=momentum, affine=affine,
                                  track_running_stats=track_running_stats)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         return self.bn(self.conv(x))
 
     def get_fused_weight(self):
         """
         :return: the weight of this fused module
-        :rtype: torch.Tensor
+        :rtype: Tensor
         """
         return functional.fused_conv2d_weight_of_convbn2d(self.conv, self.bn)
 
     def get_fused_bias(self):
         """
         :return: the bias of this fused module
-        :rtype: torch.Tensor
+        :rtype: Tensor
         """
         return functional.fused_conv2d_bias_of_convbn2d(self.conv, self.bn)
 
@@ -1150,7 +1154,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         self.element_wise_function = element_wise_function
         self.register_memory('y', None)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         if self.y is None:
             self.y = torch.zeros_like(x.data)
         self.y = self.sub_module(self.element_wise_function(self.y, x))
@@ -1214,7 +1218,7 @@ class LinearRecurrentContainer(base.MemoryModule):
         self.sub_module = sub_module
         self.register_memory('y', None)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: Tensor):
         if self.y is None:
             if x.ndim == 2:
                 self.y = torch.zeros([x.shape[0], self.sub_module_out_features]).to(x)
@@ -1226,3 +1230,167 @@ class LinearRecurrentContainer(base.MemoryModule):
         x = torch.cat((x, self.y), dim=-1)
         self.y = self.sub_module(self.rc(x))
         return self.y
+
+class SpikeLinear(nn.Linear):
+    """
+    * :ref:`API in English <SpikeLinear-en>`
+
+    .. _SpikeLinear-cn:
+
+    :class:`torch.nn.Linear` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Linear` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeLinear-cn>`
+
+    .. _SpikeLinear-en:
+
+    A specific case of :class:`torch.nn.Linear` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Linear` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    def forward(self, spike: Tensor) -> Tensor:
+        return functional.spike_linear(spike, self.weight, self.bias)
+
+class SpikeConv1d(nn.Conv1d):
+    """
+    * :ref:`API in English <SpikeConv1d-en>`
+
+    .. _SpikeConv1d-cn:
+
+    :class:`torch.nn.Conv1d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Conv1d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeConv1d-cn>`
+
+    .. _SpikeConv1d-en:
+
+    A specific case of :class:`torch.nn.Conv1d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Conv1d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != 'zeros':
+            return functional.spike_conv1d(F.pad(spike, self._reversed_padding_repeated_twice, mode=self.padding_mode),
+                            weight, bias, self.stride,
+                            _single(0), self.dilation, self.groups)
+        return functional.spike_conv1d(spike, weight, bias, self.stride,
+                        self.padding, self.dilation, self.groups)
+
+class SpikeConv2d(nn.Conv2d):
+    """
+    * :ref:`API in English <SpikeConv2d-en>`
+
+    .. _SpikeConv2d-cn:
+
+    :class:`torch.nn.Conv2d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Conv2d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeConv2d-cn>`
+
+    .. _SpikeConv2d-en:
+
+    A specific case of :class:`torch.nn.Conv2d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Conv2d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != 'zeros':
+            return functional.spike_conv2d(F.pad(spike, self._reversed_padding_repeated_twice, mode=self.padding_mode),
+                            weight, bias, self.stride,
+                            _pair(0), self.dilation, self.groups)
+        return functional.spike_conv2d(spike, weight, bias, self.stride,
+                        self.padding, self.dilation, self.groups)
+
+class SpikeConv3d(nn.Conv3d):
+    """
+    * :ref:`API in English <SpikeConv3d-en>`
+
+    .. _SpikeConv3d-cn:
+
+    :class:`torch.nn.Conv3d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Conv3d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeConv3d-cn>`
+
+    .. _SpikeConv3d-en:
+
+    A specific case of :class:`torch.nn.Conv3d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Conv3d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != "zeros":
+            return functional.spike_conv3d(
+                F.pad(
+                    spike, self._reversed_padding_repeated_twice, mode=self.padding_mode
+                ),
+                weight,
+                bias,
+                self.stride,
+                _triple(0),
+                self.dilation,
+                self.groups,
+            )
+        return functional.spike_conv3d(
+            spike, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )

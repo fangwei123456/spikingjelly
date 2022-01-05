@@ -3,7 +3,7 @@ try:
     import torch
     import time
     import numpy as np
-    from ..configure import cuda_threads, cuda_compiler_options
+    from .. import configure
 
 
     def cal_fun_t(n, device, f, *args, **kwargs):
@@ -28,7 +28,7 @@ try:
         return t_list[n:].mean()
 
     def cal_blocks(numel: int):
-        return (numel + cuda_threads - 1) // cuda_threads
+        return (numel + configure.cuda_threads - 1) // configure.cuda_threads
 
     def get_contiguous(*args):
         ret_list = []
