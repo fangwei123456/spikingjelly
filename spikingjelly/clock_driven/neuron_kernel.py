@@ -5,7 +5,7 @@ try:
     import torch
     import torch.nn.functional as F
     from . import cu_kernel_opt, surrogate
-    from ..configure import cuda_threads, cuda_compiler_options, cuda_compiler_backend
+    from .. import configure
     import numpy as np
         
 
@@ -112,7 +112,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str):
@@ -238,7 +238,7 @@ try:
                 '''
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, v_threshold: float, v_reset: float,
@@ -272,7 +272,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cuda_threads
+                threads = configure.cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -308,8 +308,11 @@ try:
 
             if requires_grad:
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq.bool())
-                ctx.spike_seq_dtype = spike_seq.dtype
+                if configure.save_spike_as_bool_in_neuron_kernel:
+                    ctx.save_for_backward(h_seq, spike_seq.bool())
+                    ctx.spike_seq_dtype = spike_seq.dtype
+                else:
+                    ctx.save_for_backward(h_seq, spike_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -336,7 +339,8 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
-            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+            if configure.save_spike_as_bool_in_neuron_kernel:
+                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -519,7 +523,7 @@ try:
                 '''
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, decay_input: bool, hard_reset: bool, detach_reset: bool, dtype: str):
@@ -670,7 +674,7 @@ try:
 
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, decay_input: bool, tau: float, v_threshold: float, v_reset: float,
@@ -704,7 +708,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cuda_threads
+                threads = configure.cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -746,8 +750,11 @@ try:
             if requires_grad:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq.bool())
-                ctx.spike_seq_dtype = spike_seq.dtype
+                if configure.save_spike_as_bool_in_neuron_kernel:
+                    ctx.save_for_backward(h_seq, spike_seq.bool())
+                    ctx.spike_seq_dtype = spike_seq.dtype
+                else:
+                    ctx.save_for_backward(h_seq, spike_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -776,7 +783,8 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
-            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+            if configure.save_spike_as_bool_in_neuron_kernel:
+                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -850,7 +858,7 @@ try:
                 {
                     const int index = blockIdx.x * blockDim.x + threadIdx.x;
                 '''
-                code += f'__shared__ float sdata[{cuda_threads}];'
+                code += f'__shared__ float sdata[{configure.cuda_threads}];'
                 code += r'''
                     if (index < neuron_num)
                     {   
@@ -948,7 +956,7 @@ try:
                 const int stride = neuron_num >> 1;
 
                 '''
-                code += f'__shared__ half2 sdata[{cuda_threads}];'
+                code += f'__shared__ half2 sdata[{configure.cuda_threads}];'
                 code += r'''
                 if (index < stride)
                 {   
@@ -1058,7 +1066,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, reciprocal_tau: torch.Tensor, decay_input: bool, v_threshold: float,
@@ -1095,7 +1103,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cuda_threads
+                threads = configure.cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -1138,8 +1146,11 @@ try:
             if requires_grad:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
-                ctx.spike_seq_dtype = spike_seq.dtype
+                if configure.save_spike_as_bool_in_neuron_kernel:
+                    ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
+                    ctx.spike_seq_dtype = spike_seq.dtype
+                else:
+                    ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -1168,7 +1179,8 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
-            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+            if configure.save_spike_as_bool_in_neuron_kernel:
+                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
             grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device).to(grad_spike_seq)
@@ -1402,7 +1414,7 @@ try:
             else:
                 raise TypeError
 
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def create_bptt_kernel(sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str):
@@ -1534,7 +1546,7 @@ try:
                 '''
             else:
                 raise TypeError
-            return cupy.RawKernel(code, kernel_name, options=cuda_compiler_options, backend=cuda_compiler_backend)
+            return cupy.RawKernel(code, kernel_name, options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, tau: float, v_threshold: float, v_reset: float, v_rest: float, theta_rh: float, delta_T: float, detach_reset: bool, sg_cuda_code_fun):
@@ -1567,7 +1579,7 @@ try:
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
-                threads = cuda_threads
+                threads = configure.cuda_threads
                 if dtype == 'fp16':
                     assert neuron_num % 2 == 0
                     blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
@@ -1609,8 +1621,11 @@ try:
 
             if requires_grad:
                 ctx.use_pad = use_pad
-                ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
-                ctx.spike_seq_dtype = spike_seq.dtype
+                if configure.save_spike_as_bool_in_neuron_kernel:
+                    ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
+                    ctx.spike_seq_dtype = spike_seq.dtype
+                else:
+                    ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
                 ctx.blocks = blocks
                 ctx.threads = threads
                 ctx.cp_numel = cp_numel
@@ -1641,7 +1656,8 @@ try:
 
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
-            spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+            if configure.save_spike_as_bool_in_neuron_kernel:
+                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
