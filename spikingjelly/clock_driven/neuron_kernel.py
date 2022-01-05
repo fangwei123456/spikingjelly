@@ -1,6 +1,5 @@
-import math
-
 try:
+    import math
     import cupy
     import torch
     import torch.nn.functional as F
