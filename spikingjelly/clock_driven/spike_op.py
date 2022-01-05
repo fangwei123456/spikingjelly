@@ -2,16 +2,21 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
-cpp_wrapper = load_inline(
-        name='cpp_wrapper',
-        cpp_sources='using namespace at;',
-        functions=[
-            'cudnn_convolution_backward',
-            'cudnn_convolution_backward_input',
-            'cudnn_convolution_backward_weight'
-        ],
-        with_cuda=True
-)
+try:
+    cpp_wrapper = load_inline(
+            name='cpp_wrapper',
+            cpp_sources='using namespace at;',
+            functions=[
+                'cudnn_convolution_backward',
+                'cudnn_convolution_backward_input',
+                'cudnn_convolution_backward_weight'
+            ],
+            with_cuda=True
+    )
+except ImportError:
+    print('Can not load_inline. Pass.')
+    cpp_wrapper = None
+
 '''
 aten/src/ATen/native/cudnn/ConvPlaceholders.cpp
 
