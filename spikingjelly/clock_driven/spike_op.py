@@ -13,7 +13,7 @@ try:
             ],
             with_cuda=True
     )
-except ImportError:
+except BaseException:
     print('Can not load_inline. Pass.')
     cpp_wrapper = None
 
