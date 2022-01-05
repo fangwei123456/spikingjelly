@@ -1,6 +1,16 @@
-# This py file defines some variables used in SpikingJelly.
-# The user can change them and install SpikingJelly manually.
+'''
+This py file defines some variables used in SpikingJelly.
+Here is an example of how you can change them to make effect in your codes:
 
+    import spikingjelly
+    spikingjelly.configure.cuda_threads = 512
+
+Do not change them in this way, which will not make effect:
+
+    from spikingjelly.configure import cuda_threads
+    cuda_threads = 512
+
+'''
 max_threads_number_for_datasets_preprocess = 4
 '''
 `max_threads_number_for_datasets_preprocess` defines the maximum threads for datasets preprocessing, which is 
@@ -41,4 +51,8 @@ If `save_datasets_compressed == True`, events and frames in spikingjelly.dataset
 The compressed npz file consumes less memory in disk but more time in reading.
 '''
 
+save_spike_as_bool_in_neuron_kernel = True
+'''
+If `save_spike_as_bool_in_neuron_kernel == True`, the neuron kernel used in the neuron's cupy backend will save the spike as a bool, rather than float/half tensor for backward, which can reduce the memory consumption.
+'''
 
