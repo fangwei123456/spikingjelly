@@ -1281,28 +1281,6 @@ try:
                         #     print(f'y_torch[{key}]={y_torch[key]}, y_cupy[{key}]={y_cupy[key]}')
                     print('\n')
 
-
-    def save_cuda_codes(cu_file_path: str = './spikingjelly/clock_driven/neuron_kernel.cu'):
-        # save all cuda codes to files
-        with open(cu_file_path, 'w+') as cu_file:
-            cu_file.write('// This file is created by spikingjelly.clock_driven.neuron_kernel.save_cuda_codes.\n')
-            for ms_neu in [MultiStepIFNodePTT, MultiStepLIFNodePTT, MultiStepParametricLIFNodePTT]:
-                cu_file.write('\n// ' + ms_neu.__name__ + '\n')
-                for sg in [surrogate.ATan, surrogate.Sigmoid, surrogate.PiecewiseLeakyReLU]:
-                    for hard_reset in [True, False]:
-                        for dtype in ['fp32', 'fp16']:
-                            cu_file.write(
-                                f'\n// {ms_neu.__name__} fptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}\n')
-                            fp_codes = ms_neu.create_fptt_kernel(hard_reset, dtype).code
-                            cu_file.write(fp_codes)
-                            for detach_reset in [True, False]:
-                                cu_file.write(
-                                    f'\n// {ms_neu.__name__} bptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}, detach_reset={detach_reset}\n')
-                                bp_codes = ms_neu.create_bptt_kernel(sg().cuda_code, hard_reset, detach_reset,
-                                                                     dtype).code
-                                cu_file.write(bp_codes)
-
-
     class MultiStepEIFNodePTT(torch.autograd.Function):
         @staticmethod
         def create_fptt_kernel(hard_reset: bool, dtype: str):
@@ -1697,7 +1675,38 @@ try:
                 return grad_x_seq, grad_v_last, None, None, None, None, None, None, None, None
 
 
-
+    def save_cuda_codes(cu_file_path: str = './spikingjelly/clock_driven/neuron_kernel.cu'):
+        # save all cuda codes to files
+        with open(cu_file_path, 'w+') as cu_file:
+            cu_file.write('// This file is created by spikingjelly.clock_driven.neuron_kernel.save_cuda_codes.\n')
+            for ms_neu in [MultiStepIFNodePTT, MultiStepLIFNodePTT, MultiStepParametricLIFNodePTT, MultiStepEIFNodePTT]:
+                cu_file.write('\n// ' + ms_neu.__name__ + '\n')
+                for sg in [surrogate.ATan, surrogate.Sigmoid, surrogate.PiecewiseLeakyReLU]:
+                    for hard_reset in [True, False]:
+                        for dtype in ['fp32', 'fp16']:
+                            if ms_neu == MultiStepLIFNodePTT or ms_neu == MultiStepParametricLIFNodePTT:
+                                for decay_input in [True, False]:
+                                    cu_file.write(
+                                        f'\n// {ms_neu.__name__} fptt {sg.__name__}, decay_input={decay_input}, hard_reset={hard_reset}, dtype={dtype}\n')
+                                    fp_codes = ms_neu.create_fptt_kernel(decay_input, hard_reset, dtype).code
+                                    cu_file.write(fp_codes)
+                                    for detach_reset in [True, False]:
+                                        cu_file.write(
+                                            f'\n// {ms_neu.__name__} bptt {sg.__name__}, decay_input={decay_input}, hard_reset={hard_reset}, dtype={dtype}, detach_reset={detach_reset}\n')
+                                        bp_codes = ms_neu.create_bptt_kernel(sg().cuda_code, decay_input, hard_reset, detach_reset,
+                                                                             dtype).code
+                                        cu_file.write(bp_codes)
+                            else:
+                                cu_file.write(
+                                    f'\n// {ms_neu.__name__} fptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}\n')
+                                fp_codes = ms_neu.create_fptt_kernel(hard_reset, dtype).code
+                                cu_file.write(fp_codes)
+                                for detach_reset in [True, False]:
+                                    cu_file.write(
+                                        f'\n// {ms_neu.__name__} bptt {sg.__name__}, hard_reset={hard_reset}, dtype={dtype}, detach_reset={detach_reset}\n')
+                                    bp_codes = ms_neu.create_bptt_kernel(sg().cuda_code, hard_reset, detach_reset,
+                                                                         dtype).code
+                                    cu_file.write(bp_codes)
 
 
 
