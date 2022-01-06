@@ -103,7 +103,7 @@ class BaseNode(base.MemoryModule):
         Calculate out spikes of neurons by their current membrane potential and threshold voltage.
         """
 
-        spike = self.surrogate_function(self.v - self.v_threshold)
+        return self.surrogate_function(self.v - self.v_threshold)
 
     def neuronal_reset(self, spike):
         """
