@@ -38,7 +38,13 @@ Tensor cudnn_convolution_forward(
     IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups,
     bool benchmark, bool deterministic, bool allow_tf32)
 
-   
+aten/src/ATen/native/cudnn/ConvPlaceholders.cpp
+
+std::tuple<at::Tensor,at::Tensor> cudnn_convolution_backward(
+    const at::Tensor& input, const at::Tensor& grad_output, const at::Tensor& weight,
+    IntArrayRef padding, IntArrayRef stride, IntArrayRef dilation, int64_t groups,
+    bool benchmark, bool deterministic, bool allow_tf32, std::array<bool,2> output_mask)
+  
 aten/src/ATen/native/cudnn/ConvShared.cpp
 
 at::Tensor cudnn_convolution_backward_input(
