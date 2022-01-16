@@ -224,10 +224,16 @@ class spike_convolution(torch.autograd.Function):
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             if ctx.needs_input_grad[1]:
-                spike_b, s_dtype, s_shape, s_padding = float_spike_to_bool(spike)
-                ctx.s_dtype = s_dtype
-                ctx.s_shape = s_shape
-                ctx.s_padding = s_padding
+                if configure.save_bool_spike_level == 0:
+                    spike_b = spike.bool()
+                    ctx.s_dtype = spike.dtype
+                elif configure.save_bool_spike_level == 1:
+                    spike_b, s_dtype, s_shape, s_padding = float_spike_to_bool(spike)
+                    ctx.s_dtype = s_dtype
+                    ctx.s_shape = s_shape
+                    ctx.s_padding = s_padding
+                else:
+                    raise NotImplementedError
 
             ctx.save_for_backward(
                 spike_b if ctx.needs_input_grad[1] else None,
@@ -256,7 +262,12 @@ class spike_convolution(torch.autograd.Function):
         grad_bias = None
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             spike, weight = ctx.saved_tensors
-            spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+            if configure.save_bool_spike_level == 0:
+                spike = spike.to(ctx.s_dtype)
+            elif configure.save_bool_spike_level == 1:
+                spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+            else:
+                raise NotImplementedError
             weight = weight.to(grad_output.dtype)
             grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(spike, grad_output, weight, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
@@ -268,7 +279,12 @@ class spike_convolution(torch.autograd.Function):
 
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
             spike, _ = ctx.saved_tensors
-            spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+            if configure.save_bool_spike_level == 0:
+                spike = spike.to(ctx.s_dtype)
+            elif configure.save_bool_spike_level == 1:
+                spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+            else:
+                raise NotImplementedError
             grad_weight = cpp_wrapper.cudnn_convolution_backward_weight(ctx.weight_shape, grad_output, spike, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
@@ -299,10 +315,16 @@ class spike_linear(torch.autograd.Function):
         # bias.shape = [out_features]
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             if ctx.needs_input_grad[1]:
-                spike_b, s_dtype, s_shape, s_padding = float_spike_to_bool(spike)
-                ctx.s_dtype = s_dtype
-                ctx.s_shape = s_shape
-                ctx.s_padding = s_padding
+                if configure.save_bool_spike_level == 0:
+                    spike_b = spike.bool()
+                    ctx.s_dtype = spike.dtype
+                elif configure.save_bool_spike_level == 1:
+                    spike_b, s_dtype, s_shape, s_padding = float_spike_to_bool(spike)
+                    ctx.s_dtype = s_dtype
+                    ctx.s_shape = s_shape
+                    ctx.s_padding = s_padding
+                else:
+                    raise NotImplementedError
             ctx.save_for_backward(spike_b if ctx.needs_input_grad[1] else None,
                                   weight if ctx.needs_input_grad[1] else None)
         return F.linear(spike, weight, bias)
@@ -313,7 +335,12 @@ class spike_linear(torch.autograd.Function):
         # grad_output.shape = [N, *, out_features]
         spike, weight = ctx.saved_tensors
         if spike is not None:
-            spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+            if configure.save_bool_spike_level == 0:
+                spike = spike.to(ctx.s_dtype)
+            elif configure.save_bool_spike_level == 1:
+                spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+            else:
+                raise NotImplementedError
 
         grad_spike = grad_weight = grad_bias = None
 

@@ -308,10 +308,16 @@ try:
             if requires_grad:
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
-                    ctx.s_dtype = s_dtype
-                    ctx.s_shape = s_shape
-                    ctx.s_padding = s_padding
+                    if configure.save_bool_spike_level == 0:
+                        spike_seq_b = spike_seq.bool()
+                        ctx.s_dtype = spike_seq.dtype
+                    elif configure.save_bool_spike_level == 1:
+                        spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                        ctx.s_dtype = s_dtype
+                        ctx.s_shape = s_shape
+                        ctx.s_padding = s_padding
+                    else:
+                        raise NotImplementedError
                     ctx.save_for_backward(h_seq, spike_seq_b)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq)
@@ -342,7 +348,12 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                if configure.save_bool_spike_level == 0:
+                    spike_seq = spike_seq.to(ctx.s_dtype)
+                elif configure.save_bool_spike_level == 1:
+                    spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                else:
+                    raise NotImplementedError
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -753,10 +764,16 @@ try:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
-                    ctx.s_dtype = s_dtype
-                    ctx.s_shape = s_shape
-                    ctx.s_padding = s_padding
+                    if configure.save_bool_spike_level == 0:
+                        spike_seq_b = spike_seq.bool()
+                        ctx.s_dtype = spike_seq.dtype
+                    elif configure.save_bool_spike_level == 1:
+                        spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                        ctx.s_dtype = s_dtype
+                        ctx.s_shape = s_shape
+                        ctx.s_padding = s_padding
+                    else:
+                        raise NotImplementedError
                     ctx.save_for_backward(h_seq, spike_seq_b)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq)
@@ -789,7 +806,12 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                if configure.save_bool_spike_level == 0:
+                    spike_seq = spike_seq.to(ctx.s_dtype)
+                elif configure.save_bool_spike_level == 1:
+                    spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                else:
+                    raise NotImplementedError
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -1152,10 +1174,16 @@ try:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
-                    ctx.s_dtype = s_dtype
-                    ctx.s_shape = s_shape
-                    ctx.s_padding = s_padding
+                    if configure.save_bool_spike_level == 0:
+                        spike_seq_b = spike_seq.bool()
+                        ctx.s_dtype = spike_seq.dtype
+                    elif configure.save_bool_spike_level == 1:
+                        spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                        ctx.s_dtype = s_dtype
+                        ctx.s_shape = s_shape
+                        ctx.s_padding = s_padding
+                    else:
+                        raise NotImplementedError
                     ctx.save_for_backward(h_seq, spike_seq_b, v_v_seq)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
@@ -1188,7 +1216,12 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                if configure.save_bool_spike_level == 0:
+                    spike_seq = spike_seq.to(ctx.s_dtype)
+                elif configure.save_bool_spike_level == 1:
+                    spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                else:
+                    raise NotImplementedError
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
             grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device).to(grad_spike_seq)
@@ -1608,10 +1641,16 @@ try:
             if requires_grad:
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
-                    ctx.s_dtype = s_dtype
-                    ctx.s_shape = s_shape
-                    ctx.s_padding = s_padding
+                    if configure.save_bool_spike_level == 0:
+                        spike_seq_b = spike_seq.bool()
+                        ctx.s_dtype = spike_seq.dtype
+                    elif configure.save_bool_spike_level == 1:
+                        spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                        ctx.s_dtype = s_dtype
+                        ctx.s_shape = s_shape
+                        ctx.s_padding = s_padding
+                    else:
+                        raise NotImplementedError
                     ctx.save_for_backward(h_seq, spike_seq_b, v_v_seq)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
@@ -1646,7 +1685,12 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                if configure.save_bool_spike_level == 0:
+                    spike_seq = spike_seq.to(ctx.s_dtype)
+                elif configure.save_bool_spike_level == 1:
+                    spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
+                else:
+                    raise NotImplementedError
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 

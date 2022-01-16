@@ -56,3 +56,14 @@ save_spike_as_bool_in_neuron_kernel = False
 If `save_spike_as_bool_in_neuron_kernel == True`, the neuron kernel used in the neuron's cupy backend will save the spike as a bool, rather than float/half tensor for backward, which can reduce the memory consumption.
 '''
 
+save_bool_spike_level = 0
+'''
+`save_bool_spike_level` take effects on SpikeConv/SpikeLinear, and on neuron's cupy kernel when `save_spike_as_bool_in_neuron_kernel == True`.
+
+If `save_bool_spike_level == 0`, spikes will be saved in bool. Note that bool uses 8-bit, rather than 1-bit.
+
+If `save_bool_spike_level == 1`, spikes will be saved in uint8 with each 8-bit storing 8 spikes.
+
+A larger `save_bool_spike_level` means less memory consumption but slower speed.
+'''
+
