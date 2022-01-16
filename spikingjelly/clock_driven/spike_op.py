@@ -32,6 +32,7 @@ class DataTypeConvertCUDACode:
     '''
 
     half2bool = r'''
+    #include <cuda_fp16.h>
     extern "C" __global__
             void half2bool(const half* fs, unsigned char* bs, const int &N)
             {
@@ -44,7 +45,7 @@ class DataTypeConvertCUDACode:
                     #pragma unroll
                     for(int i = 0; i < 8; i++)
                     {
-                        bs[index] += ( ((unsigned char) fs[mem_offset + i]) << i);
+                        bs[index] += ( ((unsigned char) __half2float(fs[mem_offset + i])) << i);
                     }
                 }
             }
@@ -70,6 +71,7 @@ class DataTypeConvertCUDACode:
     '''
 
     bool2half = r'''
+    #include <cuda_fp16.h>
     extern "C" __global__
             void bool2half(const unsigned char* bs, half* fs, const int &N)
             {
@@ -81,13 +83,12 @@ class DataTypeConvertCUDACode:
                     #pragma unroll
                     for(int i = 0; i < 8; i++)
                     {
-                        fs[mem_offset + i] = (half) (compressed_v % 2);
+                        fs[mem_offset + i] = __float2half((float) (compressed_v % 2));
                         compressed_v = (compressed_v >> 1);
                     }
                 }
             }
     '''
-
 def float_spike_to_bool(spike: torch.Tensor):
     s_dtype = spike.dtype
     if s_dtype == torch.float:
