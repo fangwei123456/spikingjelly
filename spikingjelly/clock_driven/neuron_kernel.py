@@ -3,7 +3,7 @@ try:
     import cupy
     import torch
     import torch.nn.functional as F
-    from . import cu_kernel_opt, surrogate
+    from . import cu_kernel_opt, surrogate, spike_op
     from .. import configure
     import numpy as np
         
@@ -308,8 +308,11 @@ try:
             if requires_grad:
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    ctx.save_for_backward(h_seq, spike_seq.bool())
-                    ctx.spike_seq_dtype = spike_seq.dtype
+                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                    ctx.s_dtype = s_dtype
+                    ctx.s_shape = s_shape
+                    ctx.s_padding = s_padding
+                    ctx.save_for_backward(h_seq, spike_seq_b)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq)
                 ctx.blocks = blocks
@@ -339,7 +342,7 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -750,8 +753,11 @@ try:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    ctx.save_for_backward(h_seq, spike_seq.bool())
-                    ctx.spike_seq_dtype = spike_seq.dtype
+                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                    ctx.s_dtype = s_dtype
+                    ctx.s_shape = s_shape
+                    ctx.s_padding = s_padding
+                    ctx.save_for_backward(h_seq, spike_seq_b)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq)
                 ctx.blocks = blocks
@@ -783,7 +789,7 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
@@ -1146,8 +1152,11 @@ try:
                 ctx.decay_input = decay_input
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
-                    ctx.spike_seq_dtype = spike_seq.dtype
+                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                    ctx.s_dtype = s_dtype
+                    ctx.s_shape = s_shape
+                    ctx.s_padding = s_padding
+                    ctx.save_for_backward(h_seq, spike_seq_b, v_v_seq)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
                 ctx.blocks = blocks
@@ -1179,7 +1188,7 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
             grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device).to(grad_spike_seq)
@@ -1599,8 +1608,11 @@ try:
             if requires_grad:
                 ctx.use_pad = use_pad
                 if configure.save_spike_as_bool_in_neuron_kernel:
-                    ctx.save_for_backward(h_seq, spike_seq.bool(), v_v_seq)
-                    ctx.spike_seq_dtype = spike_seq.dtype
+                    spike_seq_b, s_dtype, s_shape, s_padding = spike_op.float_spike_to_bool(spike_seq)
+                    ctx.s_dtype = s_dtype
+                    ctx.s_shape = s_shape
+                    ctx.s_padding = s_padding
+                    ctx.save_for_backward(h_seq, spike_seq_b, v_v_seq)
                 else:
                     ctx.save_for_backward(h_seq, spike_seq, v_v_seq)
                 ctx.blocks = blocks
@@ -1634,7 +1646,7 @@ try:
             device = grad_spike_seq.get_device()
             h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             if configure.save_spike_as_bool_in_neuron_kernel:
-                spike_seq = spike_seq.to(ctx.spike_seq_dtype)
+                spike_seq = spike_op.bool_spike_to_float(spike_seq, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
 
