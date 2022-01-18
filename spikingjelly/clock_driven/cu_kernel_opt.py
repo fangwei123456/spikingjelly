@@ -106,5 +106,6 @@ try:
 
 
 
-except ImportError:
+except BaseException as e:
+    print('spikingjelly.clock_driven.cu_kernel_opt:', e)
     pass

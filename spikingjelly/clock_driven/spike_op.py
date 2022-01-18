@@ -1,165 +1,16 @@
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
 from torch.cuda.amp import custom_fwd, custom_bwd
-from spikingjelly import configure
-from spikingjelly.clock_driven import cu_kernel_opt
+from . import tensor_cache
+
+
 
 try:
     import cupy
-except BaseException:
+except BaseException as e:
+    print('spikingjelly.clock_driven.spike_op:', e)
     cupy = None
-
-class DataTypeConvertCUDACode:
-    float2bool = r'''
-    extern "C" __global__
-            void float2bool(const float* fs, unsigned char* bs, const int &N)
-            {
-                // assert N == numel / 8 and numel % 8 == 0
-                const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < N)
-                {
-                    bs[index] = 0;
-                    const int mem_offset = (index << 3);
-                    #pragma unroll
-                    for(int i = 0; i < 8; i++)
-                    {
-                        bs[index] += ( ((unsigned char) fs[mem_offset + i]) << i);
-                    }
-                }
-            }
-    '''
-
-    half2bool = r'''
-    #include <cuda_fp16.h>
-    extern "C" __global__
-            void half2bool(const half* fs, unsigned char* bs, const int &N)
-            {
-                // assert N == numel / 8 and numel % 8 == 0
-                const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < N)
-                {
-                    bs[index] = 0;
-                    const int mem_offset = (index << 3);
-                    #pragma unroll
-                    for(int i = 0; i < 8; i++)
-                    {
-                        bs[index] += ( ((unsigned char) __half2float(fs[mem_offset + i])) << i);
-                    }
-                }
-            }
-    '''
-
-    bool2float = r'''
-    extern "C" __global__
-            void bool2float(const unsigned char* bs, float* fs, const int &N)
-            {
-                const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < N)
-                {
-                    const int mem_offset = (index << 3);
-                    unsigned char compressed_v = bs[index];
-                    #pragma unroll
-                    for(int i = 0; i < 8; i++)
-                    {
-                        fs[mem_offset + i] = (float) (compressed_v % 2);
-                        compressed_v = (compressed_v >> 1);
-                    }
-                }
-            }
-    '''
-
-    bool2half = r'''
-    #include <cuda_fp16.h>
-    extern "C" __global__
-            void bool2half(const unsigned char* bs, half* fs, const int &N)
-            {
-                const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                if (index < N)
-                {
-                    const int mem_offset = (index << 3);
-                    unsigned char compressed_v = bs[index];
-                    #pragma unroll
-                    for(int i = 0; i < 8; i++)
-                    {
-                        fs[mem_offset + i] = __float2half((float) (compressed_v % 2));
-                        compressed_v = (compressed_v >> 1);
-                    }
-                }
-            }
-    '''
-def float_spike_to_bool(spike: torch.Tensor):
-    s_dtype = spike.dtype
-    if s_dtype == torch.float:
-        kernel_codes = DataTypeConvertCUDACode.float2bool
-        kernel_name = 'float2bool'
-    elif s_dtype == torch.half:
-        kernel_codes = DataTypeConvertCUDACode.half2bool
-        kernel_name = 'half2bool'
-    else:
-        raise NotImplementedError
-
-    s_shape = spike.shape
-
-    spike = spike.flatten()
-    s_padding = 8 - spike.numel() % 8
-    if s_padding != 0:
-        spike = F.pad(spike, (0, s_padding))
-    device_id = spike.get_device()
-    spike_b = torch.zeros([spike.numel() // 8], device=spike.device, dtype=torch.uint8)
-    with cupy.cuda.Device(device_id):
-        numel = spike_b.numel()
-        blocks = cu_kernel_opt.cal_blocks(numel)
-        numel = cupy.asarray(numel)
-        spike, spike_b, numel = cu_kernel_opt.get_contiguous(spike, spike_b, numel)
-        kernel_args = [spike, spike_b, numel]
-        kernel = cupy.RawKernel(
-            kernel_codes,
-            kernel_name,
-            options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
-        )
-        kernel(
-            (blocks,), (configure.cuda_threads,),
-            cu_kernel_opt.wrap_args_to_raw_kernel(
-                device_id,
-                *kernel_args
-            )
-        )
-    return spike_b, s_dtype, s_shape, s_padding
-
-def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0):
-    device_id = spike_b.get_device()
-    spike = torch.zeros(spike_b.numel() * 8, device=spike_b.device, dtype=s_dtype)
-    if s_dtype == torch.float:
-        kernel_codes = DataTypeConvertCUDACode.bool2float
-        kernel_name = 'bool2float'
-    elif s_dtype == torch.half:
-        kernel_codes = DataTypeConvertCUDACode.bool2half
-        kernel_name = 'bool2half'
-    else:
-        raise NotImplementedError
-    with cupy.cuda.Device(device_id):
-        numel = spike_b.numel()
-        blocks = cu_kernel_opt.cal_blocks(numel)
-        numel = cupy.asarray(numel)
-        spike_b, spike, numel = cu_kernel_opt.get_contiguous(spike_b, spike, numel)
-        kernel_args = [spike_b, spike, numel]
-        kernel = cupy.RawKernel(
-            kernel_codes,
-            kernel_name,
-            options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
-        )
-        kernel(
-            (blocks,), (configure.cuda_threads,),
-            cu_kernel_opt.wrap_args_to_raw_kernel(
-                device_id,
-                *kernel_args
-            )
-        )
-    if s_padding is not None and s_padding != 0:
-        spike = spike[0: spike.numel() - s_padding]
-    return spike.reshape(s_shape)
 
 try:
     cpp_wrapper = load_inline(
@@ -172,7 +23,8 @@ try:
             ],
             with_cuda=True
     )
-except BaseException:
+except BaseException as e:
+    print('spikingjelly.clock_driven.spike_op:', e)
     cpp_wrapper = None
 
 '''
@@ -224,21 +76,12 @@ class spike_convolution(torch.autograd.Function):
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             if ctx.needs_input_grad[1]:
-                if configure.save_bool_spike_level == 0:
-                    spike_b = spike.bool()
-                    ctx.s_dtype = spike.dtype
-                elif configure.save_bool_spike_level == 1:
-                    spike_b, s_dtype, s_shape, s_padding = float_spike_to_bool(spike)
-                    ctx.s_dtype = s_dtype
-                    ctx.s_shape = s_shape
-                    ctx.s_padding = s_padding
-                else:
-                    raise NotImplementedError
+                ctx.s_shape = spike.shape
+                ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
 
-            ctx.save_for_backward(
-                spike_b if ctx.needs_input_grad[1] else None,
-                weight if ctx.needs_input_grad[0] else None
-            )
+            if ctx.needs_input_grad[0]:
+                ctx.save_for_backward(weight)
+
             ctx.padding = padding
             ctx.stride = stride
             ctx.dilation = dilation
@@ -261,13 +104,8 @@ class spike_convolution(torch.autograd.Function):
         grad_weight = None
         grad_bias = None
         if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            spike, weight = ctx.saved_tensors
-            if configure.save_bool_spike_level == 0:
-                spike = spike.to(ctx.s_dtype)
-            elif configure.save_bool_spike_level == 1:
-                spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
-            else:
-                raise NotImplementedError
+            weight = ctx.saved_tensors[0]
+            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
             weight = weight.to(grad_output.dtype)
             grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(spike, grad_output, weight, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
@@ -278,13 +116,7 @@ class spike_convolution(torch.autograd.Function):
                                                                                True))
 
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            spike, _ = ctx.saved_tensors
-            if configure.save_bool_spike_level == 0:
-                spike = spike.to(ctx.s_dtype)
-            elif configure.save_bool_spike_level == 1:
-                spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
-            else:
-                raise NotImplementedError
+            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
             grad_weight = cpp_wrapper.cudnn_convolution_backward_weight(ctx.weight_shape, grad_output, spike, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
                                                                                torch.backends.cudnn.benchmark,
@@ -292,7 +124,7 @@ class spike_convolution(torch.autograd.Function):
                                                                                torch.backends.cudnn.allow_tf32)
 
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            _, weight = ctx.saved_tensors
+            weight = ctx.saved_tensors[0]
             weight = weight.to(grad_output.dtype)
             grad_spike = cpp_wrapper.cudnn_convolution_backward_input(ctx.spike_shape, grad_output, weight, ctx.padding,
                                                                                ctx.stride, ctx.dilation, ctx.groups,
@@ -315,32 +147,20 @@ class spike_linear(torch.autograd.Function):
         # bias.shape = [out_features]
         if ctx.needs_input_grad[0] or ctx.needs_input_grad[1] or ctx.needs_input_grad[2]:
             if ctx.needs_input_grad[1]:
-                if configure.save_bool_spike_level == 0:
-                    spike_b = spike.bool()
-                    ctx.s_dtype = spike.dtype
-                elif configure.save_bool_spike_level == 1:
-                    spike_b, s_dtype, s_shape, s_padding = float_spike_to_bool(spike)
-                    ctx.s_dtype = s_dtype
-                    ctx.s_shape = s_shape
-                    ctx.s_padding = s_padding
-                else:
-                    raise NotImplementedError
-            ctx.save_for_backward(spike_b if ctx.needs_input_grad[1] else None,
-                                  weight if ctx.needs_input_grad[1] else None)
+                ctx.s_shape = spike.shape
+                ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
+            if ctx.needs_input_grad[1]:
+                ctx.save_for_backward(weight)
         return F.linear(spike, weight, bias)
 
     @staticmethod
     @custom_bwd
     def backward(ctx, grad_output):
         # grad_output.shape = [N, *, out_features]
-        spike, weight = ctx.saved_tensors
-        if spike is not None:
-            if configure.save_bool_spike_level == 0:
-                spike = spike.to(ctx.s_dtype)
-            elif configure.save_bool_spike_level == 1:
-                spike = bool_spike_to_float(spike, ctx.s_dtype, ctx.s_shape, ctx.s_padding)
-            else:
-                raise NotImplementedError
+        if ctx.needs_input_grad[1]:
+            weight = ctx.saved_tensors[0]
+        if ctx.needs_input_grad[0]:
+            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
 
         grad_spike = grad_weight = grad_bias = None
 

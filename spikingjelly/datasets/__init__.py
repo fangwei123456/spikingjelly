@@ -38,7 +38,8 @@ try:
                 }
             }
     '''
-except ImportError:
+except BaseException as e:
+    print('spikingjelly.dataset.__init__:', e)
     cupy = None
     pass
 

@@ -7,7 +7,8 @@ import math
 try:
     import cupy
     from . import neuron_kernel, cu_kernel_opt
-except ImportError:
+except BaseException as e:
+    print('neuron:', e)
     neuron_kernel = None
 
 
