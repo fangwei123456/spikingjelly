@@ -102,7 +102,7 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
         for i in range(1, 26):
             idx = str(i).zfill(2)
             urls.append(
-                (f'	ES-imagenet-0.18.part{idx}.rar', f'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part{idx}.rar&dl=1', None)
+                (f'ES-imagenet-0.18.part{idx}.rar', f'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part{idx}.rar&dl=1', None)
             )
         return urls
 
