@@ -1,6 +1,5 @@
-import torchvision.transforms
 from torchvision.datasets import DatasetFolder
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple
+from typing import  Callable, Dict, Optional, Tuple
 from abc import abstractmethod
 import scipy.io
 import struct
@@ -22,7 +21,7 @@ np_savez = np.savez_compressed if configure.save_datasets_compressed else np.sav
 
 try:
     import cupy
-    from spikingjelly.clock_driven import cu_kernel_opt
+    from ..clock_driven import cu_kernel_opt
 
     padded_sequence_mask_kernel_code = r'''
     extern "C" __global__

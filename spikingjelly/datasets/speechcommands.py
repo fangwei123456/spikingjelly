@@ -10,7 +10,6 @@ from torchaudio.datasets.utils import (
     download_url,
     extract_archive
 )
-from torchvision import transforms
 from torchvision.datasets.utils import verify_str_arg
 import numpy as np
 from random import choice

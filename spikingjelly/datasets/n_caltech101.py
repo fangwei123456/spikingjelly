@@ -1,13 +1,12 @@
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple
-import numpy as np
-import spikingjelly.datasets as sjds
+from typing import Callable, Dict, Optional, Tuple
+from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from .. import configure
-from spikingjelly.datasets import np_savez
+from ..datasets import np_savez
 
 class NCaltech101(sjds.NeuromorphicDatasetFolder):
     def __init__(

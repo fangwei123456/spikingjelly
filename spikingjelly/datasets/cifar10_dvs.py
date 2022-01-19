@@ -1,13 +1,13 @@
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-import spikingjelly.datasets as sjds
+from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from .. import configure
-from spikingjelly.datasets import np_savez
+from ..datasets import np_savez
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
 

@@ -1,5 +1,4 @@
-from typing import Any, Callable, cast, Dict, List, Optional, Tuple
-import numpy as np
+from typing import Callable, Dict,  Optional, Tuple
 import spikingjelly.datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
@@ -8,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import shutil
 from .. import configure
-from spikingjelly.datasets import np_savez
+from ..datasets import np_savez
 
 class ASLDVS(sjds.NeuromorphicDatasetFolder):
     def __init__(
