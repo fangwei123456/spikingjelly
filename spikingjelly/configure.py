@@ -11,7 +11,7 @@ Do not change them in this way, which will not make effect:
     cuda_threads = 512
 
 '''
-max_threads_number_for_datasets_preprocess = 4
+max_threads_number_for_datasets_preprocess = 16
 '''
 `max_threads_number_for_datasets_preprocess` defines the maximum threads for datasets preprocessing, which is 
 1. reading binary events and saving them to numpy format

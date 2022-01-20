@@ -153,6 +153,7 @@ SpikingJelly 已经将下列数据集纳入：
 | DVS128 Gesture | A Low Power, Fully Event-Based Gesture Recognition System    |
 | N-Caltech101   | Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades |
 | N-MNIST        | Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades |
+| Nav Gesture    | Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities |
 
 用户可以轻松使用事件数据，或由SpikingJelly积分生成的帧数据：
 

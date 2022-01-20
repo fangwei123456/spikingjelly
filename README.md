@@ -153,6 +153,7 @@ SpikingJelly includes the following neuromorphic datasets:
 | DVS128 Gesture | A Low Power, Fully Event-Based Gesture Recognition System    |
 | N-Caltech101   | Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades |
 | N-MNIST        | Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades |
+| Nav Gesture    | Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities |
 
 Users can use both the origin events data and frames data integrated by SpikingJelly:
 
