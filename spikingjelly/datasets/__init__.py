@@ -342,8 +342,10 @@ def integrate_events_by_fixed_frames_number(events: Dict, split_by: str, frames_
         frames[i] = integrate_events_segment_to_frame(events, H, W, j_l[i], j_r[i])
     return frames
 
-def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: str, output_dir: str, split_by: str, frames_num: int, H: int, W: int, print_save: bool = False) -> None:
+def integrate_events_file_to_frames_file_by_fixed_frames_number(loader: Callable, events_np_file: str, output_dir: str, split_by: str, frames_num: int, H: int, W: int, print_save: bool = False) -> None:
     '''
+    :param loader: a function that can load events from `events_np_file`
+    :type loader: Callable
     :param events_np_file: path of the events np file
     :type events_np_file: str
     :param output_dir: output directory for saving the frames
@@ -363,7 +365,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(events_np_file: 
     Integrate a events file to frames by fixed frames number and save it. See :class:`cal_fixed_frames_number_segment_index` and :class:`integrate_events_segment_to_frame` for more details.
     '''
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
-    np_savez(fname, frames=integrate_events_by_fixed_frames_number(np.load(events_np_file), split_by, frames_num, H, W))
+    np_savez(fname, frames=integrate_events_by_fixed_frames_number(loader(events_np_file), split_by, frames_num, H, W))
     if print_save:
         print(f'Frames [{fname}] saved.')
 
@@ -405,8 +407,10 @@ def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: i
         if right == N:
             return np.concatenate(frames)
 
-def integrate_events_file_to_frames_file_by_fixed_duration(events_np_file: str, output_dir: str, duration: int, H: int, W: int, print_save: bool = False) -> None:
+def integrate_events_file_to_frames_file_by_fixed_duration(loader: Callable, events_np_file: str, output_dir: str, duration: int, H: int, W: int, print_save: bool = False) -> None:
     '''
+    :param loader: a function that can load events from `events_np_file`
+    :type loader: Callable
     :param events_np_file: path of the events np file
     :type events_np_file: str
     :param output_dir: output directory for saving the frames
@@ -423,7 +427,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(events_np_file: str, 
 
     Integrate events to frames by fixed time duration of each frame.
     '''
-    frames = integrate_events_by_fixed_duration(np.load(events_np_file), duration, H, W)
+    frames = integrate_events_by_fixed_duration(loader(events_np_file), duration, H, W)
     fname, _ = os.path.splitext(os.path.basename(events_np_file))
     fname = os.path.join(output_dir, f'{fname}_{frames.shape[0]}.npz')
     np_savez(fname, frames=frames)
@@ -782,7 +786,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                                 for e_file in e_files:
                                     events_np_file = os.path.join(e_root, e_file)
                                     print(f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
-                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number, events_np_file, output_dir, split_by, frames_number, H, W, True)
+                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number, self.load_events_np, events_np_file, output_dir, split_by, frames_number, H, W, True)
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
@@ -812,7 +816,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                                 for e_file in e_files:
                                     events_np_file = os.path.join(e_root, e_file)
                                     print(f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
-                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration, events_np_file, output_dir, duration, H, W, True)
+                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration, self.load_events_np, events_np_file, output_dir, duration, H, W, True)
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
@@ -865,19 +869,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         super().__init__(root=_root, loader=_loader, extensions=('.npz', ), transform=_transform,
                          target_transform=_target_transform)
-
-    @staticmethod
-    @abstractmethod
-    def load_origin_data(file_name: str) -> Dict:
-        '''
-        :param file_name: path of the events file
-        :type file_name: str
-        :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-        :rtype: Dict
-
-        This function defines how to read the origin binary data.
-        '''
-        pass
 
     @staticmethod
     @abstractmethod
@@ -934,6 +925,17 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :rtype: tuple
         '''
         pass
+
+    @staticmethod
+    def load_events_np(fname: str):
+        '''
+        :param fname: file name
+        :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
+
+        This function defines how to load a sample from `events_np`. In most cases, this function is `np.load`.
+        But for some datasets, e.g., ES-ImageNet, it can be different.
+        '''
+        return np.load(fname)
 
 
 

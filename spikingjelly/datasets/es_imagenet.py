@@ -1,12 +1,27 @@
 from typing import Callable, Dict, Optional, Tuple
+import numpy as np
 from .. import datasets as sjds
-from torchvision.datasets.utils import extract_archive
 import os
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
+import rarfile
 import time
-from .. import configure
-from ..datasets import np_savez
+
+
+def load_events(fname: str):
+    events = np.load(fname)
+    e_pos = events['pos']
+    e_neg = events['neg']
+    e_pos = np.hstack((e_pos, np.ones((e_pos.shape[0], 1))))
+    e_neg = np.hstack((e_neg, np.zeros((e_neg.shape[0], 1))))
+    events = np.vstack((e_pos, e_neg))  # shape = [N, 4], N * (x, y, t, p)
+    idx = np.argsort(events[:, 2])
+    events = events[idx]
+    return {
+        'x': events[:, 1],
+        'y': events[:, 0],
+        't': events[:, 2],
+        'p': events[:, 3]
+    }
+
 
 class ESImageNet(sjds.NeuromorphicDatasetFolder):
     def __init__(
@@ -22,74 +37,21 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
             transform: Optional[Callable] = None,
             target_transform: Optional[Callable] = None,
     ) -> None:
-        '''
-        :param root: root path of the dataset
-        :type root: str
-        :param train: whether use the train set
-        :type train: bool
-        :param data_type: `event` or `frame`
-        :type data_type: str
-        :param frames_number: the integrated frame number
-        :type frames_number: int
-        :param split_by: `time` or `number`
-        :type split_by: str
-        :param duration: the time duration of each frame
-        :type duration: int
-        :param custom_integrate_function: a user-defined function that inputs are ``events, H, W``.
-            ``events`` is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-            ``H`` is the height of the data and ``W`` is the weight of the data.
-            For example, H=128 and W=128 for the DVS128 Gesture dataset.
-            The user should define how to integrate events to frames, and return frames.
-        :type custom_integrate_function: Callable
-        :param custom_integrated_frames_dir_name: The name of directory for saving frames integrating by ``custom_integrate_function``.
-            If ``custom_integrated_frames_dir_name`` is ``None``, it will be set to ``custom_integrate_function.__name__``
-        :type custom_integrated_frames_dir_name: str or None
-        :param transform: a function/transform that takes in
-            a sample and returns a transformed version.
-            E.g, ``transforms.RandomCrop`` for images.
-        :type transform: callable
-        :param target_transform: a function/transform that takes
-            in the target and transforms it.
-        :type target_transform: callable
+        """
+        The ES-ImageNet dataset, which is proposed by `ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks <https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full>`_.
 
-        If ``data_type == 'event'``
-            the sample in this dataset is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``.
-
-        If ``data_type == 'frame'`` and ``frames_number`` is not ``None``
-            events will be integrated to frames with fixed frames number. ``split_by`` will define how to split events.
-            See :class:`spikingjelly.datasets.cal_fixed_frames_number_segment_index` for
-            more details.
-
-        If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
-            events will be integrated to frames with fixed time duration.
-
-        If ``data_type == 'frame'``, ``frames_number`` is ``None``, ``duration`` is ``None``, and ``custom_integrate_function`` is not ``None``:
-            events will be integrated by the user-defined function and saved to the ``custom_integrated_frames_dir_name`` directory in ``root`` directory.
-            Here is an example from SpikingJelly's tutorials:
-
-            .. code-block:: python
-
-                from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
-                from typing import Dict
-                import numpy as np
-                import spikingjelly.datasets as sjds
-                def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
-                    index_split = np.random.randint(low=0, high=events['t'].__len__())
-                    frames = np.zeros([2, 2, H, W])
-                    frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
-                    frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
-                    return frames
-
-                root_dir = 'D:/datasets/DVS128Gesture'
-                train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
-
-                from spikingjelly.datasets import play_frame
-                frame, label = train_set[500]
-                play_frame(frame)
-
-        '''
+        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        """
         assert train is not None
         super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
+
+        if data_type == 'event':
+            self.loader = load_events
+
+    @staticmethod
+    def load_events_np(fname: str):
+        return load_events(fname)
+
     @staticmethod
     def resource_url_md5() -> list:
         '''
@@ -97,13 +59,83 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
         :rtype: list
         '''
         urls = [
-            ('Validation Set.zip', 'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FValidation%20Set.zip&dl=1', None)
+            ('ES-imagenet-0.18.part01.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part01.rar&dl=1',
+             '900bdd57b5641f7d81cd4620283fef76'),
+            ('ES-imagenet-0.18.part02.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part02.rar&dl=1',
+             '5982532009e863a8f4e18e793314c54b'),
+            ('ES-imagenet-0.18.part03.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part03.rar&dl=1',
+             '8f408c1f5a1d4604e48d0d062a8289a0'),
+            ('ES-imagenet-0.18.part04.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part04.rar&dl=1',
+             '5c5b5cf0a55954eb639964e3da510097'),
+            ('ES-imagenet-0.18.part05.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part05.rar&dl=1',
+             '51feb661b4c9fa87860b63e76b914673'),
+            ('ES-imagenet-0.18.part06.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part06.rar&dl=1',
+             'fcd007a2b17b7c13f338734c53f6db31'),
+            ('ES-imagenet-0.18.part07.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part07.rar&dl=1',
+             'd3e74b96d9c5df15714bbc3abcd329fc'),
+            ('ES-imagenet-0.18.part08.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part08.rar&dl=1',
+             '65b9cf7fa63e18d2e7d92ff45a42a5e5'),
+            ('ES-imagenet-0.18.part09.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part09.rar&dl=1',
+             '241c9a37a83ff9efd305fe46d012211e'),
+            ('ES-imagenet-0.18.part10.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part10.rar&dl=1',
+             'ceee96971008e30d0cdc34086c49fd75'),
+            ('ES-imagenet-0.18.part11.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part11.rar&dl=1',
+             '4fbfefbe6e48758fbb72427c81f119cf'),
+            ('ES-imagenet-0.18.part12.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part12.rar&dl=1',
+             'c8cc163be4e5f6451201dccbded4ec24'),
+            ('ES-imagenet-0.18.part13.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part13.rar&dl=1',
+             '08c9dff32f6b42c49ef7cd78e37c728e'),
+            ('ES-imagenet-0.18.part14.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part14.rar&dl=1',
+             '43aa157dc5bd5fcea81315a46e0322cf'),
+            ('ES-imagenet-0.18.part15.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part15.rar&dl=1',
+             '480a69b050f465ef01efcc44ae29f7df'),
+            ('ES-imagenet-0.18.part16.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part16.rar&dl=1',
+             '11abd24d92b93e7f85acd63abd4a18ab'),
+            ('ES-imagenet-0.18.part17.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part17.rar&dl=1',
+             '3891486a6862c63a325c5f16cd01fdd1'),
+            ('ES-imagenet-0.18.part18.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part18.rar&dl=1',
+             'cf8bb0525b514f411bca9d7c2d681f7c'),
+            ('ES-imagenet-0.18.part19.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part19.rar&dl=1',
+             '3766bc35572ccacc03f0f293c571d0ae'),
+            ('ES-imagenet-0.18.part20.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part20.rar&dl=1',
+             'bf73a5e338644122220e41da7b5630e6'),
+            ('ES-imagenet-0.18.part21.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part21.rar&dl=1',
+             '564de4a2609cbb0bb67ffa1bc51f2487'),
+            ('ES-imagenet-0.18.part22.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part22.rar&dl=1',
+             '60a9e52db1acadfccc9a9809073f0b04'),
+            ('ES-imagenet-0.18.part23.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part23.rar&dl=1',
+             '373b5484826d40d7ec35f0e1605cb6ea'),
+            ('ES-imagenet-0.18.part24.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part24.rar&dl=1',
+             'a50612e889b20f99cc7b2725dfd72e9e'),
+            ('ES-imagenet-0.18.part25.rar',
+             'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part25.rar&dl=1',
+             '0802ccdeb0cff29237faf55164524101')
         ]
-        for i in range(1, 26):
-            idx = str(i).zfill(2)
-            urls.append(
-                (f'ES-imagenet-0.18.part{idx}.rar', f'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part{idx}.rar&dl=1', None)
-            )
+
         return urls
 
 
@@ -114,3 +146,72 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
         :rtype: bool
         '''
         return True
+
+    @staticmethod
+    def extract_downloaded_files(download_root: str, extract_root: str):
+        '''
+        :param download_root: Root directory path which saves downloaded dataset files
+        :type download_root: str
+        :param extract_root: Root directory path which saves extracted files from downloaded files
+        :type extract_root: str
+        :return: None
+
+        This function defines how to extract download files.
+        '''
+        rar_file = os.path.join(download_root, 'ES-imagenet-0.18.part01.rar')
+        print(f'Extract [{rar_file}] to [{extract_root}].')
+        rar_file = rarfile.RarFile(rar_file)
+        rar_file.extractall(extract_root)
+        rar_file.close()
+
+
+
+    @staticmethod
+    def create_events_np_files(extract_root: str, events_np_root: str):
+        '''
+        :param extract_root: Root directory path which saves extracted files from downloaded files
+        :type extract_root: str
+        :param events_np_root: Root directory path which saves events files in the ``npz`` format
+        :type events_np_root:
+        :return: None
+
+        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
+        '''
+        t_ckp = time.time()
+        train_dir = os.path.join(events_np_root, 'train')
+        os.mkdir(train_dir)
+        print(f'Mkdir [{train_dir}].')
+        sjds.create_same_directory_structure(os.path.join(extract_root, 'ES-imagenet-0.18/train'), train_dir)
+        for class_dir in os.listdir(os.path.join(extract_root, 'ES-imagenet-0.18/train')):
+            source_dir = os.path.join(extract_root, 'ES-imagenet-0.18/train', class_dir)
+            target_dir = os.path.join(train_dir, class_dir)
+            print(f'Create soft links from [{source_dir}] to [{target_dir}].')
+            for class_sample in os.listdir(source_dir):
+                os.symlink(os.path.join(source_dir, class_sample),
+                           os.path.join(target_dir, class_sample))
+
+
+
+
+        val_label = np.loadtxt(os.path.join(extract_root, 'ES-imagenet-0.18/vallabel.txt'), delimiter=' ', usecols=(1, ), dtype=int)
+        val_fname = np.loadtxt(os.path.join(extract_root, 'ES-imagenet-0.18/vallabel.txt'), delimiter=' ', usecols=(0, ), dtype=str)
+        source_dir = os.path.join(extract_root, 'ES-imagenet-0.18/val')
+        target_dir = os.path.join(events_np_root, 'test')
+        os.mkdir(target_dir)
+        print(f'Mkdir [{target_dir}].')
+        sjds.create_same_directory_structure(train_dir, target_dir)
+
+        for i in range(val_fname.__len__()):
+            os.symlink(os.path.join(source_dir, val_fname[i]), os.path.join(target_dir, f'class{val_label[i]}/{val_fname[i]}'))
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+        print(f'Note that files in [{events_np_root}] are soft links whose source files are in [{extract_root}]. If you want to use events, do not delete [{extract_root}].')
+
+    @staticmethod
+    def get_H_W() -> Tuple:
+        '''
+        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
+            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
+        :rtype: tuple
+        '''
+        return 256, 256
