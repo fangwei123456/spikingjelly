@@ -13,6 +13,7 @@
 | [Keys to Accurate Feature Extraction Using Residual Spiking Neural Networks](https://arxiv.org/abs/2111.05955) | https://github.com/VicenteAlex/Spiking_ResNet                |
 | [Human-Level Control through Directly-Trained Deep Spiking Q-Networks](https://arxiv.org/abs/2201.07211) | https://github.com/AptX395/Deep-Spiking-Q-Networks           |
 | [Deep Reinforcement Learning with Spiking Q-learning](https://arxiv.org/abs/2201.09754) |                                                              |
+| [Event-based Video Reconstruction via Potential-assisted Spiking Neural Network](https://arxiv.org/abs/2201.10943) |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
