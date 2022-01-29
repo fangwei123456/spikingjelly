@@ -14,6 +14,7 @@
 | [Human-Level Control through Directly-Trained Deep Spiking Q-Networks](https://arxiv.org/abs/2201.07211) | https://github.com/AptX395/Deep-Spiking-Q-Networks           |
 | [Deep Reinforcement Learning with Spiking Q-learning](https://arxiv.org/abs/2201.09754) |                                                              |
 | [Event-based Video Reconstruction via Potential-assisted Spiking Neural Network](https://arxiv.org/abs/2201.10943) |                                                              |
+| [Optimal ANN-SNN Conversion for High-accuracy and Ultra-low-latency Spiking Neural Networks](https://openreview.net/forum?id=7B3IJMM1k_M) |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
