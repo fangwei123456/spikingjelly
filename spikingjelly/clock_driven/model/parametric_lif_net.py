@@ -15,9 +15,7 @@ class VotingLayer(nn.Module):
         self.voting_size = voting_size
 
     def forward(self, x: torch.Tensor):
-        x.unsqueeze_(1)  # [N, C] -> [N, 1, C]
-        y = F.avg_pool1d(x, self.voting_size, self.voting_size)
-        y.squeeze_(1)
+        y = F.avg_pool1d(x.unsqueeze(1), self.voting_size, self.voting_size).squeeze(1)
         return y
 
 
