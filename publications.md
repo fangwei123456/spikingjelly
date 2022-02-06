@@ -17,6 +17,7 @@
 | [Optimal ANN-SNN Conversion for High-accuracy and Ultra-low-latency Spiking Neural Networks](https://openreview.net/forum?id=7B3IJMM1k_M) |                                                              |
 | [Optimized Potential Initialization for Low-latency Spiking Neural Networks](https://arxiv.org/abs/2202.01440) |                                                              |
 | [AutoSNN: Towards Energy-Efficient Spiking Neural Networks](https://arxiv.org/abs/2201.12738) |                                                              |
+| [Neural Architecture Search for Spiking Neural Networks](https://arxiv.org/abs/2201.10355) | https://github.com/Intelligent-Computing-Lab-Yale/Neural-Architecture-Search-for-Spiking-Neural-Networks |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
