@@ -1346,3 +1346,27 @@ class S2NN(MultiArgsSurrogateFunctionBase):
             {tab4_str}{self.cuda_code_end_comments()}
         '''
         return code
+
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200, figsize=(6, 4))
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.S2NN(alpha=4., beta=1., spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=4, \\beta=1$')
+    #
+    # surrogate_function = surrogate.S2NN(alpha=4, beta=1., spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=4, \\beta=1$')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('S2NN surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # # plt.show()
+    # plt.savefig('./S2NN.svg')
+    # plt.savefig('./S2NN.pdf')
