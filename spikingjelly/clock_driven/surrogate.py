@@ -1221,5 +1221,128 @@ class SquarewaveFourierSeries(MultiArgsSurrogateFunctionBase):
     # plt.savefig('./docs/source/_static/API/clock_driven/surrogate/SquarewaveFourierSeries2.pdf')
     # plt.savefig('./docs/source/_static/API/clock_driven/surrogate/SquarewaveFourierSeries2.svg')
 
+class s2nn(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, alpha: float, beta: float):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+            ctx.beta = beta
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        x = ctx.saved_tensors[0]
+        sgax = torch.sigmoid(ctx.alpha * x)
+        mask_l = (x < 0.).to(x)
+        grad_x = mask_l * ctx.alpha * sgax * (1. - sgax) + (1. - mask_l) * ctx.beta / (x + 1.)
+
+        return grad_x * grad_output, None, None
+
+class S2NN(MultiArgsSurrogateFunctionBase):
+    def __init__(self, alpha=4., beta=1., spiking=True):
+        """
+        * :ref:`API in English <S2NN.__init__-en>`
+        .. _S2NN.__init__-cn:
+
+        :param alpha: 控制 ``x < 0`` 时梯度的参数
+        :param beta: 控制 ``x >= 0`` 时梯度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        `S2NN: Time Step Reduction of Spiking Surrogate Gradients for Training Energy Efficient Single-Step Neural Networks <https://arxiv.org/abs/2201.10879>`_ 提出的S2NN替代函数。反向传播为
+
+        .. math::
+            g'(x) = \\begin{cases}
+                \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
+                \\beta (x + 1), x \ge 0
+            \\end{cases}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \\begin{cases}
+                \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
+                \\beta \\mathrm{ln}(x + 1) + 1, x \ge 0
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/S2NN.*
+            :width: 100%
 
 
+        * :ref:`中文API <S2NN.__init__-cn>`
+        .. _S2NN.__init__-en:
+
+        :param alpha: the param that controls the gradient when ``x < 0``
+        :param beta: the param that controls the gradient when ``x >= 0``
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The S2NN surrogate spiking function, which is proposed by `S2NN: Time Step Reduction of Spiking Surrogate Gradients for Training Energy Efficient Single-Step Neural Networks <https://arxiv.org/abs/2201.10879>`_. The gradient is defined by
+
+        .. math::
+            g'(x) = \\begin{cases}
+                \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
+                \\beta (x + 1), x \ge 0
+            \\end{cases}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \\begin{cases}
+                \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
+                \\beta \\mathrm{ln}(x + 1) + 1, x \ge 0
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/S2NN.*
+            :width: 100%
+        """
+        super().__init__(spiking)
+        self.alpha = alpha
+        self.beta = beta
+        self.spiking = spiking
+        if spiking:
+            self.f = self.spiking_function
+        else:
+            self.f = self.primitive_function
+
+    def forward(self, x):
+        return self.f(x, self.alpha, self.beta)
+
+    @staticmethod
+    def spiking_function(x: torch.Tensor, alpha, beta):
+        return s2nn.apply(x, alpha, beta)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, alpha, beta):
+        mask_l = (x < 0.).to(x)
+        return mask_l * torch.sigmoid(x * alpha) + (1. - mask_l) * (beta * torch.log(x + 1.) + 0.5)
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
+        alpha = str(self.alpha) + 'f'
+        beta = str(self.beta) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
+        if dtype == 'fp32':
+            code += f'''
+            {tab4_str}const float {sg_name}_sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
+            {tab4_str}const float {sg_name}_mask_l = (float)({x} < 0.0f);
+            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha} * {sg_name}_mask_l + {beta} / ({x} + 1.0f) * (1.0f - {sg_name}_mask_l);
+            '''
+        elif dtype == 'fp16':
+            code += f'''
+            {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
+            {tab4_str}const half2 {sg_name}_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2({sg_name}_alpha, {x}))), __float2half2_rn(1.0f)));
+            {tab4_str}const half2 {sg_name}_mask_l = __hlt2({x}, __float2half2_rn(0.0f));
+            {tab4_str}const half2 {y} = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha), {sg_name}_mask_l), __hmul2(__h2div(__float2half2_rn({beta}), __hadd2({x}, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask_l)));
+            '''
+        else:
+            raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
+        return code
