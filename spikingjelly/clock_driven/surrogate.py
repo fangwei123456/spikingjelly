@@ -1370,3 +1370,112 @@ class S2NN(MultiArgsSurrogateFunctionBase):
     # # plt.show()
     # plt.savefig('./S2NN.svg')
     # plt.savefig('./S2NN.pdf')
+
+class q_pseudo_spike(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_x = None
+        x = ctx.saved_tensors[0]
+        if ctx.needs_input_grad[0]:
+            grad_x = ((1 + 2 / (ctx.alpha - 1) * x.abs()).pow_(-ctx.alpha)) * grad_output
+        return grad_x, None
+
+class QPseudoSpike(SurrogateFunctionBase):
+    def __init__(self, alpha=2.0, spiking=True):
+        '''
+        * :ref:`API in English <QPseudoSpike.__init__-en>`
+        .. _QPseudoSpike.__init__-cn:
+
+        :param alpha: 控制反向传播时梯度函数尾部厚度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        `Surrogate Gradients Design <https://arxiv.org/abs/2202.00282>`_ 提出的 :math:`q`-PseudoSpike替代函数。反向传播为
+
+        .. math::
+            g'(x) = (1+\\frac{2|x|}{\\alpha-1})^{-\\alpha}
+
+        其中 :math:`\\alpha>1` 对应原文中的 :math:`q`。
+
+        对应的原函数为
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            \\frac{1}{2}(1-\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x < 0 \\\\
+            1 - \\frac{1}{2}(1+\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x \\geq 0.
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/QPseudoSpike.*
+            :width: 100%
+
+        * :ref:`中文API <QPseudoSpike.__init__-cn>`
+        .. _QPseudoSpike.__init__-en:
+
+        :param alpha: parameter to control tail fatness of gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The :math:`q`-PseudoSpike surrogate spiking function, which is first proposed in `Surrogate Gradients Design <https://arxiv.org/abs/2202.00282>`_. The gradient is defined by
+
+        .. math::
+            g'(x) = (1+\\frac{2|x|}{\\alpha-1})^{-\\alpha}
+
+        where :math:`\\alpha>1` corresponds to :math:`q` in paper.
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            \\frac{1}{2}(1-\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x < 0 \\\\
+            1 - \\frac{1}{2}(1+\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x \\geq 0.
+            \\end{cases}
+
+        .. image:: ./_static/API/clock_driven/surrogate/QPseudoSpike.*
+            :width: 100%
+        '''
+        super().__init__(alpha, spiking)
+
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return q_pseudo_spike.apply(x, alpha)
+
+    @staticmethod
+    def primitive_function(x: torch.Tensor, alpha):
+        mask_nonnegative = heaviside(x)
+        mask_sign = mask_nonnegative * 2 - 1
+
+        return mask_nonnegative - mask_sign * (0.5 * ((1 + 2 / (alpha - 1) * x.abs()).pow_(1 - alpha)))
+
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200, figsize=(6, 4))
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.QPseudoSpike(alpha=2, spiking=False)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=2$')
+
+    # surrogate_function = surrogate.QPseudoSpike(alpha=2, spiking=True)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=2$')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('QPseudoSpike surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # # plt.savefig('QPseudoSpike.svg')
+    # # plt.savefig('QPseudoSpike.pdf')
