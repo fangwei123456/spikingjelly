@@ -65,8 +65,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
 
         surrogate.check_manual_grad(surrogate.S2NN.primitive_function, s2nn_apply, alpha=4., beta=1.)
     '''
-    # x = torch.arange(-2, 2, 32 / 8192)
-    x = torch.as_tensor([-1.])
+    x = torch.arange(-2, 2, 32 / 8192)
     x.requires_grad_(True)
     primitive_function(x, *args, **kwargs).sum().backward()
     x_grad_auto = x.grad.clone()
