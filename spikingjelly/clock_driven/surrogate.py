@@ -1459,9 +1459,9 @@ class QPseudoSpike(SurrogateFunctionBase):
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha):
         mask_nonnegative = heaviside(x)
-        mask_sign = mask_nonnegative * 2 - 1
+        mask_sign = mask_nonnegative * 2. - 1.
 
-        return mask_nonnegative - mask_sign * (0.5 * ((1 + 2 / (alpha - 1) * x.abs()).pow_(1 - alpha)))
+        return mask_nonnegative - mask_sign * (0.5 * ((1. + 2. / (alpha - 1.) * x * mask_sign).pow_(1. - alpha)))
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200, figsize=(6, 4))
