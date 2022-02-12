@@ -1489,6 +1489,31 @@ class QPseudoSpike(SurrogateFunctionBase):
 
         return mask_nonnegative - mask_sign * (0.5 * ((1. + 2. / (alpha - 1.) * x * mask_sign).pow_(1. - alpha)))
 
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
+        alpha = str(self.alpha) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
+        if dtype == 'fp32':
+            code += f'''
+            {tab4_str}const float {sg_name}_base = 1.0f + 2.0f / ({alpha} - 1.0f) * fabsf({x});
+            {tab4_str}const float {y} = powf({sg_name}_base, -{alpha});
+            '''
+        elif dtype == 'fp16':
+            code += f'''
+            {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
+            {tab4_str}const half2 {sg_name}_base = __hadd2(__float2half2_rn(1.0f), __h2div(__hmul2(__float2half2_rn(2.0f), __habs2({x})), __hsub2({sg_name}_alpha, __float2half2_rn(1.0f))));
+            {tab4_str}const half2 {y} = h2exp2(__hmul2(h2log2({sg_name}_base), __hneg2({sg_name}_alpha))); // Replace power with combination of log and exp, since CUDA has no power function for FP16.
+            '''
+        else:
+            raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
+        return code
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200, figsize=(6, 4))
     # x = torch.arange(-2.5, 2.5, 0.001)
