@@ -82,6 +82,32 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     print('auto   grad', x_grad_auto[idx])
     print('manual grad', x_grad_manual[idx])
 
+def check_cuda_grad(neu: nn.Module, surrogate_function, device, *args, **kwargs):
+    # check_cuda_grad(neuron.MultiStepIFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
+    for dtype in [torch.float, torch.half]:
+        print(dtype)
+        net = neu(surrogate_function=surrogate_function(*args, **kwargs))
+        net.to(device)
+        x = torch.arange(-2, 2, 32 / 8192, device=device, dtype=dtype)
+        x = x.unsqueeze(-1)
+        x.requires_grad_(True)
+        net.backend = 'torch'
+        net(x).sum().backward()
+        x_grad_py = x.grad.clone()
+        x.grad.zero_()
+        net.reset()
+        net.backend = 'cupy'
+        net(x).sum().backward()
+        x_grad_cp = x.grad.clone()
+        # print('python grad', x_grad_py)
+        # print('cupy   grad', x_grad_cp)
+        abs_error = (x_grad_cp - x_grad_py).abs()
+        idx = abs_error.argmax()
+        print('max error', abs_error[idx], 'occurs at')
+        print(f'x[{idx}] = {x[idx]}')
+        print('python grad', x_grad_py[idx])
+        print('cupy   grad', x_grad_cp[idx])
+
 
 class SurrogateFunctionBase(nn.Module):
     def __init__(self, alpha, spiking=True):
