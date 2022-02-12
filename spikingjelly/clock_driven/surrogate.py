@@ -45,14 +45,12 @@ def heaviside(x: torch.Tensor):
     '''
     return (x >= 0).to(x)
 
-def check_manual_grad(primitive_function, spiking_function, eps=1e-5):
+def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     '''
     :param primitive_function: 梯度替代函数的原函数
     :type primitive_function: callable
     :param spiking_function: 梯度替代函数
     :type spiking_function: callable
-    :param eps: 最大误差
-    :type eps: float
 
     梯度替代函数的反向传播一般是手写的，可以用此函数去检查手写梯度是否正确。
 
@@ -62,18 +60,28 @@ def check_manual_grad(primitive_function, spiking_function, eps=1e-5):
 
     .. code-block:: python
 
-        surrogate.check_manual_grad(surrogate.ATan.primitive_function, surrogate.atan.apply)
+        def s2nn_apply(x, alpha, beta):
+            return surrogate.s2nn.apply(x, alpha, beta)
+
+        surrogate.check_manual_grad(surrogate.S2NN.primitive_function, s2nn_apply, alpha=4., beta=1.)
     '''
-    alpha = torch.tensor(1.0, dtype=torch.float)
-    x = torch.arange(-16, 16, 32 / 8192)
+    # x = torch.arange(-2, 2, 32 / 8192)
+    x = torch.as_tensor([-1.])
     x.requires_grad_(True)
-    primitive_function(x, alpha).sum().backward()
+    primitive_function(x, *args, **kwargs).sum().backward()
     x_grad_auto = x.grad.clone()
     x.grad.zero_()
-    spiking_function(x, alpha).sum().backward()
+    spiking_function(x, *args, **kwargs).sum().backward()
     x_grad_manual = x.grad.clone()
-    assert (x_grad_manual - x_grad_auto).abs().max().item() <= eps, 'x.grad is wrong!'
-    print('grad check pass')
+    print('auto   grad', x_grad_auto)
+    print('manual grad', x_grad_manual)
+    abs_error = (x_grad_manual - x_grad_auto).abs()
+    idx = abs_error.argmax()
+    print('max error', abs_error[idx], 'occurs at')
+    print(f'x[{idx}] = {x[idx]}')
+    print('auto   grad', x_grad_auto[idx])
+    print('manual grad', x_grad_manual[idx])
+
 
 class SurrogateFunctionBase(nn.Module):
     def __init__(self, alpha, spiking=True):
@@ -1235,8 +1243,8 @@ class s2nn(torch.autograd.Function):
         x = ctx.saved_tensors[0]
         sgax = torch.sigmoid(ctx.alpha * x)
         mask_l = (x < 0.).to(x)
-        grad_x = mask_l * ctx.alpha * sgax * (1. - sgax) + (1. - mask_l) * ctx.beta / (x + 1.)
-
+        grad_x = mask_l * ctx.alpha * sgax * (1. - sgax) + (1. - mask_l) * ctx.beta / (x + (1. + 1e-5))
+        # 1e-5 is used to avoid nan when x = -1
         return grad_x * grad_output, None, None
 
 class S2NN(MultiArgsSurrogateFunctionBase):
@@ -1317,7 +1325,8 @@ class S2NN(MultiArgsSurrogateFunctionBase):
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha, beta):
         mask_l = (x < 0.).to(x)
-        return mask_l * torch.sigmoid(x * alpha) + (1. - mask_l) * (beta * torch.log(x + 1.) + 0.5)
+        return mask_l * torch.sigmoid(x * alpha) + (1. - mask_l) * (beta * torch.log(x + (1. + 1e-5)) + 0.5)
+        # 1e-5 is used to avoid nan when x = -1
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
@@ -1331,14 +1340,14 @@ class S2NN(MultiArgsSurrogateFunctionBase):
             code += f'''
             {tab4_str}const float {sg_name}_sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
             {tab4_str}const float {sg_name}_mask_l = (float)({x} < 0.0f);
-            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha} * {sg_name}_mask_l + {beta} / ({x} + 1.0f) * (1.0f - {sg_name}_mask_l);
+            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha} * {sg_name}_mask_l + {beta} / ({x} + 1.00001f) * (1.0f - {sg_name}_mask_l);
             '''
         elif dtype == 'fp16':
             code += f'''
             {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
             {tab4_str}const half2 {sg_name}_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2({sg_name}_alpha, {x}))), __float2half2_rn(1.0f)));
             {tab4_str}const half2 {sg_name}_mask_l = __hlt2({x}, __float2half2_rn(0.0f));
-            {tab4_str}const half2 {y} = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha), {sg_name}_mask_l), __hmul2(__h2div(__float2half2_rn({beta}), __hadd2({x}, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask_l)));
+            {tab4_str}const half2 {y} = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha), {sg_name}_mask_l), __hmul2(__h2div(__float2half2_rn({beta}), __hadd2({x}, __float2half2_rn(1.00001f))), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask_l)));
             '''
         else:
             raise NotImplementedError
