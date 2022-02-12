@@ -66,6 +66,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
         surrogate.check_manual_grad(surrogate.S2NN.primitive_function, s2nn_apply, alpha=4., beta=1.)
     '''
     x = torch.arange(-2, 2, 32 / 8192)
+    # x = torch.as_tensor([-1., 0., 1.])
     x.requires_grad_(True)
     primitive_function(x, *args, **kwargs).sum().backward()
     x_grad_auto = x.grad.clone()
@@ -1241,9 +1242,7 @@ class s2nn(torch.autograd.Function):
     def backward(ctx, grad_output):
         x = ctx.saved_tensors[0]
         sgax = torch.sigmoid(ctx.alpha * x)
-        mask_l = (x < 0.).to(x)
-        grad_x = mask_l * ctx.alpha * sgax * (1. - sgax) + (1. - mask_l) * ctx.beta / (x + (1. + 1e-5))
-        # 1e-5 is used to avoid nan when x = -1
+        grad_x = torch.where(x < 0., ctx.alpha * sgax * (1. - sgax), ctx.beta / (x + 1.))
         return grad_x * grad_output, None, None
 
 class S2NN(MultiArgsSurrogateFunctionBase):
@@ -1323,9 +1322,8 @@ class S2NN(MultiArgsSurrogateFunctionBase):
 
     @staticmethod
     def primitive_function(x: torch.Tensor, alpha, beta):
-        mask_l = (x < 0.).to(x)
-        return mask_l * torch.sigmoid(x * alpha) + (1. - mask_l) * (beta * torch.log(x + (1. + 1e-5)) + 0.5)
-        # 1e-5 is used to avoid nan when x = -1
+        return torch.where(x < 0., torch.sigmoid(x * alpha), beta * torch.log((x + 1.).abs_() + 1e-5) + 0.5)
+        # abs and 1e-5 are used to avoid nan
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
@@ -1339,14 +1337,14 @@ class S2NN(MultiArgsSurrogateFunctionBase):
             code += f'''
             {tab4_str}const float {sg_name}_sigmoid_ax = 1.0f / (1.0f + expf(- {alpha} * {x}));
             {tab4_str}const float {sg_name}_mask_l = (float)({x} < 0.0f);
-            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha} * {sg_name}_mask_l + {beta} / ({x} + 1.00001f) * (1.0f - {sg_name}_mask_l);
+            {tab4_str}const float {y} = (1.0f - {sg_name}_sigmoid_ax) * {sg_name}_sigmoid_ax * {alpha} * {sg_name}_mask_l + {beta} / ({x} + 1.0f) * (1.0f - {sg_name}_mask_l);
             '''
         elif dtype == 'fp16':
             code += f'''
             {tab4_str}const half2 {sg_name}_alpha = __float2half2_rn({alpha});
             {tab4_str}const half2 {sg_name}_sigmoid_ax = __h2div(__float2half2_rn(1.0f), __hadd2(h2exp(__hneg2(__hmul2({sg_name}_alpha, {x}))), __float2half2_rn(1.0f)));
             {tab4_str}const half2 {sg_name}_mask_l = __hlt2({x}, __float2half2_rn(0.0f));
-            {tab4_str}const half2 {y} = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha), {sg_name}_mask_l), __hmul2(__h2div(__float2half2_rn({beta}), __hadd2({x}, __float2half2_rn(1.00001f))), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask_l)));
+            {tab4_str}const half2 {y} = __hadd2(__hmul2(__hmul2(__hmul2(__hsub2(__float2half2_rn(1.0f), {sg_name}_sigmoid_ax), {sg_name}_sigmoid_ax), {sg_name}_alpha), {sg_name}_mask_l), __hmul2(__h2div(__float2half2_rn({beta}), __hadd2({x}, __float2half2_rn(1.0f))), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask_l)));
             '''
         else:
             raise NotImplementedError
