@@ -64,8 +64,8 @@ class BaseNode(base.MemoryModule):
         else:
             self.register_memory('v', v_reset)
 
-        self.v_threshold = v_threshold
-        self.v_reset = v_reset
+        self.register_memory('v_threshold', v_threshold)
+        self.register_memory('v_reset', v_reset)
 
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
@@ -261,6 +261,35 @@ class IFNode(BaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
+
+    @staticmethod
+    @torch.jit.script
+    def soft_reset_inference_forward(x, v, v_threshold):
+        v = v + x
+        spike = (v >= v_threshold).to(x)
+        v = v - spike * v_threshold
+        return spike, v
+
+    def forward(self, x: torch.Tensor):
+        if not self.training and self.v_reset is None:
+            # fused operations for accelerating ANN2SNN
+            if isinstance(self.v, float):
+                v = torch.zeros_like(x)
+                torch.fill_(v, self.v)
+                self.v = v
+
+            if isinstance(self.v_threshold, float):
+                v_threshold = torch.zeros_like(x)
+                torch.fill_(v_threshold, self.v_threshold)
+                self.v_threshold = v_threshold
+
+            spike, self.v = self.soft_reset_inference_forward(x, self.v, self.v_threshold)
+            return spike
+
+        else:
+            return super().forward(x)
+
+
 
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
