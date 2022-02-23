@@ -951,10 +951,11 @@ try:
                 extern "C" __global__
                 void {kernel_name}(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  half* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, {'const half & v_reset,' if hard_reset else ''}
-                const int & neuron_num, const int & numel)
+                const int & neuron_num, const int & numel)\
+                // note that grad_reciprocal_tau is float to avoid overflow
                 '''
                 code += r'''
                 {
@@ -962,7 +963,7 @@ try:
                 const int stride = neuron_num >> 1;
 
                 '''
-                code += f'__shared__ half2 sdata[{configure.cuda_threads}];'
+                code += f'__shared__ float sdata[{configure.cuda_threads}];'
                 code += r'''
                 if (index < stride)
                 {   
@@ -979,7 +980,7 @@ try:
                 code += r'''
 
                     half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
-                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
+                    sdata[threadIdx.x] = 0.0f;
                     for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
                     {
                         const int t = index + mem_offset;
@@ -1015,18 +1016,21 @@ try:
                 if decay_input:
                     code += r'''  
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
-                            sdata[threadIdx.x] = __hadd2(__h2div(__hmul2(grad_h, __hsub2(h_seq[t], v_v_seq[t])), reciprocal_tau_half2), sdata[threadIdx.x]);
+                            half2 temp_sum = __h2div(__hmul2(grad_h, __hsub2(h_seq[t], v_v_seq[t])), reciprocal_tau_half2);
+                            sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                     '''
                 else:
                     if hard_reset:
                         code += r'''  
                                 grad_x_seq[t] = grad_h;
-                                sdata[threadIdx.x] = __hadd2(__hmul2(grad_h, __hsub2(v_reset_half2, v_v_seq[t])), sdata[threadIdx.x]);
+                                half2 temp_sum = __hmul2(grad_h, __hsub2(v_reset_half2, v_v_seq[t]));
+                                sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                         '''
                     else:
                         code += r'''  
                                 grad_x_seq[t] = grad_h;
-                                sdata[threadIdx.x] = __hadd2(__hmul2(grad_h, __hneg2(v_v_seq[t])), sdata[threadIdx.x]);
+                                half2 temp_sum = __hmul2(grad_h, __hneg2(v_v_seq[t]));
+                                sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                         '''
                 code += r'''  
                     }
@@ -1034,7 +1038,7 @@ try:
                 }
                 else
                 {
-                    sdata[threadIdx.x] = __float2half2_rn(0.0f);
+                    sdata[threadIdx.x] = 0.0f;
                 }
                 int threadx = blockDim.x;
                 #pragma unroll
@@ -1044,14 +1048,12 @@ try:
                 __syncthreads();
                 if (threadIdx.x < i)
                 {
-                  sdata[threadIdx.x] = __hadd2(sdata[threadIdx.x], sdata[threadIdx.x + i]);
+                  sdata[threadIdx.x] += sdata[threadIdx.x + i];
                 }
                 }
                 __syncthreads();
                 if (threadIdx.x == 0)
-                {
-                //grad_reciprocal_tau[0] = __hadd(__low2half(sdata[0]), __high2half(sdata[0]));
-                
+                {                
                 /*
                 The 32-bit floating-point version of atomicAdd() is only supported by devices of compute capability 2.x and higher.
 
@@ -1064,7 +1066,7 @@ try:
                 The 16-bit __nv_bfloat16 floating-point version of atomicAdd() is only supported by devices of compute capability 8.x and higher.
                 */
                 
-                atomicAdd(grad_reciprocal_tau, __hadd(__low2half(sdata[0]), __high2half(sdata[0])));
+                atomicAdd(grad_reciprocal_tau, sdata[0]);
                     
                 }
                 }
@@ -1077,6 +1079,7 @@ try:
         @staticmethod
         def forward(ctx, x_seq: torch.Tensor, v_last: torch.Tensor, reciprocal_tau: torch.Tensor, decay_input: bool, v_threshold: float,
                     v_reset: float, detach_reset: bool, sg_cuda_code_fun):
+            # reciprocal_tau.dtype is float32 even when using amp
             requires_grad = x_seq.requires_grad or v_last.requires_grad
             device = x_seq.get_device()
             if x_seq.dtype == torch.float32:
@@ -1085,7 +1088,7 @@ try:
             elif x_seq.dtype == torch.float16:
                 dtype = 'fp16'
                 cp_dtype = np.half
-                assert torch.cuda.get_device_capability(device)[0] >= 7, "MultiStepParametricLIFNodePTT can not run in the current device with float16 because the 16-bit __half floating-point version of atomicAdd() is only supported by devices of compute capability 7.x and higher."
+                # assert torch.cuda.get_device_capability(device)[0] >= 7, "MultiStepParametricLIFNodePTT can not run in the current device with float16 because the 16-bit __half floating-point version of atomicAdd() is only supported by devices of compute capability 7.x and higher."
 
             else:
                 raise NotImplementedError
@@ -1192,7 +1195,7 @@ try:
                 h_seq, spike_seq, v_v_seq = ctx.saved_tensors
             grad_x_seq = torch.zeros_like(grad_spike_seq)
             grad_v_last = torch.zeros_like(grad_spike_seq[0])
-            grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device).to(grad_spike_seq)
+            grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device, dtype=torch.float32)
 
             if ctx.cp_v_reset is None:
                 hard_reset = False
@@ -1250,10 +1253,10 @@ try:
         def fbptt(m, x: torch.Tensor):
             x = x.detach()
             x.requires_grad_(True)
-            m(x)
-            (m.spike_seq * m.v_seq ** 2).sum().backward()
+            spike_seq = m(x)
+            (spike_seq * m.v_seq ** 2).sum().backward()
             ret = {
-                'spike_seq': m.spike_seq.detach().clone(),
+                'spike_seq': spike_seq.detach().clone(),
                 'v_seq': m.v_seq.detach().clone(),
                 'x.grad': x.grad.clone()
             }
@@ -1286,8 +1289,8 @@ try:
                     for key in y_torch.keys():
                         me = max_error(y_torch[key], y_cupy[key])
                         print(key, 'max error', me)
-                        # if me > 0.5:
-                        #     print(f'y_torch[{key}]={y_torch[key]}, y_cupy[{key}]={y_cupy[key]}')
+                        if me > 0.5:
+                            print(f'y_torch[{key}]={y_torch[key]}, y_cupy[{key}]={y_cupy[key]}')
                     print('\n')
 
     class MultiStepEIFNodePTT(torch.autograd.Function):
