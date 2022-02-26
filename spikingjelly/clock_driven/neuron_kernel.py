@@ -261,9 +261,9 @@ try:
                 x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
                 v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
-            v_seq = torch.zeros_like(x_seq.data)
-            h_seq = torch.zeros_like(x_seq.data)
-            spike_seq = torch.zeros_like(x_seq.data)
+            zero_shape = list(x_seq.shape)
+            zero_shape[0] *= 3
+            v_seq, h_seq, spike_seq = torch.split(torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype), x_seq.shape[0])
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
@@ -344,8 +344,13 @@ try:
                 spike_seq = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
             else:
                 h_seq, spike_seq = ctx.saved_tensors
-            grad_x_seq = torch.zeros_like(grad_spike_seq)
-            grad_v_last = torch.zeros_like(grad_spike_seq[0])
+
+            zero_shape = list(grad_spike_seq.shape)
+            zero_shape[0] += 1
+            zero_data = torch.zeros(zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype)
+            grad_x_seq = zero_data[0: -1]
+            grad_v_last = zero_data[-1]
+
 
             if ctx.cp_v_reset is None:
                 hard_reset = False
@@ -701,9 +706,9 @@ try:
                 x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
                 v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
-            v_seq = torch.zeros_like(x_seq.data)
-            h_seq = torch.zeros_like(x_seq.data)
-            spike_seq = torch.zeros_like(x_seq.data)
+            zero_shape = list(x_seq.shape)
+            zero_shape[0] *= 3
+            v_seq, h_seq, spike_seq = torch.split(torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype), x_seq.shape[0])
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
@@ -791,8 +796,11 @@ try:
                 spike_seq = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
             else:
                 h_seq, spike_seq = ctx.saved_tensors
-            grad_x_seq = torch.zeros_like(grad_spike_seq)
-            grad_v_last = torch.zeros_like(grad_spike_seq[0])
+            zero_shape = list(grad_spike_seq.shape)
+            zero_shape[0] += 1
+            zero_data = torch.zeros(zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype)
+            grad_x_seq = zero_data[0: -1]
+            grad_v_last = zero_data[-1]
 
             if ctx.cp_v_reset is None:
                 hard_reset = False
@@ -1101,9 +1109,9 @@ try:
                 x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
                 v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
-            v_seq = torch.zeros_like(x_seq.data)
-            h_seq = torch.zeros_like(x_seq.data)
-            spike_seq = torch.zeros_like(x_seq.data)
+            zero_shape = list(x_seq.shape)
+            zero_shape[0] *= 3
+            v_seq, h_seq, spike_seq = torch.split(torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype), x_seq.shape[0])
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
             tau = 1. / reciprocal_tau.item()
@@ -1193,8 +1201,11 @@ try:
                 h_seq, v_v_seq = ctx.saved_tensors
             else:
                 h_seq, spike_seq, v_v_seq = ctx.saved_tensors
-            grad_x_seq = torch.zeros_like(grad_spike_seq)
-            grad_v_last = torch.zeros_like(grad_spike_seq[0])
+            zero_shape = list(grad_spike_seq.shape)
+            zero_shape[0] += 1
+            zero_data = torch.zeros(zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype)
+            grad_x_seq = zero_data[0: -1]
+            grad_v_last = zero_data[-1]
             grad_reciprocal_tau = torch.as_tensor(0., device=grad_spike_seq.device, dtype=torch.float32)
 
             if ctx.cp_v_reset is None:
@@ -1559,9 +1570,9 @@ try:
                 x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
                 v_last = F.pad(v_last, (0, 1))  # [N] -> [N + 1]
 
-            v_seq = torch.zeros_like(x_seq.data)
-            h_seq = torch.zeros_like(x_seq.data)
-            spike_seq = torch.zeros_like(x_seq.data)
+            zero_shape = list(x_seq.shape)
+            zero_shape[0] *= 3
+            v_seq, h_seq, spike_seq = torch.split(torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype), x_seq.shape[0])
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
@@ -1651,8 +1662,11 @@ try:
                 h_seq, v_v_seq = ctx.saved_tensors
             else:
                 h_seq, spike_seq, v_v_seq = ctx.saved_tensors
-            grad_x_seq = torch.zeros_like(grad_spike_seq)
-            grad_v_last = torch.zeros_like(grad_spike_seq[0])
+            zero_shape = list(grad_spike_seq.shape)
+            zero_shape[0] += 1
+            zero_data = torch.zeros(zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype)
+            grad_x_seq = zero_data[0: -1]
+            grad_v_last = zero_data[-1]
 
             if ctx.cp_v_reset is None:
                 hard_reset = False
