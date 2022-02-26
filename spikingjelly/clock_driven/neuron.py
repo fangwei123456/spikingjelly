@@ -374,16 +374,22 @@ class MultiStepIFNode(IFNode):
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
-        self.v_seq = torch.zeros_like(x_seq.data)
-        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
+            spike_seq = []
+            self.v_seq = []
             for t in range(x_seq.shape[0]):
-                spike_seq[t] = super().forward(x_seq[t])
-                self.v_seq[t] = self.v
+                spike_seq.append(super().forward(x_seq[t]).unsqueeze(0))
+                self.v_seq.append(self.v.unsqueeze(0))
+            spike_seq = torch.cat(spike_seq, 0)
+            self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
 
+
         elif self.backend == 'cupy':
+            self.v_seq = torch.zeros_like(x_seq.data)
+            spike_seq = torch.zeros_like(x_seq.data)
+
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
@@ -599,16 +605,20 @@ class MultiStepLIFNode(LIFNode):
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
-        self.v_seq = torch.zeros_like(x_seq.data)
-        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
+            spike_seq = []
+            self.v_seq = []
             for t in range(x_seq.shape[0]):
-                spike_seq[t] = super().forward(x_seq[t])
-                self.v_seq[t] = self.v
+                spike_seq.append(super().forward(x_seq[t]).unsqueeze(0))
+                self.v_seq.append(self.v.unsqueeze(0))
+            spike_seq = torch.cat(spike_seq, 0)
+            self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
 
         elif self.backend == 'cupy':
+            self.v_seq = torch.zeros_like(x_seq.data)
+            spike_seq = torch.zeros_like(x_seq.data)
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
@@ -839,16 +849,20 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
-        self.v_seq = torch.zeros_like(x_seq.data)
-        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
+            spike_seq = []
+            self.v_seq = []
             for t in range(x_seq.shape[0]):
-                spike_seq[t] = super().forward(x_seq[t])
-                self.v_seq[t] = self.v
+                spike_seq.append(super().forward(x_seq[t]).unsqueeze(0))
+                self.v_seq.append(self.v.unsqueeze(0))
+            spike_seq = torch.cat(spike_seq, 0)
+            self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
 
         elif self.backend == 'cupy':
+            self.v_seq = torch.zeros_like(x_seq.data)
+            spike_seq = torch.zeros_like(x_seq.data)
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
@@ -1164,16 +1178,20 @@ class MultiStepEIFNode(EIFNode):
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
-        self.v_seq = torch.zeros_like(x_seq.data)
-        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
+            spike_seq = []
+            self.v_seq = []
             for t in range(x_seq.shape[0]):
-                spike_seq[t] = super().forward(x_seq[t])
-                self.v_seq[t] = self.v
+                spike_seq.append(super().forward(x_seq[t]).unsqueeze(0))
+                self.v_seq.append(self.v.unsqueeze(0))
+            spike_seq = torch.cat(spike_seq, 0)
+            self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
 
         elif self.backend == 'cupy':
+            self.v_seq = torch.zeros_like(x_seq.data)
+            spike_seq = torch.zeros_like(x_seq.data)
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
@@ -1224,16 +1242,20 @@ class MultiStepGeneralNode(GeneralNode):
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
-        self.v_seq = torch.zeros_like(x_seq.data)
-        spike_seq = torch.zeros_like(x_seq.data)
 
         if self.backend == 'torch':
+            spike_seq = []
+            self.v_seq = []
             for t in range(x_seq.shape[0]):
-                spike_seq[t] = super().forward(x_seq[t])
-                self.v_seq[t] = self.v
+                spike_seq.append(super().forward(x_seq[t]).unsqueeze(0))
+                self.v_seq.append(self.v.unsqueeze(0))
+            spike_seq = torch.cat(spike_seq, 0)
+            self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
 
         elif self.backend == 'cupy':
+            self.v_seq = torch.zeros_like(x_seq.data)
+            spike_seq = torch.zeros_like(x_seq.data)
             if isinstance(self.v, float):
                 v_init = self.v
                 self.v = torch.zeros_like(x_seq[0].data)
