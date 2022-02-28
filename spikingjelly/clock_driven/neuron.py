@@ -3,7 +3,9 @@ from typing import Callable, overload
 import torch
 import torch.nn as nn
 from . import surrogate, base
+from .. import configure
 import math
+import numpy as np
 try:
     import cupy
     from . import neuron_kernel, cu_kernel_opt
@@ -272,19 +274,69 @@ class IFNode(BaseNode):
 
     def forward(self, x: torch.Tensor):
         if not self.training and self.v_reset is None:
-            # fused operations for accelerating ANN2SNN
-            if isinstance(self.v, float):
-                v = torch.zeros_like(x)
-                torch.fill_(v, self.v)
-                self.v = v
+            device_id = x.get_device()
+            if neuron_kernel is None or device_id < 0 or x.dtype == torch.float16:
+                # fused operations for accelerating ANN2SNN
+                if isinstance(self.v, float):
+                    v = torch.zeros_like(x)
+                    if self.v != 0.:
+                        torch.fill_(v, self.v)
+                    self.v = v
 
-            if isinstance(self.v_threshold, float):
-                v_threshold = torch.zeros_like(x)
-                torch.fill_(v_threshold, self.v_threshold)
-                self.v_threshold = v_threshold
+                if isinstance(self.v_threshold, float):
+                    v_threshold = torch.zeros_like(x)
+                    torch.fill_(v_threshold, self.v_threshold)
+                    self.v_threshold = v_threshold
 
-            spike, self.v = self.soft_reset_inference_forward(x, self.v, self.v_threshold)
-            return spike
+                spike, self.v = self.soft_reset_inference_forward(x, self.v, self.v_threshold)
+                return spike
+            else:
+                # use cupy to accelerate ANN2SNN
+                if isinstance(self.v, float):
+                    v = torch.zeros_like(x)
+                    if self.v != 0.:
+                        torch.fill_(v, self.v)
+                    self.v = v
+
+                code = r'''
+                    extern "C" __global__
+                    void IFNode_soft_reset_inference_forward(
+                    const float* x, const float & v_threshold,
+                    float* spike, float *v,
+                    const int & numel)
+                    {
+                        const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                        if (index < numel)
+                        {
+                            v[index] += x[index];
+                            spike[index] = (float) (v[index] >= v_threshold);
+                            v[index] -= spike[index] * v_threshold;
+                        }
+                    }
+                '''
+                with cupy.cuda.Device(device_id):
+                    numel = x.numel()
+                    threads = configure.cuda_threads
+                    blocks = cu_kernel_opt.cal_blocks(numel)
+                    cp_numel = cupy.asarray(numel)
+                    cp_v_threshold = cupy.asarray(self.v_threshold)
+                    spike = torch.zeros_like(x)
+                    x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
+                    kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
+                    kernel = cupy.RawKernel(code, 'IFNode_soft_reset_inference_forward', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+                    kernel(
+                        (blocks,), (threads,),
+                        cu_kernel_opt.wrap_args_to_raw_kernel(
+                            device_id,
+                            *kernel_args
+                        )
+                    )
+                    return spike
+
+
+
+
+
 
         else:
             return super().forward(x)
