@@ -236,6 +236,10 @@ class IFNode(BaseNode):
         .. math::
             V[t] = V[t-1] + X[t]
 
+        .. tip::
+
+            在 `self.v_reset is None` 且 `self.training == False` 时（这是典型的ANN2SNN应用），若运行在GPU上，则自动使用CUPY进行加速。
+
         * :ref:`中文API <IFNode.__init__-cn>`
 
         .. _IFNode.__init__-en:
@@ -258,46 +262,33 @@ class IFNode(BaseNode):
 
         .. math::
             V[t] = V[t-1] + X[t]
+
+        .. admonition:: Tip
+            :class: tip
+
+            If `self.v_reset is None` and `self.training == False`，which is the typical application of ANN2SNN, this
+            module will use CUPY to accelerate when running on GPU.
+
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
-    @staticmethod
-    @torch.jit.script
-    def soft_reset_inference_forward(x, v, v_threshold):
-        v = v + x
-        spike = (v >= v_threshold).to(x)
-        v = v - spike * v_threshold
-        return spike, v
-
     def forward(self, x: torch.Tensor):
-        if not self.training and self.v_reset is None:
+        if neuron_kernel is not None and self.v_reset is None and not self.training and x.dtype == torch.float32:
             device_id = x.get_device()
-            if neuron_kernel is None or device_id < 0 or x.dtype == torch.float16:
-                # fused operations for accelerating ANN2SNN
-                if isinstance(self.v, float):
-                    v = torch.zeros_like(x)
-                    if self.v != 0.:
-                        torch.fill_(v, self.v)
-                    self.v = v
+            if device_id < 0:
+                return super().forward(x)
 
-                if isinstance(self.v_threshold, float):
-                    v_threshold = torch.zeros_like(x)
-                    torch.fill_(v_threshold, self.v_threshold)
-                    self.v_threshold = v_threshold
+            # use cupy to accelerate ANN2SNN
+            if isinstance(self.v, float):
+                v = torch.zeros_like(x)
+                if self.v != 0.:
+                    torch.fill_(v, self.v)
+                self.v = v
 
-                spike, self.v = self.soft_reset_inference_forward(x, self.v, self.v_threshold)
-                return spike
-            else:
-                # use cupy to accelerate ANN2SNN
-                if isinstance(self.v, float):
-                    v = torch.zeros_like(x)
-                    if self.v != 0.:
-                        torch.fill_(v, self.v)
-                    self.v = v
-
+            if not hasattr(self, 'cp_kernel'):
                 code = r'''
                     extern "C" __global__
                     void IFNode_soft_reset_inference_forward(
@@ -314,30 +305,25 @@ class IFNode(BaseNode):
                         }
                     }
                 '''
-                with cupy.cuda.Device(device_id):
-                    numel = x.numel()
-                    threads = configure.cuda_threads
-                    blocks = cu_kernel_opt.cal_blocks(numel)
-                    cp_numel = cupy.asarray(numel)
-                    cp_v_threshold = cupy.asarray(self.v_threshold)
-                    spike = torch.zeros_like(x)
-                    x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
-                    kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
-                    kernel = cupy.RawKernel(code, 'IFNode_soft_reset_inference_forward', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
-                    kernel(
-                        (blocks,), (threads,),
-                        cu_kernel_opt.wrap_args_to_raw_kernel(
-                            device_id,
-                            *kernel_args
-                        )
+                self.cp_kernel = cupy.RawKernel(code, 'IFNode_soft_reset_inference_forward', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+
+            with cupy.cuda.Device(device_id):
+                numel = x.numel()
+                threads = configure.cuda_threads
+                blocks = cu_kernel_opt.cal_blocks(numel)
+                cp_numel = cupy.asarray(numel)
+                cp_v_threshold = cupy.asarray(self.v_threshold)
+                spike = torch.zeros_like(x)
+                x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
+                kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
+                self.cp_kernel(
+                    (blocks,), (threads,),
+                    cu_kernel_opt.wrap_args_to_raw_kernel(
+                        device_id,
+                        *kernel_args
                     )
-                    return spike
-
-
-
-
-
-
+                )
+                return spike
         else:
             return super().forward(x)
 
