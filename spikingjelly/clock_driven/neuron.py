@@ -301,6 +301,14 @@ class IFNode(BaseNode):
                         {
                             v[index] += x[index];
                             spike[index] = (float) (v[index] >= v_threshold);
+                            // if (v[index] >= v_threshold)
+                            // {
+                            //     spike[index] = 1.0f;
+                            // }
+                            // else
+                            // {
+                            //     spike[index] = 0.0f;
+                            // }
                             v[index] -= spike[index] * v_threshold;
                         }
                     }
@@ -312,7 +320,7 @@ class IFNode(BaseNode):
                 threads = configure.cuda_threads
                 blocks = cu_kernel_opt.cal_blocks(numel)
                 cp_numel = cupy.asarray(numel)
-                cp_v_threshold = cupy.asarray(self.v_threshold)
+                cp_v_threshold = cupy.asarray(self.v_threshold, dtype=np.float32)
                 spike = torch.zeros_like(x)
                 x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
                 kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
