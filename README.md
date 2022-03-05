@@ -40,7 +40,7 @@ git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-From [OpenI](https://git.openi.org.cn/OpenI/spikingjelly)：
+From [OpenI](https://git.openi.org.cn/OpenI/spikingjelly):
 ```bash
 git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
