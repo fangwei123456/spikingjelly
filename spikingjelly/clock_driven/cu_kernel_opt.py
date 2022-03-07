@@ -8,24 +8,23 @@ try:
     import threading
     import datetime
 
-    def cal_fun_t(n, device, f, *args, **kwargs):
-        if n <= 2:
-            torch.cuda.synchronize(device)
-            t_start = time.perf_counter()
-            f(*args, **kwargs)
-            torch.cuda.synchronize(device)
-            return (time.perf_counter() - t_start)
-        # warm up
+    def cuda_timer(device, f, *args, **kwargs):
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
         f(*args, **kwargs)
+        end.record()
         torch.cuda.synchronize(device)
+        return start.elapsed_time(end)
+
+    def cal_fun_t(n, device, f, *args, **kwargs):
+        assert n > 2
+        # warm up
+        cuda_timer(device, f, *args, **kwargs)
 
         t_list = []
         for _ in range(n * 2):
-            torch.cuda.synchronize(device)
-            t_start = time.perf_counter()
-            f(*args, **kwargs)
-            torch.cuda.synchronize(device)
-            t_list.append(time.perf_counter() - t_start)
+            t_list.append(cuda_timer(device, f, *args, **kwargs))
         t_list = np.asarray(t_list)
         return t_list[n:].mean()
 
