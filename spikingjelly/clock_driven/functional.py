@@ -527,19 +527,19 @@ def first_spike_index(spikes: Tensor):
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
-def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple):
+def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple or nn.Sequential):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: Tensor
     :param single_step_module: a single-step module, or a list/tuple that contains single-step modules
-    :type single_step_module: torch.nn.Module or list or tuple
+    :type single_step_module: torch.nn.Module or list or tuple or torch.nn.Sequential
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: Tensor
 
     See :class:`spikingjelly.clock_driven.layer.MultiStepContainer` for more details.
     """
     y_seq = []
-    if isinstance(single_step_module, (list, tuple)):
+    if isinstance(single_step_module, (list, tuple, nn.Sequential)):
         for t in range(x_seq.shape[0]):
             x_seq_t = x_seq[t]
             for m in single_step_module:
@@ -550,16 +550,15 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or t
             y_seq.append(single_step_module(x_seq[t]))
 
     for t in range(y_seq.__len__()):
-        # y_seq[t].unsqueeze_(0)
         y_seq[t] = y_seq[t].unsqueeze(0)
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple):
+def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: Tensor
     :param stateless_module: a stateless module, e.g., 'torch.nn.Conv2d' or a list contains stateless modules, e.g., '[torch.nn.Conv2d, torch.nn.BatchNorm2d]
-    :type stateless_module: torch.nn.Module or list or tuple
+    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: Tensor
 
@@ -567,7 +566,7 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
     y = x_seq.flatten(0, 1)
-    if isinstance(stateless_module, (list, tuple)):
+    if isinstance(stateless_module, (list, tuple, nn.Sequential)):
         for m in stateless_module:
             y = m(y)
     else:
