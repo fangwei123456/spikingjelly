@@ -3,10 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from . import neuron, spike_op
-
+from .. import configure
 from torch import Tensor
 from typing import Optional, Union
-
+import copy
+import numpy as np
 from torch.types import _int, _size
 
 def reset_net(net: nn.Module):
@@ -527,19 +528,19 @@ def first_spike_index(spikes: Tensor):
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
-def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple):
+def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple or nn.Sequential):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: Tensor
     :param single_step_module: a single-step module, or a list/tuple that contains single-step modules
-    :type single_step_module: torch.nn.Module or list or tuple
+    :type single_step_module: torch.nn.Module or list or tuple or torch.nn.Sequential
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: Tensor
 
     See :class:`spikingjelly.clock_driven.layer.MultiStepContainer` for more details.
     """
     y_seq = []
-    if isinstance(single_step_module, (list, tuple)):
+    if isinstance(single_step_module, (list, tuple, nn.Sequential)):
         for t in range(x_seq.shape[0]):
             x_seq_t = x_seq[t]
             for m in single_step_module:
@@ -550,30 +551,86 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or t
             y_seq.append(single_step_module(x_seq[t]))
 
     for t in range(y_seq.__len__()):
-        # y_seq[t].unsqueeze_(0)
         y_seq[t] = y_seq[t].unsqueeze(0)
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple):
+def mini_batch_forward(x: torch.Tensor, mini_batch_size: int, m: nn.Module):
+    x = torch.split(x, mini_batch_size)
+    y = []
+    for mini in x:
+        y.append(m(mini))
+    return torch.cat(y)
+
+def forward_with_mini_batch_benchmark(x: torch.Tensor, module: nn.Module):
+    if not hasattr(module, 'fastest_mini_batch_size'):
+        m = copy.deepcopy(module)
+        # print(f'{m}: needs {16 * math.ceil(math.log2(x.shape[0]))} iterations to search the best mini_batch_size')
+        mini_batch_size = 1
+        mini_batch_size_used_times = []
+        argmin_mini_batch_size = None
+        min_mini_batch_size_used_times = None
+        x_d = x.detach()
+        while True:
+            start = torch.cuda.Event(enable_timing=True)
+            end = torch.cuda.Event(enable_timing=True)
+
+            start.record()
+            mini_batch_forward(x_d, mini_batch_size, m).sum().backward()
+            # mini_batch_forward(x_d, mini_batch_size, m)
+            end.record()
+
+            torch.cuda.synchronize()
+            mini_batch_size_used_times.append(start.elapsed_time(end))
+
+            if mini_batch_size_used_times.__len__() == 16:
+                mini_batch_size_used_times = np.asarray(mini_batch_size_used_times[8:]).sum()
+                # print(f'{m}: mini_batch_size={mini_batch_size}, mini_batch_size_used_times={mini_batch_size_used_times}')
+
+                if argmin_mini_batch_size is None or min_mini_batch_size_used_times > mini_batch_size_used_times:
+                    argmin_mini_batch_size = mini_batch_size
+                    min_mini_batch_size_used_times = mini_batch_size_used_times
+
+                mini_batch_size *= 2
+                mini_batch_size_used_times = []
+
+            if mini_batch_size > x.shape[0]:
+                module.fastest_mini_batch_size = argmin_mini_batch_size
+                # print(f'{module}: fastest_mini_batch_size = {module.fastest_mini_batch_size}')
+                break
+
+    return mini_batch_forward(x, module.fastest_mini_batch_size, module)
+
+def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: Tensor
     :param stateless_module: a stateless module, e.g., 'torch.nn.Conv2d' or a list contains stateless modules, e.g., '[torch.nn.Conv2d, torch.nn.BatchNorm2d]
-    :type stateless_module: torch.nn.Module or list or tuple
+    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: Tensor
 
     See :class:`spikingjelly.clock_driven.layer.SeqToANNContainer` for more details.
     """
-    y_shape = [x_seq.shape[0], x_seq.shape[1]]
-    y = x_seq.flatten(0, 1)
-    if isinstance(stateless_module, (list, tuple)):
-        for m in stateless_module:
-            y = m(y)
+    x_shape = [x_seq.shape[0], x_seq.shape[1]]
+    x = x_seq.flatten(0, 1)
+
+    if isinstance(stateless_module, (list, tuple, nn.Sequential)):
+        if configure.mini_batch_benchmark and x_seq.get_device() >= 0:
+            for m in stateless_module:
+                if m.training and isinstance(m, configure.mini_batch_benchmark_layers):
+                    x = forward_with_mini_batch_benchmark(x, m)
+                else:
+                    x = m(x)
+        else:
+            for m in stateless_module:
+                x = m(x)
     else:
-        y = stateless_module(y)
-    y_shape.extend(y.shape[1:])
-    return y.view(y_shape)
+        if configure.mini_batch_benchmark and stateless_module.training and x_seq.get_device() >=0 and isinstance(stateless_module, configure.mini_batch_benchmark_layers):
+            x = forward_with_mini_batch_benchmark(x, stateless_module)
+        else:
+            x = stateless_module(x)
+    x_shape.extend(x.shape[1:])
+    return x.view(x_shape)
 
 def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     """

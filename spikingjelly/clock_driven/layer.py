@@ -820,14 +820,7 @@ class MultiStepContainer(nn.Sequential):
         :return: y_seq, shape=[T, batch_size, ...]
         :rtype: Tensor
         """
-        y_seq = []
-        for t in range(x_seq.shape[0]):
-            y_seq.append(super().forward(x_seq[t]))
-
-        for t in range(y_seq.__len__()):
-            # y_seq[t].unsqueeze_(0)
-            y_seq[t] = y_seq[t].unsqueeze(0)
-        return torch.cat(y_seq, 0)
+        return functional.multi_step_forward(x_seq, self)
 
 
 class SeqToANNContainer(nn.Sequential):
@@ -880,10 +873,7 @@ class SeqToANNContainer(nn.Sequential):
         :return: y_seq, shape=[T, batch_size, ...]
         :rtype: Tensor
         """
-        y_shape = [x_seq.shape[0], x_seq.shape[1]]
-        y_seq = super().forward(x_seq.flatten(0, 1))
-        y_shape.extend(y_seq.shape[1:])
-        return y_seq.view(y_shape)
+        return functional.seq_to_ann_forward(x_seq, self)
 
 
 class STDPLearner(base.MemoryModule):
