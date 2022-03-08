@@ -358,7 +358,7 @@ def spiking_vgg16(pretrained=False, progress=True, single_step_neuron: callable 
         A spiking version of VGG-16 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg16', 'C', False, pretrained, progress, None, single_step_neuron, **kwargs)
+    return _spiking_vgg('vgg16', 'D', False, pretrained, progress, None, single_step_neuron, **kwargs)
 
 
 def multi_step_spiking_vgg16(pretrained=False, progress=True, T: int = None, multi_step_neuron: callable = None, **kwargs):
@@ -379,7 +379,7 @@ def multi_step_spiking_vgg16(pretrained=False, progress=True, T: int = None, mul
     A multi-step spiking version of VGG-16 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg16', 'C', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg16', 'D', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = None, single_step_neuron: callable = None, **kwargs):
@@ -400,7 +400,7 @@ def spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = Non
         A spiking version of VGG-16-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg16', 'C', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
+    return _spiking_vgg('vgg16', 'D', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
 
 
 def multi_step_spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
@@ -423,7 +423,7 @@ def multi_step_spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: cal
     A multi-step spiking version of VGG-16-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg16', 'C', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg16', 'D', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg19(pretrained=False, progress=True, single_step_neuron: callable = None, **kwargs):
@@ -442,7 +442,7 @@ def spiking_vgg19(pretrained=False, progress=True, single_step_neuron: callable 
         A spiking version of VGG-19 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg19', 'D', False, pretrained, progress, None, single_step_neuron, **kwargs)
+    return _spiking_vgg('vgg19', 'E', False, pretrained, progress, None, single_step_neuron, **kwargs)
 
 
 def multi_step_spiking_vgg19(pretrained=False, progress=True, T: int = None, multi_step_neuron: callable = None, **kwargs):
@@ -463,7 +463,7 @@ def multi_step_spiking_vgg19(pretrained=False, progress=True, T: int = None, mul
         A multi-step spiking version of VGG-19 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg19', 'D', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg19', 'E', False, pretrained, progress, None, T, multi_step_neuron, **kwargs)
 
 
 def spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = None, single_step_neuron: callable = None, **kwargs):
@@ -484,7 +484,7 @@ def spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = Non
     A spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg19', 'D', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
+    return _spiking_vgg('vgg19', 'E', True, pretrained, progress, norm_layer, single_step_neuron, **kwargs)
 
 
 def multi_step_spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = None, T: int = None, multi_step_neuron: callable = None, **kwargs):
@@ -507,5 +507,5 @@ def multi_step_spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: cal
     A multi-step spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _multi_step_spiking_vgg('vgg19', 'D', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
+    return _multi_step_spiking_vgg('vgg19', 'E', True, pretrained, progress, norm_layer, T, multi_step_neuron, **kwargs)
 
