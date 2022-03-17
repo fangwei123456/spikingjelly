@@ -497,9 +497,9 @@ def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data
 
 def pad_sequence_collate(batch: list):
     '''
-    :param batch: a list of samples that contains ``(x, y)``, where ``x.shape=[T, *]`` and ``y`` is the label
+    :param batch: a list of samples that contains ``(x, y)``, where ``x`` is a list containing sequences with different length and ``y`` is the label
     :type batch: list
-    :return: batched samples, where ``x`` is padded with the same length
+    :return: batched samples ``(x_p, x_len, y), where ``x_p`` is padded ``x`` with the same length, and ``x_len`` is the length of the ``x``
     :rtype: tuple
 
     This function can be use as the ``collate_fn`` for ``DataLoader`` to process the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with fixed duration to integrate events to frames.
@@ -508,28 +508,32 @@ def pad_sequence_collate(batch: list):
 
     .. code-block:: python
 
-        class RandomLengthDataset(torch.utils.data.Dataset):
-            def __init__(self, n=1000):
-                super().__init__()
-                self.n = n
+    from spikingjelly.datasets import pad_sequence_collate
+    import torch
 
-            def __getitem__(self, i):
-                return torch.rand([random.randint(1, 10), 28, 28]), random.randint(0, 10)
+    class VariableLengthDataset(torch.utils.data.Dataset):
+        def __init__(self, n=1000):
+            super().__init__()
+            self.n = n
 
-            def __len__(self):
-                return self.n
+        def __getitem__(self, i):
+            return torch.rand([i, 28, 28]), i
 
-        loader = torch.utils.data.DataLoader(RandomLengthDataset(n=32), batch_size=16, collate_fn=pad_sequence_collate)
+        def __len__(self):
+            return self.n
 
-        for x, y, z in loader:
-            print(x.shape, y.shape, z)
+
+    loader = torch.utils.data.DataLoader(VariableLengthDataset(n=32), batch_size=3, collate_fn=pad_sequence_collate, shuffle=True)
+
+    for x, y, z in loader:
+        print(x.shape, y, z)
+        exit()
 
     And the outputs are:
 
     .. code-block:: bash
 
-        torch.Size([10, 16, 28, 28]) torch.Size([16]) tensor([ 1,  9,  3,  4,  1,  2,  9,  7,  2,  1,  5,  7,  4, 10,  9,  5])
-        torch.Size([10, 16, 28, 28]) torch.Size([16]) tensor([ 1,  8,  7, 10,  3, 10,  6,  7,  5,  9, 10,  5,  9,  6,  7,  6])
+        torch.Size([3, 30, 28, 28]) tensor([30, 21, 19]) tensor([30, 21, 19])
 
     '''
     x_list = []
