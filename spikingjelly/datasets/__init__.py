@@ -508,33 +508,32 @@ def pad_sequence_collate(batch: list):
 
     .. code-block:: python
 
-    from spikingjelly.datasets import pad_sequence_collate
-    import torch
-
     class VariableLengthDataset(torch.utils.data.Dataset):
         def __init__(self, n=1000):
             super().__init__()
             self.n = n
 
         def __getitem__(self, i):
-            return torch.rand([i, 28, 28]), i
+            return torch.rand([i, 2]), i
 
         def __len__(self):
             return self.n
 
 
-    loader = torch.utils.data.DataLoader(VariableLengthDataset(n=32), batch_size=3, collate_fn=pad_sequence_collate, shuffle=True)
+    loader = torch.utils.data.DataLoader(VariableLengthDataset(n=32), batch_size=2, collate_fn=pad_sequence_collate, shuffle=True)
 
-    for x, y, z in loader:
-        print(x.shape, y, z)
-        exit()
+    for i, (x_p, x_len, z) in enumerate(loader):
+        print(f'x_p.shape={x_p.shape}, x_len={x_len}, z={z}')
+        if i == 2:
+            break
 
     And the outputs are:
 
     .. code-block:: bash
 
-        torch.Size([3, 30, 28, 28]) tensor([30, 21, 19]) tensor([30, 21, 19])
-
+        x_p.shape=torch.Size([2, 8, 2]), x_len=tensor([2, 8]), z=tensor([2, 8])
+        x_p.shape=torch.Size([2, 31, 2]), x_len=tensor([19, 31]), z=tensor([19, 31])
+        x_p.shape=torch.Size([2, 13, 2]), x_len=tensor([13, 11]), z=tensor([13, 11])
     '''
     x_list = []
     x_len_list = []
