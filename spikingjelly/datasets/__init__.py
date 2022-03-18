@@ -499,7 +499,7 @@ def pad_sequence_collate(batch: list):
     '''
     :param batch: a list of samples that contains ``(x, y)``, where ``x`` is a list containing sequences with different length and ``y`` is the label
     :type batch: list
-    :return: batched samples ``(x_p, x_len, y), where ``x_p`` is padded ``x`` with the same length, and ``x_len`` is the length of the ``x``
+    :return: batched samples ``(x_p, y, x_len), where ``x_p`` is padded ``x`` with the same length, `y`` is the label, and ``x_len`` is the length of the ``x``
     :rtype: tuple
 
     This function can be use as the ``collate_fn`` for ``DataLoader`` to process the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with fixed duration to integrate events to frames.
@@ -514,16 +514,17 @@ def pad_sequence_collate(batch: list):
             self.n = n
 
         def __getitem__(self, i):
-            return torch.rand([i, 2]), i
+            return torch.rand([i + 1, 2]), self.n - i - 1
 
         def __len__(self):
             return self.n
 
 
-    loader = torch.utils.data.DataLoader(VariableLengthDataset(n=32), batch_size=2, collate_fn=pad_sequence_collate, shuffle=True)
+    loader = torch.utils.data.DataLoader(VariableLengthDataset(n=32), batch_size=2, collate_fn=pad_sequence_collate,
+                                         shuffle=True)
 
-    for i, (x_p, x_len, z) in enumerate(loader):
-        print(f'x_p.shape={x_p.shape}, x_len={x_len}, z={z}')
+    for i, (x_p, label, x_len) in enumerate(loader):
+        print(f'x_p.shape={x_p.shape}, label={label}, x_len={x_len}')
         if i == 2:
             break
 
@@ -531,9 +532,9 @@ def pad_sequence_collate(batch: list):
 
     .. code-block:: bash
 
-        x_p.shape=torch.Size([2, 8, 2]), x_len=tensor([2, 8]), z=tensor([2, 8])
-        x_p.shape=torch.Size([2, 31, 2]), x_len=tensor([19, 31]), z=tensor([19, 31])
-        x_p.shape=torch.Size([2, 13, 2]), x_len=tensor([13, 11]), z=tensor([13, 11])
+        x_p.shape=torch.Size([2, 18, 2]), label=tensor([14, 30]), x_len=tensor([18,  2])
+        x_p.shape=torch.Size([2, 29, 2]), label=tensor([3, 6]), x_len=tensor([29, 26])
+        x_p.shape=torch.Size([2, 23, 2]), label=tensor([ 9, 23]), x_len=tensor([23,  9])
     '''
     x_list = []
     x_len_list = []
