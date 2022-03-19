@@ -159,10 +159,58 @@ SpikingJelly includes the following neuromorphic datasets:
 Users can use both the origin events data and frames data integrated by SpikingJelly:
 
 ```python
+import torch
+from torch.utils.data import DataLoader
+from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask
 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
 root_dir = 'D:/datasets/DVS128Gesture'
 event_set = DVS128Gesture(root_dir, train=True, data_type='event')
-frame_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
+event, label = event_set[0]
+for k in event.keys():
+    print(k, event[k])
+print('label', label)
+'''
+t [80048267 80048277 80048278 ... 85092406 85092538 85092700]
+x [49 55 55 ... 60 85 45]
+y [82 92 92 ... 96 86 90]
+p [1 0 0 ... 1 0 0]
+label 0
+'''
+fixed_frames_number_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
+frame, label = fixed_frames_number_set[0]
+print(f'frame.shape=[T, C, H, W]={frame.shape}')
+'''
+frame.shape=[T, C, H, W]=(20, 2, 128, 128)
+'''
+
+train_set = DVS128Gesture(root_dir, data_type='frame', duration=1000000, train=True)
+for i in range(5):
+    x, y = train_set[i]
+    print(f'x[{i}].shape=[T, C, H, W]={x.shape}')
+'''
+x[0].shape=[T, C, H, W]=(6, 2, 128, 128)
+x[1].shape=[T, C, H, W]=(6, 2, 128, 128)
+x[2].shape=[T, C, H, W]=(5, 2, 128, 128)
+x[3].shape=[T, C, H, W]=(5, 2, 128, 128)
+x[4].shape=[T, C, H, W]=(7, 2, 128, 128)
+'''
+train_data_loader = DataLoader(train_set, collate_fn=pad_sequence_collate, batch_size=5)
+for x, y, x_len in train_data_loader:
+    print(f'x.shape=[N, T, C, H, W]={tuple(x.shape)}')
+    print(f'x_len={x_len}')
+    mask = padded_sequence_mask(x_len)  # mask.shape = [T, N]
+    print(f'mask=\n{mask.t().int()}')
+    break
+'''
+x.shape=[N, T, C, H, W]=(5, 7, 2, 128, 128)
+x_len=tensor([6, 6, 5, 5, 7])
+mask=
+tensor([[1, 1, 1, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1, 1, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 0, 0],
+        [1, 1, 1, 1, 1, 1, 1]], dtype=torch.int32)
+'''
 ```
 More datasets will be included in the future.
 

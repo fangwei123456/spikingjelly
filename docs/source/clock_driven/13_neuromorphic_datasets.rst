@@ -200,6 +200,52 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 .. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.*
     :width: 100%
 
+固定时间间隔积分
+----------------------------
+使用固定时间间隔积分，更符合实际物理系统。例如每 ``10 ms`` 积分一次，则长度为 ``L ms`` 的数据，可以得到  ``math.floor(L / 10)`` 帧。但
+神经形态数据集中每个样本的长度往往不相同，因此会得到不同长度的帧数据。使用惊蜇框架提供的 :class:`spikingjelly.datasets.pad_sequence_collate`
+和 :class:`spikingjelly.datasets.padded_sequence_mask` 可以很方便的对不等长数据进行对齐和还原。
+
+示例代码：
+
+.. code:: python
+
+    import torch
+    from torch.utils.data import DataLoader
+    from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask, dvs128_gesture
+    root='D:/datasets/DVS128Gesture'
+    train_set = dvs128_gesture.DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
+    for i in range(5):
+        x, y = train_set[i]
+        print(f'x[{i}].shape=[T, C, H, W]={x.shape}')
+    train_data_loader = DataLoader(train_set, collate_fn=pad_sequence_collate, batch_size=5)
+    for x, y, x_len in train_data_loader:
+        print(f'x.shape=[N, T, C, H, W]={tuple(x.shape)}')
+        print(f'x_len={x_len}')
+        mask = padded_sequence_mask(x_len)  # mask.shape = [T, N]
+        print(f'mask=\n{mask.t().int()}')
+        break
+
+输出为：
+
+.. code:: bash
+
+    The directory [D:/datasets/DVS128Gesture\duration_1000000] already exists.
+    x[0].shape=[T, C, H, W]=(6, 2, 128, 128)
+    x[1].shape=[T, C, H, W]=(6, 2, 128, 128)
+    x[2].shape=[T, C, H, W]=(5, 2, 128, 128)
+    x[3].shape=[T, C, H, W]=(5, 2, 128, 128)
+    x[4].shape=[T, C, H, W]=(7, 2, 128, 128)
+    x.shape=[N, T, C, H, W]=(5, 7, 2, 128, 128)
+    x_len=tensor([6, 6, 5, 5, 7])
+    mask=
+    tensor([[1, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1]], dtype=torch.int32)
+
+
 自定义积分方法
 -----------------------
 惊蜇框架支持用户自定义积分方法。用户只需要提供积分函数 ``custom_integrate_function`` 以及保存frames的文件夹名 ``custom_integrated_frames_dir_name``。

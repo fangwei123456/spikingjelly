@@ -203,8 +203,55 @@ We will get the images like:
 .. image:: ../_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.*
     :width: 100%
 
+Fixed Duration Integrating
+--------------------------------------
+Integrating by fixed duration is more compatible with the practical application. For example, if we set duration as ``10 ms``,
+then a sample with length ``L ms`` can be integrated to frames with frame number ``math.floor(L / 10)``. However, the lengthes
+of samples in neuromorphic datasets are not identical, and we will get frames with different frame numbers when integrating
+with fixed duration. Fortunately, we can use :class:`spikingjelly.datasets.pad_sequence_collate` and
+:class:`spikingjelly.datasets.padded_sequence_mask` to pad/unpad frames.
+
+Example codes:
+
+.. code:: python
+
+    import torch
+    from torch.utils.data import DataLoader
+    from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask, dvs128_gesture
+    root='D:/datasets/DVS128Gesture'
+    train_set = dvs128_gesture.DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
+    for i in range(5):
+        x, y = train_set[i]
+        print(f'x[{i}].shape=[T, C, H, W]={x.shape}')
+    train_data_loader = DataLoader(train_set, collate_fn=pad_sequence_collate, batch_size=5)
+    for x, y, x_len in train_data_loader:
+        print(f'x.shape=[N, T, C, H, W]={tuple(x.shape)}')
+        print(f'x_len={x_len}')
+        mask = padded_sequence_mask(x_len)  # mask.shape = [T, N]
+        print(f'mask=\n{mask.t().int()}')
+        break
+
+The outputs are:
+
+.. code:: bash
+
+    The directory [D:/datasets/DVS128Gesture\duration_1000000] already exists.
+    x[0].shape=[T, C, H, W]=(6, 2, 128, 128)
+    x[1].shape=[T, C, H, W]=(6, 2, 128, 128)
+    x[2].shape=[T, C, H, W]=(5, 2, 128, 128)
+    x[3].shape=[T, C, H, W]=(5, 2, 128, 128)
+    x[4].shape=[T, C, H, W]=(7, 2, 128, 128)
+    x.shape=[N, T, C, H, W]=(5, 7, 2, 128, 128)
+    x_len=tensor([6, 6, 5, 5, 7])
+    mask=
+    tensor([[1, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 1, 0],
+            [1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 1, 1, 0, 0],
+            [1, 1, 1, 1, 1, 1, 1]], dtype=torch.int32)
+
 Custom Integrating Method
------------------------
+----------------------------
 SpikingJelly provides user-defined integrating method. The user should provide a function ``custom_integrate_function`` and
 the name of directory ``custom_integrated_frames_dir_name`` for saving frames.
 
