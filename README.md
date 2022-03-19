@@ -176,14 +176,17 @@ for k in event.keys():
 # label 0
 
 fixed_frames_number_set = DVS128Gesture(root_dir, train=True, data_type='frame', frames_number=20, split_by='number')
-frame, label = fixed_frames_number_set[0]
-print(f'frame.shape=[T, C, H, W]={frame.shape}')
+rand_index = torch.randint(low=0, high=fixed_frames_number_set.__len__(), size=[2])
+for i in rand_index:
+    frame, label = fixed_frames_number_set[i]
+    print(f'frame[{i}].shape=[T, C, H, W]={frame.shape}')
 
-#frame.shape=[T, C, H, W]=(20, 2, 128, 128)
+# frame[308].shape=[T, C, H, W]=(20, 2, 128, 128)
+# frame[453].shape=[T, C, H, W]=(20, 2, 128, 128)
 
-train_set = DVS128Gesture(root_dir, data_type='frame', duration=1000000, train=True)
+fixed_duration_frame_set = DVS128Gesture(root_dir, data_type='frame', duration=1000000, train=True)
 for i in range(5):
-    x, y = train_set[i]
+    x, y = fixed_duration_frame_set[i]
     print(f'x[{i}].shape=[T, C, H, W]={x.shape}')
 
 # x[0].shape=[T, C, H, W]=(6, 2, 128, 128)
@@ -192,7 +195,7 @@ for i in range(5):
 # x[3].shape=[T, C, H, W]=(5, 2, 128, 128)
 # x[4].shape=[T, C, H, W]=(7, 2, 128, 128)
 
-train_data_loader = DataLoader(train_set, collate_fn=pad_sequence_collate, batch_size=5)
+train_data_loader = DataLoader(fixed_duration_frame_set, collate_fn=pad_sequence_collate, batch_size=5)
 for x, y, x_len in train_data_loader:
     print(f'x.shape=[N, T, C, H, W]={tuple(x.shape)}')
     print(f'x_len={x_len}')
