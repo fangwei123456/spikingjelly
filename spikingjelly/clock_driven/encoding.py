@@ -312,14 +312,14 @@ class PoissonEncoder(StatelessEncoder):
         return out_spike
 
 class WeightedPhaseEncoder(StatefulEncoder):
-    def __init__(self, T: int):
+    def __init__(self, K: int):
         """
         * :ref:`API in English <WeightedPhaseEncoder.__init__-en>`
 
         .. _WeightedPhaseEncoder.__init__-cn:
 
-        :param T: 编码周期。通常情况下，与SNN的仿真周期（总步长一致）
-        :type T: int
+        :param K: 编码周期。通常情况下，与SNN的仿真周期（总步长一致）
+        :type K: int
 
         Kim J, Kim H, Huh S, et al. Deep neural networks with weighted spikes[J]. Neurocomputing, 2018, 311: 373-386.
 
@@ -346,8 +346,8 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
         .. _WeightedPhaseEncoder.__init__-en:
 
-        :param T: the encoding period. It is usually same with the total simulation time-steps of SNN
-        :type T: int
+        :param K: the encoding period. It is usually same with the total simulation time-steps of SNN
+        :type K: int
 
         The weighted phase encoder, which is based on binary system. It will flatten ``x`` as a binary number. When
         ``T=k``, it can encode :math:`x \in [0, 1-2^{-K}]` to different spikes. Here is the example from the origin paper:
@@ -368,14 +368,14 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
 
         """
-        super().__init__(T)
+        super().__init__(K)
 
     def encode(self, x: torch.Tensor):
-        assert (x >= 0).all() and (x <= 1 - 2 ** (-self.phase)).all()
+        assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
-        self.spike = torch.empty((self.phase,) + x.shape, device=x.device)  # 编码为[phase, batch_size, *]
+        self.spike = torch.empty((self.T,) + x.shape, device=x.device)  # Encoding to [T, batch_size, *]
         w = 0.5
-        for i in range(self.phase):
+        for i in range(self.T):
             self.spike[i] = inputs >= w
             inputs -= w * self.spike[i]
             w *= 0.5
