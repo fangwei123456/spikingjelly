@@ -4,15 +4,16 @@ from torch.utils.cpp_extension import load_inline
 from torch.cuda.amp import custom_fwd, custom_bwd
 from . import tensor_cache
 
-
-
 try:
     import cupy
 except BaseException as e:
     print('spikingjelly.clock_driven.spike_op:', e)
     cupy = None
 
+
 try:
+    print('spikingjelly.clock_driven.spike_op:', 'try to use `torch.utils.cpp_extension.load_inline` to load cudnn functions.')
+    print(f'If it is hanging, pleast try to delete torch_extensions cache directory. (In most cases, the directory is {torch.utils.cpp_extension._get_build_directory("", False)})')
     cpp_wrapper = load_inline(
             name='cpp_wrapper',
             cpp_sources='using namespace at;',
