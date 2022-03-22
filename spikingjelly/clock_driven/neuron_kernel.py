@@ -267,7 +267,7 @@ try:
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
@@ -366,7 +366,7 @@ try:
 
             kernel = MultiStepIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, hard_reset, ctx.detach_reset, dtype)
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
 
                 if hard_reset:
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
@@ -712,7 +712,7 @@ try:
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
@@ -815,8 +815,8 @@ try:
                 raise NotImplementedError
 
             kernel = MultiStepLIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, ctx.decay_input, hard_reset, ctx.detach_reset, dtype)
-
-            with cupy.cuda.Device(device):
+            
+            with cu_kernel_opt.DeviceEnvironment(device):
 
                 if hard_reset:
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
@@ -1116,7 +1116,7 @@ try:
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
             tau = 1. / reciprocal_tau.item()
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
@@ -1223,7 +1223,7 @@ try:
             kernel = MultiStepParametricLIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, ctx.decay_input, hard_reset,
                                                                       ctx.detach_reset, dtype)
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
 
                 if hard_reset:
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
@@ -1576,7 +1576,7 @@ try:
 
             v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
                 numel = x_seq.numel()
                 neuron_num = numel // x_seq.shape[0]
 
@@ -1682,7 +1682,7 @@ try:
 
             kernel = MultiStepEIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, hard_reset, ctx.detach_reset, dtype)
 
-            with cupy.cuda.Device(device):
+            with cu_kernel_opt.DeviceEnvironment(device):
 
                 if hard_reset:
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)

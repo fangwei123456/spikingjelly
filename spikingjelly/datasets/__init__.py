@@ -589,7 +589,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
 
     if device_id >= 0 and cupy is not None:
         mask = torch.zeros([T, N], dtype=bool, device=sequence_len.device)
-        with cupy.cuda.Device(device_id):
+        with cu_kernel_opt.DeviceEnvironment(device_id):
             T = cupy.asarray(T)
             N = cupy.asarray(N)
             sequence_len, mask, T, N = cu_kernel_opt.get_contiguous(sequence_len.to(torch.int), mask, T, N)

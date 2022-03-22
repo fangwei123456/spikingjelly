@@ -106,7 +106,7 @@ def float_spike_to_bool(spike: torch.Tensor):
         spike = F.pad(spike, (0, s_padding))
     device_id = spike.get_device()
     spike_b = torch.zeros([spike.numel() // 8], device=spike.device, dtype=torch.uint8)
-    with cupy.cuda.Device(device_id):
+    with cu_kernel_opt.DeviceEnvironment(device_id):
         numel = spike_b.numel()
         blocks = cu_kernel_opt.cal_blocks(numel)
         numel = cupy.asarray(numel)
@@ -137,7 +137,7 @@ def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: to
         kernel_name = 'bool2half'
     else:
         raise NotImplementedError
-    with cupy.cuda.Device(device_id):
+    with cu_kernel_opt.DeviceEnvironment(device_id):
         numel = spike_b.numel()
         blocks = cu_kernel_opt.cal_blocks(numel)
         numel = cupy.asarray(numel)

@@ -315,7 +315,7 @@ class IFNode(BaseNode):
                 '''
                 self.cp_kernel = cupy.RawKernel(code, 'IFNode_soft_reset_inference_forward', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
-            with cupy.cuda.Device(device_id):
+            with cu_kernel_opt.DeviceEnvironment(device_id):
                 numel = x.numel()
                 threads = configure.cuda_threads
                 blocks = cu_kernel_opt.cal_blocks(numel)

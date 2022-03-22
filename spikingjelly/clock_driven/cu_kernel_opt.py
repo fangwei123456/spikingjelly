@@ -101,9 +101,24 @@ try:
                 time.sleep(self.interval)
 
 
+    class DeviceEnvironment:
+        def __init__(self, device: int):
+            """
+            This module is used as a context to make CuPy use the specific device, and avoids `torch.cuda.current_device()` is changed by CuPy.
+            Refer to https://github.com/cupy/cupy/issues/6569 for more details.
+            """
+            self.device = device
+            self.previous_device = None
 
+        def __enter__(self):
+            current_device = torch.cuda.current_device()
+            if current_device != self.device:
+                torch.cuda.set_device(self.device)
+                self.previous_device = current_device
 
-
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            if self.previous_device is not None:
+                torch.cuda.set_device(self.previous_device)
 
 except BaseException as e:
     print('spikingjelly.clock_driven.cu_kernel_opt:', e)
