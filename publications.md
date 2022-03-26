@@ -19,6 +19,7 @@
 | [AutoSNN: Towards Energy-Efficient Spiking Neural Networks](https://arxiv.org/abs/2201.12738) |                                                              |
 | [Neural Architecture Search for Spiking Neural Networks](https://arxiv.org/abs/2201.10355) | https://github.com/Intelligent-Computing-Lab-Yale/Neural-Architecture-Search-for-Spiking-Neural-Networks |
 | [FEAS: A Faster Event-driven Accelerator Supporting Inhibitory Spiking Neural Network](https://ieeexplore.ieee.org/document/9720483/) |                                                              |
+| [Neuromorphic Data Augmentation for Training Spiking Neural Networks](https://arxiv.org/abs/2203.06145) |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
