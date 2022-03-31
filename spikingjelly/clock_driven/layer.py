@@ -8,6 +8,7 @@ from typing import Optional
 from torch.nn.modules.utils import _single, _pair, _triple
 from torch.nn.common_types import _size_2_t
 from typing import Callable
+from torch.nn.modules.batchnorm import _BatchNorm
 
 
 class NeuNorm(base.MemoryModule):
@@ -1385,3 +1386,128 @@ class SpikeConv3d(nn.Conv3d):
         return functional.spike_conv3d(
             spike, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
+
+class _MultiStepThresholdDependentBatchNormBase(_BatchNorm):
+    def __init__(self, alpha: float, v_th: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.alpha = alpha
+        self.v_th = v_th
+        assert self.affine, "ThresholdDependentBatchNorm needs to set `affine = True`!"
+        torch.nn.init.constant_(self.weight, alpha * v_th)
+
+    def forward(self, x_seq):
+        y_shape = [x_seq.shape[0], x_seq.shape[1]]
+        y = x_seq.flatten(0, 1)
+        y = super().forward(y)
+        y_shape.extend(y.shape[1:])
+        return y.view(y_shape)
+
+
+class MultiStepThresholdDependentBatchNorm1d(_MultiStepThresholdDependentBatchNormBase):
+    def __init__(self, alpha: float, v_th: float, *args, **kwargs):
+        """
+        * :ref:`API in English <MultiStepThresholdDependentBatchNorm1d.__init__-en>`
+
+        .. _MultiStepThresholdDependentBatchNorm1d.__init__-cn:
+
+        :param alpha: 由网络结构决定的超参数
+        :type alpha: float
+        :param v_th: 下一个脉冲神经元层的阈值
+        :type v_th: float
+
+        ``*args, **kwargs`` 中的参数与 :class:`torch.nn.BatchNorm1d` 的参数相同。
+
+        `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_ 一文提出
+        的Threshold-Dependent Batch Normalization (tdBN)。
+
+        * :ref:`中文API <MultiStepThresholdDependentBatchNorm1d.__init__-cn>`
+
+        .. _MultiStepThresholdDependentBatchNorm1d.__init__-en:
+
+        :param alpha: the hyper-parameter depending on network structure
+        :type alpha: float
+        :param v_th: the threshold of next spiking neurons layer
+        :type v_th: float
+
+        Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm1d`.
+
+        The Threshold-Dependent Batch Normalization (tdBN) proposed in `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_.
+        """
+        super().__init__(alpha, v_th, *args, **kwargs)
+
+    def _check_input_dim(self, x):
+        if x.dim() != 2 and x.dim() != 3:
+            raise ValueError(f'expected 3D or 4D input with shape [T, N, C] or [T, N, C, M], but got input with shape {x.shape}')
+
+class MultiStepThresholdDependentBatchNorm2d(_MultiStepThresholdDependentBatchNormBase):
+    def __init__(self, alpha: float, v_th: float, *args, **kwargs):
+        """
+        * :ref:`API in English <MultiStepThresholdDependentBatchNorm2d.__init__-en>`
+
+        .. _MultiStepThresholdDependentBatchNorm2d.__init__-cn:
+
+        :param alpha: 由网络结构决定的超参数
+        :type alpha: float
+        :param v_th: 下一个脉冲神经元层的阈值
+        :type v_th: float
+
+        ``*args, **kwargs`` 中的参数与 :class:`torch.nn.BatchNorm2d` 的参数相同。
+
+        `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_ 一文提出
+        的Threshold-Dependent Batch Normalization (tdBN)。
+
+        * :ref:`中文API <MultiStepThresholdDependentBatchNorm2d.__init__-cn>`
+
+        .. _MultiStepThresholdDependentBatchNorm2d.__init__-en:
+
+        :param alpha: the hyper-parameter depending on network structure
+        :type alpha: float
+        :param v_th: the threshold of next spiking neurons layer
+        :type v_th: float
+
+        Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm2d`.
+
+        The Threshold-Dependent Batch Normalization (tdBN) proposed in `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_.
+        """
+        super().__init__(alpha, v_th, *args, **kwargs)
+
+    def _check_input_dim(self, x):
+        if x.dim() != 4:
+            raise ValueError(f'expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}')
+
+
+class MultiStepThresholdDependentBatchNorm3d(_MultiStepThresholdDependentBatchNormBase):
+    def __init__(self, alpha: float, v_th: float, *args, **kwargs):
+        """
+        * :ref:`API in English <MultiStepThresholdDependentBatchNorm3d.__init__-en>`
+
+        .. _MultiStepThresholdDependentBatchNorm3d.__init__-cn:
+
+        :param alpha: 由网络结构决定的超参数
+        :type alpha: float
+        :param v_th: 下一个脉冲神经元层的阈值
+        :type v_th: float
+
+        ``*args, **kwargs`` 中的参数与 :class:`torch.nn.BatchNorm3d` 的参数相同。
+
+        `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_ 一文提出
+        的Threshold-Dependent Batch Normalization (tdBN)。
+
+        * :ref:`中文API <MultiStepThresholdDependentBatchNorm3d.__init__-cn>`
+
+        .. _MultiStepThresholdDependentBatchNorm3d.__init__-en:
+
+        :param alpha: the hyper-parameter depending on network structure
+        :type alpha: float
+        :param v_th: the threshold of next spiking neurons layer
+        :type v_th: float
+
+        Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm3d`.
+
+        The Threshold-Dependent Batch Normalization (tdBN) proposed in `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_.
+        """
+        super().__init__(alpha, v_th, *args, **kwargs)
+
+    def _check_input_dim(self, x):
+        if x.dim() != 5:
+            raise ValueError(f'expected 6D input with shape [T, N, C, D, H, W], but got input with shape {x.shape}')
