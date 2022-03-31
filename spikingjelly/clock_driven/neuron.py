@@ -1264,7 +1264,7 @@ class AdaptLIFNode(AdaptBaseNode):
             if self.v_rest == 0.:
                 self.v = self.v - (self.v + self.w) / self.tau + x
             else:
-                self.v = (self.v - (self.v - self.v_rest) - self.w) / self.tau + x
+                self.v = self.v - ((self.v - self.v_rest) + self.w) / self.tau + x
 
 class IzhikevichNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
