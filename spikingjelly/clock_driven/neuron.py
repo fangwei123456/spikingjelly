@@ -1256,15 +1256,15 @@ class AdaptLIFNode(AdaptBaseNode):
     def neuronal_charge(self, x: torch.Tensor):
         if self.decay_input:
             if self.v_rest == 0.:
-                self.v = self.v + (x - self.v) / self.tau
+                self.v = self.v + (x - self.v - self.w) / self.tau
             else:
-                self.v = self.v + (x - (self.v - self.v_rest)) / self.tau
+                self.v = self.v + (x - (self.v - self.v_rest) - self.w) / self.tau
 
         else:
             if self.v_rest == 0.:
-                self.v = self.v * (1. - 1. / self.tau) + x
+                self.v = self.v - (self.v + self.w) / self.tau + x
             else:
-                self.v = self.v - (self.v - self.v_rest) / self.tau + x
+                self.v = (self.v - (self.v - self.v_rest) - self.w) / self.tau + x
 
 class IzhikevichNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
@@ -1282,7 +1282,7 @@ class IzhikevichNode(AdaptBaseNode):
         return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
+        self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c) - self.w) / self.tau
 
 class AdExNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1.,
@@ -1304,4 +1304,4 @@ class AdExNode(AdaptBaseNode):
             if not isinstance(self.v, torch.Tensor):
                 self.v = torch.as_tensor(self.v, device=x.device)
         
-        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
+        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T) - self.w) / self.tau
