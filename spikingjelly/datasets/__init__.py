@@ -1034,10 +1034,13 @@ def create_sub_dataset(source_dir: str, target_dir:str, ratio: float, use_soft_l
         os.makedirs(target_dir)
         print(f'Mkdir [{target_dir}].')
     create_same_directory_structure(source_dir, target_dir)
+    warnings_info = []
     for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
         if e_files.__len__() > 0:
             output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
             samples_number = int(ratio * e_files.__len__())
+            if samples_number == 0:
+                warnings_info.append(f'Warning: the samples number is 0 in [{output_dir}].')
             if randomly:
                 np.random.shuffle(e_files)
             for i, e_file in enumerate(e_files):
@@ -1052,3 +1055,6 @@ def create_sub_dataset(source_dir: str, target_dir:str, ratio: float, use_soft_l
                     shutil.copyfile(source_file, target_file)
                     # print(f'copyfile {source_file} -> {target_file}')
             print(f'[{samples_number}] files in [{e_root}] have been copied to [{output_dir}].')
+
+    for i in range(warnings_info.__len__()):
+        print(warnings_info[i])
