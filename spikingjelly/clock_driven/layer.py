@@ -1527,12 +1527,12 @@ class MultiStepThresholdDependentBatchNorm3d(_MultiStepThresholdDependentBatchNo
             raise ValueError(f'expected 6D input with shape [T, N, C, D, H, W], but got input with shape {x.shape}')
 
 
-class MutiStepTemporalWiseAttention(nn.Module):
+class MultiStepTemporalWiseAttention(nn.Module):
     def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
         """
-        * :ref:`API in English <MutiStepTemporalWiseAttention.__init__-en>`
+        * :ref:`API in English <MultiStepTemporalWiseAttention.__init__-en>`
 
-        .. _MutiStepTemporalWiseAttention.__init__-cn:
+        .. _MultiStepTemporalWiseAttention.__init__-cn:
 
         :param T: 输入数据的时间步长
 
@@ -1541,17 +1541,17 @@ class MutiStepTemporalWiseAttention(nn.Module):
         :param dimension: 输入数据的维度。当输入数据为[T, N, C, H, W]时， dimension = 4；输入数据维度为[T, N, L]时，dimension = 2。
 
         `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_ 中提出
-        的MutiStepTemporalWiseAttention层。MutiStepTemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
+        的MultiStepTemporalWiseAttention层。MultiStepTemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
 
-        ``Conv2d -> MutiStepTemporalWiseAttention -> LIF``
+        ``Conv2d -> MultiStepTemporalWiseAttention -> LIF``
 
-        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过MutiStepTemporalWiseAttention层，输出为 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
+        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过MultiStepTemporalWiseAttention层，输出为 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
 
         ``reduction`` 是压缩比，相当于论文中的 :math:`r`。
 
-        * :ref:`中文API <MutiStepTemporalWiseAttention.__init__-cn>`
+        * :ref:`中文API <MultiStepTemporalWiseAttention.__init__-cn>`
 
-        .. _MutiStepTemporalWiseAttention.__init__-en:
+        .. _MultiStepTemporalWiseAttention.__init__-en:
 
         :param T: timewindows of input
 
@@ -1559,13 +1559,13 @@ class MutiStepTemporalWiseAttention(nn.Module):
 
         :param dimension: Dimensions of input. If the input dimension is [T, N, C, H, W], dimension = 4; when the input dimension is [T, N, L], dimension = 2.
 
-        The MutiStepTemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
+        The MultiStepTemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
 
         It should be placed after the convolution layer and before the spiking neurons, e.g.,
 
-        ``Conv2d -> MutiStepTemporalWiseAttention -> LIF``
+        ``Conv2d -> MultiStepTemporalWiseAttention -> LIF``
 
-        The dimension of the input is ``[T, N, C, H, W]`` or  ``[T, N, L]`` , after the MutiStepTemporalWiseAttention layer, the output dimension is ``[T, N, C, H, W]`` or  ``[T, N, L]`` .
+        The dimension of the input is ``[T, N, C, H, W]`` or  ``[T, N, L]`` , after the MultiStepTemporalWiseAttention layer, the output dimension is ``[T, N, C, H, W]`` or  ``[T, N, L]`` .
 
         ``reduction`` is the reduction ratio，which is :math:`r` in the paper.
 
