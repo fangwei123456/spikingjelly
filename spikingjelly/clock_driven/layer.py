@@ -1545,7 +1545,7 @@ class MutiStepTemporalWiseAttention(nn.Module):
 
         ``Conv2d -> MutiStepTemporalWiseAttention -> LIF``
 
-        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过MutiStepTemporalWiseAttention层，输出为``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
+        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过MutiStepTemporalWiseAttention层，输出为 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
 
         ``reduction`` 是压缩比，相当于论文中的 :math:`r`。
 
