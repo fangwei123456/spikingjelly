@@ -68,13 +68,13 @@ class BaseNode(base.MemoryModule):
         assert isinstance(detach_reset, bool)
         if v_reset is not None:
             assert v_threshold > v_reset
-            assert v_rest >= v_reset
         super().__init__()
 
         if v_reset is None:
             self.register_memory('v', 0.)
         else:
             self.register_memory('v', v_reset)
+
 
         self.register_memory('v_threshold', v_threshold)
         self.register_memory('v_reset', v_reset)
@@ -221,8 +221,9 @@ class AdaptBaseNode(BaseNode):
 
     def forward(self, x: torch.Tensor):
         self.neuronal_charge(x)
-        self.neuronal_fire()
+
         self.neuronal_adaptation()
+        self.spike = self.neuronal_fire()
         self.neuronal_reset()
         return self.spike
 
@@ -1357,7 +1358,7 @@ class AdaptLIFNode(AdaptBaseNode):
 
 class IzhikevichNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
-                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0.,
+                 v_reset: float = 0., v_rest: float = -0.1, w_rest: float = 0, tau_w: float = 2., a: float = 0.,
                  b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         assert isinstance(tau, float) and tau > 1.
