@@ -80,7 +80,6 @@ class BaseNode(base.MemoryModule):
         self.register_memory('v_reset', v_reset)
         self.register_memory('v_rest', v_rest)
 
-
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
 
