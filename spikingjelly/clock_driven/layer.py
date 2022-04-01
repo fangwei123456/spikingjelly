@@ -541,6 +541,7 @@ class SynapseFilter(base.MemoryModule):
 
         return self.out_i
 
+
 class ChannelsPool(nn.Module):
     def __init__(self, pool: nn.MaxPool1d or nn.AvgPool1d):
         """
@@ -1104,6 +1105,7 @@ class ConvBatchNorm2d(nn.Module):
     def get_fused_conv(self):
         return functional.fuse_convbn2d(self.conv, self.bn)
 
+
 class ElementWiseRecurrentContainer(base.MemoryModule):
     def __init__(self, sub_module: nn.Module, element_wise_function: Callable):
         """
@@ -1154,6 +1156,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
     def extra_repr(self) -> str:
         return f'element-wise function={self.element_wise_function}'
+
 
 class LinearRecurrentContainer(base.MemoryModule):
     def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True) -> None:
@@ -1223,6 +1226,7 @@ class LinearRecurrentContainer(base.MemoryModule):
         self.y = self.sub_module(self.rc(x))
         return self.y
 
+
 class SpikeLinear(nn.Linear):
     """
     * :ref:`API in English <SpikeLinear-en>`
@@ -1255,8 +1259,10 @@ class SpikeLinear(nn.Linear):
 
         Any element in `spike` must be 0 or 1.
     """
+
     def forward(self, spike: Tensor) -> Tensor:
         return functional.spike_linear(spike, self.weight, self.bias)
+
 
 class SpikeConv1d(nn.Conv1d):
     """
@@ -1290,13 +1296,15 @@ class SpikeConv1d(nn.Conv1d):
 
         Any element in `spike` must be 0 or 1.
     """
+
     def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
         if self.padding_mode != 'zeros':
             return functional.spike_conv1d(F.pad(spike, self._reversed_padding_repeated_twice, mode=self.padding_mode),
-                            weight, bias, self.stride,
-                            _single(0), self.dilation, self.groups)
+                                           weight, bias, self.stride,
+                                           _single(0), self.dilation, self.groups)
         return functional.spike_conv1d(spike, weight, bias, self.stride,
-                        self.padding, self.dilation, self.groups)
+                                       self.padding, self.dilation, self.groups)
+
 
 class SpikeConv2d(nn.Conv2d):
     """
@@ -1330,13 +1338,15 @@ class SpikeConv2d(nn.Conv2d):
 
         Any element in `spike` must be 0 or 1.
     """
+
     def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
         if self.padding_mode != 'zeros':
             return functional.spike_conv2d(F.pad(spike, self._reversed_padding_repeated_twice, mode=self.padding_mode),
-                            weight, bias, self.stride,
-                            _pair(0), self.dilation, self.groups)
+                                           weight, bias, self.stride,
+                                           _pair(0), self.dilation, self.groups)
         return functional.spike_conv2d(spike, weight, bias, self.stride,
-                        self.padding, self.dilation, self.groups)
+                                       self.padding, self.dilation, self.groups)
+
 
 class SpikeConv3d(nn.Conv3d):
     """
@@ -1370,6 +1380,7 @@ class SpikeConv3d(nn.Conv3d):
 
         Any element in `spike` must be 0 or 1.
     """
+
     def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
         if self.padding_mode != "zeros":
             return functional.spike_conv3d(
@@ -1386,6 +1397,7 @@ class SpikeConv3d(nn.Conv3d):
         return functional.spike_conv3d(
             spike, weight, bias, self.stride, self.padding, self.dilation, self.groups
         )
+
 
 class _MultiStepThresholdDependentBatchNormBase(_BatchNorm):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
@@ -1437,7 +1449,9 @@ class MultiStepThresholdDependentBatchNorm1d(_MultiStepThresholdDependentBatchNo
 
     def _check_input_dim(self, x):
         if x.dim() != 2 and x.dim() != 3:
-            raise ValueError(f'expected 3D or 4D input with shape [T, N, C] or [T, N, C, M], but got input with shape {x.shape}')
+            raise ValueError(
+                f'expected 3D or 4D input with shape [T, N, C] or [T, N, C, M], but got input with shape {x.shape}')
+
 
 class MultiStepThresholdDependentBatchNorm2d(_MultiStepThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
@@ -1511,8 +1525,10 @@ class MultiStepThresholdDependentBatchNorm3d(_MultiStepThresholdDependentBatchNo
     def _check_input_dim(self, x):
         if x.dim() != 5:
             raise ValueError(f'expected 6D input with shape [T, N, C, D, H, W], but got input with shape {x.shape}')
+
+
 class MutiStepTemporalWiseAttention(nn.Module):
-    def __init__(self, T:int, reduction:int = 16, dimension:int = 4):
+    def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
         """
         * :ref:`API in English <MutiStepTemporalWiseAttention.__init__-en>`
 
@@ -1543,7 +1559,7 @@ class MutiStepTemporalWiseAttention(nn.Module):
 
         :param dimension: Dimensions of input. If the input dimension is [T, N, C, H, W], dimension = 4; when the input dimension is [T, N, L], dimension = 2.
 
-        The MutiStepTemporalWiseAttention layer is proposed in Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
+        The MutiStepTemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
 
         It should be placed after the convolution layer and before the spiking neurons, e.g.,
 
@@ -1558,7 +1574,7 @@ class MutiStepTemporalWiseAttention(nn.Module):
         assert dimension == 4 or dimension == 2, 'dimension must be 4 or 2'
 
         self.dimension = dimension
-        
+
         # Sequence
         if self.dimension == 2:
             self.avg_pool = nn.AdaptiveAvgPool1d(1)
@@ -1566,26 +1582,27 @@ class MutiStepTemporalWiseAttention(nn.Module):
         elif self.dimension == 4:
             self.avg_pool = nn.AdaptiveAvgPool3d(1)
             self.max_pool = nn.AdaptiveMaxPool3d(1)
-        
+
         assert T >= reduction, 'reduction cannot be greater than T'
 
         # Excitation
         self.sharedMLP = nn.Sequential(
-            nn.Linear(T, T // reduction, bias=False), 
+            nn.Linear(T, T // reduction, bias=False),
             nn.ReLU(),
             nn.Linear(T // reduction, T, bias=False)
-            )
-            
+        )
+
         self.sigmoid = nn.Sigmoid()
 
-    def forward(self, x):
-        x = x.transpose(0,1)
-        avgout = self.sharedMLP(self.avg_pool(x).view([x.shape[0], x.shape[1]]))
-        maxout = self.sharedMLP(self.max_pool(x).view([x.shape[0], x.shape[1]]))
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() == 3 or x_seq.dim() == 5, ValueError(f'expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}')
+        x_seq = x_seq.transpose(0, 1)
+        avgout = self.sharedMLP(self.avg_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
+        maxout = self.sharedMLP(self.max_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
         scores = self.sigmoid(avgout + maxout)
         if self.dimension == 2:
-            out =  x * scores[:, :, None]
+            y_seq = x_seq * scores[:, :, None]
         elif self.dimension == 4:
-            out =  x * scores[:, :, None, None, None]
-        out = out.transpose(0,1)
-        return out
+            y_seq = x_seq * scores[:, :, None, None, None]
+        y_seq = y_seq.transpose(0, 1)
+        return y_seq
