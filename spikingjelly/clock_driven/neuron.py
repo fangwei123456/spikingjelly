@@ -78,6 +78,8 @@ class BaseNode(base.MemoryModule):
 
         self.register_memory('v_threshold', v_threshold)
         self.register_memory('v_reset', v_reset)
+        self.register_memory('v_rest', v_rest)
+
 
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function
@@ -580,7 +582,7 @@ class LIFNode(BaseNode):
 
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(), v_rest: float = 0.,
                  detach_reset: bool = False, backend='torch'):
         """
         * :ref:`API in English <MultiStepLIFNode.__init__-en>`
@@ -662,7 +664,7 @@ class MultiStepLIFNode(LIFNode):
             and multi-step propagation.
 
         """
-        super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(tau, decay_input, v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
