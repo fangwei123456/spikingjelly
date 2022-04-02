@@ -68,13 +68,13 @@ class BaseNode(base.MemoryModule):
         assert isinstance(detach_reset, bool)
         if v_reset is not None:
             assert v_threshold > v_reset
-            assert v_rest >= v_reset
         super().__init__()
 
         if v_reset is None:
             self.register_memory('v', 0.)
         else:
             self.register_memory('v', v_reset)
+
 
         self.register_memory('v_threshold', v_threshold)
         self.register_memory('v_reset', v_reset)
@@ -185,7 +185,7 @@ class BaseNode(base.MemoryModule):
 
 class AdaptBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0.,
+                 v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0., b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         # b: jump amplitudes
         # a: subthreshold coupling
@@ -194,7 +194,7 @@ class AdaptBaseNode(BaseNode):
         assert isinstance(a, float)
         assert isinstance(b, float)
 
-        super.__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
 
         self.register_memory('w', w_rest)
 
@@ -203,17 +203,26 @@ class AdaptBaseNode(BaseNode):
         self.a = a
         self.b = b
 
+    def neuronal_adaptation(self):
+        self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w)
 
-    def neuronal_adaptation(self, spike):
-        self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * spike
+    def neuronal_reset(self,spike):
+        if self.detach_reset:
+            spike_d = spike.detach()
+        else:
+            spike_d = spike
+
+        self.v = (1. - spike_d) * self.v + spike_d * self.v_reset
+        self.w = (1. - spike_d) * self.w + spike_d * (self.w+self.b)
 
     def extra_repr(self):
-        return super.extra_repr + f', w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
+        return super().extra_repr() + f', w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
 
     def forward(self, x: torch.Tensor):
         self.neuronal_charge(x)
+
+        self.neuronal_adaptation()
         spike = self.neuronal_fire()
-        self.neuronal_adaptation(spike)
         self.neuronal_reset(spike)
         return spike
 
@@ -348,8 +357,6 @@ class IFNode(BaseNode):
                 return spike
         else:
             return super().forward(x)
-
-
 
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -575,7 +582,7 @@ class LIFNode(BaseNode):
 
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(), v_rest: float = 0.,
                  detach_reset: bool = False, backend='torch'):
         """
         * :ref:`API in English <MultiStepLIFNode.__init__-en>`
@@ -657,7 +664,7 @@ class MultiStepLIFNode(LIFNode):
             and multi-step propagation.
 
         """
-        super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(tau, decay_input, v_threshold, v_reset, v_rest, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
@@ -1033,7 +1040,6 @@ class QIFNode(BaseNode):
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
 
-
 class EIFNode(BaseNode):
     def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_reset: float = -0.1, v_rest: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
@@ -1324,7 +1330,8 @@ class MultiStepGeneralNode(GeneralNode):
 
 class AdaptLIFNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0., 
+                 v_reset: float = 0., v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         assert isinstance(tau, float) and tau > 1.
 
@@ -1350,7 +1357,8 @@ class AdaptLIFNode(AdaptBaseNode):
 
 class IzhikevichNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
-                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0., 
+                 v_reset: float = 0., v_rest: float = -0.1, w_rest: float = 0, tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         assert isinstance(tau, float) and tau > 1.
         assert a0 > 0
@@ -1368,7 +1376,8 @@ class IzhikevichNode(AdaptBaseNode):
 
 class AdExNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1.,
-                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0., 
+                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
         assert isinstance(tau, float) and tau > 1.
         assert delta_T > 0
@@ -1385,5 +1394,111 @@ class AdExNode(AdaptBaseNode):
         with torch.no_grad():
             if not isinstance(self.v, torch.Tensor):
                 self.v = torch.as_tensor(self.v, device=x.device)
-        
-        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T) - self.w) / self.tau
+
+        self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp(
+            (self.v - self.theta_rh) / self.delta_T) - self.w) / self.tau
+
+class MultiStepAdExNode(AdExNode):
+    def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1.,
+                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+        super().__init__(tau, delta_T, theta_rh, v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function,
+                         detach_reset)
+        self.register_memory('v_seq', None)
+        self.register_memory('w_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        self.backend = backend
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.w_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+
+        if self.backend == 'torch':
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
+                self.w_seq[t] = self.w
+            return self.spike_seq
+
+        else:
+            raise NotImplementedError
+
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
+
+class MultiStepIzhikevichNode(IzhikevichNode):
+    def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
+                 v_reset: float = -0.1, v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+        super().__init__(tau, v_c, a0, v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function,
+                         detach_reset)
+        self.register_memory('v_seq', None)
+        self.register_memory('w_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        self.backend = backend
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.w_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+
+        if self.backend == 'torch':
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
+                self.w_seq[t] = self.w
+            return self.spike_seq
+
+        else:
+            raise NotImplementedError
+
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
+
+class MultiStepAdaptiveLIFNode(AdaptLIFNode):
+    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
+                 v_reset: float = 0., v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+        super().__init__(tau, decay_input, v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function,
+                         detach_reset)
+        self.register_memory('v_seq', None)
+        self.register_memory('w_seq', None)
+        self.register_memory('spike_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        self.backend = backend
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() > 1
+        # x_seq.shape = [T, *]
+        self.v_seq = torch.zeros_like(x_seq.data)
+        self.w_seq = torch.zeros_like(x_seq.data)
+        self.spike_seq = torch.zeros_like(x_seq.data)
+
+        if self.backend == 'torch':
+            for t in range(x_seq.shape[0]):
+                self.spike_seq[t] = super().forward(x_seq[t])
+                self.v_seq[t] = self.v
+                self.w_seq[t] = self.w
+            return self.spike_seq
+
+        else:
+            raise NotImplementedError
+
+    def extra_repr(self):
+        return super().extra_repr() + f', backend={self.backend}'
