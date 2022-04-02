@@ -206,14 +206,14 @@ class AdaptBaseNode(BaseNode):
     def neuronal_adaptation(self):
         self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w)
 
-    def neuronal_reset(self):
+    def neuronal_reset(self,spike):
         if self.detach_reset:
-            spike = self.spike.detach()
+            spike_d = spike.detach()
         else:
-            spike = self.spike
+            spike_d = spike
 
-        self.v = (1. - spike) * self.v + spike * self.v_reset
-        self.w = (1. - spike) * self.w + spike * (self.w+self.b)
+        self.v = (1. - spike_d) * self.v + spike_d * self.v_reset
+        self.w = (1. - spike_d) * self.w + spike_d * (self.w+self.b)
 
     def extra_repr(self):
         return super().extra_repr() + f', w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
@@ -222,9 +222,9 @@ class AdaptBaseNode(BaseNode):
         self.neuronal_charge(x)
 
         self.neuronal_adaptation()
-        self.spike = self.neuronal_fire()
-        self.neuronal_reset()
-        return self.spike
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return spike
 
 
 class IFNode(BaseNode):
