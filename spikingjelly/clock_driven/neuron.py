@@ -1310,3 +1310,39 @@ class MultiStepGeneralNode(GeneralNode):
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
+
+
+class LIAFNode(LIFNode):
+    def __init__(self, act: Callable, threshold_related: bool, *args, **kwargs):
+        """
+        :param act: the activation function
+        :type act: Callable
+        :param threshold_related: whether the neuron uses threshold related (TR mode). If true, `y = act(h - v_th)`,
+            otherwise `y = act(h)`
+        :type threshold_related: bool
+
+        Other parameters in `*args, **kwargs` are same with :class:`LIFNode`.
+
+        The LIAF neuron proposed in `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_.
+
+        .. admonition:: Warning
+            :class: warning
+
+            The outputs of this neuron are not binary spikes.
+
+        """
+        super().__init__(*args, **kwargs)
+        self.act = act
+        self.threshold_related = threshold_related
+
+    def forward(self, x: torch.Tensor):
+        self.neuronal_charge(x)
+        if self.threshold_related:
+            y = self.act(self.v - self.v_threshold)
+        else:
+            y = self.act(self.v)
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return y
+
+
