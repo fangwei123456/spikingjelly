@@ -271,8 +271,9 @@ a function:
     def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
         index_split = np.random.randint(low=0, high=events['t'].__len__())
         frames = np.zeros([2, 2, H, W])
-        frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
-        frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
+        t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
+        frames[0] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+        frames[1] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
         return frames
 
 Now let us use this function to create frames dataset:

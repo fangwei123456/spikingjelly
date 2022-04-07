@@ -186,11 +186,11 @@ def load_npz_frames(file_name: str) -> np.ndarray:
 def integrate_events_segment_to_frame(x: np.ndarray, y: np.ndarray, p: np.ndarray, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
     '''
     :param x: x-coordinate of events
-    :type events: numpy.ndarray
+    :type x: numpy.ndarray
     :param y: y-coordinate of events
-    :type events: numpy.ndarray
+    :type y: numpy.ndarray
     :param p: polarity of events
-    :type events: numpy.ndarray
+    :type p: numpy.ndarray
     :param H: height of the frame
     :type H: int
     :param W: weight of the frame
@@ -370,7 +370,10 @@ def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: i
     :rtype: np.ndarray
     Integrate events to frames by fixed time duration of each frame.
     '''
+    x = events['x']
+    y = events['y']
     t = events['t']
+    p = events['p']
     N = t.size
 
     frames = []
@@ -384,7 +387,7 @@ def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: i
             else:
                 right += 1
         # integrate from index [left, right)
-        frames.append(np.expand_dims(integrate_events_segment_to_frame(events, H, W, left, right), 0))
+        frames.append(np.expand_dims(integrate_events_segment_to_frame(x, y, p, H, W, left, right), 0))
 
         left = right
 
@@ -638,8 +641,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
                     index_split = np.random.randint(low=0, high=events['t'].__len__())
                     frames = np.zeros([2, 2, H, W])
-                    frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
-                    frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
+                    t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
+                    frames[0] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+                    frames[1] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
                     return frames
                 root_dir = 'D:/datasets/DVS128Gesture'
                 train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
