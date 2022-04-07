@@ -9,7 +9,6 @@ import torch.utils.data
 import os
 from concurrent.futures import ThreadPoolExecutor
 import time
-import multiprocessing
 from torchvision import transforms
 import torch
 from matplotlib import pyplot as plt
@@ -782,7 +781,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -812,7 +811,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -843,7 +842,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
