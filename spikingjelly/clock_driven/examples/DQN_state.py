@@ -69,7 +69,7 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if args.use_cuda else "cpu")
 
-    writer = SummaryWriter(logdir='./log')
+    writer = SummaryWriter(log_dir='./log')
 
     env = gym.make(env_name).unwrapped
     env.seed(args.seed)
