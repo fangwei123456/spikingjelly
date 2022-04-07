@@ -199,7 +199,7 @@ class AdaptiveBaseNode(BaseNode):
         self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * spike
 
     def extra_repr(self):
-        return super.extra_repr + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
+        return super().extra_repr() + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
 
     @overload
     def forward(self, x: torch.Tensor):
