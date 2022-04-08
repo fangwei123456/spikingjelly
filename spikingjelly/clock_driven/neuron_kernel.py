@@ -1708,9 +1708,10 @@ try:
         # save all cuda codes to files
         with open(cu_file_path, 'w+') as cu_file:
             cu_file.write('// This file is created by spikingjelly.clock_driven.neuron_kernel.save_cuda_codes.\n')
+            cu_file.write('// Note that codes in this file will not be executed This file is just created for reading.\n')
             for ms_neu in [MultiStepIFNodePTT, MultiStepLIFNodePTT, MultiStepParametricLIFNodePTT, MultiStepEIFNodePTT]:
                 cu_file.write('\n// ' + ms_neu.__name__ + '\n')
-                for sg in [surrogate.ATan, surrogate.Sigmoid, surrogate.PiecewiseLeakyReLU]:
+                for sg in surrogate._has_cuda_:
                     for hard_reset in [True, False]:
                         for dtype in ['fp32', 'fp16']:
                             if ms_neu == MultiStepLIFNodePTT or ms_neu == MultiStepParametricLIFNodePTT:

@@ -1536,3 +1536,11 @@ class QPseudoSpike(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # # plt.savefig('QPseudoSpike.svg')
     # # plt.savefig('QPseudoSpike.pdf')
+
+_has_cuda_ = [
+    ATan,
+    Sigmoid,
+    PiecewiseLeakyReLU,
+    S2NN,
+    QPseudoSpike
+]
