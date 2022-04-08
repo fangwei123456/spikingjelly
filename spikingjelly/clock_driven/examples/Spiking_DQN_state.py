@@ -38,15 +38,15 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
-    class NonSpikingLIFNode(neuron.LIFNode):
-        def __init__(self, *args, **kwargs):
-            super().__init__(*args, **kwargs)
+class NonSpikingLIFNode(neuron.LIFNode):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        def forward(self, dv: torch.Tensor):
-            self.neuronal_charge(dv)
-            # self.neuronal_fire()
-            # self.neuronal_reset()
-            return self.v
+    def forward(self, dv: torch.Tensor):
+        self.neuronal_charge(dv)
+        # self.neuronal_fire()
+        # self.neuronal_reset()
+        return self.v
 
 
 # Spiking DQN algorithm
