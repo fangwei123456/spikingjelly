@@ -212,7 +212,7 @@ class AdaptiveBaseNode(BaseNode):
 
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, cupy_fp32_inference=False):
         """
         * :ref:`API in English <IFNode.__init__-en>`
 
@@ -231,14 +231,13 @@ class IFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
+        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速
+        :type cupy_fp32_inference: bool
+
         Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减。其阈下神经动力学方程为：
 
         .. math::
             V[t] = V[t-1] + X[t]
-
-        .. tip::
-
-            在 `self.v_reset is None` 且 `self.training == False` 时（这是典型的ANN2SNN应用），若运行在GPU上，则自动使用CUPY进行加速。
 
         * :ref:`中文API <IFNode.__init__-cn>`
 
@@ -257,63 +256,74 @@ class IFNode(BaseNode):
         :param detach_reset: whether detach the computation graph of reset
         :type detach_reset: bool
 
+        :param cupy_fp32_inference: If `True`, if this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
+            module will use `cupy` to accelerate
+        :type cupy_fp32_inference: bool
+
         The Integrate-and-Fire neuron, which can be seen as a ideal integrator. The voltage of the IF neuron will not decay
         as that of the LIF neuron. The subthreshold neural dynamics of it is as followed:
 
         .. math::
             V[t] = V[t-1] + X[t]
 
-        .. admonition:: Tip
-            :class: tip
-
-            If `self.v_reset is None` and `self.training == False`，which is the typical application of ANN2SNN, this
-            module will use CUPY to accelerate when running on GPU.
-
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        self.cupy_fp32_inference = cupy_fp32_inference
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
     def forward(self, x: torch.Tensor):
-        if neuron_kernel is not None and self.v_reset is None and not self.training and x.dtype == torch.float32:
+        if self.cupy_fp32_inference and neuron_kernel is not None and not self.training and x.dtype == torch.float32:
+            # cupy is installed && eval mode && fp32
             device_id = x.get_device()
             if device_id < 0:
                 return super().forward(x)
 
-            # use cupy to accelerate ANN2SNN
+            # use cupy to accelerate
             if isinstance(self.v, float):
                 v = torch.zeros_like(x)
                 if self.v != 0.:
                     torch.fill_(v, self.v)
                 self.v = v
 
-            if not hasattr(self, 'cp_kernel'):
-                code = r'''
-                    extern "C" __global__
-                    void IFNode_soft_reset_inference_forward(
-                    const float* x, const float & v_threshold,
-                    float* spike, float *v,
-                    const int & numel)
+            if self.v_reset is None:
+                hard_reset = False
+            else:
+                hard_reset = True
+
+            code = rf'''
+                extern "C" __global__
+                void IFNode_{'hard' if hard_reset else 'soft'}_reset_inference_forward(
+                const float * x, const float & v_threshold, {'const float & v_reset,' if hard_reset else ''}
+                float * spike, float * v,
+                const int & numel)
+            '''
+
+            code += r'''
+                {
+                    const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                    if (index < numel)
                     {
-                        const int index = blockIdx.x * blockDim.x + threadIdx.x;
-                        if (index < numel)
-                        {
-                            v[index] += x[index];
-                            spike[index] = (float) (v[index] >= v_threshold);
-                            // if (v[index] >= v_threshold)
-                            // {
-                            //     spike[index] = 1.0f;
-                            // }
-                            // else
-                            // {
-                            //     spike[index] = 0.0f;
-                            // }
-                            v[index] -= spike[index] * v_threshold;
-                        }
+                        v[index] += x[index];
+                        spike[index] = (float) (v[index] >= v_threshold);
+            '''
+
+            code += rf'''
+                        {'v[index] = (1.0f - spike[index]) * v[index] + spike[index] * v_reset;' if hard_reset else 'v[index] -= spike[index] * v_threshold;'}
+            '''
+
+            code += r'''
                     }
-                '''
-                self.cp_kernel = cupy.RawKernel(code, 'IFNode_soft_reset_inference_forward', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+                }
+            '''
+            if hasattr(self, 'cp_kernel'):
+                if self.cp_kernel.code != code:
+                    # replace codes
+                    del self.cp_kernel
+                    self.cp_kernel = cupy.RawKernel(code, f"IFNode_{'hard' if hard_reset else 'soft'}_reset_inference_forward", options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+            else:
+                self.cp_kernel = cupy.RawKernel(code, f"IFNode_{'hard' if hard_reset else 'soft'}_reset_inference_forward", options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
             with cu_kernel_opt.DeviceEnvironment(device_id):
                 numel = x.numel()
@@ -321,9 +331,16 @@ class IFNode(BaseNode):
                 blocks = cu_kernel_opt.cal_blocks(numel)
                 cp_numel = cupy.asarray(numel)
                 cp_v_threshold = cupy.asarray(self.v_threshold, dtype=np.float32)
+                if hard_reset:
+                    cp_v_reset = cupy.asarray(self.v_reset, dtype=np.float32)
+
                 spike = torch.zeros_like(x)
-                x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
-                kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
+                if hard_reset:
+                    x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel)
+                    kernel_args = [x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel]
+                else:
+                    x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
+                    kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
                 self.cp_kernel(
                     (blocks,), (threads,),
                     cu_kernel_opt.wrap_args_to_raw_kernel(
@@ -457,7 +474,7 @@ class MultiStepIFNode(IFNode):
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False):
+                 detach_reset: bool = False, cupy_fp32_inference=False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
@@ -482,6 +499,9 @@ class LIFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
+        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速
+        :type cupy_fp32_inference: bool
+
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
         若 ``decay_input == True``:
@@ -493,6 +513,10 @@ class LIFNode(BaseNode):
 
             .. math::
                 V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
+        .. tip::
+
+            在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速。
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -517,6 +541,10 @@ class LIFNode(BaseNode):
         :param detach_reset: whether detach the computation graph of reset
         :type detach_reset: bool
 
+        :param cupy_fp32_inference: If `True`, if this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
+            module will use `cupy` to accelerate
+        :type cupy_fp32_inference: bool
+
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
 
@@ -530,12 +558,19 @@ class LIFNode(BaseNode):
             .. math::
                 V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
+        .. admonition:: Tip
+            :class: tip
+
+            If this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
+            module will use `cupy` to accelerate.
+
         """
         assert isinstance(tau, float) and tau > 1.
 
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.tau = tau
         self.decay_input = decay_input
+        self.cupy_fp32_inference = cupy_fp32_inference
 
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
@@ -552,6 +587,106 @@ class LIFNode(BaseNode):
                 self.v = self.v * (1. - 1. / self.tau) + x
             else:
                 self.v = self.v - (self.v - self.v_reset) / self.tau + x
+
+    def forward(self, x: torch.Tensor):
+        if self.cupy_fp32_inference and neuron_kernel is not None and not self.training and x.dtype == torch.float32:
+            # cupy is installed && eval mode && fp32
+            device_id = x.get_device()
+            if device_id < 0:
+                return super().forward(x)
+
+            # use cupy to accelerate
+            if isinstance(self.v, float):
+                v = torch.zeros_like(x)
+                if self.v != 0.:
+                    torch.fill_(v, self.v)
+                self.v = v
+
+            if self.v_reset is None:
+                hard_reset = False
+            else:
+                hard_reset = True
+
+            code = rf'''
+                extern "C" __global__
+                void LIFNode_{'hard' if hard_reset else 'soft'}_reset_decayInput_{self.decay_input}_inference_forward(
+                const float * x, const float & v_threshold, {'const float & v_reset,' if hard_reset else ''} const float & tau,
+                float * spike, float * v,
+                const int & numel)
+            '''
+
+            code += r'''
+                {
+                    const int index = blockIdx.x * blockDim.x + threadIdx.x;
+                    if (index < numel)
+                    {
+                        
+            '''
+
+            if self.decay_input:
+                if hard_reset:
+                    code += r'''
+                                v[index] += (x[index] - (v[index] - v_reset)) / tau;
+                            '''
+                else:
+                    code += r'''
+                                v[index] += (x[index] - v[index]) / tau;
+                    '''
+            else:
+                if hard_reset:
+                    code += r'''
+                                v[index] = x[index] + v[index] - (v[index] - v_reset) / tau;
+                            '''
+                else:
+                    code += r'''
+                                v[index] = x[index] + v[index] * (1.0f - 1.0f / tau);
+                    '''
+
+            code += rf'''
+                        spike[index] = (float) (v[index] >= v_threshold);
+                        {'v[index] = (1.0f - spike[index]) * v[index] + spike[index] * v_reset;' if hard_reset else 'v[index] -= spike[index] * v_threshold;'}
+            '''
+
+            code += r'''
+                    }
+                }
+            '''
+            if hasattr(self, 'cp_kernel'):
+                if self.cp_kernel.code != code:
+                    # replace codes
+                    del self.cp_kernel
+                    self.cp_kernel = cupy.RawKernel(code, f"LIFNode_{'hard' if hard_reset else 'soft'}_reset_decayInput_{self.decay_input}_inference_forward", options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+            else:
+                self.cp_kernel = cupy.RawKernel(code, f"LIFNode_{'hard' if hard_reset else 'soft'}_reset_decayInput_{self.decay_input}_inference_forward", options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+
+            with cu_kernel_opt.DeviceEnvironment(device_id):
+                numel = x.numel()
+                threads = configure.cuda_threads
+                blocks = cu_kernel_opt.cal_blocks(numel)
+                cp_numel = cupy.asarray(numel)
+                cp_v_threshold = cupy.asarray(self.v_threshold, dtype=np.float32)
+                if hard_reset:
+                    cp_v_reset = cupy.asarray(self.v_reset, dtype=np.float32)
+                cp_tau = cupy.asarray(self.tau, dtype=np.float32)
+                spike = torch.zeros_like(x)
+                if hard_reset:
+                    x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel)
+                    kernel_args = [x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel]
+                else:
+                    x, cp_v_threshold, cp_tau, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, cp_tau, spike, self.v, cp_numel)
+                    kernel_args = [x, cp_v_threshold, cp_tau, spike, self.v, cp_numel]
+
+                self.cp_kernel(
+                    (blocks,), (threads,),
+                    cu_kernel_opt.wrap_args_to_raw_kernel(
+                        device_id,
+                        *kernel_args
+                    )
+                )
+                return spike
+        else:
+            return super().forward(x)
+
 
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
