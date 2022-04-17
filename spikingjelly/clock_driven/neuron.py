@@ -291,6 +291,8 @@ class IFNode(BaseNode):
         self.cupy_fp32_inference = cupy_fp32_inference
 
         check_backend(backend)
+        if backend == 'lava':
+            assert self.v_reset == 0., f'lava backend only supports v_reset == 0, while v_reset = {v_reset}'
         self.backend = backend
 
         self.lava_w_scale = lava_w_scale
