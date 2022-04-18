@@ -11,25 +11,8 @@ try:
     from . import neuron_kernel, cu_kernel_opt
 except BaseException as e:
     print('neuron:', e)
-    cupy = None
     neuron_kernel = None
 
-try:
-    import lava.lib.dl.slayer as slayer
-
-except BaseException as e:
-    # print('neuron:', e)
-    slayer = None
-
-def check_backend(backend: str):
-    if backend == 'torch':
-        return
-    elif backend == 'cupy':
-        assert cupy is not None, 'CuPy is not installed! You can install it from "https://github.com/cupy/cupy".'
-    elif backend == 'lava':
-        assert slayer is not None, 'Lava DL is not installed! You can install it from "https://github.com/lava-nc/lava-dl".'
-    else:
-        raise NotImplementedError(backend)
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -229,7 +212,7 @@ class AdaptiveBaseNode(BaseNode):
 
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, cupy_fp32_inference=False, backend='torch', lava_w_scale=1 << 12):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, cupy_fp32_inference=False):
         """
         * :ref:`API in English <IFNode.__init__-en>`
 
@@ -285,50 +268,12 @@ class IFNode(BaseNode):
 
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
-
-        if cupy_fp32_inference:
-            check_backend('cupy')
         self.cupy_fp32_inference = cupy_fp32_inference
 
-        check_backend(backend)
-        self.backend = backend
-
-        self.lava_w_scale = lava_w_scale
-
     def neuronal_charge(self, x: torch.Tensor):
-        if self.backend == 'torch':
-            self.v = self.v + x
-        elif self.backend == 'lava':
-            if isinstance(self.v, float):
-                v = torch.zeros_like(x)
-                if self.v != 0.:
-                    torch.fill_(v, self.v)
-                self.v = v
-            self.v = slayer.neuron.dynamics.leaky_integrator.dynamics(x.unsqueeze(-1), decay=torch.zeros([1], dtype=x.dtype, device=x.device), state=self.v, w_scale=self.lava_w_scale, threshold=self.v_threshold)[..., -1]
-        else:
-            raise NotImplementedError(self.backend)
-
-
-    def neuronal_fire(self):
-        if self.backend == 'torch':
-            return super().neuronal_fire()
-        elif self.backend == 'lava':
-            return slayer.spike.Spike.apply(
-                self.v,
-                self.v_threshold,
-                1,  # tau_rho: gradient relaxation constant
-                1,  # scale_rho: gradient scale constant
-                False,  # graded_spike: graded or binary spike
-                self.v,  # voltage_last: voltage at t=-1
-                1,  # scale: graded spike scale
-            )
-
-
-        else:
-            raise NotImplementedError(self.backend)
+        self.v = self.v + x
 
     def forward(self, x: torch.Tensor):
-
         if self.cupy_fp32_inference and neuron_kernel is not None and not self.training and x.dtype == torch.float32:
             # cupy is installed && eval mode && fp32
             device_id = x.get_device()
@@ -411,7 +356,7 @@ class IFNode(BaseNode):
 
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch', lava_w_scale=1 << 12):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
         """
         * :ref:`API in English <MultiStepIFNode.__init__-en>`
 
@@ -480,9 +425,14 @@ class MultiStepIFNode(IFNode):
             and multi-step propagation.
 
         """
-        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, False, backend, lava_w_scale)
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
         self.register_memory('v_seq', None)
+
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+
+        self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
@@ -497,6 +447,7 @@ class MultiStepIFNode(IFNode):
             spike_seq = torch.cat(spike_seq, 0)
             self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
+
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -514,51 +465,8 @@ class MultiStepIFNode(IFNode):
             self.v = self.v_seq[-1].clone()
 
             return spike_seq
-
-        elif self.backend == 'lava':
-            # lave uses shape = [*, T], while SJ uses shape = [T, *]
-            x_seq_shape = x_seq.shape
-            x_seq = x_seq.flatten(1)
-            if isinstance(self.v, float):
-                v = torch.zeros_like(x_seq[0])
-                if self.v != 0.:
-                    torch.fill_(v, self.v)
-                self.v = v
-
-            x_seq = x_seq.transpose(0, 1)
-            # begin: shape = [*, T]
-            h_seq = slayer.neuron.dynamics.leaky_integrator.dynamics(x_seq, decay=torch.zeros([1], dtype=x_seq.dtype, device=x_seq.device), state=self.v, w_scale=self.lava_w_scale, threshold=self.v_threshold)
-
-            spike_seq = slayer.spike.Spike.apply(
-                h_seq,
-                self.v_threshold,
-                1,  # tau_rho: gradient relaxation constant
-                1,  # scale_rho: gradient scale constant
-                False,  # graded_spike: graded or binary spike
-                self.v,  # voltage_last: voltage at t=-1
-                1,  # scale: graded spike scale
-            )
-
-            if self.detach_reset:
-                spike_seq_d = spike_seq.detach()
-            else:
-                spike_seq_d = spike_seq
-            if self.v_reset is None:
-                self.v_seq = h_seq - spike_seq_d * self.v_threshold
-            else:
-                self.v_seq = spike_seq_d * self.v_reset + (1. - spike_seq_d) * h_seq
-
-            self.v_seq = self.v_seq.transpose(0, 1)
-            spike_seq = spike_seq.transpose(0, 1)
-            # end: shape = [*, T]
-
-            self.v_seq = self.v_seq.reshape(x_seq_shape)
-            spike_seq = spike_seq.reshape(x_seq_shape)
-            self.v = self.v_seq[-1]
-            return spike_seq
-
         else:
-            raise NotImplementedError(self.backend)
+            raise NotImplementedError
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
@@ -868,7 +776,8 @@ class MultiStepLIFNode(LIFNode):
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
-        check_backend(backend)
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -1109,7 +1018,8 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
-        check_backend(backend)
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -1435,7 +1345,8 @@ class MultiStepEIFNode(EIFNode):
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
-        check_backend(backend)
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -1495,7 +1406,8 @@ class MultiStepGeneralNode(GeneralNode):
         self.register_memory('v_seq', None)
         self.register_memory('spike_seq', None)
 
-        check_backend(backend)
+        assert backend == 'torch' or backend == 'cupy'
+        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
 
         self.backend = backend
 
