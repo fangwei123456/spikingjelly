@@ -292,7 +292,7 @@ class IFNode(BaseNode):
 
         check_backend(backend)
         if backend == 'lava':
-            assert self.v_reset == 0., f'lava backend only supports v_reset == 0, while v_reset = {v_reset}.'
+            assert self.v_reset == 0., f'lava backend only supports v_reset == 0, while v_reset = {v_reset}'
         self.backend = backend
 
         self.lava_w_scale = lava_w_scale
@@ -568,7 +568,7 @@ class MultiStepIFNode(IFNode):
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False, cupy_fp32_inference=False, backend='torch', lava_w_scale=1 << 12):
+                 detach_reset: bool = False, cupy_fp32_inference=False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
 
@@ -664,60 +664,23 @@ class LIFNode(BaseNode):
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.tau = tau
         self.decay_input = decay_input
-        if cupy_fp32_inference:
-            check_backend('cupy')
         self.cupy_fp32_inference = cupy_fp32_inference
-
-        check_backend(backend)
-        if backend == 'lava':
-            assert self.v_reset == 0., f'lava backend only supports v_reset == 0, while v_reset = {v_reset}.'
-        self.backend = backend
-
-        self.lava_w_scale = lava_w_scale
 
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.backend == 'torch':
-            if self.decay_input:
-                if self.v_reset is None or self.v_reset == 0.:
-                    self.v = self.v + (x - self.v) / self.tau
-                else:
-                    self.v = self.v + (x - (self.v - self.v_reset)) / self.tau
-
+        if self.decay_input:
+            if self.v_reset is None or self.v_reset == 0.:
+                self.v = self.v + (x - self.v) / self.tau
             else:
-                if self.v_reset is None or self.v_reset == 0.:
-                    self.v = self.v * (1. - 1. / self.tau) + x
-                else:
-                    self.v = self.v - (self.v - self.v_reset) / self.tau + x
-        elif self.backend == 'lava':
-            if isinstance(self.v, float):
-                v = torch.zeros_like(x)
-                if self.v != 0.:
-                    torch.fill_(v, self.v)
-                self.v = v
-            x = x.unsqueeze(-1)
-            if self.decay_input:
-                x = x / self.tau
+                self.v = self.v + (x - (self.v - self.v_reset)) / self.tau
 
-            self.v = slayer.neuron.dynamics.leaky_integrator.dynamics(x, decay=torch.as_tensor([self.lava_w_scale / self.tau], dtype=x.dtype, device=x.device), state=self.v, w_scale=self.lava_w_scale, threshold=self.v_threshold)[..., -1]
         else:
-            raise NotImplementedError(self.backend)
-
-    def neuronal_fire(self):
-        if self.backend == 'torch':
-            return super().neuronal_fire()
-        elif self.backend == 'lava':
-            return slayer.spike.Spike.apply(
-                self.v,
-                self.v_threshold,
-                1,  # tau_rho: gradient relaxation constant
-                1,  # scale_rho: gradient scale constant
-                False,  # graded_spike: graded or binary spike
-                self.v,  # voltage_last: voltage at t=-1
-                1,  # scale: graded spike scale
-            )
+            if self.v_reset is None or self.v_reset == 0.:
+                self.v = self.v * (1. - 1. / self.tau) + x
+            else:
+                self.v = self.v - (self.v - self.v_reset) / self.tau + x
 
     def forward(self, x: torch.Tensor):
         if self.cupy_fp32_inference and neuron_kernel is not None and not self.training and x.dtype == torch.float32:
@@ -822,7 +785,7 @@ class LIFNode(BaseNode):
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False, backend='torch', lava_w_scale=1 << 12):
+                 detach_reset: bool = False, backend='torch'):
         """
         * :ref:`API in English <MultiStepLIFNode.__init__-en>`
 
@@ -903,8 +866,12 @@ class MultiStepLIFNode(LIFNode):
             and multi-step propagation.
 
         """
-        super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset, False, backend, lava_w_scale)
+        super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
+
+        check_backend(backend)
+        self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
@@ -937,51 +904,8 @@ class MultiStepLIFNode(LIFNode):
             self.v = self.v_seq[-1].clone()
 
             return spike_seq
-        elif self.backend == 'lava':
-            # lave uses shape = [*, T], while SJ uses shape = [T, *]
-            x_seq_shape = x_seq.shape
-            x_seq = x_seq.flatten(1)
-            if isinstance(self.v, float):
-                v = torch.zeros_like(x_seq[0])
-                if self.v != 0.:
-                    torch.fill_(v, self.v)
-                self.v = v
-
-            x_seq = x_seq.transpose(0, 1)
-            if self.decay_input:
-                x_seq = x_seq / self.tau
-            # begin: shape = [*, T]
-            h_seq = slayer.neuron.dynamics.leaky_integrator.dynamics(x_seq, decay=torch.as_tensor([self.lava_w_scale / self.tau], dtype=x_seq.dtype, device=x_seq.device), state=self.v, w_scale=self.lava_w_scale, threshold=self.v_threshold)
-
-            spike_seq = slayer.spike.Spike.apply(
-                h_seq,
-                self.v_threshold,
-                1,  # tau_rho: gradient relaxation constant
-                1,  # scale_rho: gradient scale constant
-                False,  # graded_spike: graded or binary spike
-                self.v,  # voltage_last: voltage at t=-1
-                1,  # scale: graded spike scale
-            )
-
-            if self.detach_reset:
-                spike_seq_d = spike_seq.detach()
-            else:
-                spike_seq_d = spike_seq
-            if self.v_reset is None:
-                self.v_seq = h_seq - spike_seq_d * self.v_threshold
-            else:
-                self.v_seq = spike_seq_d * self.v_reset + (1. - spike_seq_d) * h_seq
-
-            self.v_seq = self.v_seq.transpose(0, 1)
-            spike_seq = spike_seq.transpose(0, 1)
-            # end: shape = [*, T]
-
-            self.v_seq = self.v_seq.reshape(x_seq_shape)
-            spike_seq = spike_seq.reshape(x_seq_shape)
-            self.v = self.v_seq[-1]
-            return spike_seq
         else:
-            raise NotImplementedError(self.backend)
+            raise NotImplementedError
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
@@ -1185,6 +1109,7 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         """
         super().__init__(init_tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
 
         check_backend(backend)
         self.backend = backend
@@ -1510,6 +1435,7 @@ class MultiStepEIFNode(EIFNode):
         super().__init__(tau, delta_T, theta_rh, v_threshold, v_rest, v_reset,
                  surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
 
         check_backend(backend)
         self.backend = backend
@@ -1569,6 +1495,7 @@ class MultiStepGeneralNode(GeneralNode):
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
         self.register_memory('v_seq', None)
+        self.register_memory('spike_seq', None)
 
         check_backend(backend)
 
