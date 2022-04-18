@@ -11,8 +11,18 @@ try:
     from . import neuron_kernel, cu_kernel_opt
 except BaseException as e:
     print('neuron:', e)
+    cupy = None
     neuron_kernel = None
+    cu_kernel_opt = None
 
+
+def check_backend(backend: str):
+    if backend == 'torch':
+        return
+    elif backend == 'cupy':
+        assert cupy is not None, 'CuPy is not installed! You can install it from "https://github.com/cupy/cupy".'
+    else:
+        raise NotImplementedError(backend)
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -268,13 +278,16 @@ class IFNode(BaseNode):
 
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+
+        if cupy_fp32_inference:
+            check_backend('cupy')
         self.cupy_fp32_inference = cupy_fp32_inference
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
     def forward(self, x: torch.Tensor):
-        if self.cupy_fp32_inference and neuron_kernel is not None and not self.training and x.dtype == torch.float32:
+        if self.cupy_fp32_inference and cupy is not None and not self.training and x.dtype == torch.float32:
             # cupy is installed && eval mode && fp32
             device_id = x.get_device()
             if device_id < 0:
@@ -429,8 +442,7 @@ class MultiStepIFNode(IFNode):
 
         self.register_memory('v_seq', None)
 
-        assert backend == 'torch' or backend == 'cupy'
-        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        check_backend(backend)
 
         self.backend = backend
 
@@ -570,6 +582,9 @@ class LIFNode(BaseNode):
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
         self.tau = tau
         self.decay_input = decay_input
+
+        if cupy_fp32_inference:
+            check_backend('cupy')
         self.cupy_fp32_inference = cupy_fp32_inference
 
     def extra_repr(self):
@@ -589,7 +604,7 @@ class LIFNode(BaseNode):
                 self.v = self.v - (self.v - self.v_reset) / self.tau + x
 
     def forward(self, x: torch.Tensor):
-        if self.cupy_fp32_inference and neuron_kernel is not None and not self.training and x.dtype == torch.float32:
+        if self.cupy_fp32_inference and cupy is not None and not self.training and x.dtype == torch.float32:
             # cupy is installed && eval mode && fp32
             device_id = x.get_device()
             if device_id < 0:
@@ -774,10 +789,9 @@ class MultiStepLIFNode(LIFNode):
         """
         super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
-        self.register_memory('spike_seq', None)
 
-        assert backend == 'torch' or backend == 'cupy'
-        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        check_backend(backend)
+
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -1016,10 +1030,9 @@ class MultiStepParametricLIFNode(ParametricLIFNode):
         """
         super().__init__(init_tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
-        self.register_memory('spike_seq', None)
 
-        assert backend == 'torch' or backend == 'cupy'
-        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        check_backend(backend)
+
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -1343,10 +1356,9 @@ class MultiStepEIFNode(EIFNode):
         super().__init__(tau, delta_T, theta_rh, v_threshold, v_rest, v_reset,
                  surrogate_function, detach_reset)
         self.register_memory('v_seq', None)
-        self.register_memory('spike_seq', None)
 
-        assert backend == 'torch' or backend == 'cupy'
-        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        check_backend(backend)
+
         self.backend = backend
 
     def forward(self, x_seq: torch.Tensor):
@@ -1404,10 +1416,8 @@ class MultiStepGeneralNode(GeneralNode):
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset)
 
         self.register_memory('v_seq', None)
-        self.register_memory('spike_seq', None)
 
-        assert backend == 'torch' or backend == 'cupy'
-        assert not (backend == 'cupy' and neuron_kernel is None), 'cupy is not installed'
+        check_backend(backend)
 
         self.backend = backend
 
