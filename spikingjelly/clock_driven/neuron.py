@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import Callable, overload
 import torch
 import torch.nn as nn
-from . import surrogate, base
+from . import surrogate, base, lava_exchange
 from .. import configure
 import math
 import numpy as np
@@ -23,7 +23,6 @@ except BaseException as e:
     logging.info(f'spikingjelly.clock_driven.neuron: {e}')
     slayer = None
 
-
 def check_backend(backend: str):
     if backend == 'torch':
         return
@@ -33,37 +32,6 @@ def check_backend(backend: str):
         assert slayer is not None, 'Lava-DL is not installed! You can install it from "https://github.com/lava-nc/lava-dl".'
     else:
         raise NotImplementedError(backend)
-
-def lava_neuron_forward(lava_neuron: nn.Module, x_seq: torch.Tensor, v: torch.Tensor or float):
-    # x_seq.shape = [T, N, *]
-    # lave uses shape = [*, T], while SJ uses shape = [T, *]
-    unsqueeze_flag = False
-    if x_seq.dim() == 2:
-        x_seq = x_seq.unsqueeze(1)
-        # lave needs input with shape [N, ... ,T]
-        unsqueeze_flag = True
-
-
-    if isinstance(v, float):
-        v_init = v
-        v = torch.zeros_like(x_seq[0])
-        if v_init != 0.:
-            torch.fill_(v, v_init)
-
-    x_seq_shape = x_seq.shape
-    x_seq = x_seq.flatten(2).permute(1, 2, 0)
-    # [T, N, *] -> [N, *, T]
-
-    lava_neuron.voltage_state = v
-    spike = lava_neuron(x_seq).permute(2, 0, 1)
-
-    v = lava_neuron.voltage_state.reshape(x_seq_shape[1:])
-    spike = spike.reshape(x_seq_shape)
-    if unsqueeze_flag:
-        v = v.squeeze(1)
-        spike = spike.squeeze(1)
-
-    return spike, v
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -260,7 +228,6 @@ class AdaptiveBaseNode(BaseNode):
         self.neuronal_reset(spike)
         return spike
 
-
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, cupy_fp32_inference=False):
@@ -406,8 +373,6 @@ class IFNode(BaseNode):
         else:
             return super().forward(x)
 
-
-
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch', lava_s_cale=1 << 6):
@@ -530,7 +495,7 @@ class MultiStepIFNode(IFNode):
             if self.lava_neuron is None:
                 self.lava_neuron = self.to_lava()
 
-            spike, self.v = lava_neuron_forward(self.lava_neuron, x_seq, self.v)
+            spike, self.v = lava_exchange.lava_neuron_forward(self.lava_neuron, x_seq, self.v)
 
             return spike
 
@@ -541,23 +506,13 @@ class MultiStepIFNode(IFNode):
         return super().extra_repr() + f', backend={self.backend}'
 
     def to_lava(self):
-        check_backend('lava')
-        return slayer.neuron.cuba.Neuron(
-            threshold=self.v_threshold,
-            current_decay=1.,
-            voltage_decay=0.,
-            tau_grad=1, scale_grad=1, scale=self.lava_s_cale,
-            norm=None, dropout=None,
-            shared_param=True, persistent_state=True, requires_grad=False,
-            graded_spike=False
-        )
+        return lava_exchange.to_lava_neuron(self)
 
     def reset(self):
         super().reset()
         if hasattr(self, 'lava_neu'):
             self.lava_neu.current_state.zero_()
             self.lava_neu.voltage_state.zero_()
-
 
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
@@ -778,7 +733,6 @@ class LIFNode(BaseNode):
         else:
             return super().forward(x)
 
-
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
@@ -877,7 +831,6 @@ class MultiStepLIFNode(LIFNode):
         else:
             self.lava_neuron = None
 
-
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
@@ -899,7 +852,6 @@ class MultiStepLIFNode(LIFNode):
                 if v_init != 0.:
                     torch.fill_(self.v, v_init)
 
-
             spike_seq, self.v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.decay_input, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
 
@@ -914,7 +866,7 @@ class MultiStepLIFNode(LIFNode):
             if self.lava_neuron is None:
                 self.lava_neuron = self.to_lava()
 
-            spike, self.v = lava_neuron_forward(self.lava_neuron, x_seq, self.v)
+            spike, self.v = lava_exchange.lava_neuron_forward(self.lava_neuron, x_seq, self.v)
 
             return spike
 
@@ -925,16 +877,7 @@ class MultiStepLIFNode(LIFNode):
         return super().extra_repr() + f', backend={self.backend}'
 
     def to_lava(self):
-        check_backend('lava')
-        return slayer.neuron.cuba.Neuron(
-            threshold=self.v_threshold,
-            current_decay=1.,
-            voltage_decay=1. / self.tau,
-            tau_grad=1, scale_grad=1, scale=self.lava_s_cale,
-            norm=None, dropout=None,
-            shared_param=True, persistent_state=True, requires_grad=False,
-            graded_spike=False
-        )
+        return lava_exchange.to_lava_neuron(self)
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau: float = 2.0, decay_input: bool = True, v_threshold: float = 1.,
