@@ -511,8 +511,8 @@ class MultiStepIFNode(IFNode):
     def reset(self):
         super().reset()
         if hasattr(self, 'lava_neu'):
-            self.lava_neu.current_state.zero_()
-            self.lava_neu.voltage_state.zero_()
+            self.lava_neuron.current_state.zero_()
+            self.lava_neuron.voltage_state.zero_()
 
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
@@ -878,6 +878,12 @@ class MultiStepLIFNode(LIFNode):
 
     def to_lava(self):
         return lava_exchange.to_lava_neuron(self)
+
+    def reset(self):
+        super().reset()
+        if hasattr(self, 'lava_neu'):
+            self.lava_neuron.current_state.zero_()
+            self.lava_neuron.voltage_state.zero_()
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau: float = 2.0, decay_input: bool = True, v_threshold: float = 1.,
