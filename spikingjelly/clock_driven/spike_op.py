@@ -2,12 +2,13 @@ import torch
 import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
 from torch.cuda.amp import custom_fwd, custom_bwd
+import logging
 from . import tensor_cache
 
 try:
     import cupy
 except BaseException as e:
-    print('spikingjelly.clock_driven.spike_op:', e)
+    logging.info(f'spikingjelly.clock_driven.spike_op: {e}')
     cupy = None
 
 
@@ -25,7 +26,7 @@ try:
             with_cuda=True
     )
 except BaseException as e:
-    print('spikingjelly.clock_driven.spike_op:', e)
+    logging.info(f'spikingjelly.clock_driven.spike_op: {e}')
     cpp_wrapper = None
 
 '''
