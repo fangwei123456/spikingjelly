@@ -6,14 +6,22 @@ from . import surrogate, base
 from .. import configure
 import math
 import numpy as np
+import logging
 try:
     import cupy
     from . import neuron_kernel, cu_kernel_opt
 except BaseException as e:
-    print('neuron:', e)
+    logging.info(f'spikingjelly.clock_driven.neuron: {e}')
     cupy = None
     neuron_kernel = None
     cu_kernel_opt = None
+
+try:
+    import lava.lib.dl.slayer as slayer
+
+except BaseException as e:
+    logging.info(f'spikingjelly.clock_driven.neuron: {e}')
+    slayer = None
 
 
 def check_backend(backend: str):
@@ -21,8 +29,41 @@ def check_backend(backend: str):
         return
     elif backend == 'cupy':
         assert cupy is not None, 'CuPy is not installed! You can install it from "https://github.com/cupy/cupy".'
+    elif backend == 'lava':
+        assert slayer is not None, 'Lava-DL is not installed! You can install it from "https://github.com/lava-nc/lava-dl".'
     else:
         raise NotImplementedError(backend)
+
+def lava_neuron_forward(lava_neuron: nn.Module, x_seq: torch.Tensor, v: torch.Tensor or float):
+    # x_seq.shape = [T, N, *]
+    # lave uses shape = [*, T], while SJ uses shape = [T, *]
+    unsqueeze_flag = False
+    if x_seq.dim() == 2:
+        x_seq = x_seq.unsqueeze(1)
+        # lave needs input with shape [N, ... ,T]
+        unsqueeze_flag = True
+
+
+    if isinstance(v, float):
+        v_init = v
+        v = torch.zeros_like(x_seq[0])
+        if v_init != 0.:
+            torch.fill_(v, v_init)
+
+    x_seq_shape = x_seq.shape
+    x_seq = x_seq.flatten(2).permute(1, 2, 0)
+    # [T, N, *] -> [N, *, T]
+
+    lava_neuron.voltage_state = v
+    spike = lava_neuron(x_seq).permute(2, 0, 1)
+
+    v = lava_neuron.voltage_state.reshape(x_seq_shape[1:])
+    spike = spike.reshape(x_seq_shape)
+    if unsqueeze_flag:
+        v = v.squeeze(1)
+        spike = spike.squeeze(1)
+
+    return spike, v
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -369,7 +410,7 @@ class IFNode(BaseNode):
 
 class MultiStepIFNode(IFNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch'):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, backend='torch', lava_s_cale=1 << 6):
         """
         * :ref:`API in English <MultiStepIFNode.__init__-en>`
 
@@ -446,6 +487,14 @@ class MultiStepIFNode(IFNode):
 
         self.backend = backend
 
+        self.lava_s_cale = lava_s_cale
+
+        if backend == 'lava':
+            self.lava_neuron = self.to_lava()
+        else:
+            self.lava_neuron = None
+
+
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
@@ -459,7 +508,6 @@ class MultiStepIFNode(IFNode):
             spike_seq = torch.cat(spike_seq, 0)
             self.v_seq = torch.cat(self.v_seq, 0)
             return spike_seq
-
 
         elif self.backend == 'cupy':
             if isinstance(self.v, float):
@@ -477,11 +525,39 @@ class MultiStepIFNode(IFNode):
             self.v = self.v_seq[-1].clone()
 
             return spike_seq
+
+        elif self.backend == 'lava':
+            if self.lava_neuron is None:
+                self.lava_neuron = self.to_lava()
+
+            spike, self.v = lava_neuron_forward(self.lava_neuron, x_seq, self.v)
+
+            return spike
+
         else:
-            raise NotImplementedError
+            raise NotImplementedError(self.backend)
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
+
+    def to_lava(self):
+        check_backend('lava')
+        return slayer.neuron.cuba.Neuron(
+            threshold=self.v_threshold,
+            current_decay=1.,
+            voltage_decay=0.,
+            tau_grad=1, scale_grad=1, scale=self.lava_s_cale,
+            norm=None, dropout=None,
+            shared_param=True, persistent_state=True, requires_grad=False,
+            graded_spike=False
+        )
+
+    def reset(self):
+        super().reset()
+        if hasattr(self, 'lava_neu'):
+            self.lava_neu.current_state.zero_()
+            self.lava_neu.voltage_state.zero_()
+
 
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
@@ -706,7 +782,7 @@ class LIFNode(BaseNode):
 class MultiStepLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False, backend='torch'):
+                 detach_reset: bool = False, backend='torch', lava_s_cale=1 << 6):
         """
         * :ref:`API in English <MultiStepLIFNode.__init__-en>`
 
@@ -794,6 +870,14 @@ class MultiStepLIFNode(LIFNode):
 
         self.backend = backend
 
+        self.lava_s_cale = lava_s_cale
+
+        if backend == 'lava':
+            self.lava_neuron = self.to_lava()
+        else:
+            self.lava_neuron = None
+
+
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() > 1
         # x_seq.shape = [T, *]
@@ -825,11 +909,32 @@ class MultiStepLIFNode(LIFNode):
             self.v = self.v_seq[-1].clone()
 
             return spike_seq
+
+        elif self.backend == 'lava':
+            if self.lava_neuron is None:
+                self.lava_neuron = self.to_lava()
+
+            spike, self.v = lava_neuron_forward(self.lava_neuron, x_seq, self.v)
+
+            return spike
+
         else:
-            raise NotImplementedError
+            raise NotImplementedError(self.backend)
 
     def extra_repr(self):
         return super().extra_repr() + f', backend={self.backend}'
+
+    def to_lava(self):
+        check_backend('lava')
+        return slayer.neuron.cuba.Neuron(
+            threshold=self.v_threshold,
+            current_decay=1.,
+            voltage_decay=1. / self.tau,
+            tau_grad=1, scale_grad=1, scale=self.lava_s_cale,
+            norm=None, dropout=None,
+            shared_param=True, persistent_state=True, requires_grad=False,
+            graded_spike=False
+        )
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau: float = 2.0, decay_input: bool = True, v_threshold: float = 1.,
