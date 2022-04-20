@@ -71,32 +71,64 @@ class _step_quantize(torch.autograd.Function):
 def step_quantize(x: torch.Tensor, step: float = 1.):
     return _step_quantize.apply(x, step)
 
-def quantize_8bit(x: torch.Tensor, scale):
-    return step_quantize(x, 2. / scale).clamp(-256. / scale, 255. / scale)
+def quantize_8bit(x: torch.Tensor, scale, descale=False):
+    if descale:
+        return step_quantize(x, 2. / scale).clamp(-256. / scale, 255. / scale) * scale
+    else:
+        return step_quantize(x, 2. / scale).clamp(-256. / scale, 255. / scale)
 
 # ----------------------------------------
 # convert function
+def check_conv2d(conv2d_nn: nn.Conv2d):
+    if not isinstance(conv2d_nn, nn.Conv2d):
+        raise ValueError(f'expected conv2d_nn with type torch.nn.Conv2d, but got conv2d_nn with type {type(conv2d_nn)}!')
+
+    if conv2d_nn.bias is not None:
+        raise ValueError('lava does not support for convolutional synapse with bias!')
+
+def check_fc(fc: nn.Linear):
+    if not isinstance(fc, nn.Linear):
+        raise ValueError(f'expected fc with type torch.nn.Linear, but got fc with type {type(fc)}!')
+
+    if fc.bias is not None:
+        raise ValueError('lava does not support for dense synapse with bias!')
+
+def to_lava_neuron_param_dict(sj_ms_neuron: nn.Module):
+    if isinstance(sj_ms_neuron, neuron.MultiStepIFNode):
+        if sj_ms_neuron.v_reset != 0.:
+            raise ValueError('lava only supports for v_reset == 0!')
+        return {
+            'threshold': sj_ms_neuron.v_threshold,
+            'current_decay': 1.,
+            'voltage_decay': 0.,
+            'tau_grad': 1, 'scale_grad': 1, 'scale': sj_ms_neuron.lava_s_cale,
+            'norm': None, 'dropout': None,
+            'shared_param': True, 'persistent_state': True, 'requires_grad': False,
+            'graded_spike': False
+        }
+
+    elif isinstance(sj_ms_neuron, neuron.MultiStepLIFNode):
+        if sj_ms_neuron.v_reset != 0.:
+            raise ValueError('lava only supports for v_reset == 0!')
+        if sj_ms_neuron.decay_input:
+            raise ValueError('lava only supports for decay_input == False!')
+        return {
+            'threshold': sj_ms_neuron.v_threshold,
+            'current_decay': 1.,
+            'voltage_decay': 1. / sj_ms_neuron.tau,
+            'tau_grad': 1, 'scale_grad': 1, 'scale': sj_ms_neuron.lava_s_cale,
+            'norm': None, 'dropout': None,
+            'shared_param': True, 'persistent_state': True, 'requires_grad': False,
+            'graded_spike': False
+        }
+    else:
+        raise NotImplementedError(sj_ms_neuron)
+
 
 def to_lava_neuron(sj_ms_neuron: nn.Module):
-    if isinstance(sj_ms_neuron, neuron.MultiStepIFNode):
+    if isinstance(sj_ms_neuron, (neuron.MultiStepIFNode, neuron.MultiStepLIFNode)):
         return slayer.neuron.cuba.Neuron(
-            threshold=sj_ms_neuron.v_threshold,
-            current_decay=1.,
-            voltage_decay=0.,
-            tau_grad=1, scale_grad=1, scale=sj_ms_neuron.lava_s_cale,
-            norm=None, dropout=None,
-            shared_param=True, persistent_state=True, requires_grad=False,
-            graded_spike=False
-        )
-    elif isinstance(sj_ms_neuron, neuron.MultiStepLIFNode):
-        return slayer.neuron.cuba.Neuron(
-            threshold=sj_ms_neuron.v_threshold,
-            current_decay=1.,
-            voltage_decay=1. / sj_ms_neuron.tau,
-            tau_grad=1, scale_grad=1, scale=sj_ms_neuron.lava_s_cale,
-            norm=None, dropout=None,
-            shared_param=True, persistent_state=True, requires_grad=False,
-            graded_spike=False
+            **to_lava_neuron_param_dict(sj_ms_neuron)
         )
     else:
         raise NotImplementedError(sj_ms_neuron)
@@ -122,11 +154,7 @@ def linear_to_lava_synapse_dense(fc: nn.Linear):
             y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq)))
             print('max error:', (y_nn - y_sl).abs().max())
     """
-    if not isinstance(fc, nn.Linear):
-        raise ValueError(f'expected fc with type torch.nn.Linear, but got fc with type {type(fc)}!')
-
-    if fc.bias is not None:
-        raise ValueError('lava does not support for dense synapse with bias!')
+    check_fc(fc)
 
     dense_slayer = slayer.synapse.Dense(fc.in_features, fc.out_features)
 
@@ -156,11 +184,7 @@ def conv2d_to_lava_synapse_conv(conv2d_nn: nn.Conv2d):
             y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq)))
             print('max error:', (y_nn - y_sl).abs().max())
     """
-    if not isinstance(conv2d_nn, nn.Conv2d):
-        raise ValueError(f'expected conv2d_nn with type torch.nn.Conv2d, but got conv2d_nn with type {type(conv2d_nn)}!')
-
-    if conv2d_nn.bias is not None:
-        raise ValueError('lava does not support for convolutional synapse with bias!')
+    check_conv2d(conv2d_nn)
 
     conv_slayer = slayer.synapse.Conv(in_features=conv2d_nn.in_channels, out_features=conv2d_nn.out_channels, kernel_size=conv2d_nn.kernel_size, stride=conv2d_nn.stride, padding=conv2d_nn.padding, dilation=conv2d_nn.dilation, groups=conv2d_nn.groups)
     # `conv_slayer` is a `torch.torch.nn.Conv3d`.
@@ -195,6 +219,47 @@ def avgpool2d_to_lava_synapse_pool(pool2d_nn: nn.AvgPool2d):
 
     return slayer.synapse.Pool(pool2d_nn.kernel_size, pool2d_nn.stride, pool2d_nn.padding)
 
+def to_lava_block_dense(fc: nn.Linear, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = False):
+
+    check_fc(fc)
+
+    neuron_params = to_lava_neuron_param_dict(sj_ms_neuron)
+    if isinstance(sj_ms_neuron, (neuron.MultiStepIFNode, neuron.MultiStepLIFNode)):
+        block_init = slayer.block.cuba.Dense
+    else:
+        raise NotImplementedError(sj_ms_neuron)
+
+
+    if quantize_to_8bit:
+        # if 'pre_hook_fx' not in kwargs.keys(), then `pre_hook_fx` will be set to `quantize_8bit` by default
+        block_lava = block_init(neuron_params, fc.in_features, fc.out_features, delay_shift=False)
+    else:
+        block_lava = block_init(neuron_params, fc.in_features, fc.out_features, delay_shift=False, pre_hook_fx=None)
+
+    block_lava.synapse.weight.data[:, :, 0, 0, 0] = fc.weight.data.clone()
+
+    return block_lava
+
+
+def to_lava_block_conv(conv2d_nn: nn.Conv2d, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = False):
+
+    check_conv2d(conv2d_nn)
+
+    neuron_params = to_lava_neuron_param_dict(sj_ms_neuron)
+    if isinstance(sj_ms_neuron, (neuron.MultiStepIFNode, neuron.MultiStepLIFNode)):
+        block_init = slayer.block.cuba.Conv
+    else:
+        raise NotImplementedError(sj_ms_neuron)
+
+    if quantize_to_8bit:
+        # if 'pre_hook_fx' not in kwargs.keys(), then `pre_hook_fx` will be set to `quantize_8bit` by default
+        block_lava = block_init(neuron_params, in_features=conv2d_nn.in_channels, out_features=conv2d_nn.out_channels, kernel_size=conv2d_nn.kernel_size, stride=conv2d_nn.stride, padding=conv2d_nn.padding, dilation=conv2d_nn.dilation, groups=conv2d_nn.groups, delay_shift=False)
+    else:
+        block_lava = block_init(neuron_params, in_features=conv2d_nn.in_channels, out_features=conv2d_nn.out_channels, kernel_size=conv2d_nn.kernel_size, stride=conv2d_nn.stride, padding=conv2d_nn.padding, dilation=conv2d_nn.dilation, groups=conv2d_nn.groups, delay_shift=False, pre_hook_fx=None)
+
+    block_lava.synapse.weight.data[:, :, :, :, 0] = conv2d_nn.weight.data.clone()
+
+    return block_lava
 
 
 
