@@ -14,6 +14,7 @@ spikingjelly.clock_driven package
    spikingjelly.clock_driven.rnn
    spikingjelly.clock_driven.surrogate
    spikingjelly.clock_driven.ann2snn
+   spikingjelly.clock_driven.lava_exchange
 
 Module contents
 ---------------
