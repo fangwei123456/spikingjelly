@@ -204,15 +204,17 @@ def avgpool2d_to_lava_synapse_pool(pool2d_nn: nn.AvgPool2d):
 
         The lava slayer pool layer applies sum pooling, rather than average pooling.
 
-    T = 4
-    N = 2
-    layer_nn = nn.AvgPool2d(kernel_size=2, stride=2)
-    layer_sl = lava_exchange.avgpool2d_to_lava_synapse_pool(layer_nn)
-    x_seq = torch.rand([T, N, 3, 28, 28])
-    with torch.no_grad():
-        y_nn = functional.seq_to_ann_forward(x_seq, layer_nn)
-        y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq))) / 4.
-        print('max error:', (y_nn - y_sl).abs().max())
+    .. code-block:: python
+
+        T = 4
+        N = 2
+        layer_nn = nn.AvgPool2d(kernel_size=2, stride=2)
+        layer_sl = lava_exchange.avgpool2d_to_lava_synapse_pool(layer_nn)
+        x_seq = torch.rand([T, N, 3, 28, 28])
+        with torch.no_grad():
+            y_nn = functional.seq_to_ann_forward(x_seq, layer_nn)
+            y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq))) / 4.
+            print('max error:', (y_nn - y_sl).abs().max())
     """
     if not isinstance(pool2d_nn, nn.AvgPool2d):
         raise ValueError(f'expected pool2d_nn with type torch.nn.Conv2d, but got pool2d_nn with type {type(pool2d_nn)}!')
