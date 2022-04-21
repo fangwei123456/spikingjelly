@@ -294,7 +294,10 @@ def to_lava_block_conv(conv2d_nn: nn.Conv2d, sj_ms_neuron: nn.Module, quantize_t
     return block_lava
 
 
-
+def to_lava_block_flatten(flatten_nn: nn.Flatten):
+    if flatten_nn.start_dim != 1:
+        raise ValueError('lava only supports for flatten_nn.start_dim == 1!')
+    return slayer.block.cuba.Flatten()
 
 
 
