@@ -510,7 +510,7 @@ class MultiStepIFNode(IFNode):
 
     def reset(self):
         super().reset()
-        if hasattr(self, 'lava_neuron'):
+        if self.lava_neuron is not None:
             self.lava_neuron.current_state.zero_()
             self.lava_neuron.voltage_state.zero_()
 
@@ -881,7 +881,7 @@ class MultiStepLIFNode(LIFNode):
 
     def reset(self):
         super().reset()
-        if hasattr(self, 'lava_neuron'):
+        if self.lava_neuron is not None:
             self.lava_neuron.current_state.zero_()
             self.lava_neuron.voltage_state.zero_()
 
