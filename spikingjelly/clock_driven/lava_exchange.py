@@ -251,7 +251,7 @@ def avgpool2d_to_lava_synapse_pool(pool2d_nn: nn.AvgPool2d):
 
     return slayer.synapse.Pool(pool2d_nn.kernel_size, pool2d_nn.stride, pool2d_nn.padding)
 
-def to_lava_block_dense(fc: nn.Linear, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = False):
+def to_lava_block_dense(fc: nn.Linear, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = True):
 
     check_fc(fc)
 
@@ -273,7 +273,7 @@ def to_lava_block_dense(fc: nn.Linear, sj_ms_neuron: nn.Module, quantize_to_8bit
     return block_lava
 
 
-def to_lava_block_conv(conv2d_nn: nn.Conv2d, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = False):
+def to_lava_block_conv(conv2d_nn: nn.Conv2d, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = True):
 
     check_conv2d(conv2d_nn)
 
