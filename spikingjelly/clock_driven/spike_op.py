@@ -13,8 +13,8 @@ except BaseException as e:
 
 
 try:
-    print('spikingjelly.clock_driven.spike_op:', 'try to use `torch.utils.cpp_extension.load_inline` to load cudnn functions.')
-    print(f'If it is hanging, pleast try to delete torch_extensions cache directory. (In most cases, the directory is {torch.utils.cpp_extension._get_build_directory("", False)})')
+    logging.info('spikingjelly.clock_driven.spike_op: try to use `torch.utils.cpp_extension.load_inline` to load cudnn functions.')
+    logging.info(f'If it is hanging, pleast try to delete torch_extensions cache directory. (In most cases, the directory is {torch.utils.cpp_extension._get_build_directory("", False)}.)')
     cpp_wrapper = load_inline(
             name='cpp_wrapper',
             cpp_sources='using namespace at;',

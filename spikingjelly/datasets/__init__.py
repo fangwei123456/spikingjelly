@@ -16,6 +16,7 @@ import math
 import tqdm
 import shutil
 from .. import configure
+import logging
 np_savez = np.savez_compressed if configure.save_datasets_compressed else np.savez
 
 try:
@@ -37,7 +38,7 @@ try:
             }
     '''
 except BaseException as e:
-    print('spikingjelly.dataset.__init__:', e)
+    logging.info(f'spikingjelly.dataset.__init__: {e}')
     cupy = None
     pass
 

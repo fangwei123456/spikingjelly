@@ -3,10 +3,11 @@ import torch.nn.functional as F
 import threading
 from .. import configure
 from . import cu_kernel_opt
+import logging
 try:
     import cupy
 except BaseException as e:
-    print('spikingjelly.clock_driven.tensor_cache:', e)
+    logging.info(f'spikingjelly.clock_driven.tensor_cache: {e}')
     cupy = None
 
 class DataTypeConvertCUDACode:
