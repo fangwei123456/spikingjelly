@@ -76,7 +76,7 @@
 * :ref:`search`
 
 
-引用
+引用和出版物
 -------------------------
 如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
 
@@ -86,10 +86,13 @@
         title = {SpikingJelly},
         author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Tian, Yonghong and other contributors},
         year = {2020},
-        publisher = {GitHub},
-        journal = {GitHub repository},
         howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+        note = {Accessed: YYYY-MM-DD},
     }
+
+其中的 `YYYY-MM-DD` 需要更改为您的工作使用的惊蜇(SpikingJelly)版本对应的最后一次代码修改日期。
+
+使用惊蜇(SpikingJelly)的出版物可见于 `Publications using SpikingJelly <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>`_。
 
 项目信息
 -------------------------
@@ -195,10 +198,13 @@ If you use SpikingJelly in your work, please cite it as follows:
         title = {SpikingJelly},
         author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Tian, Yonghong and other contributors},
         year = {2020},
-        publisher = {GitHub},
-        journal = {GitHub repository},
         howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+        note = {Accessed: YYYY-MM-DD},
     }
+
+Note: To specify the version of framework you are using, the default value YYYY-MM-DD in the note field should be replaced with the date of the last change of the framework you are using, i.e. the date of the latest commit.
+
+Publications using SpikingJelly are recorded in `Publications using SpikingJelly <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>`_. If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
 About
 -------------------------
