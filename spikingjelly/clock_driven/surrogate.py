@@ -167,7 +167,8 @@ class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
         if x.requires_grad:
-            ctx.save_for_backward(x, alpha)
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
         return heaviside(x)
 
     @staticmethod
