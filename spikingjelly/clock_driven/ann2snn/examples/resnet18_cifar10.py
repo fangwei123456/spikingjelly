@@ -1,7 +1,6 @@
 import torch
 import torchvision
 from tqdm import tqdm
-import spikingjelly.clock_driven.functional as f
 import spikingjelly.clock_driven.ann2snn as ann2snn
 from spikingjelly.clock_driven.ann2snn.sample_models import cifar10_resnet
 
@@ -16,15 +15,16 @@ def val(net, device, data_loader, T=None):
             if T is None:
                 out = net(img)
             else:
-                f.reset_net(net)
+                for m in net.modules():
+                    if hasattr(m, 'reset'):
+                        m.reset()
                 for t in range(T):
                     if t == 0:
-                        out = 0
+                        out = net(img)
                     else:
                         out += net(img)
             correct += (out.argmax(dim=1) == label.to(device)).float().sum().item()
             total += out.shape[0]
-            # print(batch, correct / total)
         acc = correct / total
         print('Validating Accuracy: %.3f' % (acc))
     return acc
@@ -44,7 +44,6 @@ def main():
 
     model = cifar10_resnet.ResNet18()
     model.load_state_dict(torch.load('SJ-cifar10-resnet18_model-sample.pth'))
-    #model = torch.load('cifar10-resnet18.pth')
 
     train_data_dataset = torchvision.datasets.CIFAR10(
         root=dataset_dir,
@@ -70,12 +69,13 @@ def main():
     print('ANN accuracy:')
     val(model, device, test_data_loader)
     print('Converting...')
-    model_converter = ann2snn.Converter(device=device,mode='MaxNorm', dataloader=train_data_loader)
+    model_converter = ann2snn.Converter(device=device,mode='Max', dataloader=train_data_loader)
     snn_model = model_converter(model)
     print('SNN accuracy:')
     val(snn_model, device, test_data_loader, T=T)
 
 if __name__ == '__main__':
+    print('Downloading SJ-cifar10-resnet18_model-sample.pth')
     ann2snn.download_url("https://ndownloader.figshare.com/files/26676110",'./SJ-cifar10-resnet18_model-sample.pth')
     main()
 

@@ -4,10 +4,7 @@ ANN转换SNN
 
 本节教程主要关注 ``spikingjelly.clock_driven.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
-目前实现了两套实现：基于ONNX 和 基于PyTorch，在框架中被称为 ONNX kernel 和 PyTorch kernel。
-但是这两套实现各有特点，ONNX kernel的实现更加通用，支持更加复杂的拓扑结构（例如ResNet）；
-PyTorch kernel主要是为了简单测试，支持的模块比较有限且在现有配置下可能有很多bug。
-更多模块可以通过ONNX拓展，用户可自行实现...
+较早的实现方案中有两套实现：基于ONNX 和 基于PyTorch。由于ONNX不稳定，本版本为PyTorch增强版，原生支持复杂拓扑（例如ResNet）。一起来看看吧！
 
 ANN转换SNN的理论基础
 --------------------
@@ -107,7 +104,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 .. math::
     \frac{V_T-V_0}{T} = z - V_{threshold}  \frac{\sum_{t=1}^{T}\theta_t}{T} = z- V_{threshold}  \frac{N}{T}
 
-其中 :math:`N` 为 :math:`T` 时间步内脉冲数， :math:`\frac{N}{T}` 就是发放率  :math:`r`。利用  :math:`z= V_{threshold} a` 
+其中 :math:`N` 为 :math:`T` 时间步内脉冲数， :math:`\frac{N}{T}` 就是发放率  :math:`r`。利用  :math:`z= V_{threshold} a`
 即：
 
 .. math::
@@ -123,19 +120,14 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 .. math::
     r^l = W^l r^{l-1}+b^l- \frac{V^l_T}{T V_{threshold}}
 
-详细的说明见文献 [#f1]_ 。ann2snn中的方法也主要来自文献 [#f1]_ 
+详细的说明见文献 [#f1]_ 。ann2snn中的方法也主要来自文献 [#f1]_
 
-转换和仿真
-----------
+转换到脉冲神经网络
+^^^^^^^^^^^^^^^^
 
-具体地，进行前馈ANN转SNN主要有两个步骤：即模型分析（英文：parse，直译：句法分析）和仿真模拟。
+转换主要解决两个问题：
 
-模型分析
-^^^^^^^^
-
-模型分析主要解决两个问题：
-
-1. ANN为了快速训练和收敛提出了批归一化（Batch Normalization）。批归一化旨在将ANN输出归一化到0均值，这与SNN的特性相违背。因此，需要将BN的参数吸收到前面的参数层中（Linear、Conv2d）
+1. ANN为了快速训练和收敛提出了批归一化（Batch Normalization）。批归一化旨在将ANN输出归一化到0均值，这与SNN的特性相违背。因此，可以将BN的参数吸收到前面的参数层中（Linear、Conv2d）
 
 2. 根据转换理论，ANN的每层输入输出需要被限制在[0,1]范围内，这就需要对参数进行缩放（模型归一化）
 
@@ -155,7 +147,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 
 ◆ 模型归一化
 
-对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}` ,输出张量的最大值为 :math:`\lambda` 
+对于某个参数模块，假定得到了其输入张量和输出张量，其输入张量的最大值为 :math:`\lambda_{pre}` ,输出张量的最大值为 :math:`\lambda`
 那么，归一化后的权重 :math:`\hat{W}` 为：
 
 .. math::
@@ -171,65 +163,28 @@ ANN每层输出的分布虽然服从某个特定分布，但是数据中常常�
 
 到现在为止，我们对神经网络做的操作，在数值上是完全等价的。当前的模型表现应该与原模型相同。
 
-模型仿真
-^^^^^^^^
-
-仿真前，我们需要将原模型中的ReLU激活函数变为IF神经元。
+转换中，我们需要将原模型中的ReLU激活函数变为IF神经元。
 对于ANN中的平均池化，我们需要将其转化为空间下采样。由于IF神经元可以等效ReLU激活函数。空间下采样后增加IF神经元与否对结果的影响极小。
-对于ANN中的最大池化，目前没有非常理想的方案。目前的最佳方案为使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_ 。当然在ONNX kernel中没有用，不过我们在``ann2snn.modules``依然有实现。还有文献提出使用空间下采样替代Maxpool2d。此处我们依然推荐使用avgpool2d。
-
-仿真时，依照转换理论，SNN需要输入恒定的模拟输入。使用Poisson编码器将会带来准确率的降低。Poisson编码和恒定输入方式均已实现，感兴趣可通过配置进行不同实验。
+对于ANN中的最大池化，目前没有非常理想的方案。目前的最佳方案为使用基于动量累计脉冲的门控函数控制脉冲通道 [#f1]_ 。此处我们依然推荐使用avgpool2d。
+仿真时，依照转换理论，SNN需要输入恒定的模拟输入。使用Poisson编码器将会带来准确率的降低。
 
 实现与可选配置
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-ann2snn框架在2020年12月进行一次较大更新。最大改动就是将参数配置回归到了模块参数，并且尽可能考虑到了用户对灵活度和渐变操作的需求。这里我们将简单介绍一下这些类和方法。
-针对理论中提到的分析和仿真两大中心，设计了parser和simulator两大类。类的定义在``spikingjelly.ann2snn.__init__``中。
+ann2snn框架在2022年4月又迎来一次较大更新。取消了parser和simulator两大类。使用converter类替代了之前的方案。目前的方案更加简洁，并且具有更多转换设置空间。
 
-◆ parser类
-1. 类初始化函数
-- kernel：转换的kernel。可选范围为'onnx'、'pytorch'，这将决定您使用的是ONNX kernel还是PyTorch kernel
-- name：模型的名字，通常您可以取一个和任务、模型相关的名字，之后的文件夹生成将可能用到这个字符串
-- z_norm：许多深度学习模型会存在数据标准化（Z normalization）。如果您ANN模型有这个操作，这个参数的数据格式为：(mean, std)，例如对于CIFAR10，z_norm可以为((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-- log_dir：保存临时文件的文件夹，如没有此参数则会根据参数name和当前时间自动生成
-- json：历史配置文件名。当您运行过一次parser后，程序会自动保存json文件到log_dir，您可以使用json文件进行parser快速初始化
-
-2. parse函数
-- channelwise: 如果为``True``，则控制激活幅值的统计是channelwise的；否则，控制激活幅值的统计是layerwise的
-- robust: 如果为``True``，则控制激活幅值的统计是激活的99.9百分位；否则，控制激活幅值的统计是激活的最值
-- user_methods：默认使用``spikingjelly.ann2snn.kernel.onnx._o2p_converter``；当发现ONNX kernel遇到ONNX转换PyTorch的方法缺乏的时候，可以通过用户自定义函数的形式进行转换。函数接口可见``spikingjelly.ann2snn.kernel.onnx._o2p_converter``的staticmethods
-
-◆ simulator类
-1. 类初始化参数
-- snn：待仿真的转换后的SNN
-- device：仿真的设备，支持单设备（输入为字符串）和多设备（输入为list,set,tuple类型）
-- name：模型的名字，通常您可以取一个和任务、模型相关的名字，之后的文件夹生成将可能用到这个字符串
-- log_dir：保存临时文件的文件夹，如没有此参数则会根据参数name和当前时间自动生成
-- encoder：编码器，可选范围为'constant'、'poisson'
-
-2. simulate函数
-- data_loader：仿真的数据集的dataloader
-- T：仿真时间
-- canvas：plt.fig类型，用于对仿真模型标量性能（例如准确率）的绘图
-- online_drawer：如果为``True``，则在线绘图；否则，仿真结束后绘图
-- func_dict：用户可以通过自己定义标量性能函数实现绘图
-
-除此之外，用户可以通过继承simulate类进行仿真器的功能细化。
-比如``spikingjelly.ann2snn.__init__``实现了仿真分类任务的``classify_simulator``
-
-3. classify_simulator.simulate函数
-除去继承的参数外，
-- ann_acc：ANN转换前的分类准确率（0-1间的小数）
-- fig_name: 仿真图像的名字
-- step_max： 如果为``True``，则图像中标明推理过程中的最大准确率
-
+◆ Converter类
+该类用于将ReLU的ANN转换为SNN。这里实现了常见的三种模式。
+最常见的是最大电流转换模式，它利用前后层的激活上限，使发放率最高的情况能够对应激活取得最大值的情况。使用这种模式需要将参数mode设置为``max``[#f2]_。
+99.9%电流转换模式利用99.9%的激活分位点限制了激活上限。使用这种模式需要将参数mode设置为``99.9%``[#f1]_。
+缩放转换模式下，用户需要给定缩放参数到模式中，即可利用缩放后的激活最大值对电流进行限制。使用这种模式需要将参数mode设置为0-1的浮点数。
 
 识别MNIST
 ---------
 
 现在我们使用 ``ann2snn`` ，搭建一个简单卷积网络，对MNIST数据集进行分类。
 
-首先定义我们的网络结构：
+首先定义我们的网络结构 （见``ann2snn.sample_models.mnist_cnn``）：
 
 .. code-block:: python
 
@@ -267,154 +222,177 @@ ann2snn框架在2020年12月进行一次较大更新。最大改动就是将参�
 
 .. code-block:: python
 
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
-    batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-    learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-    T = int(input('输入仿真时长，例如“100”\n input simulating steps, e.g., "100": '))
-    train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“10”\n input training epochs, e.g., "10": '))
-    model_name = input('输入模型名字，例如“mnist”\n input model name, for log_dir generating , e.g., "mnist": ')
+    torch.random.manual_seed(0)
+    torch.cuda.manual_seed(0)
+    device = 'cuda'
+    dataset_dir = 'G:/Dataset/mnist'
+    batch_size = 100
+    T = 50
 
-之后的所有临时文件都会储存到文件夹中。
+这里的T就是一会儿推理时使用的推理时间步。
 
-初始化数据加载器、网络、优化器、损失函数：
+如果您想训练的话，还需要初始化数据加载器、优化器、损失函数，例如：
 
 .. code-block:: python
 
-    # 初始化网络
-    ann = ANN().to(device)
+    lr = 1e-3
+    epochs = 10
     # 定义损失函数
     loss_function = nn.CrossEntropyLoss()
     # 使用Adam优化器
-    optimizer = torch.optim.Adam(ann.parameters(), lr=learning_rate, weight_decay=5e-4)
+    optimizer = torch.optim.Adam(ann.parameters(), lr=lr, weight_decay=5e-4)
 
-训练ANN，并定期测试。训练时也可以使用utils中预先写好的训练程序：
-
-.. code-block:: python
-
-    for epoch in range(train_epoch):
-        # 使用utils中预先写好的训练程序训练网络
-        # 训练程序的写法和经典ANN中的训练也是一样的
-        # Train the network using a pre-prepared code in ''utils''
-        utils.train_ann(net=ann,
-                        device=device,
-                        data_loader=train_data_loader,
-                        optimizer=optimizer,
-                        loss_function=loss_function,
-                        epoch=epoch
-                        )
-        # 使用utils中预先写好的验证程序验证网络输出
-        # Validate the network using a pre-prepared code in ''utils''
-        acc = utils.val_ann(net=ann,
-                            device=device,
-                            data_loader=test_data_loader,
-                            epoch=epoch
-                            )
-        if best_acc <= acc:
-            utils.save_model(ann, log_dir, model_name+'.pkl')
-
-完整的代码位于 ``ann2snn.examples.cnn_mnist.py`` ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在Python命令行运行它：
+训练ANN。示例中，我们的模型训练了10个epoch。训练时测试集准确率变化情况如下：
 
 .. code-block:: python
 
-    >>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
-    >>> cnn_mnist.main()
-    输入运行的设备，例如“cpu”或“cuda:0”
-     input device, e.g., "cpu" or "cuda:0": cuda:15
-    输入保存MNIST数据集的位置，例如“./”
-     input root directory for saving MNIST dataset, e.g., "./": ./mnist
-    输入batch_size，例如“64”
-     input batch_size, e.g., "64": 128
-    输入学习率，例如“1e-3”
-     input learning rate, e.g., "1e-3": 1e-3
-    输入仿真时长，例如“100”
-     input simulating steps, e.g., "100": 100
-    输入训练轮数，即遍历训练集的次数，例如“10”
-     input training epochs, e.g., "10": 10
-    输入模型名字，用于自动生成日志文档，例如“cnn_mnist”
-     input model name, for log_dir generating , e.g., "cnn_mnist"
+    Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
+    Validating Accuracy: 0.972
+    Epoch: 1 100%|██████████| 600/600 [00:05<00:00, 105.43it/s]
+    Validating Accuracy: 0.986
+    Epoch: 2 100%|██████████| 600/600 [00:05<00:00, 107.49it/s]
+    Validating Accuracy: 0.987
+    Epoch: 3 100%|██████████| 600/600 [00:05<00:00, 109.26it/s]
+    Validating Accuracy: 0.990
+    Epoch: 4 100%|██████████| 600/600 [00:05<00:00, 103.98it/s]
+    Validating Accuracy: 0.984
+    Epoch: 5 100%|██████████| 600/600 [00:05<00:00, 100.42it/s]
+    Validating Accuracy: 0.989
+    Epoch: 6 100%|██████████| 600/600 [00:06<00:00, 96.24it/s]
+    Validating Accuracy: 0.991
+    Epoch: 7 100%|██████████| 600/600 [00:05<00:00, 104.97it/s]
+    Validating Accuracy: 0.992
+    Epoch: 8 100%|██████████| 600/600 [00:05<00:00, 106.45it/s]
+    Validating Accuracy: 0.991
+    Epoch: 9 100%|██████████| 600/600 [00:05<00:00, 111.93it/s]
+    Validating Accuracy: 0.991
 
-    Epoch 0 [1/937] ANN Training Loss:2.252 Accuracy:0.078
-    Epoch 0 [101/937] ANN Training Loss:1.423 Accuracy:0.669
-    Epoch 0 [201/937] ANN Training Loss:1.117 Accuracy:0.773
-    Epoch 0 [301/937] ANN Training Loss:0.953 Accuracy:0.795
-    Epoch 0 [401/937] ANN Training Loss:0.865 Accuracy:0.788
-    Epoch 0 [501/937] ANN Training Loss:0.807 Accuracy:0.792
-    Epoch 0 [601/937] ANN Training Loss:0.764 Accuracy:0.795
-    Epoch 0 [701/937] ANN Training Loss:0.726 Accuracy:0.835
-    Epoch 0 [801/937] ANN Training Loss:0.681 Accuracy:0.880
-    Epoch 0 [901/937] ANN Training Loss:0.641 Accuracy:0.889
-    100%|██████████| 100/100 [00:00<00:00, 116.12it/s]
-    Epoch 0 [100/100] ANN Validating Loss:0.327 Accuracy:0.881
-    Save model to: cnn_mnist-XXXXX\cnn_mnist.pkl
-    ......
-
-示例中，这个模型训练10个epoch。训练时测试集准确率变化情况如下：
-
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/accuracy_curve.png
-
-最终达到98.8%的测试集准确率。
-
-从训练集中，取出一部分数据，用于模型的归一化步骤。这里我们取192张图片。
+训练好模型后，我们快速加载一下模型测试一下保存好的模型性能：
 
 .. code-block:: python
 
-    # 加载用于归一化模型的数据
-    # Load the data to normalize the model
-    percentage = 0.004 # load 0.004 of the data
-    norm_data_list = []
-    for idx, (imgs, targets) in enumerate(train_data_loader):
-        norm_data_list.append(imgs)
-        if idx == int(len(train_data_loader) * percentage) - 1:
-            break
-    norm_data = torch.cat(norm_data_list)
-    print('use %d imgs to parse' % (norm_data.size(0)))
+    model.load_state_dict(torch.load('SJ-mnist-cnn_model-sample.pth'))
+    acc = val(model, device, test_data_loader)
+    print('ANN Validating Accuracy: %.4f' % (acc))
 
-
-调用\ ``ann2snn``\ 中的类parser，并使用ONNX kernel。
+输出结果如下：
 
 .. code-block:: python
 
-    onnxparser = parser(name=model_name,
-                        log_dir=log_dir + '/parser',
-                        kernel='onnx')
-    snn = onnxparser.parse(ann, norm_data.to(parser_device))
+    100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
+    ANN Validating Accuracy: 0.9870
 
-我们可以保存好我们转换好的snn模型，并且定义一个plt.figure用于绘图
+使用Converter进行转换非常简单，只需要参数中设置希望使用的模式即可。例如使用MaxNorm，需要先定义一个``ann2snn.Converter``，并且把模型forward给这个对象：
 
 .. code-block:: python
 
-    torch.save(snn, os.path.join(log_dir,'snn-'+model_name+'.pkl'))
-    fig = plt.figure('simulator')
+    model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
+    snn_model = model_converter(model)
 
-现在，我们定义用于SNN的仿真器。由于我们的任务是分类，选择类``classify_simulator``
+snn_model就是输出来的SNN模型。
 
-.. code-block:: python
-
-    sim = classify_simulator(snn,
-                             log_dir=log_dir + '/simulator',
-                             device=simulator_device,
-                             canvas=fig
-                             )
-    sim.simulate(test_data_loader,
-                T=T,
-                online_drawer=True,
-                ann_acc=ann_acc,
-                fig_name=model_name,
-                step_max=True
-                )
-
-模型仿真由于时间较长，我们设计了tqdm的进度条用于预估仿真时间。仿真结束时会有仿真器的summary
+按照这个例子，我们分别定义模式为``max``，``99.9%``，``1.0/2``，``1.0/3``，``1.0/4``，``1.0/5``情况下的SNN转换并分别推理T步得到准确率。
 
 .. code-block:: python
 
-    simulator is working on the normal mode, device: cuda:0
-    100%|██████████| 100/100 [00:46<00:00,  2.15it/s]
-    --------------------simulator summary--------------------
-    time elapsed: 46.55072790000008 (sec)
-    ---------------------------------------------------------
+    print('---------------------------------------------')
+    print('Converting using MaxNorm')
+    model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
+    snn_model = model_converter(model)
+    print('Simulating...')
+    mode_max_accs = val(snn_model, device, test_data_loader, T=T)
+    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_max_accs[-1]))
 
-通过最后的输出，可以知道，仿真器使用了46.6s。转换后的SNN准确率可以从simulator文件夹中plot.pdf看到，最高的转换准确率为98.51%。转换带来了0.37%的性能下降。通过增加推理时间可以减少转换损失。
+    print('---------------------------------------------')
+    print('Converting using RobustNorm')
+    model_converter = ann2snn.Converter(mode='99.9%', dataloader=train_data_loader)
+    snn_model = model_converter(model)
+    print('Simulating...')
+    mode_robust_accs = val(snn_model, device, test_data_loader, T=T)
+    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_robust_accs[-1]))
+
+    print('---------------------------------------------')
+    print('Converting using 1/2 max(activation) as scales...')
+    model_converter = ann2snn.Converter(mode=1.0 / 2, dataloader=train_data_loader)
+    snn_model = model_converter(model)
+    print('Simulating...')
+    mode_two_accs = val(snn_model, device, test_data_loader, T=T)
+    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_two_accs[-1]))
+
+    print('---------------------------------------------')
+    print('Converting using 1/3 max(activation) as scales')
+    model_converter = ann2snn.Converter(mode=1.0 / 3, dataloader=train_data_loader)
+    snn_model = model_converter(model)
+    print('Simulating...')
+    mode_three_accs = val(snn_model, device, test_data_loader, T=T)
+    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_three_accs[-1]))
+
+    print('---------------------------------------------')
+    print('Converting using 1/4 max(activation) as scales')
+    model_converter = ann2snn.Converter(mode=1.0 / 4, dataloader=train_data_loader)
+    snn_model = model_converter(model)
+    print('Simulating...')
+    mode_four_accs = val(snn_model, device, test_data_loader, T=T)
+    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_four_accs[-1]))
+
+    print('---------------------------------------------')
+    print('Converting using 1/5 max(activation) as scales')
+    model_converter = ann2snn.Converter(mode=1.0 / 5, dataloader=train_data_loader)
+    snn_model = model_converter(model)
+    print('Simulating...')
+    mode_five_accs = val(snn_model, device, test_data_loader, T=T)
+    print('SNN accuracy (simulation %d time-steps): %.4f' % (T, mode_five_accs[-1]))
+
+观察控制栏输出：
+
+.. code-block:: python
+
+    ---------------------------------------------
+    Converting using MaxNorm
+    100%|██████████| 600/600 [00:04<00:00, 128.25it/s] Simulating...
+    100%|██████████| 200/200 [00:13<00:00, 14.44it/s] SNN accuracy (simulation 50 time-steps): 0.9777
+    ---------------------------------------------
+    Converting using RobustNorm
+    100%|██████████| 600/600 [00:19<00:00, 31.06it/s] Simulating...
+    100%|██████████| 200/200 [00:13<00:00, 14.75it/s] SNN accuracy (simulation 50 time-steps): 0.9841
+    ---------------------------------------------
+    Converting using 1/2 max(activation) as scales...
+    100%|██████████| 600/600 [00:04<00:00, 126.64it/s] ]Simulating...
+    100%|██████████| 200/200 [00:13<00:00, 14.90it/s] SNN accuracy (simulation 50 time-steps): 0.9844
+    ---------------------------------------------
+    Converting using 1/3 max(activation) as scales
+    100%|██████████| 600/600 [00:04<00:00, 126.27it/s] Simulating...
+    100%|██████████| 200/200 [00:13<00:00, 14.73it/s] SNN accuracy (simulation 50 time-steps): 0.9828
+    ---------------------------------------------
+    Converting using 1/4 max(activation) as scales
+    100%|██████████| 600/600 [00:04<00:00, 128.94it/s] Simulating...
+    100%|██████████| 200/200 [00:13<00:00, 14.47it/s] SNN accuracy (simulation 50 time-steps): 0.9747
+    ---------------------------------------------
+    Converting using 1/5 max(activation) as scales
+    100%|██████████| 600/600 [00:04<00:00, 121.18it/s] Simulating...
+    100%|██████████| 200/200 [00:13<00:00, 14.42it/s] SNN accuracy (simulation 50 time-steps): 0.9487
+    ---------------------------------------------
+
+模型转换的速度可以看到是非常快的。模型推理速度200步仅需11s完成（GTX 2080ti）。
+根据模型输出的随时间变化的准确率，我们可以绘制不同设置下的准确率图像。
+
+.. code-block:: python
+
+    fig = plt.figure()
+    plt.plot(np.arange(0, T), mode_max_accs, label='mode: max')
+    plt.plot(np.arange(0, T), mode_robust_accs, label='mode: 99.9%')
+    plt.plot(np.arange(0, T), mode_two_accs, label='mode: 1.0/2')
+    plt.plot(np.arange(0, T), mode_three_accs, label='mode: 1.0/3')
+    plt.plot(np.arange(0, T), mode_four_accs, label='mode: 1.0/4')
+    plt.plot(np.arange(0, T), mode_five_accs, label='mode: 1.0/5')
+    plt.legend()
+    plt.xlabel('t')
+    plt.ylabel('Acc')
+    plt.show()
+
+.. image:: ../_static/tutorials/clock_driven/5_ann2snn/accuracy_mode.png
+
+不同的设置可以得到不同的结果，有的推理速度快，但是最终精度低，有的推理慢，但是精度高。用户可以根据自己的需求选择模型设置。
 
 .. [#f1] Rueckauer B, Lungu I-A, Hu Y, Pfeiffer M and Liu S-C (2017) Conversion of Continuous-Valued Deep Networks to Efficient Event-Driven Networks for Image Classification. Front. Neurosci. 11:682.
 .. [#f2] Diehl, Peter U. , et al. Fast classifying, high-accuracy spiking deep networks through weight and threshold balancing. Neural Networks (IJCNN), 2015 International Joint Conference on IEEE, 2015.
