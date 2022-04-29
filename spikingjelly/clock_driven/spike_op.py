@@ -1,9 +1,15 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.cpp_extension import load_inline
 from torch.cuda.amp import custom_fwd, custom_bwd
 import logging
 from . import tensor_cache
+
+from torch import Tensor
+from typing import Optional, Union
+from torch.types import _int, _size
+from torch.nn.modules.utils import _single, _pair, _triple
 
 try:
     import cupy
@@ -70,7 +76,7 @@ at::Tensor cudnn_convolution_backward_weight(
     bool benchmark, bool deterministic, bool allow_tf32)
 '''
 
-class spike_convolution(torch.autograd.Function):
+class spikeConvolution(torch.autograd.Function):
     # Pytorch only provides cudnn_convolution without bias.
     # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
     @staticmethod
@@ -140,7 +146,7 @@ class spike_convolution(torch.autograd.Function):
             grad_bias = grad_output.transpose(0, 1).reshape(out_channels, -1).sum(1)
         return grad_spike, grad_weight, grad_bias, None, None, None, None
 
-class spike_linear(torch.autograd.Function):
+class spikeLinear(torch.autograd.Function):
     @staticmethod
     @custom_fwd
     def forward(ctx, spike, weight, bias=None):
@@ -178,3 +184,323 @@ class spike_linear(torch.autograd.Function):
             out_features = grad_output.shape[-1]
             grad_bias = grad_output.reshape(-1, out_features).sum(0)
         return grad_spike, grad_weight, grad_bias
+
+def spike_linear(spike: Tensor, weight: Tensor, bias: Optional[Tensor] = None) -> Tensor:
+    """
+    * :ref:`API in English <spike_linear-en>`
+
+    .. _spike_linear-cn:
+
+    :class:`torch.nn.functional.linear` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上训练时拥有比 :class:`torch.nn.functional.linear` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <spike_linear-cn>`
+
+    .. _spike_linear-en:
+
+    A specific case of :class:`torch.nn.functional.linear` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.functional.linear` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    if spike.get_device() < 0:
+        return F.linear(spike, weight, bias)
+    else:
+        return spikeLinear.apply(spike, weight, bias)
+
+def spike_conv1d(spike: Tensor, weight: Tensor, bias: Tensor=None, stride: Union[_int, _size]=1, padding: str="valid", dilation: Union[_int, _size]=1, groups: _int=1) -> Tensor:
+    """
+    * :ref:`API in English <spike_conv1d-en>`
+
+    .. _spike_conv1d-cn:
+
+    :class:`torch.nn.functional.conv1d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上训练时拥有比 :class:`torch.nn.functional.conv1d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <spike_conv1d-cn>`
+
+    .. _spike_conv1d-en:
+
+    A specific case of :class:`torch.nn.functional.conv1d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.functional.conv1d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    if spike.get_device() < 0:
+        return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
+    else:
+        return spikeConvolution.apply(spike, weight, bias, stride, padding, dilation, groups)
+
+def spike_conv2d(spike: Tensor, weight: Tensor, bias: Optional[Tensor]=None, stride: Union[_int, _size]=1, padding: str="valid", dilation: Union[_int, _size]=1, groups: _int=1) -> Tensor:
+    """
+    * :ref:`API in English <spike_conv2d-en>`
+
+    .. _spike_conv2d-cn:
+
+    :class:`torch.nn.functional.conv2d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上训练时拥有比 :class:`torch.nn.functional.conv2d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <spike_conv2d-cn>`
+
+    .. _spike_conv2d-en:
+
+    A specific case of :class:`torch.nn.functional.conv2d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.functional.conv2d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    if spike.get_device() < 0:
+        return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
+    else:
+        return spikeConvolution.apply(spike, weight, bias, stride, padding, dilation, groups)
+
+def spike_conv3d(spike: Tensor, weight: Tensor, bias: Optional[Tensor]=None, stride: Union[_int, _size]=1, padding: str="valid", dilation: Union[_int, _size]=1, groups: _int=1) -> Tensor:
+    """
+    * :ref:`API in English <spike_conv3d-en>`
+
+    .. _spike_conv3d-cn:
+
+    :class:`torch.nn.functional.conv3d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上训练时拥有比 :class:`torch.nn.functional.conv3d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <spike_conv3d-cn>`
+
+    .. _spike_conv3d-en:
+
+    A specific case of :class:`torch.nn.functional.conv3d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.functional.conv3d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+    if spike.get_device() < 0:
+        return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
+    else:
+        return spikeConvolution.apply(spike, weight, bias, stride, padding, dilation, groups)
+
+
+class SpikeLinear(nn.Linear):
+    """
+    * :ref:`API in English <SpikeLinear-en>`
+
+    .. _SpikeLinear-cn:
+
+    :class:`torch.nn.Linear` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Linear` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeLinear-cn>`
+
+    .. _SpikeLinear-en:
+
+    A specific case of :class:`torch.nn.Linear` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Linear` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+
+    def forward(self, spike: Tensor) -> Tensor:
+        return spike_linear(spike, self.weight, self.bias)
+
+
+class SpikeConv1d(nn.Conv1d):
+    """
+    * :ref:`API in English <SpikeConv1d-en>`
+
+    .. _SpikeConv1d-cn:
+
+    :class:`torch.nn.Conv1d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Conv1d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeConv1d-cn>`
+
+    .. _SpikeConv1d-en:
+
+    A specific case of :class:`torch.nn.Conv1d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Conv1d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+
+    def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != 'zeros':
+            return spike_conv1d(F.pad(spike, self._reversed_padding_repeated_twice, mode=self.padding_mode),
+                                           weight, bias, self.stride,
+                                           _single(0), self.dilation, self.groups)
+        return spike_conv1d(spike, weight, bias, self.stride,
+                                       self.padding, self.dilation, self.groups)
+
+
+class SpikeConv2d(nn.Conv2d):
+    """
+    * :ref:`API in English <SpikeConv2d-en>`
+
+    .. _SpikeConv2d-cn:
+
+    :class:`torch.nn.Conv2d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Conv2d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeConv2d-cn>`
+
+    .. _SpikeConv2d-en:
+
+    A specific case of :class:`torch.nn.Conv2d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Conv2d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+
+    def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != 'zeros':
+            return spike_conv2d(F.pad(spike, self._reversed_padding_repeated_twice, mode=self.padding_mode),
+                                           weight, bias, self.stride,
+                                           _pair(0), self.dilation, self.groups)
+        return spike_conv2d(spike, weight, bias, self.stride,
+                                       self.padding, self.dilation, self.groups)
+
+
+class SpikeConv3d(nn.Conv3d):
+    """
+    * :ref:`API in English <SpikeConv3d-en>`
+
+    .. _SpikeConv3d-cn:
+
+    :class:`torch.nn.Conv3d` 在输入为脉冲时的特例。
+
+    .. note::
+
+        在CUDA设备上运行时拥有比 :class:`torch.nn.Conv3d` 更低的显存消耗。
+
+    .. warning::
+
+        `spike` 中的任何元素都必须为0或1。
+
+    * :ref:`中文API <SpikeConv3d-cn>`
+
+    .. _SpikeConv3d-en:
+
+    A specific case of :class:`torch.nn.Conv3d` with inputs are spikes.
+
+    .. admonition:: Note
+        :class: note
+
+        This function has less memory consumption than :class:`torch.nn.Conv3d` when training on CUDA devices.
+
+    .. admonition:: Warning
+        :class: warning
+
+        Any element in `spike` must be 0 or 1.
+    """
+
+    def _conv_forward(self, spike: Tensor, weight: Tensor, bias: Optional[Tensor]):
+        if self.padding_mode != "zeros":
+            return spike_conv3d(
+                F.pad(
+                    spike, self._reversed_padding_repeated_twice, mode=self.padding_mode
+                ),
+                weight,
+                bias,
+                self.stride,
+                _triple(0),
+                self.dilation,
+                self.groups,
+            )
+        return spike_conv3d(
+            spike, weight, bias, self.stride, self.padding, self.dilation, self.groups
+        )
