@@ -80,7 +80,7 @@ Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh
 
 ## Fast And Handy ANN-SNN Conversion
 
-SpikingJelly implements a relatively general ANN-SNN Conversion interface. Users can realize the conversion through PyTorch or ONNX packages. What's more, users can customize the conversion module to add to the conversion. 
+SpikingJelly implements a relatively general ANN-SNN Conversion interface. Users can realize the conversion through PyTorch. What's more, users can customize the conversion mode. 
 
 ```python
 class ANN(nn.Module):
@@ -103,8 +103,7 @@ class ANN(nn.Module):
             nn.AvgPool2d(2, 2),
 
             nn.Flatten(),
-            nn.Linear(32, 10),
-            nn.ReLU()
+            nn.Linear(32, 10)
         )
 
     def forward(self,x):
@@ -112,7 +111,7 @@ class ANN(nn.Module):
         return x
 ```
 
-This simple network with analog encoding can achieve 98.51% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
+This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
 
 ```python
 >>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
