@@ -179,6 +179,17 @@ def main():
 
     # 保存绘图用数据
     net.eval()
+    # 注册钩子
+    output_layer = net[-1] # 输出层
+    output_layer.v_seq = []
+    output_layer.s_seq = []
+    def save_hook(m, x, y):
+        m.v_seq.append(m.v.unsqueeze(0))
+        m.s_seq.append(y.unsqueeze(0))
+
+    output_layer.register_forward_hook(save_hook)
+
+
     with torch.no_grad():
         img, label = test_dataset[0]        
         img = img.to(device)
@@ -189,10 +200,12 @@ def main():
                 out_spikes_counter += net(encoder(img).float())
         out_spikes_counter_frequency = (out_spikes_counter / T).cpu().numpy()
         print(f'Firing rate: {out_spikes_counter_frequency}')
-        output_layer = net[-1] # 输出层
-        v_t_array = output_layer.v.cpu().numpy().squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
+
+        output_layer.v_seq = torch.cat(output_layer.v_seq)
+        output_layer.s_seq = torch.cat(output_layer.s_seq)
+        v_t_array = output_layer.v_seq.cpu().numpy().squeeze().T  # v_t_array[i][j]表示神经元i在j时刻的电压值
         np.save("v_t_array.npy",v_t_array)
-        s_t_array = output_layer.spike.cpu().numpy().squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
+        s_t_array = output_layer.s_seq.cpu().numpy().squeeze().T  # s_t_array[i][j]表示神经元i在j时刻释放的脉冲，为0或1
         np.save("s_t_array.npy",s_t_array)
 
     train_accs = np.array(train_accs)
