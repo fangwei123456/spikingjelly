@@ -1,6 +1,32 @@
 import torch
 import torch.nn as nn
 import copy
+from abc import abstractmethod
+
+try:
+    import cupy
+except BaseException as e:
+    cupy = None
+
+try:
+    import lava.lib.dl.slayer as slayer
+except BaseException as e:
+    slayer = None
+
+
+def check_backend_library(backend: str):
+    if backend == 'torch':
+        return
+    elif backend == 'cupy':
+        if cupy is None:
+            raise ImportError('CuPy is not installed! You can install it from "https://github.com/cupy/cupy".')
+    elif backend == 'lava':
+        if slayer is None:
+            raise ImportError('Lava-DL is not installed! You can install it from ' \
+                                   '"https://github.com/lava-nc/lava-dl". ')
+    else:
+        raise NotImplementedError(backend)
+
 
 class MemoryModule(nn.Module):
     def __init__(self):
@@ -21,6 +47,134 @@ class MemoryModule(nn.Module):
         super().__init__()
         self._memories = {}
         self._memories_rv = {}
+        self._backend = 'torch'
+        self._step_mode = 's'
+
+    @property
+    def step_mode(self):
+        """
+        * :ref:`API in English <MemoryModule.step_mode-en>`
+
+        .. _memoriesModule.step_mode-cn:
+
+        单步模式的输入输出均为 `shape = [N, *]` ，表示在 `1` 个时间步的数据。
+        多步模式的输入输出均为 `shape = [T, N, *]` ，表示在 `T` 个时间步的数据。
+
+        .. code-block:: python
+
+            # note that this is just an example and can not run because `MemoryModule` has not defined forward function
+
+            net = MemoryModule()
+            T = 4
+            N = 2
+            x = torch.rand([T, N])
+            ys = []
+            net.step_mode = 's'
+            for t in range(T):
+                ys.append(net(x[t]).unsqueeze(0))
+            ys = torch.cat(ys)
+            net.reset()
+
+            net.step_mode = 'm'
+            ym = net(x)
+            error = (ys - ym).abs().max()
+            # error is 0
+
+        :return: 单步还是多步，`s`表示单步，`m`表示多步。
+        :rtype: str
+
+        * :ref:`中文API <MemoryModule.step_mode-cn>`
+
+        .. _memoriesModule.step_mode-en:
+
+        The single-step mode uses data with `shape = [N, *]`, which is the data at one time-step.
+        The multi-step mode uses data with `shape = [T, N, *]`, which is the data at `T` time-steps.
+
+        .. code-block:: python
+
+            # note that this is just an example and can not run because `MemoryModule` has not defined forward function
+
+            net = MemoryModule()
+            T = 4
+            N = 2
+            x = torch.rand([T, N])
+            ys = []
+            net.step_mode = 's'
+            for t in range(T):
+                ys.append(net(x[t]).unsqueeze(0))
+            ys = torch.cat(ys)
+            net.reset()
+
+            net.step_mode = 'm'
+            ym = net(x)
+            error = (ys - ym).abs().max()
+            # error is 0
+
+        :return: the step mode. `s` means single-step, and `m` means multi-step
+        :rtype: str
+        """
+        return self._step_mode
+
+    @step_mode.setter
+    def step_mode(self, value: str):
+        if value not in ('s', 'm'):
+            raise ValueError(f'step_mode can only be "s" or "m", but got "{value}"!')
+        self._step_mode = value
+
+    @property
+    def supported_backends(self):
+        """
+        * :ref:`API in English <MemoryModule.supported_backends-en>`
+
+        .. _memoriesModule.supported_backends-cn:
+
+        返回支持的后端，默认情况下只有 `('torch', )`。如果继承者支持了其他后端，需要覆盖这个函数
+
+        :return: 支持的后端，str组成的tuple
+        :rtype: tuple
+
+        * :ref:`中文API <MemoryModule.supported_backends-cn>`
+
+        .. _memoriesModule.supported_backends-en:
+
+        Return the supported backends. The default return value is `('torch', )`.
+        If the child module supports other backends, it should override this function
+
+        :return: supported backends in the form of `(str, ...)`
+        :rtype: tuple
+
+        """
+        return ('torch',)
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @backend.setter
+    def backend(self, value: str):
+        if value not in self.supported_backends():
+            raise NotImplementedError(f'{value} is not a supported backend of {self._get_name()}!')
+        check_backend_library(value)
+        self._backend = value
+
+    @abstractmethod
+    def single_step_forward(self, *args, **kwargs):
+        pass
+
+    @abstractmethod
+    def multi_step_forward(self, *args, **kwargs):
+        pass
+
+    def forward(self, *args, **kwargs):
+        if self.step_mode == 's':
+            return self.single_step_forward(*args, **kwargs)
+        elif self.step_mode == 'm':
+            return self.multi_step_forward(*args, **kwargs)
+        else:
+            raise ValueError(self.step_mode)
+
+    def extra_repr(self):
+        return f'step_mode={self.step_mode}, backend={self.backend}'
 
     def register_memory(self, name: str, value):
         """
@@ -44,10 +198,11 @@ class MemoryModule(nn.Module):
         :param value: variable's value
         :type value: any
 
-        Register the variable to memory dict, which saves stateful variables (e.g., the membrane potential of a spiking neuron). The reset value of this variable will be ``value``.
+        Register the variable to memory dict, which saves stateful variables (e.g., the membrane potential of a
+        spiking neuron). The reset value of this variable will be ``value``.
 
         """
-        assert not hasattr(self, name), f'{name} has been set as a member variable'
+        assert not hasattr(self, name), f'{name} has been set as a member variable!'
         self._memories[name] = value
         self.set_reset_value(name, value)
 
@@ -149,14 +304,13 @@ class MemoryModule(nn.Module):
         for key, value in self._memories.items():
             if isinstance(value, torch.Tensor):
                 self._memories[key] = fn(value)
-
-        for key, value in self._memories_rv.items():
-            if isinstance(value, torch.Tensor):
-                self._memories_rv[key] = fn(value)
+        # do not apply on default values
+        # for key, value in self._memories_rv.items():
+        #     if isinstance(value, torch.Tensor):
+        #         self._memories_rv[key] = fn(value)
         return super()._apply(fn)
 
     def _replicate_for_data_parallel(self):
         replica = super()._replicate_for_data_parallel()
         replica._memories = self._memories.copy()
         return replica
-
