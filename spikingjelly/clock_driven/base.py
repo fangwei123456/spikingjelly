@@ -27,7 +27,6 @@ def check_backend_library(backend: str):
     else:
         raise NotImplementedError(backend)
 
-
 class MemoryModule(nn.Module):
     def __init__(self):
         """
@@ -314,3 +313,29 @@ class MemoryModule(nn.Module):
         replica = super()._replicate_for_data_parallel()
         replica._memories = self._memories.copy()
         return replica
+
+
+class StatelessModule:
+    @property
+    def step_mode(self):
+        return self._step_mode
+
+    @step_mode.setter
+    def step_mode(self, value: str):
+        if value not in ('s', 'm'):
+            raise ValueError(f'step_mode can only be "s" or "m", but got "{value}"!')
+        self._step_mode = value
+
+    def __str__(self):
+        return super().__str__() + f', step_mode={self.step_mode}'
+
+class MultiStepStatelessModule(StatelessModule):
+    @property
+    def step_mode(self):
+        return self._step_mode
+
+    @step_mode.setter
+    def step_mode(self, value: str):
+        if value != 'm':
+            raise ValueError(f'{self.__class__.__name__} only supports for step_mode = s (multi-step mode)!')
+        self._step_mode = value

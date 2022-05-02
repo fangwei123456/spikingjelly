@@ -71,7 +71,6 @@ class BaseNode(base.MemoryModule):
         assert isinstance(v_threshold, float)
         assert isinstance(detach_reset, bool)
         super().__init__()
-        self._store_v_seq = False
 
         if v_reset is None:
             self.register_memory('v', 0.)

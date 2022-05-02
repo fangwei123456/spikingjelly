@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from . import neuron
+from typing import Callable
+from . import neuron, base
 
 from torch import Tensor
 
@@ -16,7 +17,7 @@ def reset_net(net: nn.Module):
 
     :return: None
 
-    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若含有 ``reset()`` 函数，则调用。
+    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若为 ``base.MemoryModule`` 函数，则调用 ``reset()``。
 
     * :ref:`中文API <reset_net-cn>`
 
@@ -26,11 +27,22 @@ def reset_net(net: nn.Module):
 
     :return: None
 
-    Reset the whole network.  Walk through every ``Module`` and call their ``reset()`` function if exists.
+    Reset the whole network.  Walk through every ``Module`` and call their ``reset()`` function if this module is ``base.MemoryModule``.
     '''
     for m in net.modules():
-        if hasattr(m, 'reset'):
+        if isinstance(m, base.MemoryModule):
             m.reset()
+
+def set_step_mode(net: nn.Module, step_mode: str):
+    for m in net.modules():
+        if isinstance(m, (base.MemoryModule, base.StatelessModule)):
+            m.step_mode = step_mode
+
+def set_backend(net: nn.Module, backend: str):
+    for m in net.modules():
+        if isinstance(m, base.MemoryModule):
+            if backend in m.supported_backends:
+                m.backend = backend
 
 def spike_cluster(v: Tensor, v_threshold, T_in: int):
     '''
@@ -524,12 +536,12 @@ def first_spike_index(spikes: Tensor):
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
-def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple or nn.Sequential):
+def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple or nn.Sequential or Callable):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: Tensor
     :param single_step_module: a single-step module, or a list/tuple that contains single-step modules
-    :type single_step_module: torch.nn.Module or list or tuple or torch.nn.Sequential
+    :type single_step_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: Tensor
 
@@ -550,12 +562,12 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or t
         y_seq[t] = y_seq[t].unsqueeze(0)
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential):
+def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential or Callable):
     """
     :param x_seq: shape=[T, batch_size, ...]
     :type x_seq: Tensor
     :param stateless_module: a stateless module, e.g., 'torch.nn.Conv2d' or a list contains stateless modules, e.g., '[torch.nn.Conv2d, torch.nn.BatchNorm2d]
-    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential
+    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
     :return: y_seq, shape=[T, batch_size, ...]
     :rtype: Tensor
 
