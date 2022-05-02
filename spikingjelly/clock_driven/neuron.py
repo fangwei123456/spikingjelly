@@ -314,6 +314,7 @@ class IFNode(BaseNode):
 
         self.single_step_cupy_fp32_inference = single_step_cupy_fp32_inference
 
+    @property
     def supported_backends(self):
         if self.step_mode == 's':
             return ('torch', )
@@ -762,6 +763,7 @@ class ParametricLIFNode(BaseNode):
         init_w = - math.log(init_tau - 1.)
         self.w = nn.Parameter(torch.as_tensor(init_w))
 
+    @property
     def supported_backends(self):
         if self.step_mode == 's':
             return ('torch', )
@@ -1002,6 +1004,7 @@ class EIFNode(BaseNode):
         
         self.v = self.v + (x + self.v_rest - self.v + self.delta_T * torch.exp((self.v - self.theta_rh) / self.delta_T)) / self.tau
 
+    @property
     def supported_backends(self):
         if self.step_mode == 's':
             return ('torch', )
@@ -1059,6 +1062,7 @@ class LIAFNode(LIFNode):
         self.act = act
         self.threshold_related = threshold_related
 
+    @property
     def supported_backends(self):
         return ('torch', )
 

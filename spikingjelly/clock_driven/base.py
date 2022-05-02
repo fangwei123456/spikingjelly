@@ -152,7 +152,7 @@ class MemoryModule(nn.Module):
 
     @backend.setter
     def backend(self, value: str):
-        if value not in self.supported_backends():
+        if value not in self.supported_backends:
             raise NotImplementedError(f'{value} is not a supported backend of {self._get_name()}!')
         check_backend_library(value)
         self._backend = value
