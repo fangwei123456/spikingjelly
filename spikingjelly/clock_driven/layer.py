@@ -4,13 +4,76 @@ import torch.nn.functional as F
 import math
 from . import base, functional
 from torch import Tensor
-from torch.nn.common_types import _size_2_t
+from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
+from typing import Optional, List, Tuple, Union
 from typing import Callable
 from torch.nn.modules.batchnorm import _BatchNorm
 
 
+class Conv2d(nn.Conv2d, base.StatelessModule):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_2_t,
+            stride: _size_2_t = 1,
+            padding: Union[str, _size_2_t] = 0,
+            dilation: _size_2_t = 1,
+            groups: int = 1,
+            bias: bool = True,
+            padding_mode: str = 'zeros',
+            device=None,
+            dtype=None,
+            step_mode='s'
+    ) -> None:
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode,
+                         device, dtype)
+        self.step_mode = step_mode
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            return super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 5:
+                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            return functional.seq_to_ann_forward(x, super().forward)
+
+
+class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
+    def __init__(
+            self,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            device=None,
+            dtype=None,
+            step_mode='s'
+    ):
+        super().__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
+        self.step_mode = step_mode
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            return super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 5:
+                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            return functional.seq_to_ann_forward(x, super().forward)
+
+
+class Linear(nn.Linear, base.StatelessModule):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device=None, dtype=None, step_mode='s') -> None:
+        super().__init__(in_features, out_features, bias, device, dtype)
+        self.step_mode = step_mode
+
+
 class NeuNorm(base.MemoryModule):
-    def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False):
+    def __init__(self, in_channels, height, width, k=0.9, shared_across_channels=False, step_mode='s'):
         """
         * :ref:`API in English <NeuNorm.__init__-en>`
 
@@ -70,6 +133,7 @@ class NeuNorm(base.MemoryModule):
 
         """
         super().__init__()
+        self.step_mode = step_mode
         self.register_memory('x', 0.)
         self.k0 = k
         self.k1 = (1. - self.k0) / in_channels ** 2
@@ -79,104 +143,20 @@ class NeuNorm(base.MemoryModule):
             self.w = nn.Parameter(Tensor(in_channels, height, width))
         nn.init.kaiming_uniform_(self.w, a=math.sqrt(5))
 
-    def forward(self, in_spikes: Tensor):
+    def single_step_forward(self, in_spikes: Tensor):
         self.x = self.k0 * self.x + self.k1 * in_spikes.sum(dim=1,
                                                             keepdim=True)  # x.shape = [batch_size, 1, height, width]
         return in_spikes - self.w * self.x
+
+    def multi_step_forward(self, in_spikes_seq: Tensor):
+        return functional.multi_step_forward(in_spikes_seq, self.single_step_forward)
 
     def extra_repr(self) -> str:
         return f'shape={self.w.shape}'
 
 
-class DCT(nn.Module):
-    def __init__(self, kernel_size):
-        """
-        * :ref:`API in English <DCT.__init__-en>`
-
-        .. _DCT.__init__-cn:
-
-        :param kernel_size: 进行分块DCT变换的块大小
-
-        将输入的 ``shape = [*, W, H]`` 的数据进行分块DCT变换的层，``*`` 表示任意额外添加的维度。变换只在最后2维进行，要求 ``W`` 和 ``H`` 都能\\
-        整除 ``kernel_size``。
-
-        ``DCT`` 是 ``AXAT`` 的一种特例。
-
-        * :ref:`中文API <DCT.__init__-cn>`
-
-        .. _DCT.__init__-en:
-
-        :param kernel_size: block size for DCT transform
-
-        Apply Discrete Cosine Transform on input with ``shape = [*, W, H]``, where ``*`` means any number of additional dimensions.
-        DCT will only applied in the last two dimensions. ``W`` and ``H`` should be divisible by ``kernel_size``.
-
-        Note that ``DCT`` is a special case of ``AXAT``.
-        """
-        super().__init__()
-        self.kernel = torch.zeros(size=[kernel_size, kernel_size])
-        for i in range(0, kernel_size):
-            for j in range(kernel_size):
-                if i == 0:
-                    self.kernel[i][j] = math.sqrt(1 / kernel_size) * math.cos((j + 0.5) * math.pi * i / kernel_size)
-                else:
-                    self.kernel[i][j] = math.sqrt(2 / kernel_size) * math.cos((j + 0.5) * math.pi * i / kernel_size)
-
-    def forward(self, x: Tensor):
-        if self.kernel.device != x.device:
-            self.kernel = self.kernel.to(x.device)
-        x_shape = x.shape
-        x = x.view(-1, x_shape[-2], x_shape[-1])
-        ret = torch.zeros_like(x)
-        for i in range(0, x_shape[-2], self.kernel.shape[0]):
-            for j in range(0, x_shape[-1], self.kernel.shape[0]):
-                ret[:, i:i + self.kernel.shape[0], j:j + self.kernel.shape[0]] \
-                    = self.kernel.matmul(x[:, i:i + self.kernel.shape[0], j:j + self.kernel.shape[0]]).matmul(
-                    self.kernel.t())
-        return ret.view(x_shape)
-
-
-class AXAT(nn.Module):
-    def __init__(self, in_features, out_features):
-        """
-        * :ref:`API in English <AXAT.__init__-en>`
-
-        .. _AXAT.__init__-cn:
-
-        :param in_features: 输入数据的最后2维的尺寸。输入应该是 ``shape = [*, in_features, in_features]``
-        :param out_features: 输出数据的最后2维的尺寸。输出数据为 ``shape = [*, out_features, out_features]``
-
-        对输入数据 :math:`X` 在最后2维进行线性变换 :math:`AXA^{T}` 的操作，:math:`A` 是 ``shape = [out_features, in_features]`` 的矩阵。
-
-        将输入的数据看作是批量个 ``shape = [in_features, in_features]`` 的矩阵.
-
-        * :ref:`中文API <AXAT.__init__-cn>`
-
-        .. _AXAT.__init__-en:
-
-        :param in_features: feature number of input at last two dimensions. The input should be ``shape = [*, in_features, in_features]``
-
-        :param out_features: feature number of output at last two dimensions. The output will be ``shape = [*, out_features, out_features]``
-
-        Apply :math:`AXA^{T}` transform on input :math:`X` at the last two dimensions. :math:`A` is a tensor with ``shape = [out_features, in_features]``.
-
-        The input will be regarded as a batch of tensors with ``shape = [in_features, in_features]``.
-        """
-        super().__init__()
-        self.A = nn.Parameter(Tensor(out_features, in_features))
-        nn.init.kaiming_uniform_(self.A, a=math.sqrt(5))
-
-    def forward(self, x: Tensor):
-        x_shape = list(x.shape)
-        x = x.view(-1, x_shape[-2], x_shape[-1])
-        x = self.A.matmul(x).matmul(self.A.t())
-        x_shape[-1] = x.shape[-1]
-        x_shape[-2] = x.shape[-2]
-        return x.view(x_shape)
-
-
 class Dropout(base.MemoryModule):
-    def __init__(self, p=0.5):
+    def __init__(self, p=0.5, step_mode='s'):
         """
         * :ref:`API in English <Dropout.__init__-en>`
 
@@ -237,6 +217,7 @@ class Dropout(base.MemoryModule):
             time window within an iteration.
         """
         super().__init__()
+        self.step_mode = step_mode
         assert 0 <= p < 1
         self.register_memory('mask', None)
         self.p = p
@@ -247,7 +228,7 @@ class Dropout(base.MemoryModule):
     def create_mask(self, x: Tensor):
         self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True)
 
-    def forward(self, x: Tensor):
+    def single_step_forward(self, x: Tensor):
         if self.training:
             if self.mask is None:
                 self.create_mask(x)
@@ -256,9 +237,18 @@ class Dropout(base.MemoryModule):
         else:
             return x
 
+    def multi_step_forward(self, x_seq: Tensor):
+        if self.training:
+            if self.mask is None:
+                self.create_mask(x_seq[0])
+
+            return x_seq * self.mask
+        else:
+            return x_seq
+
 
 class Dropout2d(Dropout):
-    def __init__(self, p=0.2):
+    def __init__(self, p=0.2, step_mode='s'):
         """
         * :ref:`API in English <Dropout2d.__init__-en>`
 
@@ -285,100 +275,14 @@ class Dropout2d(Dropout):
 
         For more information about Dropout in SNN, refer to :ref:`layer.Dropout <Dropout.__init__-en>`.
         """
-        super().__init__(p)
+        super().__init__(p, step_mode)
 
     def create_mask(self, x: Tensor):
         self.mask = F.dropout2d(torch.ones_like(x.data), self.p, training=True)
 
 
-class MultiStepDropout(Dropout):
-    def __init__(self, p=0.5):
-        """
-        * :ref:`API in English <MultiStepDropout.__init__-en>`
-
-        .. _MultiStepDropout.__init__-cn:
-
-        :param p: 每个元素被设置为0的概率
-        :type p: float
-
-        :class:`spikingjelly.clock_driven.layer.Dropout` 的多步版本。
-
-        .. tip::
-
-            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
-
-        * :ref:`中文API <MultiStepDropout.__init__-cn>`
-
-        .. _MultiStepDropout.__init__-en:
-
-        :param p: probability of an element to be zeroed
-        :type p: float
-
-        The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout`.
-
-        .. admonition:: Tip
-            :class: tip
-
-            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
-            and multi-step propagation.
-        """
-        super().__init__(p)
-
-    def forward(self, x_seq: Tensor):
-        if self.training:
-            if self.mask is None:
-                self.create_mask(x_seq[0])
-
-            return x_seq * self.mask
-        else:
-            return x_seq
-
-
-class MultiStepDropout2d(Dropout2d):
-    def __init__(self, p=0.5):
-        """
-        * :ref:`API in English <MultiStepDropout2d.__init__-en>`
-
-        .. _MultiStepDropout2d.__init__-cn:
-
-        :param p: 每个元素被设置为0的概率
-        :type p: float
-
-        :class:`spikingjelly.clock_driven.layer.Dropout2d` 的多步版本。
-
-        .. tip::
-
-            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
-
-        * :ref:`中文API <MultiStepDropout2d.__init__-cn>`
-
-        .. _MultiStepDropout2d.__init__-en:
-
-        :param p: probability of an element to be zeroed
-        :type p: float
-
-        The multi-step version of :class:`spikingjelly.clock_driven.layer.Dropout2d`.
-
-        .. admonition:: Tip
-            :class: tip
-
-            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
-            and multi-step propagation.
-        """
-        super().__init__(p)
-
-    def forward(self, x_seq: Tensor):
-        if self.training:
-            if self.mask is None:
-                self.create_mask(x_seq[0])
-
-            return x_seq * self.mask
-        else:
-            return x_seq
-
-
 class SynapseFilter(base.MemoryModule):
-    def __init__(self, tau=100.0, learnable=False):
+    def __init__(self, tau=100.0, learnable=False, step_mode='s'):
         """
         * :ref:`API in English <LowPassSynapse.__init__-en>`
 
@@ -510,6 +414,7 @@ class SynapseFilter(base.MemoryModule):
 
         """
         super().__init__()
+        self.step_mode = step_mode
         self.learnable = learnable
         assert tau > 1
         if learnable:
@@ -529,7 +434,7 @@ class SynapseFilter(base.MemoryModule):
 
         return f'tau={tau}, learnable={self.learnable}'
 
-    def forward(self, in_spikes: Tensor):
+    def single_step_forward(self, in_spikes: Tensor):
         if self.learnable:
             inv_tau = self.w.sigmoid()
         else:
@@ -539,57 +444,13 @@ class SynapseFilter(base.MemoryModule):
 
         return self.out_i
 
-
-class ChannelsPool(nn.Module):
-    def __init__(self, pool: nn.MaxPool1d or nn.AvgPool1d):
-        """
-        * :ref:`API in English <ChannelsPool.__init__-en>`
-
-        .. _ChannelsPool.__init__-cn:
-
-        :param pool: ``nn.MaxPool1d`` 或 ``nn.AvgPool1d``，池化层
-
-        使用 ``pool`` 将输入的4-D数据在第1个维度上进行池化。
-
-        示例代码：
-
-        .. code-block:: python
-
-            >>> cp = ChannelsPool(torch.nn.MaxPool1d(2, 2))
-            >>> x = torch.rand(size=[2, 8, 4, 4])
-            >>> y = cp(x)
-            >>> y.shape
-            torch.Size([2, 4, 4, 4])
-
-        * :ref:`中文API <ChannelsPool.__init__-cn>`
-
-        .. _ChannelsPool.__init__-en:
-
-        :param pool: ``nn.MaxPool1d`` or ``nn.AvgPool1d``, the pool layer
-
-        Use ``pool`` to pooling 4-D input at dimension 1.
-
-        Examples:
-
-        .. code-block:: python
-
-            >>> cmp = ChannelsPool(torch.nn.MaxPool1d(2, 2))
-            >>> x = torch.rand(size=[2, 8, 4, 4])
-            >>> y = cp(x)
-            >>> y.shape
-            torch.Size([2, 4, 4, 4])
-        """
-        super().__init__()
-        self.pool = pool
-
-    def forward(self, x: Tensor):
-        x_shape = x.shape
-        return self.pool(x.flatten(2).permute(0, 2, 1)).permute(0, 2, 1).view((x_shape[0], -1) + x_shape[2:])
+    def multi_step_forward(self, in_spikes_seq: Tensor):
+        return functional.multi_step_forward(in_spikes_seq, self.single_step_forward)
 
 
 class DropConnectLinear(base.MemoryModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
-                 invariant: bool = False, activation: None or nn.Module = nn.ReLU()) -> None:
+                 invariant: bool = False, activation: None or nn.Module = nn.ReLU(), state_mode='s') -> None:
         """
         * :ref:`API in English <DropConnectLinear.__init__-en>`
 
@@ -662,6 +523,7 @@ class DropConnectLinear(base.MemoryModule):
             ``activation`` as a member variable of this module.
         """
         super().__init__()
+        self.state_mode = state_mode
         self.in_features = in_features
         self.out_features = out_features
         self.weight = nn.Parameter(Tensor(out_features, in_features))
@@ -742,7 +604,7 @@ class DropConnectLinear(base.MemoryModule):
             # self.dropped_b = mask_b.to(self.bias) * self.bias
             self.dropped_b = self.bias * mask_b
 
-    def forward(self, input: Tensor) -> Tensor:
+    def single_step_forward(self, input: Tensor) -> Tensor:
         if self.training:
             if self.invariant:
                 if self.dropped_w is None:
@@ -772,115 +634,17 @@ class DropConnectLinear(base.MemoryModule):
                 ret = self.activation(samples)
             return ret.mean(dim=0)
 
+    def multi_step_forward(self, x_seq: Tensor) -> Tensor:
+        return functional.multi_step_forward(x_seq, self.single_step_forward)
+
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
-
-
-class MultiStepContainer(nn.Sequential):
-    def __init__(self, *args):
-        """
-        * :ref:`API in English <MultiStepContainer.reset-en>`
-
-        .. _MultiStepContainer.reset-cn:
-
-        :param args: 单个或多个网络模块
-        :type args: torch.nn.Module
-
-        将单步模块包装成多步模块的包装器。
-
-
-        .. tip::
-
-            阅读 :doc:`传播模式 <./clock_driven/10_propagation_pattern>` 以获取更多关于单步和多步传播的信息。
-
-        * :ref:`中文API <MultiStepContainer.reset-cn>`
-
-        .. _MultiStepContainer.reset-en:
-
-        :param args: one or many modules
-        :type args: torch.nn.Module
-
-        A container that wraps single-step modules to a multi-step modules.
-
-        .. admonition:: Tip
-            :class: tip
-
-            Read :doc:`Propagation Pattern <./clock_driven_en/10_propagation_pattern>` for more details about single-step
-            and multi-step propagation.
-
-
-
-        """
-        super().__init__(*args)
-
-    def forward(self, x_seq: Tensor):
-        """
-        :param x_seq: shape=[T, batch_size, ...]
-        :type x_seq: Tensor
-        :return: y_seq, shape=[T, batch_size, ...]
-        :rtype: Tensor
-        """
-
-        return functional.multi_step_forward(x_seq, self)
-
-
-class SeqToANNContainer(nn.Sequential):
-    def __init__(self, *args):
-        """
-        * :ref:`API in English <SeqToANNContainer.__init__-en>`
-
-        .. _SeqToANNContainer.__init__-cn:
-
-        :param *args: 无状态的单个或多个ANN网络层
-
-        包装无状态的ANN以处理序列数据的包装器。``shape=[T, batch_size, ...]`` 的输入会被拼接成 ``shape=[T * batch_size, ...]`` 再送入被包装的模块。输出结果会被再拆成 ``shape=[T, batch_size, ...]``。
-
-        示例代码
-
-        .. code-block:: python
-            with torch.no_grad():
-                T = 16
-                batch_size = 8
-                x = torch.rand([T, batch_size, 4])
-                fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
-                print(fc(x).shape)
-                # torch.Size([16, 8, 3])
-
-        * :ref:`中文API <SeqToANNContainer.__init__-cn>`
-
-        .. _SeqToANNContainer.__init__-en:
-
-        :param *args: one or many stateless ANN layers
-
-        A container that contain sataeless ANN to handle sequential data. This container will concatenate inputs ``shape=[T, batch_size, ...]`` at time dimension as ``shape=[T * batch_size, ...]``, and send the reshaped inputs to contained ANN. The output will be split to ``shape=[T, batch_size, ...]``.
-
-        Examples:
-
-        .. code-block:: python
-            with torch.no_grad():
-                T = 16
-                batch_size = 8
-                x = torch.rand([T, batch_size, 4])
-                fc = SeqToANNContainer(nn.Linear(4, 2), nn.Linear(2, 3))
-                print(fc(x).shape)
-                # torch.Size([16, 8, 3])
-        """
-        super().__init__(*args)
-
-    def forward(self, x_seq: Tensor):
-        """
-        :param x_seq: shape=[T, batch_size, ...]
-        :type x_seq: Tensor
-        :return: y_seq, shape=[T, batch_size, ...]
-        :rtype: Tensor
-        """
-        return functional.seq_to_ann_forward(x_seq, self)
 
 
 class STDPLearner(base.MemoryModule):
     def __init__(self,
                  tau_pre: float, tau_post: float,
-                 f_pre, f_post
+                 f_pre, f_post, step_mode='s'
                  ) -> None:
         """
         .. code-block:: python
@@ -956,6 +720,7 @@ class STDPLearner(base.MemoryModule):
 
         """
         super().__init__()
+        self.step_mode = step_mode
         self.tau_pre = tau_pre
         self.tau_post = tau_post
 
@@ -1009,7 +774,7 @@ class PrintShapeModule(nn.Module):
         return x
 
 
-class ConvBatchNorm2d(nn.Module):
+class ConvBatchNorm2d(base.StatelessModule):
     def __init__(self, in_channels: int,
                  out_channels: int,
                  kernel_size: _size_2_t,
@@ -1021,7 +786,7 @@ class ConvBatchNorm2d(nn.Module):
                  eps=1e-5,
                  momentum=0.1,
                  affine=True,
-                 track_running_stats=True):
+                 track_running_stats=True, step_mode='s'):
         """
         A fused Conv2d-BatchNorm2d module. See :class:`torch.nn.Conv2d` and :class:`torch.nn.BatchNorm2d` for params information.
 
@@ -1060,7 +825,10 @@ class ConvBatchNorm2d(nn.Module):
                                  track_running_stats=track_running_stats)
 
     def forward(self, x: Tensor):
-        return self.bn(self.conv(x))
+        if self.step_mode == 's':
+            return self.bn(self.conv(x))
+        elif self.step_mode == 'm':
+            return functional.seq_to_ann_forward(x, (self.conv, self.bn))
 
     def get_fused_weight(self):
         """
@@ -1105,7 +873,7 @@ class ConvBatchNorm2d(nn.Module):
 
 
 class ElementWiseRecurrentContainer(base.MemoryModule):
-    def __init__(self, sub_module: nn.Module, element_wise_function: Callable):
+    def __init__(self, sub_module: nn.Module, element_wise_function: Callable, step_mode='s'):
         """
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
@@ -1142,22 +910,27 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
             functional.reset_net(net)
         """
         super().__init__()
+        self.step_mode = step_mode
         self.sub_module = sub_module
         self.element_wise_function = element_wise_function
         self.register_memory('y', None)
 
-    def forward(self, x: Tensor):
+    def single_step_forward(self, x: Tensor):
         if self.y is None:
             self.y = torch.zeros_like(x.data)
         self.y = self.sub_module(self.element_wise_function(self.y, x))
         return self.y
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        return functional.multi_step_forward(x_seq, self.single_step_forward)
 
     def extra_repr(self) -> str:
         return f'element-wise function={self.element_wise_function}'
 
 
 class LinearRecurrentContainer(base.MemoryModule):
-    def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True) -> None:
+    def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True,
+                 step_mode='s') -> None:
         """
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
@@ -1206,12 +979,13 @@ class LinearRecurrentContainer(base.MemoryModule):
 
         """
         super().__init__()
+        self.step_mode = step_mode
         self.sub_module_out_features = out_features
         self.rc = nn.Linear(in_features + out_features, in_features, bias)
         self.sub_module = sub_module
         self.register_memory('y', None)
 
-    def forward(self, x: Tensor):
+    def single_step_forward(self, x: Tensor):
         if self.y is None:
             if x.ndim == 2:
                 self.y = torch.zeros([x.shape[0], self.sub_module_out_features]).to(x)
@@ -1223,9 +997,15 @@ class LinearRecurrentContainer(base.MemoryModule):
         x = torch.cat((x, self.y), dim=-1)
         self.y = self.sub_module(self.rc(x))
         return self.y
-class _MultiStepThresholdDependentBatchNormBase(_BatchNorm):
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        return functional.multi_step_forward(x_seq, self.single_step_forward)
+
+
+class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepStatelessModule):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.step_mode = 'm'
         self.alpha = alpha
         self.v_th = v_th
         assert self.affine, "ThresholdDependentBatchNorm needs to set `affine = True`!"
@@ -1239,7 +1019,7 @@ class _MultiStepThresholdDependentBatchNormBase(_BatchNorm):
         return y.view(y_shape)
 
 
-class MultiStepThresholdDependentBatchNorm1d(_MultiStepThresholdDependentBatchNormBase):
+class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
         * :ref:`API in English <MultiStepThresholdDependentBatchNorm1d.__init__-en>`
@@ -1277,7 +1057,7 @@ class MultiStepThresholdDependentBatchNorm1d(_MultiStepThresholdDependentBatchNo
                 f'expected 3D or 4D input with shape [T, N, C] or [T, N, C, M], but got input with shape {x.shape}')
 
 
-class MultiStepThresholdDependentBatchNorm2d(_MultiStepThresholdDependentBatchNormBase):
+class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
         * :ref:`API in English <MultiStepThresholdDependentBatchNorm2d.__init__-en>`
@@ -1314,7 +1094,7 @@ class MultiStepThresholdDependentBatchNorm2d(_MultiStepThresholdDependentBatchNo
             raise ValueError(f'expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}')
 
 
-class MultiStepThresholdDependentBatchNorm3d(_MultiStepThresholdDependentBatchNormBase):
+class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
         * :ref:`API in English <MultiStepThresholdDependentBatchNorm3d.__init__-en>`
@@ -1351,7 +1131,7 @@ class MultiStepThresholdDependentBatchNorm3d(_MultiStepThresholdDependentBatchNo
             raise ValueError(f'expected 6D input with shape [T, N, C, D, H, W], but got input with shape {x.shape}')
 
 
-class MultiStepTemporalWiseAttention(nn.Module):
+class TemporalWiseAttention(base.MultiStepStatelessModule):
     def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
         """
         * :ref:`API in English <MultiStepTemporalWiseAttention.__init__-en>`
@@ -1395,6 +1175,7 @@ class MultiStepTemporalWiseAttention(nn.Module):
 
         """
         super().__init__()
+        self.step_mode = 'm'
         assert dimension == 4 or dimension == 2, 'dimension must be 4 or 2'
 
         self.dimension = dimension
@@ -1419,7 +1200,8 @@ class MultiStepTemporalWiseAttention(nn.Module):
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x_seq: torch.Tensor):
-        assert x_seq.dim() == 3 or x_seq.dim() == 5, ValueError(f'expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}')
+        assert x_seq.dim() == 3 or x_seq.dim() == 5, ValueError(
+            f'expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}')
         x_seq = x_seq.transpose(0, 1)
         avgout = self.sharedMLP(self.avg_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
         maxout = self.sharedMLP(self.max_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))

@@ -1,13 +1,14 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from . import functional
 import math
 from . import base
 from abc import abstractmethod
 
 
-class StatelessEncoder(nn.Module):
-    def __init__(self):
+class StatelessEncoder(base.StatelessModule):
+    def __init__(self, step_mode='s'):
         """
         * :ref:`API in English <StatelessEncoder.__init__-en>`
 
@@ -24,6 +25,7 @@ class StatelessEncoder(nn.Module):
 
         """
         super().__init__()
+        self.step_mode = step_mode
 
     @abstractmethod
     def forward(self, x: torch.Tensor):
@@ -50,7 +52,7 @@ class StatelessEncoder(nn.Module):
 
 
 class StatefulEncoder(base.MemoryModule):
-    def __init__(self, T: int):
+    def __init__(self, T: int, step_mode='s'):
         """
         * :ref:`API in English <StatefulEncoder.__init__-en>`
 
@@ -88,12 +90,14 @@ class StatefulEncoder(base.MemoryModule):
 
         """
         super().__init__()
+        self.step_mode = step_mode
         assert isinstance(T, int) and T >= 1
         self.T = T
         self.register_memory('spike', None)
         self.register_memory('t', 0)
 
-    def forward(self, x: torch.Tensor = None):
+
+    def single_step_forward(self, x: torch.Tensor = None):
         """
         * :ref:`API in English <StatefulEncoder.forward-en>`
 
@@ -115,7 +119,7 @@ class StatefulEncoder(base.MemoryModule):
         """
 
         if self.spike is None:
-            self.encode(x)
+            self.single_step_encode(x)
 
         t = self.t
         self.t += 1
@@ -123,21 +127,24 @@ class StatefulEncoder(base.MemoryModule):
             self.t = 0
         return self.spike[t]
 
-    @abstractmethod
-    def encode(self, x: torch.Tensor):
-        """
-        * :ref:`API in English <StatefulEncoder.encode-en>`
+    def multi_step_forward(self, x_seq: torch.Tensor = None):
+        return functional.multi_step_forward(x_seq, self.single_step_forward)
 
-        .. _StatefulEncoder.encode-cn:
+    @abstractmethod
+    def single_step_encode(self, x: torch.Tensor):
+        """
+        * :ref:`API in English <StatefulEncoder.single_step_encode-en>`
+
+        .. _StatefulEncoder.single_step_encode-cn:
 
         :param x: 输入数据
         :type x: torch.Tensor
         :return: ``spike``, shape 与 ``x.shape`` 相同
         :rtype: torch.Tensor
 
-        * :ref:`中文API <StatefulEncoder.encode-cn>`
+        * :ref:`中文API <StatefulEncoder.single_step_encode-cn>`
 
-        .. _StatefulEncoder.encode-en:
+        .. _StatefulEncoder.single_step_encode-en:
 
         :param x: input data
         :type x: torch.Tensor
@@ -151,7 +158,7 @@ class StatefulEncoder(base.MemoryModule):
 
 
 class PeriodicEncoder(StatefulEncoder):
-    def __init__(self, spike: torch.Tensor):
+    def __init__(self, spike: torch.Tensor, step_mode='s'):
         """
         * :ref:`API in English <PeriodicEncoder.__init__-en>`
 
@@ -171,16 +178,16 @@ class PeriodicEncoder(StatefulEncoder):
 
         The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``
         """
-        super().__init__(spike.shape[0])
+        super().__init__(spike.shape[0], step_mode)
         self.encode(spike)
 
-    def encode(self, spike: torch.Tensor):
+    def single_step_encode(self, spike: torch.Tensor):
         self.spike = spike
         self.T = spike.shape[0]
 
 
 class LatencyEncoder(StatefulEncoder):
-    def __init__(self, T: int, enc_function='linear'):
+    def __init__(self, T: int, enc_function='linear', step_mode='s'):
         """
         * :ref:`API in English <LatencyEncoder.__init__-en>`
 
@@ -258,7 +265,7 @@ class LatencyEncoder(StatefulEncoder):
             The user must assert ``0 <= x <= 1``.
 
         """
-        super().__init__(T)
+        super().__init__(T, step_mode)
         if enc_function == 'log':
             self.alpha = math.exp(T - 1.) - 1.
         elif enc_function != 'linear':
@@ -266,7 +273,7 @@ class LatencyEncoder(StatefulEncoder):
 
         self.enc_function = enc_function
 
-    def encode(self, x: torch.Tensor):
+    def single_step_encode(self, x: torch.Tensor):
         if self.enc_function == 'log':
             t_f = (self.T - 1. - torch.log(self.alpha * x + 1.)).round().long()
         else:
@@ -279,10 +286,8 @@ class LatencyEncoder(StatefulEncoder):
         self.spike = self.spike.permute(d_seq)
 
 
-
-
 class PoissonEncoder(StatelessEncoder):
-    def __init__(self):
+    def __init__(self, step_mode='s'):
         """
         * :ref:`API in English <PoissonEncoder.__init__-en>`
 
@@ -305,14 +310,14 @@ class PoissonEncoder(StatelessEncoder):
 
             The user must assert ``0 <= x <= 1``.
         """
-        super().__init__()
+        super().__init__(step_mode)
 
     def forward(self, x: torch.Tensor):
         out_spike = torch.rand_like(x).le(x).to(x)
         return out_spike
 
 class WeightedPhaseEncoder(StatefulEncoder):
-    def __init__(self, K: int):
+    def __init__(self, K: int, step_mode='s'):
         """
         * :ref:`API in English <WeightedPhaseEncoder.__init__-en>`
 
@@ -368,9 +373,9 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
 
         """
-        super().__init__(K)
+        super().__init__(K, step_mode)
 
-    def encode(self, x: torch.Tensor):
+    def single_step_encode(self, x: torch.Tensor):
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
         self.spike = torch.empty((self.T,) + x.shape, device=x.device)  # Encoding to [T, batch_size, *]
