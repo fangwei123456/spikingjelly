@@ -33,13 +33,13 @@ class MemoryModule(nn.Module):
         """
         * :ref:`API in English <MemoryModule.__init__-en>`
 
-        .. _memoriesModule.__init__-cn:
+        .. _MemoryModule.__init__-cn:
 
         ``MemoryModule`` 是SpikingJelly中所有有状态（记忆）模块的基类。
 
         * :ref:`中文API <MemoryModule.__init__-cn>`
 
-        .. _memoriesModule.__init__-en:
+        .. _MemoryModule.__init__-en:
 
         ``MemoryModule`` is the base class of all stateful modules in SpikingJelly.
 
@@ -55,7 +55,7 @@ class MemoryModule(nn.Module):
         """
         * :ref:`API in English <MemoryModule.step_mode-en>`
 
-        .. _memoriesModule.step_mode-cn:
+        .. _MemoryModule.step_mode-cn:
 
         单步模式的输入输出均为 `shape = [N, *]` ，表示在 `1` 个时间步的数据。
         多步模式的输入输出均为 `shape = [T, N, *]` ，表示在 `T` 个时间步的数据。
@@ -85,7 +85,7 @@ class MemoryModule(nn.Module):
 
         * :ref:`中文API <MemoryModule.step_mode-cn>`
 
-        .. _memoriesModule.step_mode-en:
+        .. _MemoryModule.step_mode-en:
 
         The single-step mode uses data with `shape = [N, *]`, which is the data at one time-step.
         The multi-step mode uses data with `shape = [T, N, *]`, which is the data at `T` time-steps.
@@ -126,7 +126,7 @@ class MemoryModule(nn.Module):
         """
         * :ref:`API in English <MemoryModule.supported_backends-en>`
 
-        .. _memoriesModule.supported_backends-cn:
+        .. _MemoryModule.supported_backends-cn:
 
         返回支持的后端，默认情况下只有 `('torch', )`。如果继承者支持了其他后端，需要覆盖这个函数
 
@@ -135,7 +135,7 @@ class MemoryModule(nn.Module):
 
         * :ref:`中文API <MemoryModule.supported_backends-cn>`
 
-        .. _memoriesModule.supported_backends-en:
+        .. _MemoryModule.supported_backends-en:
 
         Return the supported backends. The default return value is `('torch', )`.
         If the child module supports other backends, it should override this function
@@ -180,7 +180,7 @@ class MemoryModule(nn.Module):
         """
         * :ref:`API in English <MemoryModule.register_memory-en>`
 
-        .. _memoriesModule.register_memory-cn:
+        .. _MemoryModule.register_memory-cn:
 
         :param name: 变量的名字
         :type name: str
@@ -191,7 +191,7 @@ class MemoryModule(nn.Module):
 
         * :ref:`中文API <MemoryModule.register_memory-cn>`
 
-        .. _memoriesModule.register_memory-en:
+        .. _MemoryModule.register_memory-en:
 
         :param name: variable's name
         :type name: str
@@ -210,13 +210,13 @@ class MemoryModule(nn.Module):
         """
         * :ref:`API in English <MemoryModule.reset-en>`
 
-        .. _memoriesModule.reset-cn:
+        .. _MemoryModule.reset-cn:
 
         重置所有有状态变量。
 
         * :ref:`中文API <MemoryModule.reset-cn>`
 
-        .. _memoriesModule.reset-en:
+        .. _MemoryModule.reset-en:
 
         Reset all stateful variables.
         """
@@ -274,7 +274,7 @@ class MemoryModule(nn.Module):
         """
         * :ref:`API in English <MemoryModule.detach-en>`
 
-        .. _memoriesModule.detach-cn:
+        .. _MemoryModule.detach-cn:
 
         从计算图中分离所有有状态变量。
 
@@ -285,7 +285,7 @@ class MemoryModule(nn.Module):
 
         * :ref:`中文API <MemoryModule.detach-cn>`
 
-        .. _memoriesModule.detach-en:
+        .. _MemoryModule.detach-en:
 
         Detach all stateful variables.
 
