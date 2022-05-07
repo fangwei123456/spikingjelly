@@ -157,12 +157,18 @@ class MemoryModule(nn.Module):
         self._backend = value
 
     @abstractmethod
-    def single_step_forward(self, *args, **kwargs):
+    def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
         pass
 
-    @abstractmethod
-    def multi_step_forward(self, *args, **kwargs):
-        pass
+    def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
+        # x_seq.shape = [T, *]
+        T = x_seq.shape[0]
+        y_seq = []
+        for t in range(T):
+            y = self.single_step_forward(x_seq[t], *args, **kwargs)
+            y_seq.append(y.unsqueeze(0))
+
+        return torch.cat(y_seq, 0)
 
     def forward(self, *args, **kwargs):
         if self.step_mode == 's':

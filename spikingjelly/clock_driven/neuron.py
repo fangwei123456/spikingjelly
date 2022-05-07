@@ -199,21 +199,7 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset(spike)
         return spike
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        y_seq = []
 
-        if self.store_v_seq:
-            self.v_seq = []
-
-        for t in range(x_seq.shape[0]):
-            y_seq.append(self.single_step_forward(x_seq[t]).unsqueeze(0))
-            if self.store_v_seq:
-                self.v_seq.append(self.v.unsqueeze(0))
-
-        if self.store_v_seq:
-            self.v_seq = torch.cat(self.v_seq)
-
-        return torch.cat(y_seq)
 
 class AdaptiveBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
