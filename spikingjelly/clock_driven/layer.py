@@ -148,9 +148,6 @@ class NeuNorm(base.MemoryModule):
                                                             keepdim=True)  # x.shape = [batch_size, 1, height, width]
         return in_spikes - self.w * self.x
 
-    def multi_step_forward(self, in_spikes_seq: Tensor):
-        return functional.multi_step_forward(in_spikes_seq, self.single_step_forward)
-
     def extra_repr(self) -> str:
         return f'shape={self.w.shape}'
 
@@ -444,9 +441,6 @@ class SynapseFilter(base.MemoryModule):
 
         return self.out_i
 
-    def multi_step_forward(self, in_spikes_seq: Tensor):
-        return functional.multi_step_forward(in_spikes_seq, self.single_step_forward)
-
 
 class DropConnectLinear(base.MemoryModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
@@ -633,9 +627,6 @@ class DropConnectLinear(base.MemoryModule):
             else:
                 ret = self.activation(samples)
             return ret.mean(dim=0)
-
-    def multi_step_forward(self, x_seq: Tensor) -> Tensor:
-        return functional.multi_step_forward(x_seq, self.single_step_forward)
 
     def extra_repr(self) -> str:
         return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
@@ -921,9 +912,6 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         self.y = self.sub_module(self.element_wise_function(self.y, x))
         return self.y
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        return functional.multi_step_forward(x_seq, self.single_step_forward)
-
     def extra_repr(self) -> str:
         return f'element-wise function={self.element_wise_function}'
 
@@ -997,9 +985,6 @@ class LinearRecurrentContainer(base.MemoryModule):
         x = torch.cat((x, self.y), dim=-1)
         self.y = self.sub_module(self.rc(x))
         return self.y
-
-    def multi_step_forward(self, x_seq: torch.Tensor):
-        return functional.multi_step_forward(x_seq, self.single_step_forward)
 
 
 class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepStatelessModule):
