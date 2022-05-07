@@ -23,6 +23,15 @@ except BaseException as e:
     logging.info(f'spikingjelly.clock_driven.neuron: {e}')
     slayer = None
 
+@torch.jit.script
+def js_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
+    v = (1. - spike) * v + spike * v_reset
+    return v
+
+@torch.jit.script
+def js_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
+    v = v - spike * v_threshold
+    return v
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -157,11 +166,11 @@ class BaseNode(base.MemoryModule):
 
         if self.v_reset is None:
             # soft reset
-            self.v = self.v - spike_d * self.v_threshold
+            self.v = js_soft_reset(self.v, spike_d, self.v_threshold)
 
         else:
             # hard reset
-            self.v = (1. - spike_d) * self.v + spike_d * self.v_reset
+            self.v = js_hard_reset(self.v, spike_d, self.v_reset)
 
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
@@ -199,7 +208,12 @@ class BaseNode(base.MemoryModule):
         self.neuronal_reset(spike)
         return spike
 
-
+    def v_float_to_tensor(self, x: torch.Tensor):
+        if isinstance(self.v, float):
+            v_init = self.v
+            self.v = torch.zeros_like(x.data)
+            if v_init != 0.:
+                torch.fill_(self.v, v_init)
 
 class AdaptiveBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -315,11 +329,7 @@ class IFNode(BaseNode):
         if self.backend == 'torch':
             return super().multi_step_forward(x_seq)
         elif self.backend == 'cupy':
-            if isinstance(self.v, float):
-                v_init = self.v
-                self.v = torch.zeros_like(x_seq[0].data)
-                if v_init != 0.:
-                    torch.fill_(self.v, v_init)
+            self.v_float_to_tensor(x_seq[0])
 
             spike_seq, v_seq = neuron_kernel.MultiStepIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.detach_reset,
@@ -522,18 +532,43 @@ class LIFNode(BaseNode):
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
 
+    @staticmethod
+    @torch.jit.script
+    def neuronal_charge_decay_input_reset0(v: torch.Tensor, x: torch.Tensor, tau: float):
+        v = v + (x - v) / tau
+        return v
+
+    @staticmethod
+    @torch.jit.script
+    def neuronal_charge_decay_input(v: torch.Tensor, x: torch.Tensor, tau: float, v_reset: float):
+        v = v + (x - (v - v_reset)) / tau
+        return v
+
+    @staticmethod
+    @torch.jit.script
+    def neuronal_charge_no_decay_input_reset0(v: torch.Tensor, x: torch.Tensor, tau: float):
+        v = v * (1. - 1. / tau) + x
+        return v
+
+    @staticmethod
+    @torch.jit.script
+    def neuronal_charge_no_decay_input(v: torch.Tensor, x: torch.Tensor, tau: float, v_reset: float):
+        v = v - (v - v_reset) / tau + x
+        return v
+
     def neuronal_charge(self, x: torch.Tensor):
+        self.v_float_to_tensor(x)
         if self.decay_input:
             if self.v_reset is None or self.v_reset == 0.:
-                self.v = self.v + (x - self.v) / self.tau
+                self.v = self.neuronal_charge_decay_input_reset0(self.v, x, self.tau)
             else:
-                self.v = self.v + (x - (self.v - self.v_reset)) / self.tau
+                self.v = self.neuronal_charge_decay_input(self.v, x, self.tau, self.v_reset)
 
         else:
             if self.v_reset is None or self.v_reset == 0.:
-                self.v = self.v * (1. - 1. / self.tau) + x
+                self.v = self.neuronal_charge_no_decay_input_reset0(self.v, x, self.tau)
             else:
-                self.v = self.v - (self.v - self.v_reset) / self.tau + x
+                self.v = self.neuronal_charge_no_decay_input(self.v, x, self.tau, self.v_reset)
 
     def single_step_cupy_fp32_inference_forward(self, x: torch.Tensor):
         # cupy is installed && eval mode && fp32
@@ -639,11 +674,7 @@ class LIFNode(BaseNode):
         if self.backend == 'torch':
             return super().multi_step_forward(x_seq)
         elif self.backend == 'cupy':
-            if isinstance(self.v, float):
-                v_init = self.v
-                self.v = torch.zeros_like(x_seq[0].data)
-                if v_init != 0.:
-                    torch.fill_(self.v, v_init)
+            self.v_float_to_tensor(x_seq[0])
 
             spike_seq, v_seq = neuron_kernel.MultiStepLIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.decay_input, self.tau, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
@@ -778,11 +809,7 @@ class ParametricLIFNode(BaseNode):
         if self.backend == 'torch':
             return super().multi_step_forward(x_seq)
         elif self.backend == 'cupy':
-            if isinstance(self.v, float):
-                v_init = self.v
-                self.v = torch.zeros_like(x_seq[0].data)
-                if v_init != 0.:
-                    torch.fill_(self.v, v_init)
+            self.v_float_to_tensor(x_seq[0])
 
             spike_seq, v_seq = neuron_kernel.MultiStepParametricLIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.w.sigmoid(), self.decay_input, self.v_threshold, self.v_reset, self.detach_reset, self.surrogate_function.cuda_code)
@@ -1002,11 +1029,7 @@ class EIFNode(BaseNode):
         if self.backend == 'torch':
             return super().multi_step_forward(x_seq)
         elif self.backend == 'cupy':
-            if isinstance(self.v, float):
-                v_init = self.v
-                self.v = torch.zeros_like(x_seq[0].data)
-                if v_init != 0.:
-                    torch.fill_(self.v, v_init)
+            self.v_float_to_tensor(x_seq[0])
 
             spike_seq, v_seq = neuron_kernel.MultiStepEIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest,
