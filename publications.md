@@ -21,6 +21,8 @@
 | [FEAS: A Faster Event-driven Accelerator Supporting Inhibitory Spiking Neural Network](https://ieeexplore.ieee.org/document/9720483/) |                                                              |
 | [Neuromorphic Data Augmentation for Training Spiking Neural Networks](https://arxiv.org/abs/2203.06145) |                                                              |
 | [SIT: A Bionic and Non-Linear Neuron for Spiking Neural Network](https://arxiv.org/abs/2203.16117) |                                                              |
-|
+| [Building and training a deep spiking neural network for ECG classification](https://www.sciencedirect.com/science/article/pii/S1746809422002713) |                                                              |
+| [DynSNN: A Dynamic Approach to Reduce Redundancy in Spiking Neural Networks](https://ieeexplore.ieee.org/abstract/document/9746566) |                                                              |
+
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
