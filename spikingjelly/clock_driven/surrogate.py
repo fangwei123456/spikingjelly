@@ -162,6 +162,12 @@ class MultiArgsSurrogateFunctionBase(nn.Module):
     def cuda_code_end_comments(self):
         return f'// end: spikingjelly.clock_driven.surrogate.{self._get_name()}.cuda_code'
 
+@torch.jit.script
+def piecewise_quadratic_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    x_abs = x.abs()
+    mask = (x_abs > (1 / alpha))
+    grad_x = (grad_output * (- (alpha ** 2) * x_abs + alpha)).masked_fill_(mask, 0)
+    return grad_x, None
 
 class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
@@ -173,12 +179,7 @@ class piecewise_quadratic(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            x_abs = ctx.saved_tensors[0].abs()
-            mask = (x_abs > (1 / ctx.alpha))
-            grad_x = (grad_output * (- (ctx.alpha ** 2) * x_abs + ctx.alpha)).masked_fill_(mask, 0)
-        return grad_x, None
+        return piecewise_quadratic_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 
 class PiecewiseQuadratic(SurrogateFunctionBase):
@@ -255,7 +256,8 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         return piecewise_quadratic.apply(x, alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha):
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
         mask0 = (x > (1.0 / alpha)).to(x)
         mask1 = (x.abs() <= (1.0 / alpha)).to(x)
 
@@ -283,6 +285,10 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+@torch.jit.script
+def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return alpha / 2 * (- alpha * x.abs()).exp_() * grad_output, None
+
 class piecewise_exp(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
@@ -293,11 +299,7 @@ class piecewise_exp(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            grad_x = ctx.alpha / 2 * (- ctx.alpha * ctx.saved_tensors[0].abs()).exp_() * grad_output
-
-        return grad_x, None
+        return piecewise_exp_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 
 class PiecewiseExp(SurrogateFunctionBase):
@@ -363,11 +365,11 @@ class PiecewiseExp(SurrogateFunctionBase):
         return piecewise_exp.apply(x, alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha):
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
         mask_nonnegative = heaviside(x)
-        mask_sign = mask_nonnegative * 2 - 1
-        exp_x = (mask_sign * x * -alpha).exp_() / 2
-
+        mask_sign = mask_nonnegative * 2. - 1.
+        exp_x = (mask_sign * x * -alpha).exp_() / 2.
         return mask_nonnegative - exp_x * mask_sign
 
     # plt.style.use(['science', 'muted', 'grid'])
@@ -393,6 +395,11 @@ class PiecewiseExp(SurrogateFunctionBase):
     # plt.show()
 
 
+@torch.jit.script
+def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    sgax = (x * alpha).sigmoid_()
+    return grad_output * (1. - sgax) * sgax * alpha, None
+
 class sigmoid(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
@@ -403,12 +410,7 @@ class sigmoid(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            sgax = (ctx.saved_tensors[0] * ctx.alpha).sigmoid_()
-            grad_x = grad_output * (1. - sgax) * sgax * ctx.alpha
-
-        return grad_x, None
+        return sigmoid_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 
 class Sigmoid(SurrogateFunctionBase):
@@ -467,6 +469,7 @@ class Sigmoid(SurrogateFunctionBase):
         return sigmoid.apply(x, alpha)
 
     @staticmethod
+    @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha):
         return (x * alpha).sigmoid()
 
@@ -517,6 +520,9 @@ class Sigmoid(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+@torch.jit.script
+def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return grad_output / (2 * alpha * (1 / alpha + x.abs()).pow_(2)), None
 
 class soft_sign(torch.autograd.Function):
     @staticmethod
@@ -528,10 +534,7 @@ class soft_sign(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            grad_x = grad_output / (2 * ctx.alpha * (1 / ctx.alpha + ctx.saved_tensors[0].abs()).pow_(2))
-        return grad_x, None
+        return soft_sign_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 
 class SoftSign(SurrogateFunctionBase):
@@ -591,8 +594,9 @@ class SoftSign(SurrogateFunctionBase):
         return soft_sign.apply(x, alpha)
 
     @staticmethod
+    @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha):
-        return (F.softsign(x * alpha) + 1) / 2
+        return (F.softsign(x * alpha) + 1.) / 2.
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
@@ -616,6 +620,9 @@ class SoftSign(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+@torch.jit.script
+def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return alpha / 2 / (1 + (math.pi / 2 *alpha * x).pow_(2)) * grad_output, None
 
 class atan(torch.autograd.Function):
     @staticmethod
@@ -627,11 +634,7 @@ class atan(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            grad_x = ctx.alpha / 2 / (1 + (math.pi / 2 * ctx.alpha * ctx.saved_tensors[0]).pow_(2)) * grad_output
-
-        return grad_x, None
+        return atan_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 class ATan(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
@@ -676,7 +679,8 @@ class ATan(SurrogateFunctionBase):
         return atan.apply(x, alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha):
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
         return (math.pi / 2 * alpha * x).atan_() / math.pi + 0.5
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
@@ -724,7 +728,9 @@ class ATan(SurrogateFunctionBase):
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
     # plt.show()
-
+@torch.jit.script
+def nonzero_sign_log_abs_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return grad_output / (1 / alpha + x.abs()), None
 
 class nonzero_sign_log_abs(torch.autograd.Function):
     @staticmethod
@@ -736,12 +742,7 @@ class nonzero_sign_log_abs(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            grad_x = grad_output / (1 / ctx.alpha + ctx.saved_tensors[0].abs())
-
-
-        return grad_x, None
+        return nonzero_sign_log_abs_backward((grad_output, ctx.saved_tensors[0], ctx.alpha))
 
 
 class NonzeroSignLogAbs(SurrogateFunctionBase):
@@ -827,9 +828,10 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         return nonzero_sign_log_abs.apply(x, alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha):
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
         # the gradient of ``(heaviside(x) * 2 - 1) * (alpha * x.abs() + 1).log()`` by autograd is wrong at ``x==0``
-        mask_p = heaviside(x) * 2 - 1
+        mask_p = heaviside(x) * 2. - 1.
         return mask_p * (alpha * mask_p * x + 1).log()
 
     # plt.style.use(['science', 'muted', 'grid'])
@@ -854,6 +856,9 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+@torch.jit.script
+def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return grad_output * (- (x * alpha).pow_(2)).exp_() * (alpha / math.sqrt(math.pi)), None
 
 class erf(torch.autograd.Function):
     @staticmethod
@@ -865,11 +870,7 @@ class erf(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            grad_x = grad_output * (- (ctx.saved_tensors[0] * ctx.alpha).pow_(2)).exp_() * (ctx.alpha / math.sqrt(math.pi))
-
-        return grad_x, None
+        return erf_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
 
 class Erf(SurrogateFunctionBase):
@@ -940,8 +941,9 @@ class Erf(SurrogateFunctionBase):
         return erf.apply(x, alpha)
 
     @staticmethod
+    @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha):
-        return torch.erfc_(-alpha * x) / 2
+        return torch.erfc_(-alpha * x) / 2.
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
@@ -965,6 +967,11 @@ class Erf(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+@torch.jit.script
+def piecewise_leaky_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, w: float, c: float):
+    mask_width = (x.abs() < w)
+    mask_c = mask_width.logical_not()
+    return grad_output * x.masked_fill(mask_width, 1 / w).masked_fill(mask_c, c), None, None
 
 class piecewise_leaky_relu(torch.autograd.Function):
     @staticmethod
@@ -977,12 +984,7 @@ class piecewise_leaky_relu(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        grad_x = None
-        if ctx.needs_input_grad[0]:
-            mask_width = (ctx.saved_tensors[0].abs() < ctx.w)
-            mask_c = mask_width.logical_not()
-            grad_x = grad_output * ctx.saved_tensors[0].masked_fill(mask_width, 1 / ctx.w).masked_fill(mask_c, ctx.c)
-        return grad_x, None, None
+        return piecewise_leaky_relu_backward(grad_output, ctx.saved_tensors[0], ctx.w, ctx.c)
 
 
 class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
@@ -1071,7 +1073,8 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
         return piecewise_leaky_relu.apply(x, w, c)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, w, c):
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, w: float, c: float):
         mask0 = (x < -w).to(x)
         mask1 = (x > w).to(x)
         mask2 = torch.ones_like(x.data) - mask0 - mask1
