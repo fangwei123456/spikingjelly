@@ -23,16 +23,6 @@ except BaseException as e:
     logging.info(f'spikingjelly.clock_driven.neuron: {e}')
     slayer = None
 
-@torch.jit.script
-def js_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
-    v = (1. - spike) * v + spike * v_reset
-    return v
-
-@torch.jit.script
-def js_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
-    v = v - spike * v_threshold
-    return v
-
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
@@ -108,6 +98,18 @@ class BaseNode(base.MemoryModule):
             if not hasattr(self, 'v_seq'):
                 self.register_memory('v_seq', None)
 
+    @staticmethod
+    @torch.jit.script
+    def js_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
+        v = (1. - spike) * v + spike * v_reset
+        return v
+
+    @staticmethod
+    @torch.jit.script
+    def js_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
+        v = v - spike * v_threshold
+        return v
+
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
         """
@@ -166,11 +168,11 @@ class BaseNode(base.MemoryModule):
 
         if self.v_reset is None:
             # soft reset
-            self.v = js_soft_reset(self.v, spike_d, self.v_threshold)
+            self.v = self.js_soft_reset(self.v, spike_d, self.v_threshold)
 
         else:
             # hard reset
-            self.v = js_hard_reset(self.v, spike_d, self.v_reset)
+            self.v = self.js_hard_reset(self.v, spike_d, self.v_reset)
 
     def extra_repr(self):
         return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
