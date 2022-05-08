@@ -9,7 +9,6 @@ from typing import Optional, List, Tuple, Union
 from typing import Callable
 from torch.nn.modules.batchnorm import _BatchNorm
 
-
 class Conv2d(nn.Conv2d, base.StatelessModule):
     def __init__(
             self,
@@ -24,21 +23,34 @@ class Conv2d(nn.Conv2d, base.StatelessModule):
             padding_mode: str = 'zeros',
             device=None,
             dtype=None,
-            step_mode='s'
+            step_mode='s',
+            channels_last=True
     ) -> None:
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode,
                          device, dtype)
         self.step_mode = step_mode
+        self.channels_last = channels_last
+        if self.channels_last and torch.backends.cudnn.version() < 7603:
+            self.channels_last = False
+            print(f'CUDNN version is {torch.backends.cudnn.version()} and does not support for channels last memory format. The minor supported version is 7603.')
 
+    # https://pytorch.org/tutorials/intermediate/memory_format_tutorial.html
+    # Conv, Batchnorm modules using cudnn backends support channels last (only works for CudNN >= 7.6)
+    # if torch.backends.cudnn.version() >= 7603:
     def forward(self, x: Tensor):
+        if self.channels_last:
+            self.to(memory_format=torch.channels_last)
+            x = x.to(memory_format=torch.channels_last)
+
         if self.step_mode == 's':
-            return super().forward(x)
+            x = super().forward(x)
 
         elif self.step_mode == 'm':
             if x.dim() != 5:
                 raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
-            return functional.seq_to_ann_forward(x, super().forward)
+            x = functional.seq_to_ann_forward(x, super().forward)
 
+        return x
 
 class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
     def __init__(
@@ -50,12 +62,22 @@ class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
             track_running_stats=True,
             device=None,
             dtype=None,
-            step_mode='s'
+            step_mode='s',
+            channels_last=True
     ):
         super().__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
         self.step_mode = step_mode
+        self.channels_last = channels_last
+        if self.channels_last and torch.backends.cudnn.version() < 7603:
+            self.channels_last = False
+            print(
+                f'CUDNN version is {torch.backends.cudnn.version()} and does not support for channels last memory format. The minor supported version is 7603.')
 
     def forward(self, x: Tensor):
+        if self.channels_last:
+            self.to(memory_format=torch.channels_last)
+            x = x.to(memory_format=torch.channels_last)
+
         if self.step_mode == 's':
             return super().forward(x)
 
