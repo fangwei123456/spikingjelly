@@ -14,6 +14,11 @@ except BaseException as e:
     logging.info(f'spikingjelly.clock_driven.cu_kernel_opt: {e}')
     pass
 
+def cpu_timer(f, *args, **kwargs):
+    start = time.perf_counter()
+    f(*args, **kwargs)
+    return time.perf_counter() - start
+
 def cuda_timer(device, f, *args, **kwargs):
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
@@ -37,17 +42,32 @@ def cal_fun_t(n, device, f, *args, **kwargs):
 def cal_blocks(numel: int):
     return (numel + configure.cuda_threads - 1) // configure.cuda_threads
 
+def get_memory_format(x: torch.Tensor):
+    for memory_format in (torch.contiguous_format, torch.channels_last):
+        if x.is_contiguous(memory_format=memory_format):
+            return memory_format
+    return None
+
 def get_contiguous(*args):
     ret_list = []
+
+    memory_format = torch.contiguous_format
     for item in args:
         if isinstance(item, torch.Tensor):
-            ret_list.append(item.contiguous())
+            if get_memory_format(item) == torch.channels_last:
+                memory_format = torch.channels_last
+                break
+                # channels_last has priority
+                # if one tensor uses channels_last, others will be set to channels_last
+
+    for item in args:
+        if isinstance(item, torch.Tensor):
+            ret_list.append(item.contiguous(memory_format))
 
         elif isinstance(item, cupy.ndarray):
             ret_list.append(cupy.ascontiguousarray(item))
-
         else:
-            raise TypeError
+            raise TypeError(type(item))
     return ret_list
 
 def wrap_args_to_raw_kernel(device: int, *args):
@@ -57,7 +77,7 @@ def wrap_args_to_raw_kernel(device: int, *args):
     for item in args:
         if isinstance(item, torch.Tensor):
             assert item.get_device() == device
-            assert item.is_contiguous()
+            assert item.is_contiguous(torch.contiguous_format) or item.is_contiguous(torch.channels_last)
             ret_list.append(item.data_ptr())
 
         elif isinstance(item, cupy.ndarray):
