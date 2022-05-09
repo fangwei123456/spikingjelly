@@ -1,5 +1,5 @@
 import torch
-from spikingjelly.clock_driven import neuron
+from spikingjelly.activation_based import neuron
 from spikingjelly import visualizing
 from matplotlib import pyplot as plt
 import numpy as np

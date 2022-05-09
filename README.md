@@ -72,7 +72,7 @@ class Net(nn.Module):
 This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
->>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+>>> import spikingjelly.activation_based.examples.lif_fc_mnist as lif_fc_mnist
 >>> lif_fc_mnist.main()
 ```
 
@@ -114,7 +114,7 @@ class ANN(nn.Module):
 This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
 
 ```python
->>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+>>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
 >>> cnn_mnist.main()
 ```
 
