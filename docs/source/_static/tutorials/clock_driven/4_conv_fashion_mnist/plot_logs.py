@@ -1,6 +1,6 @@
 from matplotlib import pyplot as plt
 import numpy as np
-from spikingjelly.clock_driven.examples.conv_fashion_mnist import Net
+from spikingjelly.activation_based.examples.conv_fashion_mnist import Net
 from spikingjelly import visualizing
 import torch
 import torch.nn as nn
@@ -25,17 +25,17 @@ def plot_log(csv_file, title, x_label, y_label, figsize=(12, 8), plot_max=False)
     # plt.show()
 if __name__ == '__main__':
     plt.style.use(['science', 'muted'])
-    plot_log('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/run-logs-tag-train_accuracy.csv', 'Accuracy on train batch',
+    plot_log('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/run-logs-tag-train_accuracy.csv', 'Accuracy on train batch',
              'iteration', 'accuracy')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/train.svg')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/train.pdf')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/train.png')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/train.svg')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/train.pdf')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/train.png')
     plt.clf()
-    plot_log('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/run-logs-tag-test_accuracy.csv', 'Accuracy on test dataset',
+    plot_log('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/run-logs-tag-test_accuracy.csv', 'Accuracy on test dataset',
              'epoch', 'accuracy', plot_max=True)
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/test.svg')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/test.pdf')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/test.png')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/test.svg')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/test.pdf')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/test.png')
     exit()
     dataset_dir = input('输入保存Fashion MNIST数据集的位置，例如“./”\n input root directory for saving Fashion MNIST dataset, e.g., "./": ')
 

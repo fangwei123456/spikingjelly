@@ -23,7 +23,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     .. code-block:: python
 
         import torch
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
         import numpy as np
@@ -113,7 +113,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
         import torch
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
 
         neuron_num = 4
         T = 50
@@ -174,7 +174,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     .. code-block:: python
 
         import torch
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
         import numpy as np
@@ -319,7 +319,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     .. code-block:: python
 
         import torch
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
 

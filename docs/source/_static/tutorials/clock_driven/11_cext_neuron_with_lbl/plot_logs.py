@@ -22,22 +22,22 @@ if __name__ == '__main__':
     plt.style.use(['science', 'muted'])
     fig = plt.figure(figsize=figsize, dpi=200)
 
-    plot_log('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/run-4_conv_fashion_mnist-tag-train_acc.csv', 'Accuracy on train set',
+    plot_log('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/run-4_conv_fashion_mnist-tag-train_acc.csv', 'Accuracy on train set',
              'iteration', 'accuracy', label='Naive PyTorch with step-by-step')
-    plot_log('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/run-11_cext_neuron_with_lbl-tag-train_acc.csv', 'Accuracy on train set',
+    plot_log('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/run-11_cext_neuron_with_lbl-tag-train_acc.csv', 'Accuracy on train set',
              'iteration', 'accuracy', label='CUDA Multi-Step with layer-by-layer')
     plt.legend(frameon=True)
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.svg')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.pdf')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.png')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/train.svg')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/train.pdf')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/train.png')
     plt.clf()
-    plot_log('./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/run-4_conv_fashion_mnist-tag-test_acc.csv', 'Accuracy on test set',
+    plot_log('./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/run-4_conv_fashion_mnist-tag-test_acc.csv', 'Accuracy on test set',
              'epoch', 'accuracy', plot_max=True, label='Naive PyTorch with step-by-step')
-    plot_log('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/run-11_cext_neuron_with_lbl-tag-test_acc.csv', 'Accuracy on test set',
+    plot_log('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/run-11_cext_neuron_with_lbl-tag-test_acc.csv', 'Accuracy on test set',
              'epoch', 'accuracy', plot_max=True, label='CUDA Multi-Step with layer-by-layer')
     plt.legend(frameon=True)
 
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.svg')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.pdf')
-    plt.savefig('./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.png')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/test.svg')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/test.pdf')
+    plt.savefig('./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/test.png')
     exit()

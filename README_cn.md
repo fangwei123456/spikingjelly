@@ -72,7 +72,7 @@ class Net(nn.Module):
 这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.clock_driven.html)。可以通过Python命令行直接运行这份代码，训练MNIST分类：
 
 ```python
->>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
+>>> import spikingjelly.activation_based.examples.lif_fc_mnist as lif_fc_mnist
 >>> lif_fc_mnist.main()
 ```
 
@@ -115,7 +115,7 @@ class ANN(nn.Module):
 在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
 
 ```python
->>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+>>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
 >>> cnn_mnist.main()
 ```
 
