@@ -127,9 +127,6 @@ class StatefulEncoder(base.MemoryModule):
             self.t = 0
         return self.spike[t]
 
-    def multi_step_forward(self, x_seq: torch.Tensor = None):
-        return functional.multi_step_forward(x_seq, self.single_step_forward)
-
     @abstractmethod
     def single_step_encode(self, x: torch.Tensor):
         """
@@ -179,7 +176,6 @@ class PeriodicEncoder(StatefulEncoder):
         The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``
         """
         super().__init__(spike.shape[0], step_mode)
-        self.encode(spike)
 
     def single_step_encode(self, spike: torch.Tensor):
         self.spike = spike
