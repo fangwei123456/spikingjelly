@@ -21,13 +21,18 @@ class Conv2d(nn.Conv2d, base.StatelessModule):
             groups: int = 1,
             bias: bool = True,
             padding_mode: str = 'zeros',
-            device=None,
-            dtype=None,
-            step_mode='s',
-            channels_last=True
+            step_mode: str = 's',
+            channels_last: bool = True
     ) -> None:
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode,
-                         device, dtype)
+        """
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+        :param channels_last: whether use channels_last memory format
+        :type channels_last: bool
+
+        Refer to :class:`torch.nn.Conv2d` for other parameters' information.
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
         self.step_mode = step_mode
         self.channels_last = channels_last
         if self.channels_last and torch.backends.cudnn.version() < 7603:
@@ -59,12 +64,18 @@ class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
             momentum=0.1,
             affine=True,
             track_running_stats=True,
-            device=None,
-            dtype=None,
             step_mode='s',
             channels_last=True
     ):
-        super().__init__(num_features, eps, momentum, affine, track_running_stats, device, dtype)
+        """
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+        :param channels_last: whether use channels_last memory format
+        :type channels_last: bool
+
+        Refer to :class:`torch.nn.BatchNorm2d` for other parameters' information.
+        """
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
         self.channels_last = channels_last
         if self.channels_last and torch.backends.cudnn.version() < 7603:
@@ -88,9 +99,14 @@ class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
 
 
 class Linear(nn.Linear, base.StatelessModule):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True,
-                 device=None, dtype=None, step_mode='s') -> None:
-        super().__init__(in_features, out_features, bias, device, dtype)
+    def __init__(self, in_features: int, out_features: int, bias: bool = True, step_mode='s') -> None:
+        """
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.Linear` for other parameters' information.
+        """
+        super().__init__(in_features, out_features, bias)
         self.step_mode = step_mode
 
 
@@ -787,7 +803,7 @@ class PrintShapeModule(nn.Module):
         return x
 
 
-class ConvBatchNorm2d(base.StatelessModule):
+class ConvBatchNorm2d(nn.Module, base.StatelessModule):
     def __init__(self, in_channels: int,
                  out_channels: int,
                  kernel_size: _size_2_t,
@@ -799,7 +815,7 @@ class ConvBatchNorm2d(base.StatelessModule):
                  eps=1e-5,
                  momentum=0.1,
                  affine=True,
-                 track_running_stats=True, step_mode='s'):
+                 track_running_stats=True, step_mode='s', channels_last: bool = True):
         """
         A fused Conv2d-BatchNorm2d module. See :class:`torch.nn.Conv2d` and :class:`torch.nn.BatchNorm2d` for params information.
 
@@ -837,7 +853,19 @@ class ConvBatchNorm2d(base.StatelessModule):
         self.bn = nn.BatchNorm2d(num_features=out_channels, eps=eps, momentum=momentum, affine=affine,
                                  track_running_stats=track_running_stats)
 
+        self.step_mode = step_mode
+        self.channels_last = channels_last
+        if self.channels_last and torch.backends.cudnn.version() < 7603:
+            self.channels_last = False
+            print(f'CUDNN version is {torch.backends.cudnn.version()} and does not support for channels last memory format. The minor supported version is 7603.')
+
+        if self.channels_last:
+            self.to(memory_format=torch.channels_last)
+
     def forward(self, x: Tensor):
+        if self.channels_last:
+            x = x.to(memory_format=torch.channels_last)
+
         if self.step_mode == 's':
             return self.bn(self.conv(x))
         elif self.step_mode == 'm':
@@ -1019,11 +1047,7 @@ class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepStatelessModule
         torch.nn.init.constant_(self.weight, alpha * v_th)
 
     def forward(self, x_seq):
-        y_shape = [x_seq.shape[0], x_seq.shape[1]]
-        y = x_seq.flatten(0, 1)
-        y = super().forward(y)
-        y_shape.extend(y.shape[1:])
-        return y.view(y_shape)
+        return functional.seq_to_ann_forward(x_seq, super().forward)
 
 
 class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
@@ -1058,11 +1082,6 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
-    def _check_input_dim(self, x):
-        if x.dim() != 2 and x.dim() != 3:
-            raise ValueError(
-                f'expected 3D or 4D input with shape [T, N, C] or [T, N, C, M], but got input with shape {x.shape}')
-
 
 class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
@@ -1096,10 +1115,6 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
-    def _check_input_dim(self, x):
-        if x.dim() != 4:
-            raise ValueError(f'expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}')
-
 
 class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
@@ -1132,10 +1147,6 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         The Threshold-Dependent Batch Normalization (tdBN) proposed in `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_.
         """
         super().__init__(alpha, v_th, *args, **kwargs)
-
-    def _check_input_dim(self, x):
-        if x.dim() != 5:
-            raise ValueError(f'expected 6D input with shape [T, N, C, D, H, W], but got input with shape {x.shape}')
 
 
 class TemporalWiseAttention(base.MultiStepStatelessModule):

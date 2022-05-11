@@ -220,7 +220,7 @@ class BaseNode(base.MemoryModule):
 class AdaptiveBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0.,
-                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False):
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         # b: jump amplitudes
         # a: subthreshold coupling
         assert isinstance(w_rest, float)
@@ -229,7 +229,7 @@ class AdaptiveBaseNode(BaseNode):
         assert isinstance(a, float)
         assert isinstance(b, float)
 
-        super.__init__(v_threshold, v_reset, surrogate_function, detach_reset)
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
 
         self.register_memory('w', w_rest)
 
@@ -239,15 +239,18 @@ class AdaptiveBaseNode(BaseNode):
         self.a = a
         self.b = b
 
+    @staticmethod
+    @torch.jit.script
+    def js_neuronal_adaptation(w: float, tau_w: float, a: float, b: float, v_rest: float, spike: torch.Tensor, v: torch.Tensor):
+        return w + 1. / tau_w * (a * (v - v_rest) - w) + b * spike
 
     def neuronal_adaptation(self, spike):
-        self.w = self.w + 1. / self.tau_w * (self.a * (self.v - self.v_rest) - self.w) + self.b * spike
+        self.w = self.js_neuronal_adaptation(self.w, self.tau_w, self.a, self.b, self.v_rest, spike, self.v)
 
     def extra_repr(self):
         return super().extra_repr() + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
 
-    @overload
-    def forward(self, x: torch.Tensor):
+    def single_step_forward(self, x: torch.Tensor):
         self.neuronal_charge(x)
         spike = self.neuronal_fire()
         self.neuronal_adaptation(spike)
