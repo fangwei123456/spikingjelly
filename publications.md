@@ -23,6 +23,7 @@
 | [SIT: A Bionic and Non-Linear Neuron for Spiking Neural Network](https://arxiv.org/abs/2203.16117) |                                                              |
 | [Building and training a deep spiking neural network for ECG classification](https://www.sciencedirect.com/science/article/pii/S1746809422002713) |                                                              |
 | [DynSNN: A Dynamic Approach to Reduce Redundancy in Spiking Neural Networks](https://ieeexplore.ieee.org/abstract/document/9746566) |                                                              |
+| [Object Detection with Spiking Neural Networks on Automotive Event Data](https://arxiv.org/abs/2205.04339) |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
