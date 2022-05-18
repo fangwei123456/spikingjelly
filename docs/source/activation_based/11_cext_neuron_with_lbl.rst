@@ -10,13 +10,13 @@ CUDA加速的神经元
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import neuron, surrogate, cu_kernel_opt
+    from spikingjelly.clock_driven import neuron, surrogate, cuda_utils
     import torch
 
 
     def cal_forward_t(multi_step_neuron, x, repeat_times):
         with torch.no_grad():
-            used_t = cu_kernel_opt.cal_fun_t(repeat_times, x.device, multi_step_neuron, x)
+            used_t = cuda_utils.cal_fun_t(repeat_times, x.device, multi_step_neuron, x)
             multi_step_neuron.reset()
             return used_t * 1000
 
@@ -29,7 +29,7 @@ CUDA加速的神经元
 
     def cal_forward_backward_t(multi_step_neuron, x, repeat_times):
         x.requires_grad_(True)
-        used_t = cu_kernel_opt.cal_fun_t(repeat_times, x.device, forward_backward, multi_step_neuron, x)
+        used_t = cuda_utils.cal_fun_t(repeat_times, x.device, forward_backward, multi_step_neuron, x)
         return used_t * 1000
 
 
