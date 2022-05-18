@@ -585,12 +585,12 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
         :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``i``, ``f``, ``o``
-        :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :type surrogate_function1: spikingjelly.activation_based.surrogate.SurrogateFunctionBase
 
         :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
             will be set as ``surrogate_function1``. Default: ``None``
-        :type surrogate_function2: None or spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :type surrogate_function2: None or spikingjelly.activation_based.surrogate.SurrogateFunctionBase
 
         .. admonition:: Note
             :class: note
@@ -798,11 +798,11 @@ class SpikingLSTM(SpikingRNNBase):
         :type bidirectional: bool
         :param surrogate_function1: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``i``, ``f``, ``o``
-        :type surrogate_function1: spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :type surrogate_function1: spikingjelly.activation_based.surrogate.SurrogateFunctionBase
         :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
             will be set as ``surrogate_function1``. Default: ``None``
-        :type surrogate_function2: None or spikingjelly.clock_driven.surrogate.SurrogateFunctionBase
+        :type surrogate_function2: None or spikingjelly.activation_based.surrogate.SurrogateFunctionBase
         '''
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
                          surrogate_function1, surrogate_function2)

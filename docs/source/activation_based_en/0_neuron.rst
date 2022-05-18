@@ -7,7 +7,7 @@ Translator: `YeYumin <https://github.com/YEYUMIN>`_
 This tutorial focuses on :class:`spikingjelly.clock_driven.neuron` and introduces spiking neurons and clock-driven
 simulation methods.
 
-Spiking Neuron Model
+Spiking Nneuron Model
 -----------------------------------------------
 In ``spikingjelly``, we define the neuron which can only output spikes, i.e. 0 or 1, as a "spiking neuron".
 Networks that use spiking neurons are called Spiking Neural Networks (SNNs).
