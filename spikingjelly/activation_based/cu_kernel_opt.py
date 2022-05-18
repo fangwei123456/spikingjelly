@@ -42,27 +42,12 @@ def cal_fun_t(n, device, f, *args, **kwargs):
 def cal_blocks(numel: int):
     return (numel + configure.cuda_threads - 1) // configure.cuda_threads
 
-def get_memory_format(x: torch.Tensor):
-    for memory_format in (torch.contiguous_format, torch.channels_last):
-        if x.is_contiguous(memory_format=memory_format):
-            return memory_format
-    return None
-
 def get_contiguous(*args):
     ret_list = []
 
-    memory_format = torch.contiguous_format
     for item in args:
         if isinstance(item, torch.Tensor):
-            if get_memory_format(item) == torch.channels_last:
-                memory_format = torch.channels_last
-                break
-                # channels_last has priority
-                # if one tensor uses channels_last, others will be set to channels_last
-
-    for item in args:
-        if isinstance(item, torch.Tensor):
-            ret_list.append(item.contiguous(memory_format))
+            ret_list.append(item.contiguous())
 
         elif isinstance(item, cupy.ndarray):
             ret_list.append(cupy.ascontiguousarray(item))
@@ -77,7 +62,7 @@ def wrap_args_to_raw_kernel(device: int, *args):
     for item in args:
         if isinstance(item, torch.Tensor):
             assert item.get_device() == device
-            assert item.is_contiguous(torch.contiguous_format) or item.is_contiguous(torch.channels_last)
+            assert item.is_contiguous()
             ret_list.append(item.data_ptr())
 
         elif isinstance(item, cupy.ndarray):

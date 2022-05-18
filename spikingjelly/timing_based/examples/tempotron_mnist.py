@@ -5,8 +5,8 @@ import torch.nn.functional as F
 import torch.utils.data as data
 import torchvision
 from torch.utils.tensorboard import SummaryWriter
-import spikingjelly.time_based.encoding as encoding
-import spikingjelly.time_based.neuron as neuron
+import spikingjelly.timing_based.encoding as encoding
+import spikingjelly.timing_based.neuron as neuron
 from tqdm import tqdm
 
 

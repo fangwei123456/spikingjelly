@@ -231,7 +231,7 @@ def main():
 
         python -m spikingjelly.activation_based.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 1024
 
-    See the tutorial :doc:`./clock_driven_en/14_classify_dvsg` for more details.
+    See the tutorial :doc:`./activation_based_en/14_classify_dvsg` for more details.
     '''
     parser = argparse.ArgumentParser(description='Classify DVS128 Gesture')
     parser.add_argument('-T', default=16, type=int, help='simulating time-steps')
