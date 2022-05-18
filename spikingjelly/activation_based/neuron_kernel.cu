@@ -1,4 +1,4 @@
-// This file is created by spikingjelly.clock_driven.neuron_kernel.save_cuda_codes.
+// This file is created by spikingjelly.clock_driven.cuda_utils.save_cuda_codes.
 // Note that codes in this file will not be executed This file is just created for reading.
 
 // MultiStepIFNodePTT

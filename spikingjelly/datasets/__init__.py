@@ -21,7 +21,7 @@ np_savez = np.savez_compressed if configure.save_datasets_compressed else np.sav
 
 try:
     import cupy
-    from ..activation_based import cu_kernel_opt
+    from ..activation_based import cuda_utils
 
     padded_sequence_mask_kernel_code = r'''
     extern "C" __global__
@@ -556,16 +556,16 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
 
     if device_id >= 0 and cupy is not None:
         mask = torch.zeros([T, N], dtype=bool, device=sequence_len.device)
-        with cu_kernel_opt.DeviceEnvironment(device_id):
+        with cuda_utils.DeviceEnvironment(device_id):
             T = cupy.asarray(T)
             N = cupy.asarray(N)
-            sequence_len, mask, T, N = cu_kernel_opt.get_contiguous(sequence_len.to(torch.int), mask, T, N)
+            sequence_len, mask, T, N = cuda_utils.get_contiguous(sequence_len.to(torch.int), mask, T, N)
             kernel_args = [sequence_len, mask, T, N]
             kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
-            blocks = cu_kernel_opt.cal_blocks(N)
+            blocks = cuda_utils.cal_blocks(N)
             kernel(
                 (blocks,), (configure.cuda_threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device_id,
                     *kernel_args
                 )

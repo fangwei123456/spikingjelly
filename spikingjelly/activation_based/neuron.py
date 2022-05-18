@@ -9,12 +9,12 @@ import numpy as np
 import logging
 try:
     import cupy
-    from . import neuron_kernel, cu_kernel_opt
+    from . import neuron_kernel, cuda_utils
 except BaseException as e:
     logging.info(f'spikingjelly.clock_driven.neuron: {e}')
     cupy = None
     neuron_kernel = None
-    cu_kernel_opt = None
+    cuda_utils = None
 
 try:
     import lava.lib.dl.slayer as slayer
@@ -406,10 +406,10 @@ class IFNode(BaseNode):
         else:
             self.cp_kernel = cupy.RawKernel(code, f"IFNode_{'hard' if hard_reset else 'soft'}_reset_inference_forward", options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
-        with cu_kernel_opt.DeviceEnvironment(device_id):
+        with cuda_utils.DeviceEnvironment(device_id):
             numel = x.numel()
             threads = configure.cuda_threads
-            blocks = cu_kernel_opt.cal_blocks(numel)
+            blocks = cuda_utils.cal_blocks(numel)
             cp_numel = cupy.asarray(numel)
             cp_v_threshold = cupy.asarray(self.v_threshold, dtype=np.float32)
             if hard_reset:
@@ -417,14 +417,14 @@ class IFNode(BaseNode):
 
             spike = torch.zeros_like(x)
             if hard_reset:
-                x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel)
+                x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel = cuda_utils.get_contiguous(x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel)
                 kernel_args = [x, cp_v_threshold, cp_v_reset, spike, self.v, cp_numel]
             else:
-                x, cp_v_threshold, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
+                x, cp_v_threshold, spike, self.v, cp_numel = cuda_utils.get_contiguous(x, cp_v_threshold, spike, self.v, cp_numel)
                 kernel_args = [x, cp_v_threshold, spike, self.v, cp_numel]
             self.cp_kernel(
                 (blocks,), (threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device_id,
                     *kernel_args
                 )
@@ -643,10 +643,10 @@ class LIFNode(BaseNode):
         else:
             self.cp_kernel = cupy.RawKernel(code, f"LIFNode_{'hard' if hard_reset else 'soft'}_reset_decayInput_{self.decay_input}_inference_forward", options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
 
-        with cu_kernel_opt.DeviceEnvironment(device_id):
+        with cuda_utils.DeviceEnvironment(device_id):
             numel = x.numel()
             threads = configure.cuda_threads
-            blocks = cu_kernel_opt.cal_blocks(numel)
+            blocks = cuda_utils.cal_blocks(numel)
             cp_numel = cupy.asarray(numel)
             cp_v_threshold = cupy.asarray(self.v_threshold, dtype=np.float32)
             if hard_reset:
@@ -654,15 +654,15 @@ class LIFNode(BaseNode):
             cp_tau = cupy.asarray(self.tau, dtype=np.float32)
             spike = torch.zeros_like(x)
             if hard_reset:
-                x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel)
+                x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel = cuda_utils.get_contiguous(x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel)
                 kernel_args = [x, cp_v_threshold, cp_v_reset, cp_tau, spike, self.v, cp_numel]
             else:
-                x, cp_v_threshold, cp_tau, spike, self.v, cp_numel = cu_kernel_opt.get_contiguous(x, cp_v_threshold, cp_tau, spike, self.v, cp_numel)
+                x, cp_v_threshold, cp_tau, spike, self.v, cp_numel = cuda_utils.get_contiguous(x, cp_v_threshold, cp_tau, spike, self.v, cp_numel)
                 kernel_args = [x, cp_v_threshold, cp_tau, spike, self.v, cp_numel]
 
             self.cp_kernel(
                 (blocks,), (threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device_id,
                     *kernel_args
                 )

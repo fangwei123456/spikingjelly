@@ -51,14 +51,14 @@ If `save_datasets_compressed == True`, events and frames in spikingjelly.dataset
 The compressed npz file consumes less memory in disk but more time in reading.
 '''
 
-save_spike_as_bool_in_neuron_kernel = False
+save_spike_as_bool_in_cuda_utils = False
 '''
-If `save_spike_as_bool_in_neuron_kernel == True`, the neuron kernel used in the neuron's cupy backend will save the spike as a bool, rather than float/half tensor for backward, which can reduce the memory consumption.
+If `save_spike_as_bool_in_cuda_utils == True`, the neuron kernel used in the neuron's cupy backend will save the spike as a bool, rather than float/half tensor for backward, which can reduce the memory consumption.
 '''
 
 save_bool_spike_level = 0
 '''
-`save_bool_spike_level` take effects on SpikeConv/SpikeLinear, and on neuron's cupy kernel when `save_spike_as_bool_in_neuron_kernel == True`.
+`save_bool_spike_level` take effects on SpikeConv/SpikeLinear, and on neuron's cupy kernel when `save_spike_as_bool_in_cuda_utils == True`.
 
 If `save_bool_spike_level == 0`, spikes will be saved in bool. Note that bool uses 8-bit, rather than 1-bit.
 

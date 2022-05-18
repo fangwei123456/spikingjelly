@@ -8,7 +8,7 @@ except BaseException as e:
 
 import torch
 import torch.nn.functional as F
-from . import cu_kernel_opt, surrogate, tensor_cache
+from . import cuda_utils, surrogate, tensor_cache
 from .. import configure
 import numpy as np
         
@@ -272,30 +272,30 @@ class MultiStepIFNodePTT(torch.autograd.Function):
 
         v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
             numel = x_seq.numel()
             neuron_num = numel // x_seq.shape[0]
 
             threads = configure.cuda_threads
             if dtype == 'fp16':
                 assert neuron_num % 2 == 0
-                blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
+                blocks = cuda_utils.cal_blocks(neuron_num >> 1)
                 # we will take two neurons to calculate as one neuron in cuda half2
             else:
-                blocks = cu_kernel_opt.cal_blocks(neuron_num)
+                blocks = cuda_utils.cal_blocks(neuron_num)
             cp_numel = cupy.asarray(numel)
             cp_neuron_num = cupy.asarray(neuron_num)
             cp_v_threshold = cupy.asarray(v_threshold, dtype=cp_dtype)
             if v_reset is None:
                 cp_v_reset = None
                 hard_reset = False
-                x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(
                     x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_neuron_num, cp_numel]
             else:
                 cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                 hard_reset = True
-                x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(
                     x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_v_threshold, cp_v_reset, cp_neuron_num,
                                 cp_numel]
@@ -304,7 +304,7 @@ class MultiStepIFNodePTT(torch.autograd.Function):
 
             kernel(
                 (blocks,), (threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -371,16 +371,16 @@ class MultiStepIFNodePTT(torch.autograd.Function):
 
         kernel = MultiStepIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, hard_reset, ctx.detach_reset, dtype)
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
 
             if hard_reset:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold,
                     ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
                 kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
                                 ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
             else:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_v_threshold,
                     ctx.cp_neuron_num, ctx.cp_numel)
                 kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
@@ -388,7 +388,7 @@ class MultiStepIFNodePTT(torch.autograd.Function):
 
             kernel(
                 (ctx.blocks,), (ctx.threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -717,17 +717,17 @@ class MultiStepLIFNodePTT(torch.autograd.Function):
 
         v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
             numel = x_seq.numel()
             neuron_num = numel // x_seq.shape[0]
 
             threads = configure.cuda_threads
             if dtype == 'fp16':
                 assert neuron_num % 2 == 0
-                blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
+                blocks = cuda_utils.cal_blocks(neuron_num >> 1)
                 # we will take two neurons to calculate as one neuron in cuda half2
             else:
-                blocks = cu_kernel_opt.cal_blocks(neuron_num)
+                blocks = cuda_utils.cal_blocks(neuron_num)
 
             cp_numel = cupy.asarray(numel)
             cp_neuron_num = cupy.asarray(neuron_num)
@@ -738,14 +738,14 @@ class MultiStepLIFNodePTT(torch.autograd.Function):
             if v_reset is None:
                 cp_v_reset = None
                 hard_reset = False
-                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(
                     x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num,
                                 cp_numel]
             else:
                 cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                 hard_reset = True
-                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(
                     x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num,
                     cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset,
@@ -754,7 +754,7 @@ class MultiStepLIFNodePTT(torch.autograd.Function):
             kernel = MultiStepLIFNodePTT.create_fptt_kernel(decay_input, hard_reset, dtype)
             kernel(
                 (blocks,), (threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -821,10 +821,10 @@ class MultiStepLIFNodePTT(torch.autograd.Function):
 
         kernel = MultiStepLIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, ctx.decay_input, hard_reset, ctx.detach_reset, dtype)
         
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
 
             if hard_reset:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau,
                     ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num,
                     ctx.cp_numel)
@@ -832,7 +832,7 @@ class MultiStepLIFNodePTT(torch.autograd.Function):
                                 ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
                                 ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
             else:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last, ctx.cp_reciprocal_tau,
                     ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
                 kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, grad_x_seq, grad_v_last,
@@ -841,7 +841,7 @@ class MultiStepLIFNodePTT(torch.autograd.Function):
 
             kernel(
                 (ctx.blocks,), (ctx.threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -1121,17 +1121,17 @@ class MultiStepParametricLIFNodePTT(torch.autograd.Function):
         v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
         tau = 1. / reciprocal_tau.item()
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
             numel = x_seq.numel()
             neuron_num = numel // x_seq.shape[0]
 
             threads = configure.cuda_threads
             if dtype == 'fp16':
                 assert neuron_num % 2 == 0
-                blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
+                blocks = cuda_utils.cal_blocks(neuron_num >> 1)
                 # we will take two neurons to calculate as one neuron in cuda half2
             else:
-                blocks = cu_kernel_opt.cal_blocks(neuron_num)
+                blocks = cuda_utils.cal_blocks(neuron_num)
 
             cp_numel = cupy.asarray(numel)
             cp_neuron_num = cupy.asarray(neuron_num)
@@ -1142,14 +1142,14 @@ class MultiStepParametricLIFNodePTT(torch.autograd.Function):
             if v_reset is None:
                 cp_v_reset = None
                 hard_reset = False
-                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(
                     x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num, cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_neuron_num,
                                 cp_numel]
             else:
                 cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                 hard_reset = True
-                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(
+                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(
                     x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset, cp_neuron_num,
                     cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_v_threshold, cp_v_reset,
@@ -1159,7 +1159,7 @@ class MultiStepParametricLIFNodePTT(torch.autograd.Function):
 
             kernel(
                 (blocks,), (threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -1228,10 +1228,10 @@ class MultiStepParametricLIFNodePTT(torch.autograd.Function):
         kernel = MultiStepParametricLIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, ctx.decay_input, hard_reset,
                                                                     ctx.detach_reset, dtype)
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
 
             if hard_reset:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last,
                     grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
                     ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
@@ -1239,7 +1239,7 @@ class MultiStepParametricLIFNodePTT(torch.autograd.Function):
                                 grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau,
                                 ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
             else:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(
                     grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last,
                     grad_reciprocal_tau, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold,
                     ctx.cp_neuron_num, ctx.cp_numel)
@@ -1249,7 +1249,7 @@ class MultiStepParametricLIFNodePTT(torch.autograd.Function):
 
             kernel(
                 (ctx.blocks,), (ctx.threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -1581,17 +1581,17 @@ class MultiStepEIFNodePTT(torch.autograd.Function):
 
         v_v_seq = torch.cat((v_last.unsqueeze(0), v_seq))
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
             numel = x_seq.numel()
             neuron_num = numel // x_seq.shape[0]
 
             threads = configure.cuda_threads
             if dtype == 'fp16':
                 assert neuron_num % 2 == 0
-                blocks = cu_kernel_opt.cal_blocks(neuron_num >> 1)
+                blocks = cuda_utils.cal_blocks(neuron_num >> 1)
                 # we will take two neurons to calculate as one neuron in cuda half2
             else:
-                blocks = cu_kernel_opt.cal_blocks(neuron_num)
+                blocks = cuda_utils.cal_blocks(neuron_num)
             
             cp_numel = cupy.asarray(numel)
             cp_neuron_num = cupy.asarray(neuron_num)
@@ -1606,12 +1606,12 @@ class MultiStepEIFNodePTT(torch.autograd.Function):
             if v_reset is None:
                 cp_v_reset = None
                 hard_reset = False
-                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_neuron_num, cp_numel)
+                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_neuron_num, cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_neuron_num, cp_numel]
             else:
                 cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
                 hard_reset = True
-                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_v_reset, cp_neuron_num, cp_numel = cu_kernel_opt.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_v_reset, cp_neuron_num, cp_numel)
+                x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_v_reset, cp_neuron_num, cp_numel = cuda_utils.get_contiguous(x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_v_reset, cp_neuron_num, cp_numel)
                 kernel_args = [x_seq, v_v_seq, h_seq, spike_seq, cp_reciprocal_tau, cp_delta_T, cp_theta_rh, cp_v_threshold, cp_v_rest, cp_v_reset, cp_neuron_num, cp_numel]
 
             kernel = MultiStepEIFNodePTT.create_fptt_kernel(hard_reset, dtype)
@@ -1619,7 +1619,7 @@ class MultiStepEIFNodePTT(torch.autograd.Function):
 
             kernel(
                 (blocks,), (threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
@@ -1687,18 +1687,18 @@ class MultiStepEIFNodePTT(torch.autograd.Function):
 
         kernel = MultiStepEIFNodePTT.create_bptt_kernel(ctx.sg_cuda_code_fun, hard_reset, ctx.detach_reset, dtype)
 
-        with cu_kernel_opt.DeviceEnvironment(device):
+        with cuda_utils.DeviceEnvironment(device):
 
             if hard_reset:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel)
                 kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_v_reset, ctx.cp_neuron_num, ctx.cp_numel]
             else:
-                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cu_kernel_opt.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
+                grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel = cuda_utils.get_contiguous(grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel)
                 kernel_args = [grad_spike_seq, grad_v_seq, h_seq, spike_seq, v_v_seq, grad_x_seq, grad_v_last, ctx.cp_theta_rh, ctx.cp_reciprocal_delta_T, ctx.cp_reciprocal_tau, ctx.cp_one_sub_reciprocal_tau, ctx.cp_v_threshold, ctx.cp_neuron_num, ctx.cp_numel]
 
             kernel(
                 (ctx.blocks,), (ctx.threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device,
                     *kernel_args
                 )
