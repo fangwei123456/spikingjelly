@@ -29,13 +29,20 @@ def cuda_timer(device, f, *args, **kwargs):
     return start.elapsed_time(end)
 
 def cal_fun_t(n, device, f, *args, **kwargs):
-    assert n > 2
+    if device == 'cpu':
+        c_timer = cpu_timer
+    else:
+        c_timer = cuda_timer
+
+    if n == 1:
+        return c_timer(device, f, *args, **kwargs)
+
     # warm up
-    cuda_timer(device, f, *args, **kwargs)
+    c_timer(device, f, *args, **kwargs)
 
     t_list = []
     for _ in range(n * 2):
-        t_list.append(cuda_timer(device, f, *args, **kwargs))
+        t_list.append(c_timer(device, f, *args, **kwargs))
     t_list = np.asarray(t_list)
     return t_list[n:].mean()
 
@@ -76,7 +83,7 @@ def wrap_args_to_raw_kernel(device: int, *args):
     return tuple(ret_list)
 
 class GPUMonitor(threading.Thread):
-    def __init__(self, log_dir: str = None, gpu_ids: tuple = (0, ), interval: float = 60., start_now=True):
+    def __init__(self, log_dir: str = None, gpu_ids: tuple = (0, ), interval: float = 600., start_now=True):
         """
         :param log_dir: the directory for saving logs with tensorboard. If it is None, this module will print logs
         :type log_dir: str
@@ -125,9 +132,7 @@ class GPUMonitor(threading.Thread):
         if log_dir is None:
             self.writer = None
         else:
-            self.writer = []
-            for i in range(self.gpu_ids.__len__()):
-                self.writer.append(SummaryWriter(os.path.join(log_dir, f'gpu_{id_str[i]}')))
+            self.writer = SummaryWriter(os.path.join(log_dir, 'gpu_monitor'))
 
         if start_now:
             self.start()
@@ -146,8 +151,8 @@ class GPUMonitor(threading.Thread):
                         utilization_memory = re.findall(r'\d+', outputs[i])
                         utilization = int(utilization_memory[0])
                         memory_used = int(utilization_memory[1])
-                        self.writer[i].add_scalar('utilization', utilization, self.step)
-                        self.writer[i].add_scalar('memory_used', memory_used, self.step)
+                        self.writer.add_scalar(f'utilization_{self.gpu_ids[i]}', utilization, self.step)
+                        self.writer.add_scalar(f'memory_used_{self.gpu_ids[i]}', memory_used, self.step)
                 else:
                     print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                     print(outputs)
