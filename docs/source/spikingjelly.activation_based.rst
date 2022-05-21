@@ -1,10 +1,111 @@
-spikingjelly.clock_driven.surrogate package
-==========================================
+spikingjelly.activation\_based package
+======================================
 
-Module contents
----------------
+Subpackages
+-----------
 
-.. automodule:: spikingjelly.clock_driven.surrogate
+.. toctree::
+   :maxdepth: 4
+
+   spikingjelly.activation_based.ann2snn
+   spikingjelly.activation_based.examples
+   spikingjelly.activation_based.model
+
+Submodules
+----------
+
+spikingjelly.activation\_based.base module
+------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.base
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.cuda\_utils module
+-------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.cuda_utils
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.encoding module
+----------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.encoding
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.functional module
+------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.functional
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.lava\_exchange module
+----------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.lava_exchange
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.layer module
+-------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.layer
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.monitor module
+---------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.monitor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.neuron module
+--------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.neuron
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.neuron\_kernel module
+----------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.neuron_kernel
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.rnn module
+-----------------------------------------
+
+.. automodule:: spikingjelly.activation_based.rnn
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.spike\_op module
+-----------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.spike_op
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.activation\_based.surrogate module
+-----------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.surrogate
    :members:
    :undoc-members:
    :show-inheritance:
@@ -30,3 +131,19 @@ References
 .. [#LISNN]	Cheng X, Hao Y, Xu J, et al. LISNN: Improving Spiking Neural Networks with Lateral Interactions for Robust Object Recognition[C]//IJCAI. 1519-1525.
 .. [#DECOLLE]	Kaiser J, Mostafa H, Neftci E. Synaptic plasticity dynamics for deep continuous local learning (DECOLLE)[J]. Frontiers in Neuroscience, 2020, 14: 424.
 .. [#SRNN] Yin B, Corradi F, Bohté S M. Effective and efficient computation with multiple-timescale spiking recurrent neural networks[C]//International Conference on Neuromorphic Systems 2020. 2020: 1-8.
+
+spikingjelly.activation\_based.tensor\_cache module
+---------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.tensor_cache
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Module contents
+---------------
+
+.. automodule:: spikingjelly.activation_based
+   :members:
+   :undoc-members:
+   :show-inheritance:

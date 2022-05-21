@@ -14,7 +14,7 @@
 
    import torch
    from torch import nn
-   from spikingjelly.clock_driven import neuron
+   from spikingjelly.activation_based import neuron
 
    net = nn.Sequential(
                    nn.Linear(784, 100, bias=False),
@@ -27,7 +27,7 @@
 
 .. code:: python
 
-   from spikingjelly.clock_driven.monitor import Monitor
+   from spikingjelly.activation_based.monitor import Monitor
    mon = Monitor(net, device='cpu', backend='torch')
 
 这样就将一个网络与监视器绑定了起来。但是此时监视功能还处于默认的禁用模式，因此在开始记录之前需要手动启用监视功能：
@@ -75,7 +75,7 @@
    import torch
    from torch import nn
    from spikingjelly.cext import neuron as cext_neuron
-   from spikingjelly.clock_driven import layer
+   from spikingjelly.activation_based import layer
 
    neuron_num = 784
    T = 8

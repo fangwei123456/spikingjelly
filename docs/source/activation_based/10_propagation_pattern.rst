@@ -4,15 +4,15 @@
 
 单步传播与多步传播
 ------------------
-SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` 除外），例如 :class:`spikingjelly.clock_driven.layer.Dropout`，模块名的前缀中没有 ``MultiStep``，表示这个模块的 ``forward`` 函数定义的是单步的前向传播：
+SpikingJelly中的绝大多数模块（:class:`spikingjelly.activation_based.rnn` 除外），例如 :class:`spikingjelly.activation_based.layer.Dropout`，模块名的前缀中没有 ``MultiStep``，表示这个模块的 ``forward`` 函数定义的是单步的前向传播：
 
     输入 :math:`X_{t}`，输出 :math:`Y_{t}`
 
-而如果前缀中含有 ``MultiStep``，例如 :class:`spikingjelly.clock_driven.layer.MultiStepDropout`，则表面这个模块的 ``forward`` 函数定义的是多步的前向传播：
+而如果前缀中含有 ``MultiStep``，例如 :class:`spikingjelly.activation_based.layer.MultiStepDropout`，则表面这个模块的 ``forward`` 函数定义的是多步的前向传播：
 
     输入 :math:`X_{t}, t=0,1,...,T-1`，输出 :math:`Y_{t}, t=0,1,...,T-1`
 
-一个单步传播的模块，可以很容易被封装成多步传播的模块，:class:`spikingjelly.clock_driven.layer.MultiStepContainer` 提供了非常简单的方式，将原始模块作为子模块，并在 ``forward`` 函数中实现在时间上的循环，代码如下所示：
+一个单步传播的模块，可以很容易被封装成多步传播的模块，:class:`spikingjelly.activation_based.layer.MultiStepContainer` 提供了非常简单的方式，将原始模块作为子模块，并在 ``forward`` 函数中实现在时间上的循环，代码如下所示：
 
 .. code-block:: python
 
@@ -40,7 +40,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import neuron, layer, functional
+    from spikingjelly.activation_based import neuron, layer, functional
     import torch
 
     neuron_num = 4
@@ -102,7 +102,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 前向传播的计算图的构建顺序如下所示：
 
-.. image:: ../_static/tutorials/clock_driven/10_propagation_pattern/step-by-step.png
+.. image:: ../_static/tutorials/activation_based/10_propagation_pattern/step-by-step.png
     :width: 100%
 
 对于SNN以及RNN，前向传播既发生在空域也发生在时域，`逐步传播` 逐步计算出整个网络在不同时刻的状态，我们可以很容易联想到，还可以使用另一种顺序来计算：逐层计算出每一层网络在所有时刻的状态。例如下面这份代码（假定 ``M0, M1, M2`` 都是多步传播的模块）：
@@ -115,7 +115,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
 前向传播的计算图的构建顺序如下所示：
 
-.. image:: ../_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png
+.. image:: ../_static/tutorials/activation_based/10_propagation_pattern/layer-by-layer.png
     :width: 100%
 
 我们称这种方式为 `逐层传播(layer-by-layer)`。`逐层传播` 在RNN以及SNN中也被广泛使用，例如 `Low-activity supervised convolutional spiking neural networks applied to speech commands recognition <https://arxiv.org/abs/2011.06846>`_ 通过逐层计算的方式来获取每一层在所有时刻的输出，然后在时域上进行卷积，代码可见于 https://github.com/romainzimmer/s2net。
@@ -133,7 +133,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
 
     y = fc(x)  # x.shape=[T, batch_size, in_features]
 
-对于无状态的层，我们可以将 ``shape=[T, batch_size, ...]`` 的输入拼接成 ``shape=[T * batch_size, ...]`` 后，再送入这一层计算，避免在时间上的循环。:class:`spikingjelly.clock_driven.layer.SeqToANNContainer` 在 ``forward`` 函数中进行了这样的实现。我们可以直接使用这个模块：
+对于无状态的层，我们可以将 ``shape=[T, batch_size, ...]`` 的输入拼接成 ``shape=[T * batch_size, ...]`` 后，再送入这一层计算，避免在时间上的循环。:class:`spikingjelly.activation_based.layer.SeqToANNContainer` 在 ``forward`` 函数中进行了这样的实现。我们可以直接使用这个模块：
 
 .. code-block:: python
 
@@ -182,7 +182,7 @@ SpikingJelly中的绝大多数模块（:class:`spikingjelly.clock_driven.rnn` �
     net_step_by_step.state_dict: odict_keys(['0.weight', '1.weight', '1.bias', '1.running_mean', '1.running_var', '1.num_batches_tracked'])
     net_layer_by_layer.state_dict: odict_keys(['0.0.weight', '0.1.weight', '0.1.bias', '0.1.running_mean', '0.1.running_var', '0.1.num_batches_tracked'])
 
-名称不一样，会给加载模型权重带来麻烦。例如，我们想构建一个多步版本的Spiking ResNet-18 (:class:`spikingjelly.clock_driven.model.spiking_resnet.spiking_resnet18`)，
+名称不一样，会给加载模型权重带来麻烦。例如，我们想构建一个多步版本的Spiking ResNet-18 (:class:`spikingjelly.activation_based.model.spiking_resnet.spiking_resnet18`)，
 且希望这个网络能够加载ANN的预训练模型权重。直接使用 ``SeqToANNContainer`` 构建出的网络，``state_dict`` 与ANN的并不相同，无法直接加载。为了避免
 这种问题，我们可以不使用 ``SeqToANNContainer`` 对ANN层包装，而是转为包装ANN层的前向传播代码。下面是示例代码：
 

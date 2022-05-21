@@ -1,5 +1,5 @@
 spikingjelly.visualizing package
-===============================
+================================
 
 Module contents
 ---------------

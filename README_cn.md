@@ -69,14 +69,14 @@ class Net(nn.Module):
         return self.fc(x)
 ```
 
-这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.clock_driven.html)。可以通过Python命令行直接运行这份代码，训练MNIST分类：
+这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.activation_based.html)。可以通过Python命令行直接运行这份代码，训练MNIST分类：
 
 ```python
 >>> import spikingjelly.activation_based.examples.lif_fc_mnist as lif_fc_mnist
 >>> lif_fc_mnist.main()
 ```
 
-阅读[spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html)以探索更多先进的神经网络！
+阅读[spikingjelly.activation_based.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.examples.html)以探索更多先进的神经网络！
 
 ## 快速好用的ANN-SNN转换
 
@@ -112,7 +112,7 @@ class ANN(nn.Module):
         return x
 ```
 
-在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
+在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
 
 ```python
 >>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
@@ -125,7 +125,7 @@ SpikingJelly为多步神经元（阅读[教程](#教程)以获取更多信息）
 
 下图对比了2种后端的多步LIF神经元 (`float32`) 的运行时长：
 
-<img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+<img src="./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
 `cupy`后端同样接支持`float16`，并且可以在[自动混合精度训练](https://pytorch.org/docs/stable/notes/amp_examples.html)中使用。
 
@@ -227,16 +227,16 @@ SpikingJelly精心准备了多项教程。下面展示了部分教程：
 
 | 图例                                                         | 教程                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![t0](./docs/source/_static/tutorials/clock_driven/0_neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html) |
-| ![t2](./docs/source/_static/tutorials/clock_driven/2_encoding/5.png) | [编码器](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/2_encoding.html) |
-| ![t3](./docs/source/_static/tutorials/clock_driven/3_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/3_fc_mnist.html) |
-| ![t4](./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/4_conv_fashion_mnist.html) |
-| ![t5](./docs/source/_static/tutorials/clock_driven/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html) |
-| ![t6](./docs/source/_static/tutorials/clock_driven/6_dqn_cart_pole/512@66.gif) | [强化学习DQN](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/6_dqn_cart_pole.html) |
-| ![t10](./docs/source/_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png) | [传播模式](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/10_propagation_pattern.html) |
-| ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/13_neuromorphic_datasets.html) |
-| ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/14_classify_dvsg.html) |
-| ![t15](./docs/source/_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/15_recurrent_connection_and_stateful_synapse.html) |
+| ![t0](./docs/source/_static/tutorials/activation_based/0_neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/0_neuron.html) |
+| ![t2](./docs/source/_static/tutorials/activation_based/2_encoding/5.png) | [编码器](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/2_encoding.html) |
+| ![t3](./docs/source/_static/tutorials/activation_based/3_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/3_fc_mnist.html) |
+| ![t4](./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/y10.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/4_conv_fashion_mnist.html) |
+| ![t5](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html) |
+| ![t6](./docs/source/_static/tutorials/activation_based/6_dqn_cart_pole/512@66.gif) | [强化学习DQN](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/6_dqn_cart_pole.html) |
+| ![t10](./docs/source/_static/tutorials/activation_based/10_propagation_pattern/layer-by-layer.png) | [传播模式](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/10_propagation_pattern.html) |
+| ![t13](./docs/source/_static/tutorials/activation_based/13_neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/13_neuromorphic_datasets.html) |
+| ![t14](./docs/source/_static/tutorials/activation_based/14_classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/14_classify_dvsg.html) |
+| ![t15](./docs/source/_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/15_recurrent_connection_and_stateful_synapse.html) |
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 

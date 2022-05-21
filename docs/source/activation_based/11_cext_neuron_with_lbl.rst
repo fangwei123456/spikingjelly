@@ -5,12 +5,12 @@
 
 CUDA加速的神经元
 -----------------------
-在 :class:`spikingjelly.clock_driven.neuron` 提供了多步版本的神经元。与单步版本相比，多步神经元增加了cupy后端。cupy后端将各种运算都封装到
+在 :class:`spikingjelly.activation_based.neuron` 提供了多步版本的神经元。与单步版本相比，多步神经元增加了cupy后端。cupy后端将各种运算都封装到
 了一个CUDA内核，因此速度比默认pytorch后端更快。现在让我们通过一个简单的实验，来对比两个模块中LIF神经元的运行耗时：
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import neuron, surrogate, cuda_utils
+    from spikingjelly.activation_based import neuron, surrogate, cuda_utils
     import torch
 
 
@@ -77,17 +77,17 @@ CUDA加速的神经元
 
 将结果画成柱状图：
 
-.. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_f.*
+.. image:: ../_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_f.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.*
+.. image:: ../_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_fb.*
     :width: 100%
 
 可以发现，使用cupy后端速度明显快于原生pytorch后端。
 
 加速深度脉冲神经网络
 -----------------------
-现在让我们使用多步和cupy后端神经元，重新实现 :doc:`../clock_driven/4_conv_fashion_mnist` 中的网络。我们只需要更改一下网络结构，无需进行
+现在让我们使用多步和cupy后端神经元，重新实现 :doc:`../activation_based/4_conv_fashion_mnist` 中的网络。我们只需要更改一下网络结构，无需进行
 其他的改动：
 
 .. code-block:: python
@@ -129,13 +129,13 @@ CUDA加速的神经元
 
             return self.fc(self.conv(x_seq)).mean(0)
 
-完整的代码可见于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`。我们按照与
-:doc:`../clock_driven/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU
+完整的代码可见于 :class:`spikingjelly.activation_based.examples.conv_fashion_mnist`。我们按照与
+:doc:`../activation_based/4_conv_fashion_mnist` 中完全相同的输入参数和设备（`Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU
 和 `GeForce RTX 2080 Ti` 的GPU）来运行，结果如下：
 
 .. code-block:: shell
 
-    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
+    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.activation_based.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
 
     Namespace(T=4, T_max=64, amp=True, b=128, cupy=True, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
     CupyNet(
@@ -198,12 +198,12 @@ CUDA加速的神经元
     epoch=63, train_loss=0.0010632637413514631, train_acc=0.9980134882478633, test_loss=0.010720000202953816, test_acc=0.9324, max_test_acc=0.9346, total_time=11.128222703933716
 
 
-最终的正确率是93.46%，与 :doc:`../clock_driven/11_cext_neuron_with_lbl` 中的93.3%相差无几，两者在训练过程中的测试集正确率曲线如下：
+最终的正确率是93.46%，与 :doc:`../activation_based/11_cext_neuron_with_lbl` 中的93.3%相差无几，两者在训练过程中的测试集正确率曲线如下：
 
-.. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/train.*
+.. image:: ../_static/tutorials/activation_based/11_cext_neuron_with_lbl/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/11_cext_neuron_with_lbl/test.*
+.. image:: ../_static/tutorials/activation_based/11_cext_neuron_with_lbl/test.*
     :width: 100%
 
 两个网络使用了完全相同的随机种子，最终的性能略有差异，可能是CUDA和PyTorch的计算数值误差导致的。在日志中记录了训练和测试所需要的时间，我们可以

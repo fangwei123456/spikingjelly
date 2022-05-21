@@ -29,7 +29,7 @@ spikingjelly.datasets.dvs128\_gesture module
    :show-inheritance:
 
 spikingjelly.datasets.es\_imagenet module
-------------------------------------------
+-----------------------------------------
 
 .. automodule:: spikingjelly.datasets.es_imagenet
    :members:
@@ -53,7 +53,7 @@ spikingjelly.datasets.n\_mnist module
    :show-inheritance:
 
 spikingjelly.datasets.nav\_gesture module
--------------------------------------
+-----------------------------------------
 
 .. automodule:: spikingjelly.datasets.nav_gesture
    :members:
