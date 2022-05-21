@@ -4,15 +4,15 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `YeYumin <https://github.com/YEYUMIN>`_
 
-This tutorial focuses on :class:`spikingjelly.clock_driven.neuron` and introduces spiking neurons and clock-driven
+This tutorial focuses on :class:`spikingjelly.activation_based.neuron` and introduces spiking neurons and clock-driven
 simulation methods.
 
 Spiking Nneuron Model
 -----------------------------------------------
 In ``spikingjelly``, we define the neuron which can only output spikes, i.e. 0 or 1, as a "spiking neuron".
 Networks that use spiking neurons are called Spiking Neural Networks (SNNs).
-:class:`spikingjelly.clock_driven.neuron` defines various common spiking neuron models.
-We take :class:`spikingjelly.clock_driven.neuron.LIFNode` as an example to introduce spiking neurons.
+:class:`spikingjelly.activation_based.neuron` defines various common spiking neuron models.
+We take :class:`spikingjelly.activation_based.neuron.LIFNode` as an example to introduce spiking neurons.
 
 First, we need to import the relevant modules:
 
@@ -21,7 +21,7 @@ First, we need to import the relevant modules:
     import torch
     import torch.nn as nn
     import numpy as np
-    from spikingjelly.clock_driven import neuron
+    from spikingjelly.activation_based import neuron
     from spikingjelly import visualizing
     from matplotlib import pyplot as plt
 
@@ -44,12 +44,12 @@ The LIF neurons layer has some parameters, which are explained in detail in the 
 The ``surrogate_function`` behaves exactly the same as the step function during forward propagation,
 and we will introduce its working principle for back propagation later. We can just ignore it now.
 
-You may be curious about the number of neurons in this layer. For most neurons layers in :class:`spikingjelly.clock_driven.neuron`,
+You may be curious about the number of neurons in this layer. For most neurons layers in :class:`spikingjelly.activation_based.neuron`,
 the number of neurons is automatically determined according to the ``shape`` of the received input after initialization or re-initialization by calling the ``reset()`` function.
 
 Similar to neurons in RNN, spiking neurons are also stateful (they have memory).
 The state variable of a spiking neuron is generally its membrane potential :math:`V_{t}`.
-Therefore, neurons in :class:`spikingjelly.clock_driven.neuron` have state variable ``v``.
+Therefore, neurons in :class:`spikingjelly.activation_based.neuron` have state variable ``v``.
 We can print the membrane potential of the newly created LIF neurons layer:
 
 .. code-block:: python
@@ -87,7 +87,7 @@ spiking neuron. For example. For LIF neurons, the equation is:
 
 where :math:`\tau_{m}` is the membrane time constant and :math:`V_{reset}` is the reset potential. For such a differential equation, :math:`X(t)` is not a constant and it is difficult to obtain a explicit analytical solution.
 
-The neurons in :class:`spikingjelly.clock_driven.neuron` use discrete difference equations to approximate continuous differential equations.
+The neurons in :class:`spikingjelly.activation_based.neuron` use discrete difference equations to approximate continuous differential equations.
 From the perspective of the discrete equation, the charging equation of the LIF neuron is:
 
 .. math::
@@ -98,7 +98,7 @@ The expression of :math:`V_{t}` can be obtained as
 .. math::
     V_{t} = f(V_{t-1}, X_{t}) = V_{t-1} + \frac{1}{\tau_{m}}(-(V_{t - 1} - V_{reset}) + X_{t})
 
-The corresponding code can be found in :class:`spikingjelly.clock_driven.neuron.LIFNode.neuronal_charge`:
+The corresponding code can be found in :class:`spikingjelly.activation_based.neuron.LIFNode.neuronal_charge`:
 
 .. code-block:: python
 
@@ -114,7 +114,7 @@ The corresponding code can be found in :class:`spikingjelly.clock_driven.neuron.
 
 Different neurons have different charging equations. However, when the membrane potential exceeds the threshold potential,
 the release of spike and the reset of the membrane potential are the same for all kinds of neurons. Therefore,
-they all inherit from :class:`spikingjelly.clock_driven.neuron.BaseNode` and share the same discharge and reset equations. The codes of neuronal fire can be found at :class:`spikingjelly.clock_driven.neuron.BaseNode.neuronal_fire`:
+they all inherit from :class:`spikingjelly.activation_based.neuron.BaseNode` and share the same discharge and reset equations. The codes of neuronal fire can be found at :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire`:
 
 .. code-block:: python
 
@@ -133,8 +133,8 @@ two ways to realize neuronal reset:
 #. Soft method: After releasing a spike, the membrane potential subtracts the threshold voltage :math:`V = V - V_{threshold}`
 
 It can be found that for neurons using the soft method, there is no need to reset the voltage :math:`V_{reset}`.
-For the neurons in :class:`spikingjelly.clock_driven.neuron`, when ``v_reset`` is set to the a float value (e.g., the default value is ``1.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
-We can find the corresponding codes in :class:`spikingjelly.clock_driven.neuron.BaseNode.neuronal_fire.neuronal_reset`:
+For the neurons in :class:`spikingjelly.activation_based.neuron`, when ``v_reset`` is set to the a float value (e.g., the default value is ``1.0``), the neuron uses the hard reset; if ``v_reset`` is set to ``None``, the soft reset will be used.
+We can find the corresponding codes in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset`:
 
 .. code-block:: python
 
@@ -181,7 +181,7 @@ The difference between neurons is the neuronal charge.
 Clock-driven Simulation
 ---------------------------
 
-:class:`spikingjelly.clock_driven` uses a clock-driven approach to simulate SNN.
+:class:`spikingjelly.activation_based` uses a clock-driven approach to simulate SNN.
 
 Next, we will stimulate the neuron and check its membrane potential and output spikes.
 
@@ -204,7 +204,7 @@ Now let us give constant input to the LIF neurons layer and plot the membrane po
 
 The input is with ``shape=[1]``, and this LIF neurons layer has only 1 neuron. Its membrane potential and output spikes change with time-step as follows:
 
-.. image:: ../_static/tutorials/clock_driven/0_neuron/0.*
+.. image:: ../_static/tutorials/activation_based/0_neuron/0.*
     :width: 100%
 
 We reset the neurons layer and give an input with ``shape=[32]`` to see the membrane potential and output spikes of these 32 neurons:
@@ -231,8 +231,8 @@ We reset the neurons layer and give an input with ``shape=[32]`` to see the memb
 
 The results are as follows:
 
-.. image:: ../_static/tutorials/clock_driven/0_neuron/1.*
+.. image:: ../_static/tutorials/activation_based/0_neuron/1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/0_neuron/2.*
+.. image:: ../_static/tutorials/activation_based/0_neuron/2.*
     :width: 100%

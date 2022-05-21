@@ -2,7 +2,7 @@ ANN转换SNN
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingjelly.clock_driven.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
+本节教程主要关注 ``spikingjelly.activation_based.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
 较早的实现方案中有两套实现：基于ONNX 和 基于PyTorch。由于ONNX不稳定，本版本为PyTorch增强版，原生支持复杂拓扑（例如ResNet）。一起来看看吧！
 
@@ -11,7 +11,7 @@ ANN转换SNN的理论基础
 
 SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。在ANN大行其道的今天，SNN的直接训练需要较多资源。自然我们会想到使用现在非常成熟的ANN转换到SNN，希望SNN也能有类似的表现。这就牵扯到如何搭建起ANN和SNN桥梁的问题。现在SNN主流的方式是采用频率编码，因此对于输出层，我们会用神经元输出脉冲数来判断类别。发放率和ANN有没有关系呢？
 
-幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_ 中提到的Soft方式。
+幸运的是，ANN中的ReLU神经元非线性激活和SNN中IF神经元(采用减去阈值 :math:`V_{threshold}` 方式重置)的发放率有着极强的相关性，我们可以借助这个特性来进行转换。这里说的神经元更新方式，也就是 `时间驱动教程 <https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/0_neuron.html>`_ 中提到的Soft方式。
 
 实验：IF神经元脉冲发放频率和输入的关系
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -21,7 +21,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
 .. code-block:: python
 
     import torch
-    from spikingjelly.clock_driven import neuron
+    from spikingjelly.activation_based import neuron
     from spikingjelly import visualizing
     from matplotlib import pyplot as plt
     import numpy as np
@@ -37,7 +37,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
     plt.grid(linestyle='-.')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/0.*
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/0.*
     :width: 100%
 
 接下来，将输入送入到IF神经元层，并运行 ``T=128`` 步，观察各个神经元发放的脉冲、脉冲发放频率：
@@ -52,7 +52,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
     visualizing.plot_1d_spikes(out_spikes, 'IF neurons\' spikes and firing rates', 't', 'Neuron index $i$')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/1.*
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/1.*
     :width: 100%
 
 可以发现，脉冲发放的频率在一定范围内，与输入 :math:`x_{i}` 的大小成正比。
@@ -77,7 +77,7 @@ SNN相比于ANN，产生的脉冲是离散的，这有利于高效的通信。�
     plt.grid(linestyle='-.')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/2.*
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/2.*
     :width: 100%
 
 可以发现，两者的曲线几乎一致。需要注意的是，脉冲频率不可能高于1，因此IF神经元无法拟合ANN中ReLU的输入大于1的情况。
@@ -390,7 +390,7 @@ snn_model就是输出来的SNN模型。
     plt.ylabel('Acc')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/accuracy_mode.png
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/accuracy_mode.png
 
 不同的设置可以得到不同的结果，有的推理速度快，但是最终精度低，有的推理慢，但是精度高。用户可以根据自己的需求选择模型设置。
 

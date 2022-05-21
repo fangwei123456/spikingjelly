@@ -1,8 +1,8 @@
-spikingjelly.clock_driven.ann2snn
+spikingjelly.activation_based.ann2snn
 =======================================
 Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-This tutorial focuses on ``spikingjelly.clock_driven.ann2snn``, introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
+This tutorial focuses on ``spikingjelly.activation_based.ann2snn``, introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
 
 There are two sets of implementations in earlier implementations: ONNX-based and PyTorch-based. Due to the instability of ONNX, this version is an enhanced version of PyTorch, which natively supports complex topologies (such as ResNet). Let's have a look!
 
@@ -11,7 +11,7 @@ Theoretical basis of ANN2SNN
 
 Compared with ANN, the generated pulses of SNN are discrete, which is conducive to efficient communication. Today, with the popularity of ANN, the direct training of SNN requires more resources. Naturally, we will think of using the now very mature ANN to convert to SNN, and hope that SNN can have similar performance. This involves the problem of how to build a bridge between ANN and SNN. Now the mainstream way of SNN is to use frequency encoding, so for the output layer, we will use the number of neuron output pulses to judge the category. Is there a relationship between the release rate and ANN?
 
-Fortunately, there is a strong correlation between the nonlinear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold: math:`V_{threshold}`). this feature to convert. The neuron update method mentioned here is the Soft method mentioned in `Time-driven tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/0_neuron.html>`_.
+Fortunately, there is a strong correlation between the nonlinear activation of ReLU neurons in ANN and the firing rate of IF neurons in SNN (reset by subtracting the threshold: math:`V_{threshold}`). this feature to convert. The neuron update method mentioned here is the Soft method mentioned in `Time-driven tutorial <https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/0_neuron.html>`_.
 
 Experiment: Relationship between IF neuron spiking frequency and input
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -21,7 +21,7 @@ We gave constant input to the IF neuron and observed its output spikes and spike
 .. code-block:: python
 
     import torch
-    from spikingjelly.clock_driven import neuron
+    from spikingjelly.activation_based import neuron
     from spikingjelly import visualizing
     from matplotlib import pyplot as plt
     import numpy as np
@@ -37,7 +37,7 @@ We gave constant input to the IF neuron and observed its output spikes and spike
     plt.grid(linestyle='-.')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/0.*
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/0.*
     :width: 100%
 
 Next, send the input to the IF neuron layer, and run the ``T=128`` step to observe the pulses and pulse firing frequency of each neuron:
@@ -52,7 +52,7 @@ Next, send the input to the IF neuron layer, and run the ``T=128`` step to obser
     visualizing.plot_1d_spikes(out_spikes, 'IF neurons\' spikes and firing rates', 't', 'Neuron index $i$')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/1.*
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/1.*
     :width: 100%
 
 It can be found that the frequency of the pulse firing is within a certain range, which is proportional to the size of the input :math:`x_{i}`.
@@ -77,7 +77,7 @@ Next, let's plot the firing frequency of the IF neuron against the input :math:`
     plt.grid(linestyle='-.')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/2.*
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/2.*
     :width: 100%
 
 It can be found that the two curves are almost the same. It should be noted that the pulse frequency cannot be higher than 1, so the IF neuron cannot fit the input of the ReLU in the ANN is larger than 1.
@@ -390,7 +390,7 @@ Based on the time-varying accuracy of the model output, we can plot the accuracy
     plt.ylabel('Acc')
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/5_ann2snn/accuracy_mode.png
+.. image:: ../_static/tutorials/activation_based/5_ann2snn/accuracy_mode.png
 
 Different settings can get different results, some inference speed is fast, but the final accuracy is low, and some inference is slow, but the accuracy is high. Users can choose model settings according to their needs.
 

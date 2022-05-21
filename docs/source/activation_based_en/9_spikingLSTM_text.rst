@@ -5,7 +5,7 @@ Authors: `LiutaoYu <https://github.com/LiutaoYu>`_, `fangwei123456 <https://gith
 This tutorial applies a Spiking LSTM to reproduce the PyTorch official tutorial `NLP From Scratch: Classifying Names with a Character-Level RNN <https://pytorch.org/tutorials/intermediate/char_rnn_classification_tutorial.html>`_.
 Please make sure that you have read the original tutorial and corresponding codes before proceeding.
 Specifically, we will train a spiking LSTM to classify surnames into different languages according to their spelling, based on a dataset consisting of several thousands of surnames from 18 languages of origin.
-The integrated script can be found here ( `clock_driven/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/spiking_lstm_text.py>`_).
+The integrated script can be found here ( `activation_based/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/spiking_lstm_text.py>`_).
 
 Preparing the data
 ----------------------------
@@ -61,7 +61,7 @@ We add a fully connected layer to the output layer, and use ``softmax`` function
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import rnn
+    from spikingjelly.activation_based import rnn
     n_hidden = 256
 
     class Net(nn.Module):
@@ -193,7 +193,7 @@ We will observe the following results when executing ``%run ./spiking_lstm_text.
 
 The following picture shows how average loss ``avg_losses`` , training accuracy ``accuracy_rec`` and testing accuracy ``test_accu_rec`` improve with training.
 
-.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.*
+.. image:: ../_static/tutorials/activation_based/\9_spikingLSTM_text/TrainingProcess.*
     :width: 100%
 
 Testing the network
@@ -299,5 +299,5 @@ We will observe the following results when executing ``%run ./spiking_lstm_text.
 The following picture exhibits the confusion matrix, of which a brighter diagonal element indicates better prediction, and thus less confusion, such as Arabic and Greek.
 However, some languages are prone to confusion, such as Korean and Chinese, English and Scottish.
 
-.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.*
+.. image:: ../_static/tutorials/activation_based/\9_spikingLSTM_text/ConfusionMatrix.*
     :width: 100%

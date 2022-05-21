@@ -20,7 +20,7 @@ We also use a similar structure in SNN. Let us import modules, inherit ``torch.n
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision
-    from spikingjelly.clock_driven import neuron, functional, surrogate, layer
+    from spikingjelly.activation_based import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
     import os
     import time
@@ -165,7 +165,7 @@ We put these stateless layers to ``self.static_conv`` to avoid duplicated calcul
 
 Training network
 ----------------------------
-The complete codes are available at :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`. The tarining arguments are:
+The complete codes are available at :class:`spikingjelly.activation_based.examples.conv_fashion_mnist`. The tarining arguments are:
 
 .. code-block:: shell
 
@@ -197,7 +197,7 @@ network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 208
 
 .. code-block:: shell
 
-    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
+    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.activation_based.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
 
     Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
     PythonNet(
@@ -252,10 +252,10 @@ network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 208
 
 After running 100 rounds of training, the correct rates on the training batch and test set are as follows:
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
     :width: 100%
 
 After training for 64 epochs, the highest test set accuracy rate can reach 93.3%, which is a very good accuracy for
@@ -289,7 +289,7 @@ modules, and redefine a data loader with ``batch_size=1``, because we want to vi
 
     from matplotlib import pyplot as plt
     import numpy as np
-    from spikingjelly.clock_driven.examples.conv_fashion_mnist import PythonNet
+    from spikingjelly.activation_based.examples.conv_fashion_mnist import PythonNet
     from spikingjelly import visualizing
     import torch
     import torch.nn as nn
@@ -347,22 +347,22 @@ Let us extract a image from the data set, send it to the encoder, and check the 
 
 The following figure shows two input iamges and the cumulative spikes :math:`\sum_{t} S_{t}` encoded by the encoder at ``t=0`` and ``t=7``:
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x0.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/x0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y00.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y00.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y07.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y07.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x1.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/x1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y10.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y17.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y17.*
     :width: 100%
 
 It can be found that the cumulative spikes :math:`\sum_{t} S_{t}` are very similar to the origin images, indicating that the encoder has strong coding ability.

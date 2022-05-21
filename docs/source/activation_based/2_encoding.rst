@@ -2,16 +2,16 @@
 =======================================
 本教程作者： `Grasshlw <https://github.com/Grasshlw>`_, `Yanqi-Chen <https://github.com/Yanqi-Chen>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 :class:`spikingjelly.clock_driven.encoding` ，介绍编码器。
+本节教程主要关注 :class:`spikingjelly.activation_based.encoding` ，介绍编码器。
 
 编码器基类
 -----------------
 
-在 :class:`spikingjelly.clock_driven.encoding` 中，存在2个基类编码器：
+在 :class:`spikingjelly.activation_based.encoding` 中，存在2个基类编码器：
 
-    1.无状态的编码器 :class:`spikingjelly.clock_driven.encoding.StatelessEncoder`
+    1.无状态的编码器 :class:`spikingjelly.activation_based.encoding.StatelessEncoder`
 
-    2.有状态的编码器 :class:`spikingjelly.clock_driven.encoding.StatefulEncoder`
+    2.有状态的编码器 :class:`spikingjelly.activation_based.encoding.StatefulEncoder`
 
 
 
@@ -19,7 +19,7 @@
 
 无状态的编码器没有隐藏状态，输入数据 ``x[t]`` 可直接编码得到输出脉冲 ``spike[t]``；而有状态的编码器 ``encoder = StatefulEncoder(T)``，
 编码器会在首次调用 ``forward`` 时使用 ``encode`` 函数对 ``T`` 个时刻的输入序列 ``x`` 进行编码得到 ``spike``，在第 ``t`` 次调用
-``forward`` 时会输出 ``spike[t % T]``，可以从其前向传播的代码 :class:`spikingjelly.clock_driven.encoding.StatefulEncoder.forward` 看到这种操作：
+``forward`` 时会输出 ``spike[t % T]``，可以从其前向传播的代码 :class:`spikingjelly.activation_based.encoding.StatefulEncoder.forward` 看到这种操作：
 
 .. code-block:: python
 
@@ -37,7 +37,7 @@
 
 泊松编码器
 -----------------
-泊松编码器 :class:`spikingjelly.clock_driven.encoding.PoissonEncoder` 是无状态的编码器。泊松编码器将输入数据 ``x`` 编码为发放次数分布符合泊松过程的脉冲序列。泊松过程又被称为泊松流，当一个脉冲流满足独立增量性、增
+泊松编码器 :class:`spikingjelly.activation_based.encoding.PoissonEncoder` 是无状态的编码器。泊松编码器将输入数据 ``x`` 编码为发放次数分布符合泊松过程的脉冲序列。泊松过程又被称为泊松流，当一个脉冲流满足独立增量性、增
 量平稳性和普通性时，这样的脉冲流就是一个泊松流。更具体地说，在整个脉冲流中，互不相交的区间里出现脉冲的个数是相互独立的，且在任意一个区间中，出现脉冲的个数
 与区间的起点无关，与区间的长度有关。因此，为了实现泊松编码，我们令一个时间步长的脉冲发放概率 :math:`p=x`, 其中 :math:`x` 需归一化到[0,1]。
 
@@ -50,7 +50,7 @@
     import matplotlib
     import matplotlib.pyplot as plt
     from PIL import Image
-    from spikingjelly.clock_driven import encoding
+    from spikingjelly.activation_based import encoding
     from spikingjelly import visualizing
 
     # 读入lena图像
@@ -76,10 +76,10 @@
 
 lena原灰度图和编码后20个脉冲矩阵如下：
 
-.. image:: ../_static/tutorials/clock_driven/2_encoding/3.*
+.. image:: ../_static/tutorials/activation_based/2_encoding/3.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/2_encoding/4.*
+.. image:: ../_static/tutorials/activation_based/2_encoding/4.*
     :width: 100%
 
 对比原灰度图和编码后的脉冲矩阵，可发现脉冲矩阵很接近原灰度图的轮廓，可见泊松编码器性能的优越性。
@@ -111,15 +111,15 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 
 叠加后的图像如下：
 
-.. image:: ../_static/tutorials/clock_driven/2_encoding/5.*
+.. image:: ../_static/tutorials/activation_based/2_encoding/5.*
     :width: 100%
 
 可见当仿真足够的步长，泊松编码器得到的脉冲叠加后几乎可以重构出原始图像。
 
 周期编码器
 -----------------
-周期编码器 :class:`spikingjelly.clock_driven.encoding.PoissonEncoder` 是周期性输出给定的脉冲序列的编码器。``PeriodicEncoder`` 在
-初始化时可以设定好要输出的脉冲序列 ``spike`` ，也可以随时调用 :class:`spikingjelly.clock_driven.encoding.PoissonEncoder.encode` 重
+周期编码器 :class:`spikingjelly.activation_based.encoding.PoissonEncoder` 是周期性输出给定的脉冲序列的编码器。``PeriodicEncoder`` 在
+初始化时可以设定好要输出的脉冲序列 ``spike`` ，也可以随时调用 :class:`spikingjelly.activation_based.encoding.PoissonEncoder.encode` 重
 新设定。
 
 .. code-block:: python
@@ -152,12 +152,12 @@ lena原灰度图和编码后20个脉冲矩阵如下：
                                plot_firing_rate=False)
     plt.show()
 
-.. image:: ../_static/tutorials/clock_driven/2_encoding/1.*
+.. image:: ../_static/tutorials/activation_based/2_encoding/1.*
     :width: 100%
 
 延迟编码器
 -------------------
-延迟编码器 :class:`spikingjelly.clock_driven.encoding.LatencyEncoder` 是根据输入数据 ``x`` ，延迟发放脉冲的编码器。当刺激强度越大，发放
+延迟编码器 :class:`spikingjelly.activation_based.encoding.LatencyEncoder` 是根据输入数据 ``x`` ，延迟发放脉冲的编码器。当刺激强度越大，发放
 时间就越早，且存在最大脉冲发放时间。因此对于每一个输入数据 ``x``，都能得到一段时间步长为最大脉冲发放时间的脉冲序列，每段序列有且仅有一个脉冲发放。
 
 脉冲发放时间 :math:`t_f` 与刺激强度 :math:`x \in [0, 1]` 满足以下二式：
@@ -191,7 +191,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 
     import torch
     import matplotlib.pyplot as plt
-    from spikingjelly.clock_driven import encoding
+    from spikingjelly.activation_based import encoding
     from spikingjelly import visualizing
 
     # 随机生成6个神经元的刺激强度，设定最大脉冲时间为20
@@ -214,7 +214,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 
 当随机生成的6个刺激强度分别为 ``0.6650`` 、 ``0.3704`` 、 ``0.8485`` 、 ``0.0247`` 、 ``0.5589`` 和 ``0.1030`` 时，得到的脉冲序列如下：
 
-.. image:: ../_static/tutorials/clock_driven/2_encoding/2.*
+.. image:: ../_static/tutorials/activation_based/2_encoding/2.*
     :width: 100%
 
 带权相位编码器

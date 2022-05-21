@@ -3,19 +3,19 @@ Train Large-Scale SNN
 
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
-Use networks from :class:`spikingjelly.clock_driven.model`
+Use networks from :class:`spikingjelly.activation_based.model`
 ----------------------------------------------
-:class:`spikingjelly.clock_driven.model` provides some classic networks. We use :class:`spikingjelly.clock_driven.model.spiking_resnet` as the example to show how to use them.
+:class:`spikingjelly.activation_based.model` provides some classic networks. We use :class:`spikingjelly.activation_based.model.spiking_resnet` as the example to show how to use them.
 
-Most of networks in :class:`spikingjelly.clock_driven.model` have two version: single-step and multi-step. We can create
+Most of networks in :class:`spikingjelly.activation_based.model` have two version: single-step and multi-step. We can create
 a single-step Spiking ResNet-18 [#ResNet]_ like this:
 
 .. code:: python
 
     import torch
     import torch.nn.functional as F
-    from spikingjelly.clock_driven import neuron, surrogate, functional
-    from spikingjelly.clock_driven.model import spiking_resnet
+    from spikingjelly.activation_based import neuron, surrogate, functional
+    from spikingjelly.activation_based.model import spiking_resnet
 
     net = spiking_resnet.spiking_resnet18(pretrained=False, progress=True, single_step_neuron=neuron.IFNode, v_threshold=1., surrogate_function=surrogate.ATan())
     print(net)
@@ -185,8 +185,8 @@ The inputs of single-step network do not contain the time dimension. We need to 
     print('firing rate =', fr)
 
 
-To build a multi-step network, we should use :class:`spikingjelly.clock_driven.model.spiking_resnet.multi_step_spiking_resnet18`,
-rather than :class:`spikingjelly.clock_driven.model.spiking_resnet.spiking_resnet18`, and use the multi-step neuron:
+To build a multi-step network, we should use :class:`spikingjelly.activation_based.model.spiking_resnet.multi_step_spiking_resnet18`,
+rather than :class:`spikingjelly.activation_based.model.spiking_resnet.spiking_resnet18`, and use the multi-step neuron:
 
 .. code:: python
 
@@ -406,7 +406,7 @@ However, it is more efficient to let network to repeat. Refer to :doc:`Clock dri
 Training on ImageNet
 ---------------------------------------
 ImageNet [#ImageNet]_ is a popular baseline dataset for computer version, which is challenging for SNNs. SpikingJelly provides a code
-example to train on ImageNet, which is available at `spikingjelly.clock_driven.model.train_imagenet <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/model/train_imagenet.py>`_ .The example is written
+example to train on ImageNet, which is available at `spikingjelly.activation_based.model.train_imagenet <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/model/train_imagenet.py>`_ .The example is written
 by referring `torchvision <https://github.com/pytorch/vision/blob/main/references/classification/train.py>`_ .We can use
 it to train our network on ImageNet after we build the network, loss and how to calculate accuracy. Here is an example:
 
@@ -414,8 +414,8 @@ it to train our network on ImageNet after we build the network, loss and how to 
 
     import torch
     import torch.nn.functional as F
-    from spikingjelly.clock_driven.model import train_imagenet, spiking_resnet, train_classify
-    from spikingjelly.clock_driven import neuron, surrogate
+    from spikingjelly.activation_based.model import train_imagenet, spiking_resnet, train_classify
+    from spikingjelly.activation_based import neuron, surrogate
 
     def ce_loss(x_seq: torch.Tensor, label: torch.Tensor):
         # x_seq.shape = [T, N, C]

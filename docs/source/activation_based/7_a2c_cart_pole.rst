@@ -117,7 +117,7 @@ SNN的训练代码如下，我们会保存训练过程中使得奖励最大的�
 
 另外一个需要注意的地方是，SNN是有状态的，因此每次前向传播后，不要忘了将网络 ``reset``。
 
-完整的代码可见于 `clock_driven/examples/Spiking_A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/Spiking_A2C.py>`_。可以从命令行直接启动训练：
+完整的代码可见于 `activation_based/examples/Spiking_A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/Spiking_A2C.py>`_。可以从命令行直接启动训练：
 
 .. code-block:: python
 
@@ -127,10 +127,10 @@ ANN与SNN的性能对比
 ---------------------------
 训练1e5个步骤的性能曲线：
 
-.. image:: ../_static/tutorials/clock_driven/\7_a2c_cart_pole/Spiking-A2C-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\7_a2c_cart_pole/Spiking-A2C-CartPole-v0.*
     :width: 100%
 
-用相同处理方式的ANN训练1e5个步骤的性能曲线(完整的代码可见于 `clock_driven/examples/A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/A2C.py>`_)：
+用相同处理方式的ANN训练1e5个步骤的性能曲线(完整的代码可见于 `activation_based/examples/A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/A2C.py>`_)：
 
-.. image:: ../_static/tutorials/clock_driven/\7_a2c_cart_pole/A2C-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\7_a2c_cart_pole/A2C-CartPole-v0.*
     :width: 100%

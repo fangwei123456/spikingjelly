@@ -3,12 +3,12 @@
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本节教程主要关注 ``spikingjelly.event_driven`` ，介绍事件驱动概念、Tempotron神经元。
+本节教程主要关注 ``spikingjelly.timing_based`` ，介绍事件驱动概念、Tempotron神经元。
 
 事件驱动的SNN仿真
 -----------------
 
-``clock_driven`` 使用时间驱动的方法对SNN进行仿真，因此在代码中都能够找到在时间上的循环，例如：
+``activation_based`` 使用时间驱动的方法对SNN进行仿真，因此在代码中都能够找到在时间上的循环，例如：
 
 .. code-block:: python
 
@@ -91,14 +91,14 @@ Tempotron的膜电位定义为：
 --------
 
 如前所述，对于脉冲响应模型，一旦输入给定，神经元的响应方程已知，任意时刻的神经元状态都可以求解。此外，计算 :math:`t` 时刻的电\
-压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 ``spikingjelly/event_driven/neuron.py`` 中\
+压值，并不需要依赖于 :math:`t-1` 时刻的电压值，因此不同时刻的电压值完全可以并行求解。在 ``spikingjelly/timing_based/neuron.py`` 中\
 实现了集成全连接层、并行计算的Tempotron，将时间看作是一个单独的维度，整个网络在 :math:`t=0, 1, ..., T-1` 时刻的状态全都被并
 行地计算出。读者如有兴趣可以直接阅读源代码。
 
 示例：识别MNIST
 ---------------
 
-我们使用Tempotron搭建一个简单的SNN网络，识别MNIST数据集。首先我们需要考虑如何将MNIST数据集转化为脉冲输入。在 ``clock_driven`` 中\
+我们使用Tempotron搭建一个简单的SNN网络，识别MNIST数据集。首先我们需要考虑如何将MNIST数据集转化为脉冲输入。在 ``activation_based`` 中\
 的泊松编码器，在伴随着整个网络的for循环中，不断地生成脉冲；但在使用Tempotron时，我们使用高斯调谐曲线编码器 [#f2]_，这一编码器\
 可以在时间维度上并行地将输入数据转化为脉冲发放时刻。
 
@@ -132,7 +132,7 @@ Tempotron的膜电位定义为：
 于 :math:`m` 个交点，这些交点在纵轴上的投影点，即为 :math:`m` 个神经元的脉冲发放时刻。但由于我们在仿真时，仿真步长通常是整\
 数，因此脉冲发放时刻也需要取整。
 
-.. image:: ./_static/tutorials/event_driven/1.png
+.. image:: ./_static/tutorials/timing_based/1.png
 
 定义网络、损失函数、分类结果
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -158,7 +158,7 @@ Tempotron的膜电位定义为：
     train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
 
 我们使用的损失函数与 [#f1]_ 中的类似，但所有不同。对于分类错误的神经元，误差为其峰值电压与阈值电压之差的平方，损失函数可以\
-在 ``event_driven.neuron`` 中找到源代码：
+在 ``timing_based.neuron`` 中找到源代码：
 
 .. code-block:: python
 
@@ -177,12 +177,12 @@ Tempotron的膜电位定义为：
             wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
             return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
 
-下面我们直接运行代码。完整的源代码位于 ``spikingjelly/event_driven/examples/tempotron_mnist.py``：
+下面我们直接运行代码。完整的源代码位于 ``spikingjelly/timing_based/examples/tempotron_mnist.py``：
 
 .. code-block:: shell
 
     $ python
-    >>> import spikingjelly.event_driven.examples.tempotron_mnist as tempotron_mnist
+    >>> import spikingjelly.timing_based.examples.tempotron_mnist as tempotron_mnist
     >>> tempotron_mnist.main()
     ########## Configurations ##########
     device=cuda:0
@@ -216,11 +216,11 @@ Tempotron的膜电位定义为：
 
 在Tesla K80上训练100个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/train_batch_acc_scale.*
+.. image:: ./_static/examples/timing_based/tempotron_mnist/train_batch_acc_scale.*
     :width: 100%
     
 
-.. image:: ./_static/examples/event_driven/tempotron_mnist/test_accuracy_scale.*
+.. image:: ./_static/examples/timing_based/tempotron_mnist/test_accuracy_scale.*
     :width: 100%
 
 

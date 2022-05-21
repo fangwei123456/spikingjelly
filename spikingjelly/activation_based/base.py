@@ -332,9 +332,6 @@ class StatelessModule:
             raise ValueError(f'step_mode can only be "s" or "m", but got "{value}"!')
         self._step_mode = value
 
-    def __str__(self):
-        return super().__str__() + f', step_mode={self.step_mode}'
-
 class MultiStepStatelessModule(StatelessModule):
     @property
     def step_mode(self):

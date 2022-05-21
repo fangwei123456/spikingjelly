@@ -7,11 +7,11 @@
 -----------------------
 自连接指的是从输出到输入的连接，例如 [#Effective]_ 一文中的SRNN(recurrent networks of spiking neurons)，如下图所示：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
 使用惊蜇框架很容易构建出带有自连接的模块。考虑最简单的一种情况，我们给神经元增加一个回路，使得它在 :math:`t` 时刻的输出 :math:`s[t]`，会与下一个时刻的外界
-输入 :math:`x[t+1]` 相加，共同作为输入。这可以由 :class:`spikingjelly.clock_driven.layer.ElementWiseRecurrentContainer` 轻松实现。
+输入 :math:`x[t+1]` 相加，共同作为输入。这可以由 :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` 轻松实现。
 ``ElementWiseRecurrentContainer`` 是一个包装器，给任意的 ``sub_module`` 增加一个额外的自连接。连接的形式可以使用用户自定义的逐元素函数
 操作 :math:`z=f(x, y)` 来实现。记 :math:`x[t]` 为 :math:`t` 时刻整个模块的输入，:math:`i[t]` 和 :math:`y[t]` 是 ``sub_module`` 的
 输入和输出（注意 :math:`y[t]` 同时也是整个模块的输出），则
@@ -66,12 +66,12 @@
 
 可以发现，由于存在自连接，即便 :math:`t \ge 1` 时 :math:`x[t]=0`，由于输出的脉冲能传回到输入，神经元也能持续释放脉冲。
 
-可以使用 :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` 实现更复杂的全连接形式的自连接。
+可以使用 :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 实现更复杂的全连接形式的自连接。
 
 有状态的突触
 -----------------------
 
-[#Unsupervised]_ [#Exploiting]_ 等文章使用有状态的突触。将 :class:`spikingjelly.clock_driven.layer.SynapseFilter` 放在普通无状
+[#Unsupervised]_ [#Exploiting]_ 等文章使用有状态的突触。将 :class:`spikingjelly.activation_based.layer.SynapseFilter` 放在普通无状
 态突触的后面，对突触输出的电流进行滤波，就可以得到有状态的突触，例如：
 
 .. code-block:: python
@@ -87,12 +87,12 @@ Sequential FashionMNIST上的对比实验
 将原始的FashionMNIST图片一行一行或者一列一列，而不是整个图片，作为输入。在这种情况下，网络必须具有一定的记忆能力，才能做出正确的分类。我们将会把
 图片一列一列的输入，这样对网络而言，就像是从左到右“阅读”一样，如下图所示：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 下图中展示了被读入的列：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 首先导入相关的包：
@@ -103,9 +103,9 @@ Sequential FashionMNIST上的对比实验
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision.datasets
-    from spikingjelly.clock_driven.model import train_classify
-    from spikingjelly.clock_driven import neuron, surrogate, layer
-    from spikingjelly.clock_driven.functional import seq_to_ann_forward
+    from spikingjelly.activation_based.model import train_classify
+    from spikingjelly.activation_based import neuron, surrogate, layer
+    from spikingjelly.activation_based.functional import seq_to_ann_forward
     from torchvision import transforms
     import os, argparse
 
@@ -137,7 +137,7 @@ Sequential FashionMNIST上的对比实验
             x = self.sn2(x)
             return x.mean(0)
 
-我们在 ``Net`` 的第一层脉冲神经元后增加一个 :class:`spikingjelly.clock_driven.layer.SynapseFilter`，得到一个新的网络 ``StatefulSynapseNet``：
+我们在 ``Net`` 的第一层脉冲神经元后增加一个 :class:`spikingjelly.activation_based.layer.SynapseFilter`，得到一个新的网络 ``StatefulSynapseNet``：
 
 .. code:: python
 
@@ -161,7 +161,7 @@ Sequential FashionMNIST上的对比实验
             x = self.sn2(x)
             return x.mean(0)
 
-我们给 ``Net`` 的第一层脉冲神经元增加一个反馈连接 :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` 得到 ``FeedBackNet``：
+我们给 ``Net`` 的第一层脉冲神经元增加一个反馈连接 :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 得到 ``FeedBackNet``：
 
 .. code:: python
 
@@ -190,14 +190,14 @@ Sequential FashionMNIST上的对比实验
 
 下图展示了3种网络的结构：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
-完整的代码位于 `spikingjelly.clock_driven.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/rsnn_sequential_fmnist.py>`_。我们可以通过命令行直接运行。运行参数为：
+完整的代码位于 `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_。我们可以通过命令行直接运行。运行参数为：
 
 .. code:: shell
 
-    (pytorch-env) PS C:/Users/fw> python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --h
+    (pytorch-env) PS C:/Users/fw> python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --h
     usage: rsnn_sequential_fmnist.py [-h] [--data-path DATA_PATH] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N]
                                      [--lr LR] [--opt OPT] [--lrs LRS] [--step-size STEP_SIZE] [--step-gamma STEP_GAMMA]
                                      [--cosa-tmax COSA_TMAX] [--momentum M] [--wd W] [--output-dir OUTPUT_DIR]
@@ -238,25 +238,25 @@ Sequential FashionMNIST上的对比实验
 
 .. code:: shell
 
-    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:0 --amp --model plain
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:0 --amp --model plain
 
-    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:1 --amp --model feedback
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:1 --amp --model feedback
 
-    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:2 --amp --model stateful-synapse
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:2 --amp --model stateful-synapse
 
 训练集损失为：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/train_loss.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/train_loss.*
     :width: 100%
 
 训练集正确率为：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/train_acc.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/train_acc.*
     :width: 100%
 
 测试集正确率为：
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/test_acc.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/test_acc.*
     :width: 100%
 
 可以发现，``feedback`` 和 ``stateful-synapse`` 的性能都高于 ``plain``，表明自连接和有状态突触都有助于提升网络的记忆能力。

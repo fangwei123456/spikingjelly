@@ -123,7 +123,7 @@ During the training process, we will save the model parameters responsible for t
 It should be emphasized here that, we need to ``reset`` the network after each forward process,
 because SNN is retentive while each trial should be started with a clean network state.
 
-The integrated script can be found here `clock_driven/examples/Spiking_A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/Spiking_A2C.py>`_.
+The integrated script can be found here `activation_based/examples/Spiking_A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/Spiking_A2C.py>`_.
 And we can start the training process in a Python Console as follows.
 
 .. code-block:: python
@@ -134,11 +134,11 @@ Performance comparison between ANN and SNN
 ------------------------------------------------------
 Here is the reward curve during the training process of 1e5 episodes:
 
-.. image:: ../_static/tutorials/clock_driven/\7_a2c_cart_pole/Spiking-A2C-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\7_a2c_cart_pole/Spiking-A2C-CartPole-v0.*
     :width: 100%
 
 And here is the result of the ANN version with the same settings.
-The integrated code can be found here `clock_driven/examples/A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/A2C.py>`_.
+The integrated code can be found here `activation_based/examples/A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/A2C.py>`_.
 
-.. image:: ../_static/tutorials/clock_driven/\7_a2c_cart_pole/A2C-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\7_a2c_cart_pole/A2C-CartPole-v0.*
     :width: 100%

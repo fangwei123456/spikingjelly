@@ -162,11 +162,11 @@ SNN的训练代码如下，我们会保存训练过程中使得奖励最大的�
         optimizer.step()
         functional.reset_net(policy_net)
 
-完整的代码可见于 `clock_driven/examples/Spiking_DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/Spiking_DQN_state.py>`_。可以从命令行直接启动训练：
+完整的代码可见于 `activation_based/examples/Spiking_DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/Spiking_DQN_state.py>`_。可以从命令行直接启动训练：
 
 .. code-block:: python
 
-    >>> from spikingjelly.clock_driven.examples import Spiking_DQN_state
+    >>> from spikingjelly.activation_based.examples import Spiking_DQN_state
     >>> Spiking_DQN_state.train(use_cuda=False, model_dir='./model/CartPole-v0', log_dir='./log', env_name='CartPole-v0', hidden_size=256, num_episodes=500, seed=1)
     ...
     Episode: 509, Reward: 715
@@ -182,31 +182,31 @@ SNN的训练代码如下，我们会保存训练过程中使得奖励最大的�
 
 .. code-block:: python
 
-    >>> from spikingjelly.clock_driven.examples import Spiking_DQN_state
+    >>> from spikingjelly.activation_based.examples import Spiking_DQN_state
     >>> Spiking_DQN_state.play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', hidden_size=256, played_frames=300)
 
 训练好的SNN会控制CartPole的左右移动，直到游戏结束或持续帧数超过 ``played_frames``。``play`` 函数中会画出SNN中IF神经元在仿真期间的脉
 冲发放频率，以及输出层NonSpikingLIF神经元在最后时刻的电压：
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/512@66.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/512@66.*
     :width: 100%
 
 训练16次的效果：
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/16@66.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/16@66.*
     :width: 100%
 
 训练32次的效果：
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/32@66.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/32@66.*
     :width: 100%
 
 训练500个回合的性能曲线：
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
     :width: 100%
 
-用相同处理方式的ANN训练500个回合的性能曲线(完整的代码可见于 `clock_driven/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/DQN_state.py>`_)：
+用相同处理方式的ANN训练500个回合的性能曲线(完整的代码可见于 `activation_based/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/DQN_state.py>`_)：
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/DQN-state-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/DQN-state-CartPole-v0.*
     :width: 100%

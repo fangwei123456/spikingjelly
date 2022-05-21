@@ -3,19 +3,19 @@
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-使用 :class:`spikingjelly.clock_driven.model`
+使用 :class:`spikingjelly.activation_based.model`
 ----------------------------------------------
-在 :class:`spikingjelly.clock_driven.model` 中定义了一些常用的网络，下面以 :class:`spikingjelly.clock_driven.model.spiking_resnet`
+在 :class:`spikingjelly.activation_based.model` 中定义了一些常用的网络，下面以 :class:`spikingjelly.activation_based.model.spiking_resnet`
 为例展示如何使用这些网络。
 
-大多数 :class:`spikingjelly.clock_driven.model` 中的网络，都提供单步和多步两种网络。例如，我们创建一个逐步传播的Spiking ResNet-18 [#ResNet]_ ：
+大多数 :class:`spikingjelly.activation_based.model` 中的网络，都提供单步和多步两种网络。例如，我们创建一个逐步传播的Spiking ResNet-18 [#ResNet]_ ：
 
 .. code:: python
 
     import torch
     import torch.nn.functional as F
-    from spikingjelly.clock_driven import neuron, surrogate, functional
-    from spikingjelly.clock_driven.model import spiking_resnet
+    from spikingjelly.activation_based import neuron, surrogate, functional
+    from spikingjelly.activation_based.model import spiking_resnet
 
     net = spiking_resnet.spiking_resnet18(pretrained=False, progress=True, single_step_neuron=neuron.IFNode, v_threshold=1., surrogate_function=surrogate.ATan())
     print(net)
@@ -186,7 +186,7 @@ ResNet-18的预训练模型参数。运行结果为：
     print('firing rate =', fr)
 
 
-搭建多步网络的方式类似，只需要把 :class:`spikingjelly.clock_driven.model.spiking_resnet.spiking_resnet18` 换成 :class:`spikingjelly.clock_driven.model.spiking_resnet.multi_step_spiking_resnet18` 并将单步神经元换成多步神经元：
+搭建多步网络的方式类似，只需要把 :class:`spikingjelly.activation_based.model.spiking_resnet.spiking_resnet18` 换成 :class:`spikingjelly.activation_based.model.spiking_resnet.multi_step_spiking_resnet18` 并将单步神经元换成多步神经元：
 
 .. code:: python
 
@@ -404,7 +404,7 @@ ResNet-18的预训练模型参数。运行结果为：
 在ImageNet上训练
 ---------------------------------------
 ImageNet [#ImageNet]_ 是计算机视觉常用的数据集，对于SNN而言颇具挑战性。惊蜇框架提供了一个训练ImageNet的代码样例，位于
-`spikingjelly.clock_driven.model.train_imagenet <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/model/train_imagenet.py>`_ 。
+`spikingjelly.activation_based.model.train_imagenet <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/model/train_imagenet.py>`_ 。
 该代码样例的实现参考了 `torchvision <https://github.com/pytorch/vision/blob/main/references/classification/train.py>`_ 。使用
 时只需要构建好网络、损失函数和正确率计算方式，就可以快速训练，下面是使用示例：
 
@@ -412,8 +412,8 @@ ImageNet [#ImageNet]_ 是计算机视觉常用的数据集，对于SNN而言颇�
 
     import torch
     import torch.nn.functional as F
-    from spikingjelly.clock_driven.model import train_imagenet, spiking_resnet, train_classify
-    from spikingjelly.clock_driven import neuron, surrogate
+    from spikingjelly.activation_based.model import train_imagenet, spiking_resnet, train_classify
+    from spikingjelly.activation_based import neuron, surrogate
 
     def ce_loss(x_seq: torch.Tensor, label: torch.Tensor):
         # x_seq.shape = [T, N, C]
