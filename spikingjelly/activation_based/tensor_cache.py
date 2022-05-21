@@ -7,7 +7,7 @@ import logging
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.clock_driven.tensor_cache: {e}')
+    logging.info(f'spikingjelly.activation_based.tensor_cache: {e}')
     cupy = None
 
 class DataTypeConvertCUDACode:

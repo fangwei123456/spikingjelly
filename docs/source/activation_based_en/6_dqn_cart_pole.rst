@@ -175,12 +175,12 @@ because SNN is retentive while each trial should be started with a clean network
         optimizer.step()
         functional.reset_net(policy_net)
 
-The integrated script can be found here `clock_driven/examples/Spiking_DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/Spiking_DQN_state.py>`_.
+The integrated script can be found here `activation_based/examples/Spiking_DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/Spiking_DQN_state.py>`_.
 And we can start the training process in a Python Console as follows.
 
 .. code-block:: python
 
-    >>> from spikingjelly.clock_driven.examples import Spiking_DQN_state
+    >>> from spikingjelly.activation_based.examples import Spiking_DQN_state
     >>> Spiking_DQN_state.train(use_cuda=False, model_dir='./model/CartPole-v0', log_dir='./log', env_name='CartPole-v0', hidden_size=256, num_episodes=500, seed=1)
     ...
     Episode: 509, Reward: 715
@@ -196,33 +196,33 @@ and run the ``play`` function on a local machine with a graphical interface to t
 
 .. code-block:: python
 
-    >>> from spikingjelly.clock_driven.examples import Spiking_DQN_state
+    >>> from spikingjelly.activation_based.examples import Spiking_DQN_state
     >>> Spiking_DQN_state.play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', hidden_size=256, played_frames=300)
 
 The trained SNN controls the left or right movement of the CartPole, until the end of the game or the number of continuous frames exceeds ``played_frames``.
 During the simulation, the ``play`` function will draw the firing rate of the IF neuron,
 and the voltages of the NonSpikingLIF neurons in the output layer at the last moment, which directly determine the movement of the CartPole.
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/512@66.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/512@66.*
     :width: 100%
 
 The performance after 16 episodes:
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/16@66.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/16@66.*
     :width: 100%
 
 The performance after 32 episodes:
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/32@66.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/32@66.*
     :width: 100%
 
 The reward increases with training:
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
     :width: 100%
 
 Here is the performance of the ANN version
-(The code can be found here `clock_driven/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/DQN_state.py>`_).
+(The code can be found here `activation_based/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/DQN_state.py>`_).
 
-.. image:: ../_static/tutorials/clock_driven/\6_dqn_cart_pole/DQN-state-CartPole-v0.*
+.. image:: ../_static/tutorials/activation_based/\6_dqn_cart_pole/DQN-state-CartPole-v0.*
     :width: 100%

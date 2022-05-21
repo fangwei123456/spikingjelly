@@ -17,7 +17,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision
-    from spikingjelly.clock_driven import neuron, functional, surrogate, layer
+    from spikingjelly.activation_based import neuron, functional, surrogate, layer
     from torch.utils.tensorboard import SummaryWriter
     import os
     import time
@@ -159,7 +159,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 训练网络
 -----------------
-完整的代码位于 :class:`spikingjelly.clock_driven.examples.conv_fashion_mnist`，训练命令如下：
+完整的代码位于 :class:`spikingjelly.activation_based.examples.conv_fashion_mnist`，训练命令如下：
 
 .. code-block:: shell
 
@@ -186,13 +186,13 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
       -gamma GAMMA          gamma for StepLR
       -T_max T_MAX          T_max for CosineAnnealingLR
 
-其中 ``-cupy`` 是使用cupy后端和多步神经元，关于它的更多信息参见 :doc:`../clock_driven/10_propagation_pattern` 和 :doc:`../clock_driven/11_cext_neuron_with_lbl`。
+其中 ``-cupy`` 是使用cupy后端和多步神经元，关于它的更多信息参见 :doc:`../activation_based/10_propagation_pattern` 和 :doc:`../activation_based/11_cext_neuron_with_lbl`。
 
 检查点会被保存在 ``tensorboard`` 日志文件的同级目录下。实验机器使用 `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` 的CPU和 `GeForce RTX 2080 Ti` 的GPU。
 
 .. code-block:: shell
 
-    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.clock_driven.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
+    (pytorch-env) root@e8b6e4800dae4011eb0918702bd7ddedd51c-fangw1598-0:/# python -m spikingjelly.activation_based.examples.conv_fashion_mnist -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
 
     Namespace(T=4, T_max=64, amp=True, b=128, cupy=False, data_dir='/userhome/datasets/FashionMNIST/', device='cuda:0', epochs=64, gamma=0.1, j=4, lr=0.1, lr_scheduler='CosALR', momentum=0.9, opt='SGD', out_dir='./logs', resume=None, step_size=32)
     PythonNet(
@@ -247,10 +247,10 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 运行64轮训练后，训练集和测试集上的正确率如下：
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/train.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/test.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
     :width: 100%
 
 在训练64个epoch后，最高测试集正确率可以达到93.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__
@@ -285,7 +285,7 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
     from matplotlib import pyplot as plt
     import numpy as np
-    from spikingjelly.clock_driven.examples.conv_fashion_mnist import PythonNet
+    from spikingjelly.activation_based.examples.conv_fashion_mnist import PythonNet
     from spikingjelly import visualizing
     import torch
     import torch.nn as nn
@@ -344,22 +344,22 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 下面展示2个输入图片，以及在最开始 ``t=0`` 和最后 ``t=7`` 时刻的编码器输出的累计脉冲 :math:`\sum_{t} S_{t}`：
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x0.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/x0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y00.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y00.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y07.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y07.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/x1.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/x1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y10.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/4_conv_fashion_mnist/y17.*
+.. image:: ../_static/tutorials/activation_based/4_conv_fashion_mnist/y17.*
     :width: 100%
 
 观察可以发现，编码器的累计输出脉冲 :math:`\sum_{t} S_{t}` 非常接近原图像的轮廓，表明这种自学习的脉冲编码器，有很强的编码能力。

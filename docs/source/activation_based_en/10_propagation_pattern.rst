@@ -4,15 +4,15 @@ Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Single-Step and Multi-Step
 ------------------------------------
-Most modules in SpikingJelly (except for :class:`spikingjelly.clock_driven.rnn`), e.g., :class:`spikingjelly.clock_driven.layer.Dropout`, don't have a ``MultiStep`` prefix. These modules' ``forward`` functions define a single-step forward:
+Most modules in SpikingJelly (except for :class:`spikingjelly.activation_based.rnn`), e.g., :class:`spikingjelly.activation_based.layer.Dropout`, don't have a ``MultiStep`` prefix. These modules' ``forward`` functions define a single-step forward:
 
     Input :math:`X_{t}`, output :math:`Y_{t}`
 
-If a module has a ``MultiStep`` prefix, e.g., :class:`spikingjelly.clock_driven.layer.MultiStepDropout`, then this module's ``forward`` function defines the multi-step forward:
+If a module has a ``MultiStep`` prefix, e.g., :class:`spikingjelly.activation_based.layer.MultiStepDropout`, then this module's ``forward`` function defines the multi-step forward:
 
     Input :math:`X_{t}, t=0,1,...,T-1`, output :math:`Y_{t}, t=0,1,...,T-1`
 
-A single-step module can be easily packaged as a multi-step module. For example, we can use :class:`spikingjelly.clock_driven.layer.MultiStepContainer`, which contains the origin module as a sub-module and implements the loop in time-steps in its ``forward`` function:
+A single-step module can be easily packaged as a multi-step module. For example, we can use :class:`spikingjelly.activation_based.layer.MultiStepContainer`, which contains the origin module as a sub-module and implements the loop in time-steps in its ``forward`` function:
 
 .. code-block:: python
 
@@ -35,11 +35,11 @@ A single-step module can be easily packaged as a multi-step module. For example,
                 y_seq[t] = y_seq[t].unsqueeze(0)
             return torch.cat(y_seq, 0)
 
-Let us use :class:`spikingjelly.clock_driven.layer.MultiStepContainer` to implement a multi-step IF neuron:
+Let us use :class:`spikingjelly.activation_based.layer.MultiStepContainer` to implement a multi-step IF neuron:
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import neuron, layer, functional
+    from spikingjelly.activation_based import neuron, layer, functional
     import torch
 
     neuron_num = 4
@@ -102,7 +102,7 @@ In the previous tutorials and examples, we run the SNNs `step-by-step`, e.g.,:
 
 The computation graph of forward propagation is built as followed:
 
-.. image:: ../_static/tutorials/clock_driven/10_propagation_pattern/step-by-step.png
+.. image:: ../_static/tutorials/activation_based/10_propagation_pattern/step-by-step.png
     :width: 100%
 
 The forward propagation of SNN and RNN is along both spatial domain and temporal domain. `step-by-step` calculates states of the whole network step by step. We can also use an another order, which is `layer-by-layer`. `layer-by-layer` calculates states layer-by-layer. The followed code is a `layer-by-layer` example (we suppose ``M0, M1, M2`` are multi-step modules):
@@ -115,7 +115,7 @@ The forward propagation of SNN and RNN is along both spatial domain and temporal
 
 The computation graph of forward propagation is built as followed:
 
-.. image:: ../_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png
+.. image:: ../_static/tutorials/activation_based/10_propagation_pattern/layer-by-layer.png
     :width: 100%
 
 The `layer-by-layer` method is widely used in RNN and SNN, e.g., `Low-activity supervised convolutional spiking neural networks applied to speech commands recognition <https://arxiv.org/abs/2011.06846>`_ calculates outputs of each layer to implement a temporal convolution. Their codes are availble at https://github.com/romainzimmer/s2net.
@@ -133,7 +133,7 @@ The `layer-by-layer` method can calculate parallelly:
 
     y = fc(x)  # x.shape=[T, batch_size, in_features]
 
-For a stateless layer, we can concatenate inputs ``shape=[T, batch_size, ...]`` at time dimension as ``shape=[T * batch_size, ...]`` to avoid loop in time-steps. :class:`spikingjelly.clock_driven.layer.SeqToANNContainer` has provided such a function in its ``forward``. We can directly use this module:
+For a stateless layer, we can concatenate inputs ``shape=[T, batch_size, ...]`` at time dimension as ``shape=[T * batch_size, ...]`` to avoid loop in time-steps. :class:`spikingjelly.activation_based.layer.SeqToANNContainer` has provided such a function in its ``forward``. We can directly use this module:
 
 .. code-block:: python
 
@@ -184,7 +184,7 @@ The outputs are:
     net_layer_by_layer.state_dict: odict_keys(['0.0.weight', '0.1.weight', '0.1.bias', '0.1.running_mean', '0.1.running_var', '0.1.num_batches_tracked'])
 
 We can find that keys have been changed, which causes some trouble to load model's weights. For example, if we want to build
-a multi-step Spiking ResNet-18 (:class:`spikingjelly.clock_driven.model.spiking_resnet.spiking_resnet18`), and we want to
+a multi-step Spiking ResNet-18 (:class:`spikingjelly.activation_based.model.spiking_resnet.spiking_resnet18`), and we want to
 load the pre-train model's weights from ANN. If the network is built by ``SeqToANNContainer``, it wil be not able to load
 weights from ANN because keys of ``state_dict`` are different. To avoid such problems, we can wrap forward propagation,
 rather than wrap layers. Here is an example:

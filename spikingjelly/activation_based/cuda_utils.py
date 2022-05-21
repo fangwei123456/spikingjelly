@@ -11,7 +11,7 @@ import re
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.clock_driven.cuda_utils: {e}')
+    logging.info(f'spikingjelly.activation_based.cuda_utils: {e}')
     pass
 
 def cpu_timer(f, *args, **kwargs):

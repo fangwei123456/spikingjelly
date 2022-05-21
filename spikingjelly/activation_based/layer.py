@@ -4,10 +4,45 @@ import torch.nn.functional as F
 import math
 from . import base, functional
 from torch import Tensor
-from torch.nn.common_types import _size_1_t, _size_2_t, _size_3_t
+from torch.nn.common_types import _size_any_t, _size_1_t, _size_2_t, _size_3_t
 from typing import Optional, List, Tuple, Union
 from typing import Callable
 from torch.nn.modules.batchnorm import _BatchNorm
+
+class MultiStepContainer(nn.Sequential):
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    @property
+    def step_mode(self):
+        return 'm'
+
+    def forward(self, x_seq: Tensor):
+        """
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: Tensor
+        """
+        return functional.multi_step_forward(x_seq, self)
+
+class SeqToANNContainer(nn.Sequential):
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    @property
+    def step_mode(self):
+        return 'm'
+
+    def forward(self, x_seq: Tensor):
+        """
+        :param x_seq: shape=[T, batch_size, ...]
+        :type x_seq: Tensor
+        :return: y_seq, shape=[T, batch_size, ...]
+        :rtype: Tensor
+        """
+        return functional.seq_to_ann_forward(x_seq, self)
+
 
 class Conv2d(nn.Conv2d, base.StatelessModule):
     def __init__(
@@ -21,31 +56,21 @@ class Conv2d(nn.Conv2d, base.StatelessModule):
             groups: int = 1,
             bias: bool = True,
             padding_mode: str = 'zeros',
-            step_mode: str = 's',
-            channels_last: bool = True
+            step_mode: str = 's'
     ) -> None:
         """
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        :param channels_last: whether use channels_last memory format
-        :type channels_last: bool
 
         Refer to :class:`torch.nn.Conv2d` for other parameters' information.
         """
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
         self.step_mode = step_mode
-        self.channels_last = channels_last
-        if self.channels_last and torch.backends.cudnn.version() < 7603:
-            self.channels_last = False
-            print(f'CUDNN version is {torch.backends.cudnn.version()} and does not support for channels last memory format. The minor supported version is 7603.')
 
-        if self.channels_last:
-            self.to(memory_format=torch.channels_last)
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
 
     def forward(self, x: Tensor):
-        if self.channels_last:
-            x = x.to(memory_format=torch.channels_last)
-
         if self.step_mode == 's':
             x = super().forward(x)
 
@@ -64,31 +89,21 @@ class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
             momentum=0.1,
             affine=True,
             track_running_stats=True,
-            step_mode='s',
-            channels_last=True
+            step_mode='s'
     ):
         """
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        :param channels_last: whether use channels_last memory format
-        :type channels_last: bool
 
         Refer to :class:`torch.nn.BatchNorm2d` for other parameters' information.
         """
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
-        self.channels_last = channels_last
-        if self.channels_last and torch.backends.cudnn.version() < 7603:
-            self.channels_last = False
-            print(f'CUDNN version is {torch.backends.cudnn.version()} and does not support for channels last memory format. The minor supported version is 7603.')
 
-        if self.channels_last:
-            self.to(memory_format=torch.channels_last)
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
 
     def forward(self, x: Tensor):
-        if self.channels_last:
-            x = x.to(memory_format=torch.channels_last)
-
         if self.step_mode == 's':
             return super().forward(x)
 
@@ -97,6 +112,26 @@ class BatchNorm2d(nn.BatchNorm2d, base.StatelessModule):
                 raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
             return functional.seq_to_ann_forward(x, super().forward)
 
+class MaxPool2d(nn.MaxPool2d, base.StatelessModule):
+    def __init__(self, kernel_size: _size_any_t, stride: Optional[_size_any_t] = None,
+                 padding: _size_any_t = 0, dilation: _size_any_t = 1,
+                 return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+        super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 5:
+                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
 
 class Linear(nn.Linear, base.StatelessModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, step_mode='s') -> None:
@@ -108,6 +143,23 @@ class Linear(nn.Linear, base.StatelessModule):
         """
         super().__init__(in_features, out_features, bias)
         self.step_mode = step_mode
+
+class Flatten(nn.Flatten, base.StatelessModule):
+    def __init__(self, start_dim: int = 1, end_dim: int = -1, step_mode='s') -> None:
+        super().__init__(start_dim, end_dim)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            x = functional.seq_to_ann_forward(x, super().forward)
+        return x
+
 
 
 class NeuNorm(base.MemoryModule):

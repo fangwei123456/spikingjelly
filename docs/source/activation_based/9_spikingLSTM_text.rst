@@ -6,7 +6,7 @@
 对应的中文版教程可参见 `使用字符级别特征的RNN网络进行名字分类 <https://pytorch.apachecn.org/docs/1.0/char_rnn_classification_tutorial.html>`_。
 请确保你已经阅读了原版教程和代码，因为本教程是对原教程的扩展。本教程将构建和训练字符级的Spiking LSTM来对姓氏进行分类。
 具体而言，本教程将在18种语言构成的几千个姓氏的数据集上训练Spiking LSTM模型，网络可根据一个姓氏的拼写预测其属于哪种语言。
-完整代码可见于 `clock_driven/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/spiking_lstm_text.py>`_。
+完整代码可见于 `activation_based/examples/spiking_lstm_text.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/spiking_lstm_text.py>`_。
 
 准备数据
 ------------------------
@@ -62,7 +62,7 @@
 
 .. code-block:: python
 
-    from spikingjelly.clock_driven import rnn
+    from spikingjelly.activation_based import rnn
     n_hidden = 256
 
     class Net(nn.Module):
@@ -198,7 +198,7 @@
 值得注意的一点是，测试表明，在当前Spiking LSTM网络中是否在一次运行完成后重置网络 ``functional.reset_net(net)`` 对于结果没有显著的影响。
 我们猜测是因为当前网络输入是随时间变化的，而且网络自身需要运行一段时间后才会输出分类结果，因此网络初始状态影响不显著。
 
-.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/TrainingProcess.*
+.. image:: ../_static/tutorials/activation_based/\9_spikingLSTM_text/TrainingProcess.*
     :width: 100%
 
 网络测试
@@ -307,5 +307,5 @@
 下图展示了Confusion matrix。对角线越亮，表示模型对某一类别预测最好，很少产生混淆，如Arabic和Greek。
 而有的语言则较容易产生混淆，如Korean和Chinese，Spanish和Portuguese，English和Scottish。
 
-.. image:: ../_static/tutorials/clock_driven/\9_spikingLSTM_text/ConfusionMatrix.*
+.. image:: ../_static/tutorials/activation_based/\9_spikingLSTM_text/ConfusionMatrix.*
     :width: 100%

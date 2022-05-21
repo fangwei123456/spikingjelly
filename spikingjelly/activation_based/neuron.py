@@ -11,7 +11,7 @@ try:
     import cupy
     from . import neuron_kernel, cuda_utils
 except BaseException as e:
-    logging.info(f'spikingjelly.clock_driven.neuron: {e}')
+    logging.info(f'spikingjelly.activation_based.neuron: {e}')
     cupy = None
     neuron_kernel = None
     cuda_utils = None
@@ -20,7 +20,7 @@ try:
     import lava.lib.dl.slayer as slayer
 
 except BaseException as e:
-    logging.info(f'spikingjelly.clock_driven.neuron: {e}')
+    logging.info(f'spikingjelly.activation_based.neuron: {e}')
     slayer = None
 
 class BaseNode(base.MemoryModule):
@@ -175,7 +175,7 @@ class BaseNode(base.MemoryModule):
             self.v = self.js_hard_reset(self.v, spike_d, self.v_reset)
 
     def extra_repr(self):
-        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}'
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}'
 
     def single_step_forward(self, x: torch.Tensor):
         """

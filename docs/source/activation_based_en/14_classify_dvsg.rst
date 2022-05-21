@@ -16,7 +16,7 @@ Define The Network
 The paper [#PLIF]_ use a general structure to build SNNs for different datasets, which is shown in the following figure:
 
 
-.. image:: ../_static/tutorials/clock_driven/14_classify_dvsg/network.png
+.. image:: ../_static/tutorials/activation_based/14_classify_dvsg/network.png
     :width: 100%
 
 :math:`N_{conv}=1, N_{down}=5, N_{fc}=2` for the DVS128 Gesture dataset.
@@ -32,7 +32,7 @@ The meanings of symbol are:
 
     `MPk2s2`: :code:`torch.nn.MaxPool2d(2, 2)`
 
-    `DP`: :code:`spikingjelly.clock_driven.layer.Dropout(0.5)`
+    `DP`: :code:`spikingjelly.activation_based.layer.Dropout(0.5)`
 
     `FC512`: :code:`torch.nn.Linear(in_features, out_features=512`
 
@@ -252,7 +252,7 @@ We can also resume from a check point:
 
 Star Training
 ----------------------
-The complete codes are available at `spikingjelly.clock_driven.examples.classify_dvsg <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/classify_dvsg.py>`_.
+The complete codes are available at `spikingjelly.activation_based.examples.classify_dvsg <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/classify_dvsg.py>`_.
 
 We train the net in a linux server with `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 2080 Ti` GPU. We
 use almost the same hyper-parameters with those in the paper [#PLIF]_ with little difference, which is we use ``T=16``
@@ -263,7 +263,7 @@ Let us try to train the step-by-step network:
 
 .. code:: bash
 
-    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -epochs 256
+    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.activation_based.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -epochs 256
     Namespace(T=16, T_max=64, amp=True, b=16, cupy=False, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     PythonNet(
       (conv): Sequential(
@@ -332,7 +332,7 @@ It takes 27.76s to finish an epoch. We stop it and train the faster network:
 
 .. code:: bash
 
-    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.clock_driven.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 256
+    (test-env) root@de41f92009cf3011eb0ac59057a81652d2d0-fangw1714-0:/userhome/test# python -m spikingjelly.activation_based.examples.classify_dvsg -data_dir /userhome/datasets/DVS128Gesture -out_dir ./logs -amp -opt Adam -device cuda:0 -lr_scheduler CosALR -T_max 64 -cupy -epochs 256
     Namespace(T=16, T_max=64, amp=True, b=16, cupy=True, channels=128, data_dir='/userhome/datasets/DVS128Gesture', device='cuda:0', epochs=256, gamma=0.1, j=4, lr=0.001, lr_scheduler='CosALR', momentum=0.9, opt='Adam', out_dir='./logs', resume=None, step_size=32)
     CextNet(
       (conv): Sequential(
@@ -418,16 +418,16 @@ It takes 27.76s to finish an epoch. We stop it and train the faster network:
 It takes 18.17s to finish an epoch, which is much faster. After 256 epochs, we will get the maximum accuracy 96.18%. The
 logs curves during training are:
 
-.. image:: ../_static/tutorials/clock_driven/14_classify_dvsg/train_loss.*
+.. image:: ../_static/tutorials/activation_based/14_classify_dvsg/train_loss.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/14_classify_dvsg/train_acc.*
+.. image:: ../_static/tutorials/activation_based/14_classify_dvsg/train_acc.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/14_classify_dvsg/test_loss.*
+.. image:: ../_static/tutorials/activation_based/14_classify_dvsg/test_loss.*
     :width: 100%
 
-.. image:: ../_static/tutorials/clock_driven/14_classify_dvsg/test_acc.*
+.. image:: ../_static/tutorials/activation_based/14_classify_dvsg/test_acc.*
     :width: 100%
 
 

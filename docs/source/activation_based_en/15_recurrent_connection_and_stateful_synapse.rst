@@ -8,12 +8,12 @@ Recurrent Connections
 The recurrent connections connect a module's outputs to its inputs. For example, [#Effective]_ uses a SRNN(recurrent
 networks of spiking neurons), which is shown in the following figure:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
 It is easy to use SpikingJelly to implement the recurrent module. Considering a simple case that we add a connection to make
 the neuron's outputs :math:`s[t]` at time-step :math:`t` can add with external inputs :math:`x[t+1]` at time-step :math:`t+1`.
-It can be implemented by :class:`spikingjelly.clock_driven.layer.ElementWiseRecurrentContainer`. ``ElementWiseRecurrentContainer``
+It can be implemented by :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer`. ``ElementWiseRecurrentContainer``
 is a container that add a recurrent connection to the contained ``sub_module``. The connection is a user-defined element-wise
 function :math:`z=f(x, y)`. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]` and :math:`y[t]` (Note that
 :math:`y[t]` is also the outputs of this module), and the inputs of this module as :math:`x[t]`, then
@@ -69,12 +69,12 @@ The outputs are:
 We can find that due to the recurrent connection, even if :math:`x[t]=0` when :math:`t \ge 1`, the neuron can still fire
 because its output spike is fed back as input.
 
-We can use :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` to implement a more complex recurrent connections.
+We can use :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` to implement a more complex recurrent connections.
 
 Stateful Synapses
 -----------------------
 
-There are many papers using stateful synapses, e.g., [#Unsupervised]_ [#Exploiting]_. We can put :class:`spikingjelly.clock_driven.layer.SynapseFilter` after a stateless synapse to get the stateful synapse:
+There are many papers using stateful synapses, e.g., [#Unsupervised]_ [#Exploiting]_. We can put :class:`spikingjelly.activation_based.layer.SynapseFilter` after a stateless synapse to get the stateful synapse:
 
 .. code-block:: python
 
@@ -91,12 +91,12 @@ promote the network's temporal information fitting ability. Sequential FashionMN
 only when it can learn long-term dependencies. We will feed the image column-by-column, which is same with reading texts
 from left to right. Here is the example:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/a.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 The following gif shows the column being read:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/samples/b.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 First, let us import packages:
@@ -107,9 +107,9 @@ First, let us import packages:
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision.datasets
-    from spikingjelly.clock_driven.model import train_classify
-    from spikingjelly.clock_driven import neuron, surrogate, layer
-    from spikingjelly.clock_driven.functional import seq_to_ann_forward
+    from spikingjelly.activation_based.model import train_classify
+    from spikingjelly.activation_based import neuron, surrogate, layer
+    from spikingjelly.activation_based.functional import seq_to_ann_forward
     from torchvision import transforms
     import os, argparse
 
@@ -141,7 +141,7 @@ Now let us define a plain feedforward network ``Net``:
             x = self.sn2(x)
             return x.mean(0)
 
-We add :class:`spikingjelly.clock_driven.layer.SynapseFilter` after the first spiking neurons layer and get ``StatefulSynapseNet``:
+We add :class:`spikingjelly.activation_based.layer.SynapseFilter` after the first spiking neurons layer and get ``StatefulSynapseNet``:
 
 .. code:: python
 
@@ -165,7 +165,7 @@ We add :class:`spikingjelly.clock_driven.layer.SynapseFilter` after the first sp
             x = self.sn2(x)
             return x.mean(0)
 
-We add a recurrent connection :class:`spikingjelly.clock_driven.layer.LinearRecurrentContainer` from the first spiking
+We add a recurrent connection :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` from the first spiking
 neurons layer's output to itself and get ``FeedBackNet``:
 
 .. code:: python
@@ -195,15 +195,15 @@ neurons layer's output to itself and get ``FeedBackNet``:
 
 The following figure shows the three networks:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
-The complete codes are available at `spikingjelly.clock_driven.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/clock_driven/examples/rsnn_sequential_fmnist.py>`_. We can run
+The complete codes are available at `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_. We can run
 it in console, and the running arguments are
 
 .. code:: shell
 
-    (pytorch-env) PS C:/Users/fw> python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --h
+    (pytorch-env) PS C:/Users/fw> python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --h
     usage: rsnn_sequential_fmnist.py [-h] [--data-path DATA_PATH] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N]
                                      [--lr LR] [--opt OPT] [--lrs LRS] [--step-size STEP_SIZE] [--step-gamma STEP_GAMMA]
                                      [--cosa-tmax COSA_TMAX] [--momentum M] [--wd W] [--output-dir OUTPUT_DIR]
@@ -244,25 +244,25 @@ Let us train the three networks:
 
 .. code:: shell
 
-    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:0 --amp --model plain
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:0 --amp --model plain
 
-    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:1 --amp --model feedback
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:1 --amp --model feedback
 
-    python -m spikingjelly.clock_driven.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:2 --amp --model stateful-synapse
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:2 --amp --model stateful-synapse
 
 The train loss is:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/train_loss.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/train_loss.*
     :width: 100%
 
 The train accuracy is:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/train_acc.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/train_acc.*
     :width: 100%
 
 The test accuracy is:
 
-.. image:: ../_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/test_acc.*
+.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/test_acc.*
     :width: 100%
 
 We can find that both ``feedback`` and ``stateful-synapse`` have higher accuracy than ``plain``, indicating that recurrent
