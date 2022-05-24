@@ -7,88 +7,48 @@ from torch.utils.tensorboard import SummaryWriter
 import os
 import time
 import argparse
-import numpy as np
 from torch.cuda import amp
-_seed_ = 2020
-torch.manual_seed(_seed_)  # use torch.manual_seed() to seed the RNG for all devices (both CPU and CUDA)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
-np.random.seed(_seed_)
+import sys
+import datetime
 
-class PythonNet(nn.Module):
-    def __init__(self, T):
+class CSNN(nn.Module):
+    def __init__(self, T: int, channels: int, use_cupy=False):
         super().__init__()
         self.T = T
 
-        self.static_conv = nn.Sequential(
-            nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
+        self.conv_fc = nn.Sequential(
+        layer.Conv2d(1, channels, kernel_size=3, padding=1, bias=False),
+        layer.BatchNorm2d(channels),
+        neuron.IFNode(surrogate_function=surrogate.ATan()),
+        layer.MaxPool2d(2, 2),  # 14 * 14
+
+        layer.Conv2d(channels, channels, kernel_size=3, padding=1, bias=False),
+        layer.BatchNorm2d(channels),
+        neuron.IFNode(surrogate_function=surrogate.ATan()),
+        layer.MaxPool2d(2, 2),  # 7 * 7
+
+        layer.Flatten(),
+        layer.Linear(channels * 7 * 7, channels * 4 * 4, bias=False),
+        neuron.IFNode(surrogate_function=surrogate.ATan()),
+
+        layer.Linear(channels * 4 * 4, 10, bias=False),
+        neuron.IFNode(surrogate_function=surrogate.ATan()),
         )
+        functional.set_step_mode(self, step_mode='m')
+        if use_cupy:
+            
+            functional.set_backend(self, backend='cupy')
 
-        self.conv = nn.Sequential(
-            neuron.IFNode(surrogate_function=surrogate.ATan()),
-            nn.MaxPool2d(2, 2),  # 14 * 14
+    def forward(self, x: torch.Tensor):
+        # x.shape = [N, C, H, W]
+        x_seq = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+        x_seq = self.conv_fc(x_seq)
+        fr = x_seq.mean(0)
+        return fr
+    
+    def spiking_encoder(self):
+        return self.conv_fc[0:3]
 
-            nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-            neuron.IFNode(surrogate_function=surrogate.ATan()),
-            nn.MaxPool2d(2, 2)  # 7 * 7
-
-        )
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False),
-            neuron.IFNode(surrogate_function=surrogate.ATan()),
-            nn.Linear(128 * 4 * 4, 10, bias=False),
-            neuron.IFNode(surrogate_function=surrogate.ATan()),
-        )
-
-
-    def forward(self, x):
-        x = self.static_conv(x)
-
-        out_spikes_counter = self.fc(self.conv(x))
-        for t in range(1, self.T):
-            out_spikes_counter += self.fc(self.conv(x))
-
-        return out_spikes_counter / self.T
-
-class CupyNet(nn.Module):
-    def __init__(self, T):
-        super().__init__()
-        self.T = T
-
-        self.static_conv = nn.Sequential(
-            nn.Conv2d(1, 128, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(128),
-        )
-
-        self.conv = nn.Sequential(
-            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
-            layer.SeqToANNContainer(
-                    nn.MaxPool2d(2, 2),  # 14 * 14
-                    nn.Conv2d(128, 128, kernel_size=3, padding=1, bias=False),
-                    nn.BatchNorm2d(128),
-            ),
-            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
-            layer.SeqToANNContainer(
-                nn.MaxPool2d(2, 2),  # 7 * 7
-                nn.Flatten(),
-            ),
-        )
-        self.fc = nn.Sequential(
-            layer.SeqToANNContainer(nn.Linear(128 * 7 * 7, 128 * 4 * 4, bias=False)),
-            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
-            layer.SeqToANNContainer(nn.Linear(128 * 4 * 4, 10, bias=False)),
-            neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), backend='cupy'),
-        )
-
-
-    def forward(self, x):
-        x_seq = self.static_conv(x).unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
-        # [N, C, H, W] -> [1, N, C, H, W] -> [T, N, C, H, W]
-
-        return self.fc(self.conv(x_seq)).mean(0)
 
 def main():
     '''
@@ -156,30 +116,22 @@ def main():
                         help='number of total epochs to run')
     parser.add_argument('-j', default=4, type=int, metavar='N',
                         help='number of data loading workers (default: 4)')
-    parser.add_argument('-data_dir', type=str, help='root dir of Fashion-MNIST dataset')
-    parser.add_argument('-out_dir', type=str, default='./logs', help='root dir for saving logs and checkpoint')
-
+    parser.add_argument('-data-dir', type=str, help='root dir of Fashion-MNIST dataset')
+    parser.add_argument('-out-dir', type=str, default='./logs', help='root dir for saving logs and checkpoint')
     parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
     parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
     parser.add_argument('-cupy', action='store_true', help='use cupy neuron and multi-step forward mode')
-
     parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')
-    parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
     parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
-    parser.add_argument('-lr_scheduler', default='CosALR', type=str, help='use which schedule. StepLR or CosALR')
-    parser.add_argument('-step_size', default=32, type=float, help='step_size for StepLR')
-    parser.add_argument('-gamma', default=0.1, type=float, help='gamma for StepLR')
-    parser.add_argument('-T_max', default=64, type=int, help='T_max for CosineAnnealingLR')
-    # python w1.py -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp
-    # python w1.py -opt SGD -data_dir /userhome/datasets/FashionMNIST/ -amp -cupy
+    parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
+
     args = parser.parse_args()
     print(args)
 
-    if args.cupy:
-        net = CupyNet(T=args.T)
-    else:
-        net = PythonNet(T=args.T)
+    net = CSNN(T=args.T, channels=args.channels)
+
     print(net)
+
     net.to(args.device)
 
     optimizer = None
@@ -190,14 +142,7 @@ def main():
     else:
         raise NotImplementedError(args.opt)
 
-    lr_scheduler = None
-    if args.lr_scheduler == 'StepLR':
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.step_size, gamma=args.gamma)
-    elif args.lr_scheduler == 'CosALR':
-        lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.T_max)
-    else:
-        raise NotImplementedError(args.lr_scheduler)
-
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
 
     train_set = torchvision.datasets.FashionMNIST(
             root=args.data_dir,
@@ -232,7 +177,7 @@ def main():
         scaler = amp.GradScaler()
 
     start_epoch = 0
-    max_test_acc = 0
+    max_test_acc = -1
 
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
@@ -243,15 +188,10 @@ def main():
         max_test_acc = checkpoint['max_test_acc']
 
     out_dir = os.path.join(args.out_dir, f'T_{args.T}_b_{args.b}_{args.opt}_lr_{args.lr}_')
-    if args.lr_scheduler == 'CosALR':
-        out_dir += f'CosALR_{args.T_max}'
-    elif args.lr_scheduler == 'StepLR':
-        out_dir += f'StepLR_{args.step_size}_{args.gamma}'
-    else:
-        raise NotImplementedError(args.lr_scheduler)
 
     if args.amp:
         out_dir += '_amp'
+
     if args.cupy:
         out_dir += '_cupy'
 
@@ -262,7 +202,11 @@ def main():
     with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
         args_txt.write(str(args))
 
-    writer = SummaryWriter(os.path.join(out_dir, 'fmnist_logs'), purge_step=start_epoch)
+    writer = SummaryWriter(out_dir, purge_step=start_epoch)
+    with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
+        args_txt.write(str(args))
+        args_txt.write('\n')
+        args_txt.write(' '.join(sys.argv))
 
     for epoch in range(start_epoch, args.epochs):
         start_time = time.time()
@@ -270,20 +214,21 @@ def main():
         train_loss = 0
         train_acc = 0
         train_samples = 0
-        for frame, label in train_data_loader:
+        for img, label in train_data_loader:
             optimizer.zero_grad()
-            frame = frame.float().to(args.device)
+            img = img.to(args.device)
             label = label.to(args.device)
             label_onehot = F.one_hot(label, 10).float()
-            if args.amp:
+
+            if scaler is not None:
                 with amp.autocast():
-                    out_fr = net(frame)
+                    out_fr = net(img)
                     loss = F.mse_loss(out_fr, label_onehot)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                out_fr = net(frame)
+                out_fr = net(img)
                 loss = F.mse_loss(out_fr, label_onehot)
                 loss.backward()
                 optimizer.step()
@@ -293,6 +238,9 @@ def main():
             train_acc += (out_fr.argmax(1) == label).float().sum().item()
 
             functional.reset_net(net)
+
+        train_time = time.time()
+        train_speed = (train_time - start_time) / train_samples
         train_loss /= train_samples
         train_acc /= train_samples
 
@@ -305,18 +253,19 @@ def main():
         test_acc = 0
         test_samples = 0
         with torch.no_grad():
-            for frame, label in test_data_loader:
-                frame = frame.float().to(args.device)
+            for img, label in test_data_loader:
+                img = img.to(args.device)
                 label = label.to(args.device)
                 label_onehot = F.one_hot(label, 10).float()
-                out_fr = net(frame)
+                out_fr = net(img)
                 loss = F.mse_loss(out_fr, label_onehot)
 
                 test_samples += label.numel()
                 test_loss += loss.item() * label.numel()
                 test_acc += (out_fr.argmax(1) == label).float().sum().item()
                 functional.reset_net(net)
-
+        test_time = time.time()
+        test_speed = (test_time - train_time) / test_samples
         test_loss /= test_samples
         test_acc /= test_samples
         writer.add_scalar('test_loss', test_loss, epoch)
@@ -342,8 +291,9 @@ def main():
 
         print(args)
         print(out_dir)
-        print(
-            f'epoch={epoch}, train_loss={train_loss}, train_acc={train_acc}, test_loss={test_loss}, test_acc={test_acc}, max_test_acc={max_test_acc}, total_time={time.time() - start_time}')
+        print(f'epoch={epoch}, train_loss={train_loss: .4f}, train_acc={train_acc: .4f}, test_loss={test_loss: .4f}, test_acc={test_acc: .4f}, max_test_acc={max_test_acc: .4f}')
+        print(f'train speed={train_speed: .4f} images/s, test speed={test_speed: .4f} images/s')
+        print(f'escape time={(datetime.datetime.now() + datetime.timedelta(seconds=(time.time() - start_time) * (args.epochs - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
 
 
 if __name__ == '__main__':
