@@ -23,11 +23,34 @@ def check_backend_library(backend: str):
     elif backend == 'lava':
         if slayer is None:
             raise ImportError('Lava-DL is not installed! You can install it from ' \
-                                   '"https://github.com/lava-nc/lava-dl". ')
+                              '"https://github.com/lava-nc/lava-dl". ')
     else:
         raise NotImplementedError(backend)
 
-class MemoryModule(nn.Module):
+
+class StepModule:
+    def supported_step_mode(self):
+        return ('s', 'm')
+
+    @property
+    def step_mode(self):
+        return self._step_mode
+
+    @step_mode.setter
+    def step_mode(self, value: str):
+        if value not in self.supported_step_mode():
+            raise ValueError(f'step_mode can only be {self.supported_step_mode()}, but got "{value}"!')
+        self._step_mode = value
+
+class SingleModule(StepModule):
+    def supported_step_mode(self):
+        return ('s', )
+
+class MultiStepModule(StepModule):
+    def supported_step_mode(self):
+        return ('m', )
+
+class MemoryModule(nn.Module, StepModule):
     def __init__(self):
         """
         * :ref:`API in English <MemoryModule.__init__-en>`
@@ -47,78 +70,7 @@ class MemoryModule(nn.Module):
         self._memories = {}
         self._memories_rv = {}
         self._backend = 'torch'
-        self._step_mode = 's'
-
-    @property
-    def step_mode(self):
-        """
-        * :ref:`API in English <MemoryModule.step_mode-en>`
-
-        .. _MemoryModule.step_mode-cn:
-
-        单步模式的输入输出均为 `shape = [N, *]` ，表示在 `1` 个时间步的数据。
-        多步模式的输入输出均为 `shape = [T, N, *]` ，表示在 `T` 个时间步的数据。
-
-        .. code-block:: python
-
-            # note that this is just an example and can not run because `MemoryModule` has not defined forward function
-
-            net = MemoryModule()
-            T = 4
-            N = 2
-            x = torch.rand([T, N])
-            ys = []
-            net.step_mode = 's'
-            for t in range(T):
-                ys.append(net(x[t]).unsqueeze(0))
-            ys = torch.cat(ys)
-            net.reset()
-
-            net.step_mode = 'm'
-            ym = net(x)
-            error = (ys - ym).abs().max()
-            # error is 0
-
-        :return: 单步还是多步，`s`表示单步，`m`表示多步。
-        :rtype: str
-
-        * :ref:`中文API <MemoryModule.step_mode-cn>`
-
-        .. _MemoryModule.step_mode-en:
-
-        The single-step mode uses data with `shape = [N, *]`, which is the data at one time-step.
-        The multi-step mode uses data with `shape = [T, N, *]`, which is the data at `T` time-steps.
-
-        .. code-block:: python
-
-            # note that this is just an example and can not run because `MemoryModule` has not defined forward function
-
-            net = MemoryModule()
-            T = 4
-            N = 2
-            x = torch.rand([T, N])
-            ys = []
-            net.step_mode = 's'
-            for t in range(T):
-                ys.append(net(x[t]).unsqueeze(0))
-            ys = torch.cat(ys)
-            net.reset()
-
-            net.step_mode = 'm'
-            ym = net(x)
-            error = (ys - ym).abs().max()
-            # error is 0
-
-        :return: the step mode. `s` means single-step, and `m` means multi-step
-        :rtype: str
-        """
-        return self._step_mode
-
-    @step_mode.setter
-    def step_mode(self, value: str):
-        if value not in ('s', 'm'):
-            raise ValueError(f'step_mode can only be "s" or "m", but got "{value}"!')
-        self._step_mode = value
+        self.step_mode = 's'
 
     @property
     def supported_backends(self):
@@ -321,24 +273,5 @@ class MemoryModule(nn.Module):
         return replica
 
 
-class StatelessModule:
-    @property
-    def step_mode(self):
-        return self._step_mode
 
-    @step_mode.setter
-    def step_mode(self, value: str):
-        if value not in ('s', 'm'):
-            raise ValueError(f'step_mode can only be "s" or "m", but got "{value}"!')
-        self._step_mode = value
 
-class MultiStepStatelessModule(StatelessModule):
-    @property
-    def step_mode(self):
-        return self._step_mode
-
-    @step_mode.setter
-    def step_mode(self, value: str):
-        if value != 'm':
-            raise ValueError(f'{self.__class__.__name__} only supports for step_mode = s (multi-step mode)!')
-        self._step_mode = value

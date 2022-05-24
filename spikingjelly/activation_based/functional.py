@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Callable
-from . import neuron, base
+from . import neuron, base, layer
 
 from torch import Tensor
 
@@ -41,12 +41,26 @@ def reset_net(net: nn.Module):
 
 
 def set_step_mode(net: nn.Module, step_mode: str):
+    step_mode_containers = []
+    for m in net.modules():
+        if isinstance(m, layer.StepModeContainer):
+            step_mode_containers.append(m)
+
     for m in net.modules():
         if hasattr(m, 'step_mode'):
-            if not isinstance(m, (base.MemoryModule, base.StatelessModule)):
-                logging.warning(f'Trying to set the step mode for {m}, which is not spikingjelly.activation_based'
-                                f'.base.MemoryModule or spikingjelly.activation_based.base.StatelessModule')
-            m.step_mode = step_mode
+            is_contained = False
+            for step_mode_container in step_mode_containers:
+                if m in step_mode_container:
+                    is_contained = True
+                    break
+            if is_contained:
+                # this function should not change step_mode of submodules in layer.StepModeContainer
+                pass
+            else:
+                if not isinstance(m, (base.StepModule)):
+                    logging.warning(f'Trying to set the step mode for {m}, which is not spikingjelly.activation_based'
+                                    f'.base.StepModule')
+                m.step_mode = step_mode
 
 
 def set_backend(net: nn.Module, backend: str):
