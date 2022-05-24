@@ -109,7 +109,7 @@ def main():
     .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
         :width: 100%
     '''
-    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1
     parser = argparse.ArgumentParser(description='Classify Fashion-MNIST')
     parser.add_argument('-T', default=4, type=int, help='simulating time-steps')
     parser.add_argument('-device', default='cuda:0', help='device')
@@ -164,7 +164,8 @@ def main():
         batch_size=args.b,
         shuffle=True,
         drop_last=True,
-        num_workers=args.j
+        num_workers=args.j,
+        pin_memory=True
     )
 
     test_data_loader = torch.utils.data.DataLoader(
@@ -172,7 +173,8 @@ def main():
         batch_size=args.b,
         shuffle=True,
         drop_last=False,
-        num_workers=args.j
+        num_workers=args.j,
+        pin_memory=True
     )
 
     scaler = None
