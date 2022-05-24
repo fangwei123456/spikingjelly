@@ -175,7 +175,7 @@ class BaseNode(base.MemoryModule):
             self.v = self.js_hard_reset(self.v, spike_d, self.v_reset)
 
     def extra_repr(self):
-        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}'
+        return f'v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}, backend={self.backend}'
 
     def single_step_forward(self, x: torch.Tensor):
         """
