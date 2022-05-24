@@ -128,7 +128,7 @@ def main():
     args = parser.parse_args()
     print(args)
 
-    net = CSNN(T=args.T, channels=args.channels)
+    net = CSNN(T=args.T, channels=args.channels, use_cupy=args.cupy)
 
     print(net)
 
