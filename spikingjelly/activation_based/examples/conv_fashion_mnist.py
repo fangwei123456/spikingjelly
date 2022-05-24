@@ -187,7 +187,7 @@ def main():
         start_epoch = checkpoint['epoch'] + 1
         max_test_acc = checkpoint['max_test_acc']
 
-    out_dir = os.path.join(args.out_dir, f'T_{args.T}_b_{args.b}_{args.opt}_lr_{args.lr}_')
+    out_dir = os.path.join(args.out_dir, f'T{args.T}_b{args.b}_{args.opt}_lr{args.lr}_c{args.channels}')
 
     if args.amp:
         out_dir += '_amp'
