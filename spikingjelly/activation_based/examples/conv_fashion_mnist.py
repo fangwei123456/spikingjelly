@@ -56,28 +56,28 @@ def main():
 
     .. _conv_fashion_mnist.main-cn:
 
+    (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
+
+    usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
+                                 [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
+
     Classify Fashion-MNIST
 
     optional arguments:
-      -h, --help            show this help message and exit
-      -T T                  simulating time-steps
-      -device DEVICE        device
-      -b B                  batch size
-      -epochs N             number of total epochs to run
-      -j N                  number of data loading workers (default: 4)
-      -data_dir DATA_DIR    root dir of Fashion-MNIST dataset
-      -out_dir OUT_DIR      root dir for saving logs and checkpoint
-      -resume RESUME        resume from the checkpoint path
-      -amp                  automatic mixed precision training
-      -cupy                 use cupy neuron and multi-step forward mode
-      -opt OPT              use which optimizer. SDG or Adam
-      -lr LR                learning rate
-      -momentum MOMENTUM    momentum for SGD
-      -lr_scheduler LR_SCHEDULER
-                            use which schedule. StepLR or CosALR
-      -step_size STEP_SIZE  step_size for StepLR
-      -gamma GAMMA          gamma for StepLR
-      -T_max T_MAX          T_max for CosineAnnealingLR
+      -h, --help          show this help message and exit
+      -T T                simulating time-steps
+      -device DEVICE      device
+      -b B                batch size
+      -epochs N           number of total epochs to run
+      -j N                number of data loading workers (default: 4)
+      -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
+      -out-dir OUT_DIR    root dir for saving logs and checkpoint
+      -resume RESUME      resume from the checkpoint path
+      -amp                automatic mixed precision training
+      -cupy               use cupy neuron and multi-step forward mode
+      -opt OPT            use which optimizer. SDG or Adam
+      -momentum MOMENTUM  momentum for SGD
+
 
 
     使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。会将训练过
@@ -108,6 +108,7 @@ def main():
     .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
         :width: 100%
     '''
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1
     parser = argparse.ArgumentParser(description='Classify Fashion-MNIST')
     parser.add_argument('-T', default=4, type=int, help='simulating time-steps')
     parser.add_argument('-device', default='cuda:0', help='device')
@@ -120,10 +121,11 @@ def main():
     parser.add_argument('-out-dir', type=str, default='./logs', help='root dir for saving logs and checkpoint')
     parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
     parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
-    parser.add_argument('-cupy', action='store_true', help='use cupy neuron and multi-step forward mode')
+    parser.add_argument('-cupy', action='store_true', help='use cupy backend')
     parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')
     parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
     parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
+    parser.add_argument('-channels', default=128, type=int, help='channels of CSNN')
 
     args = parser.parse_args()
     print(args)
