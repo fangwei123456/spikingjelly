@@ -1,0 +1,2 @@
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+/home/wfang/spikingjelly_dev/spikingjelly/spikingjelly/activation_based/examples/conv_fashion_mnist.py -T 4 -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
