@@ -2,12 +2,12 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-本教程介绍了 `spikingjelly.activation_based` 的一些基本概念，推荐所有用户在使用SpikingJelly框架前进行阅读。
+本教程介绍了 ``spikingjelly.activation_based`` 的一些基本概念，推荐所有用户在使用SpikingJelly框架前进行阅读。
 
 
 基于激活值的表示方法
 -------------------------------------------
-`spikingjelly.activation_based` 使用取值仅为0或1的张量表示脉冲，例如：
+``spikingjelly.activation_based`` 使用取值仅为0或1的张量表示脉冲，例如：
 
 .. code-block:: python
 
@@ -21,18 +21,18 @@
 
 数据格式
 -------------------------------------------
-在 `spikingjelly.activation_based` 中，数据有两种格式，分别为：
+在 ``spikingjelly.activation_based`` 中，数据有两种格式，分别为：
 
-* 表示单个时刻的数据，其 `shape = [N, *]`，其中 `N` 是batch维度，`*` 表示任意额外的维度
-* 表示多个时刻的数据，其 `shape = [T, N, *]`，其中 `T` 是数据的时间维度， `N` 是batch维度，`*` 表示任意额外的维度
+* 表示单个时刻的数据，其 ``shape = [N, *]``，其中 ``N`` 是batch维度，``*`` 表示任意额外的维度
+* 表示多个时刻的数据，其 ``shape = [T, N, *]``，其中 ``T`` 是数据的时间维度， ``N`` 是batch维度，`*` 表示任意额外的维度
 
 
 步进模式
 -------------------------------------------
-`spikingjelly.activation_based` 中的模块，具有两种传播模式，分别是单步模式(single-step)和多步模式(multi-step)。\
-在单步模式下，数据使用  `shape = [N, *]` 的格式；而在多步模式下，数据使用 `shape = [T, N, *]` 的格式。
+``spikingjelly.activation_based`` 中的模块，具有两种传播模式，分别是单步模式(single-step)和多步模式(multi-step)。\
+在单步模式下，数据使用 ``shape = [N, *]`` 的格式；而在多步模式下，数据使用 ``shape = [T, N, *]`` 的格式。
 
-模块在初始化时可以指定其使用的步进模式 `step_mode`，也可以在构建后直接进行修改：
+模块在初始化时可以指定其使用的步进模式 ``step_mode``，也可以在构建后直接进行修改：
 
 .. code-block:: python
     
@@ -44,8 +44,8 @@
     net.step_mode = 's'
     # 's' is the single-step mode
 
-如果我们想给单步模式的模块输入 `shape = [T, N, *]` 的序列数据，通常需要手动做一个时间上的循环，\
-将数据拆成 `T` 个 `shape = [N, *]` 的数据并逐步输入进去。\
+如果我们想给单步模式的模块输入 ``shape = [T, N, *]`` 的序列数据，通常需要手动做一个时间上的循环，\
+将数据拆成 ``T`` 个 ``shape = [N, *]`` 的数据并逐步输入进去。\
 让我们新建一层IF神经元，设置为单步模式，将数据逐步输入并得到输出：
 
 .. code-block:: python
@@ -69,7 +69,7 @@
     y_seq = torch.cat(y_seq)
     # y_seq.shape = [T, N, C, H, W]
 
-:class:`spikingjelly.activation_based.functional.multi_step_forward` 提供了将 `shape = [T, N, *]` 的序列数据输入到单步模块进行逐步的前向传播的封装，\
+:class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 提供了将 ``shape = [T, N, *]`` 的序列数据输入到单步模块进行逐步的前向传播的封装，\
 使用起来更加方便：
 
 .. code-block:: python
@@ -110,7 +110,7 @@
 SNN中的神经元等模块，与RNN类似，带有隐藏状态，其输出 :math:`Y[t]` 不仅仅与当前时刻的输入 :math:`X[t]` 有关，\
 还与上一个时末的状态 :math:`H[t-1]` 有关，即 :math:`Y[t] = f(X[t], H[t-1])`。
 
-PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.RNN` 的API文档。而在 `spikingjelly.activation_based` 中，\
+PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.RNN` 的API文档。而在 ``spikingjelly.activation_based`` 中，\
 状态会被保存在模块内部。例如，我们新建一层IF神经元，设置为单步模式，查看给与输入前的默认电压，和给与输入后的电压：
 
 .. code-block:: python
@@ -141,9 +141,9 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
     '''
 
 
-在初始化后，IF神经元层的 `v` 会被设置为0，首次给与输入后 `v` 会自动广播到与输入相同的 `shape`。
+在初始化后，IF神经元层的 ``v`` 会被设置为0，首次给与输入后 ``v`` 会自动广播到与输入相同的 ``shape``。
 
-若我们给与一个新的输入，则应该先清楚神经元之前的状态，让其恢复到初始化状态，可以通过调用模块的 `self.reset()` 函数实现：
+若我们给与一个新的输入，则应该先清除神经元之前的状态，让其恢复到初始化状态，可以通过调用模块的 ``self.reset()`` 函数实现：
 
 .. code-block:: python
 
@@ -235,7 +235,7 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
         for i in range(net.__len__()):
             y_seq_layer_by_layer = net[i](y_seq_layer_by_layer)
 
-在绝大多数情况下我们不需要显式的实现 `for i in range(net.__len__())` 这样的循环，因为 :class:`torch.nn.Sequential` 已经帮我们实现过了，\
+在绝大多数情况下我们不需要显式的实现 ``for i in range(net.__len__())`` 这样的循环，因为 :class:`torch.nn.Sequential` 已经帮我们实现过了，\
 因此实际上我们可以这样做：
 
 .. code-block:: python 
@@ -342,181 +342,5 @@ SNN的计算图有2个维度，分别是时间步数和网络深度，网络的�
 尽管两者区别仅在于计算顺序，但计算速度和内存消耗上会略有区别。\
 
 * 在使用梯度替代法训练时，通常推荐使用逐层传播。在正确构建网络的情况下，逐层传播的并行度更大，速度更快
-* 在内存受限时使用逐步传播，例如ANN2SNN任务中需要用到非常大的 `T`。因为在逐层传播模式下，对无状态的层而言，真正的 batch size 是 `TN` 而不是 `N`，当 `T` 太大时\
+* 在内存受限时使用逐步传播，例如ANN2SNN任务中需要用到非常大的 ``T``。因为在逐层传播模式下，对无状态的层而言，真正的 batch size 是 ``TN`` 而不是 ``N``，当 ``T`` 太大时\
   内存消耗极大
-
-
-包装器
--------------------------------------------
-SpikingJelly中主要提供了如下几种包装器：
-
-* 函数风格的 :class:`spikingjelly.activation_based.functional.multi_step_forward` 和模块风格的 :class:`spikingjelly.activation_based.layer.MultiStepContainer`
-* 函数风格的 :class:`spikingjelly.activation_based.functional.seq_to_ann_forward` 和模块风格的 :class:`spikingjelly.activation_based.layer.SeqToANNContainer`
-
-
-:class:`spikingjelly.activation_based.functional.multi_step_forward` 可以将一个单步模块进行多步传播，而 \
-:class:`spikingjelly.activation_based.layer.MultiStepContainer` 则可以将一个单步模块包装成多步模块，例如：
-
-.. code-block:: python
-
-    import torch
-    from spikingjelly.activation_based import neuron, functional, layer
-
-    net_s = neuron.IFNode(step_mode='s')
-    T = 4
-    N = 1
-    C = 3
-    H = 8
-    W = 8
-    x_seq = torch.rand([T, N, C, H, W])
-    y_seq = functional.multi_step_forward(x_seq, net_s)
-    # y_seq.shape = [T, N, C, H, W]
-
-    net_s.reset()
-    net_m = layer.MultiStepContainer(net_s)
-    z_seq = net_m(x_seq)
-    # z_seq.shape = [T, N, C, H, W]
-
-    # z_seq is identical to y_seq
-
-对于无状态的ANN网络层，例如 :class:`torch.nn.Conv2d`，其本身要求输入数据的 `shape = [N, *]`，若用于多步模式，则可以用多步的包装器进行包装：
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import functional, layer
-
-    with torch.no_grad():
-        T = 4
-        N = 1
-        C = 3
-        H = 8
-        W = 8
-        x_seq = torch.rand([T, N, C, H, W])
-        
-        conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
-        bn = nn.BatchNorm2d(8)
-        
-        y_seq = functional.multi_step_forward(x_seq, (conv, bn))
-        # y_seq.shape = [T, N, 8, H, W]
-        
-        net = layer.MultiStepContainer(conv, bn)
-        z_seq = net(x_seq)
-        # z_seq.shape = [T, N, 8, H, W]
-        
-        # z_seq is identical to y_seq
-
-但是ANN的网络层本身是无状态的，不存在前序依赖，没有必要在时间上串行的计算，可以使用函数风格的 \
-:class:`spikingjelly.activation_based.functional.seq_to_ann_forward` 或模块风格的 \
-:class:`spikingjelly.activation_based.layer.SeqToANNContainer` 进行包装。\
-:class:`spikingjelly.activation_based.functional.seq_to_ann_forward` 将 \
-`shape = [T, N, *]` 的数据首先变换为 `shape = [TN, *]`，再送入无状态的网络层进行计算，\
-输出的结果会被重新变换为 `shape = [T, N, *]`。不同时刻的数据是并行计算的，因而速度更快：
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import functional, layer
-
-    with torch.no_grad():
-        T = 4
-        N = 1
-        C = 3
-        H = 8
-        W = 8
-        x_seq = torch.rand([T, N, C, H, W])
-
-        conv = nn.Conv2d(C, 8, kernel_size=3, padding=1, bias=False)
-        bn = nn.BatchNorm2d(8)
-
-        y_seq = functional.multi_step_forward(x_seq, (conv, bn))
-        # y_seq.shape = [T, N, 8, H, W]
-
-        net = layer.MultiStepContainer(conv, bn)
-        z_seq = net(x_seq)
-        # z_seq.shape = [T, N, 8, H, W]
-
-        # z_seq is identical to y_seq
-        
-        p_seq = functional.seq_to_ann_forward(x_seq, (conv, bn))
-        # p_seq.shape = [T, N, 8, H, W]
-
-        net = layer.SeqToANNContainer(conv, bn)
-        q_seq = net(x_seq)
-        # q_seq.shape = [T, N, 8, H, W]
-
-        # q_seq is identical to p_seq, and also identical to y_seq and z_seq
-
-
-常用的网络层，在 :class:`spikingjelly.activation_based.layer` 已经定义过，更推荐使用 :class:`spikingjelly.activation_based.layer` 中的网络层，\
-而不是使用 :class:`spikingjelly.activation_based.layer.SeqToANNContainer` 手动包装，\
-尽管 :class:`spikingjelly.activation_based.layer` 中的网络层实际上就是用包装器包装 `forward` 函数实现的。\
-:class:`spikingjelly.activation_based.layer` 中的网络层，优势在于：
-* 支持单步和多步模式，而 :class:`spikingjelly.activation_based.layer.SeqToANNContainer` 和 :class:`spikingjelly.activation_based.layer.MultiStepContainer` 包装的层，只支持多步模式
-* 包装器会使得 `state_dict` 的 `keys()` 也增加一层包装，给加载权重带来麻烦
-  
-例如
-
-.. code-block:: python
-
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import functional, layer, neuron
-
-
-    ann = nn.Sequential(
-        nn.Conv2d(3, 8, kernel_size=3, padding=1, bias=False),
-        nn.BatchNorm2d(8),
-        nn.ReLU()
-    )
-
-    print(f'ann.state_dict.keys()={ann.state_dict().keys()}')
-
-    net_container = nn.Sequential(
-        layer.SeqToANNContainer(
-            nn.Conv2d(3, 8, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(8),
-        ),
-        neuron.IFNode(step_mode='m')
-    )
-    print(f'net_container.state_dict.keys()={net_container.state_dict().keys()}')
-
-    net_origin = nn.Sequential(
-        layer.Conv2d(3, 8, kernel_size=3, padding=1, bias=False),
-        nn.BatchNorm2d(8),
-        neuron.IFNode(step_mode='m')
-    )
-    print(f'net_origin.state_dict.keys()={net_origin.state_dict().keys()}')
-
-    try:
-        print('net_container is trying to load state dict from ann...')
-        net_container.load_state_dict(ann.state_dict())
-        print('Load success!')
-    except BaseException as e:
-        print('net_container can not load! The error message is\n', e)
-
-    try:
-        print('net_origin is trying to load state dict from ann...')
-        net_origin.load_state_dict(ann.state_dict())
-        print('Load success!')
-    except BaseException as e:
-        print('net_origin can not load! The error message is', e)
-
-
-
-输出为
-
-.. code-block:: shell
-
-    ann.state_dict.keys()=odict_keys(['0.weight', '1.weight', '1.bias', '1.running_mean', '1.running_var', '1.num_batches_tracked'])
-    net_container.state_dict.keys()=odict_keys(['0.0.weight', '0.1.weight', '0.1.bias', '0.1.running_mean', '0.1.running_var', '0.1.num_batches_tracked'])
-    net_origin.state_dict.keys()=odict_keys(['0.weight', '1.weight', '1.bias', '1.running_mean', '1.running_var', '1.num_batches_tracked'])
-    net_container is trying to load state dict from ann...
-    net_container can not load! The error message is
-    Error(s) in loading state_dict for Sequential:
-        Missing key(s) in state_dict: "0.0.weight", "0.1.weight", "0.1.bias", "0.1.running_mean", "0.1.running_var". 
-        Unexpected key(s) in state_dict: "0.weight", "1.weight", "1.bias", "1.running_mean", "1.running_var", "1.num_batches_tracked". 
-    net_origin is trying to load state dict from ann...
-    Load success!
