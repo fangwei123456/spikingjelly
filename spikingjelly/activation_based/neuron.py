@@ -76,8 +76,8 @@ class BaseNode(base.MemoryModule):
         else:
             self.register_memory('v', v_reset)
 
-        self.register_memory('v_threshold', v_threshold)
-        self.register_memory('v_reset', v_reset)
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
 
         self.detach_reset = detach_reset
         self.surrogate_function = surrogate_function

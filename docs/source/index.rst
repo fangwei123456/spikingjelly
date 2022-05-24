@@ -43,8 +43,10 @@
     :maxdepth: 1
     :caption: 上手教程
 
-
+    /activation_based/migrate_from_legency
     /activation_based/basic_concept
+    /activation_based/neuron
+    /activation_based/surrogate
 
 
 模块文档
