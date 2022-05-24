@@ -4,7 +4,7 @@ import numpy as np
 
 
 def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                    plot_colorbar=True, colorbar_y_label='magnitude', x_max=None, dpi=200):
+                    plot_colorbar=True, colorbar_y_label='magnitude', x_max=None, figsize=(12, 8), dpi=200):
     '''
     :param array: shape=[T, N]的任意数组
     :param title: 热力图的标题
@@ -51,7 +51,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     if array.ndim != 2:
         raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
 
-    fig, heatmap = plt.subplots(dpi=dpi)
+    fig, heatmap = plt.subplots(figsize=figsize, dpi=dpi)
     if x_max is not None:
         im = heatmap.imshow(array.T, aspect='auto', extent=[-0.5, x_max, array.shape[1] - 0.5, -0.5])
     else:
@@ -154,7 +154,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     return fig
 
 def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                   plot_firing_rate=True, firing_rate_map_title='Firing Rate', dpi=200):
+                   plot_firing_rate=True, firing_rate_map_title='firing rate', figsize=(12, 8), dpi=200):
     '''
 
 
@@ -204,7 +204,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
     spikes_T = spikes.T
     if plot_firing_rate:
-        fig = plt.figure(tight_layout=True, dpi=dpi)
+        fig = plt.figure(tight_layout=True, figsize=figsize, dpi=dpi)
         gs = matplotlib.gridspec.GridSpec(1, 5)
         spikes_map = fig.add_subplot(gs[0, 0:4])
         firing_rate_map = fig.add_subplot(gs[0, 4])
@@ -304,7 +304,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
     return fig, maps
 
 def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0.0,
-                        title='$V_{t}$ and $S_{t}$ of the neuron', dpi=200):
+                        title='$V[t]$ and $S[t]$ of the neuron', figsize=(12, 8), dpi=200):
     '''
     :param v: shape=[T], 存放神经元不同时刻的电压
     :param s: shape=[T], 存放神经元不同时刻释放的脉冲
@@ -338,7 +338,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     .. image:: ./_static/API/visualizing/plot_one_neuron_v_s.*
         :width: 100%
     '''
-    fig = plt.figure(dpi=dpi)
+    fig = plt.figure(figsize=figsize, dpi=dpi)
     ax0 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax0.set_title(title)
     T = s.shape[0]
@@ -349,7 +349,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     ax0.axhline(v_threshold, label='$V_{threshold}$', linestyle='-.', c='r')
     if v_reset is not None:
         ax0.axhline(v_reset, label='$V_{reset}$', linestyle='-.', c='g')
-    ax0.legend()
+    ax0.legend(frameon=True)
     t_spike = s * t
     mask = (s == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
     ax1 = plt.subplot2grid((3, 1), (2, 0))

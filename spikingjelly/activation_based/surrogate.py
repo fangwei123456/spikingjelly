@@ -1541,6 +1541,70 @@ class QPseudoSpike(SurrogateFunctionBase):
     # # plt.savefig('QPseudoSpike.svg')
     # # plt.savefig('QPseudoSpike.pdf')
 
+
+@torch.jit.script
+def leaky_k_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, leak: float, k: float):
+    mask1 = (x >= 0.).to(x)
+    grad_x = mask1 * k + (1. - mask1) * leak
+    return grad_output * grad_x, None
+
+class leaky_k_relu(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, leak, k):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.leak = leak
+            ctx.k = k
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return leaky_k_relu_backward(grad_output, ctx.saved_tensors[0], ctx.leak, ctx.k)
+
+
+class LeakyKReLU(MultiArgsSurrogateFunctionBase):
+    def __init__(self, spiking=True, leak: float = 0., k: float = 1.):
+        super().__init__(spiking, leak, k)
+        self.leak = leak
+        self.k = k
+
+
+    @staticmethod
+    def spiking_function(x, leak, k):
+        return leaky_k_relu.apply(x, leak, k)
+
+    @staticmethod
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, leak: float, k: float):
+        mask1 = (x >= 0.).to(x)
+        return leak * (1. - mask1) + k * mask1
+
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
+        leak = str(self.leak) + 'f'
+        k = str(self.k) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
+        if dtype == 'fp32':
+            code += f'''
+            {tab4_str}const float {sg_name}_mask1 = (float) ({x} >= 0.0f);
+            {tab4_str}const float {y} = {leak} * (1.0f - {sg_name}_mask1) + {k} * {sg_name}_mask1;
+            '''
+        elif dtype == 'fp16':
+            code += f'''
+            {tab4_str}const half2 {sg_name}_mask1 = __hgeu2({x}, __float2half2_rn(0.0f));
+            {tab4_str}const half2 {y} = __hfma2(__float2half2_rn({k}), {sg_name}_mask1, __hmul2(__float2half2_rn({leak}), __hsub2(__float2half2_rn(1.0f), {sg_name}_mask1)));
+            '''
+        else:
+            raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
+        return code
+
 _has_cuda_ = [
     ATan,
     Sigmoid,
