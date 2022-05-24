@@ -109,7 +109,7 @@ def main():
     .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
         :width: 100%
     '''
-    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
     parser = argparse.ArgumentParser(description='Classify Fashion-MNIST')
     parser.add_argument('-T', default=4, type=int, help='simulating time-steps')
     parser.add_argument('-device', default='cuda:0', help='device')
@@ -245,7 +245,7 @@ def main():
             functional.reset_net(net)
 
         train_time = time.time()
-        train_speed = (train_time - start_time) / train_samples
+        train_speed = train_samples / (train_time - start_time)
         train_loss /= train_samples
         train_acc /= train_samples
 
@@ -270,7 +270,7 @@ def main():
                 test_acc += (out_fr.argmax(1) == label).float().sum().item()
                 functional.reset_net(net)
         test_time = time.time()
-        test_speed = (test_time - train_time) / test_samples
+        test_speed = test_samples / (test_time - train_time)
         test_loss /= test_samples
         test_acc /= test_samples
         writer.add_scalar('test_loss', test_loss, epoch)
