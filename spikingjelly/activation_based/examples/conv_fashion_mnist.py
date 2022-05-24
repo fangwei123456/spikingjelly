@@ -34,9 +34,10 @@ class CSNN(nn.Module):
         layer.Linear(channels * 4 * 4, 10, bias=False),
         neuron.IFNode(surrogate_function=surrogate.ATan()),
         )
+
         functional.set_step_mode(self, step_mode='m')
+
         if use_cupy:
-            
             functional.set_backend(self, backend='cupy')
 
     def forward(self, x: torch.Tensor):
@@ -137,9 +138,9 @@ def main():
     net.to(args.device)
 
     optimizer = None
-    if args.opt == 'SGD':
+    if args.opt == 'sgd':
         optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum)
-    elif args.opt == 'Adam':
+    elif args.opt == 'adam':
         optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     else:
         raise NotImplementedError(args.opt)
