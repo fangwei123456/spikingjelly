@@ -63,7 +63,7 @@ def set_step_mode(net: nn.Module, step_mode: str):
                 m.step_mode = step_mode
 
 
-def set_backend(net: nn.Module, backend: str, instance: tuple = None):
+def set_backend(net: nn.Module, backend: str, instance: nn.Module or tuple = None):
     for m in net.modules():
         if instance is None or isinstance(m, instance):
             if hasattr(m, 'backend'):

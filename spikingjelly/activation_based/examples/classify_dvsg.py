@@ -40,7 +40,7 @@ def main():
 
     functional.set_step_mode(net, 'm')
     if args.cupy:
-        functional.set_backend(net, 'cupy')
+        functional.set_backend(net, 'cupy', instance=neuron.LIFNode)
 
     print(net)
 
@@ -165,8 +165,7 @@ def main():
                 frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
                 label = label.to(args.device)
                 label_onehot = F.one_hot(label, 11).float()
-                out_fr = net(frame)
-                out_fr = out_fr.mean(0)
+                out_fr = net(frame).mean(0)
                 loss = F.mse_loss(out_fr, label_onehot)
                 test_samples += label.numel()
                 test_loss += loss.item() * label.numel()
@@ -199,7 +198,7 @@ def main():
 
         print(args)
         print(out_dir)
-        print(f'epoch ={epoch}, train_loss ={train_loss: .4f}, train_acc ={train_acc: .4f}, test_loss ={test_loss: .4f}, test_acc ={test_acc: .4f}, max_test_acc ={max_test_acc: .4f}')
+        print(f'epoch = {epoch}, train_loss ={train_loss: .4f}, train_acc ={train_acc: .4f}, test_loss ={test_loss: .4f}, test_acc ={test_acc: .4f}, max_test_acc ={max_test_acc: .4f}')
         print(f'train speed ={train_speed: .4f} images/s, test speed ={test_speed: .4f} images/s')
         print(f'escape time = {(datetime.datetime.now() + datetime.timedelta(seconds=(time.time() - start_time) * (args.epochs - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
 

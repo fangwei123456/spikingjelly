@@ -50,6 +50,7 @@
     /activation_based/surrogate
     /activation_based/conv_fashion_mnist
     /activation_based/neuromorphic_datasets
+    /activation_based/classify_dvsg
 
 
 模块文档
