@@ -214,50 +214,54 @@
 
     # spikingjelly.activation_based.examples.conv_fashion_mnist
     class CSNN(nn.Module):
+        # ...
         def spiking_encoder(self):
             return self.conv_fc[0:3]
-    if args.resume:
-        checkpoint = torch.load(args.resume, map_location='cpu')
-        net.load_state_dict(checkpoint['net'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        start_epoch = checkpoint['epoch'] + 1
-        max_test_acc = checkpoint['max_test_acc']
-        if args.save_es is not None and args.save_es != '':
-            encoder = net.spiking_encoder()
-            with torch.no_grad():
-                for img, label in test_data_loader:
-                    img = img.to(args.device)
-                    label = label.to(args.device)
-                    # img.shape = [N, C, H, W]
-                    img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
-                    spike_seq = encoder(img_seq)
-                    functional.reset_net(encoder)
-                    to_pil_img = torchvision.transforms.ToPILImage()
-                    vs_dir = os.path.join(args.save_es, 'visualization')
-                    os.mkdir(vs_dir)
+    def main():
+        # ...
+        if args.resume:
+            checkpoint = torch.load(args.resume, map_location='cpu')
+            net.load_state_dict(checkpoint['net'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+            start_epoch = checkpoint['epoch'] + 1
+            max_test_acc = checkpoint['max_test_acc']
+            if args.save_es is not None and args.save_es != '':
+                encoder = net.spiking_encoder()
+                with torch.no_grad():
+                    for img, label in test_data_loader:
+                        img = img.to(args.device)
+                        label = label.to(args.device)
+                        # img.shape = [N, C, H, W]
+                        img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+                        spike_seq = encoder(img_seq)
+                        functional.reset_net(encoder)
+                        to_pil_img = torchvision.transforms.ToPILImage()
+                        vs_dir = os.path.join(args.save_es, 'visualization')
+                        os.mkdir(vs_dir)
 
-                    img = img.cpu()
-                    spike_seq = spike_seq.cpu()
+                        img = img.cpu()
+                        spike_seq = spike_seq.cpu()
 
-                    img = F.interpolate(img, scale_factor=4, mode='bilinear')
-                    # 28 * 28 is too small to read. So, we interpolate it to a larger size
+                        img = F.interpolate(img, scale_factor=4, mode='bilinear')
+                        # 28 * 28 is too small to read. So, we interpolate it to a larger size
 
-                    for i in range(label.shape[0]):
-                        vs_dir_i = os.path.join(vs_dir, f'{i}')
-                        os.mkdir(vs_dir_i)
-                        to_pil_img(img[i]).save(os.path.join(vs_dir_i, f'input.png'))
-                        for t in range(net.T):
-                            print(f'saving {i}-th sample with t={t}...')
-                            # spike_seq.shape = [T, N, C, H, W]
+                        for i in range(label.shape[0]):
+                            vs_dir_i = os.path.join(vs_dir, f'{i}')
+                            os.mkdir(vs_dir_i)
+                            to_pil_img(img[i]).save(os.path.join(vs_dir_i, f'input.png'))
+                            for t in range(net.T):
+                                print(f'saving {i}-th sample with t={t}...')
+                                # spike_seq.shape = [T, N, C, H, W]
 
-                            visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$')
-                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'))
-                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'))
-                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'))
-                            plt.clf()
+                                visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$')
+                                plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'))
+                                plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'))
+                                plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'))
+                                plt.clf()
 
-                    exit()
+                        exit()
+        # ...
 
 
 我们加载已经训练好的模型，设置 ``batch_size=4`` （表示我们只保存4张图片和对应的编码后的脉冲），将图片保存到 ``./logs`` 下，按照如下命令运行：
