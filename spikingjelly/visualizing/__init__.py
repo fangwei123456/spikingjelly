@@ -250,17 +250,18 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         firing_rate_map.set_title(firing_rate_map_title)
     return fig
 
-def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: str, dpi=200):
+def plot_2d_feature_map(x3d: np.asarray, nrows, ncols, space, title: str, figsize=(12, 8), dpi=200):
     '''
-    :param spikes: shape=[C, W, H]，C个尺寸为W * H的脉冲矩阵，矩阵中的元素为0或1。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
+    :param x3d: shape=[C, W, H]，C个尺寸为W * H的矩阵。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
     :param nrows: 画成多少行
     :param ncols: 画成多少列
     :param space: 矩阵之间的间隙
     :param title: 图的标题
+    :param figsize: 图片大小
     :param dpi: 绘图的dpi
     :return: 一个figure，将C个矩阵全部画出，然后排列成nrows行ncols列
 
-    将C个尺寸为W * H的脉冲矩阵，全部画出，然后排列成nrows行ncols列。这样的矩阵一般来源于卷积层后的脉冲神经元的输出，通过这个函数\\
+    将C个尺寸为W * H的矩阵，全部画出，然后排列成nrows行ncols列。这样的矩阵一般来源于卷积层后的脉冲神经元的输出，通过这个函数\\
     可以对输出进行可视化。示例代码：
 
     .. code-block:: python
@@ -273,29 +274,29 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
         W = 8
         H = 8
         spikes = (np.random.rand(C, W, H) > 0.8).astype(float)
-        visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='Spiking Feature Maps', dpi=200)
+        visualizing.plot_2d_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='Spiking Feature Maps', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_spiking_feature_map.*
+    .. image:: ./_static/API/visualizing/plot_2d_feature_map.*
         :width: 100%
 
     '''
-    if spikes.ndim != 3:
-        raise ValueError(f"Expected 3D array, got {spikes.ndim}D array instead")
+    if x3d.ndim != 3:
+        raise ValueError(f"Expected 3D array, got {x3d.ndim}D array instead")
 
-    C = spikes.shape[0]
+    C = x3d.shape[0]
 
     assert nrows * ncols == C, 'nrows * ncols != C'
 
-    h = spikes.shape[1]
-    w = spikes.shape[2]
-    y = np.ones(shape=[(h + space) * nrows, (w + space) * ncols]) * spikes.max().item()
+    h = x3d.shape[1]
+    w = x3d.shape[2]
+    y = np.ones(shape=[(h + space) * nrows, (w + space) * ncols]) * x3d.max().item()
     index = 0
     for i in range(space // 2, y.shape[0], h + space):
         for j in range(space // 2, y.shape[1], w + space):
-            y[i:i + h, j:j + w] = spikes[index]
+            y[i:i + h, j:j + w] = x3d[index]
             index += 1
-    fig, maps = plt.subplots(dpi=dpi)
+    fig, maps = plt.subplots(figsize=figsize, dpi=dpi)
     maps.set_title(title)
     maps.imshow(y, cmap='gray')
 

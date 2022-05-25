@@ -197,3 +197,9 @@
     escape time = 2022-05-24 21:42:16
 
 最终获得了 ``max_test_acc = 0.9308`` 的性能。如果精心调整超参数，通常还可以获得更高的性能。
+
+下图展示了训练过程中正确率的变化：
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/fmnist_logs.*
+    :width: 100%
+
