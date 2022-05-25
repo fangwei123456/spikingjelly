@@ -127,7 +127,7 @@ def main():
             optimizer.zero_grad()
             img = img.to(args.device)
             label = label.to(args.device)
-            label_onehot = F.one_hot(label, 10).float()
+            label_onehot = F.one_hot(label, 11).float()
 
             if scaler is not None:
                 with amp.autocast():
@@ -165,7 +165,7 @@ def main():
             for img, label in test_data_loader:
                 img = img.to(args.device)
                 label = label.to(args.device)
-                label_onehot = F.one_hot(label, 10).float()
+                label_onehot = F.one_hot(label, 11).float()
                 out_fr = net(img).mean(0)
                 loss = F.mse_loss(out_fr, label_onehot)
 
