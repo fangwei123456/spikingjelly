@@ -534,6 +534,15 @@ class LIFNode(BaseNode):
         self.tau = tau
         self.decay_input = decay_input
 
+    @property
+    def supported_backends(self):
+        if self.step_mode == 's':
+            return ('torch', )
+        elif self.step_mode == 'm':
+            return ('torch', 'cupy')
+        else:
+            raise ValueError(self.step_mode)
+
     def extra_repr(self):
         return super().extra_repr() + f', tau={self.tau}'
 
