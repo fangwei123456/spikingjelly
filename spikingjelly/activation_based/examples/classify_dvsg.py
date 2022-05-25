@@ -123,6 +123,7 @@ def main():
         for frame, label in train_data_loader:
             optimizer.zero_grad()
             frame = frame.to(args.device)
+            frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
             label = label.to(args.device)
             label_onehot = F.one_hot(label, 11).float()
 
@@ -161,11 +162,12 @@ def main():
         with torch.no_grad():
             for frame, label in test_data_loader:
                 frame = frame.to(args.device)
+                frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]
                 label = label.to(args.device)
                 label_onehot = F.one_hot(label, 11).float()
-                out_fr = net(frame).mean(0)
+                out_fr = net(frame)
+                out_fr = out_fr.mean(0)
                 loss = F.mse_loss(out_fr, label_onehot)
-
                 test_samples += label.numel()
                 test_loss += loss.item() * label.numel()
                 test_acc += (out_fr.argmax(1) == label).float().sum().item()
