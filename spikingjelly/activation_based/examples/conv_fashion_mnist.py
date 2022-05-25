@@ -112,6 +112,8 @@ def main():
         :width: 100%
     '''
     # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
+
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es
     parser = argparse.ArgumentParser(description='Classify Fashion-MNIST')
     parser.add_argument('-T', default=4, type=int, help='simulating time-steps')
     parser.add_argument('-device', default='cuda:0', help='device')
@@ -129,7 +131,7 @@ def main():
     parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
     parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
     parser.add_argument('-channels', default=128, type=int, help='channels of CSNN')
-    parser.add_argument('-save-es', action='store_true', help='save a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}')
+    parser.add_argument('-save-es', default=None, help='dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}')
 
     args = parser.parse_args()
     print(args)
@@ -197,6 +199,38 @@ def main():
         lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
         start_epoch = checkpoint['epoch'] + 1
         max_test_acc = checkpoint['max_test_acc']
+        if args.save_es is not None and args.save_es != '':
+            encoder = net.spiking_encoder()
+            with torch.no_grad():
+                for img, label in test_data_loader:
+                    img = img.to(args.device)
+                    label = label.to(args.device)
+                    # img.shape = [N, C, H, W]
+                    img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+                    spike_seq = encoder(img_seq)
+                    to_pil_img = torchvision.transforms.ToPILImage()
+                    vs_dir = os.path.join(args.save_es, 'visualization')
+                    os.mkdir(vs_dir)
+
+                    img = img.cpu()
+                    spike_seq = spike_seq.cpu()
+
+                    for i in range(label.shape[0]):
+                        vs_dir_i = os.path.join(vs_dir, f'{i}')
+                        os.mkdir(vs_dir_i)
+                        to_pil_img(img[i]).save(os.path.join(vs_dir_i), f'input.png')
+                        for t in range(net.T):
+                            print(f'saving {i}-th sample with t={t}...')
+                            # spike_seq.shape = [T, N, C, H, W]
+
+                            visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$')
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'))
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'))
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'))
+                            plt.clf()
+
+            exit()
+
     out_dir = os.path.join(args.out_dir, f'T{args.T}_b{args.b}_{args.opt}_lr{args.lr}_c{args.channels}')
 
     if args.amp:
@@ -208,37 +242,6 @@ def main():
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
         print(f'Mkdir {out_dir}.')
-
-    if args.save_es:
-        encoder = net.spiking_encoder()
-        with torch.no_grad():
-            for img, label in test_data_loader:
-                img = img.to(args.device)
-                label = label.to(args.device)
-                # img.shape = [N, C, H, W]
-                img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
-                spike_seq = encoder(img_seq)
-                to_pil_img = torchvision.transforms.ToPILImage()
-                vs_dir = os.path.join(out_dir, 'visualization')
-                os.mkdir(vs_dir)
-
-                img = img.cpu()
-                spike_seq = spike_seq.cpu()
-
-                for i in range(label.shape[0]):
-                    vs_dir_i = os.path.join(vs_dir, f'{i}')
-                    os.mkdir(vs_dir_i)
-                    to_pil_img(img[i]).save(os.path.join(vs_dir_i), f'input.png')
-                    for t in range(net.T):
-                        # spike_seq.shape = [T, N, C, H, W]
-
-                        visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$')
-                        plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'))
-                        plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'))
-                        plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'))
-                        plt.clf()
-
-        exit()
 
     with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
         args_txt.write(str(args))
