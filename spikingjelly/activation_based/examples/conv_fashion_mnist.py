@@ -214,6 +214,9 @@ def main():
                     img = img.cpu()
                     spike_seq = spike_seq.cpu()
 
+                    img = F.interpolate(img, scale_factor=4, mode='bilinear')
+                    # 28 * 28 is too small to read. So, we interpolate it to a larger size
+
                     for i in range(label.shape[0]):
                         vs_dir_i = os.path.join(vs_dir, f'{i}')
                         os.mkdir(vs_dir_i)
