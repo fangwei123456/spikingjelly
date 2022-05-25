@@ -225,10 +225,10 @@ def main():
                             print(f'saving {i}-th sample with t={t}...')
                             # spike_seq.shape = [T, N, C, H, W]
 
-                            visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$', figsize=(8, spike_seq.shape[2] // 8))
-                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'))
-                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'))
-                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'))
+                            visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$')
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'), pad_inches=0.02)
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'), pad_inches=0.02)
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'), pad_inches=0.02)
                             plt.clf()
 
                     exit()
