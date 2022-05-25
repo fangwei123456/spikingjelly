@@ -45,6 +45,7 @@
 
     /activation_based/migrate_from_legency
     /activation_based/basic_concept
+    /activation_based/container
     /activation_based/neuron
     /activation_based/surrogate
     /activation_based/conv_fashion_mnist
