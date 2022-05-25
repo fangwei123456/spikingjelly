@@ -55,10 +55,6 @@ class CSNN(nn.Module):
 
 def main():
     '''
-    * :ref:`API in English <conv_fashion_mnist.main-en>`
-
-    .. _conv_fashion_mnist.main-cn:
-
     (sj-dev) wfang@Precision-5820-Tower-X-Series:~/spikingjelly_dev$ python -m spikingjelly.activation_based.examples.conv_fashion_mnist -h
 
     usage: conv_fashion_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR]
@@ -80,36 +76,7 @@ def main():
       -cupy               use cupy neuron and multi-step forward mode
       -opt OPT            use which optimizer. SDG or Adam
       -momentum MOMENTUM  momentum for SGD
-
-
-
-    使用卷积-全连接的网络结构，进行Fashion MNIST识别。这个函数会初始化网络进行训练，并显示训练过程中在测试集的正确率。会将训练过
-    程中测试集正确率最高的网络保存在 ``tensorboard`` 日志文件的同级目录下。这个目录的位置，是在运行 ``main()``
-    函数时由用户输入的。
-
-    训练100个epoch，训练batch和测试集上的正确率如下：
-
-    .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/train.*
-        :width: 100%
-
-    .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
-        :width: 100%
-
-    * :ref:`中文API <conv_fashion_mnist.main-cn>`
-
-    .. _conv_fashion_mnist.main-en:
-
-    The network with Conv-FC structure for classifying Fashion MNIST. This function initials the network, starts training
-    and shows accuracy on test dataset. The net with the max accuracy on test dataset will be saved in
-    the root directory for saving ``tensorboard`` logs, which is inputted by user when running the ``main()``  function.
-
-    After 100 epochs, the accuracy on train batch and test dataset is as followed:
-
-    .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/train.*
-        :width: 100%
-
-    .. image:: ./_static/tutorials/activation_based/4_conv_fashion_mnist/test.*
-        :width: 100%
+      -save-es            dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
     '''
     # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
 

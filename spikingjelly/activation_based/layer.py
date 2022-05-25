@@ -1303,3 +1303,19 @@ class TemporalWiseAttention(base.MultiStepModule):
             y_seq = x_seq * scores[:, :, None, None, None]
         y_seq = y_seq.transpose(0, 1)
         return y_seq
+
+
+class VotingLayer(nn.Module, base.StepModule):
+    def __init__(self, voting_size: int = 10, step_mode='s'):
+        super().__init__()
+        self.voting_size = voting_size
+        self.step_mode = step_mode
+
+    def single_step_forward(self, x: torch.Tensor):
+        return F.avg_pool1d(x.unsqueeze(1), self.voting_size, self.voting_size).squeeze(1)
+
+    def forward(self, x: torch.Tensor):
+        if self.step_mode == 's':
+            return self.single_step_forward(x)
+        elif self.step_mode == 'm':
+            return functional.seq_to_ann_forward(x, self.single_step_forward)
