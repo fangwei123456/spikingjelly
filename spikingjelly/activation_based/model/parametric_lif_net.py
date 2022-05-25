@@ -144,10 +144,10 @@ class DVSGestureNet(nn.Module):
             spiking_neuron(*args, **kwargs),
 
             layer.Dropout(0.5),
-            layer.Linear(512, 100),
+            layer.Linear(512, 110),
             spiking_neuron(*args, **kwargs),
 
-            layer.VotingLayer(10)
+            layer.VotingLayer(11)
         )
 
     def forward(self, x: torch.Tensor):
