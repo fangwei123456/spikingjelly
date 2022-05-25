@@ -63,16 +63,17 @@ def set_step_mode(net: nn.Module, step_mode: str):
                 m.step_mode = step_mode
 
 
-def set_backend(net: nn.Module, backend: str):
+def set_backend(net: nn.Module, backend: str, instance: tuple = None):
     for m in net.modules():
-        if hasattr(m, 'backend'):
-            if not isinstance(m, base.MemoryModule):
-                logging.warning(
-                    f'Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule')
-            if backend in m.supported_backends:
-                m.backend = backend
-            else:
-                logging.warning(f'{m} does not supports for backend={backend}. It will still use backend={m.backend}.')
+        if instance is None or isinstance(m, instance):
+            if hasattr(m, 'backend'):
+                if not isinstance(m, base.MemoryModule):
+                    logging.warning(
+                        f'Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule')
+                if backend in m.supported_backends:
+                    m.backend = backend
+                else:
+                    logging.warning(f'{m} does not supports for backend={backend}. It will still use backend={m.backend}.')
 
 
 def spike_cluster(v: Tensor, v_threshold, T_in: int):
