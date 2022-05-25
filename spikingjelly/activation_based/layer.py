@@ -1311,6 +1311,9 @@ class VotingLayer(nn.Module, base.StepModule):
         self.voting_size = voting_size
         self.step_mode = step_mode
 
+    def extra_repr(self):
+        return super().extra_repr() + f', voting_size={self.voting_size}, step_mode={self.step_mode}'
+
     def single_step_forward(self, x: torch.Tensor):
         return F.avg_pool1d(x.unsqueeze(1), self.voting_size, self.voting_size).squeeze(1)
 
