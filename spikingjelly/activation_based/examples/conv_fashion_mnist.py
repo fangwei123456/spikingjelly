@@ -142,16 +142,6 @@ def main():
 
     net.to(args.device)
 
-    optimizer = None
-    if args.opt == 'sgd':
-        optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum)
-    elif args.opt == 'adam':
-        optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
-    else:
-        raise NotImplementedError(args.opt)
-
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
-
     train_set = torchvision.datasets.FashionMNIST(
             root=args.data_dir,
             train=True,
@@ -182,15 +172,23 @@ def main():
         pin_memory=True
     )
 
+
     scaler = None
     if args.amp:
         scaler = amp.GradScaler()
-        with torch.no_grad():
-            for img, label in test_data_loader:
-                img = img.to(args.device)
-                label = label.to(args.device)
+
     start_epoch = 0
     max_test_acc = -1
+
+    optimizer = None
+    if args.opt == 'sgd':
+        optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum)
+    elif args.opt == 'adam':
+        optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
+    else:
+        raise NotImplementedError(args.opt)
+
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
 
     if args.resume:
         checkpoint = torch.load(args.resume, map_location='cpu')
@@ -230,6 +228,7 @@ def main():
                             plt.clf()
 
             exit()
+
 
     out_dir = os.path.join(args.out_dir, f'T{args.T}_b{args.b}_{args.opt}_lr{args.lr}_c{args.channels}')
 
