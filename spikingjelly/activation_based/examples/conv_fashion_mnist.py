@@ -113,7 +113,7 @@ def main():
     '''
     # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
 
-    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es
+    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
     parser = argparse.ArgumentParser(description='Classify Fashion-MNIST')
     parser.add_argument('-T', default=4, type=int, help='simulating time-steps')
     parser.add_argument('-device', default='cuda:0', help='device')
@@ -206,6 +206,7 @@ def main():
                     # img.shape = [N, C, H, W]
                     img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
                     spike_seq = encoder(img_seq)
+                    functional.reset_net(encoder)
                     to_pil_img = torchvision.transforms.ToPILImage()
                     vs_dir = os.path.join(args.save_es, 'visualization')
                     os.mkdir(vs_dir)
@@ -216,7 +217,7 @@ def main():
                     for i in range(label.shape[0]):
                         vs_dir_i = os.path.join(vs_dir, f'{i}')
                         os.mkdir(vs_dir_i)
-                        to_pil_img(img[i]).save(os.path.join(vs_dir_i), f'input.png')
+                        to_pil_img(img[i]).save(os.path.join(vs_dir_i, f'input.png'))
                         for t in range(net.T):
                             print(f'saving {i}-th sample with t={t}...')
                             # spike_seq.shape = [T, N, C, H, W]
