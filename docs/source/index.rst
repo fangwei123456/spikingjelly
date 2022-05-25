@@ -47,6 +47,7 @@
     /activation_based/basic_concept
     /activation_based/neuron
     /activation_based/surrogate
+    /activation_based/conv_fashion_mnist
 
 
 模块文档

@@ -16,6 +16,7 @@
 .. code-block:: python
 
     # spikingjelly.activation_based.examples.conv_fashion_mnist
+    import matplotlib.pyplot as plt
     import torch
     import torch.nn as nn
     import torch.nn.functional as F
@@ -28,6 +29,7 @@
     from torch.cuda import amp
     import sys
     import datetime
+    from spikingjelly import visualizing
 
     class CSNN(nn.Module):
         def __init__(self, T: int, channels: int, use_cupy=False):
@@ -76,7 +78,6 @@
 .. code-block:: python
 
     # spikingjelly.activation_based.examples.conv_fashion_mnist
-
     class CSNN(nn.Module):
         def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
@@ -132,6 +133,7 @@
     -momentum MOMENTUM  momentum for SGD
     -lr LR              learning rate
     -channels CHANNELS  channels of CSNN
+    -save-es SAVE_ES    dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
 
 
 
@@ -203,3 +205,96 @@
 .. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/fmnist_logs.*
     :width: 100%
 
+可视化编码器
+-------------------------------------------
+如前所述，我们将图片直接送入网络，实际的编码过程是由网络中的首个 ``{Conv2d-BatchNorm2d-IFNode}`` 实现的。现在让我们提取出网络中的编码器，输入图片，\
+并将输出脉冲可视化，代码如下：
+
+.. code-block:: python
+
+    # spikingjelly.activation_based.examples.conv_fashion_mnist
+    class CSNN(nn.Module):
+        def spiking_encoder(self):
+            return self.conv_fc[0:3]
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location='cpu')
+        net.load_state_dict(checkpoint['net'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
+        start_epoch = checkpoint['epoch'] + 1
+        max_test_acc = checkpoint['max_test_acc']
+        if args.save_es is not None and args.save_es != '':
+            encoder = net.spiking_encoder()
+            with torch.no_grad():
+                for img, label in test_data_loader:
+                    img = img.to(args.device)
+                    label = label.to(args.device)
+                    # img.shape = [N, C, H, W]
+                    img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+                    spike_seq = encoder(img_seq)
+                    functional.reset_net(encoder)
+                    to_pil_img = torchvision.transforms.ToPILImage()
+                    vs_dir = os.path.join(args.save_es, 'visualization')
+                    os.mkdir(vs_dir)
+
+                    img = img.cpu()
+                    spike_seq = spike_seq.cpu()
+
+                    img = F.interpolate(img, scale_factor=4, mode='bilinear')
+                    # 28 * 28 is too small to read. So, we interpolate it to a larger size
+
+                    for i in range(label.shape[0]):
+                        vs_dir_i = os.path.join(vs_dir, f'{i}')
+                        os.mkdir(vs_dir_i)
+                        to_pil_img(img[i]).save(os.path.join(vs_dir_i, f'input.png'))
+                        for t in range(net.T):
+                            print(f'saving {i}-th sample with t={t}...')
+                            # spike_seq.shape = [T, N, C, H, W]
+
+                            visualizing.plot_2d_feature_map(spike_seq[t][i], 8, spike_seq.shape[2] // 8, 2, f'$S[{t}]$')
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.png'))
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.pdf'))
+                            plt.savefig(os.path.join(vs_dir_i, f's_{t}.svg'))
+                            plt.clf()
+
+                    exit()
+
+
+我们加载已经训练好的模型，设置 ``batch_size=4`` （表示我们只保存4张图片和对应的编码后的脉冲），将图片保存到 ``./logs`` 下，按照如下命令运行：
+
+.. code-block:: shell
+
+    python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
+
+
+运行后图片会保存到 ``./logs/visualization`` 文件夹中。下面展示2个输入图片，和对应的编码后的脉冲：
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/0/input.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/0/s_0.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/0/s_1.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/0/s_2.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/0/s_3.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/3/input.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/3/s_0.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/3/s_1.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/3/s_2.*
+    :width: 100%
+
+.. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/3/s_3.*
+    :width: 100%
