@@ -49,6 +49,7 @@
     /activation_based/neuron
     /activation_based/surrogate
     /activation_based/conv_fashion_mnist
+    /activation_based/neuromorphic_datasets
 
 
 模块文档
