@@ -13,7 +13,7 @@ import argparse
 import datetime
 
 def main():
-    # python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
+    # python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -T 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -cupy -opt adam -lr 0.001 -j 8
 
     parser = argparse.ArgumentParser(description='Classify DVS Gesture')
     parser.add_argument('-T', default=16, type=int, help='simulating time-steps')
