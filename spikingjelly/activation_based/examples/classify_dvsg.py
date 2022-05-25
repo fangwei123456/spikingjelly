@@ -108,9 +108,6 @@ def main():
         os.makedirs(out_dir)
         print(f'Mkdir {out_dir}.')
 
-    with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
-        args_txt.write(str(args))
-
     writer = SummaryWriter(out_dir, purge_step=start_epoch)
     with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
         args_txt.write(str(args))
@@ -123,21 +120,21 @@ def main():
         train_loss = 0
         train_acc = 0
         train_samples = 0
-        for img, label in train_data_loader:
+        for frame, label in train_data_loader:
             optimizer.zero_grad()
-            img = img.to(args.device)
+            frame = frame.to(args.device)
             label = label.to(args.device)
             label_onehot = F.one_hot(label, 11).float()
 
             if scaler is not None:
                 with amp.autocast():
-                    out_fr = net(img).mean(0)
+                    out_fr = net(frame).mean(0)
                     loss = F.mse_loss(out_fr, label_onehot)
                 scaler.scale(loss).backward()
                 scaler.step(optimizer)
                 scaler.update()
             else:
-                out_fr = net(img).mean(0)
+                out_fr = net(frame).mean(0)
                 loss = F.mse_loss(out_fr, label_onehot)
                 loss.backward()
                 optimizer.step()
@@ -162,11 +159,11 @@ def main():
         test_acc = 0
         test_samples = 0
         with torch.no_grad():
-            for img, label in test_data_loader:
-                img = img.to(args.device)
+            for frame, label in test_data_loader:
+                frame = frame.to(args.device)
                 label = label.to(args.device)
                 label_onehot = F.one_hot(label, 11).float()
-                out_fr = net(img).mean(0)
+                out_fr = net(frame).mean(0)
                 loss = F.mse_loss(out_fr, label_onehot)
 
                 test_samples += label.numel()
