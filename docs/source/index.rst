@@ -51,6 +51,7 @@
     /activation_based/conv_fashion_mnist
     /activation_based/neuromorphic_datasets
     /activation_based/classify_dvsg
+    /activation_based/recurrent_connection_and_stateful_synapse
 
 
 模块文档
