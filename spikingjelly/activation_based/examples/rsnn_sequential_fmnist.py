@@ -84,8 +84,6 @@ def main():
     elif args.model == 'fb':
         net = FeedBackNet()
 
-    print(net)
-
     net.to(args.device)
 
     # `functional.set_step_mode` will not set neurons in LinearRecurrentContainer to use step_mode = 'm'
@@ -94,6 +92,8 @@ def main():
     if args.cupy:
         # neurons in LinearRecurrentContainer still use step_mode = 's', so, they will still use backend = 'torch'
         functional.set_backend(net, backend='cupy')
+
+    print(net)
 
     train_set = torchvision.datasets.FashionMNIST(
             root=args.data_dir,
