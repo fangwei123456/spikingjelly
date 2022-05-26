@@ -56,7 +56,7 @@ class FeedBackNet(nn.Module):
 
 
 def main():
-    # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -T 16 -device cuda:0 -b 16 -T 16 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt adam -lr 0.001 -j 8 -model plain
+    # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt adam -lr 0.001 -j 8 -model plain
     parser = argparse.ArgumentParser(description='Classify Sequential Fashion-MNIST')
     parser.add_argument('-model', default='plain', type=str, help='use which model, "plain", "ss" (StatefulSynapseNet) or "fb" (FeedBackNet)')
     parser.add_argument('-device', default='cuda:0', help='device')
@@ -151,7 +151,7 @@ def main():
         start_epoch = checkpoint['epoch'] + 1
         max_test_acc = checkpoint['max_test_acc']
 
-    out_dir = os.path.join(args.out_dir, f'{args.model}_b{args.b}_{args.opt}_lr{args.lr}_c{args.channels}')
+    out_dir = os.path.join(args.out_dir, f'{args.model}_b{args.b}_{args.opt}_lr{args.lr}')
 
     if args.amp:
         out_dir += '_amp'
