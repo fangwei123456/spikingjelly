@@ -97,12 +97,12 @@ Sequential FashionMNIST上的对比实验
 将原始的FashionMNIST图片一行一行或者一列一列，而不是整个图片，作为输入。在这种情况下，网络必须具有一定的记忆能力，才能做出正确的分类。我们将会把
 图片一列一列的输入，这样对网络而言，就像是从左到右“阅读”一样，如下图所示：
 
-.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/samples/a.*
+.. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 下图中展示了被读入的列：
 
-.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/samples/b.*
+.. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 首先导入相关的包：
@@ -113,163 +113,121 @@ Sequential FashionMNIST上的对比实验
     import torch.nn as nn
     import torch.nn.functional as F
     import torchvision.datasets
-    from spikingjelly.activation_based.model import train_classify
-    from spikingjelly.activation_based import neuron, surrogate, layer
-    from spikingjelly.activation_based.functional import seq_to_ann_forward
-    from torchvision import transforms
+    from spikingjelly.activation_based import neuron, surrogate, layer, functional
+    from torch.cuda import amp
     import os, argparse
+    from torch.utils.tensorboard import SummaryWriter
+    import time
+    import datetime
+    import sys
 
-    try:
-        import cupy
-        backend = 'cupy'
-    except ImportError:
-        backend = 'torch'
-
-我们定义一个普通的前馈网络 ``Net``：
+我们定义一个普通的前馈网络 ``PlainNet``：
 
 .. code:: python
 
-    class Net(nn.Module):
+    class PlainNet(nn.Module):
         def __init__(self):
             super().__init__()
-            self.fc1 = nn.Linear(28, 32)
-            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
-            self.fc2 = nn.Linear(32, 10)
-            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.fc = nn.Sequential(
+                layer.Linear(28, 32),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
+                layer.Linear(32, 10),
+                neuron.IFNode(surrogate_function=surrogate.ATan())
+            )
 
         def forward(self, x: torch.Tensor):
-            # x.shape = [N, C, H, W]
-            x.squeeze_(1)  # [N, H, W]
-            x = x.permute(2, 0, 1)  # [W, N, H]
-            x = seq_to_ann_forward(x, self.fc1)
-            x = self.sn1(x)
-            x = seq_to_ann_forward(x, self.fc2)
-            x = self.sn2(x)
-            return x.mean(0)
+            return self.fc(x).mean(0)
 
-我们在 ``Net`` 的第一层脉冲神经元后增加一个 :class:`spikingjelly.activation_based.layer.SynapseFilter`，得到一个新的网络 ``StatefulSynapseNet``：
+我们在 ``PlainNet`` 的第一层脉冲神经元后增加一个 :class:`spikingjelly.activation_based.layer.SynapseFilter`，得到一个新的网络 ``StatefulSynapseNet``：
 
 .. code:: python
 
     class StatefulSynapseNet(nn.Module):
         def __init__(self):
             super().__init__()
-            self.fc1 = nn.Linear(28, 32)
-            self.sn1 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
-            self.sy1 = layer.MultiStepContainer(layer.SynapseFilter(tau=2., learnable=True))
-            self.fc2 = nn.Linear(32, 10)
-            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
+            self.fc = nn.Sequential(
+                layer.Linear(28, 32),
+                neuron.IFNode(surrogate_function=surrogate.ATan()),
+                layer.SynapseFilter(tau=2., learnable=True),
+                layer.Linear(32, 10),
+                neuron.IFNode(surrogate_function=surrogate.ATan())
+            )
 
         def forward(self, x: torch.Tensor):
-            # x.shape = [N, C, H, W]
-            x.squeeze_(1)  # [N, H, W]
-            x = x.permute(2, 0, 1)  # [W, N, H]
-            x = self.fc1(x)
-            x = self.sn1(x)
-            x = self.sy1(x)
-            x = self.fc2(x)
-            x = self.sn2(x)
-            return x.mean(0)
+            return self.fc(x).mean(0)
 
-我们给 ``Net`` 的第一层脉冲神经元增加一个反馈连接 :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 得到 ``FeedBackNet``：
+我们给 ``PlainNet`` 的第一层脉冲神经元增加一个反馈连接 :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 得到 ``FeedBackNet``：
 
 .. code:: python
 
     class FeedBackNet(nn.Module):
         def __init__(self):
             super().__init__()
-            self.fc1 = nn.Linear(28, 32)
-            self.sn1 = layer.MultiStepContainer(
+
+            self.fc = nn.Sequential(
+                layer.Linear(28, 32),
                 layer.LinearRecurrentContainer(
                     neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
-                    32, 32
-                )
+                    in_features=32, out_features=32, bias=True
+                ),
+                layer.Linear(32, 10),
+                neuron.IFNode(surrogate_function=surrogate.ATan())
             )
-            self.fc2 = nn.Linear(32, 10)
-            self.sn2 = neuron.MultiStepIFNode(surrogate_function=surrogate.ATan(), detach_reset=True, backend=backend)
 
         def forward(self, x: torch.Tensor):
-            # x.shape = [N, C, H, W]
-            x.squeeze_(1)  # [N, H, W]
-            x = x.permute(2, 0, 1)  # [W, N, H]
-            x = seq_to_ann_forward(x, self.fc1)
-            x = self.sn1(x)
-            x = seq_to_ann_forward(x, self.fc2)
-            x = self.sn2(x)
-            return x.mean(0)
+            return self.fc(x).mean(0)
 
 下图展示了3种网络的结构：
 
-.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
+.. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
 完整的代码位于 `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_。我们可以通过命令行直接运行。运行参数为：
 
 .. code:: shell
 
-    (pytorch-env) PS C:/Users/fw> python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --h
-    usage: rsnn_sequential_fmnist.py [-h] [--data-path DATA_PATH] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N]
-                                     [--lr LR] [--opt OPT] [--lrs LRS] [--step-size STEP_SIZE] [--step-gamma STEP_GAMMA]
-                                     [--cosa-tmax COSA_TMAX] [--momentum M] [--wd W] [--output-dir OUTPUT_DIR]
-                                     [--resume RESUME] [--start-epoch N] [--cache-dataset] [--amp] [--tb] [--model MODEL]
+    usage: rsnn_sequential_fmnist.py [-h] [-model MODEL] [-device DEVICE] [-b B] [-epochs N] [-j N] [-data-dir DATA_DIR] [-out-dir OUT_DIR] [-resume RESUME] [-amp] [-cupy] [-opt OPT] [-momentum MOMENTUM] [-lr LR]
 
-    PyTorch Classification Training
+    Classify Sequential Fashion-MNIST
 
     optional arguments:
-      -h, --help            show this help message and exit
-      --data-path DATA_PATH
-                            dataset
-      --device DEVICE       device
-      -b BATCH_SIZE, --batch-size BATCH_SIZE
-      --epochs N            number of total epochs to run
-      -j N, --workers N     number of data loading workers (default: 16)
-      --lr LR               initial learning rate
-      --opt OPT             optimizer (sgd or adam)
-      --lrs LRS             lr schedule (cosa(CosineAnnealingLR), step(StepLR)) or None
-      --step-size STEP_SIZE
-                            step_size for StepLR
-      --step-gamma STEP_GAMMA
-                            gamma for StepLR
-      --cosa-tmax COSA_TMAX
-                            T_max for CosineAnnealingLR. If none, it will be set to epochs
-      --momentum M          Momentum for SGD
-      --wd W, --weight-decay W
-                            weight decay (default: 0)
-      --output-dir OUTPUT_DIR
-                            path where to save
-      --resume RESUME       resume from checkpoint
-      --start-epoch N       start epoch
-      --cache-dataset       Cache the datasets for quicker initialization. It also serializes the transforms
-      --amp                 Use AMP training
-      --tb                  Use TensorBoard to record logs
-      --model MODEL         "plain", "feedback", or "stateful-synapse"
+    -h, --help          show this help message and exit
+    -model MODEL        use which model, "plain", "ss" (StatefulSynapseNet) or "fb" (FeedBackNet)
+    -device DEVICE      device
+    -b B                batch size
+    -epochs N           number of total epochs to run
+    -j N                number of data loading workers (default: 4)
+    -data-dir DATA_DIR  root dir of Fashion-MNIST dataset
+    -out-dir OUT_DIR    root dir for saving logs and checkpoint
+    -resume RESUME      resume from the checkpoint path
+    -amp                automatic mixed precision training
+    -cupy               use cupy backend
+    -opt OPT            use which optimizer. SDG or Adam
+    -momentum MOMENTUM  momentum for SGD
+    -lr LR              learning rate
+
 
 分别训练3个模型：
 
 .. code:: shell
 
-    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:0 --amp --model plain
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model plain
 
-    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:1 --amp --model feedback
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model fb
 
-    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist --data-path /raid/wfang/datasets/FashionMNIST --tb --device cuda:2 --amp --model stateful-synapse
+    python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model ss
 
-训练集损失为：
+下图展示了3种网络的训练曲线：
 
-.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/train_loss.*
+.. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
     :width: 100%
 
-训练集正确率为：
 
-.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/train_acc.*
+.. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/rsnn_test_acc.*
     :width: 100%
 
-测试集正确率为：
 
-.. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/test_acc.*
-    :width: 100%
-
-可以发现，``feedback`` 和 ``stateful-synapse`` 的性能都高于 ``plain``，表明自连接和有状态突触都有助于提升网络的记忆能力。
+可以发现， ``StatefulSynapseNet`` 和 ``FeedBackNet`` 的性能都高于 ``PlainNet``，表明自连接和有状态突触都有助于提升网络的记忆能力。
 
 .. [#Effective] Yin B, Corradi F, Bohté S M. Effective and efficient computation with multiple-timescale spiking recurrent neural networks[C]//International Conference on Neuromorphic Systems 2020. 2020: 1-8.
 
