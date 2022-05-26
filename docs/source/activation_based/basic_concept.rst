@@ -5,7 +5,7 @@
 本教程介绍了 ``spikingjelly.activation_based`` 的一些基本概念，推荐所有用户在使用SpikingJelly框架前进行阅读。
 
 SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly框架的用户应该首先熟悉PyTorch的使用。\
-如果用户对PyTorch不甚了解，我们推荐用户先学习 `PyTorch的基础教程 <https://pytorch.org/tutorials/>`_
+如果用户对PyTorch不甚了解，我们推荐用户先学习 `PyTorch的基础教程 <https://pytorch.org/tutorials/>`_ 。
 
 基于激活值的表示方法
 -------------------------------------------

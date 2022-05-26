@@ -550,16 +550,33 @@ class SynapseFilter(base.MemoryModule):
         else:
             tau = self.tau
 
-        return f'tau={tau}, learnable={self.learnable}'
+        return f'tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}'
 
-    def single_step_forward(self, in_spikes: Tensor):
+    @staticmethod
+    @torch.jit.script
+    def js_single_step_forward_learnable(x: torch.Tensor, w: torch.Tensor, out_i: torch.Tensor):
+        inv_tau = w.sigmoid()
+        out_i = out_i - (1. - x) * out_i * inv_tau + x
+        return out_i
+
+    @staticmethod
+    @torch.jit.script
+    def js_single_step_forward(x: torch.Tensor, tau: float, out_i: torch.Tensor):
+        inv_tau = 1. / tau
+        out_i = out_i - (1. - x) * out_i * inv_tau + x
+        return out_i
+
+    def single_step_forward(self, x: Tensor):
+        if isinstance(self.out_i, float):
+            out_i_init = self.out_i
+            self.out_i = torch.zeros_like(x.data)
+            if out_i_init != 0.:
+                torch.fill_(self.out_i, out_i_init)
+
         if self.learnable:
-            inv_tau = self.w.sigmoid()
+            self.out_i = self.js_single_step_forward_learnable(x, self.w, self.out_i)
         else:
-            inv_tau = 1. / self.tau
-
-        self.out_i = self.out_i - (1 - in_spikes) * self.out_i * inv_tau + in_spikes
-
+            self.out_i = self.js_single_step_forward(x, self.tau, self.out_i)
         return self.out_i
 
 
@@ -1025,6 +1042,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         """
         super().__init__()
         self.step_mode = step_mode
+        assert not hasattr(sub_module, 'step_mode') or sub_module.step_mode == 's'
         self.sub_module = sub_module
         self.element_wise_function = element_wise_function
         self.register_memory('y', None)
@@ -1036,7 +1054,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         return self.y
 
     def extra_repr(self) -> str:
-        return f'element-wise function={self.element_wise_function}'
+        return f'element-wise function={self.element_wise_function}, step_mode={self.step_mode}'
 
 
 class LinearRecurrentContainer(base.MemoryModule):
@@ -1091,6 +1109,7 @@ class LinearRecurrentContainer(base.MemoryModule):
         """
         super().__init__()
         self.step_mode = step_mode
+        assert not hasattr(sub_module, 'step_mode') or sub_module.step_mode == 's'
         self.sub_module_out_features = out_features
         self.rc = nn.Linear(in_features + out_features, in_features, bias)
         self.sub_module = sub_module
@@ -1109,6 +1128,8 @@ class LinearRecurrentContainer(base.MemoryModule):
         self.y = self.sub_module(self.rc(x))
         return self.y
 
+    def extra_repr(self) -> str:
+        return f', step_mode={self.step_mode}'
 
 class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):

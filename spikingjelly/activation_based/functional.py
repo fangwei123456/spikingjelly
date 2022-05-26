@@ -5,10 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Callable
-from . import neuron, base, layer
+from . import neuron, base
 
 from torch import Tensor
-
 
 def reset_net(net: nn.Module):
     '''
@@ -39,22 +38,28 @@ def reset_net(net: nn.Module):
                                 f'.MemoryModule')
             m.reset()
 
-
 def set_step_mode(net: nn.Module, step_mode: str):
-    step_mode_containers = []
+    from .layer import StepModeContainer, ElementWiseRecurrentContainer, LinearRecurrentContainer
+
+    keep_step_mode_instance = (
+        StepModeContainer, ElementWiseRecurrentContainer, LinearRecurrentContainer
+    )
+    # step_mode of sub-modules in keep_step_mode_instance will not be changed
+
+    keep_step_mode_containers = []
     for m in net.modules():
-        if isinstance(m, layer.StepModeContainer):
-            step_mode_containers.append(m)
+        if isinstance(m, keep_step_mode_instance):
+            keep_step_mode_containers.append(m)
 
     for m in net.modules():
         if hasattr(m, 'step_mode'):
             is_contained = False
-            for step_mode_container in step_mode_containers:
-                if m in step_mode_container:
+            for container in keep_step_mode_containers:
+                if not isinstance(m, keep_step_mode_instance) and m in container.modules():
                     is_contained = True
                     break
             if is_contained:
-                # this function should not change step_mode of submodules in layer.StepModeContainer
+                # this function should not change step_mode of submodules in keep_step_mode_containers
                 pass
             else:
                 if not isinstance(m, (base.StepModule)):
@@ -63,9 +68,9 @@ def set_step_mode(net: nn.Module, step_mode: str):
                 m.step_mode = step_mode
 
 
-def set_backend(net: nn.Module, backend: str, instance: nn.Module or tuple = None):
+def set_backend(net: nn.Module, backend: str, instance: nn.Module or tuple = (nn.Module, )):
     for m in net.modules():
-        if instance is None or isinstance(m, instance):
+        if isinstance(m, instance):
             if hasattr(m, 'backend'):
                 if not isinstance(m, base.MemoryModule):
                     logging.warning(
