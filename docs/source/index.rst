@@ -52,6 +52,7 @@
     /activation_based/neuromorphic_datasets
     /activation_based/classify_dvsg
     /activation_based/recurrent_connection_and_stateful_synapse
+    /activation_based/monitor
 
 
 模块文档
