@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, overload
+from typing import Callable
 import torch
 import torch.nn as nn
 from . import surrogate, base, lava_exchange
