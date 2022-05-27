@@ -434,7 +434,10 @@ class Trainer:
 
         optimizer = self.set_optimizer(args, parameters)
 
-        scaler = torch.cuda.amp.GradScaler()
+        if args.disable_amp:
+            scaler = None
+        else:
+            scaler = torch.cuda.amp.GradScaler()
 
         lr_scheduler = self.set_lr_scheduler(args, optimizer)
 
@@ -712,6 +715,9 @@ class Trainer:
         parser.add_argument("--print-logdir", action="store_true", help="print the dirs for tensorboard logs and pt files and exit")
         parser.add_argument("--clean", action="store_true", help="delete the dirs for tensorboard logs and pt files")
         parser.add_argument("--disable-pinmemory", action="store_true", help="not use pin memory in dataloader, which can help reduce memory consumption")
+        parser.add_argument("--disable-amp", action="store_true",
+                            help="not use automatic mixed precision training")
+        parser.add_argument("--local_rank", type=int, help="args for DDP, which should not be set by user")
 
         return parser
 
