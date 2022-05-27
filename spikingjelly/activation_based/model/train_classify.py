@@ -124,7 +124,7 @@ class Trainer:
                 image = image.to(device, non_blocking=True)
                 target = target.to(device, non_blocking=True)
                 image = self.preprocess_test_sample(args, image)
-                output = self.process_model_output(model(image))
+                output = self.process_model_output(args, model(image))
                 loss = criterion(output, target)
 
                 acc1, acc5 = self.cal_acc1_acc5(output, target)
