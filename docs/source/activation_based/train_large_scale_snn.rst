@@ -245,13 +245,13 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
 
 (pytorch-env) PS spikingjelly> python -m spikingjelly.activation_based.model.train_classify -h
 
-  usage: train_classify.py [-h] [--data-path DATA_PATH] [--model MODEL] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N] [--opt OPT] [--lr LR] [--momentum M] [--wd W] [--norm-weight-decay NORM_WEIGHT_DECAY] [--label-smoothing LABEL_SMOOTHING]
-                          [--mixup-alpha MIXUP_ALPHA] [--cutmix-alpha CUTMIX_ALPHA] [--lr-scheduler LR_SCHEDULER] [--lr-warmup-epochs LR_WARMUP_EPOCHS] [--lr-warmup-method LR_WARMUP_METHOD] [--lr-warmup-decay LR_WARMUP_DECAY]                     
-                          [--lr-step-size LR_STEP_SIZE] [--lr-gamma LR_GAMMA] [--output-dir OUTPUT_DIR] [--resume RESUME] [--start-epoch N] [--cache-dataset] [--sync-bn] [--test-only] [--pretrained] [--auto-augment AUTO_AUGMENT]                  
-                          [--random-erase RANDOM_ERASE] [--world-size WORLD_SIZE] [--dist-url DIST_URL] [--model-ema] [--model-ema-steps MODEL_EMA_STEPS] [--model-ema-decay MODEL_EMA_DECAY] [--interpolation INTERPOLATION]                         
-                          [--val-resize-size VAL_RESIZE_SIZE] [--val-crop-size VAL_CROP_SIZE] [--train-crop-size TRAIN_CROP_SIZE] [--clip-grad-norm CLIP_GRAD_NORM] [--ra-sampler] [--ra-reps RA_REPS] [--prototype] [--weights WEIGHTS] [--seed SEED]
-                          [--print-logdir] [--clean] [--disable-pinmemory]                                                                                                                                                                            
-                                                                                                                                                                                                                                                      
+usage: train_classify.py [-h] [--data-path DATA_PATH] [--model MODEL] [--device DEVICE] [-b BATCH_SIZE] [--epochs N] [-j N] [--opt OPT] [--lr LR] [--momentum M] [--wd W] [--norm-weight-decay NORM_WEIGHT_DECAY] [--label-smoothing LABEL_SMOOTHING]
+                         [--mixup-alpha MIXUP_ALPHA] [--cutmix-alpha CUTMIX_ALPHA] [--lr-scheduler LR_SCHEDULER] [--lr-warmup-epochs LR_WARMUP_EPOCHS] [--lr-warmup-method LR_WARMUP_METHOD] [--lr-warmup-decay LR_WARMUP_DECAY]                     
+                         [--lr-step-size LR_STEP_SIZE] [--lr-gamma LR_GAMMA] [--output-dir OUTPUT_DIR] [--resume RESUME] [--start-epoch N] [--cache-dataset] [--sync-bn] [--test-only] [--pretrained] [--auto-augment AUTO_AUGMENT]                  
+                         [--random-erase RANDOM_ERASE] [--world-size WORLD_SIZE] [--dist-url DIST_URL] [--model-ema] [--model-ema-steps MODEL_EMA_STEPS] [--model-ema-decay MODEL_EMA_DECAY] [--interpolation INTERPOLATION]                         
+                         [--val-resize-size VAL_RESIZE_SIZE] [--val-crop-size VAL_CROP_SIZE] [--train-crop-size TRAIN_CROP_SIZE] [--clip-grad-norm CLIP_GRAD_NORM] [--ra-sampler] [--ra-reps RA_REPS] [--prototype] [--weights WEIGHTS] [--seed SEED]
+                         [--print-logdir] [--clean] [--disable-pinmemory] [--disable-amp] [--local_rank LOCAL_RANK] [--disable-uda]                                                                                                                  
+                                                                                                                                                                                                                                                     
   PyTorch Classification Training                                                                                                                                                                                                                      
                                                                                                                                                                                                                                                       
   optional arguments:                                                                                                                                                                                                                                  
@@ -265,13 +265,13 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
     --epochs N            number of total epochs to run                                                                                                                                                                                                
     -j N, --workers N     number of data loading workers (default: 16)                                                                                                                                                                                 
     --opt OPT             optimizer                                                                                                                                                                                                                    
-    --lr LR               initial learning rate                                                                                                                                                                                                        
-    --momentum M          momentum                                                                                                                                                                                                                     
-    --wd W, --weight-decay W                                                                                                                                                                                                                           
-                          weight decay (default: 0.)                                                                                                                                                                                                   
-    --norm-weight-decay NORM_WEIGHT_DECAY                                                                                                                                                                                                              
-                          weight decay for Normalization layers (default: None, same value as --wd)                                                                                                                                                    
-    --label-smoothing LABEL_SMOOTHING                                                                                                                                                                                                                  
+    --lr LR               initial learning rate
+    --momentum M          momentum
+    --wd W, --weight-decay W
+                          weight decay (default: 0.)
+    --norm-weight-decay NORM_WEIGHT_DECAY
+                          weight decay for Normalization layers (default: None, same value as --wd)
+    --label-smoothing LABEL_SMOOTHING
                           label smoothing (default: 0.1)
     --mixup-alpha MIXUP_ALPHA
                           mixup alpha (default: 0.2)
@@ -290,7 +290,7 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
     --lr-gamma LR_GAMMA   decrease lr by a factor of lr-gamma
     --output-dir OUTPUT_DIR
                           path to save outputs
-    --resume RESUME       path of checkpoint
+    --resume RESUME       path of checkpoint. If set to 'latest', it will try to load the latest checkpoint
     --start-epoch N       start epoch
     --cache-dataset       Cache the datasets for quicker initialization. It also serializes the transforms
     --sync-bn             Use sync batch norm
@@ -326,6 +326,11 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
     --print-logdir        print the dirs for tensorboard logs and pt files and exit
     --clean               delete the dirs for tensorboard logs and pt files
     --disable-pinmemory   not use pin memory in dataloader, which can help reduce memory consumption
+    --disable-amp         not use automatic mixed precision training
+    --local_rank LOCAL_RANK
+                          args for DDP, which should not be set by user
+    --disable-uda         not set 'torch.use_deterministic_algorithms(True)', which can avoid the error raised by some functions that do not have a deterministic implementation
+
 
 如果想增加参数，仍然可以通过继承的方式实现：
 
@@ -347,7 +352,77 @@ SpikingJelly按照 ``torchvision`` 中的ResNet结构搭建的Spiking ResNet，�
     trainer.main(args)
 
 ``Trainer`` 在训练中会自动计算训练集、测试集的 ``Acc@1, Acc@5, loss`` 并使用 ``tensorboard`` 保存为日志文件，此外训练过程中的最新一个epoch的模型以及测试集性能最高的模型\
-也会被保存下来。 ``Trainer`` 支持 Distributed Data Parallel 训练。
+也会被保存下来。 ``Trainer`` 支持Distributed Data Parallel训练。
+
+在ImageNet上训练
+----------------------------------------------
+ ``Trainer`` 默认的数据加载函数 :class:`load_data <spikingjelly.activation_based.model.train_classify.Trainer.load_data>` 加载 ImageNet [#ImageNet]_ 数据集。\
+ 结合 :class:`Trainer <spikingjelly.activation_based.model.train_classify.Trainer>` 和 :class:`spikingjelly.activation_based.model.spiking_resnet`，我们可以轻松训练\
+ 大型深度SNN，代码如下：
+
+.. code-block:: python
+
+  # spikingjelly.activation_based.model.train_imagenet_example
+  import torch
+  from spikingjelly.activation_based import surrogate, neuron, functional
+  from spikingjelly.activation_based.model import spiking_resnet, train_classify
+
+
+  class SResNetTrainer(train_classify.Trainer):
+      def preprocess_train_sample(self, args, x: torch.Tensor):
+          # define how to process train sample before send it to model
+          return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+
+      def preprocess_test_sample(self, args, x: torch.Tensor):
+          # define how to process test sample before send it to model
+          return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+
+      def process_model_output(self, args, y: torch.Tensor):
+          return y.mean(0)  # return firing rate
+
+      def get_args_parser(self, add_help=True):
+          parser = super().get_args_parser()
+          parser.add_argument('--T', type=int, help="total time-steps")
+          parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
+          return parser
+
+      def get_tb_logdir_name(self, args):
+          return super().get_tb_logdir_name(args) + f'_T{args.T}'
+
+      def load_model(self, args, num_classes):
+          if args.model in spiking_resnet.__all__:
+              model = spiking_resnet.__dict__[args.model](pretrained=args.pretrained, spiking_neuron=neuron.IFNode,
+                                                          surrogate_function=surrogate.ATan(), detach_reset=True)
+              functional.set_step_mode(model, step_mode='m')
+              if args.cupy:
+                  functional.set_backend(model, 'cupy', neuron.IFNode)
+
+              return model
+          else:
+              raise ValueError(f"args.model should be one of {spiking_resnet.__all__}")
+
+
+  if __name__ == "__main__":
+      trainer = SResNetTrainer()
+      args = trainer.get_args_parser().parse_args()
+      trainer.main(args)
+
+代码位于 :class:`spikingjelly.activation_based.model.train_imagenet_example`，可以直接运行。
+在单卡上进行训练：
+
+.. code-block:: shell
+
+  python -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+
+在多卡上进行训练：
+
+.. code-block:: shell
+
+  python -m torch.distributed.launch --nproc_per_node=2 -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
+
+输出为：
+
+
 
 
 
