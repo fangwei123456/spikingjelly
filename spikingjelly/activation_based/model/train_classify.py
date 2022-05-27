@@ -24,7 +24,7 @@ try:
 except ImportError:
     prototype = None
 
-def set_deterministic(_seed_: int = 2020):
+def set_deterministic(_seed_: int = 2020, disable_uda=False):
     random.seed(_seed_)
     np.random.seed(_seed_)
     torch.manual_seed(_seed_)  # use torch.manual_seed() to seed the RNG for all devices (both CPU and CUDA)
@@ -32,7 +32,7 @@ def set_deterministic(_seed_: int = 2020):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    if args.disable_uda:
+    if disable_uda:
         pass
     else:
         os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
@@ -377,7 +377,7 @@ class Trainer:
         return lr_scheduler
 
     def main(self, args):
-        set_deterministic(args.seed)
+        set_deterministic(args.seed, args.disable_uda)
         if args.prototype and prototype is None:
             raise ImportError("The prototype module couldn't be found. Please install the latest torchvision nightly.")
         if not args.prototype and args.weights:
