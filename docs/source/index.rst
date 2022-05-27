@@ -53,6 +53,7 @@
     /activation_based/classify_dvsg
     /activation_based/recurrent_connection_and_stateful_synapse
     /activation_based/monitor
+    /activation_based/train_large_scale_snn
 
 
 模块文档
