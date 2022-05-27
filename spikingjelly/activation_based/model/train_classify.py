@@ -1,5 +1,4 @@
 import datetime
-import logging
 import os
 import time
 import warnings
@@ -60,6 +59,10 @@ class Trainer:
         # define how to process test sample before send it to model
         return x
 
+    def process_model_output(self, args, y: torch.Tensor):
+        # define how to process y = model(x)
+        return y
+
     def train_one_epoch(self, model, criterion, optimizer, data_loader, device, epoch, args, model_ema=None, scaler=None):
         model.train()
         metric_logger = utils.MetricLogger(delimiter="  ")
@@ -72,7 +75,7 @@ class Trainer:
             image, target = image.to(device), target.to(device)
             with torch.cuda.amp.autocast(enabled=scaler is not None):
                 image = self.preprocess_train_sample(args, image)
-                output = model(image)
+                output = self.process_model_output(args, model(image))
                 loss = criterion(output, target)
 
             optimizer.zero_grad()
@@ -121,7 +124,7 @@ class Trainer:
                 image = image.to(device, non_blocking=True)
                 target = target.to(device, non_blocking=True)
                 image = self.preprocess_test_sample(args, image)
-                output = model(image)
+                output = self.process_model_output(model(image))
                 loss = criterion(output, target)
 
                 acc1, acc5 = self.cal_acc1_acc5(output, target)
@@ -396,6 +399,12 @@ class Trainer:
         num_classes = len(dataset.classes)
         mixup_transforms = []
         if args.mixup_alpha > 0.0:
+            if torch.__version__ >= torch.torch_version.TorchVersion('1.10.0'):
+                pass
+            else:
+                # TODO implement a CrossEntropyLoss to support for probabilities for each class.
+                raise NotImplementedError("CrossEntropyLoss in pytorch < 1.11.0 does not support for probabilities for each class."
+                                          "Set mixup_alpha=0. to avoid such a problem or update your pytorch.")
             mixup_transforms.append(transforms.RandomMixup(num_classes, p=1.0, alpha=args.mixup_alpha))
         if args.cutmix_alpha > 0.0:
             mixup_transforms.append(transforms.RandomCutmix(num_classes, p=1.0, alpha=args.cutmix_alpha))
@@ -411,6 +420,7 @@ class Trainer:
             collate_fn=collate_fn,
             worker_init_fn=seed_worker
         )
+
         data_loader_test = torch.utils.data.DataLoader(
             dataset_test, batch_size=args.batch_size, sampler=test_sampler, num_workers=args.workers, pin_memory=not args.disable_pinmemory,
             worker_init_fn=seed_worker
@@ -472,8 +482,10 @@ class Trainer:
             exit()
         if args.clean:
             if utils.is_main_process():
-                os.remove(tb_dir)
-                os.remove(pt_dir)
+                if os.path.exists(tb_dir):
+                    os.remove(tb_dir)
+                if os.path.exists(pt_dir):
+                    os.remove(pt_dir)
                 print(f'remove {tb_dir} and {pt_dir}.')
 
         if utils.is_main_process():

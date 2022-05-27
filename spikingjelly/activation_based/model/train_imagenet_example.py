@@ -4,10 +4,6 @@ from spikingjelly.activation_based.model import spiking_resnet, train_classify
 
 
 class SResNetTrainer(train_classify.Trainer):
-    def cal_acc1_acc5(self, output, target):
-        # output.shape = [T, N, C]
-        return super().cal_acc1_acc5(output.mean(0), target)
-
     def preprocess_train_sample(self, args, x: torch.Tensor):
         # define how to process train sample before send it to model
         return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
@@ -15,6 +11,9 @@ class SResNetTrainer(train_classify.Trainer):
     def preprocess_test_sample(self, args, x: torch.Tensor):
         # define how to process test sample before send it to model
         return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+
+    def process_model_output(self, args, y: torch.Tensor):
+        return y.mean(0)  # return firing rate
 
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser()
@@ -39,7 +38,8 @@ class SResNetTrainer(train_classify.Trainer):
 
 
 if __name__ == "__main__":
-    # python -m torch.distributed.launch --nproc_per_node=2 -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_125 --batch-size 4 --lr 0.1 --lr-scheduler cosa --lr-warmup-epochs 5 --lr-warmup-method linear --auto-augment ta_wide --epochs 90 --random-erase 0.1 --label-smoothing 0.1 --mixup-alpha 0.2 --cutmix-alpha 1.0 --train-crop-size 176 --model-ema -j 4 --weight-decay 0.0 --val-resize-size 232
+    # -m torch.distributed.launch --nproc_per_node=2 spikingjelly.activation_based.model.train_imagenet_example
+    # python -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90
     trainer = SResNetTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
