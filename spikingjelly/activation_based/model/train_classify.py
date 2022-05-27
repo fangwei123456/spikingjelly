@@ -112,7 +112,7 @@ class Trainer:
         print(f'Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={metric_logger.meters["img/s"]}')
         return train_loss, train_acc1, train_acc5
 
-    def evaluate(self, model, criterion, data_loader, device, log_suffix=""):
+    def evaluate(self, args, model, criterion, data_loader, device, log_suffix=""):
         model.eval()
         metric_logger = utils.MetricLogger(delimiter="  ")
         header = f"Test: {log_suffix}"
@@ -526,9 +526,9 @@ class Trainer:
 
         if args.test_only:
             if model_ema:
-                self.evaluate(model_ema, criterion, data_loader_test, device=device, log_suffix="EMA")
+                self.evaluate(args, model_ema, criterion, data_loader_test, device=device, log_suffix="EMA")
             else:
-                self.evaluate(model, criterion, data_loader_test, device=device)
+                self.evaluate(args, model, criterion, data_loader_test, device=device)
             return
 
 
@@ -548,13 +548,13 @@ class Trainer:
 
             lr_scheduler.step()
             self.before_test_one_epoch(args, model, epoch)
-            test_loss, test_acc1, test_acc5 = self.evaluate(model, criterion, data_loader_test, device=device)
+            test_loss, test_acc1, test_acc5 = self.evaluate(args, model, criterion, data_loader_test, device=device)
             if utils.is_main_process():
                 tb_writer.add_scalar('test_loss', test_loss, epoch)
                 tb_writer.add_scalar('test_acc1', test_acc1, epoch)
                 tb_writer.add_scalar('test_acc5', test_acc5, epoch)
             if model_ema:
-                ema_test_loss, ema_test_acc1, ema_test_acc5 = self.evaluate(model_ema, criterion, data_loader_test, device=device, log_suffix="EMA")
+                ema_test_loss, ema_test_acc1, ema_test_acc5 = self.evaluate(args, model_ema, criterion, data_loader_test, device=device, log_suffix="EMA")
                 if utils.is_main_process():
                     tb_writer.add_scalar('ema_test_loss', ema_test_loss, epoch)
                     tb_writer.add_scalar('ema_test_acc1', ema_test_acc1, epoch)
