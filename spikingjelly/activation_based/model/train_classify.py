@@ -470,13 +470,14 @@ class Trainer:
             print(pt_dir)
             exit()
         if args.clean:
-            os.remove(tb_dir)
-            os.remove(pt_dir)
-            print(f'remove {tb_dir} and {pt_dir}.')
+            if utils.is_main_process():
+                os.remove(tb_dir)
+                os.remove(pt_dir)
+                print(f'remove {tb_dir} and {pt_dir}.')
 
-
-        os.makedirs(tb_dir, exist_ok=args.resume is not None)
-        os.makedirs(pt_dir, exist_ok=args.resume is not None)
+        if utils.is_main_process():
+            os.makedirs(tb_dir, exist_ok=args.resume is not None)
+            os.makedirs(pt_dir, exist_ok=args.resume is not None)
 
         if utils.is_main_process():
             tb_writer = SummaryWriter(tb_dir, purge_step=args.start_epoch)
@@ -635,7 +636,7 @@ class Trainer:
         parser.add_argument("--lr-step-size", default=30, type=int, help="decrease lr every step-size epochs")
         parser.add_argument("--lr-gamma", default=0.1, type=float, help="decrease lr by a factor of lr-gamma")
         parser.add_argument("--output-dir", default="./logs", type=str, help="path to save outputs")
-        parser.add_argument("--resume", default=None, type=str, help="path of checkpoint")
+        parser.add_argument("--resume", default=None, type=str, help="path of checkpoint. If set to 'latest', it will try to load the latest checkpoint")
         parser.add_argument("--start-epoch", default=0, type=int, metavar="N", help="start epoch")
         parser.add_argument(
             "--cache-dataset",
