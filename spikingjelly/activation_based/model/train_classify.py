@@ -32,12 +32,13 @@ def set_deterministic(_seed_: int = 2020):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     
-    try:
+    if args.disable_uda:
+        pass
+    else:
         os.environ['CUBLAS_WORKSPACE_CONFIG'] = ':4096:8'
         # set a debug environment variable CUBLAS_WORKSPACE_CONFIG to ":16:8" (may limit overall performance) or ":4096:8" (will increase library footprint in GPU memory by approximately 24MiB).
         torch.use_deterministic_algorithms(True)
-    except BaseException as e:
-        logging.warning(f'Can not set `torch.use_deterministic_algorithms(True)` because of: \n{e}\nPass.')
+
 
 
 def seed_worker(worker_id):
@@ -719,6 +720,9 @@ class Trainer:
         parser.add_argument("--disable-amp", action="store_true",
                             help="not use automatic mixed precision training")
         parser.add_argument("--local_rank", type=int, help="args for DDP, which should not be set by user")
+        parser.add_argument("--disable-uda", action="store_true",
+                            help="not set 'torch.use_deterministic_algorithms(True)', which can avoid the error raised by some functions that do not have a deterministic implementation")
+
 
         return parser
 
