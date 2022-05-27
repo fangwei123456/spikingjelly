@@ -18,7 +18,7 @@ class SResNetTrainer(train_classify.Trainer):
 
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser()
-        parser.add_argument('--T', type=str, help="total time-steps")
+        parser.add_argument('--T', type=int, help="total time-steps")
         parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
         return parser
 
@@ -39,7 +39,7 @@ class SResNetTrainer(train_classify.Trainer):
 
 
 if __name__ == "__main__":
-    # python -m torch.distributed.launch --nproc_per_node=2 -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_125 --batch-size 4 --lr 0.1 --lr-scheduler cosineannealinglr --lr-warmup-epochs 5 --lr-warmup-method linear --auto-augment ta_wide --epochs 90 --random-erase 0.1 --label-smoothing 0.1 --mixup-alpha 0.2 --cutmix-alpha 1.0 --train-crop-size 176 --model-ema -j 4 --weight-decay 0.0 --val-resize-size 232
+    # python -m torch.distributed.launch --nproc_per_node=2 -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_125 --batch-size 4 --lr 0.1 --lr-scheduler cosa --lr-warmup-epochs 5 --lr-warmup-method linear --auto-augment ta_wide --epochs 90 --random-erase 0.1 --label-smoothing 0.1 --mixup-alpha 0.2 --cutmix-alpha 1.0 --train-crop-size 176 --model-ema -j 4 --weight-decay 0.0 --val-resize-size 232
     trainer = SResNetTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
