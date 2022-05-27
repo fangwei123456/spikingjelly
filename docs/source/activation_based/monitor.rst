@@ -190,7 +190,7 @@
             [[0.4966, 0.6030]]])]
 
 记录模块的输入梯度 :math:`\frac{\partial L}{\partial Y}`
--------------------------------------------
+--------------------------------------------------------------------------------------
 如果我们想要记录每一层脉冲神经元的输入梯度 :math:`\frac{\partial L}{\partial S}`，则可以使用 \
 :class:`spikingjelly.activation_based.monitor.GradOutputMonitor` 轻松实现：
 
@@ -225,7 +225,7 @@
 
 
 记录模块的输出梯度 :math:`\frac{\partial L}{\partial X}`
--------------------------------------------
+--------------------------------------------------------------------------------------
 使用 :class:`spikingjelly.activation_based.monitor.GradInputMonitor` 可以轻松记录模块的输出梯度 :math:`\frac{\partial L}{\partial X}`。
 
 让我们构建一个深度网络，调节替代函数的 ``alpha`` 并比较不同 ``alpha`` 下的梯度的幅值：
