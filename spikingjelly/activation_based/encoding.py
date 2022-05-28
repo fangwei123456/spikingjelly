@@ -7,7 +7,7 @@ from . import base
 from abc import abstractmethod
 
 
-class StatelessEncoder(base.StatelessModule):
+class StatelessEncoder(base.StepModule):
     def __init__(self, step_mode='s'):
         """
         * :ref:`API in English <StatelessEncoder.__init__-en>`
