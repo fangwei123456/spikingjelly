@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from typing import Callable
+
 from . import neuron, base
 
 from torch import Tensor
@@ -19,7 +20,7 @@ def reset_net(net: nn.Module):
 
     :return: None
 
-    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若为 ``base.MemoryModule`` 函数，则调用 ``reset()``。
+    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若 ``m `` 为 ``base.MemoryModule`` 函数或者是拥有 ``reset()`` 方法，则调用 ``m.reset()``。
 
     * :ref:`中文API <reset_net-cn>`
 
@@ -29,7 +30,7 @@ def reset_net(net: nn.Module):
 
     :return: None
 
-    Reset the whole network.  Walk through every ``Module`` and call their ``reset()`` function if this module is ``base.MemoryModule``.
+    Reset the whole network.  Walk through every ``Module`` as ``m``, and call ``m.reset()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``reset()``.
     '''
     for m in net.modules():
         if hasattr(m, 'reset'):
@@ -39,6 +40,43 @@ def reset_net(net: nn.Module):
             m.reset()
 
 def set_step_mode(net: nn.Module, step_mode: str):
+    """
+    * :ref:`API in English <set_step_mode-en>`
+
+    .. _set_step_mode-cn:
+
+    :param net: 一个神经网络
+    :type net: nn.Module
+    :param step_mode: 's' (单步模式) 或 'm' (多步模式)
+    :type step_mode: str
+    :return: None
+
+    将 ``net`` 中所有模块的步进模式设置为 ``step_mode`` 。
+
+    .. note::
+
+        :class:`spikingjelly.activation_based.layer.StepModeContainer`, :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer`,
+        :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 的子模块（不包含包装器本身）的 ``step_mode`` 不会被改变。
+
+
+    * :ref:`中文 API <set_step_mode-cn>`
+
+    .. _set_step_mode-en:
+
+    :param net: a network
+    :type net: nn.Module
+    :param step_mode: 's' (single-step) or 'm' (multi-step)
+    :type step_mode: str
+    :return: None
+
+    Set ``step_mode`` for all modules in ``net``.
+
+    .. admonition:: Note
+        :class: note
+
+        The submodule (not including the container itself) of :class:`spikingjelly.activation_based.layer.StepModeContainer`, :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer`,
+        :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` will not be changed.
+    """
     from .layer import StepModeContainer, ElementWiseRecurrentContainer, LinearRecurrentContainer
 
     keep_step_mode_instance = (
@@ -68,7 +106,36 @@ def set_step_mode(net: nn.Module, step_mode: str):
                 m.step_mode = step_mode
 
 
-def set_backend(net: nn.Module, backend: str, instance: nn.Module or tuple = (nn.Module, )):
+def set_backend(net: nn.Module, backend: str, instance: object or tuple = (nn.Module, )):
+    """
+    * :ref:`API in English <set_backend-en>`
+
+    .. _set_backend-cn:
+
+    :param net: 一个神经网络
+    :type net: nn.Module
+    :param backend: 使用哪个后端
+    :type backend: str
+    :param instance: 类型为 ``instance`` 的模块后端会被改变
+    :type instance: nn.Module or tuple[nn.Module]
+    :return: None
+
+    将 ``net`` 中 所有类型为 ``instance`` 的模块后端更改为 ``backend``
+
+    * :ref:`中文 API <set_backend-cn>`
+
+    .. _set_backend-en:
+
+    :param net: a network
+    :type net: nn.Module
+    :param backend: the backend to be set
+    :type backend: str
+    :param instance: the backend of which instance will be changed
+    :type instance: nn.Module or tuple[nn.Module]
+    :return: None
+
+    Sets backends of all modules whose instance is ``instance`` in ``net`` to ``backend``
+    """
     for m in net.modules():
         if isinstance(m, instance):
             if hasattr(m, 'backend'):
