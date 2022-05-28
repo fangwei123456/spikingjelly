@@ -11,7 +11,7 @@ from . import neuron, base
 from torch import Tensor
 
 def reset_net(net: nn.Module):
-    '''
+    """
     * :ref:`API in English <reset_net-en>`
 
     .. _reset_net-cn:
@@ -31,7 +31,7 @@ def reset_net(net: nn.Module):
     :return: None
 
     Reset the whole network.  Walk through every ``Module`` as ``m``, and call ``m.reset()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``reset()``.
-    '''
+    """
     for m in net.modules():
         if hasattr(m, 'reset'):
             if not isinstance(m, base.MemoryModule):
@@ -149,7 +149,7 @@ def set_backend(net: nn.Module, backend: str, instance: object or tuple = (nn.Mo
 
 
 def spike_similar_loss(spikes: Tensor, labels: Tensor, kernel_type='linear', loss_type='mse', *args):
-    '''
+    """
     * :ref:`API in English <spike_similar_loss-en>`
 
     .. _spike_similar_loss-cn:
@@ -229,7 +229,7 @@ def spike_similar_loss(spikes: Tensor, labels: Tensor, kernel_type='linear', los
         :class: note
 
         Since spike vectors are usually discrete and sparse, it would be better to apply Gaussian filter first to smooth the vectors before calculating similarities.
-    '''
+    """
 
     spikes = spikes.flatten(start_dim=1)
 
@@ -254,7 +254,7 @@ def spike_similar_loss(spikes: Tensor, labels: Tensor, kernel_type='linear', los
 
 
 def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
-    '''
+    """
     * :ref:`API in English <kernel_dot_product-en>`
 
     .. _kernel_dot_product-cn:
@@ -294,7 +294,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
     - 'sigmoid' -- Sigmoid kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{sigmoid}(\\alpha \\boldsymbol{x_{i}}^{T}\\boldsymbol{y_{j}})`, where :math:`\\alpha = args[0]`.
 
     - 'gaussian' -- Gaussian kernel, :math:`\\kappa(\\boldsymbol{x_{i}}, \\boldsymbol{y_{j}}) = \\mathrm{exp}(- \\frac{||\\boldsymbol{x_{i}} - \\boldsymbol{y_{j}}||^{2}}{2\\sigma^{2}})`, where :math:`\\sigma = args[0]`.
-    '''
+    """
     if kernel == 'linear':
         return x.mm(y.t())
     elif kernel == 'polynomial':
@@ -319,7 +319,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
 
 def set_threshold_margin(output_layer: neuron.BaseNode, label_one_hot: Tensor,
                          eval_threshold=1.0, threshold0=0.9, threshold1=1.1):
-    '''
+    """
     * :ref:`API in English <set_threshold_margin-en>`
 
     .. _set_threshold_margin-cn:
@@ -352,7 +352,7 @@ def set_threshold_margin(output_layer: neuron.BaseNode, label_one_hot: Tensor,
     When there are C different classes, the output layer contains C neurons. During training, when the input with groundtruth label i are sent into the network, the voltage threshold of the i-th neurons in the output layer will be set to ``threshold1`` and the remaining will be set to ``threshold0``.
     
     During inference, the voltage thresholds of **ALL** neurons in the output layer will be set to ``eval_threshold``.
-    '''
+    """
     if output_layer.training:
         output_layer.v_threshold = torch.ones_like(label_one_hot) * threshold0
         output_layer.v_threshold[label_one_hot == 1] = threshold1
@@ -361,7 +361,7 @@ def set_threshold_margin(output_layer: neuron.BaseNode, label_one_hot: Tensor,
 
 
 def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
-    '''
+    """
     * :ref:`API in English <redundant_one_hot-en>`
 
     .. _redundant_one_hot-cn:
@@ -415,7 +415,7 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
                 [0., 0., 1., 1., 0., 0.],
                 [0., 0., 1., 1., 0., 0.],
                 [1., 1., 0., 0., 0., 0.]])
-    '''
+    """
     redundant_classes = num_classes * n
     codes = torch.zeros(size=[labels.shape[0], redundant_classes], device=labels.device)
     for i in range(n):
@@ -424,7 +424,7 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
 
 
 def first_spike_index(spikes: Tensor):
-    '''
+    """
     * :ref:`API in English <first_spike_index-en>`
 
     .. _first_spike_index-cn:
@@ -487,30 +487,40 @@ def first_spike_index(spikes: Tensor):
          [ True, False, False, False, False, False, False, False],
          [False, False, False,  True, False, False, False, False]]])
 
-    '''
+    """
     with torch.no_grad():
         # 在时间维度上，2次cumsum后，元素为1的位置，即为首次发放脉冲的位置
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
 
-def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or tuple or nn.Sequential or Callable):
+def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.Module] or tuple[nn.Module] or nn.Sequential or Callable):
     """
     * :ref:`API in English <multi_step_forward-en>`
 
     .. _multi_step_forward-cn:
 
+    :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
+    :type x_seq: Tensor
+    :param single_step_module: 一个或多个单步模块
+    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :return: ``shape=[T, batch_size, ...]`` 的输出tensor
+    :rtype: torch.Tensor
+
+    在单步模块 ``single_step_module`` 上使用多步前向传播。
+
     * :ref:`中文 API <multi_step_forward-cn>`
 
     .. _multi_step_forward-en:
 
-    :param x_seq: shape=[T, batch_size, ...]
-    :type x_seq: Tensor
-    :param single_step_module: a single-step module, or a list/tuple that contains single-step modules
-    :type single_step_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
-    :return: y_seq, shape=[T, batch_size, ...]
-    :rtype: Tensor
+    :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
+    :type x_seq: torch.Tensor
+    :param single_step_module: one or many single-step modules
+    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :return: the output tensor with ``shape=[T, batch_size, ...]``
+    :rtype: torch.torch.Tensor
 
-    See :class:`spikingjelly.activation_based.layer.MultiStepContainer` for more details.
+    Applies multi-step forward on ``single_step_module``.
+
     """
     y_seq = []
     if isinstance(single_step_module, (list, tuple, nn.Sequential)):
@@ -530,14 +540,30 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list or t
 
 def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential or Callable):
     """
-    :param x_seq: shape=[T, batch_size, ...]
+    * :ref:`API in English <seq_to_ann_forward-en>`
+
+    .. _seq_to_ann_forward-cn:
+
+    :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
     :type x_seq: Tensor
-    :param stateless_module: a stateless module, e.g., 'torch.nn.Conv2d' or a list contains stateless modules, e.g., '[torch.nn.Conv2d, torch.nn.BatchNorm2d]
+    :param stateless_module: 单个或多个无状态网络层
     :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
-    :return: y_seq, shape=[T, batch_size, ...]
+    :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: Tensor
 
-    See :class:`spikingjelly.activation_based.layer.SeqToANNContainer` for more details.
+    * :ref:`中文 API <seq_to_ann_forward-cn>`
+
+    .. _seq_to_ann_forward-en:
+
+    :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
+    :type x_seq: Tensor
+    :param stateless_module: one or many stateless modules
+    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :return: the output tensor with ``shape=[T, batch_size, ...]``
+    :rtype: Tensor
+
+    Applied forward on stateless modules
+
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
     y = x_seq.flatten(0, 1)
@@ -552,6 +578,28 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
 
 def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     """
+    * :ref:`API in English <fused_conv2d_weight_of_convbn2d-en>`
+
+    .. _fused_conv2d_weight_of_convbn2d-cn:
+
+    :param conv2d: 一个2D卷积层
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: 一个2D的BN层
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
+
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    本函数返回合并后的卷积的权重。
+
+    .. note::
+
+        这里按照 ``conv2d.bias`` 为 ``None`` 进行处理。原因参见 `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ 。
+
+    * :ref:`中文 API <fused_conv2d_weight_of_convbn2d-cn>`
+
+    .. _fused_conv2d_weight_of_convbn2d-en:
+
     :param conv2d: a Conv2d layer
     :type conv2d: torch.nn.Conv2d
     :param bn2d: a BatchNorm2d layer
@@ -559,13 +607,13 @@ def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     :return: the weight of this fused module
     :rtype: Tensor
 
-    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    A ``{Conv2d-BatchNorm2d}`` can be fused to a ``{Conv2d}`` module with ``BatchNorm2d`` 's parameters being absorbed into ``Conv2d``.
     This function returns the weight of this fused module.
 
     .. admonition:: Note
         :class: note
 
-        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+        We assert ``conv2d.bias`` is ``None``. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
 
     """
     assert conv2d.bias is None
@@ -575,20 +623,42 @@ def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
 
 def fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     """
+    * :ref:`API in English <fused_conv2d_bias_of_convbn2d-en>`
+
+    .. _fused_conv2d_bias_of_convbn2d-cn:
+
+    :param conv2d: 一个2D卷积层
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: 一个2D的BN层
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
+
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    本函数返回合并后的卷积的偏置项。
+
+    .. note::
+
+        这里按照 ``conv2d.bias`` 为 ``None`` 进行处理。原因参见 `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ 。
+
+    * :ref:`中文 API <fused_conv2d_bias_of_convbn2d-cn>`
+
+    .. _fused_conv2d_bias_of_convbn2d-en:
+
     :param conv2d: a Conv2d layer
     :type conv2d: torch.nn.Conv2d
     :param bn2d: a BatchNorm2d layer
     :type bn2d: torch.nn.BatchNorm2d
-    :return: the bias of this fused module
+    :return: the weight of this fused module
     :rtype: Tensor
 
-    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
+    A ``{Conv2d-BatchNorm2d}`` can be fused to a ``{Conv2d}`` module with ``BatchNorm2d`` 's parameters being absorbed into ``Conv2d``.
     This function returns the bias of this fused module.
 
     .. admonition:: Note
         :class: note
 
-        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+        We assert ``conv2d.bias`` is ``None``. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
 
     """
     assert conv2d.bias is None
@@ -598,18 +668,42 @@ def fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
 @torch.no_grad()
 def scale_fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
     """
+    * :ref:`API in English <scale_fused_conv2d_weight_of_convbn2d-en>`
+
+    .. _scale_fused_conv2d_weight_of_convbn2d-cn:
+
+    :param conv2d: 一个2D卷积层
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: 一个2D的BN层
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
+
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    本函数对 ``{Conv2d-BatchNorm2d}`` 模块整体的等效权重进行 ``weight = k * weight + b`` 的线性变换。
+
+    .. note::
+
+        这里按照 ``conv2d.bias`` 为 ``None`` 进行处理。原因参见 `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ 。
+
+    * :ref:`中文 API <scale_fused_conv2d_weight_of_convbn2d-cn>`
+
+    .. _scale_fused_conv2d_weight_of_convbn2d-en:
+
     :param conv2d: a Conv2d layer
     :type conv2d: torch.nn.Conv2d
     :param bn2d: a BatchNorm2d layer
     :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
 
-    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
-    This function sets the weight of this fused module to `weight * k + b`.
+    A ``{Conv2d-BatchNorm2d}`` can be fused to a ``{Conv2d}`` module with ``BatchNorm2d`` 's parameters being absorbed into ``Conv2d``.
+    This function applies a linear transform ``weight = k * weight + b`` on the equivalent weight of the whole ``{Conv2d-BatchNorm2d}``.
 
     .. admonition:: Note
         :class: note
 
-        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+        We assert ``conv2d.bias`` is ``None``. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
 
     """
     assert conv2d.bias is None
@@ -622,18 +716,42 @@ def scale_fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2
 @torch.no_grad()
 def scale_fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
     """
+    * :ref:`API in English <scale_fused_conv2d_bias_of_convbn2d-en>`
+
+    .. _scale_fused_conv2d_bias_of_convbn2d-cn:
+
+    :param conv2d: 一个2D卷积层
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: 一个2D的BN层
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
+
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    本函数对 ``{Conv2d-BatchNorm2d}`` 模块整体的等效偏置项进行 ``bias = k * bias + b`` 的线性变换。
+
+    .. note::
+
+        这里按照 ``conv2d.bias`` 为 ``None`` 进行处理。原因参见 `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ 。
+
+    * :ref:`中文 API <scale_fused_conv2d_bias_of_convbn2d-cn>`
+
+    .. _scale_fused_conv2d_bias_of_convbn2d-en:
+
     :param conv2d: a Conv2d layer
     :type conv2d: torch.nn.Conv2d
     :param bn2d: a BatchNorm2d layer
     :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
 
-    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
-    This function sets the bias of this fused module to `bias * k + b`.
+    A ``{Conv2d-BatchNorm2d}`` can be fused to a ``{Conv2d}`` module with ``BatchNorm2d`` 's parameters being absorbed into ``Conv2d``.
+    This function applies a linear transform ``bias = k * bias + b`` on the equivalent bias of the whole ``{Conv2d-BatchNorm2d}``.
 
     .. admonition:: Note
         :class: note
 
-        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+        We assert ``conv2d.bias`` is ``None``. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
 
     """
     assert conv2d.bias is None
@@ -645,22 +763,45 @@ def scale_fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d,
 
 
 @torch.no_grad()
-def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
+def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     """
+    * :ref:`API in English <fuse_convbn2d-en>`
+
+    .. _fuse_convbn2d-cn:
+
+    :param conv2d: 一个2D卷积层
+    :type conv2d: torch.nn.Conv2d
+    :param bn2d: 一个2D的BN层
+    :type bn2d: torch.nn.BatchNorm2d
+    :return: the weight of this fused module
+    :rtype: Tensor
+
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    本函数对返回这个等效的合并后的 ``{Conv2d}``。
+
+    .. note::
+
+        这里按照 ``conv2d.bias`` 为 ``None`` 进行处理。原因参见 `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ 。
+
+    * :ref:`中文 API <fuse_convbn2d-cn>`
+
+    .. _fuse_convbn2d-en:
+
     :param conv2d: a Conv2d layer
     :type conv2d: torch.nn.Conv2d
     :param bn2d: a BatchNorm2d layer
     :type bn2d: torch.nn.BatchNorm2d
-    :return: the fused Conv2d layer
-    :rtype: torch.nn.Conv2d
+    :return: the weight of this fused module
+    :rtype: Tensor
 
-    A {Conv2d-BatchNorm2d} can be fused to a {Conv2d} module with BatchNorm2d's parameters being absorbed into Conv2d.
-    This function returns the fused module.
+    A ``{Conv2d-BatchNorm2d}`` can be fused to a ``{Conv2d}`` module with ``BatchNorm2d`` 's parameters being absorbed into ``Conv2d``.
+    This function returns the fused ``{Conv2d}`` merged by ``{Conv2d-BatchNorm2d}``.
 
     .. admonition:: Note
         :class: note
 
-        We assert `conv2d.bias` is `None`. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+        We assert ``conv2d.bias`` is ``None``. See `Disable bias for convolutions directly followed by a batch norm <https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#disable-bias-for-convolutions-directly-followed-by-a-batch-norm>`_ for more details.
+
     """
     fused_conv = nn.Conv2d(in_channels=conv2d.in_channels, out_channels=conv2d.out_channels,
                            kernel_size=conv2d.kernel_size,
@@ -671,15 +812,56 @@ def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d, k=None, b=None):
     fused_conv.bias.data = fused_conv2d_bias_of_convbn2d(conv2d, bn2d)
     return fused_conv
 
-
-def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: torch.LongTensor):
+@torch.jit.script
+def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: torch.Tensor):
     """
-    :param x_seq: ``shape=[T, N, C, *]``, where ``C`` is the number of classes
-    :type x_seq: Tensor
-    :param target: ``shape=[N]``, where ``0 <= target[i] <= C-1``
-    :type target: torch.LongTensor
+    * :ref:`API in English <temporal_efficient_training_cross_entropy-en>`
+
+    .. _temporal_efficient_training_cross_entropy-cn:
+
+    :param x_seq: ``shape=[T, N, C, *]`` 的预测值，其中 ``C`` 是类别总数
+    :type x_seq: torch.Tensor
+    :param target: ``shape=[N]`` 的真实值，其中 ``target[i]`` 是真实类别
+    :type target: torch.Tensor
     :return: the temporal efficient training cross entropy
-    :rtype: Tensor
+    :rtype: torch.Tensor
+
+    Temporal efficient training (TET) 交叉熵损失, 是每个时间步的交叉熵损失的平均。
+
+    示例代码：
+
+    .. code-block:: python
+
+        def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
+            loss = 0.
+            for t in range(x_seq.shape[0]):
+                loss += F.cross_entropy(x_seq[t], target)
+            return loss / x_seq.shape[0]
+
+
+        T = 8
+        N = 4
+        C = 10
+        x_seq = torch.rand([T, N, C])
+        target = torch.randint(low=0, high=C - 1, size=[N])
+        print(f'max error = {(tet_ce_for_loop_version(x_seq, target) - temporal_efficient_training_cross_entropy(x_seq, target)).abs().max()}')
+        # max error < 1e-6
+
+
+    .. note::
+
+        TET交叉熵是 `Temporal Efficient Training of Spiking Neural Network via Gradient Re-weighting <https://openreview.net/forum?id=_XNtisL32jv>`_ 一文提出的。
+
+    * :ref:`中文 API <temporal_efficient_training_cross_entropy-cn>`
+
+    .. _temporal_efficient_training_cross_entropy-en:
+
+    :param x_seq: the predicted value with ``shape=[T, N, C, *]``, where ``C`` is the number of classes
+    :type x_seq: torch.Tensor
+    :param target: the ground truth tensor with ``shape=[N]``, where ``target[i]`` is the label
+    :type target: torch.Tensor
+    :return: the temporal efficient training cross entropy
+    :rtype: torch.Tensor
 
     The temporal efficient training (TET) cross entropy, which is the mean of cross entropy of each time-step.
 
@@ -687,23 +869,24 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: torch.LongT
 
     .. code-block:: python
 
-        def tet_ce_for_loop_version(x_seq: Tensor, target: torch.LongTensor):
+        def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
             loss = 0.
             for t in range(x_seq.shape[0]):
                 loss += F.cross_entropy(x_seq[t], target)
             return loss / x_seq.shape[0]
 
+
         T = 8
         N = 4
         C = 10
         x_seq = torch.rand([T, N, C])
-        target = torch.randint(low=0, high=C-1, size=[N])
-        print(tet_ce_for_loop_version(x_seq, target))
-        print(temporal_efficient_training_cross_entropy(x_seq, target))
+        target = torch.randint(low=0, high=C - 1, size=[N])
+        print(f'max error = {(tet_ce_for_loop_version(x_seq, target) - temporal_efficient_training_cross_entropy(x_seq, target)).abs().max()}')
+        # max error < 1e-6
 
 
-    .. admonition:: Tip
-        :class: tip
+    .. admonition:: Note
+        :class: note
 
         The TET cross entropy is proposed by `Temporal Efficient Training of Spiking Neural Network via Gradient Re-weighting <https://openreview.net/forum?id=_XNtisL32jv>`_.
     """
@@ -725,7 +908,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: torch.LongT
 
 
 def kaiming_normal_conv_linear_weight(net: nn.Module):
-    '''
+    """
     * :ref:`API in English <kaiming_normal_conv_linear_weight-en>`
 
     .. _kaiming_normal_conv_linear_weight-cn:
@@ -734,7 +917,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
 
     :return: None
 
-    使用kaiming normal初始化 `net` 中的所有 :class:`torch.nn._ConvNd` 和 `:class:`torch.nn.Linear` 的权重（不包括偏置项）。参见 :class:`torch.nn.init.kaiming_normal_`。
+    使用kaiming normal初始化 ``net` `中的所有 :class:`torch.nn._ConvNd` 和 :class:`torch.nn.Linear` 的权重（不包括偏置项）。参见 :class:`torch.nn.init.kaiming_normal_`。
 
     * :ref:`中文API <kaiming_normal_conv_linear_weight-cn>`
 
@@ -744,9 +927,9 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
 
     :return: None
 
-    initialize all weights (not including bias) of :class:`torch.nn._ConvNd` and :class:`torch.nn.Linear` in `net` by the kaiming normal. See :class:`torch.nn.init.kaiming_normal_`
+    initialize all weights (not including bias) of :class:`torch.nn._ConvNd` and :class:`torch.nn.Linear` in ``net`` by the kaiming normal. See :class:`torch.nn.init.kaiming_normal_`
     for more details.
-    '''
+    """
     for m in net.modules():
         if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))

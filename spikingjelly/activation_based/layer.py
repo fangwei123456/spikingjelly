@@ -23,9 +23,9 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 
     def forward(self, x_seq: Tensor):
         """
-        :param x_seq: shape=[T, batch_size, ...]
+        :param x_seq: ``shape=[T, batch_size, ...]``
         :type x_seq: Tensor
-        :return: y_seq, shape=[T, batch_size, ...]
+        :return: y_seq with ``shape=[T, batch_size, ...]``
         :rtype: Tensor
         """
         return functional.multi_step_forward(x_seq, super().forward)
@@ -87,10 +87,23 @@ class Conv2d(nn.Conv2d, base.StepModule):
             step_mode: str = 's'
     ) -> None:
         """
+        * :ref:`API in English <Conv2d-en>`
+
+        .. _Conv2d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.Conv2d`
+
+        * :ref:`中文 API <Conv2d-cn>`
+
+        .. _Conv2d-en:
+
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        Refer to :class:`torch.nn.Conv2d` for other parameters' information.
+        Refer to :class:`torch.nn.Conv2d` for other parameters' API
         """
         super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
         self.step_mode = step_mode
@@ -121,10 +134,23 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
             step_mode='s'
     ):
         """
+        * :ref:`API in English <BatchNorm2d-en>`
+
+        .. _BatchNorm2d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.BatchNorm2d`
+
+        * :ref:`中文 API <BatchNorm2d-cn>`
+
+        .. _BatchNorm2d-en:
+
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        Refer to :class:`torch.nn.BatchNorm2d` for other parameters' information.
+        Refer to :class:`torch.nn.BatchNorm2d` for other parameters' API
         """
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
@@ -148,10 +174,23 @@ class GroupNorm(nn.GroupNorm, base.StepModule):
             step_mode='s'
     ):
         """
+        * :ref:`API in English <GroupNorm-en>`
+
+        .. _GroupNorm-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.GroupNorm`
+
+        * :ref:`中文 API <GroupNorm-cn>`
+
+        .. _GroupNorm-en:
+
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        Refer to :class:`torch.nn.BatchNorm2d` for other parameters' information.
+        Refer to :class:`torch.nn.GroupNorm` for other parameters' API
         """
         super().__init__(num_groups, num_channels, eps, affine)
         self.step_mode = step_mode
@@ -171,6 +210,25 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
     def __init__(self, kernel_size: _size_any_t, stride: Optional[_size_any_t] = None,
                  padding: _size_any_t = 0, dilation: _size_any_t = 1,
                  return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+        """
+        * :ref:`API in English <MaxPool2d-en>`
+
+        .. _MaxPool2d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.MaxPool2d`
+
+        * :ref:`中文 API <MaxPool2d-cn>`
+
+        .. _MaxPool2d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.MaxPool2d` for other parameters' API
+        """
         super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
         self.step_mode = step_mode
 
@@ -191,6 +249,25 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
 class AvgPool2d(nn.AvgPool2d, base.StepModule):
     def __init__(self, kernel_size: _size_2_t, stride: Optional[_size_2_t] = None, padding: _size_2_t = 0,
                  ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None, step_mode='s') -> None:
+        """
+        * :ref:`API in English <AvgPool2d-en>`
+
+        .. _AvgPool2d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.AvgPool2d`
+
+        * :ref:`中文 API <AvgPool2d-cn>`
+
+        .. _AvgPool2d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.AvgPool2d` for other parameters' API
+        """
         super().__init__(kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
         self.step_mode = step_mode
 
@@ -210,6 +287,25 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
 
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
     def __init__(self, output_size, step_mode='s') -> None:
+        """
+        * :ref:`API in English <AdaptiveAvgPool2d-en>`
+
+        .. _AdaptiveAvgPool2d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.AdaptiveAvgPool2d`
+
+        * :ref:`中文 API <AdaptiveAvgPool2d-cn>`
+
+        .. _AdaptiveAvgPool2d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.AdaptiveAvgPool2d` for other parameters' API
+        """
         super().__init__(output_size)
         self.step_mode = step_mode
 
@@ -230,10 +326,23 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
 class Linear(nn.Linear, base.StepModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, step_mode='s') -> None:
         """
+        * :ref:`API in English <Linear-en>`
+
+        .. _Linear-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.Linear`
+
+        * :ref:`中文 API <Linear-cn>`
+
+        .. _Linear-en:
+
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        Refer to :class:`torch.nn.Linear` for other parameters' information.
+        Refer to :class:`torch.nn.Linear` for other parameters' API
         """
         super().__init__(in_features, out_features, bias)
         self.step_mode = step_mode
@@ -241,6 +350,25 @@ class Linear(nn.Linear, base.StepModule):
 
 class Flatten(nn.Flatten, base.StepModule):
     def __init__(self, start_dim: int = 1, end_dim: int = -1, step_mode='s') -> None:
+        """
+        * :ref:`API in English <Flatten-en>`
+
+        .. _Flatten-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.Flatten`
+
+        * :ref:`中文 API <Flatten-cn>`
+
+        .. _Flatten-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.Flatten` for other parameters' API
+        """
         super().__init__(start_dim, end_dim)
         self.step_mode = step_mode
 
@@ -966,113 +1094,59 @@ class PrintShapeModule(nn.Module):
         return x
 
 
-class ConvBatchNorm2d(nn.Module, base.StepModule):
-    def __init__(self, in_channels: int,
-                 out_channels: int,
-                 kernel_size: _size_2_t,
-                 stride: _size_2_t = 1,
-                 padding: _size_2_t = 0,
-                 dilation: _size_2_t = 1,
-                 groups: int = 1,
-                 padding_mode: str = 'zeros',
-                 eps=1e-5,
-                 momentum=0.1,
-                 affine=True,
-                 track_running_stats=True, step_mode='s'):
-        """
-        A fused Conv2d-BatchNorm2d module. See :class:`torch.nn.Conv2d` and :class:`torch.nn.BatchNorm2d` for params information.
-
-        Examples:
-
-        .. code-block:: python
-
-            convbn = ConvBatchNorm2d(3, 64, kernel_size=3, padding=1)
-            x = torch.rand([16, 3, 224, 224])
-            with torch.no_grad():
-                convbn.eval()
-                conv = convbn.get_fused_conv()
-                conv.eval()
-                print((convbn(x) - conv(x)).abs().max())
-
-                k_weight = 1.5
-                b_weight = 0.4
-                k_bias = 0.8
-                b_bias = 0.1
-
-                conv.weight.data *= k_weight
-                conv.weight.data += b_weight
-                conv.bias.data *= k_bias
-                conv.bias.data += b_bias
-
-                convbn.scale_fused_weight(k_weight, b_weight)
-                convbn.scale_fused_bias(k_bias, b_bias)
-
-                print((convbn(x) - conv(x)).abs().max())
-        """
-        super().__init__()
-        self.conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size,
-                              stride=stride, padding=padding, dilation=dilation, groups=groups, bias=False,
-                              padding_mode=padding_mode)
-        self.bn = nn.BatchNorm2d(num_features=out_channels, eps=eps, momentum=momentum, affine=affine,
-                                 track_running_stats=track_running_stats)
-
-        self.step_mode = step_mode
-
-    def forward(self, x: Tensor):
-        if self.step_mode == 's':
-            return self.bn(self.conv(x))
-        elif self.step_mode == 'm':
-            return functional.seq_to_ann_forward(x, (self.conv, self.bn))
-
-    def get_fused_weight(self):
-        """
-        :return: the weight of this fused module
-        :rtype: Tensor
-        """
-        return functional.fused_conv2d_weight_of_convbn2d(self.conv, self.bn)
-
-    def get_fused_bias(self):
-        """
-        :return: the bias of this fused module
-        :rtype: Tensor
-        """
-        return functional.fused_conv2d_bias_of_convbn2d(self.conv, self.bn)
-
-    @torch.no_grad()
-    def scale_fused_weight(self, k=None, b=None):
-        """
-        :param k: scale factor
-        :type k: float or None
-        :param b: bias factor
-        :type b: float or None
-
-        Set the `weight` of this fused module to `weight * k + b`
-        """
-        functional.scale_fused_conv2d_weight_of_convbn2d(self.conv, self.bn, k, b)
-
-    @torch.no_grad()
-    def scale_fused_bias(self, k=None, b=None):
-        """
-        :param k: scale factor
-        :type k: float or None
-        :param b: bias factor
-        :type b: float or None
-
-        Set the `bias` of this fused module to `bias * k + b`
-        """
-        functional.scale_fused_conv2d_bias_of_convbn2d(self.conv, self.bn, k, b)
-
-    def get_fused_conv(self):
-        return functional.fuse_convbn2d(self.conv, self.bn)
-
-
 class ElementWiseRecurrentContainer(base.MemoryModule):
     def __init__(self, sub_module: nn.Module, element_wise_function: Callable, step_mode='s'):
         """
+        * :ref:`API in English <ElementWiseRecurrentContainer-en>`
+
+        .. _ElementWiseRecurrentContainer-cn:
+
+        :param sub_module: 被包含的模块
+        :type sub_module: torch.nn.Module
+        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(x, y)``
+        :type element_wise_function: Callable
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        使用逐元素运算的自连接包装器。记 ``sub_module`` 的输入输出为 :math:`i[t]` 和 :math:`y[t]` （注意 :math:`y[t]` 也是整个模块的输出），
+        整个模块的输入为 :math:`x[t]`，则
+
+        .. math::
+
+            i[t] = f(x[t], y[t-1])
+
+        其中 :math:`f` 是用户自定义的逐元素函数。我们默认 :math:`y[-1] = 0`。
+
+
+        .. Note::
+
+            ``sub_module`` 输入和输出的尺寸需要相同。
+
+        示例代码：
+
+        .. code-block:: python
+
+            T = 8
+            net = ElementWiseRecurrentContainer(neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y)
+            print(net)
+            x = torch.zeros([T])
+            x[0] = 1.5
+            for t in range(T):
+                print(t, f'x[t]={x[t]}, s[t]={net(x[t])}')
+
+            functional.reset_net(net)
+
+
+        * :ref:`中文 API <ElementWiseRecurrentContainer-cn>`
+
+        .. _ElementWiseRecurrentContainer-en:
+
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
         :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(x, y)``
         :type element_wise_function: Callable
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         A container that use a element-wise recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
         and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
@@ -1087,7 +1161,7 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         .. admonition:: Note
             :class: note
 
-            The shape inputs and outputs of ``sub_module`` must be the same.
+            The shape of inputs and outputs of ``sub_module`` must be the same.
 
         Codes example:
 
@@ -1124,13 +1198,64 @@ class LinearRecurrentContainer(base.MemoryModule):
     def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True,
                  step_mode='s') -> None:
         """
+        * :ref:`API in English <LinearRecurrentContainer-en>`
+
+        .. _LinearRecurrentContainer-cn:
+
+        :param sub_module: 被包含的模块
+        :type sub_module: torch.nn.Module
+        :param in_features: 输入的特征数量
+        :type in_features: int
+        :param out_features: 输出的特征数量
+        :type out_features: int
+        :param bias: 若为 ``False``，则线性自连接不会带有可学习的偏执项
+        :type bias: bool
+
+        使用线性层的自连接包装器。记 ``sub_module`` 的输入和输出为 :math:`i[t]` 和 :math:`y[t]` （注意 :math:`y[t]` 也是整个模块的输出），
+        整个模块的输入记作 :math:`x[t]` ，则
+
+        .. math::
+
+            i[t] = \\begin{pmatrix} x[t] \\\\ y[t-1]\\end{pmatrix} W^{T} + b
+
+        其中 :math:`W, b` 是线性层的权重和偏置项。默认 :math:`y[-1] = 0`。
+
+        :math:`x[t]` 应该 ``shape = [N, *, in_features]``，:math:`y[t]` 则应该 ``shape = [N, *, out_features]``。
+
+        .. Note::
+
+            自连接是由 ``torch.nn.Linear(in_features + out_features, in_features, bias)`` 实现的。
+
+        .. code-block:: python
+
+            in_features = 4
+            out_features = 2
+            T = 8
+            N = 2
+            net = LinearRecurrentContainer(
+                nn.Sequential(
+                    nn.Linear(in_features, out_features),
+                    neuron.LIFNode(),
+                ),
+                in_features, out_features)
+            print(net)
+            x = torch.rand([T, N, in_features])
+            for t in range(T):
+                print(t, net(x[t]))
+
+            functional.reset_net(net)
+
+        * :ref:`中文 API <LinearRecurrentContainer-cn>`
+
+        .. _LinearRecurrentContainer-en:
+
         :param sub_module: the contained module
         :type sub_module: torch.nn.Module
         :param in_features: size of each input sample
         :type in_features: int
         :param out_features: size of each output sample
         :type out_features: int
-        :param bias: If set to ``False``, the layer will not learn an additive bias
+        :param bias: If set to ``False``, the linear recurrent layer will not learn an additive bias
         :type bias: bool
 
         A container that use a linear recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
@@ -1145,8 +1270,8 @@ class LinearRecurrentContainer(base.MemoryModule):
 
         :math:`x[t]` should have the shape ``[N, *, in_features]``, and :math:`y[t]` has the shape ``[N, *, out_features]``.
 
-        .. admonition:: Tip
-            :class: tip
+        .. admonition:: Note
+            :class: note
 
             The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, in_features, bias)``.
 
@@ -1391,6 +1516,30 @@ class TemporalWiseAttention(base.MultiStepModule):
 
 class VotingLayer(nn.Module, base.StepModule):
     def __init__(self, voting_size: int = 10, step_mode='s'):
+        """
+        * :ref:`API in English <VotingLayer-en>`
+
+        .. _VotingLayer-cn:
+
+        :param voting_size: 决定一个类别的投票数量
+        :type voting_size: int
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        投票层，对 ``shape = [..., C * voting_size]`` 的输入在最后一维上做 ``kernel_size = voting_size, stride = voting_size`` 的平均池化
+
+        * :ref:`中文 API <VotingLayer-cn>`
+
+        .. _VotingLayer-en:
+
+        :param voting_size: the voting numbers for determine a class
+        :type voting_size: int
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        Applies average pooling with ``kernel_size = voting_size, stride = voting_size`` on the last dimension of the input with ``shape = [..., C * voting_size]``
+
+        """
         super().__init__()
         self.voting_size = voting_size
         self.step_mode = step_mode
