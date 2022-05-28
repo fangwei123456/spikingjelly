@@ -110,6 +110,7 @@
 -------------------------
 * `脉冲神经网络相关博客 <https://www.cnblogs.com/lucifer1997/tag/SNN/>`_
 * `脉冲强化学习相关博客 <https://www.cnblogs.com/lucifer1997/tag/SNN-RL/>`_
+* `神经形态计算团结框架LAVA相关博客 <https://www.cnblogs.com/lucifer1997/p/16286303.html>`_
 
 .. _index_en:
 
