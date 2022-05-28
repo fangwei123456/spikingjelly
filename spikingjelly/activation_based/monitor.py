@@ -72,26 +72,187 @@ class BaseMonitor:
 
 class OutputMonitor(BaseMonitor):
     def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_output: Callable = lambda x: x):
+        """
+        * :ref:`API in English <OutputMonitor-en>`
+
+        .. _OutputMonitor-cn:
+
+        :param net: 一个神经网络
+        :type net: nn.Module
+        :param instance: 设置监视器的类型
+        :type instance: Any or tuple
+        :param function_on_output: 作用于被监控的模块输出的自定义的函数
+        :type function_on_output: Callable
+
+        对 ``net`` 中所有类型为 ``instance`` 的模块的输出使用 ``function_on_output`` 作用后，记录到 ``self.records`` 的 ``list`` 中。
+        可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
+
+        示例代码：
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.OutputMonitor(net, instance=neuron.IFNode)
+
+            with torch.no_grad():
+                y = net(torch.rand([1, 8]))
+                print(f'mtor.records={mtor.records}')
+                # mtor.records=[tensor([[1., 0., 1., 0.]]), tensor([[0., 0.]])]
+
+
+        * :ref:`中文 API <OutputMonitor-cn>`
+
+        .. _OutputMonitor-en:
+
+        :param net: a network
+        :type net: nn.Module
+        :param instance: the instance of modules to be monitored
+        :type instance: Any or tuple
+        :param function_on_output: the function that applies on the monitored modules' outputs
+        :type function_on_output: Callable
+
+        Applies ``function_on_output`` on outputs of all modules whose instances are ``instance`` in ``net``, and records
+        the data into ``self.records``, which is a ``list``.
+        Call ``self.enable()`` or ``self.disable()`` to enable or disable the monitor.
+
+        Codes example:
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.OutputMonitor(net, instance=neuron.IFNode)
+
+            with torch.no_grad():
+                y = net(torch.rand([1, 8]))
+                print(f'mtor.records={mtor.records}')
+                # mtor.records=[tensor([[1., 0., 1., 0.]]), tensor([[0., 0.]])]
+        """
         super().__init__()
         self.function_on_output = function_on_output
         self.register_forward_hook(net, instance, self.record_output_hook)
 
     def record_output_hook(self, module: nn.Module, x, y):
         if self.is_enable():
-            with torch.no_grad():
-                self.records.append(self.function_on_output(unpack_len1_tuple(y)))
+            self.records.append(self.function_on_output(unpack_len1_tuple(y)))
 
 
 class InputMonitor(BaseMonitor):
     def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_input: Callable = lambda x: x):
+        """
+        * :ref:`API in English <InputMonitor-en>`
+
+        .. _InputMonitor-cn:
+
+        :param net: 一个神经网络
+        :type net: nn.Module
+        :param instance: 设置监视器的类型
+        :type instance: Any or tuple
+        :param function_on_input: 作用于被监控的模块输入的自定义的函数
+        :type function_on_input: Callable
+
+        对 ``net`` 中所有类型为 ``instance`` 的模块的输入使用 ``function_on_input`` 作用后，记录到 ``self.records`` 的 ``list`` 中。
+        可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
+
+        示例代码：
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.InputMonitor(net, instance=neuron.IFNode)
+
+            with torch.no_grad():
+                y = net(torch.rand([1, 8]))
+                print(f'mtor.records={mtor.records}')
+                # mtor.records=[tensor([[1.2320, 1.1814, 1.0237, 1.3018]]), tensor([[1.4000, 1.5815]])]
+
+
+
+        * :ref:`中文 API <InputMonitor-cn>`
+
+        .. _InputMonitor-en:
+
+        :param net: a network
+        :type net: nn.Module
+        :param instance: the instance of modules to be monitored
+        :type instance: Any or tuple
+        :param function_on_input: the function that applies on the monitored modules' inputs
+        :type function_on_input: Callable
+
+        Applies ``function_on_input`` on inputs of all modules whose instances are ``instance`` in ``net``, and records
+        the data into ``self.records``, which is a ``list``.
+        Call ``self.enable()`` or ``self.disable()`` to enable or disable the monitor.
+
+        Codes example:
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.InputMonitor(net, instance=neuron.IFNode)
+
+            with torch.no_grad():
+                y = net(torch.rand([1, 8]))
+                print(f'mtor.records={mtor.records}')
+                # mtor.records=[tensor([[1.2320, 1.1814, 1.0237, 1.3018]]), tensor([[1.4000, 1.5815]])]
+        """
         super().__init__()
         self.function_on_input = function_on_input
         self.register_forward_hook(net, instance, self.record_input_hook)
 
     def record_input_hook(self, module: nn.Module, x, y):
         if self.is_enable():
-            with torch.no_grad():
-                self.records.append(self.function_on_input(unpack_len1_tuple(x)))
+            self.records.append(self.function_on_input(unpack_len1_tuple(x)))
 
 
 class AttributeMonitor(BaseMonitor):
@@ -107,8 +268,7 @@ class AttributeMonitor(BaseMonitor):
 
     def record_attribute_hook(self, module: nn.Module, x, y):
         if self.is_enable():
-            with torch.no_grad():
-                self.records.append(self.function_on_attribute(module.__getattr__(self.attribute_name)))
+            self.records.append(self.function_on_attribute(module.__getattr__(self.attribute_name)))
 
 class GradInputMonitor(BaseMonitor):
     def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_grad_input: Callable = lambda x: x):
@@ -118,8 +278,7 @@ class GradInputMonitor(BaseMonitor):
 
     def record_grad_input_hook(self, module: nn.Module, grad_input, grad_output):
         if self.is_enable():
-            with torch.no_grad():
-                self.records.append(self.function_on_grad_input(unpack_len1_tuple(grad_input)))
+            self.records.append(self.function_on_grad_input(unpack_len1_tuple(grad_input)))
 
 
 class GradOutputMonitor(BaseMonitor):
@@ -130,8 +289,7 @@ class GradOutputMonitor(BaseMonitor):
 
     def record_grad_output_hook(self, module: nn.Module, grad_input, grad_output):
         if self.is_enable():
-            with torch.no_grad():
-                self.records.append(self.function_on_grad_output(unpack_len1_tuple(grad_output)))
+            self.records.append(self.function_on_grad_output(unpack_len1_tuple(grad_output)))
 
 class GPUMonitor(threading.Thread):
     def __init__(self, log_dir: str = None, gpu_ids: tuple = (0,), interval: float = 600., start_now=True):
