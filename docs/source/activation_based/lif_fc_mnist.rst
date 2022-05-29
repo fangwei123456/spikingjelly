@@ -1,4 +1,4 @@
-时间驱动：使用单层全连接SNN识别MNIST
+使用单层全连接SNN识别MNIST
 ====================================
 本教程作者：\ `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
 
@@ -56,6 +56,7 @@
 结合以上三点，得到训练循环的核心代码如下：
 
 .. code-block:: python
+
     for epoch in range(start_epoch, args.epochs):
         start_time = time.time()
         net.train()
