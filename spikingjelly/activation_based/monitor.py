@@ -84,7 +84,7 @@ class OutputMonitor(BaseMonitor):
         :param function_on_output: 作用于被监控的模块输出的自定义的函数
         :type function_on_output: Callable
 
-        对 ``net`` 中所有类型为 ``instance`` 的模块的输出使用 ``function_on_output`` 作用后，记录到 ``self.records`` 的 ``list`` 中。
+        对 ``net`` 中所有类型为 ``instance`` 的模块的输出使用 ``function_on_output`` 作用后，记录到类型为 `list`` 的 ``self.records`` 中。
         可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
 
         示例代码：
@@ -176,7 +176,7 @@ class InputMonitor(BaseMonitor):
         :param function_on_input: 作用于被监控的模块输入的自定义的函数
         :type function_on_input: Callable
 
-        对 ``net`` 中所有类型为 ``instance`` 的模块的输入使用 ``function_on_input`` 作用后，记录到 ``self.records`` 的 ``list`` 中。
+        对 ``net`` 中所有类型为 ``instance`` 的模块的输入使用 ``function_on_input`` 作用后，记录到类型为 `list`` 的 ``self.records`` 中。
         可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
 
         示例代码：
@@ -258,6 +258,97 @@ class InputMonitor(BaseMonitor):
 class AttributeMonitor(BaseMonitor):
     def __init__(self, attribute_name: str, pre_forward: bool, net: nn.Module, instance: Any or tuple = (nn.Module,),
                  function_on_attribute: Callable = lambda x: x):
+        """
+        * :ref:`API in English <AttributeMonitor-en>`
+
+        .. _AttributeMonitor-cn:
+
+        :param attribute_name: 要监控的成员变量的名字
+        :type attribute_name: str
+        :param pre_forward: 若为 ``True``，则记录模块在完成前向传播前的成员变量，否则记录完成前向传播后的变量
+        :type pre_forward: bool
+        :param net: 一个神经网络
+        :type net: nn.Module
+        :param instance: 设置监视器的类型
+        :type instance: Any or tuple
+        :param function_on_attribute: 作用于被监控的模块 ``m`` 的成员 ``m.attribute_name`` 的自定义的函数
+        :type function_on_attribute: Callable
+
+        对 ``net`` 中所有类型为 ``instance`` 的模块 ``m`` 的成员 ``m.attribute_name`` 使用 ``function_on_attribute`` 作用后，记录到类型为 `list`` 的  ``self.records``。
+        可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
+
+        示例代码：
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.AttributeMonitor('v', False, net, instance=neuron.IFNode)
+
+            with torch.no_grad():
+                y = net(torch.rand([1, 8]))
+                print(f'mtor.records={mtor.records}')
+                # mtor.records=[tensor([[0.9024, 0.7505, 0.5845, 0.7932]]), tensor([[0.3248, 0.1716]])]
+
+
+
+
+        * :ref:`中文 API <AttributeMonitor-cn>`
+
+        .. _AttributeMonitor-en:
+
+        :param attribute_name: the monitored attribute's name
+        :type attribute_name: str
+        :param pre_forward: If ``True``, recording the attribute before forward, otherwise recording the attribute after forward
+        :type pre_forward: bool
+        :param net: a network
+        :type net: nn.Module
+        :param instance: the instance of modules to be monitored
+        :type instance: Any or tuple
+        :param function_on_attribute: the function that applies on each monitored module's attribute
+        :type function_on_attribute: Callable
+
+        Applies ``function_on_attribute`` on ``m.attribute_name`` of each monitored module ``m`` whose instance is ``instance`` in ``net``, and records
+        the data into ``self.records``, which is a ``list``.
+        Call ``self.enable()`` or ``self.disable()`` to enable or disable the monitor.
+
+        Codes example:
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.AttributeMonitor('v', False, net, instance=neuron.IFNode)
+
+            with torch.no_grad():
+                y = net(torch.rand([1, 8]))
+                print(f'mtor.records={mtor.records}')
+                # mtor.records=[tensor([[0.9024, 0.7505, 0.5845, 0.7932]]), tensor([[0.3248, 0.1716]])]
+        """
         super().__init__()
         self.attribute_name = attribute_name
         self.function_on_attribute = function_on_attribute
@@ -272,6 +363,86 @@ class AttributeMonitor(BaseMonitor):
 
 class GradInputMonitor(BaseMonitor):
     def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_grad_input: Callable = lambda x: x):
+        """
+        * :ref:`API in English <GradInputMonitor-en>`
+
+        .. _GradInputMonitor-cn:
+
+        :param net: 一个神经网络
+        :type net: nn.Module
+        :param instance: 设置监视器的类型
+        :type instance: Any or tuple
+        :param function_on_grad_input: 作用于被监控的模块输出的输入的梯度的函数
+        :type function_on_grad_input: Callable
+
+        对 ``net`` 中所有类型为 ``instance`` 的模块的输入的梯度使用 ``function_on_grad_input`` 作用后，记录到类型为 `list`` 的 ``self.records`` 中。
+        可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
+
+        示例代码：
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.GradInputMonitor(net, instance=neuron.IFNode)
+
+            net(torch.rand([1, 8])).sum().backward()
+            print(f'mtor.records={mtor.records}')
+            # mtor.records=[tensor([[0.3232, 0.2446]]), tensor([[0.0686, 0.1175, 0.1179, 0.1489]])]
+
+
+
+        * :ref:`中文 API <GradInputMonitor-cn>`
+
+        .. _GradInputMonitor-en:
+
+        :param net: a network
+        :type net: nn.Module
+        :param instance: the instance of modules to be monitored
+        :type instance: Any or tuple
+        :param function_on_grad_input: the function that applies on the grad of monitored modules' inputs
+        :type function_on_grad_input: Callable
+
+        Applies ``function_on_grad_input`` on grad of inputs of all modules whose instances are ``instance`` in ``net``, and records
+        the data into ``self.records``, which is a ``list``.
+        Call ``self.enable()`` or ``self.disable()`` to enable or disable the monitor.
+
+        Codes example:
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.GradInputMonitor(net, instance=neuron.IFNode)
+
+            net(torch.rand([1, 8])).sum().backward()
+            print(f'mtor.records={mtor.records}')
+            # mtor.records=[tensor([[0.3232, 0.2446]]), tensor([[0.0686, 0.1175, 0.1179, 0.1489]])]
+        """
         super().__init__()
         self.function_on_grad_input = function_on_grad_input
         self.register_backward_hook(net, instance, self.record_grad_input_hook)
@@ -283,6 +454,88 @@ class GradInputMonitor(BaseMonitor):
 
 class GradOutputMonitor(BaseMonitor):
     def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_grad_output: Callable = lambda x: x):
+        """
+        * :ref:`API in English <GradOutputMonitor-en>`
+
+        .. _GradOutputMonitor-cn:
+
+        :param net: 一个神经网络
+        :type net: nn.Module
+        :param instance: 设置监视器的类型
+        :type instance: Any or tuple
+        :param function_on_grad_output: 作用于被监控的模块输出的输出的的梯度的函数
+        :type function_on_grad_output: Callable
+
+        对 ``net`` 中所有类型为 ``instance`` 的模块的输出的梯度使用 ``function_on_grad_output`` 作用后，记录到类型为 `list`` 的 ``self.records`` 中。
+        可以通过 ``self.enable()`` 和 ``self.disable()`` 来启用或停用这个监视器。
+
+        示例代码：
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.GradOutputMonitor(net, instance=neuron.IFNode)
+
+            net(torch.rand([1, 8])).sum().backward()
+            print(f'mtor.records={mtor.records}')
+            # mtor.records=[tensor([[1., 1.]]), tensor([[0.5536, 0.1842, 0.4142, 0.2572]])]
+
+
+
+        * :ref:`中文 API <GradOutputMonitor-cn>`
+
+        .. _GradOutputMonitor-en:
+
+        :param net: a network
+        :type net: nn.Module
+        :param instance: the instance of modules to be monitored
+        :type instance: Any or tuple
+        :param function_on_grad_output: the function that applies on the grad of monitored modules' inputs
+        :type function_on_grad_output: Callable
+
+        Applies ``function_on_grad_output`` on grad of outputs of all modules whose instances are ``instance`` in ``net``, and records
+        the data into ``self.records``, which is a ``list``.
+        Call ``self.enable()`` or ``self.disable()`` to enable or disable the monitor.
+
+        Codes example:
+
+        .. code-block:: python
+
+            import torch
+            import torch.nn as nn
+            from spikingjelly.activation_based import monitor, neuron, layer
+
+            net = nn.Sequential(
+                layer.Linear(8, 4),
+                neuron.IFNode(),
+                layer.Linear(4, 2),
+                neuron.IFNode()
+            )
+
+            for param in net.parameters():
+                param.data.abs_()
+
+            mtor = monitor.GradOutputMonitor(net, instance=neuron.IFNode)
+
+            net(torch.rand([1, 8])).sum().backward()
+            print(f'mtor.records={mtor.records}')
+            # mtor.records=[tensor([[1., 1.]]), tensor([[0.5536, 0.1842, 0.4142, 0.2572]])]
+
+        """
+
         super().__init__()
         self.function_on_grad_output = function_on_grad_output
         self.register_backward_hook(net, instance, self.record_grad_output_hook)
@@ -294,21 +547,60 @@ class GradOutputMonitor(BaseMonitor):
 class GPUMonitor(threading.Thread):
     def __init__(self, log_dir: str = None, gpu_ids: tuple = (0,), interval: float = 600., start_now=True):
         """
+        * :ref:`API in English <GPUMonitor.__init__-en>`
+
+        .. _GPUMonitor.__init__-cn:
+
+        :param log_dir: 使用 ``tensorboard`` 保存GPU数据的文件夹. 若为None，则日志不会保存，而是直接 ``print``
+        :type log_dir: str
+        :param gpu_ids: 监视的GPU，例如 ``(0, 1, 2, 3)``。默认为 ``(0, )``
+        :type gpu_ids: tuple
+        :param interval: 记录数据的间隔，单位是秒
+        :type interval: float
+        :param start_now: 若为 ``True`` 则初始化后会立刻开始记录数据，否则需要手动调用 ``start()`` 后才开始记录数据
+        :type start_now:
+
+        GPU监视器，可以开启一个新的线程来记录 ``gpu_ids`` 的使用率和显存使用情况，每 ``interval`` 秒记录一次数据。
+
+        .. Warning::
+
+            在主线程的工作完成后一定要调用GPU监视器的 ``stop()`` 函数，否则主线程不会退出。
+
+        Codes example:
+
+        .. code-block:: python
+
+            import time
+
+            gm = GPUMonitor(interval=1)
+            time.sleep(2)  # make the main thread sleep
+            gm.stop()
+
+            # The outputs are:
+
+            # 2022-04-28 10:52:25
+            # utilization.gpu [%], memory.used [MiB]
+            # 0 %, 376 MiB
+
+        * :ref:`中文API <GPUMonitor.__init__-cn>`
+
+        .. _GPUMonitor.__init__-en:
+
         :param log_dir: the directory for saving logs with tensorboard. If it is None, this module will print logs
         :type log_dir: str
-        :param gpu_ids: the id of GPUs to be monitored, e.g., `(0, 1, 2, 3)`. The default value is `(0, )`
+        :param gpu_ids: the id of GPUs to be monitored, e.g., ``(0, 1, 2, 3)``. The default value is ``(0, )``
         :type gpu_ids: tuple
         :param interval: the recording interval (in seconds)
         :type interval: float
-        :param start_now: if true, the monitor will start to record now. Otherwise, it will start after the user call `start()` manually
+        :param start_now: if true, the monitor will start to record now. Otherwise, it will start after the user call ``start()`` manually
         :type start_now:
 
-        The GPU monitor, which starts a new thread to record the utilization and memory used of `gpu_ids` every `interval` seconds.
+        The GPU monitor, which starts a new thread to record the utilization and memory used of ``gpu_ids`` every ``interval`` seconds.
 
         .. admonition:: Warning
         :class: warning
 
-            Do not forget to call `stop()` after the main thread finishes its job, otherwise the main thread will never stop!
+            Do not forget to call this module's ``stop()`` after the main thread finishes its job, otherwise the main thread will never stop!
 
         Codes example:
 

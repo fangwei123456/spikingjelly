@@ -36,7 +36,7 @@ class BaseNode(base.MemoryModule):
         :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
         :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -45,24 +45,50 @@ class BaseNode(base.MemoryModule):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
+
         可微分SNN神经元的基类神经元。
 
         * :ref:`中文API <BaseNode.__init__-cn>`
 
         .. _BaseNode.__init__-en:
 
-        :param v_threshold: threshold voltage of neurons
+        :param v_threshold: threshold of this neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
-        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset
+        :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
 
         This class is the base class of differentiable spiking neurons.
         """
@@ -285,7 +311,7 @@ class IFNode(BaseNode):
         :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
         :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -294,7 +320,20 @@ class IFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
+
+        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速。
+            这个选项的优先权高于 ``backend``
         :type cupy_fp32_inference: bool
 
         Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减。其阈下神经动力学方程为：
@@ -306,25 +345,39 @@ class IFNode(BaseNode):
 
         .. _IFNode.__init__-en:
 
-        :param v_threshold: threshold voltage of neurons
+        :param v_threshold: threshold of this neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
-        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset
+        :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
 
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
+
         :param cupy_fp32_inference: If `True`, if this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
-            module will use `cupy` to accelerate
+            module will use `cupy` to accelerate. This option has priority over ``backend``
         :type cupy_fp32_inference: bool
 
         The Integrate-and-Fire neuron, which can be seen as a ideal integrator. The voltage of the IF neuron will not decay
-        as that of the LIF neuron. The subthreshold neural dynamics of it is as followed:
+        as that of the LIF neuron. The sub-threshold neural dynamics of it is as followed:
 
         .. math::
             V[t] = V[t-1] + X[t]
@@ -459,14 +512,14 @@ class LIFNode(BaseNode):
         :param tau: 膜电位时间常数
         :type tau: float
 
-        :param decay_input: 输入是否会衰减
+        :param decay_input: 输入是否也会参与衰减
         :type decay_input: bool
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
         :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -475,7 +528,20 @@ class LIFNode(BaseNode):
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
 
-        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
+
+        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速。
+            这个选项的优先权高于 ``backend``
         :type cupy_fp32_inference: bool
 
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
@@ -490,9 +556,6 @@ class LIFNode(BaseNode):
             .. math::
                 V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
-        .. tip::
-
-            在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速。
 
         * :ref:`中文API <LIFNode.__init__-cn>`
 
@@ -504,21 +567,35 @@ class LIFNode(BaseNode):
         :param decay_input: whether the input will decay
         :type decay_input: bool
 
-        :param v_threshold: threshold voltage of neurons
+        :param v_threshold: threshold of this neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
-        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset
+        :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
 
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
+
         :param cupy_fp32_inference: If `True`, if this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
-            module will use `cupy` to accelerate
+            module will use `cupy` to accelerate. This option has priority over ``backend``
         :type cupy_fp32_inference: bool
 
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
@@ -533,12 +610,6 @@ class LIFNode(BaseNode):
 
             .. math::
                 V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
-
-        .. admonition:: Tip
-            :class: tip
-
-            If this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
-            module will use `cupy` to accelerate.
 
         """
         assert isinstance(tau, float) and tau > 1.
@@ -733,14 +804,14 @@ class ParametricLIFNode(BaseNode):
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
 
-        :param decay_input: 输入是否会衰减
+        :param decay_input: 输入是否也会参与衰减
         :type decay_input: bool
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
         :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -748,6 +819,22 @@ class ParametricLIFNode(BaseNode):
 
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
+
+        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速。
+            这个选项的优先权高于 ``backend``
+        :type cupy_fp32_inference: bool
 
         `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_
         提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
@@ -774,18 +861,36 @@ class ParametricLIFNode(BaseNode):
         :param decay_input: whether the input will decay
         :type decay_input: bool
 
-        :param v_threshold: threshold voltage of neurons
+        :param v_threshold: threshold of this neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
-        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset
+        :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
+
+        :param cupy_fp32_inference: If `True`, if this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
+            module will use `cupy` to accelerate. This option has priority over ``backend``
+        :type cupy_fp32_inference: bool
 
         The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ and can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
@@ -880,7 +985,7 @@ class QIFNode(BaseNode):
         :type v_rest: float
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
         :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -888,6 +993,18 @@ class QIFNode(BaseNode):
 
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
 
 
         Quadratic Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，也是指数积分发放神经元(Exponential Integrate-and-Fire)的近似版本。其阈下神经动力学方程为：
@@ -911,18 +1028,29 @@ class QIFNode(BaseNode):
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
-        :param v_rest: resting potential
-        :type v_rest: float
-
-        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
-        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset
+        :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
 
         The Quadratic Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an approximation of the Exponential Integrate-and-Fire model.
         The subthreshold neural dynamics of it is as followed:
@@ -969,11 +1097,8 @@ class EIFNode(BaseNode):
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
-        :param v_rest: 静息电位
-        :type v_rest: float
-
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，则电压会被减去 ``v_threshold``
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
         :type v_reset: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
@@ -981,6 +1106,18 @@ class EIFNode(BaseNode):
 
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
 
 
         Exponential Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，是由HH神经元模型(Hodgkin-Huxley model)简化后推导出的一维模型。在 :math:`\\Delta_T\\to 0` 时退化为LIF模型。其阈下神经动力学方程为：
@@ -1001,21 +1138,32 @@ class EIFNode(BaseNode):
         :param theta_rh: rheobase threshold
         :type theta_rh: float
 
-        :param v_threshold: threshold voltage of neurons
+        :param v_threshold: threshold of this neuron
         :type v_threshold: float
 
-        :param v_rest: resting potential
-        :type v_rest: float
-
-        :param v_reset: reset voltage of neurons. If not ``None``, voltage of neurons that just fired spikes will be set to
-            ``v_reset``. If ``None``, voltage of neurons that just fired spikes will subtract ``v_threshold``
+        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
-        :param surrogate_function: surrogate function for replacing gradient of spiking functions during back-propagation
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset
+        :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
 
         The Exponential Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an one-dimensional model derived from the Hodgkin-Huxley model. It degenerates to the LIF model when :math:`\\Delta_T\\to 0`.
         The subthreshold neural dynamics of it is as followed:
@@ -1080,15 +1228,37 @@ class EIFNode(BaseNode):
 class LIAFNode(LIFNode):
     def __init__(self, act: Callable, threshold_related: bool, *args, **kwargs):
         """
+        * :ref:`API in English <LIAFNode.__init__-en>`
+
+        .. _LIAFNode.__init__-cn:
+
+        :param act: 激活函数
+        :type act: Callable
+        :param threshold_related: 是否使用阈值依赖模式 (TR mode). 若为 ``True`` 则 ``y = act(h - v_th)``，
+            否则 ``y = act(h)``
+        :type threshold_related: bool
+
+        `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_ 提出的LIAF神经元。LIAFNode和LIFNode的行为相同，但输出是 ``self.act(...)`` 而非脉冲。
+
+        .. Warning::
+
+            The outputs of this neuron are not binary spikes.
+
+
+        * :ref:`中文API <LIAFNode.__init__-cn>`
+
+        .. _LIAFNode.__init__-en:
+
         :param act: the activation function
         :type act: Callable
-        :param threshold_related: whether the neuron uses threshold related (TR mode). If true, `y = act(h - v_th)`,
-            otherwise `y = act(h)`
+        :param threshold_related: whether the neuron uses threshold related (TR mode). If ``True``, ``y = act(h - v_th)``,
+            otherwise ``y = act(h)``
         :type threshold_related: bool
 
         Other parameters in `*args, **kwargs` are same with :class:`LIFNode`.
 
-        The LIAF neuron proposed in `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_.
+        The LIAF neuron proposed in `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_. LIAFNode has the same behavior as LIFNode, but outputs ``self.act(...)``
+        rather than spikes.
 
         .. admonition:: Warning
             :class: warning
@@ -1099,6 +1269,9 @@ class LIAFNode(LIFNode):
         super().__init__(*args, **kwargs)
         self.act = act
         self.threshold_related = threshold_related
+
+        assert self.backend == 'torch', "LIAFNode only supports for backend='torch'!"
+        assert self.single_step_cupy_fp32_inference == False, "LIAFNode does not support for single_step_cupy_fp32_inference!"
 
     @property
     def supported_backends(self):
