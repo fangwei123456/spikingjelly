@@ -780,8 +780,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         .. image:: ./_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
-        该函数在文章  中使用。
-
         * :ref:`中文API <LogAbs.__init__-cn>`
         .. _LogAbs.__init__-en:
 
@@ -818,7 +816,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         .. image:: ./_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
-        The function is used in  .
         '''
         super().__init__(alpha, spiking)
 
@@ -1060,13 +1057,15 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
         self.w = w
         self.c = c
         self.spiking = spiking
-        if spiking:
-            self.f = self.spiking_function
-        else:
-            self.f = self.primitive_function
+
 
     def forward(self, x):
-        return self.f(x, self.w, self.c)
+        if self.spiking:
+            f = self.spiking_function
+        else:
+            f = self.primitive_function
+
+        return f(x, self.w, self.c)
 
     @staticmethod
     def spiking_function(x: torch.Tensor, w, c):
@@ -1173,13 +1172,13 @@ class SquarewaveFourierSeries(MultiArgsSurrogateFunctionBase):
         self.n = n
         self.T_period = T_period
         self.spiking = spiking
-        if spiking:
-            self.f = self.spiking_function
-        else:
-            self.f = self.primitive_function
 
     def forward(self, x):
-        return self.f(x, self.n, self.T_period)
+        if self.spiking:
+            f = self.spiking_function
+        else:
+            f = self.primitive_function
+        return f(x, self.n, self.T_period)
 
     @staticmethod
     def spiking_function(x: torch.Tensor, w, c):
@@ -1338,13 +1337,14 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         self.alpha = alpha
         self.beta = beta
         self.spiking = spiking
-        if spiking:
-            self.f = self.spiking_function
-        else:
-            self.f = self.primitive_function
 
     def forward(self, x):
-        return self.f(x, self.alpha, self.beta)
+        if self.spiking:
+            f = self.spiking_function
+        else:
+            f = self.primitive_function
+
+        return f(x, self.alpha, self.beta)
 
     @staticmethod
     def spiking_function(x: torch.Tensor, alpha, beta):
@@ -1546,7 +1546,7 @@ class QPseudoSpike(SurrogateFunctionBase):
 def leaky_k_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, leak: float, k: float):
     mask1 = (x >= 0.).to(x)
     grad_x = mask1 * k + (1. - mask1) * leak
-    return grad_output * grad_x, None
+    return grad_output * grad_x, None, None
 
 class leaky_k_relu(torch.autograd.Function):
     @staticmethod
@@ -1564,10 +1564,76 @@ class leaky_k_relu(torch.autograd.Function):
 
 class LeakyKReLU(MultiArgsSurrogateFunctionBase):
     def __init__(self, spiking=True, leak: float = 0., k: float = 1.):
+        """
+        * :ref:`API in English <LeakyKReLU.__init__-en>`
+        .. _LeakyKReLU.__init__-cn:
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :param leak: gradient when ``x < 0``
+        :type leak: float
+        :param k: gradient when ``x >= 0 ``
+        :type k: float
+
+        反向传播时使用LeakyKReLU的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            k, & x \\geq 0 \\\\
+            leak, & x < 0 \\\\
+            \\end{cases}
+
+        对应的原函数为
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            k \\cdot x, & x \\geq 0 \\\\
+            leak \\cdot x, & x < 0 \\\\
+            \\end{cases}
+
+        .. image:: ./_static/API/activation_based/surrogate/LeakyKReLU.*
+            :width: 100%
+
+        * :ref:`中文API <LeakyKReLU.__init__-cn>`
+        .. _LeakyKReLU.__init__-en:
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
+        :param leak: ``x < 0`` 时的梯度值
+        :type leak: float
+        :param k: ``x >= 0 `` 时的梯度值
+        :type k: float
+
+        The LeakyKReLU surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            k, & x \\geq 0 \\\\
+            leak, & x < 0 \\\\
+            \\end{cases}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            k \\cdot x, & x \\geq 0 \\\\
+            leak \\cdot x, & x < 0 \\\\
+            \\end{cases}
+
+        .. image:: ./_static/API/activation_based/surrogate/LeakyKReLU.*
+            :width: 100%
+
+        """
         super().__init__(spiking, leak, k)
         self.leak = leak
         self.k = k
-
 
     @staticmethod
     def spiking_function(x, leak, k):
@@ -1577,7 +1643,15 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
     @torch.jit.script
     def primitive_function(x: torch.Tensor, leak: float, k: float):
         mask1 = (x >= 0.).to(x)
-        return leak * (1. - mask1) + k * mask1
+        return (leak * (1. - mask1) + k * mask1) * x
+
+    def forward(self, x):
+        if self.spiking:
+            f = self.spiking_function
+        else:
+            f = self.primitive_function
+
+        return f(x, self.leak, self.k)
 
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
@@ -1604,7 +1678,28 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
             {tab4_str}{self.cuda_code_end_comments()}
         '''
         return code
-
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200, figsize=(6, 4))
+    # x = torch.arange(-2.5, 2.5, 0.001)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.LeakyKReLU(spiking=False, leak=0.1, k=0.5)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, leak=0.1, k=1')
+    #
+    # surrogate_function = surrogate.LeakyKReLU(spiking=True, leak=0.1, k=0.5)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, leak=0.1, k=1')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('LeakyKReLU surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.savefig('LeakyKReLU.svg')
+    # plt.savefig('LeakyKReLU.pdf')
 _has_cuda_ = [
     ATan,
     Sigmoid,

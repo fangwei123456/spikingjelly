@@ -401,6 +401,9 @@ class NeuNorm(base.MemoryModule):
 
         :param shared_across_channels: 可学习的权重 ``w`` 是否在通道这一维度上共享。设置为 ``True`` 可以大幅度节省内存
 
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
         `Direct Training for Spiking Neural Networks: Faster, Larger, Better <https://arxiv.org/abs/1809.05793>`_ 中提出\\
         的NeuNorm层。NeuNorm层必须放在二维卷积层后的脉冲神经元后，例如：
 
@@ -428,6 +431,9 @@ class NeuNorm(base.MemoryModule):
 
         :param shared_across_channels: whether the learnable parameter ``w`` is shared over channel dim. If set ``True``,
             the consumption of memory can decrease largely
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         The NeuNorm layer is proposed in `Direct Training for Spiking Neural Networks: Faster, Larger, Better <https://arxiv.org/abs/1809.05793>`_.
 
@@ -473,6 +479,8 @@ class Dropout(base.MemoryModule):
 
         :param p: 每个元素被设置为0的概率
         :type p: float
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
 
         与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -501,6 +509,8 @@ class Dropout(base.MemoryModule):
 
         :param p: probability of an element to be zeroed
         :type p: float
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
@@ -565,6 +575,8 @@ class Dropout2d(Dropout):
 
         :param p: 每个元素被设置为0的概率
         :type p: float
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
 
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
         数后，才会按照概率去重新决定，哪些位置被置0。
@@ -577,6 +589,8 @@ class Dropout2d(Dropout):
 
         :param p: probability of an element to be zeroed
         :type p: float
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
@@ -600,6 +614,9 @@ class SynapseFilter(base.MemoryModule):
         :param tau: time 突触上电流衰减的时间常数
 
         :param learnable: 时间常数在训练过程中是否是可学习的。若为 ``True``，则 ``tau`` 会被设定成时间常数的初始值
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
 
         具有滤波性质的突触。突触的输出电流满足，当没有脉冲输入时，输出电流指数衰减：
 
@@ -663,6 +680,9 @@ class SynapseFilter(base.MemoryModule):
 
         :param learnable: whether time constant is learnable during training. If ``True``, then ``tau`` will be the
             initial value of time constant
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         The synapse filter that can filter input current. The output current will decay when there is no input spike:
 
@@ -798,6 +818,8 @@ class DropConnectLinear(base.MemoryModule):
         :type invariant: bool
         :param activation: 在线性层后的激活层
         :type activation: None or nn.Module
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
 
         DropConnect，由 `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
         一文提出。DropConnect与Dropout非常类似，区别在于DropConnect是以概率 ``p`` 断开连接，而Dropout是将输入以概率置0。
@@ -831,6 +853,8 @@ class DropConnectLinear(base.MemoryModule):
         :type invariant: bool
         :param activation: the activation layer after the linear layer
         :type activation: None or nn.Module
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         DropConnect, which is proposed by `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_,
         is similar with Dropout but drop connections of a linear layer rather than the elements of the input tensor with
@@ -1210,6 +1234,8 @@ class LinearRecurrentContainer(base.MemoryModule):
         :type out_features: int
         :param bias: 若为 ``False``，则线性自连接不会带有可学习的偏执项
         :type bias: bool
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
 
         使用线性层的自连接包装器。记 ``sub_module`` 的输入和输出为 :math:`i[t]` 和 :math:`y[t]` （注意 :math:`y[t]` 也是整个模块的输出），
         整个模块的输入记作 :math:`x[t]` ，则
@@ -1257,6 +1283,8 @@ class LinearRecurrentContainer(base.MemoryModule):
         :type out_features: int
         :param bias: If set to ``False``, the linear recurrent layer will not learn an additive bias
         :type bias: bool
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
 
         A container that use a linear recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
         and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
