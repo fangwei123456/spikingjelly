@@ -48,6 +48,7 @@
     /activation_based/container
     /activation_based/neuron
     /activation_based/surrogate
+    /activation_based/lif_fc_mnist
     /activation_based/conv_fashion_mnist
     /activation_based/neuromorphic_datasets
     /activation_based/classify_dvsg
