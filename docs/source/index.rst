@@ -150,22 +150,9 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :maxdepth: 1
     :caption: Tutorials
 
-    tutorial_en.activation_based
-    /activation_based_en/0_neuron
-    /activation_based_en/2_encoding
-    /activation_based_en/3_fc_mnist
-    /activation_based_en/4_conv_fashion_mnist
-    /activation_based_en/5_ann2snn
-    /activation_based_en/6_dqn_cart_pole
-    /activation_based_en/7_a2c_cart_pole
-    /activation_based_en/8_ppo_cart_pole
-    /activation_based_en/9_spikingLSTM_text
-    /activation_based_en/10_propagation_pattern
-    /activation_based_en/11_cext_neuron_with_lbl
-    /activation_based_en/13_neuromorphic_datasets
-    /activation_based_en/14_classify_dvsg
-    /activation_based_en/15_recurrent_connection_and_stateful_synapse
-    /activation_based_en/16_train_large_scale_snn
+    /activation_based_en/basic_concept
+    /activation_based_en/classify_dvsg
+
 
 
 
