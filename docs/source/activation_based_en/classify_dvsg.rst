@@ -1,17 +1,19 @@
-分类 DVS Gesture
+Classify DVS Gesture
 =======================================
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+Author of this tutorial: `fangwei123456 <https://github.com/fangwei123456>`_
 
-在 :doc:`../activation_based/neuromorphic_datasets` 中我们已经学习了如何使用神经形态数据集，下面让我们搭建SNN对其进行分类。
+Translator: Qiu Haonan
 
-网络结构
+In :doc:`../activation_based/neuromorphic_datasets`, we have learned how to use neuromorphic datasets. Let's build SNN to classify them.
+
+Network Structure
 -------------------------------------------
-我们将使用 [#PLIF]_ 一文中定义的网络，其结构如下：
+We will use the network defined in [#PLIF]_, which has the following structure:
 
 .. image:: ../_static/tutorials/activation_based/classify_dvsg/network.png
     :width: 100%
 
-[#PLIF]_ 一文中的所有网络都在 :class:`spikingjelly.activation_based.model.parametric_lif_net` 中进行了定义，其中用于DVS Gesture的网络结构为：
+[#PLIF]_ all the networks in the article are present :class:`spikingjelly.activation_based.model.parametric_lif_net`, where the network structure for DVS Gesture is:
 
 .. code-block:: python
 
@@ -56,11 +58,11 @@
         def forward(self, x: torch.Tensor):
             return self.conv_fc(x)
 
-训练
+Train
 -------------------------------------------
-训练的代码与之前的教程 :doc:`../activation_based/conv_fashion_mnist` 几乎相同，相同之处不再赘述，下面只介绍差异部分。
+Training code with previous tutorial :doc:`../activation_based/conv_fashion_mnist` is almost the same, the similarities will not be repeated, only the differences will be introduced below.
 
-定义网络，使用多步模式。若使用 ``CuPy`` 则将所有的 ``neuron.LIFNode`` 设置为 ``cupy`` 后端：
+Define the network, using a multi-step pattern. Using ``CuPy`` sets all ``neuron.LIFNode`` back ends to ``cupy``:
 
 .. code-block:: python
 
@@ -90,7 +92,7 @@
         # ...
 
 
-新建数据集：
+New dataset:
 
 .. code-block:: python
 
@@ -102,8 +104,7 @@
         test_set = DVS128Gesture(root=args.data_dir, train=False, data_type='frame', frames_number=args.T, split_by='number')
         # ...
 
-注意，由 ``DataLoader`` 打包的数据，第0维总是batch维度，因此我们从 ``DataLoader`` 读取的数据实际上是 ``shape = [N, T, C, H, W]``，因此我们需要转换为\
-SpikingJelly的多步模式使用的 ``shape = [T, N, C, H, W]``：
+Note that dimension 0 is always the Batch dimension for data packed by ``DataLoader``, so the data we read from the ``DataLoader`` is actually ``shape = [N, T, C, H, W]``, so we need to convert to ``shape = [T, N, C, H, W]`` for SpikingJelly multi-step mode:
 
 .. code-block:: python
 
@@ -126,7 +127,7 @@ SpikingJelly的多步模式使用的 ``shape = [T, N, C, H, W]``：
 
         # ...
 
-DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类：
+DVS Gesture has 11 classes, so don't forget to set one Hot target to 11 classes:
 
 .. code-block:: python
 
@@ -137,7 +138,7 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
         label_onehot = F.one_hot(label, 11).float()
         # ...
 
-``DVSGestureNet`` 输出的并不是脉冲发放频率，而是 ``shape = [T, N, 11]`` 的原始输出：
+``DVSGestureNet`` does not output the pulse frequency, but the original output of ``shape = [T, N, 11]``:
 
 .. code-block:: python
 
@@ -148,7 +149,7 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
         def forward(self, x: torch.Tensor):
             return self.conv_fc(x)
 
-因此，我们需要对输出在时间维度上求平均后，得到脉冲发放频率，然后才去计算损失和正确率：
+Therefore, we need to average the output in the time dimension to get the pulse issuing frequency, and then calculate the loss and accuracy:
 
 .. code-block:: python
 
@@ -160,13 +161,13 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
         loss = F.mse_loss(out_fr, label_onehot)
         # ...
 
-运行我们的网络：
+Run our network:
 
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -cupy -opt adam -lr 0.001 -j 8
 
-得到输出为：
+The output is:
 
 .. code-block:: shell
 
@@ -247,9 +248,9 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
     train speed = 100.4324 images/s, test speed = 121.0402 images/s
     escape time = 2022-05-25 21:30:51
 
-最终获得了 ``max_test_acc = 0.9375`` 的性能。如果精心调整超参数、增加训练 ``epochs``，通常还能获得更高的性能。
+Finally, the ``max_test_acc = 0.9375`` performance is achieved. Higher performance can often be achieved if the hyperparameters are carefully adjusted and the training ``epochs`` are increased.
 
-下图展示了训练过程中的正确率曲线：
+The following figure shows the accuracy curve in the training process:
 
 
 .. image:: ../_static/tutorials/activation_based/classify_dvsg/dvsg_logs.*
