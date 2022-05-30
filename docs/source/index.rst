@@ -151,6 +151,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :caption: Tutorials
 
     /activation_based_en/basic_concept
+    /activation_based_en/neuromorphic_datasets
     /activation_based_en/classify_dvsg
 
 
