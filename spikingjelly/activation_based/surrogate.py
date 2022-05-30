@@ -1700,10 +1700,70 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.savefig('LeakyKReLU.svg')
     # plt.savefig('LeakyKReLU.pdf')
+
+
+@torch.jit.script
+def fake_numerical_gradient_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    grad_x = torch.clamp_max(((x >= 0.) * 2. - 1.) / x, alpha)
+    return grad_output * grad_x, None
+
+class fake_numerical_gradient(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return fake_numerical_gradient_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
+
+class FakeNumericalGradient(SurrogateFunctionBase):
+    def __init__(self, alpha=0.3):
+        super().__init__(alpha, spiking=True)
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return fake_numerical_gradient.apply(x, alpha)
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
+        alpha = str(self.alpha) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
+        if dtype == 'fp32':
+            code += f'''
+            {tab4_str}const float {sg_name}_sign = (float) ({x} >= 0.0f) * 2.0f - 1.0f;
+            {tab4_str}const float {y} = min({sg_name}_sign / {x}, {alpha});
+            '''
+        elif dtype == 'fp16':
+            code += f'''
+            {tab4_str}const half2 {sg_name}_sign = __hfma2(__hgeu2({x}, __float2half2_rn(0.0f)), __float2half2_rn(2.0f), __float2half2_rn(-1.0f));
+            #if (__CUDA_ARCH__ < 800)
+            {tab4_str}const half2 {sg_name}_grad_x = __h2div({sg_name}_sign, {x});
+            {tab4_str}const half2 {sg_name}_grad_max = __float2half2_rn({alpha});
+            {tab4_str}const half2 {y} = make_half2({sg_name}_grad_x.x <= {sg_name}_grad_max.x ? {sg_name}_grad_x.x : {sg_name}_grad_max.x, {sg_name}_grad_x.y <= {sg_name}_grad_max.y ? {sg_name}_grad_x.y : {sg_name}_grad_max.y);
+            #else
+            {tab4_str}const half2 {y} = __hmin2(__h2div({sg_name}_sign, {x}), __float2half2_rn({alpha}));
+            #endif
+            '''
+        else:
+            raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
+        return code
+
 _has_cuda_ = [
     ATan,
     Sigmoid,
     PiecewiseLeakyReLU,
     S2NN,
-    QPseudoSpike
+    QPseudoSpike,
+    LeakyKReLU,
+    FakeNumericalGradient
 ]
