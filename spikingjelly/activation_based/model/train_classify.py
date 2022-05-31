@@ -492,17 +492,6 @@ class Trainer:
             os.makedirs(tb_dir, exist_ok=args.resume is not None)
             os.makedirs(pt_dir, exist_ok=args.resume is not None)
 
-        if utils.is_main_process():
-            tb_writer = SummaryWriter(tb_dir, purge_step=args.start_epoch)
-            with open(os.path.join(tb_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
-                args_txt.write(str(args))
-                args_txt.write('\n')
-                args_txt.write(' '.join(sys.argv))
-
-            max_test_acc1 = -1.
-            if model_ema:
-                max_ema_test_acc1 = -1.
-
         if args.resume is not None:
             if args.resume == 'latest':
                 checkpoint = torch.load(os.path.join(pt_dir, 'checkpoint_latest.pth'), map_location="cpu")
@@ -522,6 +511,17 @@ class Trainer:
                 max_test_acc1 = checkpoint['max_test_acc1']
                 if model_ema:
                     max_ema_test_acc1 = checkpoint['max_ema_test_acc1']
+
+        if utils.is_main_process():
+            tb_writer = SummaryWriter(tb_dir, purge_step=args.start_epoch)
+            with open(os.path.join(tb_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
+                args_txt.write(str(args))
+                args_txt.write('\n')
+                args_txt.write(' '.join(sys.argv))
+
+            max_test_acc1 = -1.
+            if model_ema:
+                max_ema_test_acc1 = -1.
 
 
         if args.test_only:
