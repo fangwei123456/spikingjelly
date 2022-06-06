@@ -1,6 +1,6 @@
 Classify DVS Gesture
 =======================================
-Author of this tutorial: `fangwei123456 <https://github.com/fangwei123456>`_
+Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: Qiu Haonan
 

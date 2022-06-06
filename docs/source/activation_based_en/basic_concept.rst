@@ -1,6 +1,6 @@
 Basic Conception
 =======================================
-Author： `fangwei123456 <https://github.com/fangwei123456>`_
+Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 

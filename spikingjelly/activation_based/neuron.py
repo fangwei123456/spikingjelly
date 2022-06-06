@@ -63,10 +63,10 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.__init__-en:
 
-        :param v_threshold: threshold of this neuron
+        :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
@@ -79,7 +79,7 @@ class BaseNode(base.MemoryModule):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
         using ``'cupy'`` backend will have the fastest training speed
         :type backend: str
@@ -347,10 +347,10 @@ class IFNode(BaseNode):
 
         .. _IFNode.__init__-en:
 
-        :param v_threshold: threshold of this neuron
+        :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
@@ -363,7 +363,7 @@ class IFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
         using ``'cupy'`` backend will have the fastest training speed
         :type backend: str
@@ -569,10 +569,10 @@ class LIFNode(BaseNode):
         :param decay_input: whether the input will decay
         :type decay_input: bool
 
-        :param v_threshold: threshold of this neuron
+        :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
@@ -585,7 +585,7 @@ class LIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
         using ``'cupy'`` backend will have the fastest training speed
         :type backend: str
@@ -863,10 +863,10 @@ class ParametricLIFNode(BaseNode):
         :param decay_input: whether the input will decay
         :type decay_input: bool
 
-        :param v_threshold: threshold of this neuron
+        :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
@@ -879,7 +879,7 @@ class ParametricLIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
         using ``'cupy'`` backend will have the fastest training speed
         :type backend: str
@@ -1030,7 +1030,7 @@ class QIFNode(BaseNode):
         :param v_threshold: threshold voltage of neurons
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
@@ -1043,7 +1043,7 @@ class QIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
         using ``'cupy'`` backend will have the fastest training speed
         :type backend: str
@@ -1140,10 +1140,10 @@ class EIFNode(BaseNode):
         :param theta_rh: rheobase threshold
         :type theta_rh: float
 
-        :param v_threshold: threshold of this neuron
+        :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neuron. If not ``None``, the neuron's voltage will be set to ``v_reset``
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
         :type v_reset: float
 
@@ -1156,7 +1156,7 @@ class EIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
         using ``'cupy'`` backend will have the fastest training speed
         :type backend: str
@@ -1244,7 +1244,7 @@ class LIAFNode(LIFNode):
 
         .. Warning::
 
-            The outputs of this neuron are not binary spikes.
+            The outputs of this neurons layer are not binary spikes.
 
 
         * :ref:`中文API <LIAFNode.__init__-cn>`
@@ -1265,7 +1265,7 @@ class LIAFNode(LIFNode):
         .. admonition:: Warning
             :class: warning
 
-            The outputs of this neuron are not binary spikes.
+            The outputs of this neurons layer are not binary spikes.
 
         """
         super().__init__(*args, **kwargs)
