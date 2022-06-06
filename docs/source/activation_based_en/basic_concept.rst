@@ -2,7 +2,7 @@ Basic Conception
 =======================================
 Author： `fangwei123456 <https://github.com/fangwei123456>`_
 
-Translator: `Qiu Haonan <https://github.com/Maybe2022>`, `fangwei123456 <https://github.com/fangwei123456>`_
+Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
 This tutorial introduces ``spikingjelly.activation_based``. It is recommended that all users read this tutorial before using SpikengJelly.
 
