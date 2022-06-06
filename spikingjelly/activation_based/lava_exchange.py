@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import logging
 from . import neuron
-
+from typing import Iterable
 try:
     import lava.lib.dl.slayer as slayer
 
@@ -109,19 +109,16 @@ def quantize_8bit(x: torch.Tensor, scale, descale=False):
 
 # ----------------------------------------
 # convert function
-def check_conv2d(conv2d_nn: nn.Conv2d):
-    if not isinstance(conv2d_nn, nn.Conv2d):
-        raise ValueError(f'expected conv2d_nn with type torch.nn.Conv2d, but got conv2d_nn with type {type(conv2d_nn)}!')
 
-    if conv2d_nn.bias is not None:
-        raise ValueError('lava does not support for convolutional synapse with bias!')
+def check_instance(m, instance):
+    if not isinstance(m, instance):
+        raise ValueError(
+            f'expected {m} with type {instance}, but got {m} with type {type(m)}!')
 
-def check_fc(fc: nn.Linear):
-    if not isinstance(fc, nn.Linear):
-        raise ValueError(f'expected fc with type torch.nn.Linear, but got fc with type {type(fc)}!')
 
-    if fc.bias is not None:
-        raise ValueError('lava does not support for dense synapse with bias!')
+def check_no_bias(m):
+    if m.bias is not None:
+        raise ValueError(f'lava does not support for {type(m)} with bias!')
 
 def to_lava_neuron_param_dict(sj_ms_neuron: nn.Module):
     if isinstance(sj_ms_neuron, neuron.IFNode):
@@ -184,7 +181,8 @@ def linear_to_lava_synapse_dense(fc: nn.Linear):
             y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq)))
             print('max error:', (y_nn - y_sl).abs().max())
     """
-    check_fc(fc)
+    check_instance(fc, nn.Linear)
+    check_no_bias(fc)
 
     slayer_dense = slayer.synapse.Dense(fc.in_features, fc.out_features)
 
@@ -214,7 +212,8 @@ def conv2d_to_lava_synapse_conv(conv2d_nn: nn.Conv2d):
             y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq)))
             print('max error:', (y_nn - y_sl).abs().max())
     """
-    check_conv2d(conv2d_nn)
+    check_instance(conv2d_nn, nn.Conv2d)
+    check_no_bias(conv2d_nn)
 
     slayer_conv = slayer.synapse.Conv(in_features=conv2d_nn.in_channels, out_features=conv2d_nn.out_channels, kernel_size=conv2d_nn.kernel_size, stride=conv2d_nn.stride, padding=conv2d_nn.padding, dilation=conv2d_nn.dilation, groups=conv2d_nn.groups)
     # `slayer_conv` is a `torch.torch.nn.Conv3d`.
@@ -246,17 +245,18 @@ def avgpool2d_to_lava_synapse_pool(pool2d_nn: nn.AvgPool2d):
             y_sl = lava_exchange.NXT_to_TNX(layer_sl(lava_exchange.TNX_to_NXT(x_seq))) / 4.
             print('max error:', (y_nn - y_sl).abs().max())
     """
-    if not isinstance(pool2d_nn, nn.AvgPool2d):
-        raise ValueError(f'expected pool2d_nn with type torch.nn.Conv2d, but got pool2d_nn with type {type(pool2d_nn)}!')
+    check_instance(pool2d_nn, nn.AvgPool2d)
+    logging.warning('The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer.')
 
     return slayer.synapse.Pool(pool2d_nn.kernel_size, pool2d_nn.stride, pool2d_nn.padding)
 
 def to_lava_block_dense(fc: nn.Linear, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = True):
 
-    check_fc(fc)
+    check_instance(fc, nn.Linear)
+    check_no_bias(fc)
 
     neuron_params = to_lava_neuron_param_dict(sj_ms_neuron)
-    if isinstance(sj_ms_neuron, (neuron.MultiStepIFNode, neuron.MultiStepLIFNode)):
+    if isinstance(sj_ms_neuron, (neuron.IFNode, neuron.LIFNode)):
         block_init = slayer.block.cuba.Dense
     else:
         raise NotImplementedError(sj_ms_neuron)
@@ -275,7 +275,8 @@ def to_lava_block_dense(fc: nn.Linear, sj_ms_neuron: nn.Module, quantize_to_8bit
 
 def to_lava_block_conv(conv2d_nn: nn.Conv2d, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = True):
 
-    check_conv2d(conv2d_nn)
+    check_instance(conv2d_nn, nn.Conv2d)
+    check_no_bias(conv2d_nn)
 
     neuron_params = to_lava_neuron_param_dict(sj_ms_neuron)
     if isinstance(sj_ms_neuron, (neuron.IFNode, neuron.LIFNode)):
@@ -293,11 +294,84 @@ def to_lava_block_conv(conv2d_nn: nn.Conv2d, sj_ms_neuron: nn.Module, quantize_t
 
     return lava_block
 
+def to_lava_block_pool(pool2d_nn: nn.AvgPool2d, sj_ms_neuron: nn.Module, quantize_to_8bit: bool = True):
+
+    check_instance(pool2d_nn, nn.AvgPool2d)
+
+    neuron_params = to_lava_neuron_param_dict(sj_ms_neuron)
+    if isinstance(sj_ms_neuron, (neuron.IFNode, neuron.LIFNode)):
+        block_init = slayer.block.cuba.Pool
+    else:
+        raise NotImplementedError(sj_ms_neuron)
+
+    if quantize_to_8bit:
+        # if 'pre_hook_fx' not in kwargs.keys(), then `pre_hook_fx` will be set to `quantize_8bit` by default
+        lava_block = block_init(neuron_params, pool2d_nn.kernel_size, pool2d_nn.stride, pool2d_nn.padding, delay_shift=False)
+    else:
+        lava_block = block_init(neuron_params, pool2d_nn.kernel_size, pool2d_nn.stride, pool2d_nn.padding, delay_shift=False, pre_hook_fx=None)
+
+    logging.warning('The lava slayer pool layer applies sum pooling, rather than average pooling. `avgpool2d_to_lava_synapse_pool` will return a sum pooling layer.')
+
+    return lava_block
 
 def to_lava_block_flatten(flatten_nn: nn.Flatten):
+    check_instance(flatten_nn, nn.Flatten)
     if flatten_nn.start_dim != 1:
         raise ValueError('lava only supports for flatten_nn.start_dim == 1!')
     return slayer.block.cuba.Flatten()
 
 
 
+def to_lava_blocks(net: Iterable):
+    # https://lava-nc.org/lava-lib-dl/netx/netx.html
+    '''
+    Supported layer types
+    input  : {shape, type}
+    flatten: {shape, type}
+    average: {shape, type}
+    concat : {shape, type, layers}
+    dense  : {shape, type, neuron, inFeatures, outFeatures, weight, delay(if available)}
+    pool   : {shape, type, neuron, kernelSize, stride, padding, dilation, weight}
+    conv   : {shape, type, neuron, inChannels, outChannels, kernelSize, stride,
+                            |      padding, dilation, groups, weight, delay(if available)}
+                            |
+                            |-> this is the description of the compartment parameters
+                            |-> {iDecay, vDecay, vThMant, refDelay, ... (other additional params)}
+    '''
+    blocks = []
+    length = net.__len__()
+    i = 0
+    while True:
+        if isinstance(net[i], nn.Linear):
+            if i + 1 < length and isinstance(net[i + 1], (neuron.IFNode, neuron.LIFNode)):
+                blocks.append(to_lava_block_dense(net[i], net[i + 1]))
+                i += 2
+            else:
+                raise ValueError(type(net[i]))
+
+        elif isinstance(net[i], nn.Conv2d):
+            if i + 1 < length and isinstance(net[i + 1], (neuron.IFNode, neuron.LIFNode)):
+                blocks.append(to_lava_block_conv(net[i], net[i + 1]))
+                i += 2
+            else:
+                raise ValueError(type(net[i]))
+
+        elif isinstance(net[i], nn.AvgPool2d):
+            if i + 1 < length and isinstance(net[i + 1], (neuron.IFNode, neuron.LIFNode)):
+                blocks.append(to_lava_block_pool(net[i], net[i + 1]))
+                i += 2
+            else:
+                raise ValueError(type(net[i]))
+
+
+        elif isinstance(net[i], nn.Flatten):
+            blocks.append(to_lava_block_flatten(net[i]))
+            i += 1
+
+        else:
+            raise ValueError(type(net[i]))
+
+        if i == length:
+            break
+
+    return blocks

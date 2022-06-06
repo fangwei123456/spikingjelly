@@ -113,6 +113,8 @@ class BaseNode(base.MemoryModule):
 
         self.store_v_seq = store_v_seq
 
+        self.lava_s_cale = 1 << 6
+
     @property
     def store_v_seq(self):
         return self._store_v_seq
