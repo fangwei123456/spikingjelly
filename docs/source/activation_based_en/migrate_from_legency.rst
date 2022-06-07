@@ -1,33 +1,36 @@
-从老版本迁移
+Migrate From Old Version of SpikingJelly
 =======================================
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
-新版的SpikingJelly改动较大，使用老版本SpikingJelly的用户若想迁移到新版本，则需要阅读此教程。\
-SpikingJelly的版本升级尽可能前向兼容，因此用户无需做出太多代码上的修改，即可轻松迁移到新版本。
+There are some difference between the old and new version of SpikingJelly. We recommend the users to read this \
+tutorial if they are familiar to the old version and want to try the new version. SpikingJelly has nice compatibility \
+for the old version, and the users do not need to do much change on their codes to Migrate from the old version to the new version.
 
-推荐老版本用户也阅读新版本的教程 :doc:`../activation_based/basic_concept`。
+We also recommend that the users read the tutorial :doc:`../activation_based_en/basic_concept`
 
-“老版本SpikingJelly”均指的是版本号 ``<=0.0.0.0.12`` 的SpikingJelly。
+The old version of SpikingJelly means the version number ``<=0.0.0.0.12``.
 
-子包重命名
+Rename of Packages
 -------------------------------------------
 新版的SpikingJelly对子包进行了重命名，与老版本的对应关系为：
+In new version, SpikingJelly renames some sub-packages, which are:
 
 ===============  ==================
-老版本            新版本             
+Old              New            
 ===============  ==================
 clock_driven     activation_based
 event_driven     timing_based    
 ===============  ==================
 
-单步多步模块和传播模式
+Step Mode and Propagation Patterns
 -------------------------------------------
-``<=0.0.0.0.12`` 的老版本SpikingJelly，在默认情况下所有模块都是单步的，除非其名称含有前缀 ``MultiStep``。\
-而新版的SpikingJelly，则不再使用前缀对单步和多步模块进行区分，取而代之的是同一个模块，拥有单步和多步两种步进模式，\
-使用 ``step_mode`` 进行控制。具体信息可以参见 :doc:`../activation_based/basic_concept`。
+All modules in old version (``<=0.0.0.0.12``) of SpikingJelly are the single-step modules by defaule, excpet for the module has the prefix ``MultiStep``.\
 
-因而在新版本中不再有单独的多步模块，取而代之的则是融合了单步和多步的统一模块。例如，在老版本的SpikingJelly中，若想使用单步LIF神经元，\
-是按照如下方式：
+The new version of SpikingJelly does not use the prefix to distinguish the single/multi-step module. Now the step mode is controled by the module itself, which is \
+the attribute ``step_mode``. Refer to :doc:`../activation_based_en/basic_concept` for more details.
+
+Hence, there is no multi-step module defined additionally in the new version of SpikingJelly. Now one module can be both the single-step module and the multi-step module, which is determined by ``step_mode`` is ``'s'`` or ``'m'``.\
+In the old version of SpikingJelly, if we want to use the LIF neuron with single-step, we write codes as:
 
 .. code-block:: python
 
@@ -35,7 +38,7 @@ event_driven     timing_based
 
     lif = neuron.LIFNode()
 
-在新版本中，所有模块默认是单步的，所以与老版本的代码几乎相同，除了将 ``clock_driven`` 换成了 ``activation_based``：
+In the new version of SpikingJelly, all modules are single-step modules by default. We write codes similar to the old version, except for we replace ``clock_driven`` by ``activation_based``: 
 
 .. code-block:: python
 
@@ -45,13 +48,15 @@ event_driven     timing_based
 
 在老版本的SpikingJelly中，若想使用多步LIF神经元，是按照如下方式：
 
+In the old version of SpikingJelly, if we want to use the LIF neuron with multi-step, we should write codes as:
+
 .. code-block:: python
 
     from spikingjelly.clock_driven import neuron
 
     lif = neuron.MultiStepLIFNode()
 
-在新版本中，单步和多步模块进行了统一，因此只需要指定为多步模块即可：
+In the new version of SpikingJelly, one module can use both single-step and multi-step. We can use the LIF neuron with multi-step easily by setting ``step_mode='m'``:
 
 .. code-block:: python
 
@@ -60,7 +65,7 @@ event_driven     timing_based
     lif = neuron.LIFNode(step_mode='m')
 
 
-在老版本中，若想分别搭建一个逐步传播和逐层传播的网络，按照如下方式：
+In the old version of SpikingJelly, we use the step-by-step or layer-by-layer propagation patterns as the following codes:
 
 .. code-block:: python
 
@@ -102,8 +107,8 @@ event_driven     timing_based
         functional.reset_net(net_lbl)
 
 
-而在新版本中，由于单步和多步模块已经融合，可以通过 :class:`spikingjelly.activation_based.functional.set_step_mode` 对整个网络的步进模式进行转换。\
-在所有模块使用单步模式时，整个网络就可以使用逐步传播；所有模块都使用多步模式时，整个网络就可以使用逐层传播：
+In the new version of SpikingJelly, we can use :class:`spikingjelly.activation_based.functional.set_step_mode` to change the step mode of all modules in the whole network.\
+If all modules use single-step, the network can use step-by-step propagation pattern; if all modules use multi-step, the network can use layer-by-layer propagation pattern:
 
 .. code-block:: python
 

@@ -141,7 +141,7 @@ Soft方式重置方程为：
 .. math::
     V[t] = H[t] - V_{threshold} \cdot S[t]
 
-其中 :math:`V[t]` 是神经元的膜电位；:math:`X[t]` 是外源输入，例如电压增量；为了避免混淆，我们使用 :math:`H[t]` 表示神经元充电后、释放脉冲前的膜电位；:math:`V[t]` 是神经元释放脉冲后的膜电位；:math:`f(V[t-1], X[t])` 是神经元的状态更新方程，不同的神经元，区别就在于更新方程不同。
+其中 :math:`X[t]` 是外源输入，例如电压增量；为了避免混淆，我们使用 :math:`H[t]` 表示神经元充电后、释放脉冲前的膜电位；:math:`V[t]` 是神经元释放脉冲后的膜电位；:math:`f(V[t-1], X[t])` 是神经元的状态更新方程，不同的神经元，区别就在于更新方程不同。
 
 神经元的动态如下图所示（图片来自 `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_）：
 
