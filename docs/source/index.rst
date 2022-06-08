@@ -218,4 +218,3 @@ The list of developers can be found at `contributors <https://github.com/fangwei
    spikingjelly.datasets
    spikingjelly.timing_based
    spikingjelly.visualizing
-   spikingjelly.cext

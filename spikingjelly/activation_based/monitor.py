@@ -48,12 +48,18 @@ class BaseMonitor:
         self.backward_hooks.clear()
         self.forward_pre_hooks.clear()
 
-    def register_forward_hook(self, module: nn.Module, instance: Any or tuple = (nn.Module,), hook: Callable = None):
+    def register_forward_hook(self, module: nn.Module, instance: Any or tuple = None, hook: Callable = None):
+        if instance is None:
+            instance = type(module)
+
         for m in module.modules():
             if isinstance(m, instance):
                 self.forward_hooks.append(m.register_forward_hook(hook))
 
-    def register_backward_hook(self, module: nn.Module, instance: Any or tuple = (nn.Module,), hook: Callable = None):
+    def register_backward_hook(self, module: nn.Module, instance: Any or tuple = None, hook: Callable = None):
+        if instance is None:
+            instance = type(module)
+
         for m in module.modules():
             if isinstance(m, instance):
                 if torch.__version__ >= torch.torch_version.TorchVersion('1.8.0'):
@@ -61,7 +67,10 @@ class BaseMonitor:
                 else:
                     self.backward_hooks.append(m.register_backward_hook(hook))
 
-    def register_forward_pre_hook(self, module: nn.Module, instance: Any or tuple = (nn.Module,), hook: Callable = None):
+    def register_forward_pre_hook(self, module: nn.Module, instance: Any or tuple = None, hook: Callable = None):
+        if instance is None:
+            instance = type(module)
+
         for m in module.modules():
             if isinstance(m, instance):
                 self.forward_pre_hooks.append(m.register_forward_pre_hook(hook))
@@ -71,7 +80,7 @@ class BaseMonitor:
 
 
 class OutputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_output: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_output: Callable = lambda x: x):
         """
         * :ref:`API in English <OutputMonitor-en>`
 
@@ -79,7 +88,7 @@ class OutputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型
+        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_output: 作用于被监控的模块输出的自定义的函数
         :type function_on_output: Callable
@@ -119,7 +128,7 @@ class OutputMonitor(BaseMonitor):
 
         :param net: a network
         :type net: nn.Module
-        :param instance: the instance of modules to be monitored
+        :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
         :type instance: Any or tuple
         :param function_on_output: the function that applies on the monitored modules' outputs
         :type function_on_output: Callable
@@ -163,7 +172,7 @@ class OutputMonitor(BaseMonitor):
 
 
 class InputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_input: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_input: Callable = lambda x: x):
         """
         * :ref:`API in English <InputMonitor-en>`
 
@@ -171,7 +180,7 @@ class InputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型
+        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_input: 作用于被监控的模块输入的自定义的函数
         :type function_on_input: Callable
@@ -212,7 +221,7 @@ class InputMonitor(BaseMonitor):
 
         :param net: a network
         :type net: nn.Module
-        :param instance: the instance of modules to be monitored
+        :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
         :type instance: Any or tuple
         :param function_on_input: the function that applies on the monitored modules' inputs
         :type function_on_input: Callable
@@ -256,7 +265,7 @@ class InputMonitor(BaseMonitor):
 
 
 class AttributeMonitor(BaseMonitor):
-    def __init__(self, attribute_name: str, pre_forward: bool, net: nn.Module, instance: Any or tuple = (nn.Module,),
+    def __init__(self, attribute_name: str, pre_forward: bool, net: nn.Module, instance: Any or tuple = None,
                  function_on_attribute: Callable = lambda x: x):
         """
         * :ref:`API in English <AttributeMonitor-en>`
@@ -269,7 +278,7 @@ class AttributeMonitor(BaseMonitor):
         :type pre_forward: bool
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型
+        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_attribute: 作用于被监控的模块 ``m`` 的成员 ``m.attribute_name`` 的自定义的函数
         :type function_on_attribute: Callable
@@ -315,7 +324,7 @@ class AttributeMonitor(BaseMonitor):
         :type pre_forward: bool
         :param net: a network
         :type net: nn.Module
-        :param instance: the instance of modules to be monitored
+        :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
         :type instance: Any or tuple
         :param function_on_attribute: the function that applies on each monitored module's attribute
         :type function_on_attribute: Callable
@@ -362,7 +371,7 @@ class AttributeMonitor(BaseMonitor):
             self.records.append(self.function_on_attribute(module.__getattr__(self.attribute_name)))
 
 class GradInputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_grad_input: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_grad_input: Callable = lambda x: x):
         """
         * :ref:`API in English <GradInputMonitor-en>`
 
@@ -370,7 +379,7 @@ class GradInputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型
+        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_grad_input: 作用于被监控的模块输出的输入的梯度的函数
         :type function_on_grad_input: Callable
@@ -410,7 +419,7 @@ class GradInputMonitor(BaseMonitor):
 
         :param net: a network
         :type net: nn.Module
-        :param instance: the instance of modules to be monitored
+        :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
         :type instance: Any or tuple
         :param function_on_grad_input: the function that applies on the grad of monitored modules' inputs
         :type function_on_grad_input: Callable
@@ -453,7 +462,7 @@ class GradInputMonitor(BaseMonitor):
 
 
 class GradOutputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = (nn.Module,), function_on_grad_output: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_grad_output: Callable = lambda x: x):
         """
         * :ref:`API in English <GradOutputMonitor-en>`
 
@@ -461,7 +470,7 @@ class GradOutputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型
+        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_grad_output: 作用于被监控的模块输出的输出的的梯度的函数
         :type function_on_grad_output: Callable
@@ -501,7 +510,7 @@ class GradOutputMonitor(BaseMonitor):
 
         :param net: a network
         :type net: nn.Module
-        :param instance: the instance of modules to be monitored
+        :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
         :type instance: Any or tuple
         :param function_on_grad_output: the function that applies on the grad of monitored modules' inputs
         :type function_on_grad_output: Callable
