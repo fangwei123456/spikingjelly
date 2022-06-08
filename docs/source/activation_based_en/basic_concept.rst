@@ -143,7 +143,7 @@ For example, let us create a new layer of IF neurons, set them to single-step mo
     '''
 
 
-After initialization, the ``v`` of the IF neurons layer is set to 0 and is automatically broadcast to have the same ``shape``as the input.
+After initialization, the ``v`` of the IF neurons layer is set to 0 and is automatically broadcast to have the same ``shape`` as the input.
 
 If we give a new input sample, we should clear the previous states of the neurons and reset the neurons to the initialization states, which can be done by calling the module's ``self.reset()`` function:
 

@@ -248,7 +248,7 @@ The output is:
     train speed = 100.4324 images/s, test speed = 121.0402 images/s
     escape time = 2022-05-25 21:30:51
 
-Finally, the ``max_test_acc = 0.9375`` performance is achieved. Higher performance can often be achieved if the hyperparameters are carefully adjusted and the training ``epochs`` are increased.
+Finally, the ``max_test_acc = 0.9375`` performance is achieved. Higher performance can often be achieved if the hyperparameters are carefully adjusted and the training ``epochs`` is increased.
 
 The following figure shows the accuracy curve in the training process:
 

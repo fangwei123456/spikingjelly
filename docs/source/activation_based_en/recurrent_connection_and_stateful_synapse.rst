@@ -1,34 +1,33 @@
-自连接和有状态突触
-======================================
+Recurrent Connection and Stateful Synapse
+============================================
+Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
-
-自连接模块
------------------------
-自连接指的是从输出到输入的连接，例如 [#Effective]_ 一文中的SRNN(recurrent networks of spiking neurons)，如下图所示：
+Self-connected Modules
+-----------------------------
+Recurrent connection is the connection from outputs to inputs, e.g., the SRNN(recurrent networks of spiking neurons) in [#Effective]_, which are shown in the following figure:
 
 .. image:: ../_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
-使用SpikingJelly框架很容易构建出带有自连接的模块。考虑最简单的一种情况，我们给神经元增加一个回路，使得它在 :math:`t` 时刻的输出 :math:`s[t]`，\
-会与下一个时刻的外界输入 :math:`x[t+1]` 相加，共同作为输入。这可以由 :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` \
-轻松实现。 :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` 是一个包装器，\
-给任意的 ``sub_module`` 增加一个额外的自连接。连接的形式可以使用用户自定义的逐元素函数操作 :math:`z=f(x, y)` 来实现。记 :math:`x[t]` 为\
- :math:`t` 时刻整个模块的输入，:math:`i[t]` 和 :math:`y[t]` 是 ``sub_module`` 的输入和输出（注意 :math:`y[t]` 同时也是整个模块的输出），则
+We can add recurrent connection to modules by SpikingJelly easily. Considering the most simple case that we add a recurrent connection to the spiking neruons layer to make its \
+outputs :math:`s[t]` at time-step :math:`t` add to the external input :math:`x[t+1]` as the input to the neuron at the next time-step. We can use :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` to implement this idea.\ 
+:class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` is a container that add a recurrent connection to any ``sub_module``.\ 
+The connection can be specified as a user-defined element-wise operation :math:`z=f(x, y)`. Denote :math:`x[t]` as the external input for the whole module (container and ``sub_module``) at time-step :math:`t`, :math:`i[t]` and :math:`y[t]` are the input and output of ``sub_module`` \
+(note that :math:`y[t]` is also the outputs of the whole module), then we can get
 
 .. math::
 
     i[t] = f(x[t], y[t-1])
 
-其中 :math:`f` 是用户自定义的逐元素操作。默认 :math:`y[-1] = 0`。
+where :math:`f` is a user-defined element-wise function. We regard :math:`y[-1] = 0`.
 
-现在让我们用 ``ElementWiseRecurrentContainer`` 来包装一个IF神经元，逐元素操作设置为加法，因而
+Let us use ``ElementWiseRecurrentContainer`` to wrap one IF neuron. We set the element-wise function as addition:
 
 .. math::
 
     i[t] = x[t] + y[t-1].
 
-我们给与 :math:`x[t]=[1.5, 0, ..., 0]` 的输入：
+The external intpus are :math:`x[t]=[1.5, 0, ..., 0]`:
 
 .. code-block:: python
 
@@ -50,7 +49,7 @@
 
     functional.reset_net(net)
 
-输出为：
+The outputs are:
 
 .. code-block:: bash
 
@@ -70,15 +69,14 @@
     6 x[t]=tensor([0.]), s[t]=tensor([1.])
     7 x[t]=tensor([0.]), s[t]=tensor([1.])
 
-可以发现，由于存在自连接，即便 :math:`t \ge 1` 时 :math:`x[t]=0`，由于输出的脉冲能传回到输入，神经元也能持续释放脉冲。
+We can find that even when :math:`t \ge 1`, :math:`x[t]=0`, the neuron can still fire spikes because of the recurrent connection.
 
-可以使用 :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 实现更复杂的全连接形式的自连接。
+We can use :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` to implement the more complex recurrent connection.
 
-有状态的突触
+Stateful Synapse
 -----------------------
-
-[#Unsupervised]_ [#Exploiting]_ 等文章使用有状态的突触。将 :class:`spikingjelly.activation_based.layer.SynapseFilter` 放在普通无状
-态突触的后面，对突触输出的电流进行滤波，就可以得到有状态的突触，例如：
+Some papers, e.g., [#Unsupervised]_ and [#Exploiting]_ , use the stateful synapses. By placing :class:`spikingjelly.activation_based.layer.SynapseFilter` after the synapse to filter the output current, \
+we can get the stateful synapse:
 
 .. code-block:: python
 
@@ -91,21 +89,21 @@
         layer.SynapseFilter(tau=100.)
     )
 
-Sequential FashionMNIST上的对比实验
--------------------------------------
-接下来让我们在Sequential FashionMNIST上做一个简单的实验，验证自连接和有状态突触是否有助于改善网络的记忆能力。Sequential FashionMNIST指的是
-将原始的FashionMNIST图片一行一行或者一列一列，而不是整个图片，作为输入。在这种情况下，网络必须具有一定的记忆能力，才能做出正确的分类。我们将会把
-图片一列一列的输入，这样对网络而言，就像是从左到右“阅读”一样，如下图所示：
+Experiments on Sequential FashionMNIST
+------------------------------------------
+Now let us do some simple experiments on Sequential FashionMNIST to verify whether the recurrent connection or the stateful synapse can promote the network's \
+ability on the memory task. The Sequential FashionMNIST dataset is a modified FashionMNIST dataset. Images will be sent to the network row by row or column by column, rather than \
+be sent entirely. To classify correctly, the network should have good memory ability. We will send images column by column, which is similar to how humans read the book from left to right:
 
 .. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
-下图中展示了被读入的列：
+The following figure shows the column that is being sent:
 
 .. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
-首先导入相关的包：
+First, let us import some packages:
 
 .. code:: python
 
@@ -121,7 +119,7 @@ Sequential FashionMNIST上的对比实验
     import datetime
     import sys
 
-我们定义一个普通的前馈网络 ``PlainNet``：
+Define the plain feedforward network ``PlainNet``:
 
 .. code:: python
 
@@ -138,7 +136,7 @@ Sequential FashionMNIST上的对比实验
         def forward(self, x: torch.Tensor):
             return self.fc(x).mean(0)
 
-我们在 ``PlainNet`` 的第一层脉冲神经元后增加一个 :class:`spikingjelly.activation_based.layer.SynapseFilter`，得到一个新的网络 ``StatefulSynapseNet``：
+By adding a :class:`spikingjelly.activation_based.layer.SynapseFilter` behind the first spiking neurons layer of ``PlainNet``, we can get the network ``StatefulSynapseNet``:
 
 .. code:: python
 
@@ -156,7 +154,7 @@ Sequential FashionMNIST上的对比实验
         def forward(self, x: torch.Tensor):
             return self.fc(x).mean(0)
 
-我们给 ``PlainNet`` 的第一层脉冲神经元增加一个反馈连接 :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 得到 ``FeedBackNet``：
+By adding a recurrent connection implemented by :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` to ``PlainNet``, we can get ``FeedBackNet``
 
 .. code:: python
 
@@ -177,12 +175,13 @@ Sequential FashionMNIST上的对比实验
         def forward(self, x: torch.Tensor):
             return self.fc(x).mean(0)
 
-下图展示了3种网络的结构：
+
+The following figure shows the network structure of three networks:
 
 .. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
-完整的代码位于 `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_。我们可以通过命令行直接运行。运行参数为：
+The complete codes are saved in `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_. We can run by the following commands:
 
 .. code:: shell
 
@@ -207,7 +206,7 @@ Sequential FashionMNIST上的对比实验
     -lr LR              learning rate
 
 
-分别训练3个模型：
+Train three networks:
 
 .. code:: shell
 
@@ -217,7 +216,7 @@ Sequential FashionMNIST上的对比实验
 
     python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -model ss
 
-下图展示了3种网络的训练曲线：
+The following figures show the accuracy curves during training:
 
 .. image:: ../_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
     :width: 100%
@@ -227,7 +226,7 @@ Sequential FashionMNIST上的对比实验
     :width: 100%
 
 
-可以发现， ``StatefulSynapseNet`` 和 ``FeedBackNet`` 的性能都高于 ``PlainNet``，表明自连接和有状态突触都有助于提升网络的记忆能力。
+We can find that both ``StatefulSynapseNet`` and ``FeedBackNet`` have higher accuracy than ``PlainNet``, indicating that recurrent connection and stateful synapse can promote the network's memory ability.
 
 .. [#Effective] Yin B, Corradi F, Bohté S M. Effective and efficient computation with multiple-timescale spiking recurrent neural networks[C]//International Conference on Neuromorphic Systems 2020. 2020: 1-8.
 

@@ -150,9 +150,18 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :maxdepth: 1
     :caption: Tutorials
 
+    /activation_based_en/migrate_from_legency
     /activation_based_en/basic_concept
+    /activation_based_en/container
+    /activation_based_en/neuron
+    /activation_based_en/surrogate
+    .. /activation_based_en/lif_fc_mnist
+    /activation_based_en/conv_fashion_mnist
     /activation_based_en/neuromorphic_datasets
     /activation_based_en/classify_dvsg
+    /activation_based_en/recurrent_connection_and_stateful_synapse
+    /activation_based_en/monitor
+    /activation_based_en/train_large_scale_snn
 
 
 

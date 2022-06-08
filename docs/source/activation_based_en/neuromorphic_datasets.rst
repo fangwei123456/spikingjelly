@@ -6,7 +6,7 @@ Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Download Automatically/Manually
 -------------------------------------------------------
-SpikingJelly can download some datasets (e.g., CIFAR10-DVS) automatically. When we firstly use these datasets, SpikingJelly
+SpikingJelly can download some datasets (e.g., CIFAR10-DVS) automatically. When we first use these datasets, SpikingJelly
 will download the dataset to ``download`` in the root directory. The ``downloadable()`` function of each dataset defines
 whether this dataset can be downloaded automatically, and the ``resource_url_md5()`` function defines the download url and
 MD5 of each file. Here is an example:
@@ -34,9 +34,9 @@ The outputs are:
      [('DvsGesture.tar.gz', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '8a5c71fb11e24e5ca5b11866ca6c00a1'), ('gesture_mapping.csv', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '109b2ae64a0e1f3ef535b18ad7367fd1'), ('LICENSE.txt', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', '065e10099753156f18f51941e6e44b66'), ('README.txt', 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794', 'a0663d3b1d8307c329a43d949ee32d19')]
 
 
-The DVS128 Gesture dataset can not be downloaded automatically. But its ``resource_url_md5()`` will tell user where to
+The DVS128 Gesture dataset can not be downloaded automatically. But its ``resource_url_md5()`` will tell the user where to
 download. The DVS128 Gesture dataset can be downloaded from https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794.
-The box website does not allow us to download data by python codes without login. Thus, the user have to download manually.
+The box website does not allow us to download data by python codes without login. Thus, the user has to download it manually.
 Suppose we have downloaded the dataset into ``E:/datasets/DVS128Gesture/download``, then the directory structure is
 
 .. code:: bash
@@ -50,7 +50,7 @@ Suppose we have downloaded the dataset into ``E:/datasets/DVS128Gesture/download
 
 Get Events Data
 -----------------------
-Let us create train set. We set ``data_type='event'`` to use Event data rather than frame data.
+Let us create a train set. We set ``data_type='event'`` to use Event data rather than frame data.
 
 .. code:: python
 
@@ -61,14 +61,14 @@ Let us create train set. We set ``data_type='event'`` to use Event data rather t
 
 SpikingJelly will do the followed work when running these codes:
 
-#. Check whether the dataset exists. If the dataset exists, check MD5 to ensure the dataset is complete. Then SpikingJelly will extract the origin data into the ``extracted`` folder
-#. The sample in DVS128 Gesture is the video which records one actor displayed different gestures under different illumination conditions. Hence, an AER sample contains many gestures and there is also a adjoint csv file to label the time stamp of each gesture. Hence, an AER sample is not a sample with one class but multi-classes. SpikingJelly will use multi-threads to cut and extract each gesture from these files.
+#. Check whether the dataset exists. If the dataset exists, check MD5 to ensure the dataset is complete. Then SpikingJelly will extract the original data into the ``extracted`` folder
+#. The sample in DVS128 Gesture is the video that records one actor displaying different gestures under different illumination conditions. Hence, an AER sample contains many gestures and there is also an adjoint csv file to label the time stamp of each gesture. Hence, an AER sample is not a sample with one class but multi-classes. SpikingJelly will use multi-threads to cut and extract each gesture from these files.
 
 Here are the terminal outputs:
 
 .. code:: bash
 
-    The [D:/datasets/DVS128Gesture/download] directory for saving downloaed files already exists, check files...
+    The [D:/datasets/DVS128Gesture/download] directory for saving downloaded files already exists, check files...
     Mkdir [D:/datasets/DVS128Gesture/extract].
     Extract [D:/datasets/DVS128Gesture/download/DvsGesture.tar.gz] to [D:/datasets/DVS128Gesture/extract].
     Mkdir [D:/datasets/DVS128Gesture/events_np].
@@ -88,7 +88,7 @@ Here are the terminal outputs:
     Used time = [1017.27s].
     All aedat files have been split to samples and saved into [('D:/datasets/DVS128Gesture//events_np//train', 'D:/datasets/DVS128Gesture//events_np//test')].
 
-We have to wait for a moment because the cutting and extracting is very slow. A ``events_np`` folder will be created and contain the train/test set:
+We have to wait for a moment because the cutting and extracting are very slow. A ``events_np`` folder will be created and contain the train/test set:
 
 .. code:: bash
 
@@ -115,7 +115,7 @@ The output is:
     p [1 0 0 ... 1 0 0]
     label 0
 
-where ``event`` is a dictionary with keys ``['t', 'x', 'y', 'p']``;``label`` is the label of the sample. Note that the classes number of DVS128 Gesture is 11.
+where ``event`` is a dictionary with keys ``['t', 'x', 'y', 'p']``;``label`` is the label of the sample. Note that the class number of DVS128 Gesture is 11.
 
 Get Frames Data
 -----------------------
@@ -124,7 +124,7 @@ The event-to-frame integrating method for pre-processing neuromorphic datasets i
 .. math::
 
     j_{l} & = \left\lfloor \frac{N}{T}\right \rfloor \cdot j \\
-	j_{r} & = \begin{cases} \left \lfloor \frac{N}{T} \right \rfloor \cdot (j + 1), & \text{if}~~ j <  T - 1 \cr N, &  \text{if} ~~j = T - 1 \end{cases} \\
+    j_{r} & = \begin{cases} \left \lfloor \frac{N}{T} \right \rfloor \cdot (j + 1), & \text{if}~~ j <  T - 1 \cr N, &  \text{if} ~~j = T - 1 \end{cases} \\
     F(j, p, x, y) &= \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
 where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
@@ -205,9 +205,9 @@ We will get the images like:
 Fixed Duration Integrating
 --------------------------------------
 Integrating by fixed duration is more compatible with the practical application. For example, if we set duration as ``10 ms``,
-then a sample with length ``L ms`` can be integrated to frames with frame number ``math.floor(L / 10)``. However, the lengthes
+then a sample with length ``L ms`` can be integrated to frames with frame number ``math.floor(L / 10)``. However, the lengths
 of samples in neuromorphic datasets are not identical, and we will get frames with different frame numbers when integrating
-with fixed duration. Fortunately, we can use :class:`spikingjelly.datasets.pad_sequence_collate` and
+with a fixed duration. Fortunately, we can use :class:`spikingjelly.datasets.pad_sequence_collate` and
 :class:`spikingjelly.datasets.padded_sequence_mask` to pad/unpad frames.
 
 Example codes:
@@ -259,7 +259,7 @@ the name of directory ``custom_integrated_frames_dir_name`` for saving frames.
 data and ``W`` is the weight of the data. For example, H=128 and W=128 for the DVS128 Gesture dataset. The function should
 return frames.
 
-``custom_integrated_frames_dir_name`` can be ``None``, and then the the name of directory for saving frames will be set to ``custom_integrate_function.__name__``.
+``custom_integrated_frames_dir_name`` can be ``None``, and then the name of directory for saving frames will be set to ``custom_integrate_function.__name__``.
 
 For example, if we want to split events to two parts randomly, and integrate two parts to two frames, we can define such
 a function:
@@ -275,13 +275,13 @@ a function:
         frames[1] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
         return frames
 
-Now let us use this function to create frames dataset:
+Now let us use this function to create a frames dataset:
 
 .. code:: python
 
     train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
 
-After the process finished, there will be a ``integrate_events_to_2_frames_randomly`` directory in ``root_dir``. And the
+After the process is finished, there will be a ``integrate_events_to_2_frames_randomly`` directory in ``root_dir``. And the
 ``integrate_events_to_2_frames_randomly`` directory will save our frames integrated by the custom integrating function.
 
 

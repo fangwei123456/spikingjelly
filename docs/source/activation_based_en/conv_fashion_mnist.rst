@@ -1,17 +1,17 @@
-使用卷积SNN识别Fashion-MNIST
+Using Convolutional SNN to Classify Fashion-MNIST
 =======================================
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
-在本节教程中，我们将搭建一个卷积脉冲神经网络，对 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ 数据集进行
-分类。Fashion-MNIST数据集，与MNIST数据集的格式相同，均为 ``1 * 28 * 28`` 的灰度图片。
+In this tutorial, we will build a convolutional SNN to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset. Images in the Fashion-MNIST dataset \
+have the same shape as these in the MNIST dataset, which is ``1 * 28 * 28``.
 
-网络结构
+Network Structure
 -------------------------------------------
-我们使用最常见的卷积神经网络结构。具体而言，网络结构为：
+We use the common convolutional network structure. More specifically, the network structure is:
 
 ``{Conv2d-BatchNorm2d-IFNode-MaxPool2d}-{Conv2d-BatchNorm2d-IFNode-MaxPool2d}-{Linear-IFNode}``
 
-网络结构的定义如下：
+We build the network like the following codes:
 
 .. code-block:: python
 
@@ -55,7 +55,7 @@
             neuron.IFNode(surrogate_function=surrogate.ATan()),
             )
 
-为了更快的训练速度，我们将网络设置成多步模式，并根据构造函数的要求，决定是否使用 ``cupy`` 后端：
+For faster training speed, we use the multi-step mode and use the ``cupy`` backend if specified by ``use_cupy`` in ``__init__``:
 
 .. code-block:: python
 
@@ -69,11 +69,11 @@
             if use_cupy:
                 functional.set_backend(self, backend='cupy')
 
-将图片直接输入到SNN，而不是编码后在输入，是近年来深度SNN的常见做法，我们在此教程中也使用这样的方法。在这种情况下，实际的 ``图片-脉冲`` 编码是由网络中的前三层，也就是 \
-``{Conv2d-BatchNorm2d-IFNode}`` 完成。
+Recently, sending the image to SNN directly is a popular method in deep SNNs, which we will also use in this tutorial. In this case, the ``image-spike`` encoding is implemented by the first three layers of the network, \
+which are ``{Conv2d-BatchNorm2d-IFNode}``.
 
-网络的输入直接是 ``shape=[N, C, H, W]`` 的图片，我们将其添加时间维度，并复制 ``T`` 次，得到 ``shape=[T, N, C, H, W]`` 的序列，然后送入到网络层。网络的输出定义为最后一层脉冲神经元的\
-脉冲发放频率。因而，网络的前向传播定义为：
+The input image has ``shape=[N, C, H, W]``. We add an additional time-step dimension, repeat it ``T`` times, and get the input sequence with ``shape=[T, N, C, H, W]``. \
+The output is defined by the firing rate of the last spiking neurons layer. Thus, the forward function is defined by:
 
 .. code-block:: python
 
@@ -87,9 +87,10 @@
         return fr
 
 
-网络训练
+Training
 -------------------------------------------
-网络的训练方式、损失函数定义、分类结果的确定均与上一节教程相同，不再赘述。唯一的区别是，使用Fashion-MNIST数据集：
+How to define the training method, loss function, and classification result are identical to the last tutorial, and we will not introduce them in this tutorial. \
+The only difference is we use the Fashion-MNIST dataset:
 
 .. code-block:: python
 
@@ -107,7 +108,7 @@
             transform=torchvision.transforms.ToTensor(),
             download=True)
 
-可以使用如下命令查看训练参数：
+We can use the following commands to print the training args:
 
 .. code-block:: shell
 
@@ -136,14 +137,13 @@
     -save-es SAVE_ES    dir for saving a batch spikes encoded by the first {Conv2d-BatchNorm2d-IFNode}
 
 
-
-我们使用如下命令进行训练，其中为了加快训练速度，启用了混合精度训练和CuPy后端：
+We can use the following commands to train. For faster training speed, we enable the AMP (automatic mixed precision) and the ``cupy`` backend:
 
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8
 
-输出为：
+The outputs are:
 
 .. code-block:: shell
 
@@ -198,17 +198,17 @@
     train speed = 7627.8147 images/s, test speed = 7868.9090 images/s
     escape time = 2022-05-24 21:42:16
 
-最终获得了 ``max_test_acc = 0.9308`` 的性能。如果精心调整超参数，通常还可以获得更高的性能。
+We get ``max_test_acc = 0.9308``. If we fine-tune the hyper-parameters, we will get higher accuracy.
 
-下图展示了训练过程中正确率的变化：
+The following figure shows the accuracy curves during training:
 
 .. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/fmnist_logs.*
     :width: 100%
 
-可视化编码器
+Visualizing Encoding
 -------------------------------------------
-如前所述，我们将图片直接送入网络，实际的编码过程是由网络中的首个 ``{Conv2d-BatchNorm2d-IFNode}`` 实现的。现在让我们提取出网络中的编码器，输入图片，\
-并将输出脉冲可视化，代码如下：
+As mentioned above, we send images to SNN directly, and the encoding is implemented by the first ``{Conv2d-BatchNorm2d-IFNode}`` in the SNN. \
+Now let us extract the encoder ``{Conv2d-BatchNorm2d-IFNode}``, give images to the encoder, and visualize the output spikes:
 
 .. code-block:: python
 
@@ -264,14 +264,13 @@
         # ...
 
 
-我们加载已经训练好的模型，设置 ``batch_size=4`` （表示我们只保存4张图片和对应的编码后的脉冲），将图片保存到 ``./logs`` 下，按照如下命令运行：
+Let us load the trained model, set ``batch_size=4``, which means we only save 4 images and their spikes, and save data in ``./logs``. The running commands are:
 
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
 
-
-运行后图片会保存到 ``./logs/visualization`` 文件夹中。下面展示2个输入图片，和对应的编码后的脉冲：
+Images and spikes will be saved in ``./logs/visualization``. Here are two images and spikes encoded from them:
 
 .. image:: ../_static/tutorials/activation_based/conv_fashion_mnist/visualization/0/input.*
     :width: 100%

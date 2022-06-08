@@ -177,7 +177,7 @@ The outputs are
 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>` only support for multi-step mode and do not allow to switch to single-step mode.
 
 :class:`StepModeContainer <spikingjelly.activation_based.layer.StepModeContainer>` works like the merged version of :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>` and :class:`SeqToANNContainer <spikingjelly.activation_based.layer.SeqToANNContainer>`, which can be used to wrap stateless or stateful single-step modules.\
-The user should specify whether the wrapped modules are stateless or stateful when using this container. This container also supports for switching step modes.
+The user should specify whether the wrapped modules are stateless or stateful when using this container. This container also supports switching step modes.
 
 Here is an example of wrapping a stateless layer:
 
