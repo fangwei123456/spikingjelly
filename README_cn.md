@@ -46,27 +46,18 @@ git clone https://git.openi.org.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。
+如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。推荐使用最新的稳定版或开发版。
 
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
 
 ```python
-class Net(nn.Module):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
-        super().__init__()
-        # 网络结构，简单的双层全连接网络，每一层之后都是LIF神经元
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 14 * 14, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-            nn.Linear(14 * 14, 10, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+net = nn.Sequential(
+        layer.Flatten(),
+        layer.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
         )
-
-    def forward(self, x):
-        return self.fc(x)
 ```
 
 这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.activation_based.html)。可以通过Python命令行直接运行这份代码，训练MNIST分类：

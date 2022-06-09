@@ -2,9 +2,9 @@ Classify DVS Gesture
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
-Translator: Qiu Haonan
+Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
-In :doc:`../activation_based/neuromorphic_datasets`, we have learned how to use neuromorphic datasets. Let's build SNN to classify them.
+In :doc:`../activation_based_en/neuromorphic_datasets`, we have learned how to use neuromorphic datasets. Let's build a SNN to classify them.
 
 Network Structure
 -------------------------------------------
@@ -13,7 +13,7 @@ We will use the network defined in [#PLIF]_, which has the following structure:
 .. image:: ../_static/tutorials/activation_based/classify_dvsg/network.png
     :width: 100%
 
-[#PLIF]_ all the networks in the article are present :class:`spikingjelly.activation_based.model.parametric_lif_net`, where the network structure for DVS Gesture is:
+All networks in [#PLIF]_ are defined in :class:`spikingjelly.activation_based.model.parametric_lif_net`. The network structure for DVS Gesture is:
 
 .. code-block:: python
 
@@ -60,9 +60,9 @@ We will use the network defined in [#PLIF]_, which has the following structure:
 
 Train
 -------------------------------------------
-Training code with previous tutorial :doc:`../activation_based/conv_fashion_mnist` is almost the same, the similarities will not be repeated, only the differences will be introduced below.
+How to define the training method, loss function, and classification result are identical to previous tutorials, and we will not introduce them in this tutorial. We will only introduce the difference.
 
-Define the network, using a multi-step pattern. Using ``CuPy`` sets all ``neuron.LIFNode`` back ends to ``cupy``:
+We use multi-step mode for faster training speed, and use `cupy` backend if `args.cupy`:
 
 .. code-block:: python
 
@@ -91,8 +91,7 @@ Define the network, using a multi-step pattern. Using ``CuPy`` sets all ``neuron
             functional.set_backend(net, 'cupy', instance=neuron.LIFNode)
         # ...
 
-
-New dataset:
+Define the dataset:
 
 .. code-block:: python
 
@@ -104,7 +103,7 @@ New dataset:
         test_set = DVS128Gesture(root=args.data_dir, train=False, data_type='frame', frames_number=args.T, split_by='number')
         # ...
 
-Note that dimension 0 is always the Batch dimension for data packed by ``DataLoader``, so the data we read from the ``DataLoader`` is actually ``shape = [N, T, C, H, W]``, so we need to convert to ``shape = [T, N, C, H, W]`` for SpikingJelly multi-step mode:
+Note that dimension 0 is always the batch dimension for data packed by ``DataLoader``. So, the data we read from ``DataLoader`` has ``shape = [N, T, C, H, W]``. We need to reshape the data to ``shape = [T, N, C, H, W]`` for the multi-step mode:
 
 .. code-block:: python
 
@@ -127,7 +126,7 @@ Note that dimension 0 is always the Batch dimension for data packed by ``DataLoa
 
         # ...
 
-DVS Gesture has 11 classes, so don't forget to set one Hot target to 11 classes:
+DVS Gesture has 11 classes:
 
 .. code-block:: python
 
@@ -140,6 +139,8 @@ DVS Gesture has 11 classes, so don't forget to set one Hot target to 11 classes:
 
 ``DVSGestureNet`` does not output the pulse frequency, but the original output of ``shape = [T, N, 11]``:
 
+The networks in :class:`spikingjelly.activation_based.model.parametric_lif_net` output spikes, rather than firing rates:
+
 .. code-block:: python
 
     # spikingjelly.activation_based.model.parametric_lif_net
@@ -149,7 +150,7 @@ DVS Gesture has 11 classes, so don't forget to set one Hot target to 11 classes:
         def forward(self, x: torch.Tensor):
             return self.conv_fc(x)
 
-Therefore, we need to average the output in the time dimension to get the pulse issuing frequency, and then calculate the loss and accuracy:
+Therefore, we need to average the output in the time-step dimension to get the firing rates, and then calculate the loss and accuracy by the firing rates:
 
 .. code-block:: python
 
@@ -161,13 +162,13 @@ Therefore, we need to average the output in the time dimension to get the pulse 
         loss = F.mse_loss(out_fr, label_onehot)
         # ...
 
-Run our network:
+Train the network:
 
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.classify_dvsg -T 16 -device cuda:0 -b 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -cupy -opt adam -lr 0.001 -j 8
 
-The output is:
+The outputs are:
 
 .. code-block:: shell
 
@@ -248,9 +249,9 @@ The output is:
     train speed = 100.4324 images/s, test speed = 121.0402 images/s
     escape time = 2022-05-25 21:30:51
 
-Finally, the ``max_test_acc = 0.9375`` performance is achieved. Higher performance can often be achieved if the hyperparameters are carefully adjusted and the training ``epochs`` is increased.
+Finally, ``max_test_acc = 0.9375`` is achieved. Higher accuracy can be achieved if the hyper-parameters are carefully adjusted with more training epochs.
 
-The following figure shows the accuracy curve in the training process:
+The following figure shows the accuracy curves during the training process:
 
 
 .. image:: ../_static/tutorials/activation_based/classify_dvsg/dvsg_logs.*

@@ -61,8 +61,6 @@ We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons
     # x.shape=torch.Size([4, 5, 6]), if_layer.v.shape=torch.Size([4, 5, 6])
     if_layer.reset()
 
-脉冲神经元是有状态的，在输入下一个样本前，一定要先调用 ``reset()`` 函数清除之前的状态。
-
 Note that the spiking neurons are stateful. So, we must call ``reset()`` before we give a new input sample to the spiking neurons.
 
 What is teh realization between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.

@@ -1,4 +1,4 @@
-Using Convolutional SNN to Classify Fashion-MNIST
+Convolutional SNN to Classify FMNIST
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 

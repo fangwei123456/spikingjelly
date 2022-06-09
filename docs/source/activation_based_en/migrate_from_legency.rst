@@ -1,4 +1,4 @@
-Migrate From Old Version of SpikingJelly
+Migrate From Old Versions
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
@@ -12,7 +12,6 @@ The old version of SpikingJelly means the version number ``<=0.0.0.0.12``.
 
 Rename of Packages
 -------------------------------------------
-新版的SpikingJelly对子包进行了重命名，与老版本的对应关系为：
 In the new version, SpikingJelly renames some sub-packages, which are:
 
 ===============  ==================

@@ -78,9 +78,6 @@ All surrogate functions have a module style API, e.g., :class:`spikingjelly.acti
 The module style API uses Camel-Case to name modules, while the functional API uses Snake-Case to name functions. Their relation are similar to ``torch.nn`` and ``torch.nn.functional``.\ 
 Here are some examples:
 
-每个替代函数，除了有形如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` 的模块风格API，也提供了形如 :class:`spikingjelly.activation_based.surrogate.sigmoid` 函数风格的API。\
-模块风格的API使用驼峰命名法，而函数风格的API使用下划线命名法，关系类似于 ``torch.nn`` 和 ``torch.nn.functional``，下面是几个示例：
-
 ===============  ===============
 module             function
 ===============  ===============
