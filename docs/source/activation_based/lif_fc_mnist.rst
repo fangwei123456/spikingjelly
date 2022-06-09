@@ -140,7 +140,13 @@
 训练结果
 --------
 
-取\ ``tau=2.0,T=100,batch_size=64,lr=1e-3``\ ，训练100个Epoch后，将会输出两个npy文件以及训练日志。测试集上的最高正确率为92.9%，通过matplotlib可视化得到的正确率曲线如下
+取\ ``tau=2.0,T=100,batch_size=64,lr=1e-3``\ ，对应的运行命令为
+
+.. code-block:: shell
+
+    python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
+
+其中为了加快训练速度，启用了混合精度训练。训练100个Epoch后，将会输出两个npy文件以及训练日志。测试集上的最高正确率为92.9%，通过matplotlib可视化得到的正确率曲线如下
 
 .. image:: ../_static/tutorials/activation_based/lif_fc_mnist/acc.*
     :width: 100%
