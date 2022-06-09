@@ -537,6 +537,91 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.M
         y_seq[t] = y_seq[t].unsqueeze(0)
     return torch.cat(y_seq, 0)
 
+def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: nn.Module):
+    """
+    * :ref:`API in English <chunk_multi_step_forward-en>`
+
+    .. _chunk_multi_step_forward-cn:
+
+    :param split_size: 分割的尺寸
+    :type split_size: int
+    :param x_seq: 输入
+    :type x_seq: Tensor
+    :param multi_step_module: 一个使用多步传播模式的网络
+    :type multi_step_module: nn.Module
+    :return: 输出
+    :rtype: Tensor
+
+    将 ``shape = [T, *]`` 的输入 ``x_seq`` 拆分成多个 ``shape = [split_size, *]`` 的小tensor(若 ``T % split_size != 0``，最后\
+    一个tensor的 ``shape[0]`` 会小于 ``split_size``)，然后逐个输入到 ``multi_step_module`` 中，再将输出重新拼接为 ``shape = [split_size, *]``。\
+
+    ``chunk_multi_step_forward`` 可以在使用很大的 ``T`` 进行不带梯度的推理(例如ANN2SNN)时使用，能够减少内存消耗量。
+
+    示例代码：
+
+    .. code-block:: python
+
+        import torch
+        import torch.nn as nn
+        from spikingjelly.activation_based import neuron, layer, functional
+
+        net = nn.Sequential(
+            layer.Linear(8, 4),
+            neuron.IFNode(step_mode='m'),
+            layer.Linear(4, 2),
+            neuron.IFNode(step_mode='m'),
+        )
+
+        x_seq = torch.rand([1024, 8])
+        with torch.no_grad():
+            y_seq = functional.chunk_multi_step_forward(16, x_seq, net)
+            print(y_seq.shape)
+            # torch.Size([1024, 2])
+
+    * :ref:`中文 API <chunk_multi_step_forward-cn>`
+
+    .. _chunk_multi_step_forward-en:
+
+    :param split_size: the split size
+    :type split_size: int
+    :param x_seq: the input tensor
+    :type x_seq: Tensor
+    :param multi_step_module:
+    :type multi_step_module: nn.Module
+    :return: the output tensor
+    :rtype: Tensor
+
+    Splits the input ``x_seq`` with ``shape = [T, *]`` to many tensor chunks with ``shape = [split_size, *]`` (if ``T % split_size != 0``,\
+    ``shape[0]`` of the last tensor chunk will be smaller than ``split_size``), and sends chunks to ``multi_step_module``,\
+    then concatenates the outputs to  ``shape = [split_size, *]``.
+
+    ``chunk_multi_step_forward`` can be used for inference with a large ``T`` (e.g., ANN2SNN) to reduce the memory consumption.
+
+    Codes example:
+
+    .. code-block:: python
+
+        import torch
+        import torch.nn as nn
+        from spikingjelly.activation_based import neuron, layer, functional
+
+        net = nn.Sequential(
+            layer.Linear(8, 4),
+            neuron.IFNode(step_mode='m'),
+            layer.Linear(4, 2),
+            neuron.IFNode(step_mode='m'),
+        )
+
+        x_seq = torch.rand([1024, 8])
+        with torch.no_grad():
+            y_seq = functional.chunk_multi_step_forward(16, x_seq, net)
+            print(y_seq.shape)
+            # torch.Size([1024, 2])
+    """
+    y_seq = []
+    for x in torch.split(x_seq, split_size):
+        y_seq.append(multi_step_module(x))
+    return torch.cat(y_seq, 0)
 
 def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential or Callable):
     """
