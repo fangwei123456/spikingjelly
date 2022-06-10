@@ -557,12 +557,12 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
     if device_id >= 0 and cupy is not None:
         mask = torch.zeros([T, N], dtype=bool, device=sequence_len.device)
         with cuda_utils.DeviceEnvironment(device_id):
+            blocks = cuda_utils.cal_blocks(N)
             T = cupy.asarray(T)
             N = cupy.asarray(N)
             sequence_len, mask, T, N = cuda_utils.get_contiguous(sequence_len.to(torch.int), mask, T, N)
             kernel_args = [sequence_len, mask, T, N]
             kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
-            blocks = cuda_utils.cal_blocks(N)
             kernel(
                 (blocks,), (configure.cuda_threads,),
                 cuda_utils.wrap_args_to_raw_kernel(
@@ -570,7 +570,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
                     *kernel_args
                 )
             )
-            return mask
+        return mask
 
     else:
         t_seq = torch.arange(0, T).unsqueeze(1).repeat(1, N).to(sequence_len)  # [T, N]
