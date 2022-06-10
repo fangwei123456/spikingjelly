@@ -66,6 +66,7 @@ def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
     :return: used time in seconds
     :rtype: float
     """
+    torch.cuda.set_device(device)
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     start.record()
