@@ -6,45 +6,9 @@ from .. import configure
 from typing import Callable
 try:
     import cupy
-
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.cuda_utils: {e}')
     pass
-
-
-
-def cal_blocks(numel: int):
-    """
-    * :ref:`API in English <cal_blocks-en>`
-
-    .. _cal_blocks-cn:
-
-    :param numel: 并行执行的CUDA内核的数量
-    :type numel: int
-    :return: blocks的数量
-    :rtype: int
-
-    此函数返回 blocks，用来按照 ``kernel((blocks,), (configure.cuda_threads,), ...)`` 调用 :class:`cupy.RawKernel`
-
-    * :ref:`中文 API <cal_blocks-cn>`
-
-    .. _cal_blocks-en:
-
-    :param numel: the number of parallel CUDA kernels
-    :type numel: int
-    :return: the number of blocks
-    :rtype: int
-
-    Returns blocks to call :class:`cupy.RawKernel` by ``kernel((blocks,), (configure.cuda_threads,), ...)``
-
-    """
-    # refer to https://zhuanlan.zhihu.com/p/447577193
-
-    if configure.device_attribute is None or torch.cuda.get_device_name(torch.cuda.current_device()) != configure.device_attribute.dev_name:
-        configure.device_attribute = configure.DeviceAttribute()
-
-    return max(1, min((numel + configure.cuda_threads - 1) // configure.cuda_threads, configure.device_attribute.sm_number * configure.device_attribute.threads_per_sm // configure.cuda_threads * 32))
-
 
 def cpu_timer(f: Callable, *args, **kwargs):
     """
@@ -170,6 +134,33 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
         t_list.append(c_timer(device, f, *args, **kwargs))
     t_list = np.asarray(t_list)
     return t_list[n:].mean()
+
+def cal_blocks(numel: int):
+    """
+    * :ref:`API in English <cal_blocks-en>`
+
+    .. _cal_blocks-cn:
+
+    :param numel: 并行执行的CUDA内核的数量
+    :type numel: int
+    :return: blocks的数量
+    :rtype: int
+
+    此函数返回 blocks，用来按照 ``kernel((blocks,), (configure.cuda_threads,), ...)`` 调用 :class:`cupy.RawKernel`
+
+    * :ref:`中文 API <cal_blocks-cn>`
+
+    .. _cal_blocks-en:
+
+    :param numel: the number of parallel CUDA kernels
+    :type numel: int
+    :return: the number of blocks
+    :rtype: int
+
+    Returns blocks to call :class:`cupy.RawKernel` by ``kernel((blocks,), (configure.cuda_threads,), ...)``
+
+    """
+    return (numel + configure.cuda_threads - 1) // configure.cuda_threads
 
 def get_contiguous(*args):
     """
