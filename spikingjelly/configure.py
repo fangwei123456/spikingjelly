@@ -1,3 +1,5 @@
+import logging
+import torch
 '''
 This py file defines some variables used in SpikingJelly.
 Here is an example of how you can change them to make effect in your codes:
@@ -20,7 +22,7 @@ max_threads_number_for_datasets_preprocess = 16
 Note that a too larger `max_threads_number_for_datasets_preprocess` will overload the disc and slow down the speed.
 '''
 
-cuda_threads = 1024
+cuda_threads = 256
 '''
 `cuda_threads` defines the default threads number for CUDA kernel.
 
@@ -67,3 +69,23 @@ If `save_bool_spike_level == 1`, spikes will be saved in uint8 with each 8-bit s
 A larger `save_bool_spike_level` means less memory consumption but slower speed.
 '''
 
+try:
+    from cuda import cuda
+    class DeviceAttribute:
+        def __init__(self):
+            self.dev_name = torch.cuda.get_device_name(torch.cuda.current_device())
+            dev = cuda.CUdevice(torch.cuda.current_device())
+            cuda.cuInit(dev)
+            _, self.sm_number = cuda.cuDeviceGetAttribute(
+                cuda.CUdevice_attribute.CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT,
+                dev)
+
+            _, self.threads_per_sm = cuda.cuDeviceGetAttribute(
+                cuda.CUdevice_attribute.CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_MULTIPROCESSOR,
+                dev)
+
+    device_attribute = None
+
+except BaseException as e:
+    logging.info(f'spikingjelly.configure: {e}')
+    pass
