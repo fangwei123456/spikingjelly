@@ -48,12 +48,12 @@
     /activation_based/container
     /activation_based/neuron
     /activation_based/surrogate
+    /activation_based/monitor
     /activation_based/lif_fc_mnist
     /activation_based/conv_fashion_mnist
     /activation_based/neuromorphic_datasets
     /activation_based/classify_dvsg
     /activation_based/recurrent_connection_and_stateful_synapse
-    /activation_based/monitor
     /activation_based/train_large_scale_snn
 
 
@@ -155,12 +155,12 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/container
     /activation_based_en/neuron
     /activation_based_en/surrogate
+    /activation_based_en/monitor
     .. /activation_based_en/lif_fc_mnist
     /activation_based_en/conv_fashion_mnist
     /activation_based_en/neuromorphic_datasets
     /activation_based_en/classify_dvsg
     /activation_based_en/recurrent_connection_and_stateful_synapse
-    /activation_based_en/monitor
     /activation_based_en/train_large_scale_snn
 
 
