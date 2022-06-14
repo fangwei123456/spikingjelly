@@ -20,7 +20,7 @@ max_threads_number_for_datasets_preprocess = 16
 Note that a too larger `max_threads_number_for_datasets_preprocess` will overload the disc and slow down the speed.
 '''
 
-cuda_threads = 1024
+cuda_threads = 512
 '''
 `cuda_threads` defines the default threads number for CUDA kernel.
 
