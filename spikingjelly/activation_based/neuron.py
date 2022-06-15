@@ -501,7 +501,7 @@ class IFNode(BaseNode):
             if self.v_reset is None:
                 spike, self.v = self.jit_eval_single_step_forward_soft_reset(x, self.v, self.v_threshold)
             else:
-                spike, self.v = self.jit_eval_single_step_forward_soft_reset(x, self.v, self.v_threshold, self.v_reset)
+                spike, self.v = self.jit_eval_single_step_forward_hard_reset(x, self.v, self.v_threshold, self.v_reset)
             return spike
 
 class LIFNode(BaseNode):
