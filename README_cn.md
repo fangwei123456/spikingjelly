@@ -60,14 +60,11 @@ nn.Sequential(
         )
 ```
 
-这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.activation_based.html)。可以通过Python命令行直接运行这份代码，训练MNIST分类：
+这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.activation_based.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
 
 ```python
->>> import spikingjelly.activation_based.examples.lif_fc_mnist as lif_fc_mnist
->>> lif_fc_mnist.main()
+python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
 ```
-
-阅读[spikingjelly.activation_based.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.examples.html)以探索更多先进的神经网络！
 
 ## 快速好用的ANN-SNN转换
 
@@ -103,10 +100,11 @@ class ANN(nn.Module):
         return x
 ```
 
-在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
+在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html)。可以在Python命令行中通过如下命令，在MNIST上使用ANN2SNN：
 
-```shell
-python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
+```python
+>>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
+>>> cnn_mnist.main()
 ```
 
 ## CUDA增强的神经元
@@ -213,18 +211,18 @@ https://git.openi.org.cn/OpenI/spikingjelly/datasets?type=0
 
 ## 教程
 
-SpikingJelly精心准备了多项教程。下面展示了部分教程：
+SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
 | 图例                                                         | 教程                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) |                                                              |
-| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/neuron.html) |
-| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/3_fc_mnist.html) |
-| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/4_conv_fashion_mnist.html) |
+| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [基本概念](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/basic_concept.html) |
+| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/neuron.html) |
+| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/lif_fc_mnist.html) |
+| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/conv_fashion_mnist.html) |
 | ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html) |
-| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/13_neuromorphic_datasets.html) |
-| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/14_classify_dvsg.html) |
-| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/15_recurrent_connection_and_stateful_synapse.html) |
+| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/neuromorphic_datasets.html) |
+| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/classify_dvsg.html) |
+| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/recurrent_connection_and_stateful_synapse.html) |
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 

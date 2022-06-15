@@ -53,30 +53,18 @@ If you use an old version of SpikingJelly, you may meet some fatal bugs. Refer t
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
 
 ```python
-class Net(nn.Module):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
-        super().__init__()
-        # Network structure, a simple two-layer fully connected network, each layer is followed by LIF neurons
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 14 * 14, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-            nn.Linear(14 * 14, 10, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+nn.Sequential(
+        layer.Flatten(),
+        layer.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
         )
-
-    def forward(self, x):
-        return self.fc(x)
 ```
 
 This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial_en.activation_based.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
->>> import spikingjelly.activation_based.examples.lif_fc_mnist as lif_fc_mnist
->>> lif_fc_mnist.main()
+python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
 ```
-
-Read [spikingjelly.activation_based.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.examples.html) to explore more advanced networks!
 
 ## Fast And Handy ANN-SNN Conversion
 
@@ -138,7 +126,7 @@ To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable
 As simple as using PyTorch.
 
 ```python
->>> net = nn.Sequential(nn.Flatten(), nn.Linear(28 * 28, 10, bias=False), neuron.LIFNode(tau=tau))
+>>> net = nn.Sequential(layer.Flatten(), layer.Linear(28 * 28, 10, bias=False), neuron.LIFNode(tau=tau))
 >>> net = net.to(device) # Can be CPU or CUDA devices
 ```
 
