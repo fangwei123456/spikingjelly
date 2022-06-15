@@ -1,0 +1,441 @@
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+DVSGestureNet(
+  (conv_fc): Sequential(
+    (0): Conv2d(2, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (2): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (6): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (8): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (9): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (10): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (11): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (12): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (13): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (14): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (15): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (16): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (17): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (18): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (19): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (20): Flatten(start_dim=1, end_dim=-1, step_mode=m)
+    (21): Dropout(p=0.5)
+    (22): Linear(in_features=2048, out_features=512, bias=True)
+    (23): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (24): Dropout(p=0.5)
+    (25): Linear(in_features=512, out_features=110, bias=True)
+    (26): LIFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=True, step_mode=m, backend=cupy, tau=2.0
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (27): VotingLayer(voting_size=10, step_mode=m)
+  )
+)
+The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
+The directory [/datasets/DVSGesture/frames_number_16_split_by_number] already exists.
+Mkdir ./logs/T16_b16_adam_lr0.001_c128_amp_cupy.
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 0, train_loss = 0.0666, train_acc = 0.3964, test_loss = 0.0514, test_acc = 0.6042, max_test_acc = 0.6042
+train speed = 92.7646 images/s, test speed = 115.2935 images/s
+escape time = 2022-05-25 21:31:54
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 1, train_loss = 0.0463, train_acc = 0.6036, test_loss = 0.0439, test_acc = 0.6319, max_test_acc = 0.6319
+train speed = 101.5938 images/s, test speed = 120.5184 images/s
+escape time = 2022-05-25 21:30:48
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 2, train_loss = 0.0403, train_acc = 0.6678, test_loss = 0.0379, test_acc = 0.6875, max_test_acc = 0.6875
+train speed = 101.6987 images/s, test speed = 121.5391 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 3, train_loss = 0.0350, train_acc = 0.7252, test_loss = 0.0357, test_acc = 0.7257, max_test_acc = 0.7257
+train speed = 101.2500 images/s, test speed = 121.2395 images/s
+escape time = 2022-05-25 21:30:54
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 4, train_loss = 0.0316, train_acc = 0.7457, test_loss = 0.0374, test_acc = 0.6667, max_test_acc = 0.7257
+train speed = 101.3711 images/s, test speed = 120.0668 images/s
+escape time = 2022-05-25 21:30:44
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 5, train_loss = 0.0296, train_acc = 0.7654, test_loss = 0.0366, test_acc = 0.7257, max_test_acc = 0.7257
+train speed = 101.2458 images/s, test speed = 119.7162 images/s
+escape time = 2022-05-25 21:30:46
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 6, train_loss = 0.0288, train_acc = 0.7800, test_loss = 0.0317, test_acc = 0.7778, max_test_acc = 0.7778
+train speed = 100.9217 images/s, test speed = 121.9909 images/s
+escape time = 2022-05-25 21:30:52
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 7, train_loss = 0.0262, train_acc = 0.7911, test_loss = 0.0288, test_acc = 0.7847, max_test_acc = 0.7847
+train speed = 100.5260 images/s, test speed = 122.2812 images/s
+escape time = 2022-05-25 21:30:55
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 8, train_loss = 0.0241, train_acc = 0.8339, test_loss = 0.0256, test_acc = 0.8368, max_test_acc = 0.8368
+train speed = 100.8521 images/s, test speed = 120.6634 images/s
+escape time = 2022-05-25 21:30:55
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 9, train_loss = 0.0221, train_acc = 0.8399, test_loss = 0.0520, test_acc = 0.5868, max_test_acc = 0.8368
+train speed = 100.7805 images/s, test speed = 117.9515 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 10, train_loss = 0.0209, train_acc = 0.8536, test_loss = 0.0267, test_acc = 0.7812, max_test_acc = 0.8368
+train speed = 100.8356 images/s, test speed = 118.2885 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 11, train_loss = 0.0200, train_acc = 0.8622, test_loss = 0.0269, test_acc = 0.7986, max_test_acc = 0.8368
+train speed = 100.3292 images/s, test speed = 117.3570 images/s
+escape time = 2022-05-25 21:30:55
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 12, train_loss = 0.0182, train_acc = 0.8724, test_loss = 0.0231, test_acc = 0.8681, max_test_acc = 0.8681
+train speed = 100.7801 images/s, test speed = 121.2770 images/s
+escape time = 2022-05-25 21:30:55
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 13, train_loss = 0.0162, train_acc = 0.9033, test_loss = 0.0232, test_acc = 0.8160, max_test_acc = 0.8681
+train speed = 101.0496 images/s, test speed = 120.7119 images/s
+escape time = 2022-05-25 21:30:47
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 14, train_loss = 0.0154, train_acc = 0.8981, test_loss = 0.0265, test_acc = 0.7882, max_test_acc = 0.8681
+train speed = 100.5298 images/s, test speed = 120.2335 images/s
+escape time = 2022-05-25 21:30:47
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 15, train_loss = 0.0149, train_acc = 0.9075, test_loss = 0.0213, test_acc = 0.8646, max_test_acc = 0.8681
+train speed = 100.8681 images/s, test speed = 117.7616 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 16, train_loss = 0.0144, train_acc = 0.9170, test_loss = 0.0198, test_acc = 0.8507, max_test_acc = 0.8681
+train speed = 100.5348 images/s, test speed = 119.9878 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 17, train_loss = 0.0124, train_acc = 0.9238, test_loss = 0.0177, test_acc = 0.8750, max_test_acc = 0.8750
+train speed = 100.8698 images/s, test speed = 121.3661 images/s
+escape time = 2022-05-25 21:30:54
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 18, train_loss = 0.0118, train_acc = 0.9324, test_loss = 0.0177, test_acc = 0.8750, max_test_acc = 0.8750
+train speed = 100.8408 images/s, test speed = 120.8948 images/s
+escape time = 2022-05-25 21:30:48
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 19, train_loss = 0.0108, train_acc = 0.9401, test_loss = 0.0226, test_acc = 0.8472, max_test_acc = 0.8750
+train speed = 100.9482 images/s, test speed = 120.9457 images/s
+escape time = 2022-05-25 21:30:47
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 20, train_loss = 0.0099, train_acc = 0.9478, test_loss = 0.0144, test_acc = 0.9132, max_test_acc = 0.9132
+train speed = 99.8666 images/s, test speed = 120.3704 images/s
+escape time = 2022-05-25 21:30:59
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 21, train_loss = 0.0086, train_acc = 0.9598, test_loss = 0.0280, test_acc = 0.7847, max_test_acc = 0.9132
+train speed = 100.2027 images/s, test speed = 117.1004 images/s
+escape time = 2022-05-25 21:30:55
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 22, train_loss = 0.0077, train_acc = 0.9658, test_loss = 0.0157, test_acc = 0.8819, max_test_acc = 0.9132
+train speed = 100.5154 images/s, test speed = 121.3704 images/s
+escape time = 2022-05-25 21:30:49
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 23, train_loss = 0.0076, train_acc = 0.9598, test_loss = 0.0218, test_acc = 0.8472, max_test_acc = 0.9132
+train speed = 100.7825 images/s, test speed = 122.2284 images/s
+escape time = 2022-05-25 21:30:48
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 24, train_loss = 0.0074, train_acc = 0.9726, test_loss = 0.0165, test_acc = 0.8715, max_test_acc = 0.9132
+train speed = 100.9117 images/s, test speed = 121.4708 images/s
+escape time = 2022-05-25 21:30:47
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 25, train_loss = 0.0069, train_acc = 0.9700, test_loss = 0.0144, test_acc = 0.9132, max_test_acc = 0.9132
+train speed = 100.9581 images/s, test speed = 120.2959 images/s
+escape time = 2022-05-25 21:30:48
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 26, train_loss = 0.0058, train_acc = 0.9803, test_loss = 0.0141, test_acc = 0.9132, max_test_acc = 0.9132
+train speed = 99.6093 images/s, test speed = 119.9019 images/s
+escape time = 2022-05-25 21:30:54
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 27, train_loss = 0.0049, train_acc = 0.9846, test_loss = 0.0134, test_acc = 0.9132, max_test_acc = 0.9132
+train speed = 99.6477 images/s, test speed = 121.7705 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 28, train_loss = 0.0045, train_acc = 0.9829, test_loss = 0.0147, test_acc = 0.8958, max_test_acc = 0.9132
+train speed = 100.2140 images/s, test speed = 120.5132 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 29, train_loss = 0.0043, train_acc = 0.9897, test_loss = 0.0163, test_acc = 0.8819, max_test_acc = 0.9132
+train speed = 100.6450 images/s, test speed = 120.4352 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 30, train_loss = 0.0039, train_acc = 0.9923, test_loss = 0.0141, test_acc = 0.8924, max_test_acc = 0.9132
+train speed = 100.3064 images/s, test speed = 119.2435 images/s
+escape time = 2022-05-25 21:30:52
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 31, train_loss = 0.0035, train_acc = 0.9940, test_loss = 0.0133, test_acc = 0.9132, max_test_acc = 0.9132
+train speed = 100.8604 images/s, test speed = 122.1024 images/s
+escape time = 2022-05-25 21:30:48
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 32, train_loss = 0.0035, train_acc = 0.9897, test_loss = 0.0158, test_acc = 0.8993, max_test_acc = 0.9132
+train speed = 100.2414 images/s, test speed = 117.9307 images/s
+escape time = 2022-05-25 21:30:52
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 33, train_loss = 0.0031, train_acc = 0.9949, test_loss = 0.0132, test_acc = 0.9062, max_test_acc = 0.9132
+train speed = 100.6262 images/s, test speed = 119.7248 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 34, train_loss = 0.0031, train_acc = 0.9932, test_loss = 0.0124, test_acc = 0.9167, max_test_acc = 0.9167
+train speed = 100.0160 images/s, test speed = 121.7948 images/s
+escape time = 2022-05-25 21:30:56
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 35, train_loss = 0.0029, train_acc = 0.9914, test_loss = 0.0127, test_acc = 0.9236, max_test_acc = 0.9236
+train speed = 100.5386 images/s, test speed = 117.9107 images/s
+escape time = 2022-05-25 21:30:53
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 36, train_loss = 0.0023, train_acc = 0.9957, test_loss = 0.0124, test_acc = 0.9132, max_test_acc = 0.9236
+train speed = 100.7215 images/s, test speed = 121.2242 images/s
+escape time = 2022-05-25 21:30:49
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 37, train_loss = 0.0022, train_acc = 0.9974, test_loss = 0.0139, test_acc = 0.8993, max_test_acc = 0.9236
+train speed = 100.3358 images/s, test speed = 121.3785 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 38, train_loss = 0.0024, train_acc = 0.9983, test_loss = 0.0113, test_acc = 0.9271, max_test_acc = 0.9271
+train speed = 100.2098 images/s, test speed = 120.2595 images/s
+escape time = 2022-05-25 21:30:55
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 39, train_loss = 0.0020, train_acc = 0.9974, test_loss = 0.0111, test_acc = 0.9271, max_test_acc = 0.9271
+train speed = 100.2763 images/s, test speed = 117.9119 images/s
+escape time = 2022-05-25 21:30:53
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 40, train_loss = 0.0020, train_acc = 0.9983, test_loss = 0.0120, test_acc = 0.9201, max_test_acc = 0.9271
+train speed = 100.6609 images/s, test speed = 120.0767 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 41, train_loss = 0.0020, train_acc = 0.9974, test_loss = 0.0125, test_acc = 0.9167, max_test_acc = 0.9271
+train speed = 100.8499 images/s, test speed = 121.5567 images/s
+escape time = 2022-05-25 21:30:49
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 42, train_loss = 0.0017, train_acc = 0.9991, test_loss = 0.0109, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.7061 images/s, test speed = 120.6302 images/s
+escape time = 2022-05-25 21:30:53
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 43, train_loss = 0.0016, train_acc = 0.9983, test_loss = 0.0130, test_acc = 0.9201, max_test_acc = 0.9306
+train speed = 100.0491 images/s, test speed = 121.3524 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 44, train_loss = 0.0016, train_acc = 0.9983, test_loss = 0.0109, test_acc = 0.9271, max_test_acc = 0.9306
+train speed = 100.5718 images/s, test speed = 120.9933 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 45, train_loss = 0.0015, train_acc = 0.9991, test_loss = 0.0118, test_acc = 0.9271, max_test_acc = 0.9306
+train speed = 100.3037 images/s, test speed = 120.9340 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 46, train_loss = 0.0013, train_acc = 0.9991, test_loss = 0.0108, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.7601 images/s, test speed = 121.3169 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 47, train_loss = 0.0013, train_acc = 0.9991, test_loss = 0.0104, test_acc = 0.9271, max_test_acc = 0.9306
+train speed = 100.0738 images/s, test speed = 121.0342 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 48, train_loss = 0.0012, train_acc = 0.9991, test_loss = 0.0105, test_acc = 0.9236, max_test_acc = 0.9306
+train speed = 100.9182 images/s, test speed = 121.9193 images/s
+escape time = 2022-05-25 21:30:49
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 49, train_loss = 0.0012, train_acc = 0.9983, test_loss = 0.0111, test_acc = 0.9271, max_test_acc = 0.9306
+train speed = 100.8580 images/s, test speed = 119.9276 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 50, train_loss = 0.0013, train_acc = 0.9991, test_loss = 0.0110, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.6963 images/s, test speed = 121.4650 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 51, train_loss = 0.0013, train_acc = 0.9991, test_loss = 0.0108, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.3837 images/s, test speed = 119.8870 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 52, train_loss = 0.0012, train_acc = 0.9991, test_loss = 0.0107, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.1332 images/s, test speed = 119.6623 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 53, train_loss = 0.0011, train_acc = 0.9983, test_loss = 0.0110, test_acc = 0.9132, max_test_acc = 0.9306
+train speed = 100.8611 images/s, test speed = 119.1377 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 54, train_loss = 0.0012, train_acc = 1.0000, test_loss = 0.0112, test_acc = 0.9271, max_test_acc = 0.9306
+train speed = 100.8274 images/s, test speed = 121.7383 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 55, train_loss = 0.0011, train_acc = 0.9991, test_loss = 0.0109, test_acc = 0.9271, max_test_acc = 0.9306
+train speed = 100.3311 images/s, test speed = 118.4615 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 56, train_loss = 0.0010, train_acc = 0.9991, test_loss = 0.0101, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.7692 images/s, test speed = 119.9165 images/s
+escape time = 2022-05-25 21:30:50
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 57, train_loss = 0.0010, train_acc = 0.9991, test_loss = 0.0103, test_acc = 0.9306, max_test_acc = 0.9306
+train speed = 100.2100 images/s, test speed = 119.6725 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 58, train_loss = 0.0011, train_acc = 0.9991, test_loss = 0.0101, test_acc = 0.9340, max_test_acc = 0.9340
+train speed = 100.3876 images/s, test speed = 116.4733 images/s
+escape time = 2022-05-25 21:30:52
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 59, train_loss = 0.0010, train_acc = 0.9991, test_loss = 0.0110, test_acc = 0.9306, max_test_acc = 0.9340
+train speed = 99.7135 images/s, test speed = 121.1878 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 60, train_loss = 0.0011, train_acc = 0.9983, test_loss = 0.0099, test_acc = 0.9306, max_test_acc = 0.9340
+train speed = 100.5713 images/s, test speed = 120.6284 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 61, train_loss = 0.0009, train_acc = 0.9991, test_loss = 0.0102, test_acc = 0.9306, max_test_acc = 0.9340
+train speed = 100.6810 images/s, test speed = 117.5697 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 62, train_loss = 0.0011, train_acc = 0.9991, test_loss = 0.0102, test_acc = 0.9375, max_test_acc = 0.9375
+train speed = 100.5870 images/s, test speed = 120.1276 images/s
+escape time = 2022-05-25 21:30:51
+
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+./logs/T16_b16_adam_lr0.001_c128_amp_cupy
+epoch = 63, train_loss = 0.0011, train_acc = 0.9991, test_loss = 0.0103, test_acc = 0.9375, max_test_acc = 0.9375
+train speed = 100.4324 images/s, test speed = 121.0402 images/s
+escape time = 2022-05-25 21:30:51
+

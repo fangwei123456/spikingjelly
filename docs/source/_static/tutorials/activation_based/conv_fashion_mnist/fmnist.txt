@@ -1,0 +1,415 @@
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+CSNN(
+  (conv_fc): Sequential(
+    (0): Conv2d(1, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (2): IFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (3): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (4): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False, step_mode=m)
+    (5): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True, step_mode=m)
+    (6): IFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (7): MaxPool2d(kernel_size=2, stride=2, padding=0, dilation=1, ceil_mode=False, step_mode=m)
+    (8): Flatten(start_dim=1, end_dim=-1, step_mode=m)
+    (9): Linear(in_features=6272, out_features=2048, bias=False)
+    (10): IFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+    (11): Linear(in_features=2048, out_features=10, bias=False)
+    (12): IFNode(
+      v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=cupy
+      (surrogate_function): ATan(alpha=2.0, spiking=True)
+    )
+  )
+)
+Mkdir ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy.
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 0, train_loss = 0.0325, train_acc = 0.7875, test_loss = 0.0248, test_acc = 0.8543, max_test_acc = 0.8543
+train speed = 7109.7899 images/s, test speed = 7936.2602 images/s
+escape time = 2022-05-24 21:42:15
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 1, train_loss = 0.0217, train_acc = 0.8734, test_loss = 0.0201, test_acc = 0.8758, max_test_acc = 0.8758
+train speed = 7712.5343 images/s, test speed = 7902.5029 images/s
+escape time = 2022-05-24 21:43:13
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 2, train_loss = 0.0178, train_acc = 0.8905, test_loss = 0.0188, test_acc = 0.8725, max_test_acc = 0.8758
+train speed = 7647.6188 images/s, test speed = 8098.7911 images/s
+escape time = 2022-05-24 21:41:58
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 3, train_loss = 0.0160, train_acc = 0.9015, test_loss = 0.0169, test_acc = 0.8954, max_test_acc = 0.8954
+train speed = 7635.2700 images/s, test speed = 7919.8779 images/s
+escape time = 2022-05-24 21:42:51
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 4, train_loss = 0.0147, train_acc = 0.9104, test_loss = 0.0163, test_acc = 0.8922, max_test_acc = 0.8954
+train speed = 7655.8875 images/s, test speed = 7885.6324 images/s
+escape time = 2022-05-24 21:42:03
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 5, train_loss = 0.0141, train_acc = 0.9135, test_loss = 0.0154, test_acc = 0.8983, max_test_acc = 0.8983
+train speed = 7665.4878 images/s, test speed = 7780.4102 images/s
+escape time = 2022-05-24 21:42:50
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 6, train_loss = 0.0131, train_acc = 0.9209, test_loss = 0.0151, test_acc = 0.9085, max_test_acc = 0.9085
+train speed = 7628.9436 images/s, test speed = 7936.9871 images/s
+escape time = 2022-05-24 21:42:57
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 7, train_loss = 0.0123, train_acc = 0.9265, test_loss = 0.0143, test_acc = 0.9097, max_test_acc = 0.9097
+train speed = 7605.1008 images/s, test speed = 7779.6165 images/s
+escape time = 2022-05-24 21:43:04
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 8, train_loss = 0.0120, train_acc = 0.9284, test_loss = 0.0143, test_acc = 0.9099, max_test_acc = 0.9099
+train speed = 7649.4328 images/s, test speed = 7828.8850 images/s
+escape time = 2022-05-24 21:42:54
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 9, train_loss = 0.0112, train_acc = 0.9337, test_loss = 0.0145, test_acc = 0.8997, max_test_acc = 0.9099
+train speed = 7684.6622 images/s, test speed = 7988.3714 images/s
+escape time = 2022-05-24 21:42:05
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 10, train_loss = 0.0107, train_acc = 0.9376, test_loss = 0.0153, test_acc = 0.8970, max_test_acc = 0.9099
+train speed = 7651.3811 images/s, test speed = 7960.8810 images/s
+escape time = 2022-05-24 21:42:06
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 11, train_loss = 0.0104, train_acc = 0.9391, test_loss = 0.0149, test_acc = 0.9031, max_test_acc = 0.9099
+train speed = 7645.5972 images/s, test speed = 7814.0968 images/s
+escape time = 2022-05-24 21:42:12
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 12, train_loss = 0.0098, train_acc = 0.9434, test_loss = 0.0136, test_acc = 0.9105, max_test_acc = 0.9105
+train speed = 7640.0016 images/s, test speed = 7939.7336 images/s
+escape time = 2022-05-24 21:42:50
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 13, train_loss = 0.0093, train_acc = 0.9473, test_loss = 0.0146, test_acc = 0.9084, max_test_acc = 0.9105
+train speed = 7666.1548 images/s, test speed = 7790.4133 images/s
+escape time = 2022-05-24 21:42:08
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 14, train_loss = 0.0091, train_acc = 0.9491, test_loss = 0.0134, test_acc = 0.9175, max_test_acc = 0.9175
+train speed = 7599.9443 images/s, test speed = 7798.8148 images/s
+escape time = 2022-05-24 21:42:52
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 15, train_loss = 0.0086, train_acc = 0.9520, test_loss = 0.0135, test_acc = 0.9114, max_test_acc = 0.9175
+train speed = 7621.7006 images/s, test speed = 7942.9091 images/s
+escape time = 2022-05-24 21:42:10
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 16, train_loss = 0.0083, train_acc = 0.9541, test_loss = 0.0124, test_acc = 0.9203, max_test_acc = 0.9203
+train speed = 7632.6759 images/s, test speed = 7875.3731 images/s
+escape time = 2022-05-24 21:42:49
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 17, train_loss = 0.0078, train_acc = 0.9588, test_loss = 0.0122, test_acc = 0.9230, max_test_acc = 0.9230
+train speed = 7599.6687 images/s, test speed = 8052.3113 images/s
+escape time = 2022-05-24 21:42:49
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 18, train_loss = 0.0075, train_acc = 0.9608, test_loss = 0.0121, test_acc = 0.9249, max_test_acc = 0.9249
+train speed = 7614.5872 images/s, test speed = 7938.6050 images/s
+escape time = 2022-05-24 21:42:48
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 19, train_loss = 0.0074, train_acc = 0.9610, test_loss = 0.0124, test_acc = 0.9251, max_test_acc = 0.9251
+train speed = 7628.9412 images/s, test speed = 7717.1127 images/s
+escape time = 2022-05-24 21:42:53
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 20, train_loss = 0.0069, train_acc = 0.9647, test_loss = 0.0123, test_acc = 0.9227, max_test_acc = 0.9251
+train speed = 7654.6702 images/s, test speed = 7945.2578 images/s
+escape time = 2022-05-24 21:42:12
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 21, train_loss = 0.0066, train_acc = 0.9660, test_loss = 0.0126, test_acc = 0.9179, max_test_acc = 0.9251
+train speed = 7630.5647 images/s, test speed = 7797.5694 images/s
+escape time = 2022-05-24 21:42:15
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 22, train_loss = 0.0065, train_acc = 0.9674, test_loss = 0.0119, test_acc = 0.9226, max_test_acc = 0.9251
+train speed = 7668.1625 images/s, test speed = 7861.9324 images/s
+escape time = 2022-05-24 21:42:13
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 23, train_loss = 0.0061, train_acc = 0.9693, test_loss = 0.0119, test_acc = 0.9272, max_test_acc = 0.9272
+train speed = 7644.1646 images/s, test speed = 8030.6744 images/s
+escape time = 2022-05-24 21:42:47
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 24, train_loss = 0.0059, train_acc = 0.9719, test_loss = 0.0121, test_acc = 0.9268, max_test_acc = 0.9272
+train speed = 7647.4428 images/s, test speed = 7975.3827 images/s
+escape time = 2022-05-24 21:42:13
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 25, train_loss = 0.0056, train_acc = 0.9735, test_loss = 0.0120, test_acc = 0.9256, max_test_acc = 0.9272
+train speed = 7650.2531 images/s, test speed = 7983.5513 images/s
+escape time = 2022-05-24 21:42:13
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 26, train_loss = 0.0054, train_acc = 0.9749, test_loss = 0.0118, test_acc = 0.9264, max_test_acc = 0.9272
+train speed = 7636.5069 images/s, test speed = 7945.2970 images/s
+escape time = 2022-05-24 21:42:13
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 27, train_loss = 0.0052, train_acc = 0.9760, test_loss = 0.0117, test_acc = 0.9252, max_test_acc = 0.9272
+train speed = 7650.8576 images/s, test speed = 7928.7650 images/s
+escape time = 2022-05-24 21:42:13
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 28, train_loss = 0.0050, train_acc = 0.9774, test_loss = 0.0116, test_acc = 0.9288, max_test_acc = 0.9288
+train speed = 7674.0057 images/s, test speed = 7816.4880 images/s
+escape time = 2022-05-24 21:42:42
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 29, train_loss = 0.0048, train_acc = 0.9791, test_loss = 0.0114, test_acc = 0.9272, max_test_acc = 0.9288
+train speed = 7626.6783 images/s, test speed = 7925.6202 images/s
+escape time = 2022-05-24 21:42:14
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 30, train_loss = 0.0046, train_acc = 0.9810, test_loss = 0.0115, test_acc = 0.9258, max_test_acc = 0.9288
+train speed = 7630.7269 images/s, test speed = 7773.5492 images/s
+escape time = 2022-05-24 21:42:15
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 31, train_loss = 0.0044, train_acc = 0.9820, test_loss = 0.0114, test_acc = 0.9282, max_test_acc = 0.9288
+train speed = 7653.1964 images/s, test speed = 7818.3122 images/s
+escape time = 2022-05-24 21:42:14
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 32, train_loss = 0.0042, train_acc = 0.9835, test_loss = 0.0117, test_acc = 0.9251, max_test_acc = 0.9288
+train speed = 7649.5101 images/s, test speed = 7834.4902 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 33, train_loss = 0.0041, train_acc = 0.9839, test_loss = 0.0117, test_acc = 0.9232, max_test_acc = 0.9288
+train speed = 7658.2206 images/s, test speed = 7892.7254 images/s
+escape time = 2022-05-24 21:42:14
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 34, train_loss = 0.0039, train_acc = 0.9852, test_loss = 0.0117, test_acc = 0.9261, max_test_acc = 0.9288
+train speed = 7634.6756 images/s, test speed = 7796.8330 images/s
+escape time = 2022-05-24 21:42:15
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 35, train_loss = 0.0038, train_acc = 0.9865, test_loss = 0.0117, test_acc = 0.9292, max_test_acc = 0.9292
+train speed = 7633.5407 images/s, test speed = 7910.7631 images/s
+escape time = 2022-05-24 21:42:38
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 36, train_loss = 0.0037, train_acc = 0.9869, test_loss = 0.0115, test_acc = 0.9270, max_test_acc = 0.9292
+train speed = 7672.2477 images/s, test speed = 7908.4019 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 37, train_loss = 0.0036, train_acc = 0.9875, test_loss = 0.0114, test_acc = 0.9277, max_test_acc = 0.9292
+train speed = 7603.4127 images/s, test speed = 7907.3762 images/s
+escape time = 2022-05-24 21:42:18
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 38, train_loss = 0.0034, train_acc = 0.9888, test_loss = 0.0115, test_acc = 0.9258, max_test_acc = 0.9292
+train speed = 7641.1531 images/s, test speed = 7814.0386 images/s
+escape time = 2022-05-24 21:42:18
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 39, train_loss = 0.0033, train_acc = 0.9891, test_loss = 0.0112, test_acc = 0.9308, max_test_acc = 0.9308
+train speed = 7659.5382 images/s, test speed = 7861.6215 images/s
+escape time = 2022-05-24 21:42:36
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 40, train_loss = 0.0032, train_acc = 0.9899, test_loss = 0.0113, test_acc = 0.9287, max_test_acc = 0.9308
+train speed = 7637.5408 images/s, test speed = 7842.6982 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 41, train_loss = 0.0032, train_acc = 0.9903, test_loss = 0.0115, test_acc = 0.9304, max_test_acc = 0.9308
+train speed = 7670.0054 images/s, test speed = 7916.4981 images/s
+escape time = 2022-05-24 21:42:18
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 42, train_loss = 0.0030, train_acc = 0.9905, test_loss = 0.0112, test_acc = 0.9277, max_test_acc = 0.9308
+train speed = 7643.8306 images/s, test speed = 7837.8955 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 43, train_loss = 0.0030, train_acc = 0.9909, test_loss = 0.0113, test_acc = 0.9277, max_test_acc = 0.9308
+train speed = 7676.4898 images/s, test speed = 7939.9665 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 44, train_loss = 0.0029, train_acc = 0.9914, test_loss = 0.0113, test_acc = 0.9289, max_test_acc = 0.9308
+train speed = 7644.9961 images/s, test speed = 7940.7392 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 45, train_loss = 0.0028, train_acc = 0.9920, test_loss = 0.0112, test_acc = 0.9293, max_test_acc = 0.9308
+train speed = 7631.7447 images/s, test speed = 7737.5390 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 46, train_loss = 0.0028, train_acc = 0.9923, test_loss = 0.0113, test_acc = 0.9289, max_test_acc = 0.9308
+train speed = 7660.5275 images/s, test speed = 8016.1443 images/s
+escape time = 2022-05-24 21:42:15
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 47, train_loss = 0.0028, train_acc = 0.9923, test_loss = 0.0113, test_acc = 0.9275, max_test_acc = 0.9308
+train speed = 7633.6696 images/s, test speed = 7864.5933 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 48, train_loss = 0.0027, train_acc = 0.9928, test_loss = 0.0115, test_acc = 0.9270, max_test_acc = 0.9308
+train speed = 7647.6290 images/s, test speed = 7886.8824 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 49, train_loss = 0.0026, train_acc = 0.9930, test_loss = 0.0116, test_acc = 0.9271, max_test_acc = 0.9308
+train speed = 7648.1102 images/s, test speed = 8016.9349 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 50, train_loss = 0.0026, train_acc = 0.9933, test_loss = 0.0111, test_acc = 0.9295, max_test_acc = 0.9308
+train speed = 7641.4778 images/s, test speed = 7872.8084 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 51, train_loss = 0.0025, train_acc = 0.9935, test_loss = 0.0111, test_acc = 0.9292, max_test_acc = 0.9308
+train speed = 7652.6631 images/s, test speed = 7975.8210 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 52, train_loss = 0.0025, train_acc = 0.9932, test_loss = 0.0111, test_acc = 0.9300, max_test_acc = 0.9308
+train speed = 7646.8712 images/s, test speed = 7895.5647 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 53, train_loss = 0.0025, train_acc = 0.9934, test_loss = 0.0111, test_acc = 0.9289, max_test_acc = 0.9308
+train speed = 7649.0953 images/s, test speed = 7828.1369 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 54, train_loss = 0.0025, train_acc = 0.9937, test_loss = 0.0113, test_acc = 0.9291, max_test_acc = 0.9308
+train speed = 7639.9150 images/s, test speed = 8020.7200 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 55, train_loss = 0.0024, train_acc = 0.9938, test_loss = 0.0112, test_acc = 0.9273, max_test_acc = 0.9308
+train speed = 7631.6478 images/s, test speed = 8004.4336 images/s
+escape time = 2022-05-24 21:42:17
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 56, train_loss = 0.0024, train_acc = 0.9940, test_loss = 0.0112, test_acc = 0.9285, max_test_acc = 0.9308
+train speed = 7693.8059 images/s, test speed = 8071.6737 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 57, train_loss = 0.0024, train_acc = 0.9939, test_loss = 0.0113, test_acc = 0.9283, max_test_acc = 0.9308
+train speed = 7629.0953 images/s, test speed = 7965.9536 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 58, train_loss = 0.0024, train_acc = 0.9942, test_loss = 0.0112, test_acc = 0.9275, max_test_acc = 0.9308
+train speed = 7640.4024 images/s, test speed = 7958.2890 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 59, train_loss = 0.0024, train_acc = 0.9942, test_loss = 0.0111, test_acc = 0.9296, max_test_acc = 0.9308
+train speed = 7640.5685 images/s, test speed = 7901.1795 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 60, train_loss = 0.0024, train_acc = 0.9942, test_loss = 0.0112, test_acc = 0.9296, max_test_acc = 0.9308
+train speed = 7661.5798 images/s, test speed = 7779.0322 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 61, train_loss = 0.0023, train_acc = 0.9944, test_loss = 0.0112, test_acc = 0.9282, max_test_acc = 0.9308
+train speed = 7655.8441 images/s, test speed = 7997.9863 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 62, train_loss = 0.0024, train_acc = 0.9941, test_loss = 0.0112, test_acc = 0.9299, max_test_acc = 0.9308
+train speed = 7648.7067 images/s, test speed = 7919.7538 images/s
+escape time = 2022-05-24 21:42:16
+
+Namespace(T=4, device='cuda:0', b=256, epochs=64, j=8, data_dir='/datasets/FashionMNIST/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='sgd', momentum=0.9, lr=0.1, channels=128)
+./logs/T4_b256_sgd_lr0.1_c128_amp_cupy
+epoch = 63, train_loss = 0.0024, train_acc = 0.9941, test_loss = 0.0113, test_acc = 0.9283, max_test_acc = 0.9308
+train speed = 7627.8147 images/s, test speed = 7868.9090 images/s
+escape time = 2022-05-24 21:42:16
+

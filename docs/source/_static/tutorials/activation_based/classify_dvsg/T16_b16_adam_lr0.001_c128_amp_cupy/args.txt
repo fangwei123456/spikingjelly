@@ -1,0 +1,2 @@
+Namespace(T=16, device='cuda:0', b=16, epochs=64, j=8, data_dir='/datasets/DVSGesture/', out_dir='./logs', resume=None, amp=True, cupy=True, opt='adam', momentum=0.9, lr=0.001, channels=128)
+/home/wfang/spikingjelly_dev/spikingjelly/spikingjelly/activation_based/examples/classify_dvsg.py -T 16 -device cuda:0 -b 16 -T 16 -epochs 64 -data-dir /datasets/DVSGesture/ -amp -cupy -opt adam -lr 0.001 -j 8

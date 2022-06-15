@@ -53,30 +53,18 @@ If you use an old version of SpikingJelly, you may meet some fatal bugs. Refer t
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
 
 ```python
-class Net(nn.Module):
-    def __init__(self, tau=100.0, v_threshold=1.0, v_reset=0.0):
-        super().__init__()
-        # Network structure, a simple two-layer fully connected network, each layer is followed by LIF neurons
-        self.fc = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 14 * 14, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset),
-            nn.Linear(14 * 14, 10, bias=False),
-            neuron.LIFNode(tau=tau, v_threshold=v_threshold, v_reset=v_reset)
+nn.Sequential(
+        layer.Flatten(),
+        layer.Linear(28 * 28, 10, bias=False),
+        neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
         )
-
-    def forward(self, x):
-        return self.fc(x)
 ```
 
-This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial_en.clock_driven.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
+This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial_en.activation_based.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
->>> import spikingjelly.clock_driven.examples.lif_fc_mnist as lif_fc_mnist
->>> lif_fc_mnist.main()
+python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
 ```
-
-Read [spikingjelly.clock_driven.examples](https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.clock_driven.examples.html) to explore more advanced networks!
 
 ## Fast And Handy ANN-SNN Conversion
 
@@ -111,10 +99,10 @@ class ANN(nn.Module):
         return x
 ```
 
-This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
+This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
 
 ```python
->>> import spikingjelly.clock_driven.ann2snn.examples.cnn_mnist as cnn_mnist
+>>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
 >>> cnn_mnist.main()
 ```
 
@@ -124,7 +112,7 @@ SpikingJelly provides two backends for multi-step neurons (read [Tutorials](#Tut
 
 The followed figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
 
-<img src="./docs/source/_static/tutorials/clock_driven/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+<img src="./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
 `float16` is also provided by the `cupy` backend and can be used in [automatic mixed precision training](https://pytorch.org/docs/stable/notes/amp_examples.html).
 
@@ -138,7 +126,7 @@ To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable
 As simple as using PyTorch.
 
 ```python
->>> net = nn.Sequential(nn.Flatten(), nn.Linear(28 * 28, 10, bias=False), neuron.LIFNode(tau=tau))
+>>> net = nn.Sequential(layer.Flatten(), layer.Linear(28 * 28, 10, bias=False), neuron.LIFNode(tau=tau))
 >>> net = net.to(device) # Can be CPU or CUDA devices
 ```
 
@@ -225,16 +213,16 @@ SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 
 | Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![t0](./docs/source/_static/tutorials/clock_driven/0_neuron/0.png) | [Neurons](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/0_neuron.html) |
-| ![t2](./docs/source/_static/tutorials/clock_driven/2_encoding/5.png) | [Encoder](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/2_encoding.html) |
-| ![t3](./docs/source/_static/tutorials/clock_driven/3_fc_mnist/2d_heatmap.png) | [Use single-layer fully connected SNN to identify MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/3_fc_mnist.html) |
-| ![t4](./docs/source/_static/tutorials/clock_driven/4_conv_fashion_mnist/y10.png) | [Use convolutional SNN to identify Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/4_conv_fashion_mnist.html) |
-| ![t5](./docs/source/_static/tutorials/clock_driven/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/5_ann2snn.html) |
-| ![t6](./docs/source/_static/tutorials/clock_driven/6_dqn_cart_pole/512@66.gif) | [Reinforcement Learning: Deep Q Learning](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/6_dqn_cart_pole.html) |
-| ![t10](./docs/source/_static/tutorials/clock_driven/10_propagation_pattern/layer-by-layer.png) | [Propagation Pattern](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/10_propagation_pattern.html) |
-| ![t13](./docs/source/_static/tutorials/clock_driven/13_neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/13_neuromorphic_datasets.html) |
-| ![t14](./docs/source/_static/tutorials/clock_driven/14_classify_dvsg/network.png) | [Classify DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/14_classify_dvsg.html) |
-| ![t15](./docs/source/_static/tutorials/clock_driven/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [Recurrent Connections and Stateful Synapses](https://spikingjelly.readthedocs.io/zh_CN/latest/clock_driven_en/15_recurrent_connection_and_stateful_synapse.html) |
+| ![t0](./docs/source/_static/tutorials/activation_based/0_neuron/0.png) | [Neurons](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/0_neuron.html) |
+| ![t2](./docs/source/_static/tutorials/activation_based/2_encoding/5.png) | [Encoder](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/2_encoding.html) |
+| ![t3](./docs/source/_static/tutorials/activation_based/3_fc_mnist/2d_heatmap.png) | [Use single-layer fully connected SNN to identify MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/3_fc_mnist.html) |
+| ![t4](./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/y10.png) | [Use convolutional SNN to identify Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/4_conv_fashion_mnist.html) |
+| ![t5](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/5_ann2snn.html) |
+| ![t6](./docs/source/_static/tutorials/activation_based/6_dqn_cart_pole/512@66.gif) | [Reinforcement Learning: Deep Q Learning](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/6_dqn_cart_pole.html) |
+| ![t10](./docs/source/_static/tutorials/activation_based/10_propagation_pattern/layer-by-layer.png) | [Propagation Pattern](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/10_propagation_pattern.html) |
+| ![t13](./docs/source/_static/tutorials/activation_based/13_neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/13_neuromorphic_datasets.html) |
+| ![t14](./docs/source/_static/tutorials/activation_based/14_classify_dvsg/network.png) | [Classify DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/14_classify_dvsg.html) |
+| ![t15](./docs/source/_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [Recurrent Connections and Stateful Synapses](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/15_recurrent_connection_and_stateful_synapse.html) |
 
 Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
 

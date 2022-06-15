@@ -4,7 +4,7 @@ import numpy as np
 
 
 def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                    plot_colorbar=True, colorbar_y_label='magnitude', x_max=None, dpi=200):
+                    plot_colorbar=True, colorbar_y_label='magnitude', x_max=None, figsize=(12, 8), dpi=200):
     '''
     :param array: shape=[T, N]的任意数组
     :param title: 热力图的标题
@@ -23,7 +23,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     .. code-block:: python
 
         import torch
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
         import numpy as np
@@ -51,7 +51,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
     if array.ndim != 2:
         raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
 
-    fig, heatmap = plt.subplots(dpi=dpi)
+    fig, heatmap = plt.subplots(figsize=figsize, dpi=dpi)
     if x_max is not None:
         im = heatmap.imshow(array.T, aspect='auto', extent=[-0.5, x_max, array.shape[1] - 0.5, -0.5])
     else:
@@ -113,7 +113,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
         import torch
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
 
         neuron_num = 4
         T = 50
@@ -154,7 +154,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     return fig
 
 def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                   plot_firing_rate=True, firing_rate_map_title='Firing Rate', dpi=200):
+                   plot_firing_rate=True, firing_rate_map_title='firing rate', figsize=(12, 8), dpi=200):
     '''
 
 
@@ -174,7 +174,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     .. code-block:: python
 
         import torch
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
         import numpy as np
@@ -204,7 +204,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
 
     spikes_T = spikes.T
     if plot_firing_rate:
-        fig = plt.figure(tight_layout=True, dpi=dpi)
+        fig = plt.figure(tight_layout=True, figsize=figsize, dpi=dpi)
         gs = matplotlib.gridspec.GridSpec(1, 5)
         spikes_map = fig.add_subplot(gs[0, 0:4])
         firing_rate_map = fig.add_subplot(gs[0, 4])
@@ -250,17 +250,18 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         firing_rate_map.set_title(firing_rate_map_title)
     return fig
 
-def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: str, dpi=200):
+def plot_2d_feature_map(x3d: np.asarray, nrows, ncols, space, title: str, figsize=(12, 8), dpi=200):
     '''
-    :param spikes: shape=[C, W, H]，C个尺寸为W * H的脉冲矩阵，矩阵中的元素为0或1。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
+    :param x3d: shape=[C, W, H]，C个尺寸为W * H的矩阵。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
     :param nrows: 画成多少行
     :param ncols: 画成多少列
     :param space: 矩阵之间的间隙
     :param title: 图的标题
+    :param figsize: 图片大小
     :param dpi: 绘图的dpi
     :return: 一个figure，将C个矩阵全部画出，然后排列成nrows行ncols列
 
-    将C个尺寸为W * H的脉冲矩阵，全部画出，然后排列成nrows行ncols列。这样的矩阵一般来源于卷积层后的脉冲神经元的输出，通过这个函数\\
+    将C个尺寸为W * H的矩阵，全部画出，然后排列成nrows行ncols列。这样的矩阵一般来源于卷积层后的脉冲神经元的输出，通过这个函数\\
     可以对输出进行可视化。示例代码：
 
     .. code-block:: python
@@ -273,29 +274,29 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
         W = 8
         H = 8
         spikes = (np.random.rand(C, W, H) > 0.8).astype(float)
-        visualizing.plot_2d_spiking_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='Spiking Feature Maps', dpi=200)
+        visualizing.plot_2d_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='Spiking Feature Maps', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_spiking_feature_map.*
+    .. image:: ./_static/API/visualizing/plot_2d_feature_map.*
         :width: 100%
 
     '''
-    if spikes.ndim != 3:
-        raise ValueError(f"Expected 3D array, got {spikes.ndim}D array instead")
+    if x3d.ndim != 3:
+        raise ValueError(f"Expected 3D array, got {x3d.ndim}D array instead")
 
-    C = spikes.shape[0]
+    C = x3d.shape[0]
 
     assert nrows * ncols == C, 'nrows * ncols != C'
 
-    h = spikes.shape[1]
-    w = spikes.shape[2]
-    y = np.ones(shape=[(h + space) * nrows, (w + space) * ncols]) * spikes.max().item()
+    h = x3d.shape[1]
+    w = x3d.shape[2]
+    y = np.ones(shape=[(h + space) * nrows, (w + space) * ncols]) * x3d.max().item()
     index = 0
     for i in range(space // 2, y.shape[0], h + space):
         for j in range(space // 2, y.shape[1], w + space):
-            y[i:i + h, j:j + w] = spikes[index]
+            y[i:i + h, j:j + w] = x3d[index]
             index += 1
-    fig, maps = plt.subplots(dpi=dpi)
+    fig, maps = plt.subplots(figsize=figsize, dpi=dpi)
     maps.set_title(title)
     maps.imshow(y, cmap='gray')
 
@@ -304,7 +305,7 @@ def plot_2d_spiking_feature_map(spikes: np.asarray, nrows, ncols, space, title: 
     return fig, maps
 
 def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0.0,
-                        title='$V_{t}$ and $S_{t}$ of the neuron', dpi=200):
+                        title='$V[t]$ and $S[t]$ of the neuron', figsize=(12, 8), dpi=200):
     '''
     :param v: shape=[T], 存放神经元不同时刻的电压
     :param s: shape=[T], 存放神经元不同时刻释放的脉冲
@@ -319,7 +320,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     .. code-block:: python
 
         import torch
-        from spikingjelly.clock_driven import neuron
+        from spikingjelly.activation_based import neuron
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
 
@@ -338,7 +339,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     .. image:: ./_static/API/visualizing/plot_one_neuron_v_s.*
         :width: 100%
     '''
-    fig = plt.figure(dpi=dpi)
+    fig = plt.figure(figsize=figsize, dpi=dpi)
     ax0 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax0.set_title(title)
     T = s.shape[0]
@@ -349,7 +350,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     ax0.axhline(v_threshold, label='$V_{threshold}$', linestyle='-.', c='r')
     if v_reset is not None:
         ax0.axhline(v_reset, label='$V_{reset}$', linestyle='-.', c='g')
-    ax0.legend()
+    ax0.legend(frameon=True)
     t_spike = s * t
     mask = (s == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
     ax1 = plt.subplot2grid((3, 1), (2, 0))

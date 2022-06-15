@@ -43,24 +43,18 @@
     :maxdepth: 1
     :caption: 上手教程
 
-    tutorial.clock_driven
-    tutorial.event_driven
-    /clock_driven/0_neuron
-    /clock_driven/2_encoding
-    /clock_driven/3_fc_mnist
-    /clock_driven/4_conv_fashion_mnist
-    /clock_driven/5_ann2snn
-    /clock_driven/6_dqn_cart_pole
-    /clock_driven/7_a2c_cart_pole
-    /clock_driven/8_ppo_cart_pole
-    /clock_driven/9_spikingLSTM_text
-    /clock_driven/10_propagation_pattern
-    /clock_driven/11_cext_neuron_with_lbl
-    /clock_driven/12_monitor
-    /clock_driven/13_neuromorphic_datasets
-    /clock_driven/14_classify_dvsg
-    /clock_driven/15_recurrent_connection_and_stateful_synapse
-    /clock_driven/16_train_large_scale_snn
+    /activation_based/migrate_from_legency
+    /activation_based/basic_concept
+    /activation_based/container
+    /activation_based/neuron
+    /activation_based/surrogate
+    /activation_based/monitor
+    /activation_based/lif_fc_mnist
+    /activation_based/conv_fashion_mnist
+    /activation_based/neuromorphic_datasets
+    /activation_based/classify_dvsg
+    /activation_based/recurrent_connection_and_stateful_synapse
+    /activation_based/train_large_scale_snn
 
 
 模块文档
@@ -157,22 +151,19 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :maxdepth: 1
     :caption: Tutorials
 
-    tutorial_en.clock_driven
-    /clock_driven_en/0_neuron
-    /clock_driven_en/2_encoding
-    /clock_driven_en/3_fc_mnist
-    /clock_driven_en/4_conv_fashion_mnist
-    /clock_driven_en/5_ann2snn
-    /clock_driven_en/6_dqn_cart_pole
-    /clock_driven_en/7_a2c_cart_pole
-    /clock_driven_en/8_ppo_cart_pole
-    /clock_driven_en/9_spikingLSTM_text
-    /clock_driven_en/10_propagation_pattern
-    /clock_driven_en/11_cext_neuron_with_lbl
-    /clock_driven_en/13_neuromorphic_datasets
-    /clock_driven_en/14_classify_dvsg
-    /clock_driven_en/15_recurrent_connection_and_stateful_synapse
-    /clock_driven_en/16_train_large_scale_snn
+    /activation_based_en/migrate_from_legency
+    /activation_based_en/basic_concept
+    /activation_based_en/container
+    /activation_based_en/neuron
+    /activation_based_en/surrogate
+    /activation_based_en/monitor
+    .. /activation_based_en/lif_fc_mnist
+    /activation_based_en/conv_fashion_mnist
+    /activation_based_en/neuromorphic_datasets
+    /activation_based_en/classify_dvsg
+    /activation_based_en/recurrent_connection_and_stateful_synapse
+    /activation_based_en/train_large_scale_snn
+
 
 
 
@@ -224,8 +215,7 @@ The list of developers can be found at `contributors <https://github.com/fangwei
    :maxdepth: 4
    :caption: APIs
 
-   spikingjelly.clock_driven
+   spikingjelly.activation_based
    spikingjelly.datasets
-   spikingjelly.event_driven
+   spikingjelly.timing_based
    spikingjelly.visualizing
-   spikingjelly.cext
