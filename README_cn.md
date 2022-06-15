@@ -215,14 +215,14 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
 | 图例                                                         | 教程                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [基本概念](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/basic_concept.html) |
-| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/neuron.html) |
-| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/lif_fc_mnist.html) |
-| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/conv_fashion_mnist.html) |
-| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html) |
-| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/neuromorphic_datasets.html) |
-| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/classify_dvsg.html) |
-| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/fuse_ms/activation_based/recurrent_connection_and_stateful_synapse.html) |
+| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [基本概念](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/basic_concept.html) |
+| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/neuron.html) |
+| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/lif_fc_mnist.html) |
+| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/conv_fashion_mnist.html) |
+| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN(老版本教程，新版编写中)](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven/5_ann2snn.html) |
+| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/neuromorphic_datasets.html) |
+| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/classify_dvsg.html) |
+| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/recurrent_connection_and_stateful_synapse.html) |
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 

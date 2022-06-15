@@ -211,18 +211,16 @@ All datasets saved in the OpenI mirror are allowable by their licence or authors
 
 SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 
-| Figure                                                       | Tutorial                                                     |
+| Figure                                                         | Tutorial                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![t0](./docs/source/_static/tutorials/activation_based/0_neuron/0.png) | [Neurons](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/0_neuron.html) |
-| ![t2](./docs/source/_static/tutorials/activation_based/2_encoding/5.png) | [Encoder](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/2_encoding.html) |
-| ![t3](./docs/source/_static/tutorials/activation_based/3_fc_mnist/2d_heatmap.png) | [Use single-layer fully connected SNN to identify MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/3_fc_mnist.html) |
-| ![t4](./docs/source/_static/tutorials/activation_based/4_conv_fashion_mnist/y10.png) | [Use convolutional SNN to identify Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/4_conv_fashion_mnist.html) |
-| ![t5](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/5_ann2snn.html) |
-| ![t6](./docs/source/_static/tutorials/activation_based/6_dqn_cart_pole/512@66.gif) | [Reinforcement Learning: Deep Q Learning](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/6_dqn_cart_pole.html) |
-| ![t10](./docs/source/_static/tutorials/activation_based/10_propagation_pattern/layer-by-layer.png) | [Propagation Pattern](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/10_propagation_pattern.html) |
-| ![t13](./docs/source/_static/tutorials/activation_based/13_neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/13_neuromorphic_datasets.html) |
-| ![t14](./docs/source/_static/tutorials/activation_based/14_classify_dvsg/network.png) | [Classify DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/14_classify_dvsg.html) |
-| ![t15](./docs/source/_static/tutorials/activation_based/15_recurrent_connection_and_stateful_synapse/SRNN_example.png) | [Recurrent Connections and Stateful Synapses](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/15_recurrent_connection_and_stateful_synapse.html) |
+| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/basic_concept.html) |
+| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/neuron.html) |
+| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [Use single-layer fully connected SNN to identify MNIST(old version, the new version is under developing)](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/3_fc_mnist.html) |
+| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [Convolutional SNN to Classify FMNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/conv_fashion_mnist.html) |
+| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN(old version, the new version is under developing)](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/5_ann2snn.html) |
+| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/neuromorphic_datasets.html) |
+| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/classify_dvsg.html) |
+| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
 
 Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
 
