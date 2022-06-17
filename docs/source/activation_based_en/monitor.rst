@@ -46,7 +46,7 @@ We can get the recorded data by ``.records``:
 
     with torch.no_grad():
         net(x_seq)
-        print(f'spike_seq_monitor_monitor.records=\n{spike_seq_monitor.records}')
+        print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
         functional.reset_net(net)
         del spike_seq_monitor
 
@@ -54,7 +54,7 @@ The outputs are:
 
 .. code-block:: shell
 
-    spike_seq_monitor_monitor.records=
+    spike_seq_monitor.records=
     [tensor([[[0., 0., 0., 0.]],
 
             [[1., 1., 1., 1.]],
