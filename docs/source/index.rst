@@ -8,6 +8,12 @@
 
 * :ref:`Homepage in English <index_en>`
 
+注意
+----------------
+此文档为最新的开发版的文档，如果你使用的是稳定版（例如从PIP安装的就是稳定版），请跳转到稳定版文档：
+
+https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
+
 安装
 ----------------
 
@@ -114,6 +120,12 @@ Welcome to SpikingJelly's documentation
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
 
 * :ref:`中文首页 <index>`
+
+Notification
+----------------
+This doc is for the latest developing version. If you use the stable version (e.g., install from PIP), please use the doc for the stable version:
+
+https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
 
 Installation
 ----------------
