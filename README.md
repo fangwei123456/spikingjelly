@@ -24,7 +24,9 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
-The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
+The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI. 
+
+Note that the default doc is for the latest developing version. If you are using the  stable version, do not forget to switch to the doc in the corresponding version: https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/.
 
 **Install the last stable version from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
