@@ -45,8 +45,6 @@ In the new version of SpikingJelly, all modules are single-step modules by defau
 
     lif = neuron.LIFNode()
 
-在老版本的SpikingJelly中，若想使用多步LIF神经元，是按照如下方式：
-
 In the old version of SpikingJelly, if we want to use the LIF neuron with multi-step, we should write codes as:
 
 .. code-block:: python
