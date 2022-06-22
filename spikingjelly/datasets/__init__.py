@@ -9,7 +9,6 @@ import torch.utils.data
 import os
 from concurrent.futures import ThreadPoolExecutor
 import time
-import multiprocessing
 from torchvision import transforms
 import torch
 from matplotlib import pyplot as plt
@@ -17,11 +16,12 @@ import math
 import tqdm
 import shutil
 from .. import configure
+import logging
 np_savez = np.savez_compressed if configure.save_datasets_compressed else np.savez
 
 try:
     import cupy
-    from ..clock_driven import cu_kernel_opt
+    from ..activation_based import cuda_utils
 
     padded_sequence_mask_kernel_code = r'''
     extern "C" __global__
@@ -38,7 +38,7 @@ try:
             }
     '''
 except BaseException as e:
-    print('spikingjelly.dataset.__init__:', e)
+    logging.info(f'spikingjelly.dataset.__init__: {e}')
     cupy = None
     pass
 
@@ -92,7 +92,6 @@ def load_aedat_v3(file_name: str) -> Dict:
     :type file_name: str
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: Dict
-
     This function is written by referring to https://gitlab.com/inivation/dv/dv-python . It can be used for DVS128 Gesture.
     '''
     with open(file_name, 'rb') as bin_f:
@@ -157,19 +156,12 @@ def load_ATIS_bin(file_name: str) -> Dict:
     :type file_name: str
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: Dict
-
     This function is written by referring to https://github.com/jackd/events-tfds .
-
     Each ATIS binary example is a separate binary file consisting of a list of events. Each event occupies 40 bits as described below:
-
     bit 39 - 32: Xaddress (in pixels)
-
     bit 31 - 24: Yaddress (in pixels)
-
     bit 23: Polarity (0 for OFF, 1 for ON)
-
     bit 22 - 0: Timestamp (in microseconds)
-
     '''
     with open(file_name, 'rb') as bin_f:
         # `& 128` 是取一个8位二进制数的最高位
@@ -190,12 +182,16 @@ def load_npz_frames(file_name: str) -> np.ndarray:
     :return: frames
     :rtype: np.ndarray
     '''
-    return np.load(file_name, allow_pickle=True)['frames']
+    return np.load(file_name, allow_pickle=True)['frames'].astype(np.float32)
 
-def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
+def integrate_events_segment_to_frame(x: np.ndarray, y: np.ndarray, p: np.ndarray, H: int, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
     '''
-    :param events: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-    :type events: Dict
+    :param x: x-coordinate of events
+    :type x: numpy.ndarray
+    :param y: y-coordinate of events
+    :type y: numpy.ndarray
+    :param p: polarity of events
+    :type p: numpy.ndarray
     :param H: height of the frame
     :type H: int
     :param W: weight of the frame
@@ -206,13 +202,9 @@ def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0
     :type j_r:
     :return: frames
     :rtype: np.ndarray
-
     Denote a two channels frame as :math:`F` and a pixel at :math:`(p, x, y)` as :math:`F(p, x, y)`, the pixel value is integrated from the events data whose indices are in :math:`[j_{l}, j_{r})`:
-
     .. math::
-
         F(p, x, y) = \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
-
     where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
     '''
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
@@ -254,9 +246,9 @@ def integrate_events_segment_to_frame(events: Dict, H: int, W: int, j_l: int = 0
     # print('correct accumulation by bincount\n', frames)
 
     frame = np.zeros(shape=[2, H * W])
-    x = events['x'][j_l: j_r].astype(int)  # avoid overflow
-    y = events['y'][j_l: j_r].astype(int)
-    p = events['p'][j_l: j_r]
+    x = x[j_l: j_r].astype(int)  # avoid overflow
+    y = y[j_l: j_r].astype(int)
+    p = p[j_l: j_r]
     mask = []
     mask.append(p == 0)
     mask.append(np.logical_not(mask[0]))
@@ -276,17 +268,12 @@ def cal_fixed_frames_number_segment_index(events_t: np.ndarray, split_by: str, f
     :type frames_num: int
     :return: a tuple ``(j_l, j_r)``
     :rtype: tuple
-
     Denote ``frames_num`` as :math:`M`, if ``split_by`` is ``'time'``, then
-
     .. math::
-
         \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
         j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
-
     If ``split_by`` is ``'number'``, then
-
     .. math::
         j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
         j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
@@ -333,13 +320,13 @@ def integrate_events_by_fixed_frames_number(events: Dict, split_by: str, frames_
     :type W: int
     :return: frames
     :rtype: np.ndarray
-
     Integrate events to frames by fixed frames number. See :class:`cal_fixed_frames_number_segment_index` and :class:`integrate_events_segment_to_frame` for more details.
     '''
-    j_l, j_r = cal_fixed_frames_number_segment_index(events['t'], split_by, frames_num)
+    t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
+    j_l, j_r = cal_fixed_frames_number_segment_index(t, split_by, frames_num)
     frames = np.zeros([frames_num, 2, H, W])
     for i in range(frames_num):
-        frames[i] = integrate_events_segment_to_frame(events, H, W, j_l[i], j_r[i])
+        frames[i] = integrate_events_segment_to_frame(x, y, p, H, W, j_l[i], j_r[i])
     return frames
 
 def integrate_events_file_to_frames_file_by_fixed_frames_number(loader: Callable, events_np_file: str, output_dir: str, split_by: str, frames_num: int, H: int, W: int, print_save: bool = False) -> None:
@@ -361,7 +348,6 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(loader: Callable
     :param print_save: If ``True``, this function will print saved files' paths.
     :type print_save: bool
     :return: None
-
     Integrate a events file to frames by fixed frames number and save it. See :class:`cal_fixed_frames_number_segment_index` and :class:`integrate_events_segment_to_frame` for more details.
     '''
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
@@ -383,10 +369,12 @@ def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: i
     :type W: int
     :return: frames
     :rtype: np.ndarray
-
     Integrate events to frames by fixed time duration of each frame.
     '''
+    x = events['x']
+    y = events['y']
     t = events['t']
+    p = events['p']
     N = t.size
 
     frames = []
@@ -400,7 +388,7 @@ def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: i
             else:
                 right += 1
         # integrate from index [left, right)
-        frames.append(np.expand_dims(integrate_events_segment_to_frame(events, H, W, left, right), 0))
+        frames.append(np.expand_dims(integrate_events_segment_to_frame(x, y, p, H, W, left, right), 0))
 
         left = right
 
@@ -424,7 +412,6 @@ def integrate_events_file_to_frames_file_by_fixed_duration(loader: Callable, eve
     :param print_save: If ``True``, this function will print saved files' paths.
     :type print_save: bool
     :return: None
-
     Integrate events to frames by fixed time duration of each frame.
     '''
     frames = integrate_events_by_fixed_duration(loader(events_np_file), duration, H, W)
@@ -446,7 +433,6 @@ def create_same_directory_structure(source_dir: str, target_dir: str) -> None:
     :param target_dir: Path of the directory that be copied to
     :type target_dir: str
     :return: None
-
     Create the same directory structure in ``target_dir`` with that of ``source_dir``.
     '''
     for sub_dir_name in os.listdir(source_dir):
@@ -501,37 +487,25 @@ def pad_sequence_collate(batch: list):
     :type batch: list
     :return: batched samples ``(x_p, y, x_len), where ``x_p`` is padded ``x`` with the same length, `y`` is the label, and ``x_len`` is the length of the ``x``
     :rtype: tuple
-
     This function can be use as the ``collate_fn`` for ``DataLoader`` to process the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with fixed duration to integrate events to frames.
-
     Here is an example:
-
     .. code-block:: python
-
     class VariableLengthDataset(torch.utils.data.Dataset):
         def __init__(self, n=1000):
             super().__init__()
             self.n = n
-
         def __getitem__(self, i):
             return torch.rand([i + 1, 2]), self.n - i - 1
-
         def __len__(self):
             return self.n
-
-
     loader = torch.utils.data.DataLoader(VariableLengthDataset(n=32), batch_size=2, collate_fn=pad_sequence_collate,
                                          shuffle=True)
-
     for i, (x_p, label, x_len) in enumerate(loader):
         print(f'x_p.shape={x_p.shape}, label={label}, x_len={x_len}')
         if i == 2:
             break
-
     And the outputs are:
-
     .. code-block:: bash
-
         x_p.shape=torch.Size([2, 18, 2]), label=tensor([14, 30]), x_len=tensor([18,  2])
         x_p.shape=torch.Size([2, 29, 2]), label=tensor([3, 6]), x_len=tensor([29, 26])
         x_p.shape=torch.Size([2, 23, 2]), label=tensor([ 9, 23]), x_len=tensor([23,  9])
@@ -554,11 +528,8 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
     :type T: int
     :return: a bool mask with shape = [T, N], where the padded position is ``False``
     :rtype: torch.Tensor
-
     Here is an example:
-
     .. code-block:: python
-
         x1 = torch.rand([2, 6])
         x2 = torch.rand([3, 6])
         x3 = torch.rand([4, 6])
@@ -568,11 +539,8 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
         mask = padded_sequence_mask(x_len)
         print('mask.shape=', mask.shape)
         print('mask=\\n', mask)
-
     And the outputs are:
-
     .. code-block:: bash
-
         x.shape= torch.Size([4, 3, 6])
         mask.shape= torch.Size([4, 3])
         mask=
@@ -580,7 +548,6 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
                 [ True,  True,  True],
                 [False,  True,  True],
                 [False, False,  True]])
-
     '''
     if T is None:
         T = sequence_len.max().item()
@@ -589,21 +556,21 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
 
     if device_id >= 0 and cupy is not None:
         mask = torch.zeros([T, N], dtype=bool, device=sequence_len.device)
-        with cu_kernel_opt.DeviceEnvironment(device_id):
+        with cuda_utils.DeviceEnvironment(device_id):
+            blocks = cuda_utils.cal_blocks(N)
             T = cupy.asarray(T)
             N = cupy.asarray(N)
-            sequence_len, mask, T, N = cu_kernel_opt.get_contiguous(sequence_len.to(torch.int), mask, T, N)
+            sequence_len, mask, T, N = cuda_utils.get_contiguous(sequence_len.to(torch.int), mask, T, N)
             kernel_args = [sequence_len, mask, T, N]
             kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
-            blocks = cu_kernel_opt.cal_blocks(N)
             kernel(
                 (blocks,), (configure.cuda_threads,),
-                cu_kernel_opt.wrap_args_to_raw_kernel(
+                cuda_utils.wrap_args_to_raw_kernel(
                     device_id,
                     *kernel_args
                 )
             )
-            return mask
+        return mask
 
     else:
         t_seq = torch.arange(0, T).unsqueeze(1).repeat(1, N).to(sequence_len)  # [T, N]
@@ -654,27 +621,20 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param target_transform: a function/transform that takes
             in the target and transforms it.
         :type target_transform: callable
-
         The base class for neuromorphic dataset. Users can define a new dataset by inheriting this class and implementing
         all abstract methods. Users can refer to :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture`.
-
         If ``data_type == 'event'``
             the sample in this dataset is a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``.
-
         If ``data_type == 'frame'`` and ``frames_number`` is not ``None``
             events will be integrated to frames with fixed frames number. ``split_by`` will define how to split events.
             See :class:`cal_fixed_frames_number_segment_index` for
             more details.
-
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, and ``duration`` is not ``None``
             events will be integrated to frames with fixed time duration.
-
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, ``duration`` is ``None``, and ``custom_integrate_function`` is not ``None``:
             events will be integrated by the user-defined function and saved to the ``custom_integrated_frames_dir_name`` directory in ``root`` directory.
             Here is an example from SpikingJelly's tutorials:
-
             .. code-block:: python
-
                 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
                 from typing import Dict
                 import numpy as np
@@ -682,13 +642,12 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
                     index_split = np.random.randint(low=0, high=events['t'].__len__())
                     frames = np.zeros([2, 2, H, W])
-                    frames[0] = sjds.integrate_events_segment_to_frame(events, H, W, 0, index_split)
-                    frames[1] = sjds.integrate_events_segment_to_frame(events, H, W, index_split, events['t'].__len__())
+                    t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
+                    frames[0] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+                    frames[1] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
                     return frames
-
                 root_dir = 'D:/datasets/DVS128Gesture'
                 train_set = DVS128Gesture(root_dir, train=True, data_type='frame', custom_integrate_function=integrate_events_to_2_frames_randomly)
-
                 from spikingjelly.datasets import play_frame
                 frame, label = train_set[500]
                 play_frame(frame)
@@ -782,7 +741,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -812,7 +771,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -843,7 +802,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     create_same_directory_structure(events_np_root, frames_np_root)
                     # use multi-thread to accelerate
                     t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -901,7 +860,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param extract_root: Root directory path which saves extracted files from downloaded files
         :type extract_root: str
         :return: None
-
         This function defines how to extract download files.
         '''
         pass
@@ -915,7 +873,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param events_np_root: Root directory path which saves events files in the ``npz`` format
         :type events_np_root:
         :return: None
-
         This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
         '''
         pass
@@ -935,7 +892,6 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         '''
         :param fname: file name
         :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-
         This function defines how to load a sample from `events_np`. In most cases, this function is `np.load`.
         But for some datasets, e.g., ES-ImageNet, it can be different.
         '''
@@ -953,13 +909,9 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
     :type batch_first: bool
     :return: the sequence with length `T_remain`, which is obtained by randomly removing `T - T_remain` slices
     :rtype: torch.Tensor or np.ndarray
-
     The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
-
     Codes example:
-
     .. code-block:: python
-
         import torch
         from spikingjelly.datasets import random_temporal_delete
         T = 8
@@ -968,11 +920,8 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
         x_seq = torch.arange(0, N*T).view([N, T])
         print('x_seq=\\n', x_seq)
         print('random_temporal_delete(x_seq)=\\n', random_temporal_delete(x_seq, T_remain, batch_first=True))
-
     Outputs:
-
     .. code-block:: shell
-
         x_seq=
          tensor([[ 0,  1,  2,  3,  4,  5,  6,  7],
                 [ 8,  9, 10, 11, 12, 13, 14, 15],
@@ -1001,9 +950,7 @@ class RandomTemporalDelete(torch.nn.Module):
         :type T_remain: int
         :type T_remain: int
         :param batch_first: if `True`, `x_seq` will be regarded as `shape = [N, T, *]`
-
         The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
-
         Refer to :class:`random_temporal_delete` for more details.
         """
         super().__init__()
@@ -1027,7 +974,6 @@ def create_sub_dataset(source_dir: str, target_dir:str, ratio: float, use_soft_l
     :param randomly: if ``True``, the files copy from the origin dataset will be picked up randomly. The randomness is controlled by
             ``numpy.random.seed``
     :type randomly: bool
-
     Create a sub dataset with copy ``ratio`` of samples from the origin dataset.
     """
     if not os.path.exists(target_dir):

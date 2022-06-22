@@ -7,11 +7,21 @@ Subpackages
 .. toctree::
    :maxdepth: 4
 
-   spikingjelly.cext
-   spikingjelly.clock_driven
+   spikingjelly.activation_based
    spikingjelly.datasets
-   spikingjelly.event_driven
+   spikingjelly.timing_based
    spikingjelly.visualizing
+
+Submodules
+----------
+
+spikingjelly.configure module
+-----------------------------
+
+.. automodule:: spikingjelly.configure
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------

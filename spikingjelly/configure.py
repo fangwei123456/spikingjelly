@@ -20,7 +20,7 @@ max_threads_number_for_datasets_preprocess = 16
 Note that a too larger `max_threads_number_for_datasets_preprocess` will overload the disc and slow down the speed.
 '''
 
-cuda_threads = 1024
+cuda_threads = 512
 '''
 `cuda_threads` defines the default threads number for CUDA kernel.
 
@@ -58,7 +58,7 @@ If `save_spike_as_bool_in_neuron_kernel == True`, the neuron kernel used in the 
 
 save_bool_spike_level = 0
 '''
-`save_bool_spike_level` take effects on SpikeConv/SpikeLinear, and on neuron's cupy kernel when `save_spike_as_bool_in_neuron_kernel == True`.
+`save_bool_spike_level` take effects on SpikeConv/SpikeLinear, and on neuron's cupy kernel when `save_spike_as_bool_in_cuda_utils == True`.
 
 If `save_bool_spike_level == 0`, spikes will be saved in bool. Note that bool uses 8-bit, rather than 1-bit.
 

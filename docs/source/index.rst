@@ -8,6 +8,12 @@
 
 * :ref:`Homepage in English <index_en>`
 
+注意
+----------------
+此文档为最新的开发版的文档，如果你使用的是稳定版（例如从PIP安装的就是稳定版），请跳转到稳定版文档：
+
+https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
+
 安装
 ----------------
 
@@ -43,24 +49,18 @@
     :maxdepth: 1
     :caption: 上手教程
 
-    tutorial.clock_driven
-    tutorial.event_driven
-    /clock_driven/0_neuron
-    /clock_driven/2_encoding
-    /clock_driven/3_fc_mnist
-    /clock_driven/4_conv_fashion_mnist
-    /clock_driven/5_ann2snn
-    /clock_driven/6_dqn_cart_pole
-    /clock_driven/7_a2c_cart_pole
-    /clock_driven/8_ppo_cart_pole
-    /clock_driven/9_spikingLSTM_text
-    /clock_driven/10_propagation_pattern
-    /clock_driven/11_cext_neuron_with_lbl
-    /clock_driven/12_monitor
-    /clock_driven/13_neuromorphic_datasets
-    /clock_driven/14_classify_dvsg
-    /clock_driven/15_recurrent_connection_and_stateful_synapse
-    /clock_driven/16_train_large_scale_snn
+    /activation_based/migrate_from_legency
+    /activation_based/basic_concept
+    /activation_based/container
+    /activation_based/neuron
+    /activation_based/surrogate
+    /activation_based/monitor
+    /activation_based/lif_fc_mnist
+    /activation_based/conv_fashion_mnist
+    /activation_based/neuromorphic_datasets
+    /activation_based/classify_dvsg
+    /activation_based/recurrent_connection_and_stateful_synapse
+    /activation_based/train_large_scale_snn
 
 
 模块文档
@@ -76,7 +76,7 @@
 * :ref:`search`
 
 
-引用
+引用和出版物
 -------------------------
 如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
 
@@ -86,10 +86,13 @@
         title = {SpikingJelly},
         author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Tian, Yonghong and other contributors},
         year = {2020},
-        publisher = {GitHub},
-        journal = {GitHub repository},
         howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+        note = {Accessed: YYYY-MM-DD},
     }
+
+其中的 `YYYY-MM-DD` 需要更改为您的工作使用的惊蜇(SpikingJelly)版本对应的最后一次代码修改日期。
+
+使用惊蜇(SpikingJelly)的出版物可见于 `Publications using SpikingJelly <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>`_。
 
 项目信息
 -------------------------
@@ -107,6 +110,7 @@
 -------------------------
 * `脉冲神经网络相关博客 <https://www.cnblogs.com/lucifer1997/tag/SNN/>`_
 * `脉冲强化学习相关博客 <https://www.cnblogs.com/lucifer1997/tag/SNN-RL/>`_
+* `神经形态计算软件框架LAVA相关博客 <https://www.cnblogs.com/lucifer1997/p/16286303.html>`_
 
 .. _index_en:
 
@@ -116,6 +120,12 @@ Welcome to SpikingJelly's documentation
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
 
 * :ref:`中文首页 <index>`
+
+Notification
+----------------
+This doc is for the latest developing version. If you use the stable version (e.g., install from PIP), please use the doc for the stable version:
+
+https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
 
 Installation
 ----------------
@@ -153,22 +163,19 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :maxdepth: 1
     :caption: Tutorials
 
-    tutorial_en.clock_driven
-    /clock_driven_en/0_neuron
-    /clock_driven_en/2_encoding
-    /clock_driven_en/3_fc_mnist
-    /clock_driven_en/4_conv_fashion_mnist
-    /clock_driven_en/5_ann2snn
-    /clock_driven_en/6_dqn_cart_pole
-    /clock_driven_en/7_a2c_cart_pole
-    /clock_driven_en/8_ppo_cart_pole
-    /clock_driven_en/9_spikingLSTM_text
-    /clock_driven_en/10_propagation_pattern
-    /clock_driven_en/11_cext_neuron_with_lbl
-    /clock_driven_en/13_neuromorphic_datasets
-    /clock_driven_en/14_classify_dvsg
-    /clock_driven_en/15_recurrent_connection_and_stateful_synapse
-    /clock_driven_en/16_train_large_scale_snn
+    /activation_based_en/migrate_from_legency
+    /activation_based_en/basic_concept
+    /activation_based_en/container
+    /activation_based_en/neuron
+    /activation_based_en/surrogate
+    /activation_based_en/monitor
+    .. /activation_based_en/lif_fc_mnist
+    /activation_based_en/conv_fashion_mnist
+    /activation_based_en/neuromorphic_datasets
+    /activation_based_en/classify_dvsg
+    /activation_based_en/recurrent_connection_and_stateful_synapse
+    /activation_based_en/train_large_scale_snn
+
 
 
 
@@ -195,10 +202,13 @@ If you use SpikingJelly in your work, please cite it as follows:
         title = {SpikingJelly},
         author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Tian, Yonghong and other contributors},
         year = {2020},
-        publisher = {GitHub},
-        journal = {GitHub repository},
         howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
+        note = {Accessed: YYYY-MM-DD},
     }
+
+Note: To specify the version of framework you are using, the default value YYYY-MM-DD in the note field should be replaced with the date of the last change of the framework you are using, i.e. the date of the latest commit.
+
+Publications using SpikingJelly are recorded in `Publications using SpikingJelly <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>`_. If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
 About
 -------------------------
@@ -217,8 +227,7 @@ The list of developers can be found at `contributors <https://github.com/fangwei
    :maxdepth: 4
    :caption: APIs
 
-   spikingjelly.clock_driven
+   spikingjelly.activation_based
    spikingjelly.datasets
-   spikingjelly.event_driven
+   spikingjelly.timing_based
    spikingjelly.visualizing
-   spikingjelly.cext
