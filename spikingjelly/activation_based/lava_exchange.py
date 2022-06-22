@@ -322,7 +322,7 @@ def to_lava_block_flatten(flatten_nn: nn.Flatten):
 
 
 
-def to_lava_blocks(net: Iterable):
+def to_lava_blocks(net: list):
     # https://lava-nc.org/lava-lib-dl/netx/netx.html
     '''
     Supported layer types
@@ -341,8 +341,16 @@ def to_lava_blocks(net: Iterable):
     blocks = []
     length = net.__len__()
     i = 0
+    k = None
     while True:
         if isinstance(net[i], nn.Linear):
+            if k is not None:
+                if isinstance(net[i], (nn.Conv2d, nn.Linear)):
+                    net[i].weight.data /= k
+                else:
+                    raise NotImplementedError(type(net[i]))
+
+                k = None
             if i + 1 < length and isinstance(net[i + 1], (neuron.IFNode, neuron.LIFNode)):
                 blocks.append(to_lava_block_dense(net[i], net[i + 1]))
                 i += 2
@@ -360,6 +368,10 @@ def to_lava_blocks(net: Iterable):
             if i + 1 < length and isinstance(net[i + 1], (neuron.IFNode, neuron.LIFNode)):
                 blocks.append(to_lava_block_pool(net[i], net[i + 1]))
                 i += 2
+                if isinstance(net[i].kernel_size, int):
+                    k = float(net[i].kernel_size * net[i].kernel_size)
+                else:
+                    k = float(net[i].kernel_size[0] * net[i].kernel_size[1])
             else:
                 raise ValueError(type(net[i]))
 

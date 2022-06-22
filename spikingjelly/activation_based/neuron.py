@@ -113,6 +113,7 @@ class BaseNode(base.MemoryModule):
 
         self.store_v_seq = store_v_seq
 
+        # used in lava_exchange
         self.lava_s_cale = 1 << 6
 
     @property
