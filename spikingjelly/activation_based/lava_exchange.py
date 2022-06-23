@@ -1,14 +1,99 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import logging
 from . import neuron
-from typing import Iterable
 try:
     import lava.lib.dl.slayer as slayer
 
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.lava_exchange: {e}')
     slayer = None
+
+class FasterLavaDense(slayer.synapse.Dense):
+    @staticmethod
+    def convert_from(slayer_dense: slayer.synapse.Dense):
+        fc = FasterLavaDense(slayer_dense.in_channels, slayer_dense.out_channels)
+        fc.weight.data = slayer_dense.weight.data.clone()
+        fc.to(slayer_dense.weight)
+        return fc
+
+    def convert_to(self):
+        slayer_dense = slayer.synapse.Dense(self.in_channels, self.out_channels)
+        slayer_dense.weight.data = self.weight.data.clone()
+        slayer_dense.to(self.weight)
+        return slayer_dense
+
+    def forward(self, x_seq: torch.Tensor):
+        # x_seq.shape = [N, C, T]
+        if self._pre_hook_fx is None:
+            weight = self.weight
+        else:
+            weight = self._pre_hook_fx(self.weight)
+
+        x_seq = x_seq.transpose(1, 2)
+
+        x_seq = F.linear(x_seq, weight[:, :, 0, 0, 0], self.bias)
+
+        x_seq = x_seq.transpose(1, 2)
+        return x_seq
+
+class FasterLavaConv(slayer.synapse.Conv):
+    @staticmethod
+    def convert_from(slayer_conv: slayer.synapse.Conv):
+        conv = FasterLavaConv(in_features=slayer_conv.in_channels, out_features=slayer_conv.out_channels, kernel_size=slayer_conv.kernel_size[: 2], stride=slayer_conv.stride[: 2], padding=slayer_conv.padding[: 2], dilation=slayer_conv.dilation[: 2], groups=slayer_conv.groups)
+        conv.weight.data = slayer_conv.weight.data.clone()
+        conv.to(slayer_conv.weight)
+        return conv
+
+    def convert_to(self):
+        slayer_conv = slayer.synapse.Conv(in_features=self.in_channels, out_features=self.out_channels, kernel_size=self.kernel_size[: 2], stride=self.stride[: 2], padding=self.padding[: 2], dilation=self.dilation[: 2], groups=self.groups)
+        slayer_conv.weight.data = self.weight.data.clone()
+        slayer_conv.to(self.weight)
+        return slayer_conv
+
+    def forward(self, x_seq: torch.Tensor):
+        # x_seq.shape = [N, C, H, W, T]
+        N, C, H, W, T = x_seq.shape
+        x_seq = x_seq.permute(4, 0, 1, 2, 3)  # [T, N, C, H, W]
+        x_seq = x_seq.flatten(0, 1)  # [TN, C, H, W]
+
+        if self._pre_hook_fx is None:
+            weight = self.weight
+        else:
+            weight = self._pre_hook_fx(self.weight)
+
+        x_seq = F.conv2d(x_seq,
+                weight[:, :, :, :, 0], self.bias,
+                self.stride[: 2], self.padding[: 2], self.dilation[: 2], self.groups)
+
+        x_seq = x_seq.view(T, N, x_seq.shape[1], x_seq.shape[2], x_seq.shape[3])
+        x_seq = x_seq.permute(1, 2, 3, 4, 0)  # [N, C, H, W, T]
+        return x_seq
+
+class FasterLavaPool(slayer.synapse.Pool):
+    @staticmethod
+    def convert_from(slayer_pool: slayer.synapse.Pool):
+        pool = FasterLavaPool(slayer_pool.kernel_size[: 2], slayer_pool.stride[: 2], slayer_pool.padding[: 2])
+        pool.to(slayer_pool.weight)
+        return pool
+
+    def convert_to(self):
+        slayer_pool = slayer.synapse.Pool(self.kernel_size[: 2], self.stride[: 2], self.padding[: 2])
+        slayer_pool.to(self.weight)
+        return slayer_pool
+
+    def forward(self, x_seq: torch.Tensor):
+        # x_seq.shape = [N, C, H, W, T]
+        N, C, H, W, T = x_seq.shape
+        x_seq = x_seq.permute(4, 0, 1, 2, 3)  # [T, N, C, H, W]
+        x_seq = x_seq.flatten(0, 1)  # [TN, C, H, W]
+
+        x_seq = F.avg_pool2d(x_seq, self.kernel_size[: 2], self.stride[: 2], self.padding[: 2]) * (self.kernel_size[0] * self.kernel_size[1])
+
+        x_seq = x_seq.view(T, N, C, H, W)
+        x_seq = x_seq.permute(1, 2, 3, 4, 0)  # [N, C, H, W, T]
+        return x_seq
 
 # ----------------------------------------
 # data reshape function
@@ -322,7 +407,7 @@ def to_lava_block_flatten(flatten_nn: nn.Flatten):
 
 
 
-def to_lava_blocks(net: list):
+def to_lava_blocks(net: list or tuple or nn.Sequential):
     # https://lava-nc.org/lava-lib-dl/netx/netx.html
     '''
     Supported layer types
