@@ -6,6 +6,7 @@ tab4_str = '\t\t\t\t'  # used for aligning code
 curly_bracket_l = '{'
 curly_bracket_r = '}'
 
+@torch.jit.script
 def heaviside(x: torch.Tensor):
     '''
     * :ref:`API in English <heaviside.__init__-en>`
