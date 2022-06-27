@@ -25,6 +25,12 @@ class BaseMonitor:
         self.records = []
         self._enable = True
 
+    def clear(self):
+        """
+        Clears the recorded data in ``self.records``
+        """
+        self.records.clear()
+
     def enable(self):
         self._enable = True
 
