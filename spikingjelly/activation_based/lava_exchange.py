@@ -189,7 +189,7 @@ try:
             plt.savefig('./docs/source/_static/API/activation_based/lava_exchange/step_quantize.svg')
             plt.savefig('./docs/source/_static/API/activation_based/lava_exchange/step_quantize.pdf')
 
-        .. image:: ./_static/API/activation_based/lava_exchange/step_quantize.*
+        .. image:: ../_static/API/activation_based/lava_exchange/step_quantize.*
             :width: 100%
 
         """

@@ -212,7 +212,7 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
             1, & x > \\frac{1}{\\alpha} \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/PiecewiseQuadratic.*
+        .. image:: ../_static/API/activation_based/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
         该函数在文章 [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_ 中使用。
@@ -244,7 +244,7 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
             1, & x > \\frac{1}{\\alpha} \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/PiecewiseQuadratic.*
+        .. image:: ../_static/API/activation_based/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
         The function is used in [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
@@ -327,7 +327,7 @@ class PiecewiseExp(SurrogateFunctionBase):
             1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/PiecewiseExp.*
+        .. image:: ../_static/API/activation_based/surrogate/PiecewiseExp.*
             :width: 100%
 
         该函数在文章 [#SLAYER]_ [#neftci2019surrogate]_ 中使用。
@@ -354,7 +354,7 @@ class PiecewiseExp(SurrogateFunctionBase):
             1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/PiecewiseExp.*
+        .. image:: ../_static/API/activation_based/surrogate/PiecewiseExp.*
             :width: 100%
 
         The function is used in [#SLAYER]_ [#neftci2019surrogate]_ .
@@ -434,7 +434,7 @@ class Sigmoid(SurrogateFunctionBase):
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
 
-        .. image:: ./_static/API/activation_based/surrogate/Sigmoid.*
+        .. image:: ../_static/API/activation_based/surrogate/Sigmoid.*
             :width: 100%
 
         该函数在文章 [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ 中使用。
@@ -457,7 +457,7 @@ class Sigmoid(SurrogateFunctionBase):
         .. math::
             g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
 
-        .. image:: ./_static/API/activation_based/surrogate/Sigmoid.*
+        .. image:: ../_static/API/activation_based/surrogate/Sigmoid.*
             :width: 100%
 
         The function is used in  [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ .
@@ -559,7 +559,7 @@ class SoftSign(SurrogateFunctionBase):
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
             = \\frac{1}{2} (\\frac{x}{\\frac{1}{\\alpha} + |x|} + 1)
 
-        .. image:: ./_static/API/activation_based/surrogate/SoftSign.*
+        .. image:: ../_static/API/activation_based/surrogate/SoftSign.*
             :width: 100%
 
         该函数在文章 [#SuperSpike]_ [#neftci2019surrogate]_ 中使用。
@@ -582,7 +582,7 @@ class SoftSign(SurrogateFunctionBase):
         .. math::
             g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
 
-        .. image:: ./_static/API/activation_based/surrogate/SoftSign.*
+        .. image:: ../_static/API/activation_based/surrogate/SoftSign.*
             :width: 100%
 
         The function is used in [#SuperSpike]_ [#neftci2019surrogate]_ .
@@ -653,7 +653,7 @@ class ATan(SurrogateFunctionBase):
         .. math::
             g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
 
-        .. image:: ./_static/API/activation_based/surrogate/ATan.*
+        .. image:: ../_static/API/activation_based/surrogate/ATan.*
             :width: 100%
 
         * :ref:`中文API <ATan.__init__-cn>`
@@ -669,7 +669,7 @@ class ATan(SurrogateFunctionBase):
         .. math::
             g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
 
-        .. image:: ./_static/API/activation_based/surrogate/ATan.*
+        .. image:: ../_static/API/activation_based/surrogate/ATan.*
             :width: 100%
         '''
         super().__init__(alpha, spiking)
@@ -778,7 +778,7 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
                 -1, & x < 0 \\\\
                 \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
+        .. image:: ../_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
         * :ref:`中文API <LogAbs.__init__-cn>`
@@ -814,7 +814,7 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
             -1, & x < 0 \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
+        .. image:: ../_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
         '''
@@ -897,7 +897,7 @@ class Erf(SurrogateFunctionBase):
             &= \\frac{1}{\\sqrt{\\pi}}\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
             \\end{split}
 
-        .. image:: ./_static/API/activation_based/surrogate/Erf.*
+        .. image:: ../_static/API/activation_based/surrogate/Erf.*
             :width: 100%
         
         该函数在文章 [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_ 中使用。
@@ -926,7 +926,7 @@ class Erf(SurrogateFunctionBase):
             &= \\frac{1}{\\sqrt{\\pi}}\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
             \\end{split}
 
-        .. image:: ./_static/API/activation_based/surrogate/Erf.*
+        .. image:: ../_static/API/activation_based/surrogate/Erf.*
             :width: 100%
 
         The function is used in [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_.
@@ -1015,7 +1015,7 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
             cx - cw + 1, & x > w \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/PiecewiseLeakyReLU.*
+        .. image:: ../_static/API/activation_based/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
         该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_ 中使用。
@@ -1048,7 +1048,7 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
             cx - cw + 1, & x > w
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/PiecewiseLeakyReLU.*
+        .. image:: ../_static/API/activation_based/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
         The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
@@ -1302,7 +1302,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
                 \\beta \\mathrm{ln}(x + 1) + 1, x \ge 0
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/S2NN.*
+        .. image:: ../_static/API/activation_based/surrogate/S2NN.*
             :width: 100%
 
 
@@ -1331,7 +1331,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
                 \\beta \\mathrm{ln}(x + 1) + 1, x \ge 0
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/S2NN.*
+        .. image:: ../_static/API/activation_based/surrogate/S2NN.*
             :width: 100%
         """
         super().__init__(spiking)
@@ -1450,7 +1450,7 @@ class QPseudoSpike(SurrogateFunctionBase):
             1 - \\frac{1}{2}(1+\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x \\geq 0.
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/QPseudoSpike.*
+        .. image:: ../_static/API/activation_based/surrogate/QPseudoSpike.*
             :width: 100%
 
         * :ref:`中文API <QPseudoSpike.__init__-cn>`
@@ -1477,7 +1477,7 @@ class QPseudoSpike(SurrogateFunctionBase):
             1 - \\frac{1}{2}(1+\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x \\geq 0.
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/QPseudoSpike.*
+        .. image:: ../_static/API/activation_based/surrogate/QPseudoSpike.*
             :width: 100%
         '''
         super().__init__(alpha, spiking)
@@ -1596,7 +1596,7 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
             leak \\cdot x, & x < 0 \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/LeakyKReLU.*
+        .. image:: ../_static/API/activation_based/surrogate/LeakyKReLU.*
             :width: 100%
 
         * :ref:`中文API <LeakyKReLU.__init__-cn>`
@@ -1628,7 +1628,7 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
             leak \\cdot x, & x < 0 \\\\
             \\end{cases}
 
-        .. image:: ./_static/API/activation_based/surrogate/LeakyKReLU.*
+        .. image:: ../_static/API/activation_based/surrogate/LeakyKReLU.*
             :width: 100%
 
         """
