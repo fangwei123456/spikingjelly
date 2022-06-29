@@ -6,49 +6,27 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 the data that they are interested in. Now let us try these monitors.
 
 
-Record Outputs
+Usage
 -------------------------------------------
+All monitors have similar usage. Let us take :class:`spikingjelly.activation_based.monitor.OutputMonitor` as the example.
+
 Firstly, let us build a simple single-step network. To avoid no spikes, we set all weights to be positive:
 
 .. code-block:: python
 
-    import torch
-    import torch.nn as nn
-    from spikingjelly.activation_based import monitor, neuron, functional, layer
-
-    net = nn.Sequential(
-        layer.Linear(8, 4),
-        neuron.IFNode(),
-        layer.Linear(4, 2),
-        neuron.IFNode()
-    )
-
-    for param in net.parameters():
-        param.data.abs_()
-
-    functional.set_step_mode(net, 'm')
-
-:class:`spikingjelly.activation_based.monitor.OutputMonitor` can record outputs of all modules whose instance is ``instance`` in a network. \
-The outputs of the spiking neurons layer are spikes, and we can use :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` to record the spikes of all \
-``neuron.IFNode`` in the network:
-
-.. code-block:: python
-
     spike_seq_monitor = monitor.OutputMonitor(net, neuron.IFNode)
-
-We can get the recorded data by ``.records``:
-
-.. code-block:: python
-
     T = 4
     N = 1
     x_seq = torch.rand([T, N, 8])
 
     with torch.no_grad():
         net(x_seq)
-        print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
-        functional.reset_net(net)
-        del spike_seq_monitor
+
+The recorded data will be stored in ``.records`` whose type is ``list``. The data are recorded by the order in how they are created:
+
+.. code-block:: python
+
+    print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
 
 The outputs are:
 
@@ -59,18 +37,100 @@ The outputs are:
 
             [[1., 1., 1., 1.]],
 
-            [[1., 0., 1., 0.]],
+            [[0., 0., 0., 0.]],
 
             [[1., 1., 1., 1.]]]), tensor([[[0., 0.]],
 
-            [[1., 1.]],
+            [[1., 0.]],
 
-            [[0., 0.]],
+            [[0., 1.]],
 
-            [[1., 1.]]])]
+            [[1., 0.]]])]
 
+
+We can also use the index to get the ``i``-th data:
+
+.. code-block:: python
+
+    print(f'spike_seq_monitor[0]={spike_seq_monitor[0]}')
+
+The outputs are:
+
+.. code-block:: shell
+
+    spike_seq_monitor[0]=tensor([[[0., 0., 0., 0.]],
+
+            [[1., 1., 1., 1.]],
+
+            [[0., 0., 0., 0.]],
+
+            [[1., 1., 1., 1.]]])
+    
+
+The names of monitored layers are stored in ``.monitored_layers``:
+
+.. code-block:: python
+
+    print(f'net={net}')
+    print(f'spike_seq_monitor.monitored_layers={spike_seq_monitor.monitored_layers}')
+
+The outputs are:
+
+.. code-block:: shell
+
+    net=Sequential(
+    (0): Linear(in_features=8, out_features=4, bias=True)
+    (1): IFNode(
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=torch
+        (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+    )
+    (2): Linear(in_features=4, out_features=2, bias=True)
+    (3): IFNode(
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=torch
+        (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+    )
+    )
+    spike_seq_monitor.monitored_layers=['1', '3']
+
+We can also use the name as the index to get the recorded data of the layer, which are stored in a ``list``:
+
+.. code-block:: python
+
+    print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
+
+The outputs are:
+
+.. code-block:: shell
+
+    spike_seq_monitor['1']=[tensor([[[0., 0., 0., 0.]],
+
+        [[1., 1., 1., 1.]],
+
+        [[0., 0., 0., 0.]],
+
+        [[1., 1., 1., 1.]]])]
+
+
+We can call ``.clear_recorded_data()`` to clear the recorded data:
+
+.. code-block:: python
+
+    spike_seq_monitor.clear_recorded_data()
+    print(f'spike_seq_monitor.records={spike_seq_monitor.records}')
+    print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
+
+The outputs are:
+
+.. code-block:: shell
+
+    spike_seq_monitor.records=[]
+    spike_seq_monitor['1']=[]
 
 All ``monitor`` will remove hooks when they are deleted. We do not need to remove hooks manually.
+
+.. code-block:: python
+
+    del spike_seq_monitor
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` can also process the data when recording, which is implemented by ``function_on_output``. \
 The default value of ``function_on_output`` is ``lambda x: x``, which means record the origin data. If we want to record the firing rates, we can define the \

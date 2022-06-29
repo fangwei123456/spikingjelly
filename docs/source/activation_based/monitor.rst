@@ -6,8 +6,10 @@
 记录功能。下面以一个简单的网络为例进行介绍。
 
 
-记录模块输出
+基本使用
 -------------------------------------------
+所有的监视器的用法类似，以 :class:`spikingjelly.activation_based.monitor.OutputMonitor` 为例进行介绍。
+
 首先我们搭建起一个简单的多步网络。为了避免无脉冲释放，我们将权重全部设置为正值：
 
 .. code-block:: python
@@ -35,20 +37,18 @@
 .. code-block:: python
 
     spike_seq_monitor = monitor.OutputMonitor(net, neuron.IFNode)
-
-可以通过 ``.records`` 访问记录的数据：
-
-.. code-block:: python
-
     T = 4
     N = 1
     x_seq = torch.rand([T, N, 8])
 
     with torch.no_grad():
         net(x_seq)
-        print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
-        functional.reset_net(net)
-        del spike_seq_monitor
+
+要记录的数据，会根据生成顺序，保存在 ``.records`` 的 ``list`` 中：
+
+.. code-block:: python
+
+    print(f'spike_seq_monitor.records=\n{spike_seq_monitor.records}')
 
 输出为：
 
@@ -59,18 +59,98 @@
 
             [[1., 1., 1., 1.]],
 
-            [[1., 0., 1., 0.]],
+            [[0., 0., 0., 0.]],
 
             [[1., 1., 1., 1.]]]), tensor([[[0., 0.]],
 
-            [[1., 1.]],
+            [[1., 0.]],
 
-            [[0., 0.]],
+            [[0., 1.]],
 
-            [[1., 1.]]])]
+            [[1., 0.]]])]
 
+也可以使用索引操作，直接访问被记录的第 ``i`` 个数据：
 
-所有的 ``monitor`` 在析构时都会自动删除已经注册的钩子，可以放心使用。
+.. code-block:: python
+
+    print(f'spike_seq_monitor[0]={spike_seq_monitor[0]}')
+
+输出为：
+
+.. code-block:: shell
+
+    spike_seq_monitor[0]=tensor([[[0., 0., 0., 0.]],
+
+            [[1., 1., 1., 1.]],
+
+            [[0., 0., 0., 0.]],
+
+            [[1., 1., 1., 1.]]])
+    
+
+``.monitored_layers`` 记录了被监视器监控的层的名字：
+
+.. code-block:: python
+
+    print(f'net={net}')
+    print(f'spike_seq_monitor.monitored_layers={spike_seq_monitor.monitored_layers}')
+
+输出为：
+
+.. code-block:: shell
+
+    net=Sequential(
+    (0): Linear(in_features=8, out_features=4, bias=True)
+    (1): IFNode(
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=torch
+        (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+    )
+    (2): Linear(in_features=4, out_features=2, bias=True)
+    (3): IFNode(
+        v_threshold=1.0, v_reset=0.0, detach_reset=False, step_mode=m, backend=torch
+        (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+    )
+    )
+    spike_seq_monitor.monitored_layers=['1', '3']
+
+可以直接通过层的名字作为索引，访问某一层被记录的数据。这返回的是一个 ``list`` ：
+
+.. code-block:: python
+
+    print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
+
+输出为：
+
+.. code-block:: shell
+
+    spike_seq_monitor['1']=[tensor([[[0., 0., 0., 0.]],
+
+        [[1., 1., 1., 1.]],
+
+        [[0., 0., 0., 0.]],
+
+        [[1., 1., 1., 1.]]])]
+
+可以通过调用 ``.clear_recorded_data()`` 来清空已经记录的数据：
+
+.. code-block:: python
+
+    spike_seq_monitor.clear_recorded_data()
+    print(f'spike_seq_monitor.records={spike_seq_monitor.records}')
+    print(f"spike_seq_monitor['1']={spike_seq_monitor['1']}")
+
+输出为：
+
+.. code-block:: shell
+
+    spike_seq_monitor.records=[]
+    spike_seq_monitor['1']=[]
+
+所有的 ``monitor`` 在析构时都会自动删除已经注册的钩子，可以放心使用：
+
+.. code-block:: python
+
+    del spike_seq_monitor
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` 还支持在记录数据时就对数据进行简单的处理，只需要\
 指定构造函数中的 ``function_on_output`` 即可。 ``function_on_output`` 的默认值是 ``lambda x: x``，也就是默认不进行任何处理。\
@@ -93,6 +173,7 @@
 .. code-block:: python
 
     with torch.no_grad():
+        functional.reset_net(net)
         fr_monitor.disable()
         net(x_seq)
         functional.reset_net(net)
