@@ -83,22 +83,22 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     print('auto   grad', x_grad_auto[idx])
     print('manual grad', x_grad_manual[idx])
 
-def check_cuda_grad(neu: nn.Module, surrogate_function, device, *args, **kwargs):
-    # check_cuda_grad(neuron.MultiStepIFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
+def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
+    # check_cuda_grad(neuron.IFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
     for dtype in [torch.float, torch.half]:
         print(dtype)
-        net = neu(surrogate_function=surrogate_function(*args, **kwargs))
+        net = neu(surrogate_function=surrogate_function(*args, **kwargs), step_mode='m')
         net.to(device)
         x = torch.arange(-2, 2, 32 / 8192, device=device, dtype=dtype)
-        x = x.unsqueeze(-1)
         x.requires_grad_(True)
         net.backend = 'torch'
-        net(x).sum().backward()
+        net(x.unsqueeze(0)).sum().backward()
         x_grad_py = x.grad.clone()
         x.grad.zero_()
         net.reset()
         net.backend = 'cupy'
-        net(x).sum().backward()
+        net(x.unsqueeze(0)).sum().backward()
+
         x_grad_cp = x.grad.clone()
         # print('python grad', x_grad_py)
         # print('cupy   grad', x_grad_cp)
@@ -1758,6 +1758,181 @@ class FakeNumericalGradient(SurrogateFunctionBase):
             {tab4_str}{self.cuda_code_end_comments()}
         '''
         return code
+
+@torch.jit.script
+def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    mask_gt1 = x > 1.
+    mask_le0 = x <= 0.
+    grad_x = torch.ones_like(grad_output)
+    grad_x[mask_gt1] = 1. / x[mask_gt1]
+    grad_x[mask_le0] = alpha
+    return grad_output * grad_x, None
+
+
+class log_tailed_relu(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return log_tailed_relu_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
+class LogTailedReLU(SurrogateFunctionBase):
+    def __init__(self, alpha=0., spiking=True):
+        '''
+        * :ref:`API in English <LogTailedReLU.__init__-en>`
+        .. _LogTailedReLU.__init__-cn:
+
+        :param alpha: 控制反向传播时梯度的参数
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        `Deep Learning with Low Precision by Half-wave Gaussian Quantization <https://arxiv.org/abs/1702.00953>`_ 提出的 Log-tailed ReLU替代函数。反向传播为
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            \\alpha, & x \\leq 0 \\\\
+            1, & 0 < x \\leq 0 \\\\
+            \\frac{1}{x}, x > 1 \\\\
+            \\end{cases}
+
+        对应的原函数为
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            \\alpha x, & x \\leq 0 \\\\
+            x, & 0 < x \\leq 0 \\\\
+            log(x), x > 1 \\\\
+            \\end{cases}
+
+        .. image:: ../_static/API/activation_based/surrogate/LogTailedReLU.*
+            :width: 100%
+
+        * :ref:`中文API <LogTailedReLU.__init__-cn>`
+        .. _LogTailedReLU.__init__-en:
+
+        :param alpha: parameter to control gradient
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+
+        The Log-tailed ReLU surrogate spiking function, which is first proposed in `Deep Learning with Low Precision by `Half-wave Gaussian Quantization <https://arxiv.org/abs/1702.00953>`_. The gradient is defined by
+
+        .. math::
+            g'(x) =
+            \\begin{cases}
+            \\alpha, & x \\leq 0 \\\\
+            1, & 0 < x \\leq 0 \\\\
+            \\frac{1}{x}, x > 1 \\\\
+            \\end{cases}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) =
+            \\begin{cases}
+            \\alpha x, & x \\leq 0 \\\\
+            x, & 0 < x \\leq 0 \\\\
+            log(x), x > 1 \\\\
+            \\end{cases}
+
+        .. image:: ../_static/API/activation_based/surrogate/LogTailedReLU.*
+            :width: 100%
+        '''
+        super().__init__(alpha, spiking)
+
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return log_tailed_relu.apply(x, alpha)
+
+    @staticmethod
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
+        mask_ge1 = (x > 1.).to(x)
+        y = (1. - mask_ge1) * F.leaky_relu(x, alpha) + mask_ge1 * (torch.log(x) + 1.)
+        return y
+
+
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        sg_name = 'sg_' + self._get_name()
+        alpha = str(self.alpha) + 'f'
+        code = f'''
+            {tab4_str}{self.cuda_code_start_comments()}
+        '''
+
+        if dtype == 'fp32':
+            code += f'''
+            {tab4_str}float {y} = 0.0f;
+            {tab4_str}if({x} <= 0.0f)
+            {tab4_str}{curly_bracket_l}{y} = {alpha};{curly_bracket_r}
+            {tab4_str}else if({x} <= 1.0f)
+            {tab4_str}{curly_bracket_l}{y} = 1.0f;{curly_bracket_r}
+            {tab4_str}else
+            {tab4_str}{curly_bracket_l}{y} = 1.0f / {x};{curly_bracket_r}
+            '''
+        elif dtype == 'fp16':
+            code += f'''
+            {tab4_str}const half {sg_name}_alpha = __float2half_rn({alpha});
+            
+            {tab4_str}half {sg_name}_{y}_low;
+            {tab4_str}const half {sg_name}_{x}_low = __low2half({x});
+            {tab4_str}if(__hle({sg_name}_{x}_low, __float2half_rn(0.0f)))
+            {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = {sg_name}_alpha;{curly_bracket_r}
+            {tab4_str}else if(__hle({sg_name}_{x}_low, __float2half_rn(1.0f)))
+            {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = __float2half_rn(1.0f);{curly_bracket_r}
+            {tab4_str}else
+            {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = __hdiv(__float2half_rn(1.0f), {sg_name}_{x}_low);{curly_bracket_r}
+            
+            {tab4_str}half {sg_name}_{y}_high;
+            {tab4_str}const half {sg_name}_{x}_high = __high2half({x});
+            {tab4_str}if(__hle({sg_name}_{x}_high, __float2half_rn(0.0f)))
+            {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = {sg_name}_alpha;{curly_bracket_r}
+            {tab4_str}else if(__hle({sg_name}_{x}_high, __float2half_rn(1.0f)))
+            {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = __float2half_rn(1.0f);{curly_bracket_r}
+            {tab4_str}else
+            {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = __hdiv(__float2half_rn(1.0f), {sg_name}_{x}_high);{curly_bracket_r}
+            
+            
+            {tab4_str}const half2 {y} = __halves2half2({sg_name}_{y}_low, {sg_name}_{y}_high);
+
+            '''
+        else:
+            raise NotImplementedError
+        code += f'''
+            {tab4_str}{self.cuda_code_end_comments()}
+        '''
+        return code
+
+    # plt.style.use(['science', 'muted', 'grid'])
+    # fig = plt.figure(dpi=200, figsize=(6, 4))
+    # x = torch.arange(-5, 5, 0.01)
+    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
+    # surrogate_function = surrogate.LogTailedReLU(spiking=False, alpha=0.01)
+    # y = surrogate_function(x)
+    # plt.plot(x.data, y.data, label='Primitive, $\\alpha$=0.1')
+    #
+    # surrogate_function = surrogate.LogTailedReLU(spiking=True, alpha=0.01)
+    # x.requires_grad_(True)
+    # y = surrogate_function(x)
+    # z = y.sum()
+    # z.backward()
+    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha$=0.1')
+    # plt.xlim(-2, 2)
+    # plt.legend()
+    # plt.title('LeakyKReLU surrogate function')
+    # plt.xlabel('Input')
+    # plt.ylabel('Output')
+    # plt.grid(linestyle='--')
+    # plt.savefig('LogTailedReLU.svg')
+    # plt.savefig('LogTailedReLU.pdf')
 
 _has_cuda_ = [
     ATan,
