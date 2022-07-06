@@ -29,7 +29,7 @@
 | [Relaxation LIF: A gradient-based spiking neuron for direct training deep spiking neural networks](https://www.sciencedirect.com/science/article/pii/S092523122200755X) |                                                              | Neurocomputing                                               |
 | [SNN2ANN: A Fast and Memory-Efficient Training Framework for Spiking Neural Networks](https://arxiv.org/abs/2206.09449) | https://github.com/TJXTT/SNN2ANN                             |                                                              |
 | [Spiking Neural Networks for Frame-based and Event-based Single Object Localization](https://arxiv.org/abs/2206.06506) |                                                              |                                                              |
-| [TCJA-SNN: Temporal-Channel Joint Attention for Spiking Neural Networks](https://arxiv.org/abs/2206.10177) |                                                              | https://github.com/ridgerchu/TCJA                           |
+| [TCJA-SNN: Temporal-Channel Joint Attention for Spiking Neural Networks](https://arxiv.org/abs/2206.10177) | https://github.com/ridgerchu/TCJA                                                             |                            |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
