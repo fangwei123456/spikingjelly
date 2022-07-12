@@ -1157,6 +1157,37 @@ class QIFNode(BaseNode):
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
 
+    @property
+    def supported_backends(self):
+        if self.step_mode == 's':
+            return ('torch', )
+        elif self.step_mode == 'm':
+            return ('torch', 'cupy')
+        else:
+            raise ValueError(self.step_mode)
+    
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        if self.backend == 'torch':
+            return super().multi_step_forward(x_seq)
+        elif self.backend == 'cupy':
+            self.v_float_to_tensor(x_seq[0])
+
+            spike_seq, v_seq = neuron_kernel.MultiStepQIFNodePTT.apply(
+                x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest,
+                self.v_c, self.a0, self.detach_reset, self.surrogate_function.cuda_code)
+
+            spike_seq = spike_seq.reshape(x_seq.shape)
+            v_seq = v_seq.reshape(x_seq.shape)
+
+            if self.store_v_seq:
+                self.v_seq = v_seq
+
+            self.v = self.v_seq[-1].clone()
+
+            return spike_seq
+        else:
+            raise ValueError(self.backend)
+
 class EIFNode(BaseNode):
     def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
