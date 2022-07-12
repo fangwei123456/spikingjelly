@@ -1,5 +1,7 @@
 
 
+
+
 # cuda_utils
 
 This md file shows how we define cuda kernel for neuronal forward and backward.
@@ -53,6 +55,20 @@ $$
 \frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
 \end{align}
 $$
+
+```mermaid
+stateDiagram
+	V0 --> H1
+	X1 --> H1
+	H1 --> S1
+	H1 --> V1
+	S1 --> V1
+	V1 --> H2
+	X2 --> H2
+	
+```
+
+
 
 ## CUDA Kernel
 
@@ -138,6 +154,21 @@ $$
 \frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\\
 \frac{\mathrm{d} L}{\mathrm{d} \frac{1}{\tau}} &= \sum_{t} \frac{\mathrm{d} L}{\mathrm{d} H[t]} (V_{reset} - V[t - 1])\\
 \frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
+\end{align}
+$$
+
+## Quadratic Integrate-and-Fire Neuron (QIF Neuron)
+
+For the QIF neuron, the charge function is 
+$$
+H[t] = V[t - 1] + \frac{1}{\tau}\left(X[t] + a_0 (V[t - 1] - V_{rest})(V[t - 1] - v_c)\right)
+$$
+Then the gradients are
+$$
+\begin{align}
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1+\frac{a_0}{\tau}(2V[t]-V_{rest}-v_c)))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1+\frac{a_0}{\tau}(2V[t]-V_{rest}-v_c))
 \end{align}
 $$
 
