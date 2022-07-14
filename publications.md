@@ -6,7 +6,7 @@
 | [Pruning of Deep Spiking Neural Networks through Gradient Rewiring](https://arxiv.org/abs/2105.04916) | https://github.com/Yanqi-Chen/Gradient-Rewiring              | IJCAI 2021                                                   |
 | [Optimal ANN-SNN Conversion for Fast and Accurate Inference in Deep Spiking Neural Networks](https://arxiv.org/abs/2105.11654) | https://github.com/DingJianhao/OptSNNConvertion-RNL-RIL      | IJCAI 2021                                                   |
 | [Deep Residual Learning in Spiking Neural Networks](https://arxiv.org/abs/2102.04159) | https://github.com/fangwei123456/Spike-Element-Wise-ResNet   | NeurIPS 2021                                                 |
-| [Spiking Neural Networks Trained via Proxy](https://arxiv.org/abs/2109.13208) | https://github.com/SRKH/ProxyLearning                        |                                                              |
+| [Spiking Neural Networks Trained via Proxy](https://arxiv.org/abs/2109.13208) | https://github.com/SRKH/ProxyLearning                        | IEEE Access                                                  |
 | [StereoSpike: Depth Learning with a Spiking Neural Network](https://arxiv.org/abs/2109.13751) | https://github.com/urancon/StereoSpike                       |                                                              |
 | [An Odor Recognition Algorithm of Electronic Noses Based on Convolutional Spiking Neural Network for Spoiled Food Identification](https://iopscience.iop.org/article/10.1149/1945-7111/ac1699/meta) |                                                              | Journal of The Electrochemical Society                       |
 | [Cascade Spiking Neuron Network For Event-based Image Classification In Noisy Environment](https://www.techrxiv.org/articles/preprint/Cascade_Spiking_Neuron_Network_For_Event-based_Image_Classification_In_Noisy_Environment/16571043) |                                                              |                                                              |
@@ -29,7 +29,7 @@
 | [Relaxation LIF: A gradient-based spiking neuron for direct training deep spiking neural networks](https://www.sciencedirect.com/science/article/pii/S092523122200755X) |                                                              | Neurocomputing                                               |
 | [SNN2ANN: A Fast and Memory-Efficient Training Framework for Spiking Neural Networks](https://arxiv.org/abs/2206.09449) | https://github.com/TJXTT/SNN2ANN                             |                                                              |
 | [Spiking Neural Networks for Frame-based and Event-based Single Object Localization](https://arxiv.org/abs/2206.06506) |                                                              |                                                              |
-| [TCJA-SNN: Temporal-Channel Joint Attention for Spiking Neural Networks](https://arxiv.org/abs/2206.10177) | https://github.com/ridgerchu/TCJA                                                             |                            |
+| [TCJA-SNN: Temporal-Channel Joint Attention for Spiking Neural Networks](https://arxiv.org/abs/2206.10177) | https://github.com/ridgerchu/TCJA                            |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
