@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
+from copy import deepcopy
 from .. import functional, neuron, layer
+
 try:
     from torchvision.models.utils import load_state_dict_from_url
 except ImportError:
@@ -37,10 +39,10 @@ class SpikingVGG(nn.Module):
         self.avgpool = layer.AdaptiveAvgPool2d((7, 7))
         self.classifier = nn.Sequential(
             layer.Linear(512 * 7 * 7, 4096),
-            spiking_neuron(**kwargs),
+            spiking_neuron(**deepcopy(kwargs)),
             layer.Dropout(),
             layer.Linear(4096, 4096),
-            spiking_neuron(**kwargs),
+            spiking_neuron(**deepcopy(kwargs)),
             layer.Dropout(),
             layer.Linear(4096, num_classes),
         )
