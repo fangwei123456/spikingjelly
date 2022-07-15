@@ -84,9 +84,9 @@ class SpikingVGG(nn.Module):
             else:
                 conv2d = layer.Conv2d(in_channels, v, kernel_size=3, padding=1)
                 if batch_norm:
-                    layers += [conv2d, norm_layer(v), neuron(**kwargs)]
+                    layers += [conv2d, norm_layer(v), neuron(**deepcopy(kwargs))]
                 else:
-                    layers += [conv2d, neuron(**kwargs)]
+                    layers += [conv2d, neuron(**deepcopy(kwargs))]
                 in_channels = v
         return nn.Sequential(*layers)
 
