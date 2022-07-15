@@ -403,6 +403,7 @@ we can train large-scale SNNs easily. Here are the example codes:
       trainer.main(args)
 
 The codes are saved in :class:`spikingjelly.activation_based.model.train_imagenet_example`. Training on a single GPU:
+
 .. code-block:: shell
 
   python -m spikingjelly.activation_based.model.train_imagenet_example --T 4 --model spiking_resnet18 --data-path /datasets/ImageNet0_03125 --batch-size 64 --lr 0.1 --lr-scheduler cosa --epochs 90

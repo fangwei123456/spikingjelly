@@ -146,11 +146,19 @@
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-所有的 ``monitor`` 在析构时都会自动删除已经注册的钩子，可以放心使用：
+所有的 ``monitor`` 在析构时都会自动删除已经注册的钩子，但python的内存回收机制并不保证在手动调用 ``del`` 时一定会进行析构。因此删除一个监视器，并不能保证钩子也立刻被删除：
 
 .. code-block:: python
 
     del spike_seq_monitor
+    # 钩子可能仍然在起作用
+
+若想立刻删除钩子，应该通过以下方式：
+
+.. code-block:: python
+
+    spike_seq_monitor.remove_hooks()
+
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` 还支持在记录数据时就对数据进行简单的处理，只需要\
 指定构造函数中的 ``function_on_output`` 即可。 ``function_on_output`` 的默认值是 ``lambda x: x``，也就是默认不进行任何处理。\

@@ -126,11 +126,19 @@ The outputs are:
     spike_seq_monitor.records=[]
     spike_seq_monitor['1']=[]
 
-All ``monitor`` will remove hooks when they are deleted. We do not need to remove hooks manually.
+All ``monitor`` will remove hooks when they are deleted. However, python will not guarantee to call the ``__del__()`` function of the monitor even if we call ``del a_monitor`` manually:
 
 .. code-block:: python
 
     del spike_seq_monitor
+    # hooks may still work
+
+Instead, we should call ``remove_hooks`` to remove all hooks:
+
+.. code-block:: python
+
+    spike_seq_monitor.remove_hooks()
+
 
 :class:`OutputMonitor <spikingjelly.activation_based.monitor.OutputMonitor>` can also process the data when recording, which is implemented by ``function_on_output``. \
 The default value of ``function_on_output`` is ``lambda x: x``, which means record the origin data. If we want to record the firing rates, we can define the \
