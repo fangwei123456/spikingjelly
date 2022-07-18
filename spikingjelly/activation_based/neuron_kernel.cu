@@ -40,7 +40,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -67,7 +67,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -76,7 +76,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -104,7 +104,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -145,7 +145,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -177,7 +177,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -187,7 +187,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -219,7 +219,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -260,7 +260,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -287,7 +287,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -296,7 +296,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -324,7 +324,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -363,7 +363,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -393,7 +393,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -403,7 +403,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -433,7 +433,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -474,7 +474,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -501,7 +501,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -510,7 +510,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -538,7 +538,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -579,7 +579,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -611,7 +611,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -621,7 +621,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -653,7 +653,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -694,7 +694,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -721,7 +721,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -730,7 +730,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -758,7 +758,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -797,7 +797,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -827,7 +827,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -837,7 +837,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -867,7 +867,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -908,7 +908,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -943,7 +943,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -952,7 +952,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -988,7 +988,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1029,7 +1029,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1061,7 +1061,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1071,7 +1071,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1103,7 +1103,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1144,7 +1144,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1179,7 +1179,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1188,7 +1188,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1224,7 +1224,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1263,7 +1263,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1293,7 +1293,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1303,7 +1303,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1333,7 +1333,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1374,7 +1374,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1402,7 +1402,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1411,7 +1411,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1440,7 +1440,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1481,7 +1481,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1514,7 +1514,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1524,7 +1524,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1557,7 +1557,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1598,7 +1598,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1626,7 +1626,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1635,7 +1635,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1664,7 +1664,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1703,7 +1703,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1734,7 +1734,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1744,7 +1744,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -1775,7 +1775,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1816,7 +1816,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1843,7 +1843,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1852,7 +1852,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1880,7 +1880,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1921,7 +1921,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1953,7 +1953,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -1963,7 +1963,7 @@
                 extern "C" __global__
                 void IFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
                 
@@ -1995,7 +1995,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -2036,7 +2036,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -2063,7 +2063,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -2072,7 +2072,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -2100,7 +2100,7 @@
                     // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, (grad_v_seq[t] + grad_h) * grad_v_to_h);
                     grad_x_seq[t] = grad_h;
                     }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -2139,7 +2139,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -2169,7 +2169,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -2179,7 +2179,7 @@
                 extern "C" __global__
                 void IFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
                 
@@ -2209,7 +2209,7 @@
                         grad_h = __hfma2(__hadd2(grad_v_seq[t], grad_h), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
                         grad_x_seq[t] = grad_h;
                         }
-                grad_v_last[index] = grad_h;
+                grad_v_init[index] = grad_h;
                 }
                 }
                 
@@ -2255,7 +2255,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2285,7 +2285,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2294,7 +2294,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2325,7 +2325,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2369,7 +2369,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2399,7 +2399,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2408,7 +2408,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2439,7 +2439,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2482,7 +2482,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2520,7 +2520,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -2530,7 +2530,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2568,7 +2568,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -2613,7 +2613,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2651,7 +2651,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -2661,7 +2661,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -2699,7 +2699,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -2743,7 +2743,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -2773,7 +2773,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2782,7 +2782,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -2813,7 +2813,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2857,7 +2857,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -2887,7 +2887,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2896,7 +2896,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -2927,7 +2927,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -2968,7 +2968,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3004,7 +3004,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3014,7 +3014,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3050,7 +3050,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3092,7 +3092,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3128,7 +3128,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3138,7 +3138,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3174,7 +3174,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3218,7 +3218,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3248,7 +3248,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3257,7 +3257,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3288,7 +3288,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3332,7 +3332,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3362,7 +3362,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3371,7 +3371,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3402,7 +3402,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3445,7 +3445,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3483,7 +3483,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3493,7 +3493,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3531,7 +3531,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3576,7 +3576,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3614,7 +3614,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3624,7 +3624,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -3662,7 +3662,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3706,7 +3706,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3736,7 +3736,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3745,7 +3745,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3776,7 +3776,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3820,7 +3820,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3850,7 +3850,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3859,7 +3859,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3890,7 +3890,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -3931,7 +3931,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -3967,7 +3967,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -3977,7 +3977,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4013,7 +4013,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4055,7 +4055,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4091,7 +4091,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4101,7 +4101,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4137,7 +4137,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4181,7 +4181,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4219,7 +4219,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4228,7 +4228,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4267,7 +4267,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4311,7 +4311,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4349,7 +4349,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4358,7 +4358,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4397,7 +4397,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4440,7 +4440,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4478,7 +4478,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4488,7 +4488,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4526,7 +4526,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4571,7 +4571,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4609,7 +4609,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4619,7 +4619,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -4657,7 +4657,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -4701,7 +4701,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4739,7 +4739,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4748,7 +4748,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4787,7 +4787,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4831,7 +4831,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4869,7 +4869,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4878,7 +4878,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4917,7 +4917,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -4958,7 +4958,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -4994,7 +4994,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5004,7 +5004,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5040,7 +5040,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5082,7 +5082,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5118,7 +5118,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5128,7 +5128,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5164,7 +5164,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5208,7 +5208,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5239,7 +5239,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5248,7 +5248,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5280,7 +5280,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5324,7 +5324,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5355,7 +5355,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5364,7 +5364,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5396,7 +5396,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5439,7 +5439,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5478,7 +5478,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5488,7 +5488,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5527,7 +5527,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5572,7 +5572,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5611,7 +5611,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5621,7 +5621,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -5660,7 +5660,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5704,7 +5704,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5735,7 +5735,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5744,7 +5744,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5776,7 +5776,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5820,7 +5820,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5851,7 +5851,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5860,7 +5860,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5892,7 +5892,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -5933,7 +5933,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -5970,7 +5970,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -5980,7 +5980,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6017,7 +6017,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6059,7 +6059,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6096,7 +6096,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6106,7 +6106,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6143,7 +6143,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6187,7 +6187,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6217,7 +6217,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6226,7 +6226,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6257,7 +6257,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6301,7 +6301,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6331,7 +6331,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6340,7 +6340,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6371,7 +6371,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6414,7 +6414,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6452,7 +6452,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6462,7 +6462,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6500,7 +6500,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6545,7 +6545,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6583,7 +6583,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6593,7 +6593,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)
@@ -6631,7 +6631,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6675,7 +6675,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6705,7 +6705,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6714,7 +6714,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6745,7 +6745,7 @@
                         grad_x_seq[t] = grad_h * reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6789,7 +6789,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6819,7 +6819,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6828,7 +6828,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6859,7 +6859,7 @@
                         grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 }
                 
@@ -6900,7 +6900,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6936,7 +6936,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -6946,7 +6946,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -6982,7 +6982,7 @@
                             grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -7024,7 +7024,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -7060,7 +7060,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -7070,7 +7070,7 @@
                 extern "C" __global__
                 void LIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -7106,7 +7106,7 @@
                             grad_x_seq[t] = grad_h;
                     
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 }
                 
@@ -7152,7 +7152,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -7185,7 +7185,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -7214,7 +7214,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -7248,7 +7248,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -7312,7 +7312,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -7345,7 +7345,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -7374,7 +7374,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -7408,7 +7408,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -7471,7 +7471,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -7517,7 +7517,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -7560,7 +7560,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -7606,7 +7606,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -7684,7 +7684,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -7730,7 +7730,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -7773,7 +7773,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -7819,7 +7819,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -7896,7 +7896,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -7929,7 +7929,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -7958,7 +7958,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -7992,7 +7992,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8056,7 +8056,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -8089,7 +8089,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8118,7 +8118,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -8152,7 +8152,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8213,7 +8213,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -8257,7 +8257,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -8300,7 +8300,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -8344,7 +8344,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -8419,7 +8419,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -8463,7 +8463,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -8506,7 +8506,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -8550,7 +8550,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -8627,7 +8627,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -8660,7 +8660,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8689,7 +8689,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -8723,7 +8723,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8787,7 +8787,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -8820,7 +8820,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8849,7 +8849,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -8883,7 +8883,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -8946,7 +8946,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -8992,7 +8992,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9035,7 +9035,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -9081,7 +9081,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9159,7 +9159,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -9205,7 +9205,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9248,7 +9248,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -9294,7 +9294,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9371,7 +9371,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -9404,7 +9404,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -9433,7 +9433,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -9467,7 +9467,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -9531,7 +9531,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -9564,7 +9564,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -9593,7 +9593,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -9627,7 +9627,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -9688,7 +9688,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -9732,7 +9732,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9775,7 +9775,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -9819,7 +9819,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9894,7 +9894,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -9938,7 +9938,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -9981,7 +9981,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -10025,7 +10025,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -10102,7 +10102,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -10143,7 +10143,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -10172,7 +10172,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -10214,7 +10214,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -10278,7 +10278,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -10319,7 +10319,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -10348,7 +10348,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -10390,7 +10390,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -10453,7 +10453,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -10499,7 +10499,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -10542,7 +10542,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -10588,7 +10588,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -10666,7 +10666,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -10712,7 +10712,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -10755,7 +10755,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -10801,7 +10801,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -10878,7 +10878,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -10919,7 +10919,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -10948,7 +10948,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -10990,7 +10990,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11054,7 +11054,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -11095,7 +11095,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11124,7 +11124,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -11166,7 +11166,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11227,7 +11227,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -11271,7 +11271,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -11314,7 +11314,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -11358,7 +11358,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -11433,7 +11433,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -11477,7 +11477,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -11520,7 +11520,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -11564,7 +11564,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -11641,7 +11641,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -11675,7 +11675,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11704,7 +11704,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -11739,7 +11739,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11803,7 +11803,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -11837,7 +11837,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11866,7 +11866,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -11901,7 +11901,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -11964,7 +11964,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -12011,7 +12011,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -12054,7 +12054,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -12101,7 +12101,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -12179,7 +12179,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -12226,7 +12226,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -12269,7 +12269,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -12316,7 +12316,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -12393,7 +12393,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -12427,7 +12427,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -12456,7 +12456,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -12491,7 +12491,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -12555,7 +12555,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -12589,7 +12589,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -12618,7 +12618,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -12653,7 +12653,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -12714,7 +12714,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -12759,7 +12759,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -12802,7 +12802,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -12847,7 +12847,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -12922,7 +12922,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -12967,7 +12967,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -13010,7 +13010,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -13055,7 +13055,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -13132,7 +13132,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -13165,7 +13165,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -13194,7 +13194,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -13228,7 +13228,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -13292,7 +13292,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -13325,7 +13325,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -13354,7 +13354,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
                 const int & neuron_num, const int & numel)
@@ -13388,7 +13388,7 @@
                             sdata[threadIdx.x] += grad_h * (v_reset - v_v_seq[t]);
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -13451,7 +13451,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -13497,7 +13497,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -13540,7 +13540,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -13586,7 +13586,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -13664,7 +13664,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -13710,7 +13710,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -13753,7 +13753,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
                 const int & neuron_num, const int & numel)\
@@ -13799,7 +13799,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -13876,7 +13876,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -13909,7 +13909,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -13938,7 +13938,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -13972,7 +13972,7 @@
                         sdata[threadIdx.x] += grad_h * (h_seq[t] - v_v_seq[t]) / reciprocal_tau;
                     
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -14036,7 +14036,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -14069,7 +14069,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -14098,7 +14098,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last, float* grad_reciprocal_tau,
+                float* grad_x_seq, float* grad_v_init, float* grad_reciprocal_tau,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
                 const int & neuron_num, const int & numel)
@@ -14132,7 +14132,7 @@
                             sdata[threadIdx.x] -= grad_h * v_v_seq[t];
                         
                     }
-                grad_v_last[index] = grad_h * one_sub_reciprocal_tau;
+                grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
                 }
                 else
                 {
@@ -14193,7 +14193,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -14237,7 +14237,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -14280,7 +14280,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputTrue_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -14324,7 +14324,7 @@
                             sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                       
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -14399,7 +14399,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -14443,7 +14443,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -14486,7 +14486,7 @@
                 extern "C" __global__
                 void ParametricLIFNode_bptt_decayInputFalse_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,  float* grad_reciprocal_tau,
+                half2* grad_x_seq, half2* grad_v_init,  float* grad_reciprocal_tau,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
                 const int & neuron_num, const int & numel)\
@@ -14530,7 +14530,7 @@
                                 sdata[threadIdx.x] += __half2float(__hadd(__low2half(temp_sum), __high2half(temp_sum)));
                           
                     }
-                grad_v_last[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+                grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
                 }
                 else
                 {
@@ -14611,7 +14611,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -14639,7 +14639,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -14648,7 +14648,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -14676,7 +14676,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -14725,7 +14725,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -14764,7 +14764,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -14774,7 +14774,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -14813,7 +14813,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -14859,7 +14859,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -14887,7 +14887,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -14896,7 +14896,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -14924,7 +14924,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -14971,7 +14971,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -15008,7 +15008,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15018,7 +15018,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -15055,7 +15055,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15101,7 +15101,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -15129,7 +15129,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15138,7 +15138,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -15166,7 +15166,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15215,7 +15215,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -15254,7 +15254,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15264,7 +15264,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -15303,7 +15303,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15349,7 +15349,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -15377,7 +15377,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15386,7 +15386,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -15414,7 +15414,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15461,7 +15461,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -15498,7 +15498,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15508,7 +15508,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -15545,7 +15545,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15591,7 +15591,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -15627,7 +15627,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15636,7 +15636,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -15672,7 +15672,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15721,7 +15721,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -15760,7 +15760,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15770,7 +15770,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -15809,7 +15809,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -15855,7 +15855,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -15891,7 +15891,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15900,7 +15900,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -15936,7 +15936,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -15983,7 +15983,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -16020,7 +16020,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16030,7 +16030,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -16067,7 +16067,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16113,7 +16113,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -16142,7 +16142,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16151,7 +16151,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -16180,7 +16180,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16229,7 +16229,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -16269,7 +16269,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16279,7 +16279,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -16319,7 +16319,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16365,7 +16365,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -16394,7 +16394,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16403,7 +16403,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -16432,7 +16432,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16479,7 +16479,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -16517,7 +16517,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16527,7 +16527,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -16565,7 +16565,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16611,7 +16611,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -16639,7 +16639,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16648,7 +16648,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, const float & v_reset,
@@ -16676,7 +16676,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16725,7 +16725,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -16764,7 +16764,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16774,7 +16774,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_hardReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, const half & v_reset,
@@ -16813,7 +16813,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -16859,7 +16859,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -16887,7 +16887,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16896,7 +16896,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp32(
                 const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
-                float* grad_x_seq, float* grad_v_last,
+                float* grad_x_seq, float* grad_v_init,
                 const float & theta_rh, const float & reciprocal_delta_T,
                 const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
                 const float & v_threshold, 
@@ -16924,7 +16924,7 @@
                     grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[t + neuron_num] - theta_rh) * reciprocal_delta_T))) * grad_v_to_h;
                     grad_x_seq[t] = grad_h * reciprocal_tau;
                     }
-                grad_v_last[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
+                grad_v_init[index] = grad_x_seq[index] * (one_sub_reciprocal_tau + reciprocal_tau * expf((v_v_seq[index] - theta_rh) * reciprocal_delta_T));
                 }
                 }
                 
@@ -16971,7 +16971,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset_detachReset_fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -17008,7 +17008,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
@@ -17018,7 +17018,7 @@
                 extern "C" __global__
                 void EIFNode_bptt_softReset__fp16(
                 const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq, const half2* v_v_seq,
-                half2* grad_x_seq, half2* grad_v_last,
+                half2* grad_x_seq, half2* grad_v_init,
                 const half & theta_rh, const half & reciprocal_delta_T,
                 const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
                 const half & v_threshold, 
@@ -17055,7 +17055,7 @@
                         grad_h = __hfma2(__hfma2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[t + stride], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_h, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));                      
                         grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
                     }
-                grad_v_last[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
+                grad_v_init[index] = __hmul2(__hfma2(h2exp(__hmul2(__hsub2(v_v_seq[index], theta_rh_half2), reciprocal_delta_T_half2)), reciprocal_tau_half2, one_sub_reciprocal_tau_half2), grad_x_seq[index]);
                 }
                 }
                 
