@@ -234,6 +234,7 @@ class BaseNode(base.MemoryModule):
         Forward by the order of `neuronal_charge`, `neuronal_fire`, and `neuronal_reset`.
 
         """
+        self.v_float_to_tensor(x)
         self.neuronal_charge(x)
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
@@ -627,7 +628,6 @@ class LIFNode(BaseNode):
         return super().extra_repr() + f', tau={self.tau}'
 
     def neuronal_charge(self, x: torch.Tensor):
-        self.v_float_to_tensor(x)
         if self.decay_input:
             if self.v_reset is None or self.v_reset == 0.:
                 self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
