@@ -15,8 +15,8 @@ $$
 	H[t] &= f(V[t - 1], X[t])\\
 	S[t] &= \Theta(H[t] - V_{th})\\
 	V[t] &= \begin{cases}
-	H[t]\left( 1 - S[t] \right) + V_{reset}S[t], &~Hard~Reset\\
-	H[t] - V_{th}S[t], &~Soft~Reset\\
+	H[t]\left( 1 - S[t] \right) + V_{reset}S[t], &\text{Hard Reset}\\
+	H[t] - V_{th}S[t], &\text{Soft Reset}\\
 \end{cases}
 \end{align}
 $$
@@ -42,8 +42,8 @@ $$
 	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
 	\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]} &= 
 	\begin{cases}
-		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Hard~Reset\\
-		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Soft~Reset\\
+		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &\text{Hard Reset}\\
+		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &\text{Soft Reset}\\
 	\end{cases}
 \end{align}
 $$
@@ -52,8 +52,8 @@ where
 
 $$
 D_{reset} = \begin{cases}
-	1, &~Detach~Reset\\
-	0, &~Not~Detach~Reset\\
+	1, &\text{Detach Reset}\\
+	0, &\text{Not Detach Reset}\\
 \end{cases}
 $$
 
@@ -242,8 +242,8 @@ $$
 	S[t] &= \Theta(H[t] - V_{th})\\
 	V[t] &= 
 	\begin{cases}
-	H[t]\left( 1 - S[t] \right) + V_{reset}S[t], &~Hard~Reset\\
-	H[t] - V_{th}S[t], &~Soft~Reset\\
+	H[t]\left( 1 - S[t] \right) + V_{reset}S[t], &\text{Hard Reset}\\
+	H[t] - V_{th}S[t], &\text{Soft Reset}\\
 	\end{cases}\\
 	W[t] &= Z[t]+bS[t]
 \end{align}
@@ -269,10 +269,14 @@ $$
 	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \frac{\mathrm{d} L}{\mathrm{d} W[t]}\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]}+\frac{\mathrm{d} L}{\mathrm{d} V[t]}\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
 	\frac{\mathrm{d} L}{\mathrm{d} W[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} W[t]}+\frac{\mathrm{d} L}{\mathrm{d} W[t+1]}\frac{\mathrm{d} W[t+1]}{\mathrm{d} Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
 	\frac{\mathrm{d} L}{\mathrm{d} V[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}+\frac{\partial L}{\partial V[t]}\\
+	\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]} &= \frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]}+b\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
+	\frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]} &= \frac{a}{\tau_{w}}\\
+	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
+	\frac{\partial Z[t + 1]}{\partial W[t]} &= 1 - \frac{1}{\tau_{w}}\\
 	\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]} &= 
 	\begin{cases}
-		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Hard~Reset\\
-		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Soft~Reset\\
+		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &\text{Hard Reset}\\
+		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &\text{Soft Reset}\\
 	\end{cases}
 \end{align}
 $$
@@ -281,8 +285,8 @@ where
 
 $$
 D_{reset} = \begin{cases}
-	1, &~Detach~Reset\\
-	0, &~Not~Detach~Reset\\
+	1, &\text{Detach Reset}\\
+	0, &\text{Not Detach Reset}\\
 \end{cases}
 $$
 
