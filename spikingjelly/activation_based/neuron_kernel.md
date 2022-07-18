@@ -4,15 +4,12 @@
 
 # cuda_utils
 
-$$
-\newcommand{\dif}{\mathop{}\!\mathrm{d}}
-$$
-
 This md file shows how we define cuda kernel for neuronal forward and backward.
 
 ## Definition
 
 We use three equations to describe spiking neurons:
+
 $$
 \begin{align}
 	H[t] &= f(V[t - 1], X[t])\\
@@ -23,40 +20,50 @@ $$
 \end{cases}
 \end{align}
 $$
+
 We define the FPTT function as
+
 $$
 S[1,2,...,T], V[1,2,...,T] = F_{fp}(X[1,2,...,T], V[0])
 $$
+
 Thus, we need to define the backward as
+
 $$
-\frac{\dif L}{\dif X[1,2,...,T]},\frac{\dif L}{\dif V[0]} = F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]})
+\frac{\mathrm{d} L}{\mathrm{d} X[1,2,...,T]},\frac{\mathrm{d} L}{\mathrm{d} V[0]} = F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]})
 $$
+
 According to the forward function, we can get
+
 $$
 \begin{align}
-	\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]} \frac{\dif H[t]}{\dif X[t]}\\
-	\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}\frac{\dif H[t+1]}{\dif V[t]})\frac{\dif V[t]}{\dif H[t]}\\
-	\frac{\dif S[t]}{\dif H[t]} &= \Theta'(H[t] - V_{th})\\
-	\frac{\dif V[t]}{\dif H[t]} &= 
+	\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
+	\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]} &= 
 	\begin{cases}
 		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Hard~Reset\\
 		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Soft~Reset\\
 	\end{cases}
 \end{align}
 $$
+
 where
+
 $$
 D_{reset} = \begin{cases}
 	1, &~Detach~Reset\\
 	0, &~Not~Detach~Reset\\
 \end{cases}
 $$
+
 Finally, we will calculate gradients as
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}\frac{\dif H[t+1]}{\dif V[t]})\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]}\frac{\dif H[t]}{\dif X[t]}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]}
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
 \end{align}
 $$
 
@@ -103,108 +110,131 @@ It will calculate ``index`` where ``0 <= index < neuron_num``, and do a for loop
 ### Integrate-and-Fire Neuron (IF Neuron)
 
 For the IF neuron, the charge function is 
+
 $$
 H[t] = V[t - 1] + X[t]
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]})\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]}
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
 \end{align}
 $$
+
 ### Leaky-Integrate-and-Fire Neuron (LIF Neuron)
 
-For the LIF neuron with decay input, the charge function is 
+For the LIF neuron with decay input, the charge function is
+
 $$
 H[t] = V[t - 1] + \frac{1}{\tau}(X[t] - (V[t - 1] - V_{reset}))
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}(1 - \frac{1}{\tau}))\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]} \frac{1}{\tau}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1 - \frac{1}{\tau})
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
 
 For the LIF neuron without decay input, the charge function is 
+
 $$
 H[t] = V[t - 1] - \frac{1}{\tau}(V[t - 1] - V_{reset}) + X[t]
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}(1 - \frac{1}{\tau}))\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1 - \frac{1}{\tau})
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
 
 ### Parametric Leaky-Integrate-and-Fire Neuron (PLIF Neuron)
 
-For the PLIF neuron with decay input, the charge function is 
+For the PLIF neuron with decay input, the charge function is
+
 $$
 H[t] = V[t - 1] + \frac{1}{\tau}(X[t] - (V[t - 1] - V_{reset}))
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}(1 - \frac{1}{\tau}))\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]} \frac{1}{\tau}\\
-\frac{\dif L}{\dif \frac{1}{\tau}} &= \sum_{t} \frac{\dif L}{\dif H[t]} (X[t] - (V[t - 1] - V_{reset}))=\sum_{t} \frac{\dif L}{\dif H[t]}(H[t]-V[t-1])\tau\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1 - \frac{1}{\tau})
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} \frac{1}{\tau}} &= \sum_{t} \frac{\mathrm{d} L}{\mathrm{d} H[t]} (X[t] - (V[t - 1] - V_{reset}))=\sum_{t} \frac{\mathrm{d} L}{\mathrm{d} H[t]}(H[t]-V[t-1])\tau\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
 
 For the PLIF neuron without decay input, the charge function is 
+
 $$
 H[t] = V[t - 1] - \frac{1}{\tau}(V[t - 1] - V_{reset}) + X[t]
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}(1 - \frac{1}{\tau}))\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]}\\
-\frac{\dif L}{\dif \frac{1}{\tau}} &= \sum_{t} \frac{\dif L}{\dif H[t]} (V_{reset} - V[t - 1])\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1 - \frac{1}{\tau})
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} \frac{1}{\tau}} &= \sum_{t} \frac{\mathrm{d} L}{\mathrm{d} H[t]} (V_{reset} - V[t - 1])\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau})
 \end{align}
 $$
 
 ### Quadratic Integrate-and-Fire Neuron (QIF Neuron)
 
 For the QIF neuron, the charge function is 
+
 $$
 H[t] = V[t - 1] + \frac{1}{\tau}\left(X[t] + a_0 (V[t - 1] - V_{rest})(V[t - 1] - v_c)\right)
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}(1+\frac{a_0}{\tau}(2V[t]-V_{rest}-v_c)))\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]} \frac{1}{\tau}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1+\frac{a_0}{\tau}(2V[t]-V_{rest}-v_c))
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1+\frac{a_0}{\tau}(2V[t]-V_{rest}-v_c)))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1+\frac{a_0}{\tau}(2V[t]-V_{rest}-v_c))
 \end{align}
 $$
 
 ### Exponential Integrate-and-Fire Neuron (EIF Neuron)
 
 For the EIF neuron, the charge function is 
+
 $$
 H[t] = V[t - 1] + \frac{1}{\tau}\left(X[t] - (V[t - 1] - V_{rest}) + \Delta_T\exp\left(\frac{V[t-1] - \theta_{rh}}{\Delta_T}\right)\right)
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-\frac{\dif L}{\dif H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\dif L}{\dif H[t+1]}(1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[t] - \theta_{rh}}{\Delta_T})))\frac{\dif V[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]} \frac{1}{\tau}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[0] - \theta_{rh}}{\Delta_T}))
+\frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}(1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[t] - \theta_{rh}}{\Delta_T})))\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1 - \frac{1}{\tau}+\frac{1}{\tau}\exp(\frac{V[0] - \theta_{rh}}{\Delta_T}))
 \end{align}
 $$
 
 ## Definition of Adaptive Neuron
 
 For adaptive neuron, an extra equation for adaptive variable $W$ is used for describing spiking neurons. $Z,H$ are intermediate states of adaptive variable $W$ and membrane potential $V$, respectively:
+
 $$
 \begin{align}
 	H[t] &= f(V[t - 1], X[t], W[t - 1])\\
@@ -218,26 +248,32 @@ $$
 	W[t] &= Z[t]+bS[t]
 \end{align}
 $$
+
 We define the FPTT function as
+
 $$
 S[1,2,...,T], V[1,2,...,T] = F_{fp}(X[1,2,...,T], V[0], W[0])
 $$
+
 Thus, we need to define the backward as
+
 $$
-\frac{\dif L}{\dif X[1,2,...,T]},\frac{\dif L}{\dif V[0]},\frac{\dif L}{\dif W[0]} = F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]},\frac{\partial L}{\partial W[1,2,...,T]})
+\frac{\mathrm{d} L}{\mathrm{d} X[1,2,...,T]},\frac{\mathrm{d} L}{\mathrm{d} V[0]},\frac{\mathrm{d} L}{\mathrm{d} W[0]} = F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]},\frac{\partial L}{\partial W[1,2,...,T]})
 $$
+
 According to the forward function, we can get
+
 $$
 \begin{align}
-	\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]} \frac{\dif H[t]}{\dif X[t]}\\
-	\frac{\dif L}{\dif H[t]} &= \frac{\dif L}{\dif W[t]}\frac{\dif W[t]}{\dif H[t]}+\frac{\dif L}{\dif V[t]}\frac{\dif V[t]}{\dif H[t]}+\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]}\\
-	\frac{\dif L}{\dif W[t]} &= \frac{\dif L}{\dif H[t+1]}\frac{\dif H[t+1]}{\dif W[t]}
-	+\frac{\dif L}{\dif W[t+1]}\frac{\dif W[t+1]}{\dif Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
-	\frac{\dif L}{\dif V[t]} &= \frac{\dif L}{\dif H[t+1]}\frac{\dif H[t+1]}{\dif V[t]}+\frac{\partial L}{\partial V[t]}\\
-	\frac{\dif W[t]}{\dif H[t]} &= \frac{\dif Z[t]}{\dif H[t]}+b\frac{\dif S[t]}{\dif H[t]}\\
-	\frac{\dif Z[t]}{\dif H[t]} &= \frac{a}{\tau_w}\\
-	\frac{\dif S[t]}{\dif H[t]} &= \Theta'(H[t] - V_{th})\\
-	\frac{\dif V[t]}{\dif H[t]} &= 
+	\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]} \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \frac{\mathrm{d} L}{\mathrm{d} W[t]}\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]}+\frac{\mathrm{d} L}{\mathrm{d} V[t]}\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} W[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} W[t]}
+	+\frac{\mathrm{d} L}{\mathrm{d} W[t+1]}\frac{\mathrm{d} W[t+1]}{\mathrm{d} Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} V[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}+\frac{\partial L}{\partial V[t]}\\
+	\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]} &= \frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]}+b\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
+	\frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]} &= \frac{a}{\tau_w}\\
+	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
+	\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]} &= 
 	\begin{cases}
 		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Hard~Reset\\
 		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &~Soft~Reset\\
@@ -245,21 +281,25 @@ $$
 	\frac{\partial Z[t+1]}{\partial W[t]} &= 1-\frac{1}{\tau_w}
 \end{align}
 $$
+
 where
+
 $$
 D_{reset} = \begin{cases}
 	1, &~Detach~Reset\\
 	0, &~Not~Detach~Reset\\
 \end{cases}
 $$
+
 Finally, we will calculate gradients as
+
 $$
 \begin{align}
-	\frac{\dif L}{\dif W[t]} &= \frac{\dif L}{\dif H[t+1]}\frac{\dif H[t+1]}{\dif W[t]}
-	+\frac{\dif L}{\dif W[t+1]}\frac{\dif W[t+1]}{\dif Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
-	\frac{\dif L}{\dif H[t]} &= \frac{\dif L}{\dif W[t]}\frac{\dif W[t]}{\dif H[t]}+(\frac{\dif L}{\dif H[t+1]}\frac{\dif H[t+1]}{\dif V[t]}+\frac{\partial L}{\partial V[t]})\frac{\dif V[t]}{\dif H[t]}+\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]}\frac{\dif H[t]}{\dif X[t]}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]}
+	\frac{\mathrm{d} L}{\mathrm{d} W[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} W[t]}
+	+\frac{\mathrm{d} L}{\mathrm{d} W[t+1]}\frac{\mathrm{d} W[t+1]}{\mathrm{d} Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \frac{\mathrm{d} L}{\mathrm{d} W[t]}\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]}+(\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}+\frac{\partial L}{\partial V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
 \end{align}
 $$
 
@@ -312,17 +352,20 @@ flowchart LR
 ### Izhikevich Neuron 
 
 For the Izhikevich neuron, the charge function is 
+
 $$
 H[t] = V[t - 1] + \frac{1}{\tau}\left(X[t] + a_0 (V[t - 1] - V_{rest})(V[t - 1] - v_c)-W[t-1]\right)
 $$
+
 Then the gradients are
+
 $$
 \begin{align}
-	\frac{\dif L}{\dif W[t]} &= -\frac{1}{\tau}\frac{\dif L}{\dif H[t+1]}
-	+(1-\frac{1}{\tau_w})\frac{\dif L}{\dif W[t+1]}\\
-	\frac{\dif L}{\dif H[t]} &= \left(\frac{a}{\tau_w}+b\frac{\dif S[t]}{\dif H[t]}\right)\frac{\dif L}{\dif W[t]}+\left(\left(1+\frac{a_0}{\tau}(2V[t]-v_c-V_{rest})\right)\frac{\dif L}{\dif H[t+1]}+\frac{\partial L}{\partial V[t]}\right)\frac{\dif V[t]}{\dif H[t]}\\
-	&+\frac{\partial L}{\partial S[t]}\frac{\dif S[t]}{\dif H[t]}\\
-\frac{\dif L}{\dif X[t]} &= \frac{\dif L}{\dif H[t]}\frac{1}{\tau}\\
-\frac{\dif L}{\dif V[0]} &= \frac{\dif L}{\dif H[1]} (1+\frac{a_0}{\tau}(2V[0]-V_{rest}-v_c))
+	\frac{\mathrm{d} L}{\mathrm{d} W[t]} &= -\frac{1}{\tau}\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}
+	+(1-\frac{1}{\tau_w})\frac{\mathrm{d} L}{\mathrm{d} W[t+1]}\\
+	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \left(\frac{a}{\tau_w}+b\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\right)\frac{\mathrm{d} L}{\mathrm{d} W[t]}+\left(\left(1+\frac{a_0}{\tau}(2V[t]-v_c-V_{rest})\right)\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}+\frac{\partial L}{\partial V[t]}\right)\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
+	&+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
+\frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{1}{\tau}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1+\frac{a_0}{\tau}(2V[0]-V_{rest}-v_c))
 \end{align}
 $$
