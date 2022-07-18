@@ -258,9 +258,7 @@ class BaseNode(base.MemoryModule):
     def v_float_to_tensor(self, x: torch.Tensor):
         if isinstance(self.v, float):
             v_init = self.v
-            self.v = torch.zeros_like(x.data)
-            if v_init != 0.:
-                torch.fill_(self.v, v_init)
+            self.v = torch.full_like(x.data, v_init)
 
 class AdaptiveBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
