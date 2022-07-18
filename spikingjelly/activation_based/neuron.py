@@ -306,15 +306,15 @@ class AdaptBaseNode(BaseNode):
 
     @staticmethod
     @torch.jit.script
-    def jit_hard_reset(v: torch.Tensor, w: torch.Tensor, spike: torch.Tensor, v_reset: float, b: float):
-        v = (1. - spike) * v + spike * v_reset
+    def jit_hard_reset(v: torch.Tensor, w: torch.Tensor, spike_d: torch.Tensor, v_reset: float, b: float, spike: torch.Tensor):
+        v = (1. - spike_d) * v + spike * v_reset
         w = w + b * spike
         return v, w
 
     @staticmethod
     @torch.jit.script
-    def jit_soft_reset(v: torch.Tensor, w: torch.Tensor, spike: torch.Tensor, v_threshold: float, b: float):
-        v = v - spike * v_threshold
+    def jit_soft_reset(v: torch.Tensor, w: torch.Tensor, spike_d: torch.Tensor, v_threshold: float, b: float, spike: torch.Tensor):
+        v = v - spike_d * v_threshold
         w = w + b * spike
         return v, w
 
@@ -340,11 +340,11 @@ class AdaptBaseNode(BaseNode):
 
         if self.v_reset is None:
             # soft reset
-            self.v, self.w = self.jit_soft_reset(self.v, self.w, spike_d, self.v_threshold, self.b)
+            self.v, self.w = self.jit_soft_reset(self.v, self.w, spike_d, self.v_threshold, self.b, spike)
 
         else:
             # hard reset
-            self.v, self.w = self.jit_hard_reset(self.v, self.w, spike_d, self.v_reset, self.b)
+            self.v, self.w = self.jit_hard_reset(self.v, self.w, spike_d, self.v_reset, self.b, spike)
 
     def extra_repr(self):
         return super().extra_repr() + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'

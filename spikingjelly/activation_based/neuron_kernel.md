@@ -62,7 +62,7 @@ $$
 
 ### Computation Graph
 
-The circle means saved gradient for Dynamic Programming (DP). Nodes with wide border indicates direct links to loss function.
+The circle means saved gradient for Dynamic Programming (DP). Nodes with wide border indicates direct links to loss function. The dashed line show the ignored gradient path when $D_{reset}=1$.
 
 ```mermaid
 flowchart LR
@@ -71,7 +71,7 @@ flowchart LR
 	
 	H1--> S1:::S
 	
-	S1 --> V1:::V
+	S1 -.-> V1:::V
 	H1 --> V1
 
 	V1 --> H2((H2)):::H
@@ -265,7 +265,7 @@ $$
 
 ### Computation Graph
 
-The circle means saved gradient for Dynamic Programming (DP). Nodes with wide border indicates direct links to loss function.
+The circle means saved gradient for Dynamic Programming (DP). Nodes with wide border indicates direct links to loss function. The dashed line show the ignored gradient path when $D_{reset}=1$.
 
 ```mermaid
 flowchart LR
@@ -278,7 +278,7 @@ flowchart LR
 	
 	H1 --> S1:::S
 	
-	S1 --> V1:::V
+	S1 -.-> V1:::V
 	H1 --> V1
 	
 	Z1 --> W1((W1)):::W
@@ -293,7 +293,7 @@ flowchart LR
 	
 	H2 --> S2:::S
 	
-	S2 --> V2:::V
+	S2 -.-> V2:::V
 	H2 --> V2
 	
 	Z2 --> W2((W2)):::W
