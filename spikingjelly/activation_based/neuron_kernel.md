@@ -273,11 +273,6 @@ $$
 	\frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]} &= \frac{a}{\tau_{w}}\\
 	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
 	\frac{\partial Z[t + 1]}{\partial W[t]} &= 1 - \frac{1}{\tau_{w}}\\
-	\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]} &= 
-	\begin{cases}
-		1 - S[t] + (-H[t] + V_{reset})\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &\text{Hard Reset}\\
-		1 - V_{th}\frac{\partial S[t]}{\partial H[t]}(1-D_{reset}), &\text{Soft Reset}\\
-	\end{cases}
 \end{align}
 $$
 
