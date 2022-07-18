@@ -271,7 +271,8 @@ $$
 	\frac{\mathrm{d} L}{\mathrm{d} V[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}+\frac{\partial L}{\partial V[t]}\\
 	\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]} &= \frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]}+b\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
 	\frac{\mathrm{d} Z[t]}{\mathrm{d} H[t]} &= \frac{a}{\tau_w}\\
-	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})
+	\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} &= \Theta'(H[t] - V_{th})\\
+	\frac{\partial Z[t + 1]}{\partial W[t]} &= 1 - \frac{1}{\tau_w}
 \end{align}
 $$
 
