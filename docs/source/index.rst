@@ -49,7 +49,7 @@ https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
     :maxdepth: 1
     :caption: 上手教程
 
-    /activation_based/migrate_from_legency
+    /activation_based/migrate_from_legacy
     /activation_based/basic_concept
     /activation_based/container
     /activation_based/neuron
@@ -163,7 +163,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :maxdepth: 1
     :caption: Tutorials
 
-    /activation_based_en/migrate_from_legency
+    /activation_based_en/migrate_from_legacy
     /activation_based_en/basic_concept
     /activation_based_en/container
     /activation_based_en/neuron
