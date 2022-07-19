@@ -59,7 +59,7 @@ $$
 \begin{align}
 \frac{\mathrm{d} L}{\mathrm{d} H[t]} &=\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]} + (\frac{\partial L}{\partial V[t]}+\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
 \frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
-\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\frac{\mathrm{d} H[1]}{\mathrm{d} V[0]}
 \end{align}
 $$
 
@@ -294,7 +294,7 @@ $$
 	+\frac{\mathrm{d} L}{\mathrm{d} W[t+1]}\frac{\mathrm{d} W[t+1]}{\mathrm{d} Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
 	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \frac{\mathrm{d} L}{\mathrm{d} W[t]}\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]}+(\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}+\frac{\partial L}{\partial V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
 \frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
-\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\\
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\frac{\mathrm{d} H[1]}{\mathrm{d} V[0]}\\
 \frac{\mathrm{d} L}{\mathrm{d} W[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\frac{\mathrm{d} H[1]}{\mathrm{d} W[0]}+\frac{\mathrm{d} L}{\mathrm{d} W[1]}\frac{\mathrm{d} W[1]}{\mathrm{d} Z[1]}\frac{\partial Z[1]}{\partial W[0]}
 \end{align}
 $$
