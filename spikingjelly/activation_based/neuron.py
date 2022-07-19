@@ -261,9 +261,9 @@ class BaseNode(base.MemoryModule):
             v_init = self.v
             self.v = torch.full_like(x.data, v_init)
 
-class AdaptiveBaseNode(BaseNode):
+class AdaptBaseNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
-                 v_rest: float = 0., w_rest: float = 0, tau_w: float = 2., a: float = 0., b: float = 0.,
+                 v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0., b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         # b: jump amplitudes
         # a: subthreshold coupling
@@ -285,21 +285,83 @@ class AdaptiveBaseNode(BaseNode):
 
     @staticmethod
     @torch.jit.script
-    def jit_neuronal_adaptation(w: float, tau_w: float, a: float, b: float, v_rest: float, spike: torch.Tensor, v: torch.Tensor):
-        return w + 1. / tau_w * (a * (v - v_rest) - w) + b * spike
+    def jit_neuronal_adaptation(w: torch.Tensor, tau_w: float, a: float, v_rest: float, v: torch.Tensor):
+        return w + 1. / tau_w * (a * (v - v_rest) - w)
 
-    def neuronal_adaptation(self, spike):
-        self.w = self.jit_neuronal_adaptation(self.w, self.tau_w, self.a, self.b, self.v_rest, spike, self.v)
+    def neuronal_adaptation(self):
+        """
+        * :ref:`API in English <AdaptBaseNode.neuronal_adaptation-en>`
+
+        .. _AdaptBaseNode.neuronal_adaptation-cn:
+
+        脉冲触发的适应性电流的更新
+
+        * :ref:`中文API <AdaptBaseNode.neuronal_adaptation-cn>`
+
+        .. _AdaptBaseNode.neuronal_adaptation-en:
+
+        Spike-triggered update of adaptation current.
+        """
+        self.w = self.jit_neuronal_adaptation(self.w, self.tau_w, self.a, self.v_rest, self.v)
+
+    @staticmethod
+    @torch.jit.script
+    def jit_hard_reset(v: torch.Tensor, w: torch.Tensor, spike_d: torch.Tensor, v_reset: float, b: float, spike: torch.Tensor):
+        v = (1. - spike_d) * v + spike * v_reset
+        w = w + b * spike
+        return v, w
+
+    @staticmethod
+    @torch.jit.script
+    def jit_soft_reset(v: torch.Tensor, w: torch.Tensor, spike_d: torch.Tensor, v_threshold: float, b: float, spike: torch.Tensor):
+        v = v - spike_d * v_threshold
+        w = w + b * spike
+        return v, w
+
+    def neuronal_reset(self, spike):
+        """
+        * :ref:`API in English <AdaptBaseNode.neuronal_reset-en>`
+
+        .. _AdaptBaseNode.neuronal_reset-cn:
+
+        根据当前神经元释放的脉冲，对膜电位进行重置。
+
+        * :ref:`中文API <AdaptBaseNode.neuronal_reset-cn>`
+
+        .. _AdaptBaseNode.neuronal_reset-en:
+
+
+        Reset the membrane potential according to neurons' output spikes.
+        """
+        if self.detach_reset:
+            spike_d = spike.detach()
+        else:
+            spike_d = spike
+
+        if self.v_reset is None:
+            # soft reset
+            self.v, self.w = self.jit_soft_reset(self.v, self.w, spike_d, self.v_threshold, self.b, spike)
+
+        else:
+            # hard reset
+            self.v, self.w = self.jit_hard_reset(self.v, self.w, spike_d, self.v_reset, self.b, spike)
 
     def extra_repr(self):
         return super().extra_repr() + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
 
     def single_step_forward(self, x: torch.Tensor):
+        self.v_float_to_tensor(x)
+        self.w_float_to_tensor(x)
         self.neuronal_charge(x)
+        self.neuronal_adaptation()
         spike = self.neuronal_fire()
-        self.neuronal_adaptation(spike)
         self.neuronal_reset(spike)
         return spike
+
+    def w_float_to_tensor(self, x: torch.Tensor):
+        if isinstance(self.w, float):
+            w_init = self.w
+            self.w = torch.full_like(x.data, fill_value=w_init)
 
 class IFNode(BaseNode):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
@@ -1156,6 +1218,37 @@ class QIFNode(BaseNode):
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c)) / self.tau
 
+    @property
+    def supported_backends(self):
+        if self.step_mode == 's':
+            return ('torch', )
+        elif self.step_mode == 'm':
+            return ('torch', 'cupy')
+        else:
+            raise ValueError(self.step_mode)
+    
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        if self.backend == 'torch':
+            return super().multi_step_forward(x_seq)
+        elif self.backend == 'cupy':
+            self.v_float_to_tensor(x_seq[0])
+
+            spike_seq, v_seq = neuron_kernel.MultiStepQIFNodePTT.apply(
+                x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest,
+                self.v_c, self.a0, self.detach_reset, self.surrogate_function.cuda_code)
+
+            spike_seq = spike_seq.reshape(x_seq.shape)
+            v_seq = v_seq.reshape(x_seq.shape)
+
+            if self.store_v_seq:
+                self.v_seq = v_seq
+
+            self.v = v_seq[-1].clone()
+
+            return spike_seq
+        else:
+            raise ValueError(self.backend)
+
 class EIFNode(BaseNode):
     def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1., v_rest: float = 0., v_reset: float = -0.1,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
@@ -1298,11 +1391,65 @@ class EIFNode(BaseNode):
             if self.store_v_seq:
                 self.v_seq = v_seq
 
-            self.v = self.v_seq[-1].clone()
+            self.v = v_seq[-1].clone()
 
             return spike_seq
         else:
             raise ValueError(self.backend)
+
+class IzhikevichNode(AdaptBaseNode):
+    def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
+                 v_reset: float = 0., v_rest: float = -0.1, w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 b: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
+        assert isinstance(tau, float) and tau > 1.
+        assert a0 > 0
+
+        super().__init__(v_threshold, v_reset, v_rest, w_rest, tau_w, a, b, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
+        self.tau = tau
+        self.v_c = v_c
+        self.a0 = a0
+
+    def extra_repr(self):
+        return super().extra_repr() + f', tau={self.tau}, v_c={self.v_c}, a0={self.a0}'
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + (x + self.a0 * (self.v - self.v_rest) * (self.v - self.v_c) - self.w) / self.tau
+
+    @property
+    def supported_backends(self):
+        if self.step_mode == 's':
+            return ('torch', )
+        elif self.step_mode == 'm':
+            return ('torch', 'cupy')
+        else:
+            raise ValueError(self.step_mode)
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        if self.backend == 'torch':
+            return super().multi_step_forward(x_seq)
+        elif self.backend == 'cupy':
+            self.v_float_to_tensor(x_seq[0])
+            self.w_float_to_tensor(x_seq[0])
+
+            spike_seq, v_seq, w_seq = neuron_kernel.MultiStepIzhikevichNodePTT.apply(
+                x_seq.flatten(1), self.v.flatten(0), self.w.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest, self.a, self.b, self.tau_w,
+                self.v_c, self.a0, self.detach_reset, self.surrogate_function.cuda_code)
+
+            spike_seq = spike_seq.reshape(x_seq.shape)
+            v_seq = v_seq.reshape(x_seq.shape)
+            w_seq = w_seq.reshape(x_seq.shape)
+
+            if self.store_v_seq:
+                self.v_seq = v_seq
+
+            self.v = v_seq[-1].clone()
+            self.w = w_seq[-1].clone()
+
+            return spike_seq
+        else:
+            raise ValueError(self.backend)
+
 
 class LIAFNode(LIFNode):
     def __init__(self, act: Callable, threshold_related: bool, *args, **kwargs):
