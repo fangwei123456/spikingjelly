@@ -176,7 +176,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/classify_dvsg
     /activation_based_en/recurrent_connection_and_stateful_synapse
     /activation_based_en/train_large_scale_snn
-    /legacy_tutorials
+    /legacy_tutorials_en
 
 
 
