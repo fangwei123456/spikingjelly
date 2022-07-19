@@ -294,7 +294,8 @@ $$
 	+\frac{\mathrm{d} L}{\mathrm{d} W[t+1]}\frac{\mathrm{d} W[t+1]}{\mathrm{d} Z[t+1]}\frac{\partial Z[t+1]}{\partial W[t]}\\
 	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \frac{\mathrm{d} L}{\mathrm{d} W[t]}\frac{\mathrm{d} W[t]}{\mathrm{d} H[t]}+(\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}+\frac{\partial L}{\partial V[t]})\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
 \frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}\\
-\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\\
+\frac{\mathrm{d} L}{\mathrm{d} W[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\frac{\mathrm{d} H[1]}{\mathrm{d} W[0]}+\frac{\mathrm{d} L}{\mathrm{d} W[1]}\frac{\mathrm{d} W[1]}{\mathrm{d} Z[1]}\frac{\partial Z[1]}{\partial W[0]}
 \end{align}
 $$
 
@@ -361,6 +362,8 @@ $$
 	\frac{\mathrm{d} L}{\mathrm{d} H[t]} &= \left(\frac{a}{\tau_w}+b\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\right)\frac{\mathrm{d} L}{\mathrm{d} W[t]}+\left(\left(1+\frac{a_0}{\tau}(2V[t]-v_c-V_{rest})\right)\frac{\mathrm{d} L}{\mathrm{d} H[t+1]}+\frac{\partial L}{\partial V[t]}\right)\frac{\mathrm{d} V[t]}{\mathrm{d} H[t]}\\
 	&+\frac{\partial L}{\partial S[t]}\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}\\
 \frac{\mathrm{d} L}{\mathrm{d} X[t]} &= \frac{\mathrm{d} L}{\mathrm{d} H[t]}\frac{1}{\tau}\\
-\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1+\frac{a_0}{\tau}(2V[0]-V_{rest}-v_c))
+\frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]} (1+\frac{a_0}{\tau}(2V[0]-V_{rest}-v_c))\\
+\frac{\mathrm{d} L}{\mathrm{d} W[0]} &= -\frac{1}{\tau}\frac{\mathrm{d} L}{\mathrm{d} H[1]}
+	+(1-\frac{1}{\tau_w})\frac{\mathrm{d} L}{\mathrm{d} W[1]}
 \end{align}
 $$
