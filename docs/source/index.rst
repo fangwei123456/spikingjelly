@@ -61,6 +61,7 @@ https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
     /activation_based/classify_dvsg
     /activation_based/recurrent_connection_and_stateful_synapse
     /activation_based/train_large_scale_snn
+    /legacy_tutorials
 
 
 模块文档
@@ -175,6 +176,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/classify_dvsg
     /activation_based_en/recurrent_connection_and_stateful_synapse
     /activation_based_en/train_large_scale_snn
+    /legacy_tutorials
 
 
 
