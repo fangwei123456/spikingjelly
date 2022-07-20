@@ -340,7 +340,7 @@ class Trainer:
         elif opt_name == "adamw":
             optimizer = torch.optim.AdamW(parameters, lr=args.lr, weight_decay=args.weight_decay)
         else:
-            raise RuntimeError(f"Invalid optimizer {args.opt}. Only SGD, RMSprop and AdamW are supported.")
+            optimizer = None
         return optimizer
 
     def set_lr_scheduler(self, args, optimizer):
@@ -354,10 +354,7 @@ class Trainer:
         elif args.lr_scheduler == "exp":
             main_lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.lr_gamma)
         else:
-            raise RuntimeError(
-                f"Invalid lr scheduler '{args.lr_scheduler}'. Only StepLR, CosineAnnealingLR and ExponentialLR "
-                "are supported."
-            )
+            main_lr_scheduler = None
         if args.lr_warmup_epochs > 0:
             if args.lr_warmup_method == "linear":
                 warmup_lr_scheduler = torch.optim.lr_scheduler.LinearLR(
@@ -368,9 +365,7 @@ class Trainer:
                     optimizer, factor=args.lr_warmup_decay, total_iters=args.lr_warmup_epochs
                 )
             else:
-                raise RuntimeError(
-                    f"Invalid warmup lr method '{args.lr_warmup_method}'. Only linear and constant are supported."
-                )
+                warmup_lr_scheduler = None
             lr_scheduler = torch.optim.lr_scheduler.SequentialLR(
                 optimizer, schedulers=[warmup_lr_scheduler, main_lr_scheduler], milestones=[args.lr_warmup_epochs]
             )
