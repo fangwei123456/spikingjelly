@@ -22,7 +22,7 @@ ANN to SNN conversion
 --------------------------------------------
 This tutorial has not been updated. The user can refer to the old tutorial for the moment:
 
-`ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/5_ann2snn.html>`
+`ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/5_ann2snn.html>`_
 
 Applications of SNNs on other tasks
 --------------------------------------------
