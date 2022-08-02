@@ -696,6 +696,14 @@ class SpikingLSTMCell(SpikingRNNCellBase):
 
 
         c = c * f + i * g
+        '''
+        according to the origin paper:
+            Notice that c can take the values 0, 1, or 2. Since the gradients around 2 are not as informative, we threshold this output to output 1 when it is 1 or 2. We approximate the gradients of this step function with γ that take two values 1 or ≤ 1.
+        '''
+
+        with torch.no_grad():
+            torch.clamp_max_(c, 1.)
+
         h = c * o
             
         return h, c
