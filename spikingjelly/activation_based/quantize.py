@@ -15,7 +15,7 @@ class k_bit_quantize_atgf(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        return grad_output
+        return grad_output, None
 
 
 def k_bit_quantize(x: torch.Tensor, k: int):
@@ -44,6 +44,45 @@ def k_bit_quantize(x: torch.Tensor, k: int):
     """
     return k_bit_quantize_atgf.apply(x, k)
 
+
+@torch.jit.script
+def step_quantize_forward(x: torch.Tensor, step: float):
+    x = x / step
+    torch.round_(x)
+    return x * step
+
+
+class step_quantize_atgf(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x: torch.Tensor, step: float = 1.):
+        return step_quantize_forward(x, step)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output, None
+
+
+def step_quantize(x: torch.Tensor, step: float = 1.):
+    """
+    :param x: a float tensor whose range is ``0 <= x <= 1``.
+    :type x: torch.Tensor
+    :param step: the quantization step
+    :type step: float
+    :return: ``y = round(x / step) * step``
+    :rtype: torch.Tensor
+
+    The step quantizer defined in `Lava`.
+    """
+    return step_quantize_atgf.apply(x, step)
+
+
+def quantize_8b(x, scale, descale = False):
+    if not descale:
+        return step_quantize(x, step = 2 / scale).clamp(-256/scale, 255/scale)
+    else:
+        return step_quantize(x, step = 2 / scale).clamp(-256/scale, 255/scale) * scale
+
+
 @torch.jit.script
 def norm_to_01_by_sigmoid(x: torch.Tensor):
     sgx = torch.sigmoid(x)
@@ -55,3 +94,12 @@ def norm_to_01_by_linear(x: torch.Tensor, eps: float = 1e-5):
     x_min = torch.min(x)
     return (x - x_min) / (x_max - x_min)
 
+
+def right_shift_to_zero(x, bits):
+    if x.dtype not in (torch.int32, torch.int64):
+        raise AssertionError(
+            "Expected torch.int32 or torch.int64 data."
+        )
+
+    x_sign = 2 * (x > 0) - 1
+    return (x_sign * ((x_sign * x) >> bits)).to(x.dtype)
