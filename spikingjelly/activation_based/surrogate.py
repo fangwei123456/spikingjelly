@@ -1935,18 +1935,20 @@ class LogTailedReLU(SurrogateFunctionBase):
     # plt.savefig('LogTailedReLU.pdf')
 
 
-@torch.jit.script
+#@torch.jit.script
 def cuba_spike_backward(
     grad_output: torch.Tensor, 
     x, tau_rho, scale_rho, graded_spike = False
 ):
     if graded_spike is False:
-        return scale_rho / 2. / tau_rho * torch.exp(
+        grad_spike2v = scale_rho / 2. / tau_rho * torch.exp(
             -torch.abs(x) / tau_rho
-        ) * grad_output
-    return scale_rho * torch.exp(
-        -torch.clamp(x, max = 0.) / tau_rho
-    ) * grad_output
+        )
+    else:
+        grad_spike2v = scale_rho * torch.exp(
+            -torch.clamp(x, max = 0.) / tau_rho
+        ) 
+    return grad_spike2v * grad_output
 
 class cuba_spike(torch.autograd.Function):
     @staticmethod
@@ -1988,11 +1990,12 @@ class cuba_spike(torch.autograd.Function):
     def backward(ctx, grad_spikes):
         voltage, threshold, tau_rho, scale_rho, graded_spike = ctx.saved_tensors
         graded_spike = True if graded_spike > 0.5 else False
+        grad_input = cuba_spike_backward(
+            grad_spikes, voltage - threshold,
+            tau_rho, scale_rho, graded_spike
+        )
         return (
-            cuba_spike_backward(
-                grad_spikes, voltage - threshold,
-                tau_rho, scale_rho, graded_spike
-            ),
+            grad_input,
             None, None, None, None, None,
         )
 
