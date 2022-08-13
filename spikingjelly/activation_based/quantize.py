@@ -66,8 +66,10 @@ def step_quantize(x: torch.Tensor, step: float = 1.):
     """
     :param x: a float tensor whose range is ``0 <= x <= 1``.
     :type x: torch.Tensor
+
     :param step: the quantization step
     :type step: float
+
     :return: ``y = round(x / step) * step``
     :rtype: torch.Tensor
 
@@ -98,7 +100,8 @@ def norm_to_01_by_linear(x: torch.Tensor, eps: float = 1e-5):
 def right_shift_to_zero(x, bits):
     if x.dtype not in (torch.int32, torch.int64):
         raise AssertionError(
-            "Expected torch.int32 or torch.int64 data."
+            f"Expected x.dtype to be torch.int32 or torch.int64,"
+            f"but get {x.dtype} instead."
         )
 
     x_sign = 2 * (x > 0) - 1

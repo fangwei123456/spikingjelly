@@ -1940,14 +1940,10 @@ def cuba_spike_backward(
     grad_output: torch.Tensor, 
     x, tau_rho, scale_rho, graded_spike = False
 ):
-    if graded_spike is False:
-        grad_spike2v = scale_rho / 2. / tau_rho * torch.exp(
-            -torch.abs(x) / tau_rho
-        )
+    if graded_spike:
+        grad_spike2v = scale_rho * torch.exp(-torch.clamp(x, max=0.)/tau_rho) 
     else:
-        grad_spike2v = scale_rho * torch.exp(
-            -torch.clamp(x, max = 0.) / tau_rho
-        ) 
+        grad_spike2v = scale_rho/2./tau_rho * torch.exp(-torch.abs(x)/tau_rho)
     return grad_spike2v * grad_output
 
 class cuba_spike(torch.autograd.Function):
@@ -1960,13 +1956,13 @@ class cuba_spike(torch.autograd.Function):
         dtype = voltage.dtype
 
         if graded_spike:
-            spikes = ((voltage >= threshold) * voltage / scale).to(dtype)
+            spikes = ((voltage >= threshold) * voltage / scale).to(dtype = dtype)
         else:
-            spikes = (voltage >= threshold).to(dtype)
+            spikes = (voltage >= threshold).to(dtype = dtype)
 
-        graded_spike = 1 if graded_spike else 0
         if not torch.is_tensor(threshold):
             threshold = torch.tensor(threshold, device = device, dtype = dtype)
+
         ctx.save_for_backward(
             voltage,
             torch.autograd.Variable(threshold, requires_grad = False),
@@ -1978,26 +1974,20 @@ class cuba_spike(torch.autograd.Function):
                 torch.tensor(scale_rho, device = device, dtype = dtype),
                 requires_grad = False
             ),
-            torch.autograd.Variable(
-                torch.tensor(graded_spike, device = device, dtype = dtype),
-                requires_grad = False
-            ),
         )
+        ctx.graded_spike = graded_spike
 
         return spikes
 
     @staticmethod
     def backward(ctx, grad_spikes):
-        voltage, threshold, tau_rho, scale_rho, graded_spike = ctx.saved_tensors
-        graded_spike = True if graded_spike > 0.5 else False
+        voltage, threshold, tau_rho, scale_rho = ctx.saved_tensors
+        graded_spike = ctx.graded_spike
         grad_input = cuba_spike_backward(
             grad_spikes, voltage - threshold,
             tau_rho, scale_rho, graded_spike
         )
-        return (
-            grad_input,
-            None, None, None, None, None,
-        )
+        return grad_input, None, None, None, None, None,
 
 # TODO: write a spikingjelly-styled nn.Module wrapper
 # for cuba_spike autograd function

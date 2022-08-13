@@ -1,4 +1,3 @@
-from matplotlib.pyplot import step
 import numpy as np
 import torch
 
@@ -12,26 +11,28 @@ TAU_RHO_MULT = 100
 
 
 def _listep_forward(input, decay, state, w_scale, dtype = torch.int32):
+    device = input.device
     scaled_state = (state * w_scale).clone().detach().to(
-        dtype = dtype, device = input.device
+        dtype = dtype, device = device
     )
     decay_int = (1<<12) - decay.clone().detach().to(
-        dtype = dtype, device = input.device
+        dtype = dtype, device = device
     )
-    output = right_shift_to_zero(scaled_state * decay_int, 12) + \
-        (w_scale * input).to(dtype = dtype)
+    output = right_shift_to_zero(scaled_state * decay_int, 12) \
+        + (w_scale * input).to(dtype = dtype)
     return output / w_scale
 
 
 def _listep_backward_correct(grad_output, decay, state,):
-    decay_factor = 1 - decay / (1<<12)
-    grad_input = grad_output
-    grad_state = grad_output * decay_factor
-    grad_decay = -grad_output * state
-    if torch.numel(decay) == 1:
-        grad_decay = torch.sum(grad_decay).unsqueeze(dim = 0)
-    else:
-        grad_decay = torch.sum(grad_decay, dim = 0)
+    with torch.no_grad():
+        decay_factor = 1 - decay / (1<<12)
+        grad_input = grad_output
+        grad_state = grad_output * decay_factor
+        grad_decay = -grad_output * state
+        if torch.numel(decay) == 1:
+            grad_decay = torch.sum(grad_decay).unsqueeze(dim = 0)
+        else:
+            grad_decay = torch.sum(grad_decay, dim = 0)
     return grad_input, grad_decay, grad_state
 
 
@@ -273,12 +274,13 @@ class CubaLIFNode(MemoryModule):
         self.store_i_seq = store_i_seq
         self.v_reset = v_reset
 
+        # the default quantization parameter setting in lava
         self.p_scale = 1<<12
         self.w_scale = int(scale)
         self.s_scale = int(scale * (1<<6))
 
-        self._threshold = int(threshold*self.w_scale) / self.w_scale
-        self.tau_rho = tau_grad * self._threshold
+        self.threshold = int(threshold*self.w_scale) / self.w_scale
+        self.tau_rho = tau_grad * self.threshold
         self.scale_rho = scale_grad
         self.shared_param = shared_param
         self.requires_grad = requires_grad
@@ -303,49 +305,41 @@ class CubaLIFNode(MemoryModule):
             self.register_parameter(
                 "current_decay",
                 torch.nn.Parameter(
-                    torch.FloatTensor([self.p_scale * current_decay]),
+                    torch.tensor(
+                        [self.p_scale * current_decay],
+                        dtype = torch.float32,
+                    ),
                     requires_grad = self.requires_grad,
                 )
             )
             self.register_parameter(
                 "voltage_decay",
                 torch.nn.Parameter(
-                    torch.FloatTensor([self.p_scale * voltage_decay]),
+                    torch.tensor(
+                        [self.p_scale * voltage_decay], 
+                        dtype = torch.float32,
+                    ),
                     requires_grad = self.requires_grad,
                 )
             )
         else:
-            if np.isscalar(current_decay) is True:  # 1% jitter for now
-                self.current_decay_min = current_decay * 0.99
-                self.current_decay_max = current_decay * 1.01
-            else:
-                if len(current_decay) != 2:
-                    raise AssertionError(
-                        f'Expected current decay to be of length 2'
-                    )
-                self.current_decay_min = current_decay[0]
-                self.current_decay_max = current_decay[1]
-            if np.isscalar(voltage_decay) is True:
-                self.voltage_decay_min = voltage_decay * 0.99
-                self.voltage_decay_max = voltage_decay * 1.01
-            else:
-                if len(voltage_decay) != 2:
-                    raise AssertionError(
-                        f'Expected voltage decay to be of length 2'
-                    )
-                self.voltage_decay_min = voltage_decay[0]
-                self.voltage_decay_max = voltage_decay[1]
+            self.current_decay_raw = current_decay
+            self.voltage_decay_raw = voltage_decay
             self.register_parameter(
                 'current_decay',
                 torch.nn.Parameter(
-                    torch.FloatTensor([self.p_scale * self.current_decay_min]),
+                    torch.tensor(
+                        [0.], dtype = torch.float32,
+                    ),
                     requires_grad=self.requires_grad,
                 )
             )
             self.register_parameter(
                 'voltage_decay',
                 torch.nn.Parameter(
-                    torch.FloatTensor([self.p_scale * self.voltage_decay_min]),
+                    torch.tensor(
+                        [0.], dtype = torch.float32,
+                    ),
                     requires_grad=self.requires_grad,
                 )
             )
@@ -362,15 +356,23 @@ class CubaLIFNode(MemoryModule):
         self.register_memory("num_neuron", None)
         self.register_memory("last_voltage_before_spike", None)
 
-        self.clamp()
+        self.clamp_decay_parameters()
 
     def quantize_8bit(self, x, descale = False):
         return quantize_8b(x, scale = self.w_scale, descale = descale)
 
-    def clamp(self):
+    def clamp_decay_parameters(self):
         with torch.no_grad():
-            self.current_decay.data.clamp_(0, self.p_scale)
-            self.voltage_decay.data.clamp_(0, self.p_scale)
+            self.current_decay.data.clamp_(min = 0., max = self.p_scale)
+            self.voltage_decay.data.clamp_(min = 0., max = self.p_scale)
+
+    @property
+    def device(self):
+        return self.current_decay.device
+
+    @property
+    def scale(self):
+        return self.w_scale 
 
     @property
     def store_v_seq(self):
@@ -395,57 +397,25 @@ class CubaLIFNode(MemoryModule):
                 self.register_memory("i_seq", None)
 
     @property
-    def threshold(self):
-        return self._threshold
-
-    @property
-    def v_th_mant(self):
-        return int(self.threshold * self.w_scale)
-
-    @property
-    def device(self):
-        return self.current_decay.device
-
-    @property
     def cx_current_decay(self):
-        """The compartment current decay parameter to be used for configuring
-        Loihi hardware."""
-        self.clamp()
+        self.clamp_decay_parameters()
         val = step_quantize(self.current_decay).cpu().data.numpy().astype(int)
-        if len(val) == 1:
-            return val[0]
-        return val
+        return val[0] if len(val) == 1 else val
 
     @property
     def cx_voltage_decay(self):
-        """The compartment voltage decay parameter to be used for configuring
-        Loihi hardware."""
-        self.clamp()
+        self.clamp_decay_parameters()
         val = step_quantize(self.voltage_decay).cpu().data.numpy().astype(int)
-        if len(val) == 1:
-            return val[0]
-        return val
-
-    @property
-    def ref_delay(self):
-        """Refractory delay."""
-        return 1
-
-    @property
-    def scale(self):
-        """Scale difference between slayer representation and hardware
-        representation of the variable states."""
-        return self.w_scale
+        return val[0] if len(val) == 1 else val
 
     @property
     def device_params(self):
-        """Dictionary of device parameters."""
         return {
             'type': 'CUBA',
             'iDecay': self.cx_current_decay,
             'vDecay': self.cx_voltage_decay,
-            'vThMant': self.v_th_mant,
-            'refDelay': self.ref_delay,
+            'vThMant': int(self.threshold * self.w_scale),
+            'refDelay': 1,
             'gradedSpike': self.graded_spike,
         }
 
@@ -464,26 +434,42 @@ class CubaLIFNode(MemoryModule):
     def neuronal_charge_1st(self, x: torch.Tensor):
         self.shape = x.shape[1:] # x.shape = [batch_size, ......]
         if len(self.shape) <= 0:
-            raise AssertionError(
+            raise ValueError(
                 "x.shape of neuronal_charge() should be"
                 "[batch_size, ......]"
             )
         self.num_neurons = int(np.prod(self.shape))
 
         if not self.shared_param:
-            cd = self.current_decay_min \
-                + (self.current_decay_max - self.current_decay_min) \
-                * torch.rand(self.shape, dtype = torch.float).to(self.device)
-            vd = self.voltage_decay_min \
-                + (self.voltage_decay_max - self.voltage_decay_min) \
-                * torch.rand(self.shape, dtype = torch.float).to(self.device)
+            if np.isscalar(self.current_decay_raw):
+                current_decay_min = self.current_decay_raw * 0.99
+                current_decay_max = self.current_decay_raw * 1.01
+            else:
+                if len(self.current_decay_raw) != 2:
+                    raise ValueError(
+                        f'current decay should be of length 2'
+                    )
+                current_decay_min = self.current_decay_raw[0]
+                current_decay_max = self.current_decay_raw[1]
+            cd = current_decay_min \
+                + (current_decay_max - current_decay_min) \
+                * torch.rand(self.shape, dtype = torch.float32).to(self.device)
             self.current_decay.data = self.p_scale * cd
-            self.voltage_decay.data = self.p_scale * vd
 
-            del self.current_decay_max
-            del self.current_decay_min
-            del self.voltage_decay_max
-            del self.voltage_decay_min
+            if np.isscalar(self.voltage_decay_raw) is True:
+                voltage_decay_min = self.voltage_decay_raw * 0.99
+                voltage_decay_max = self.voltage_decay_raw * 1.01
+            else:
+                if len(self.voltage_decay_raw) != 2:
+                    raise ValueError(
+                        f'voltage decay should be of length 2'
+                    )
+                voltage_decay_min = self.voltage_decay_raw[0]
+                voltage_decay_max = self.voltage_decay_raw[1]
+            vd = voltage_decay_min \
+                + (voltage_decay_max - voltage_decay_min) \
+                * torch.rand(self.shape, dtype = torch.float32).to(self.device)
+            self.voltage_decay.data = self.p_scale * vd
 
         self.current_state = self.current_state * torch.ones(x.shape).to(
             dtype = self.current_state.dtype,
@@ -505,7 +491,7 @@ class CubaLIFNode(MemoryModule):
                     f"{self.shape}"
                 )
         if self.requires_grad:
-            self.clamp()
+            self.clamp_decay_parameters()
 
         current = LeakyIntegratorStep.apply(
             x,
@@ -539,7 +525,7 @@ class CubaLIFNode(MemoryModule):
 
     def neuronal_reset(self, spike):
         if self.graded_spike:
-            spike = torch.clamp(spike, max = self.threshold) / self.threshold
+            spike = (spike >= self.threshold).to(dtype = torch.float32)
 
         if self.lava_style:
             spike_d = spike.detach()
