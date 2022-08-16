@@ -62,6 +62,7 @@ https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
     /activation_based/recurrent_connection_and_stateful_synapse
     /activation_based/train_large_scale_snn
     /legacy_tutorials
+    /activation_based/inference_on_lynxi
 
 
 模块文档

@@ -18,12 +18,6 @@ TracerWarning: Converting a tensor to a Python index might cause the trace to be
 
 '''
 
-# def unfold_seq(T: int, x_seq_folded: torch.Tensor):
-#     # x_seq.shape = [TN, *]
-#     # 此函数会因未知原因编译报错
-#     return x_seq_folded.reshape(T, x_seq_folded.shape[0] // T, *x_seq_folded.shape[1:])
-#
-
 class BaseNode(nn.Module):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0., step_mode='s', T: int = None,
                  return_v: bool = False):
@@ -121,60 +115,63 @@ class LIFNode(BaseNode):
 
 
 
+def to_lynxi_supported_module(m_in: nn.Module, T: int):
+    if isinstance(m_in, layer.Conv2d):
+        m_out = nn.Conv2d(in_channels=m_in.in_channels, out_channels=m_in.out_channels,
+                          kernel_size=m_in.kernel_size, stride=m_in.stride, padding=m_in.padding,
+                          dilation=m_in.dilation, groups=m_in.groups, bias=m_in.bias is not None,
+                          padding_mode=m_in.padding_mode)
+        m_out.load_state_dict(m_in.state_dict())
+
+
+
+    elif isinstance(m_in, layer.BatchNorm2d):
+        m_out = nn.BatchNorm2d(num_features=m_in.num_features, eps=m_in.eps, momentum=m_in.momentum,
+                               affine=m_in.affine, track_running_stats=m_in.affine)
+        m_out.load_state_dict(m_in.state_dict())
+
+
+
+    elif isinstance(m_in, layer.MaxPool2d):
+        m_out = nn.MaxPool2d(kernel_size=m_in.kernel_size, stride=m_in.stride, padding=m_in.padding,
+                             dilation=m_in.dilation, return_indices=m_in.return_indices, ceil_mode=m_in.ceil_mode)
+
+
+    elif isinstance(m_in, layer.AvgPool2d):
+        m_out = nn.AvgPool2d(kernel_size=m_in.kernel_size, stride=m_in.stride, padding=m_in.padding,
+                             ceil_mode=m_in.ceil_mode, count_include_pad=m_in.count_include_pad,
+                             divisor_override=m_in.divisor_override)
+
+
+    elif isinstance(m_in, layer.AdaptiveAvgPool2d):
+        m_out = nn.AdaptiveAvgPool2d(output_size=m_in.output_size)
+
+
+    elif isinstance(m_in, layer.Flatten):
+        m_out = nn.Flatten(start_dim=m_in.start_dim, end_dim=m_in.end_dim)
+
+
+    elif isinstance(m_in, neuron.IFNode):
+        m_out = IFNode(v_threshold=m_in.v_threshold, v_reset=m_in.v_reset, step_mode=m_in.step_mode, T=T,
+                       return_v=False)
+
+
+    elif isinstance(m_in, neuron.LIFNode):
+        m_out = LIFNode(tau=m_in.tau, v_threshold=m_in.v_threshold, v_reset=m_in.v_reset, decay_input=m_in.decay_input,
+                        step_mode=m_in.step_mode, T=T,
+                        return_v=False)
+
+    else:
+        logging.critical(f'{type(m_in)} is not processed and the origin module is used for lynxi compiling.')
+        m_out = copy.deepcopy(m_in).cpu()
+
+    return m_out
 
 def to_lynxi_supported_modules(net: list or tuple or nn.Sequential, T: int):
     output_net = []
     for i in range(net.__len__()):
         m_in = net[i]
-        m_out = None
-
-        if isinstance(m_in, layer.Conv2d):
-            m_out = nn.Conv2d(in_channels=m_in.in_channels, out_channels=m_in.out_channels,
-                              kernel_size=m_in.kernel_size, stride=m_in.stride, padding=m_in.padding,
-                              dilation=m_in.dilation, groups=m_in.groups, bias=m_in.bias is not None,
-                              padding_mode=m_in.padding_mode)
-            m_out.load_state_dict(m_in.state_dict())
-
-
-
-        elif isinstance(m_in, layer.BatchNorm2d):
-            m_out = nn.BatchNorm2d(num_features=m_in.num_features, eps=m_in.eps, momentum=m_in.momentum,
-                                   affine=m_in.affine, track_running_stats=m_in.affine)
-            m_out.load_state_dict(m_in.state_dict())
-
-
-
-        elif isinstance(m_in, layer.MaxPool2d):
-            m_out = nn.MaxPool2d(kernel_size=m_in.kernel_size, stride=m_in.stride, padding=m_in.padding,
-                                 dilation=m_in.dilation, return_indices=m_in.return_indices, ceil_mode=m_in.ceil_mode)
-
-
-        elif isinstance(m_in, layer.AvgPool2d):
-            m_out = nn.AvgPool2d(kernel_size=m_in.kernel_size, stride=m_in.stride, padding=m_in.padding,
-                                 ceil_mode=m_in.ceil_mode, count_include_pad=m_in.count_include_pad,
-                                 divisor_override=m_in.divisor_override)
-
-
-        elif isinstance(m_in, layer.AdaptiveAvgPool2d):
-            m_out = nn.AdaptiveAvgPool2d(output_size=m_in.output_size)
-
-
-        elif isinstance(m_in, layer.Flatten):
-            m_out = nn.Flatten(start_dim=m_in.start_dim, end_dim=m_in.end_dim)
-
-
-        elif isinstance(m_in, neuron.IFNode):
-            m_out = IFNode(v_threshold=m_in.v_threshold, v_reset=m_in.v_reset, step_mode=m_in.step_mode, T=T,
-                           return_v=False)
-
-
-        elif isinstance(m_in, neuron.LIFNode):
-            m_out = LIFNode(tau=m_in.tau, v_threshold=m_in.v_threshold, v_reset=m_in.v_reset, decay_input=m_in.decay_input, step_mode=m_in.step_mode, T=T,
-                           return_v=False)
-
-        else:
-            m_out = copy.deepcopy(m_in).cpu()
-
+        m_out = to_lynxi_supported_module(m_in, T)
         output_net.append(m_out)
 
     return output_net
@@ -187,6 +184,8 @@ try:
     '''
     import lyngor
     import lynpy
+    logging.info(f'lynpy.version={lynpy.version}')
+    logging.info(f'lyngor.version={lyngor.version}')
 
 
     def torch_tensor_to_lynxi(x: torch.Tensor, device_id: int = 0, to_apu: bool = True):
@@ -224,80 +223,4 @@ try:
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.lynxi_exchange: {e}')
 
-'''
-目前的问题是误差太大，神经元的电压误差容易在时间上累计
-代码示例：
-
-from spikingjelly.activation_based import lynxi_exchange, layer, functional, neuron
-import torch
-import torch.nn as nn
-import os
-import numpy as np
-
-class PlainIFNode(nn.Module):
-    def __init__(self, T: int) -> None:
-        super().__init__()
-        self.v_threshold = 1.
-        self.v_reset = 0.
-        self.T = T
-
-    def forward(self, x):
-        x_shape = x.shape
-        x = x.reshape(self.T, x.shape[0] // self.T, -1)
-        v = 0.
-        spike_seq = []
-        v_seq = []
-        for t in range(self.T):
-            v = v + x[t]
-            spike = (v >= self.v_threshold).to(x)
-            spike_seq.append(spike)
-            v = (1. - spike) * v + spike * self.v_reset
-            v_seq.append(v)
-
-        return torch.cat(spike_seq).reshape(x_shape), torch.cat(v_seq).reshape(x_shape)
-
-T = 4
-N = 1
-temp_dir = '/home/cxhpc/fangwei/tempdir'
-module = nn.Sequential(
-    # layer.Conv2d(3, 4, kernel_size=3, stride=1, padding=1, bias=False, step_mode='m'),
-    # layer.BatchNorm2d(4, step_mode='m'),
-    # neuron.IFNode(step_mode='m'),
-    PlainIFNode(T)
-)
-
-x = torch.rand([T, N, 2])
-x = x.flatten(0, 1)
-print(x.shape)
-module.eval()
-
-
-module = nn.Sequential(*lynxi_exchange.to_lynxi_supported_modules(module, T))
-print(module)
-
-out_path = lynxi_exchange.compile_lynxi_model(os.path.join(temp_dir, '1'), module, in_data_type='float32', out_data_type='float32', input_shape_dict={'x': x.shape})
-
-
-
-print(out_path)
-device_id = 1
-lynxi_model = lynxi_exchange.load_lynxi_model(device_id, out_path)
-
-
-with torch.no_grad():
-    y_torch, v_torch = module(x.reshape([T, N] + list(x.shape[1:])))
-    print('y_torch\n', y_torch)
-    print('v_torch\n', v_torch)
-
-    x = lynxi_exchange.torch_tensor_to_lynxi(x, device_id=device_id)
-    y_lynxi = lynxi_model(x)
-    y_v_lynxi_to_torch = lynxi_exchange.lynxi_tensor_to_torch(y_lynxi, [y_torch.numel() + v_torch.numel()], np.float32)
-    y_lynxi_to_torch = y_v_lynxi_to_torch[:y_torch.numel()].reshape_as(y_torch)
-    v_lynxi_to_torch = y_v_lynxi_to_torch[y_torch.numel():].reshape_as(v_torch)
-    print('y_lynxi_to_torch\n', y_lynxi_to_torch)
-    print('v_lynxi_to_torch\n', v_lynxi_to_torch)
-    print((v_torch - v_lynxi_to_torch).abs().sum())
-    print((y_lynxi_to_torch - y_torch).abs().sum())
-
-'''
 
