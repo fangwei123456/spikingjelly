@@ -15,6 +15,7 @@ import os
 import sys
 # sys.path.insert(0, os.path.abspath('../../spikingjelly/'))
 sys.path.insert(0, os.path.abspath('../../'))
+os.environ['PYTORCH_JIT'] = '0'
 print('sys.path', sys.path)
 print('list dir', os.listdir(sys.path[0]))
 # -- Project information -----------------------------------------------------
