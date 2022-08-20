@@ -6,8 +6,8 @@ from .base import MemoryModule
 from .surrogate import cuba_spike
 
 
-SCALE_RHO_MULT = 0.1
-TAU_RHO_MULT = 100
+SCALE_GRAD_MULT = 0.1
+TAU_GRAD_MULT = 100
 
 
 def _listep_forward(input, decay, state, w_scale, dtype = torch.int32):
@@ -75,7 +75,9 @@ class LeakyIntegratorStep(torch.autograd.Function):
             )
         else:
             decay, state = ctx.saved_tensors
-            grad_input, grad_decay, grad_state = _listep_backward_correct(grad_output, decay, state)
+            grad_input, grad_decay, grad_state = _listep_backward_correct(
+                grad_output, decay, state
+            )
         return grad_input, grad_decay, grad_state, None, None, None,
 
 
@@ -115,7 +117,7 @@ class CubaLIFNode(MemoryModule):
         :param voltage_decay: 电压衰减常数
         :type voltage_decay: float, list
 
-        :param v_reset: 重置电压，默认为0。若为 ``None``，则必为软重置；
+        :param v_reset: 重置电压，默认为0。若为 ``None``，则必为软·重置；
             若不为 ``None``，则取决于 ``soft_reset``的值来进行软/硬重置
         :type v_reset: float, None
 
@@ -125,8 +127,8 @@ class CubaLIFNode(MemoryModule):
         :param scale_grad: 控制梯度替代函数的幅度，默认为1。
         :type scale_grad: float
 
-        :param scale: 量化参数，控制神经元的量化精度，默认为 ``1<<6`` 。
-            ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``。
+        :param scale: 量化参数，控制神经元的量化精度（参考了lava-dl的cuba.Neuron）。默认为 ``1<<6`` 。
+            等效于``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``。
         :type scale: float
 
         :param norm: 对电流的normalization函数，默认为 ``None`` 。
@@ -206,8 +208,8 @@ class CubaLIFNode(MemoryModule):
         :param scale_grad: control the scale of the surrogate gradient function. Default to 1.
         :type scale_grad: float
 
-        :param scale: quantization precision. Default to ``1<<6`` .
-            ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
+        :param scale: quantization precision (ref: lava-dl cuba.Neuron). Default to ``1<<6`` .
+            Equivalent to ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
         :type scale: float
 
         :param norm: normalization function acting on neuronal current. Default to ``None`` .
@@ -275,15 +277,16 @@ class CubaLIFNode(MemoryModule):
         self.v_reset = v_reset
 
         # the default quantization parameter setting in lava
-        self.p_scale = 1<<12
-        self.w_scale = int(scale)
-        self.s_scale = int(scale * (1<<6))
+        self._scale = int(scale)
+        self._s_scale = int(scale * (1<<6))
+        # Which is equivalent to:
+        # self.p_scale = 1<<12
+        # self.w_scale = int(scale)
+        # self.s_scale = int(scale * (1<<6))
 
-        self.threshold = int(threshold*self.w_scale) / self.w_scale
-        self.tau_rho = tau_grad * self.threshold
-        self.scale_rho = scale_grad
-        self.shared_param = shared_param
-        self.requires_grad = requires_grad
+        self._threshold = int(threshold*self.scale) / self.scale
+        self.tau_grad = tau_grad * self.threshold
+        self.scale_grad = scale_grad
 
         if norm is not None:
             self.norm = norm()
@@ -293,6 +296,8 @@ class CubaLIFNode(MemoryModule):
             self.norm = None
         self.drop = dropout
 
+        self.shared_param = shared_param
+        self.requires_grad = requires_grad
         self.graded_spike = graded_spike
         self.threshold_eps = 0.01 / self.s_scale
 
@@ -306,7 +311,7 @@ class CubaLIFNode(MemoryModule):
                 "current_decay",
                 torch.nn.Parameter(
                     torch.tensor(
-                        [self.p_scale * current_decay],
+                        [(1<<12) * current_decay],
                         dtype = torch.float32,
                     ),
                     requires_grad = self.requires_grad,
@@ -316,7 +321,7 @@ class CubaLIFNode(MemoryModule):
                 "voltage_decay",
                 torch.nn.Parameter(
                     torch.tensor(
-                        [self.p_scale * voltage_decay], 
+                        [(1<<12) * voltage_decay], 
                         dtype = torch.float32,
                     ),
                     requires_grad = self.requires_grad,
@@ -359,12 +364,12 @@ class CubaLIFNode(MemoryModule):
         self.clamp_decay_parameters()
 
     def quantize_8bit(self, x, descale = False):
-        return quantize_8b(x, scale = self.w_scale, descale = descale)
+        return quantize_8b(x, scale = self.scale, descale = descale)
 
     def clamp_decay_parameters(self):
         with torch.no_grad():
-            self.current_decay.data.clamp_(min = 0., max = self.p_scale)
-            self.voltage_decay.data.clamp_(min = 0., max = self.p_scale)
+            self.current_decay.data.clamp_(min = 0., max = 1<<12)
+            self.voltage_decay.data.clamp_(min = 0., max = 1<<12)
 
     @property
     def device(self):
@@ -372,7 +377,18 @@ class CubaLIFNode(MemoryModule):
 
     @property
     def scale(self):
-        return self.w_scale 
+        """Read-only attribute: scale"""
+        return self._scale 
+
+    @property
+    def s_scale(self):
+        """Read-only attribute: s_scale"""
+        return self._s_scale
+
+    @property
+    def threshold(self):
+        """Read-only attribute: threshold"""
+        return self._threshold
 
     @property
     def store_v_seq(self):
@@ -414,7 +430,7 @@ class CubaLIFNode(MemoryModule):
             'type': 'CUBA',
             'iDecay': self.cx_current_decay,
             'vDecay': self.cx_voltage_decay,
-            'vThMant': int(self.threshold * self.w_scale),
+            'vThMant': int(self.threshold * self.scale),
             'refDelay': 1,
             'gradedSpike': self.graded_spike,
         }
@@ -454,7 +470,7 @@ class CubaLIFNode(MemoryModule):
             cd = current_decay_min \
                 + (current_decay_max - current_decay_min) \
                 * torch.rand(self.shape, dtype = torch.float32).to(self.device)
-            self.current_decay.data = self.p_scale * cd
+            self.current_decay.data = (1<<12) * cd
 
             if np.isscalar(self.voltage_decay_raw) is True:
                 voltage_decay_min = self.voltage_decay_raw * 0.99
@@ -469,7 +485,7 @@ class CubaLIFNode(MemoryModule):
             vd = voltage_decay_min \
                 + (voltage_decay_max - voltage_decay_min) \
                 * torch.rand(self.shape, dtype = torch.float32).to(self.device)
-            self.voltage_decay.data = self.p_scale * vd
+            self.voltage_decay.data = (1<<12) * vd
 
         self.current_state = self.current_state * torch.ones(x.shape).to(
             dtype = self.current_state.dtype,
@@ -517,8 +533,8 @@ class CubaLIFNode(MemoryModule):
         return cuba_spike.apply(
             self.voltage_state,
             self.threshold + self.threshold_eps,
-            self.tau_rho * TAU_RHO_MULT,
-            self.scale_rho * SCALE_RHO_MULT,
+            self.tau_grad * TAU_GRAD_MULT,
+            self.scale_grad * SCALE_GRAD_MULT,
             self.graded_spike,
             1,
         )
