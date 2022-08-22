@@ -471,7 +471,7 @@ class Sigmoid(SurrogateFunctionBase):
 
     @staticmethod
     @torch.jit.script
-    def primitive_function(x: torch.Tensor, alpha):
+    def primitive_function(x: torch.Tensor, alpha: float):
         return (x * alpha).sigmoid()
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
@@ -596,7 +596,7 @@ class SoftSign(SurrogateFunctionBase):
 
     @staticmethod
     @torch.jit.script
-    def primitive_function(x: torch.Tensor, alpha):
+    def primitive_function(x: torch.Tensor, alpha: float):
         return (F.softsign(x * alpha) + 1.) / 2.
 
     # plt.style.use(['science', 'muted', 'grid'])
@@ -940,7 +940,7 @@ class Erf(SurrogateFunctionBase):
 
     @staticmethod
     @torch.jit.script
-    def primitive_function(x: torch.Tensor, alpha):
+    def primitive_function(x: torch.Tensor, alpha: float):
         return torch.erfc_(-alpha * x) / 2.
 
     # plt.style.use(['science', 'muted', 'grid'])
@@ -1352,7 +1352,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         return s2nn.apply(x, alpha, beta)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha, beta):
+    def primitive_function(x: torch.Tensor, alpha: float, beta: float):
         return torch.where(x < 0., torch.sigmoid(x * alpha), beta * torch.log((x + 1.).abs_() + 1e-5) + 0.5)
         # abs and 1e-5 are used to avoid nan
 
@@ -1488,7 +1488,7 @@ class QPseudoSpike(SurrogateFunctionBase):
         return q_pseudo_spike.apply(x, alpha)
 
     @staticmethod
-    def primitive_function(x: torch.Tensor, alpha):
+    def primitive_function(x: torch.Tensor, alpha: float):
         mask_nonnegative = heaviside(x)
         mask_sign = mask_nonnegative * 2. - 1.
 
