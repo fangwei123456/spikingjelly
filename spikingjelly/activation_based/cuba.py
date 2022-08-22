@@ -96,8 +96,7 @@ class CubaLIFNode(MemoryModule):
     def __init__(
         self, threshold, current_decay, voltage_decay,
         v_reset=0., tau_grad=1, scale_grad=1, scale=1 << 6,
-        norm=None, dropout=None,
-        shared_param=True, requires_grad=False, graded_spike=False,  
+        norm=None, shared_param=True, requires_grad=False, graded_spike=False,  
         lava_style = True,
         detach_reset = False, soft_reset = False,
         step_mode = "s", backend = "torch",
@@ -133,9 +132,6 @@ class CubaLIFNode(MemoryModule):
 
         :param norm: 对电流的normalization函数，默认为 ``None`` 。
         :type norm: Callable
-
-        :param dropout: 对输出spike的dropout函数，默认为 ``None`` 。
-        :type dropout: Callable
 
         :param shared_param: 层内所有神经元是否共享 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数，默认为 ``True`` 。
             若为 ``True`` ，则上述两个参数应以float的形式输入。
@@ -215,9 +211,6 @@ class CubaLIFNode(MemoryModule):
         :param norm: normalization function acting on neuronal current. Default to ``None`` .
         :type norm: Callable
 
-        :param dropout: dropout function acting on output spikes. Default to ``None`` .
-        :type dropout: Callable
-
         :param shared_param: whether all the neurons in this layer share the two neuronal parameters ``current_decay`` and ``voltage_decay`` . Default to `True`.
             If ``True`` , the two neuronal parameters should be floats。
             If ``False`` and the two parameters are floats, then a 1% perturbation is added。
@@ -294,7 +287,6 @@ class CubaLIFNode(MemoryModule):
                 self.norm.pre_hook_fx = self.quantize_8bit
         else:
             self.norm = None
-        self.drop = dropout
 
         self.shared_param = shared_param
         self.requires_grad = requires_grad
@@ -496,7 +488,6 @@ class CubaLIFNode(MemoryModule):
             device = self.voltage_state.device,
         )
 
-
     def neuronal_charge(self, x: torch.Tensor):
         if self.shape is None: # the method is called for the first time
             self.neuronal_charge_1st(x)
@@ -565,8 +556,6 @@ class CubaLIFNode(MemoryModule):
             self.last_voltage_before_spike = self.voltage_state
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
-        if self.drop is not None:
-            spike = self.drop(spike)
         return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor):
