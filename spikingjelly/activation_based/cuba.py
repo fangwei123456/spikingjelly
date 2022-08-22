@@ -299,47 +299,23 @@ class CubaLIFNode(MemoryModule):
                     f"current_decay and voltage_decay should be scalars when"
                     f"shared_param = True."
                 )
-            self.register_parameter(
-                "current_decay",
-                torch.nn.Parameter(
-                    torch.tensor(
-                        [(1<<12) * current_decay],
-                        dtype = torch.float32,
-                    ),
-                    requires_grad = self.requires_grad,
-                )
-            )
-            self.register_parameter(
-                "voltage_decay",
-                torch.nn.Parameter(
-                    torch.tensor(
-                        [(1<<12) * voltage_decay], 
-                        dtype = torch.float32,
-                    ),
-                    requires_grad = self.requires_grad,
-                )
-            )
         else:
             self.current_decay_raw = current_decay
             self.voltage_decay_raw = voltage_decay
-            self.register_parameter(
-                'current_decay',
-                torch.nn.Parameter(
-                    torch.tensor(
-                        [0.], dtype = torch.float32,
-                    ),
-                    requires_grad=self.requires_grad,
-                )
-            )
-            self.register_parameter(
-                'voltage_decay',
-                torch.nn.Parameter(
-                    torch.tensor(
-                        [0.], dtype = torch.float32,
-                    ),
-                    requires_grad=self.requires_grad,
-                )
-            )
+        self.current_decay = torch.nn.Parameter(
+            torch.tensor(
+                [(1<<12) * current_decay if self.shared_param else 0.],
+                dtype = torch.float32,
+            ),
+            requires_grad = self.requires_grad,
+        )
+        self.voltage_decay = torch.nn.Parameter(
+            torch.tensor(
+                [(1<<12) * voltage_decay if self.shared_param else 0.], 
+                dtype = torch.float32,
+            ),
+            requires_grad = self.requires_grad,
+        )
 
         self.register_memory(
             "current_state",
