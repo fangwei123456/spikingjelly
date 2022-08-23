@@ -69,7 +69,7 @@ def main():
     print('ANN accuracy:')
     val(model, device, test_data_loader)
     print('Converting...')
-    model_converter = ann2snn.Converter(device=device,mode='Max', dataloader=train_data_loader)
+    model_converter = ann2snn.Converter(mode='Max', dataloader=train_data_loader)
     snn_model = model_converter(model)
     print('SNN accuracy:')
     val(snn_model, device, test_data_loader, T=T)
