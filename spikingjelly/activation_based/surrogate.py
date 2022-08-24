@@ -1950,13 +1950,13 @@ class cuba_spike(torch.autograd.Function):
     @staticmethod
     def forward(
         ctx, voltage: torch.Tensor, threshold,
-        tau_rho, scale_rho, graded_spike: bool, scale
+        tau_rho, scale_rho, graded_spike: bool,
     ):
         device = voltage.device
         dtype = voltage.dtype
 
         if graded_spike:
-            spikes = ((voltage >= threshold) * voltage / scale).to(dtype = dtype)
+            spikes = ((voltage >= threshold) * voltage).to(dtype = dtype)
         else:
             spikes = (voltage >= threshold).to(dtype = dtype)
 

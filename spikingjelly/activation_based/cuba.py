@@ -95,9 +95,10 @@ class CubaNeuronReset(torch.autograd.Function):
 class CubaLIFNode(MemoryModule):
     def __init__(
         self, threshold, current_decay, voltage_decay,
-        v_reset=0., tau_grad=1, scale_grad=1, scale=1 << 6,
-        norm=None, shared_param=True, requires_grad=False, graded_spike=False,  
-        lava_style = True,
+        v_reset = 0., tau_grad = 1, scale_grad = 1, scale = 1 << 6,
+        shared_param = True, jitter_amplitude = 0.01,
+        requires_grad = False, graded_spike = False,  
+        normalization = None, lava_style = True,
         detach_reset = False, soft_reset = False,
         step_mode = "s", backend = "torch",
         store_v_seq: bool = False, store_i_seq: bool = False,
@@ -130,14 +131,15 @@ class CubaLIFNode(MemoryModule):
             等效于``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``。
         :type scale: float
 
-        :param norm: 对电流的normalization函数，默认为 ``None`` 。
-        :type norm: Callable
-
         :param shared_param: 层内所有神经元是否共享 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数，默认为 ``True`` 。
             若为 ``True`` ，则上述两个参数应以float的形式输入。
-            若为 ``False`` ，且上述两个参数以float形式输入，则会施加1%的随机扰动。
+            若为 ``False`` ，且上述两个参数以float形式输入，则会施加随机扰动。
             若为 ``False`` ，且上述两个参数以list形式给出，则以第0个元素为最小值，第1个元素为最大值，按均匀分布随机取值。
         :type shared_param: bool
+
+        :param jitter_amplitude: 若 ``shared_param`` 为 ``False`` 且 衰减参数为标量，
+            则施加振幅为 ``jitter_amplitude`` 的随机扰动。默认为 ``0.01`` 。
+        :type jitter_amplitude: float
 
         :param requires_grad: 指明 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数是否可学习（是否需要梯度），默认为 ``False`` 。
         :type requires_grad: bool
@@ -146,6 +148,9 @@ class CubaLIFNode(MemoryModule):
             若为 ``False`` ，则为常规脉冲输出形式；输出取值为0或1。
             若为 ``True`` ，则输出为0（若不发放脉冲）或脉冲前电压（若发放脉冲）。
         :type graded_spike: bool
+
+        :param normalization: 对电流的normalization函数，默认为 ``None`` 。
+        :type normalization: Callable
 
         :param lava_style: 是否严格按照lava-dl中 ``cuba.Neuron`` 的机制进行计算，默认为 ``True`` 。
             若为 ``True`` ，则 ``detach_reset, soft_reset``这两个自定义选项均将被无视。
@@ -208,14 +213,15 @@ class CubaLIFNode(MemoryModule):
             Equivalent to ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
         :type scale: float
 
-        :param norm: normalization function acting on neuronal current. Default to ``None`` .
-        :type norm: Callable
-
         :param shared_param: whether all the neurons in this layer share the two neuronal parameters ``current_decay`` and ``voltage_decay`` . Default to `True`.
             If ``True`` , the two neuronal parameters should be floats。
-            If ``False`` and the two parameters are floats, then a 1% perturbation is added。
+            If ``False`` and the two parameters are floats, then a perturbation is added。
             If ``False`` and the two parameters are lists, then the final values of the parameters are taken randomly following uniform distributions in the intervals defined by the lists。
         :type shared_param: bool
+
+        :param jitter_amplitude: if ``shared_param`` is ``False`` and the decay parameters are scalars,
+            a perturbation whose amplitude is `jitter_amplitude` is added. Default to ``0.01`` .
+        :type jitter_amplitude: float
 
         :param requires_grad: whether ``current_decay`` and ``voltage_decay`` are learnable. Default to ``False`` .
         :type requires_grad: bool
@@ -224,6 +230,9 @@ class CubaLIFNode(MemoryModule):
             If ``False`` , the spike output takes value from 0 and 1.
             If ``True`` , the spike output is 0 if a spike is not emitted and takes the value of the pre-spike voltage if there's a spike.
         :type graded_spike: bool
+
+        :param normalization: normalization function acting on neuronal current. Default to ``None`` .
+        :type normalization: Callable
 
         :param lava_style: whether to strictly follow the computation of ``cuba.Neuron`` . Default to ``True`` .
             If ``True``, optional arguments ``detach_reset, soft_reset`` will have no effect.
@@ -280,18 +289,16 @@ class CubaLIFNode(MemoryModule):
         self._threshold = int(threshold*self.scale) / self.scale
         self.tau_grad = tau_grad * self.threshold
         self.scale_grad = scale_grad
-
-        if norm is not None:
-            self.norm = norm()
-            if hasattr(self.norm, "pre_hook_fx"):
-                self.norm.pre_hook_fx = self.quantize_8bit
-        else:
-            self.norm = None
+        self.jitter_amplitude = jitter_amplitude
 
         self.shared_param = shared_param
         self.requires_grad = requires_grad
         self.graded_spike = graded_spike
         self.threshold_eps = 0.01 / self.s_scale
+
+        self.normalization = normalization
+        if self.normalization is not None and hasattr(self.normalization, "pre_hook_fx"):
+            self.normalization.pre_hook_fx = self.quantize_8bit
 
         if self.shared_param:
             if not np.isscalar(current_decay) or not np.isscalar(voltage_decay):
@@ -339,6 +346,7 @@ class CubaLIFNode(MemoryModule):
             self.current_decay.data.clamp_(min = 0., max = 1<<12)
             self.voltage_decay.data.clamp_(min = 0., max = 1<<12)
 
+    # properties
     @property
     def device(self):
         return self.current_decay.device
@@ -403,6 +411,7 @@ class CubaLIFNode(MemoryModule):
             'gradedSpike': self.graded_spike,
         }
 
+    # static methods
     @staticmethod
     @torch.jit.script
     def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
@@ -415,6 +424,33 @@ class CubaLIFNode(MemoryModule):
         v = v - spike * v_threshold
         return v
 
+    @staticmethod
+    def get_min_max(raw_data, jitter_amplitude: float = 0.01):
+        if np.isscalar(raw_data):
+            data_min = raw_data * (1. - jitter_amplitude)
+            data_max = raw_data * (1. + jitter_amplitude)
+            return data_min, data_max
+        else:
+            if len(raw_data) != 2:
+                raise ValueError(
+                    f"raw_data should be of length 2"
+                    f"if it is not a scalar."
+                )
+            if raw_data[0] > raw_data[1]:
+                raise AssertionError(
+                    f"raw_data should have the form of"
+                    f"[min, max], but get {raw_data} instead."
+                )
+            return raw_data
+
+    @staticmethod
+    def uniformly_assign_by_min_max(data_min, data_max, shape, dtype, device):
+        random_data = data_min \
+            + (data_max - data_min) \
+            * torch.rand(size = shape, dtype = dtype).to(device = device)
+        return random_data
+
+    # computation process
     def neuronal_charge_1st(self, x: torch.Tensor):
         self.shape = x.shape[1:] # x.shape = [batch_size, ......]
         if len(self.shape) <= 0:
@@ -425,34 +461,21 @@ class CubaLIFNode(MemoryModule):
         self.num_neurons = int(np.prod(self.shape))
 
         if not self.shared_param:
-            if np.isscalar(self.current_decay_raw):
-                current_decay_min = self.current_decay_raw * 0.99
-                current_decay_max = self.current_decay_raw * 1.01
-            else:
-                if len(self.current_decay_raw) != 2:
-                    raise ValueError(
-                        f'current decay should be of length 2'
-                    )
-                current_decay_min = self.current_decay_raw[0]
-                current_decay_max = self.current_decay_raw[1]
-            cd = current_decay_min \
-                + (current_decay_max - current_decay_min) \
-                * torch.rand(self.shape, dtype = torch.float32).to(self.device)
+            current_decay_min, current_decay_max = self.get_min_max(
+                self.current_decay_raw, self.jitter_amplitude
+            )
+            cd = self.uniformly_assign_by_min_max(
+                current_decay_min, current_decay_max,
+                self.shape, torch.float32, self.device
+            )
+            voltage_decay_min, voltage_decay_max = self.get_min_max(
+                self.voltage_decay_raw, self.jitter_amplitude
+            )
+            vd = self.uniformly_assign_by_min_max(
+                voltage_decay_min, voltage_decay_max,
+                self.shape, torch.float32, self.device
+            )
             self.current_decay.data = (1<<12) * cd
-
-            if np.isscalar(self.voltage_decay_raw) is True:
-                voltage_decay_min = self.voltage_decay_raw * 0.99
-                voltage_decay_max = self.voltage_decay_raw * 1.01
-            else:
-                if len(self.voltage_decay_raw) != 2:
-                    raise ValueError(
-                        f'voltage decay should be of length 2'
-                    )
-                voltage_decay_min = self.voltage_decay_raw[0]
-                voltage_decay_max = self.voltage_decay_raw[1]
-            vd = voltage_decay_min \
-                + (voltage_decay_max - voltage_decay_min) \
-                * torch.rand(self.shape, dtype = torch.float32).to(self.device)
             self.voltage_decay.data = (1<<12) * vd
 
         self.current_state = self.current_state * torch.ones(x.shape).to(
@@ -465,7 +488,7 @@ class CubaLIFNode(MemoryModule):
         )
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.shape is None: # the method is called for the first time
+        if self.shape is None: # if neuronal_charge() is called for the first time
             self.neuronal_charge_1st(x)
         else:
             if x.shape[1:] != self.shape:
@@ -483,8 +506,8 @@ class CubaLIFNode(MemoryModule):
             self.s_scale,
             self.lava_style, None
         )
-        if self.norm is not None:
-            current = self.norm(current)
+        if self.normalization is not None:
+            current = self.normalization(current)
         voltage = LeakyIntegratorStep.apply(
             current,
             step_quantize(self.voltage_decay),
@@ -503,7 +526,6 @@ class CubaLIFNode(MemoryModule):
             self.tau_grad * TAU_GRAD_MULT,
             self.scale_grad * SCALE_GRAD_MULT,
             self.graded_spike,
-            1,
         )
 
     def neuronal_reset(self, spike):
