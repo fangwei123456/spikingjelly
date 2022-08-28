@@ -533,9 +533,7 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.M
         for t in range(x_seq.shape[0]):
             y_seq.append(single_step_module(x_seq[t]))
 
-    for t in range(y_seq.__len__()):
-        y_seq[t] = y_seq[t].unsqueeze(0)
-    return torch.cat(y_seq, 0)
+    return torch.stack(y_seq)
 
 def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: nn.Module):
     """
