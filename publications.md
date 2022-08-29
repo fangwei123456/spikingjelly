@@ -32,6 +32,8 @@
 | [TCJA-SNN: Temporal-Channel Joint Attention for Spiking Neural Networks](https://arxiv.org/abs/2206.10177) | https://github.com/ridgerchu/TCJA                            |                                                              |
 | [Lottery Ticket Hypothesis for Spiking Neural Networks](https://arxiv.org/abs/2207.01382) |                                                              | ECCV 2022                                                    |
 | [Spiking Graph Convolutional Networks](https://arxiv.org/abs/2205.02767) | https://github.com/ZulunZhu/SpikingGCN                       | IJCAI 2022                                                   |
+|                                                              |                                                              |                                                              |
+| [A model of TaOx threshold switching memristor for neuromorphic computing](https://aip.scitation.org/doi/full/10.1063/5.0096643) |                                                              | Journal of Applied Physics                                   |
 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
