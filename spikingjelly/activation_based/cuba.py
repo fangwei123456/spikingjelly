@@ -94,8 +94,9 @@ class CubaNeuronReset(torch.autograd.Function):
 
 class CubaLIFNode(MemoryModule):
     def __init__(
-        self, threshold, current_decay, voltage_decay,
-        v_reset = 0., tau_grad = 1, scale_grad = 1, scale = 1 << 6,
+        self, current_decay: float, voltage_decay: float,
+        v_threshold: float = 1., v_reset = 0.,
+        tau_grad = 1, scale_grad = 1, scale = 1 << 6,
         shared_param = True, jitter_amplitude = 0.01,
         requires_grad = False, graded_spike = False,  
         normalization = None, lava_style = True,
@@ -108,14 +109,14 @@ class CubaLIFNode(MemoryModule):
         
         .. _CubaLIFNode.__init__-cn:
 
-        :param threshold: 神经元阈值电压
-        :type threshold: float
-
         :param current_decay: 电流衰减常数
         :type current_decay: float, list
 
         :param voltage_decay: 电压衰减常数
         :type voltage_decay: float, list
+
+        :param v_threshold: 神经元阈值电压。默认为1。
+        :type v_threshold: float
 
         :param v_reset: 重置电压，默认为0。若为 ``None``，则必为软·重置；
             若不为 ``None``，则取决于 ``soft_reset``的值来进行软/硬重置
@@ -189,14 +190,14 @@ class CubaLIFNode(MemoryModule):
 
         .. CubaLIFNode.__init__-en:
 
-        :param threshold: threshold of the the neurons in this layer
-        :type threshold: float
-
         :param current_decay: current decay constant
         :type current_decay: float, list
 
         :param voltage_decay: voltage decay constant
         :type voltage_decay: float, list
+
+        :param v_threshold: threshold of the the neurons in this layer. Default to 1.
+        :type v_threshold: float
 
         :param v_reset: reset potential of the neurons in this layer, 0 by default.
             If ``None`` , do soft reset.
@@ -286,15 +287,15 @@ class CubaLIFNode(MemoryModule):
         # self.w_scale = int(scale)
         # self.s_scale = int(scale * (1<<6))
 
-        self._threshold = int(threshold*self.scale) / self.scale
-        self.tau_grad = tau_grad * self.threshold
+        self._v_threshold = int(v_threshold*self.scale) / self.scale
+        self.tau_grad = tau_grad * self.v_threshold
         self.scale_grad = scale_grad
         self.jitter_amplitude = jitter_amplitude
 
         self.shared_param = shared_param
         self.requires_grad = requires_grad
         self.graded_spike = graded_spike
-        self.threshold_eps = 0.01 / self.s_scale
+        self.v_threshold_eps = 0.01 / self.s_scale
 
         self.normalization = normalization
         if self.normalization is not None and hasattr(self.normalization, "pre_hook_fx"):
@@ -362,9 +363,9 @@ class CubaLIFNode(MemoryModule):
         return self._s_scale
 
     @property
-    def threshold(self):
-        """Read-only attribute: threshold"""
-        return self._threshold
+    def v_threshold(self):
+        """Read-only attribute: v_threshold"""
+        return self._v_threshold
 
     @property
     def store_v_seq(self):
@@ -406,7 +407,7 @@ class CubaLIFNode(MemoryModule):
             'type': 'CUBA',
             'iDecay': self.cx_current_decay,
             'vDecay': self.cx_voltage_decay,
-            'vThMant': int(self.threshold * self.scale),
+            'vThMant': int(self.v_threshold * self.scale),
             'refDelay': 1,
             'gradedSpike': self.graded_spike,
         }
@@ -522,7 +523,7 @@ class CubaLIFNode(MemoryModule):
     def neuronal_fire(self):
         return cuba_spike.apply(
             self.voltage_state,
-            self.threshold + self.threshold_eps,
+            self.v_threshold + self.v_threshold_eps,
             self.tau_grad * TAU_GRAD_MULT,
             self.scale_grad * SCALE_GRAD_MULT,
             self.graded_spike,
@@ -530,7 +531,7 @@ class CubaLIFNode(MemoryModule):
 
     def neuronal_reset(self, spike):
         if self.graded_spike:
-            spike = (spike >= self.threshold).to(dtype = torch.float32)
+            spike = (spike >= self.v_threshold).to(dtype = torch.float32)
 
         if self.lava_style:
             spike_d = spike.detach()
@@ -544,7 +545,7 @@ class CubaLIFNode(MemoryModule):
                 spike_d = spike
 
             if (self.v_reset is None) or self.soft_reset: 
-                self.voltage_state = self.jit_soft_reset(self.voltage_state, spike_d, self.threshold+self.threshold_eps)
+                self.voltage_state = self.jit_soft_reset(self.voltage_state, spike_d, self.v_threshold+self.v_threshold_eps)
             else:
                 self.voltage_state = self.jit_hard_reset(self.voltage_state, spike_d, self.v_reset)
 
