@@ -1,3 +1,5 @@
+from typing import Union
+
 import numpy as np
 import torch
 
@@ -94,10 +96,9 @@ class CubaNeuronReset(torch.autograd.Function):
 
 class CubaLIFNode(MemoryModule):
     def __init__(
-        self, current_decay: float, voltage_decay: float,
-        v_threshold: float = 1., v_reset = 0.,
+        self, current_decay: Union[float, torch.Tensor], voltage_decay: Union[float, torch.Tensor],
+        v_threshold: float = 1., v_reset: float = 0.,
         tau_grad = 1, scale_grad = 1, scale = 1 << 6,
-        shared_param = True, jitter_amplitude = 0.01,
         requires_grad = False, graded_spike = False,  
         normalization = None, lava_style = True,
         detach_reset = False, soft_reset = False,
@@ -110,10 +111,10 @@ class CubaLIFNode(MemoryModule):
         .. _CubaLIFNode.__init__-cn:
 
         :param current_decay: 电流衰减常数
-        :type current_decay: float, list
+        :type current_decay: float | torch.Tensor
 
         :param voltage_decay: 电压衰减常数
-        :type voltage_decay: float, list
+        :type voltage_decay: float | torch.Tensor
 
         :param v_threshold: 神经元阈值电压。默认为1。
         :type v_threshold: float
@@ -131,16 +132,6 @@ class CubaLIFNode(MemoryModule):
         :param scale: 量化参数，控制神经元的量化精度（参考了lava-dl的cuba.Neuron）。默认为 ``1<<6`` 。
             等效于``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``。
         :type scale: float
-
-        :param shared_param: 层内所有神经元是否共享 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数，默认为 ``True`` 。
-            若为 ``True`` ，则上述两个参数应以float的形式输入。
-            若为 ``False`` ，且上述两个参数以float形式输入，则会施加随机扰动。
-            若为 ``False`` ，且上述两个参数以list形式给出，则以第0个元素为最小值，第1个元素为最大值，按均匀分布随机取值。
-        :type shared_param: bool
-
-        :param jitter_amplitude: 若 ``shared_param`` 为 ``False`` 且 衰减参数为标量，
-            则施加振幅为 ``jitter_amplitude`` 的随机扰动。默认为 ``0.01`` 。
-        :type jitter_amplitude: float
 
         :param requires_grad: 指明 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数是否可学习（是否需要梯度），默认为 ``False`` 。
         :type requires_grad: bool
@@ -191,10 +182,10 @@ class CubaLIFNode(MemoryModule):
         .. CubaLIFNode.__init__-en:
 
         :param current_decay: current decay constant
-        :type current_decay: float, list
+        :type current_decay: float | torch.Tensor
 
         :param voltage_decay: voltage decay constant
-        :type voltage_decay: float, list
+        :type voltage_decay: float | torch.Tensor
 
         :param v_threshold: threshold of the the neurons in this layer. Default to 1.
         :type v_threshold: float
@@ -213,16 +204,6 @@ class CubaLIFNode(MemoryModule):
         :param scale: quantization precision (ref: lava-dl cuba.Neuron). Default to ``1<<6`` .
             Equivalent to ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
         :type scale: float
-
-        :param shared_param: whether all the neurons in this layer share the two neuronal parameters ``current_decay`` and ``voltage_decay`` . Default to `True`.
-            If ``True`` , the two neuronal parameters should be floats。
-            If ``False`` and the two parameters are floats, then a perturbation is added。
-            If ``False`` and the two parameters are lists, then the final values of the parameters are taken randomly following uniform distributions in the intervals defined by the lists。
-        :type shared_param: bool
-
-        :param jitter_amplitude: if ``shared_param`` is ``False`` and the decay parameters are scalars,
-            a perturbation whose amplitude is `jitter_amplitude` is added. Default to ``0.01`` .
-        :type jitter_amplitude: float
 
         :param requires_grad: whether ``current_decay`` and ``voltage_decay`` are learnable. Default to ``False`` .
         :type requires_grad: bool
@@ -290,9 +271,6 @@ class CubaLIFNode(MemoryModule):
         self._v_threshold = int(v_threshold*self.scale) / self.scale
         self.tau_grad = tau_grad * self.v_threshold
         self.scale_grad = scale_grad
-        self.jitter_amplitude = jitter_amplitude
-
-        self.shared_param = shared_param
         self.requires_grad = requires_grad
         self.graded_spike = graded_spike
         self.v_threshold_eps = 0.01 / self.s_scale
@@ -301,25 +279,20 @@ class CubaLIFNode(MemoryModule):
         if self.normalization is not None and hasattr(self.normalization, "pre_hook_fx"):
             self.normalization.pre_hook_fx = self.quantize_8bit
 
-        if self.shared_param:
-            if not np.isscalar(current_decay) or not np.isscalar(voltage_decay):
-                raise AssertionError(
-                    f"current_decay and voltage_decay should be scalars when"
-                    f"shared_param = True."
-                )
-        else:
-            self.current_decay_raw = current_decay
-            self.voltage_decay_raw = voltage_decay
         self.current_decay = torch.nn.Parameter(
             torch.tensor(
-                [(1<<12) * current_decay if self.shared_param else 0.],
+                [(1<<12) * current_decay] 
+                    if np.isscalar(current_decay) 
+                    else (1<<12) * current_decay,
                 dtype = torch.float32,
             ),
             requires_grad = self.requires_grad,
         )
         self.voltage_decay = torch.nn.Parameter(
             torch.tensor(
-                [(1<<12) * voltage_decay if self.shared_param else 0.], 
+                [(1<<12) * voltage_decay] 
+                    if np.isscalar(voltage_decay) 
+                    else (1<<12) * voltage_decay, 
                 dtype = torch.float32,
             ),
             requires_grad = self.requires_grad,
@@ -425,32 +398,6 @@ class CubaLIFNode(MemoryModule):
         v = v - spike * v_threshold
         return v
 
-    @staticmethod
-    def get_min_max(raw_data, jitter_amplitude: float = 0.01):
-        if np.isscalar(raw_data):
-            data_min = raw_data * (1. - jitter_amplitude)
-            data_max = raw_data * (1. + jitter_amplitude)
-            return data_min, data_max
-        else:
-            if len(raw_data) != 2:
-                raise ValueError(
-                    f"raw_data should be of length 2"
-                    f"if it is not a scalar."
-                )
-            if raw_data[0] > raw_data[1]:
-                raise AssertionError(
-                    f"raw_data should have the form of"
-                    f"[min, max], but get {raw_data} instead."
-                )
-            return raw_data
-
-    @staticmethod
-    def uniformly_assign_by_min_max(data_min, data_max, shape, dtype, device):
-        random_data = data_min \
-            + (data_max - data_min) \
-            * torch.rand(size = shape, dtype = dtype).to(device = device)
-        return random_data
-
     # computation process
     def neuronal_charge_1st(self, x: torch.Tensor):
         self.shape = x.shape[1:] # x.shape = [batch_size, ......]
@@ -460,24 +407,6 @@ class CubaLIFNode(MemoryModule):
                 "[batch_size, ......]"
             )
         self.num_neurons = int(np.prod(self.shape))
-
-        if not self.shared_param:
-            current_decay_min, current_decay_max = self.get_min_max(
-                self.current_decay_raw, self.jitter_amplitude
-            )
-            cd = self.uniformly_assign_by_min_max(
-                current_decay_min, current_decay_max,
-                self.shape, torch.float32, self.device
-            )
-            voltage_decay_min, voltage_decay_max = self.get_min_max(
-                self.voltage_decay_raw, self.jitter_amplitude
-            )
-            vd = self.uniformly_assign_by_min_max(
-                voltage_decay_min, voltage_decay_max,
-                self.shape, torch.float32, self.device
-            )
-            self.current_decay.data = (1<<12) * cd
-            self.voltage_decay.data = (1<<12) * vd
 
         self.current_state = self.current_state * torch.ones(x.shape).to(
             dtype = self.current_state.dtype,
