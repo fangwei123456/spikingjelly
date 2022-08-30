@@ -173,6 +173,8 @@ class OutputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_output = function_on_output
+        if instance is None:
+            instance = type(net)
         for name, m in net.named_modules():
             if isinstance(m, instance):
                 self.monitored_layers.append(name)
@@ -312,6 +314,8 @@ class InputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_input = function_on_input
+        if instance is None:
+            instance = type(net)
         for name, m in net.named_modules():
             if isinstance(m, instance):
                 self.monitored_layers.append(name)
@@ -464,6 +468,8 @@ class AttributeMonitor(BaseMonitor):
         super().__init__()
         self.attribute_name = attribute_name
         self.function_on_attribute = function_on_attribute
+        if instance is None:
+            instance = type(net)
 
         for name, m in net.named_modules():
             if isinstance(m, instance):
@@ -602,6 +608,8 @@ class GradInputMonitor(BaseMonitor):
         """
         super().__init__()
         self.function_on_grad_input = function_on_grad_input
+        if instance is None:
+            instance = type(net)
 
         for name, m in net.named_modules():
             if isinstance(m, instance):
@@ -745,6 +753,8 @@ class GradOutputMonitor(BaseMonitor):
 
         super().__init__()
         self.function_on_grad_output = function_on_grad_output
+        if instance is None:
+            instance = type(net)
         for name, m in net.named_modules():
             if isinstance(m, instance):
                 self.monitored_layers.append(name)
