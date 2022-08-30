@@ -363,23 +363,14 @@ class CubaLIFNode(MemoryModule):
                 self.register_memory("i_seq", None)
 
     @property
-    def cx_current_decay(self):
-        self.clamp_decay_parameters()
-        val = step_quantize(self.current_decay).cpu().data.numpy().astype(int)
-        return val[0] if len(val) == 1 else val
-
-    @property
-    def cx_voltage_decay(self):
-        self.clamp_decay_parameters()
-        val = step_quantize(self.voltage_decay).cpu().data.numpy().astype(int)
-        return val[0] if len(val) == 1 else val
-
-    @property
     def device_params(self):
+        self.clamp_decay_parameters()
+        cd_val = step_quantize(self.current_decay).cpu().data.numpy().astype(int)
+        vd_val = step_quantize(self.voltage_decay).cpu().data.numpy().astype(int)
         return {
             'type': 'CUBA',
-            'iDecay': self.cx_current_decay,
-            'vDecay': self.cx_voltage_decay,
+            'iDecay': cd_val[0] if len(cd_val) == 1 else cd_val,
+            'vDecay': vd_val[0] if len(vd_val) == 1 else vd_val,
             'vThMant': int(self.v_threshold * self.scale),
             'refDelay': 1,
             'gradedSpike': self.graded_spike,
