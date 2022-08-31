@@ -363,6 +363,16 @@ class CubaLIFNode(MemoryModule):
                 self.register_memory("i_seq", None)
 
     @property
+    def supported_backends(self):
+        if self.step_mode == "m" or self.step_mode == "s":
+            return ("torch", )
+        else:
+            raise ValueError(
+                f"self.step_mode should be 's' or 'm', "
+                f"but get {self.step_mode} instead."
+            )
+
+    @property
     def device_params(self):
         self.clamp_decay_parameters()
         cd_val = step_quantize(self.current_decay).cpu().data.numpy().astype(int)
@@ -376,7 +386,7 @@ class CubaLIFNode(MemoryModule):
             'gradedSpike': self.graded_spike,
         }
 
-    # static methods
+    # static jit methods
     @staticmethod
     @torch.jit.script
     def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
@@ -390,7 +400,7 @@ class CubaLIFNode(MemoryModule):
         return v
 
     # computation process
-    def neuronal_charge_1st(self, x: torch.Tensor):
+    def state_initialization(self, x: torch.Tensor):
         self.shape = x.shape[1:] # x.shape = [batch_size, ......]
         if len(self.shape) <= 0:
             raise ValueError(
@@ -409,14 +419,11 @@ class CubaLIFNode(MemoryModule):
         )
 
     def neuronal_charge(self, x: torch.Tensor):
-        if self.shape is None: # if neuronal_charge() is called for the first time
-            self.neuronal_charge_1st(x)
-        else:
-            if x.shape[1:] != self.shape:
-                raise AssertionError(
-                    f"x.shape of neuronal_charge should be"
-                    f"{self.shape}"
-                )
+        if x.shape[1:] != self.shape:
+            raise AssertionError(
+                f"x.shape of neuronal_charge should be"
+                f"{self.shape}"
+            )
         if self.requires_grad:
             self.clamp_decay_parameters()
 
@@ -469,7 +476,7 @@ class CubaLIFNode(MemoryModule):
             else:
                 self.voltage_state = self.jit_hard_reset(self.voltage_state, spike_d, self.v_reset)
 
-    def single_step_forward(self, x):
+    def training_single_step_forward(self, x):
         self.neuronal_charge(x)
         if self.lava_style:
             self.last_voltage_before_spike = self.voltage_state
@@ -477,7 +484,7 @@ class CubaLIFNode(MemoryModule):
         self.neuronal_reset(spike)
         return spike
 
-    def multi_step_forward(self, x_seq: torch.Tensor):
+    def training_multi_step_forward(self, x_seq: torch.Tensor):
         T = x_seq.shape[0]
         y_seq = []
         if self.store_v_seq:
@@ -486,7 +493,7 @@ class CubaLIFNode(MemoryModule):
             i_seq = []
 
         for t in range(T):
-            y = self.single_step_forward(x_seq[t])
+            y = self.training_single_step_forward(x_seq[t])
             y_seq.append(y.unsqueeze(0))
             if self.store_v_seq:
                 v_seq.append(self.voltage_state.unsqueeze(0))
@@ -499,3 +506,19 @@ class CubaLIFNode(MemoryModule):
             self.i_seq = torch.cat(i_seq, dim = 0)
 
         return torch.cat(y_seq, dim = 0)
+
+    def single_step_forward(self, x):
+        if self.shape is None:
+            self.state_initialization(x)
+        if self.training:
+            return self.training_single_step_forward(x)
+        else:
+            return self.training_single_step_forward(x)
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        if self.shape is None:
+            self.state_initialization(x_seq[0])
+        if self.training:
+            return self.training_multi_step_forward(x_seq)
+        else:
+            return self.training_multi_step_forward(x_seq)
