@@ -213,7 +213,7 @@ All datasets saved in the OpenI mirror are allowable by their licence or authors
 
 SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 
-| Figure                                                         | Tutorial                                                         |
+| Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/basic_concept.html) |
 | ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/neuron.html) |
@@ -223,6 +223,7 @@ SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 | ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/neuromorphic_datasets.html) |
 | ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/classify_dvsg.html) |
 | ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
+| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/trace.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/stdp.html) |
 
 Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
 

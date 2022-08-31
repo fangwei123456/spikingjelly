@@ -10,6 +10,7 @@ spikingjelly.activation\_based package
    ./sub_module/spikingjelly.activation_based.functional
    ./sub_module/spikingjelly.activation_based.lava_exchange
    ./sub_module/spikingjelly.activation_based.layer
+   ./sub_module/spikingjelly.activation_based.learning
    ./sub_module/spikingjelly.activation_based.monitor
    ./sub_module/spikingjelly.activation_based.neuron
    ./sub_module/spikingjelly.activation_based.neuron_kernel
