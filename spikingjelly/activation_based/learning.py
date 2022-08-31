@@ -236,8 +236,8 @@ class STDPLearner(base.MemoryModule):
             functional.reset_net(net)
             stdp_learner.reset()
 
-            * :ref:`中文API <STDPLearner.__init__-cn>`
-            .. _STDPLearner.__init__-en:
+        * :ref:`中文API <STDPLearner.__init__-cn>`
+        .. _STDPLearner.__init__-en:
 
         :param step_mode: the step mode, which should be same with that of ``synapse`` and ``sn``
         :type step_mode: str
