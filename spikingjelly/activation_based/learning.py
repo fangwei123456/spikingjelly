@@ -190,7 +190,7 @@ class STDPLearner(base.MemoryModule):
 
         特别的，设置 ``on_grad=False`` 则 ``step()`` 函数返回 ``delta_w * scale``；
         若设置 ``on_grad=True``，则 ``- delta_w * scale`` 会被加到 ``weight.grad``，这意味着我们可以通过 :class:`torch.optim.SGD` 之类的优化器来更新权重。注意这里有一个负号 ``-``，因为我们希望 ``weight.data += delta_w * scale``，但优化器的操作则是 ``weight.data -= lr * weight.grad``。
-        默认`on_grad=True`。
+        默认 ``on_grad=True``。
 
         需要注意，``STDPLearner`` 也是有状态的，因其内部的 ``trace_pre`` 和 ``trace_post`` 是有状态的。因此在给与网络新输入前，也需要调用 ``.reset()`` 进行重置。
 
@@ -280,8 +280,8 @@ class STDPLearner(base.MemoryModule):
         We can use ``step(on_grad, scale)`` to apply the STDP learning rule and get the update variation ``delta_w``, while the actual update variation is ``delta_w * scale``. We set ``scale = 1.`` as the default value.
 
         Note that when we set ``on_grad=False``, then ``.step()`` will return ``delta_w * scale``.
-        If we set ``on_grad=True``, then ``- delta_w * scale`` will be added in ``weight.grad``, indicating that we can use optimizers like :class:`torch.optim.SGD` to update weights.
-        We set ``on_grad=True`` as the default value. Note that there is a negative sign ``-`` because we want the operation ``weight.data += delta_w * scale``, but the optimizer will apply ``weight.data -= lr * weight.grad``.
+        If we set ``on_grad=True``, then ``- delta_w * scale`` will be added in ``weight.grad``, indicating that we can use optimizers like :class:`torch.optim.SGD` to update weights. Note that there is a negative sign ``-`` because we want the operation ``weight.data += delta_w * scale``, but the optimizer will apply ``weight.data -= lr * weight.grad``.
+        We set ``on_grad=True`` as the default value.
 
         Note that ``STDPLearner`` is also stateful because its ``trace_pre`` and ``trace_post`` are stateful. Do not forget to call ``.reset()`` before giving a new sample to the network.
 
