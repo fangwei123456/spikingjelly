@@ -62,7 +62,7 @@ STDP优化器
 -----------------------------------------------------
 :class:`spikingjelly.activation_based.learning.STDPLearner` 提供了STDP优化器的实现，支持卷积和全连接层，请读者先阅读其API文档以获取使用方法。
 
-我们使用 ``STDPLearner`` 搭建一个最简单的 ``1x1`` 网络，pre和post都只有一个神经元，并且将权重设置为 ``0.2``：
+我们使用 ``STDPLearner`` 搭建一个最简单的 ``1x1`` 网络，pre和post都只有一个神经元，并且将权重设置为 ``0.4``：
 
 .. code-block:: python
 
@@ -70,25 +70,32 @@ STDP优化器
     import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer, learning
     from matplotlib import pyplot as plt
+    torch.manual_seed(0)
 
-    tau_pre = 20.
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+    tau_pre = 2.
     tau_post = 100.
-    T = 64
+    T = 128
     N = 1
-    lr = 0.1
+    lr = 0.01
     net = nn.Sequential(
         layer.Linear(1, 1, bias=False),
         neuron.IFNode()
     )
-    nn.init.constant_(net[0].weight.data, 0.2)
+    nn.init.constant_(net[0].weight.data, 0.4)
 
-``STDPLearner`` 可以将权重的更新量叠加到参数的梯度上，因而与深度学习完全兼容。我们可以将其和优化器、学习率调节器等深度学习中的模块一起使用。这里我们使用最简单的权重更新策略：
+``STDPLearner`` 可以将负的权重的更新量 ``- delta_w * scale`` 叠加到参数的梯度上，因而与深度学习完全兼容。
+
+我们可以将其和优化器、学习率调节器等深度学习中的模块一起使用。这里我们使用最简单的权重更新策略：
 
 .. math::
 
-    W = W - lr \cdot \Delta W
+    W = W - lr \cdot \nabla W
 
-其中 :math:`\Delta W` 是使用STDP得到的权重更新量。
+其中 :math:`\nabla W` 是使用STDP得到的权重更新量取负后的 ``- delta_w * scale``。因而借助优化器可以实现\
+ ``weight.data = weight.data - lr * weight.grad = weight.data + lr * delta_w * scale``。
 
 
 这可以使用最朴素的 :class:`torch.optim.SGD` 实现，只需要设置 ``momentum=0.``：
@@ -101,7 +108,7 @@ STDP优化器
 
 .. code-block:: python
 
-    in_spike = (torch.rand([T, N, 1]) > 0.8).float()
+    in_spike = (torch.rand([T, N, 1]) > 0.7).float()
     stdp_learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1], tau_pre=tau_pre, tau_post=tau_post,
                                         f_pre=f_weight, f_post=f_weight)
 

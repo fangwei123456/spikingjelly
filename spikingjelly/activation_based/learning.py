@@ -189,7 +189,7 @@ class STDPLearner(base.MemoryModule):
         使用 ``step(on_grad, scale)`` 函数将根据STDP学习规则，计算出权重的更新量 ``delta_w``，而实际的梯度更新量为 ``delta_w * scale``，默认 ``scale = 1.``。
 
         特别的，设置 ``on_grad=False`` 则 ``step()`` 函数返回 ``delta_w * scale``；
-        若设置 ``on_grad=True``，则 ``delta_w * scale`` 会被加到 ``weight.grad``，这意味着我们可以通过 :class:`torch.optim.SGD` 之类的优化器来更新权重。
+        若设置 ``on_grad=True``，则 ``- delta_w * scale`` 会被加到 ``weight.grad``，这意味着我们可以通过 :class:`torch.optim.SGD` 之类的优化器来更新权重。注意这里有一个负号 ``-``，因为我们希望 ``weight.data += delta_w * scale``，但优化器的操作则是 ``weight.data -= lr * weight.grad``。
         默认`on_grad=True`。
 
         需要注意，``STDPLearner`` 也是有状态的，因其内部的 ``trace_pre`` 和 ``trace_post`` 是有状态的。因此在给与网络新输入前，也需要调用 ``.reset()`` 进行重置。
@@ -280,8 +280,8 @@ class STDPLearner(base.MemoryModule):
         We can use ``step(on_grad, scale)`` to apply the STDP learning rule and get the update variation ``delta_w``, while the actual update variation is ``delta_w * scale``. We set ``scale = 1.`` as the default value.
 
         Note that when we set ``on_grad=False``, then ``.step()`` will return ``delta_w * scale``.
-        If we set ``on_grad=True``, then ``delta_w * scale`` will be added in ``weight.grad``, indicating that we can use optimizers like :class:`torch.optim.SGD` to update weights.
-        We set ``on_grad=True`` as the default value.
+        If we set ``on_grad=True``, then ``- delta_w * scale`` will be added in ``weight.grad``, indicating that we can use optimizers like :class:`torch.optim.SGD` to update weights.
+        We set ``on_grad=True`` as the default value. Note that there is a negative sign ``-`` because we want the operation ``weight.data += delta_w * scale``, but the optimizer will apply ``weight.data -= lr * weight.grad``.
 
         Note that ``STDPLearner`` is also stateful because its ``trace_pre`` and ``trace_post`` are stateful. Do not forget to call ``.reset()`` before giving a new sample to the network.
 
@@ -378,7 +378,7 @@ class STDPLearner(base.MemoryModule):
         * :ref:`API in English <STDPLearner.step-en>`
         .. _STDPLearner.step-cn:
 
-        :param on_grad: 是否将更新量叠加到参数梯度。若为 ``True`` 则会将 ``delta_w * scale`` 加到 ``weight.grad``；若为 ``False`` 则本函数会返回 ``delta_w * scale``
+        :param on_grad: 是否将更新量叠加到参数梯度。若为 ``True`` 则会将 ``- delta_w * scale`` 加到 ``weight.grad``；若为 ``False`` 则本函数会返回 ``delta_w * scale``
         :type on_grad: bool
         :param scale: 更新量的系数，作用类似于学习率
         :type scale: float
@@ -388,7 +388,7 @@ class STDPLearner(base.MemoryModule):
         * :ref:`中文API <STDPLearner.step-cn>`
         .. _STDPLearner.step-en:
 
-        :param on_grad: whether add the update variation on ``weight.grad``. If ``True``, then ``delta_w * scale`` will be added on ``weight.grad``. If `False`, then this function will return ``delta_w * scale``
+        :param on_grad: whether add the update variation on ``weight.grad``. If ``True``, then ``- delta_w * scale`` will be added on ``weight.grad``. If `False`, then this function will return ``delta_w * scale``
         :type on_grad: bool
         :param scale: the scale of ``delta_w``, which acts like the learning rate
         :type scale: float
@@ -426,8 +426,8 @@ class STDPLearner(base.MemoryModule):
 
             if on_grad:
                 if self.synapse.weight.grad is None:
-                    self.synapse.weight.grad = delta_w
+                    self.synapse.weight.grad = - delta_w
                 else:
-                    self.synapse.weight.grad = self.synapse.weight.grad + delta_w
+                    self.synapse.weight.grad = self.synapse.weight.grad - delta_w
             else:
                 return delta_w

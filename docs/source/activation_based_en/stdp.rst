@@ -65,7 +65,7 @@ STDP Learner
 Please read the api doc first to learn how to use it.
 
 Now let us use ``STDPLearner`` to build the simplest ``1x1`` SNN with only one pre and one post neuron. \
-And we set the weight as ``0.2``:
+And we set the weight as ``0.4``:
 
 .. code-block:: python
 
@@ -73,28 +73,33 @@ And we set the weight as ``0.2``:
     import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer, learning
     from matplotlib import pyplot as plt
+    torch.manual_seed(0)
 
-    tau_pre = 20.
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+    tau_pre = 2.
     tau_post = 100.
-    T = 64
+    T = 128
     N = 1
-    lr = 0.1
+    lr = 0.01
     net = nn.Sequential(
         layer.Linear(1, 1, bias=False),
         neuron.IFNode()
     )
-    nn.init.constant_(net[0].weight.data, 0.2)
+    nn.init.constant_(net[0].weight.data, 0.4)
 
-``STDPLearner`` can add weight variation on the gradient of weight, which makes it compatible with deep learning methods. We can use \
+``STDPLearner`` can add the negative weight variation ``- delta_w * scale`` on the gradient of weight, which makes it compatible with deep learning methods. We can use \
 the optimizer, learning rate scheduler with ``STDPLearner`` together. 
 
 In this example, we use the simplest parameter update method:
 
 .. math::
 
-    W = W - lr \cdot \Delta W
+    W = W - lr \cdot \nabla W
 
-where :math:`\Delta W` is the weight variation calculated by STDP.
+where :math:`\nabla W` is ``- delta_w * scale``. Thus, the optimizer will apply \
+``weight.data = weight.data - lr * weight.grad = weight.data + lr * delta_w * scale``.
 
 We can implement the above parameter update method by the plain :class:`torch.optim.SGD` with ``momentum=0.``:
 
@@ -106,7 +111,7 @@ Then we create the input spikes and set ``STDPLearner``:
 
 .. code-block:: python
 
-    in_spike = (torch.rand([T, N, 1]) > 0.8).float()
+    in_spike = (torch.rand([T, N, 1]) > 0.7).float()
     stdp_learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1], tau_pre=tau_pre, tau_post=tau_post,
                                         f_pre=f_weight, f_post=f_weight)
 
@@ -123,7 +128,7 @@ to ``shape = [T]``:
         for t in range(T):
             optimizer.zero_grad()
             out_spike.append(net(in_spike[t]).squeeze())
-            stdp_learner.step(on_grad=True)  # 将STDP学习得到的参数更新量叠加到参数的梯度上
+            stdp_learner.step(on_grad=True)  # add ``- delta_w * scale`` on grad
             optimizer.step()
             weight.append(net[0].weight.data.clone().squeeze())
             trace_pre.append(stdp_learner.trace_pre.squeeze())
