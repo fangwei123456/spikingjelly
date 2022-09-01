@@ -94,8 +94,7 @@ STDP优化器
 
     W = W - lr \cdot \nabla W
 
-其中 :math:`\nabla W` 是使用STDP得到的权重更新量取负后的 ``- delta_w * scale``。因而借助优化器可以实现\
- ``weight.data = weight.data - lr * weight.grad = weight.data + lr * delta_w * scale``。
+其中 :math:`\nabla W` 是使用STDP得到的权重更新量取负后的 ``- delta_w * scale``。因而借助优化器可以实现 ``weight.data = weight.data - lr * weight.grad = weight.data + lr * delta_w * scale``。
 
 
 这可以使用最朴素的 :class:`torch.optim.SGD` 实现，只需要设置 ``momentum=0.``：
