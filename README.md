@@ -255,7 +255,7 @@ Not all API documents are written in both English and Chinese. We welcome users 
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
 
-<img src="./docs/source/_static/logo/pku.png" alt="PKU" style="zoom:50%;" /><img src="./docs/source/_static/logo/pcl.png" alt="PCL" style="zoom:50%;" />
+<img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" /><img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
