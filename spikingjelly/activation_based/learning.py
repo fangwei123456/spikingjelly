@@ -343,6 +343,11 @@ class STDPLearner(base.MemoryModule):
         self.register_memory('trace_pre', None)
         self.register_memory('trace_post', None)
 
+    def reset(self):
+        super(STDPLearner, self).reset()
+        self.in_spike_monitor.clear_recorded_data()
+        self.out_spike_monitor.clear_recorded_data()
+
     def disable(self):
         """
         * :ref:`API in English <STDPLearner.disable-en>`
