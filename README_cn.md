@@ -257,7 +257,7 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
 北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](https://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
 
-![PKU](./docs/source/_static/logo/pku.png)![PCL](./docs/source/_static/logo/pcl.png)
+<img src="./docs/source/_static/logo/pku.png" alt="PKU" style="zoom:50%;" /><img src="./docs/source/_static/logo/pcl.png" alt="PCL" style="zoom:50%;" />
 
 开发人员名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
 
