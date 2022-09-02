@@ -512,6 +512,11 @@ class GradInputMonitor(BaseMonitor):
         
         阅读监视器的教程以获得更多信息。
 
+        .. Note::
+
+            对于一个模块，输入为 :math:`X`，输出为 :math:`Y`，损失为 :math:`L`，则 ``GradInputMonitor`` 记录的是对输入的梯度 :math:`\\frac{\\partial L}{\\partial X}`。
+
+
         示例代码：
 
         .. code-block:: python
@@ -568,6 +573,11 @@ class GradInputMonitor(BaseMonitor):
         Call ``self.clear_recorded_data()`` to clear the recorded data.
 
         Refer to the tutorial about the monitor for more details.
+
+        .. admonition:: Note
+            :class: note
+
+            Denote the input and output of the monitored module as :math:`X` and :math:`Y`, and the loss is :math:`L`, then ``GradInputMonitor`` will record the gradient of input, which is :math:`\\frac{\\partial L}{\\partial X}`.
 
         Codes example:
 
@@ -649,6 +659,10 @@ class GradOutputMonitor(BaseMonitor):
         
         阅读监视器的教程以获得更多信息。
 
+        .. Note::
+
+            对于一个模块，输入为 :math:`X`，输出为 :math:`Y`，损失为 :math:`L`，则 ``GradOutputMonitor`` 记录的是对输出的梯度 :math:`\\frac{\\partial L}{\\partial Y}`。
+
         示例代码：
 
         .. code-block:: python
@@ -708,6 +722,12 @@ class GradOutputMonitor(BaseMonitor):
         Call ``self.clear_recorded_data()`` to clear the recorded data.
 
         Refer to the tutorial about the monitor for more details.
+
+        .. admonition:: Note
+            :class: note
+
+            Denote the input and output of the monitored module as :math:`X` and :math:`Y`, and the loss is :math:`L`, then ``GradOutputMonitor`` will record the gradient of output, which is :math:`\\frac{\\partial L}{\\partial Y}`.
+
 
         Codes example:
 
