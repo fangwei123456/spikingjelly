@@ -67,7 +67,7 @@ class OutputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
+        :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_output: 作用于被监控的模块输出的自定义的函数
         :type function_on_output: Callable
@@ -199,7 +199,7 @@ class InputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
+        :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_input: 作用于被监控的模块输入的自定义的函数
         :type function_on_input: Callable
@@ -345,7 +345,7 @@ class AttributeMonitor(BaseMonitor):
         :type pre_forward: bool
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
+        :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_attribute: 作用于被监控的模块 ``m`` 的成员 ``m.attribute_name`` 的自定义的函数
         :type function_on_attribute: Callable
@@ -501,7 +501,7 @@ class GradInputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
+        :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_grad_input: 作用于被监控的模块输出的输入的梯度的函数
         :type function_on_grad_input: Callable
@@ -648,7 +648,7 @@ class GradOutputMonitor(BaseMonitor):
 
         :param net: 一个神经网络
         :type net: nn.Module
-        :param instance: 设置监视器的类型。若为 ``None`` 则表示类型为 ``type(net)``
+        :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
         :type instance: Any or tuple
         :param function_on_grad_output: 作用于被监控的模块输出的输出的的梯度的函数
         :type function_on_grad_output: Callable
