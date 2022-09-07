@@ -27,6 +27,115 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
         The DVS128 Gesture dataset, which is proposed by `A Low Power, Fully Event-Based Gesture Recognition System <https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html>`_.
 
         Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+
+
+        .. admonition:: Note
+            :class: note
+
+            In SpikingJelly, there are 1176 train samples and 288 test samples. The total samples number is 1464.
+
+            .. code-block:: python
+
+                from spikingjelly.datasets import dvs128_gesture
+
+                data_dir = 'D:/datasets/DVS128Gesture'
+                train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
+                test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
+                print(f'train samples = {train_set.__len__()}, test samples = {test_set.__len__()}')
+                print(f'total samples = {train_set.__len__() + test_set.__len__()}')
+
+                # train samples = 1176, test samples = 288
+                # total samples = 1464
+
+
+            While from the origin paper, `the DvsGesture dataset comprises 1342 instances of a set of 11 hand and arm \
+            gestures`. The difference may be caused by different pre-processing methods.
+
+            `snnTorch <https://snntorch.readthedocs.io/>`_ have the same numbers with SpikingJelly:
+
+            .. code-block:: python
+
+                from snntorch.spikevision import spikedata
+
+                train_set = spikedata.DVSGesture("D:/datasets/DVS128Gesture/temp2", train=True, num_steps=500, dt=1000)
+                test_set = spikedata.DVSGesture("D:/datasets/DVS128Gesture/temp2", train=False, num_steps=1800, dt=1000)
+                print(f'train samples = {train_set.__len__()}, test samples = {test_set.__len__()}')
+                print(f'total samples = {train_set.__len__() + test_set.__len__()}')
+
+                # train samples = 1176, test samples = 288
+                # total samples = 1464
+
+
+            But `tonic <https://tonic.readthedocs.io/>`_ has different numbers, which are close to `1342`:
+
+            .. code-block:: python
+
+                import tonic
+
+                train_set = tonic.datasets.DVSGesture(save_to='D:/datasets/DVS128Gesture/temp', train=True)
+                test_set = tonic.datasets.DVSGesture(save_to='D:/datasets/DVS128Gesture/temp', train=False)
+                print(f'train samples = {train_set.__len__()}, test samples = {test_set.__len__()}')
+                print(f'total samples = {train_set.__len__() + test_set.__len__()}')
+
+                # train samples = 1077, test samples = 264
+                # total samples = 1341
+
+
+            Here we show how 1176 train samples and 288 test samples are got in SpikingJelly.
+
+            The origin dataset is split to train and test set by ``trials_to_train.txt`` and ``trials_to_test.txt``.
+
+
+            .. code-block:: shell
+
+                trials_to_train.txt:
+
+                    user01_fluorescent.aedat
+                    user01_fluorescent_led.aedat
+                    ...
+                    user23_lab.aedat
+                    user23_led.aedat
+
+                trials_to_test.txt:
+
+                    user24_fluorescent.aedat
+                    user24_fluorescent_led.aedat
+                    ...
+                    user29_led.aedat
+                    user29_natural.aedat
+
+            SpikingJelly will read the txt file and get the aedat file name like ``user01_fluorescent.aedat``. The corresponding \
+            label file name will be regarded as ``user01_fluorescent_labels.csv``.
+
+            .. code-block:: shell
+
+                user01_fluorescent_labels.csv:
+
+                    class	startTime_usec	endTime_usec
+                    1	80048239	85092709
+                    2	89431170	95231007
+                    3	95938861	103200075
+                    4	114845417	123499505
+                    5	124344363	131742581
+                    6	133660637	141880879
+                    7	142360393	149138239
+                    8	150717639	157362334
+                    8	157773346	164029864
+                    9	165057394	171518239
+                    10	172843790	179442817
+                    11	180675853	187389051
+
+
+
+
+            Then SpikingJelly will split the aedat to samples by the time range and class in the csv file. In this sample, \
+            the first sample ``user01_fluorescent_0.npz`` is sliced from the origin events ``user01_fluorescent.aedat`` with \
+            ``80048239 <= t < 85092709`` and ``label=0``. ``user01_fluorescent_0.npz`` will be saved in ``./events_np/train/0``.
+
+
+
+
+
         """
         assert train is not None
         super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)

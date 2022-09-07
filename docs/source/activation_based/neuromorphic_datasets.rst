@@ -44,6 +44,11 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
     `-- gesture_mapping.csv
 
 
+.. Note::
+
+    不同框架对DVS128 Gesture数据集的预处理方式可能不同，这或许导致不同的训练集和测试机样本数量。请参考 :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture` 的API文档获取更多信息。
+
+
 获取Event数据
 -----------------------
 创建训练集和测试集，其中参数 ``data_type='event'`` 表示我们使用Event数据。

@@ -47,6 +47,12 @@ Suppose we have downloaded the dataset into ``E:/datasets/DVS128Gesture/download
     |-- README.txt
     `-- gesture_mapping.csv
 
+.. admonition:: Note
+    :class: note
+
+    Different frameworks may use different pre-processing methods on the DVS128 Gesture dataset and cause different samples \
+    number. Refer to the API doc of :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture` for more details.
+
 
 Get Events Data
 -----------------------
