@@ -130,7 +130,7 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
 
             Then SpikingJelly will split the aedat to samples by the time range and class in the csv file. In this sample, \
             the first sample ``user01_fluorescent_0.npz`` is sliced from the origin events ``user01_fluorescent.aedat`` with \
-            ``80048239 <= t < 85092709`` and ``label=0``. ``user01_fluorescent_0.npz`` will be saved in ``./events_np/train/0``.
+            ``80048239 <= t < 85092709`` and ``label=0``. ``user01_fluorescent_0.npz`` will be saved in ``root/events_np/train/0``.
 
 
 
