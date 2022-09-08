@@ -1934,6 +1934,64 @@ class LogTailedReLU(SurrogateFunctionBase):
     # plt.savefig('LogTailedReLU.svg')
     # plt.savefig('LogTailedReLU.pdf')
 
+
+def cuba_spike_backward(
+    grad_output: torch.Tensor, 
+    x, tau_rho, scale_rho, graded_spike = False
+):
+    if graded_spike:
+        grad_spike2v = scale_rho * torch.exp(-torch.clamp(x, max=0.)/tau_rho) 
+    else:
+        grad_spike2v = scale_rho/2./tau_rho * torch.exp(-torch.abs(x)/tau_rho)
+    return grad_spike2v * grad_output
+
+class cuba_spike(torch.autograd.Function):
+    @staticmethod
+    def forward(
+        ctx, voltage: torch.Tensor, threshold,
+        tau_rho, scale_rho, graded_spike: bool,
+    ):
+        device = voltage.device
+        dtype = voltage.dtype
+
+        if graded_spike:
+            spikes = ((voltage >= threshold) * voltage).to(dtype = dtype)
+        else:
+            spikes = (voltage >= threshold).to(dtype = dtype)
+
+        if voltage.requires_grad:
+            if not torch.is_tensor(threshold):
+                threshold = torch.tensor(threshold, device = device, dtype = dtype)
+            ctx.save_for_backward(
+                voltage,
+                torch.autograd.Variable(threshold, requires_grad = False),
+                torch.autograd.Variable(
+                    torch.tensor(tau_rho, device = device, dtype = dtype),
+                    requires_grad = False
+                ),
+                torch.autograd.Variable(
+                    torch.tensor(scale_rho, device = device, dtype = dtype),
+                    requires_grad = False
+                ),
+            )
+            ctx.graded_spike = graded_spike
+
+        return spikes
+
+    @staticmethod
+    def backward(ctx, grad_spikes):
+        voltage, threshold, tau_rho, scale_rho = ctx.saved_tensors
+        graded_spike = ctx.graded_spike
+        grad_input = cuba_spike_backward(
+            grad_spikes, voltage - threshold,
+            tau_rho, scale_rho, graded_spike
+        )
+        return grad_input, None, None, None, None, None,
+
+# TODO: write a spikingjelly-styled nn.Module wrapper
+# for cuba_spike autograd function
+
+
 _has_cuda_ = [
     ATan,
     Sigmoid,
