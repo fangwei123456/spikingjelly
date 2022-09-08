@@ -51,7 +51,7 @@ def stdp_linear_multi_step(fc: nn.Linear, in_spike: torch.Tensor, out_spike: tor
         trace_pre, trace_post, dw = stdp_linear_single_step(fc, in_spike[t], out_spike[t], trace_pre, trace_post,
                                                             tau_pre, tau_post, f_pre, f_post)
         delta_w += dw
-    return delta_w
+    return trace_pre, trace_post, delta_w
 
 
 def stdp_conv2d_single_step(conv: nn.Conv2d, in_spike: torch.Tensor, out_spike: torch.Tensor,
@@ -137,7 +137,7 @@ def stdp_conv2d_multi_step(conv: nn.Conv2d, in_spike: torch.Tensor, out_spike: t
         trace_pre, trace_post, dw = stdp_conv2d_single_step(conv, in_spike[t], out_spike[t], trace_pre, trace_post,
                                                             tau_pre, tau_post, f_pre, f_post)
         delta_w += dw
-    return delta_w
+    return trace_pre, trace_post, delta_w
 
 
 class STDPLearner(base.MemoryModule):
