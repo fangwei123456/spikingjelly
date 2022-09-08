@@ -98,11 +98,13 @@ def norm_to_01_by_linear(x: torch.Tensor, eps: float = 1e-5):
 
 
 def right_shift_to_zero(x, bits):
-    if x.dtype not in (torch.int32, torch.int64):
+    data_type = x.dtype
+    if data_type not in (torch.int32, torch.int64):
         raise AssertionError(
             f"Expected x.dtype to be torch.int32 or torch.int64,"
-            f"but get {x.dtype} instead."
+            f"but get {data_type} instead."
         )
 
-    x_sign = 2 * (x > 0) - 1
-    return (x_sign * ((x_sign * x) >> bits)).to(x.dtype)
+    sign_x = ((x > 0) << 1) - 1
+    abs_x = sign_x * x
+    return (sign_x * (abs_x >> bits)).to(data_type)

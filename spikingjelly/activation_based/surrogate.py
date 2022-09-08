@@ -1935,7 +1935,6 @@ class LogTailedReLU(SurrogateFunctionBase):
     # plt.savefig('LogTailedReLU.pdf')
 
 
-#@torch.jit.script
 def cuba_spike_backward(
     grad_output: torch.Tensor, 
     x, tau_rho, scale_rho, graded_spike = False
@@ -1960,22 +1959,22 @@ class cuba_spike(torch.autograd.Function):
         else:
             spikes = (voltage >= threshold).to(dtype = dtype)
 
-        if not torch.is_tensor(threshold):
-            threshold = torch.tensor(threshold, device = device, dtype = dtype)
-
-        ctx.save_for_backward(
-            voltage,
-            torch.autograd.Variable(threshold, requires_grad = False),
-            torch.autograd.Variable(
-                torch.tensor(tau_rho, device = device, dtype = dtype),
-                requires_grad = False
-            ),
-            torch.autograd.Variable(
-                torch.tensor(scale_rho, device = device, dtype = dtype),
-                requires_grad = False
-            ),
-        )
-        ctx.graded_spike = graded_spike
+        if voltage.requires_grad:
+            if not torch.is_tensor(threshold):
+                threshold = torch.tensor(threshold, device = device, dtype = dtype)
+            ctx.save_for_backward(
+                voltage,
+                torch.autograd.Variable(threshold, requires_grad = False),
+                torch.autograd.Variable(
+                    torch.tensor(tau_rho, device = device, dtype = dtype),
+                    requires_grad = False
+                ),
+                torch.autograd.Variable(
+                    torch.tensor(scale_rho, device = device, dtype = dtype),
+                    requires_grad = False
+                ),
+            )
+            ctx.graded_spike = graded_spike
 
         return spikes
 

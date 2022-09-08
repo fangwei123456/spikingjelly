@@ -61,11 +61,12 @@ class LeakyIntegratorStep(torch.autograd.Function):
         lava_charge_bp, last_state_before_spike
     ):
         output = _listep_forward(input, decay, state, w_scale, dtype = torch.int64)
-        ctx.lava_charge_bp = lava_charge_bp
-        if lava_charge_bp:
-            ctx.save_for_backward(decay, state, last_state_before_spike)
-        else:
-            ctx.save_for_backward(decay, state)
+        if input.requires_grad or state.requires_grad:
+            ctx.lava_charge_bp = lava_charge_bp
+            if lava_charge_bp:
+                ctx.save_for_backward(decay, state, last_state_before_spike)
+            else:
+                ctx.save_for_backward(decay, state)
         return output
 
     @staticmethod
@@ -227,7 +228,7 @@ class CubaLIFNode(MemoryModule):
             Notice: even if the value is ``False`` , soft reset will be done if ``v_reset`` is ``None`` .
         :type soft_reset: bool
 
-        :param step_mode: 可the step mode, which can be `s` (single-step) or `m` (multi-step). Default to `'s'` .
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step). Default to `'s'` .
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
@@ -472,9 +473,13 @@ class CubaLIFNode(MemoryModule):
                 spike_d = spike
 
             if (self.v_reset is None) or self.soft_reset: 
-                self.voltage_state = self.jit_soft_reset(self.voltage_state, spike_d, self.v_threshold+self.v_threshold_eps)
+                self.voltage_state = self.jit_soft_reset(
+                    self.voltage_state, spike_d, self.v_threshold+self.v_threshold_eps
+                )
             else:
-                self.voltage_state = self.jit_hard_reset(self.voltage_state, spike_d, self.v_reset)
+                self.voltage_state = self.jit_hard_reset(
+                    self.voltage_state, spike_d, self.v_reset
+                )
 
     def single_step_forward(self, x):
         if self.shape is None:
@@ -497,7 +502,7 @@ class CubaLIFNode(MemoryModule):
             i_seq = []
 
         for t in range(T):
-            y = self.training_single_step_forward(x_seq[t])
+            y = self.single_step_forward(x_seq[t])
             y_seq.append(y.unsqueeze(0))
             if self.store_v_seq:
                 v_seq.append(self.voltage_state.unsqueeze(0))
