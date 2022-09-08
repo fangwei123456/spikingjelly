@@ -148,6 +148,232 @@ STDP优化器
     :width: 100%
 
 
+与梯度下降混合使用
+-----------------------------------------------------
+在SNN中一种广泛使用STDP的做法是，使用STDP和梯度下降分别训练网路中的不同层。下面介绍如何使用 ``STDPLearner`` 实现这一做法。
+
+我们的目标是搭建一个深度卷积SNN，使用STDP训练卷积层，使用梯度下降法训练全连接层。首先定义超参数：
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.optim import SGD, Adam
+    from spikingjelly.activation_based import learning, layer, neuron, functional
+
+    T = 8
+    N = 2
+    C = 3
+    H = 32
+    W = 32
+    lr = 0.1
+    tau_pre = 2.
+    tau_post = 100.
+    step_mode = 'm'
+
+我们使用 `shape = [T, N, C, H, W] = [8, 2, 3, 32, 32]` 的输入。
+
+
+接下来定义STDP的权重函数以及网络，这里我们搭建的是一个简单的卷积SNN，且使用多步模式：
+
+.. code-block:: python
+
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+
+    net = nn.Sequential(
+        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Flatten(),
+        layer.Linear(16 * 8 * 8, 64, bias=False),
+        neuron.IFNode(),
+        layer.Linear(64, 10, bias=False),
+        neuron.IFNode(),
+    )
+
+    functional.set_step_mode(net, step_mode)
+
+我们希望使用STDP训练 ``layer.Conv2d``，其他层使用梯度下降训练。首先定义使用STDP训练的层类型：
+
+.. code-block:: python
+
+    instances_stdp = (layer.Conv2d, )
+
+对于每个类型为 ``instances_stdp`` 的层，我们都使用一个STDP学习器：
+
+.. code-block:: python
+
+    stdp_learners = []
+
+    for i in range(net.__len__()):
+        if isinstance(net[i], instances_stdp):
+            stdp_learners.append(
+                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
+                                    f_pre=f_weight, f_post=f_weight)
+            )
+
+接下来进行参数分组，将类型为 ``instances_stdp`` 的层参数和其他类型的层的参数，分别放置到不同的优化器中。\
+这里我们使用 ``Adam`` 作为梯度下降训练的参数的优化器，使用 ``SGD`` 作为STDP训练的参数的优化器：
+
+
+.. code-block:: python
+
+    params_stdp = []
+    for m in net.modules():
+        if isinstance(m, instances_stdp):
+            for p in m.parameters():
+                params_stdp.append(p)
+                
+    params_stdp_set = set(params_stdp)
+    params_gradient_descent = []
+    for p in net.parameters():
+        if p not in params_stdp_set:
+            params_gradient_descent.append(p)
+
+    optimizer_gd = Adam(params_gradient_descent, lr=lr)
+    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
+
+在实际任务中，输入和输出应该是从数据集中抽样得到的，我们这里仅仅是做示例，因此手动生成：
+
+.. code-block:: python
+
+    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
+    target = torch.randint(low=0, high=10, size=[N])
+
+接下来就是参数优化的主要步骤了，在实际任务中下面的代码通常会放到训练的主循环中。我们的代码与纯梯度下降会略有不同。
+
+首先清零所有梯度，进行前向传播，计算出损失，反向传播：
+
+.. code-block:: python
+
+    optimizer_gd.zero_grad()
+    optimizer_stdp.zero_grad()
+    y = net(x_seq).mean(0)
+    loss = F.cross_entropy(y, target)
+    loss.backward()
+
+需要注意的是，尽管 ``optimizer_gd`` 只会对 ``params_gradient_descent`` 中的参数进行梯度下降，但调用 ``loss.backward()`` \
+后整个网络中所有的参数都会计算出梯度，包括那些我们只想使用STDP进行优化的参数。
+
+因此，我们需要将使用梯度下降得到的 ``params_stdp`` 的梯度进行清零：
+
+.. code-block:: python
+
+    optimizer_stdp.zero_grad()
+
+接下来就是使用STDP学习器计算出参数更新量，然后使用2个优化器，对整个网络的参数进行更新：
+
+
+.. code-block:: python
+
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].step(on_grad=True)
+
+    optimizer_gd.step()
+    optimizer_stdp.step()
+
+
+完整的示例代码如下：
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    import torch.nn.functional as F
+    from torch.optim import SGD, Adam
+    from spikingjelly.activation_based import learning, layer, neuron, functional
+
+    T = 8
+    N = 2
+    C = 3
+    H = 32
+    W = 32
+    lr = 0.1
+    tau_pre = 2.
+    tau_post = 100.
+    step_mode = 'm'
+
+    def f_weight(x):
+        return torch.clamp(x, -1, 1.)
+
+
+    net = nn.Sequential(
+        layer.Conv2d(3, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        layer.Flatten(),
+        layer.Linear(16 * 8 * 8, 64, bias=False),
+        neuron.IFNode(),
+        layer.Linear(64, 10, bias=False),
+        neuron.IFNode(),
+    )
+
+    functional.set_step_mode(net, step_mode)
+
+    instances_stdp = (layer.Conv2d, )
+
+    stdp_learners = []
+
+    for i in range(net.__len__()):
+        if isinstance(net[i], instances_stdp):
+            stdp_learners.append(
+                learning.STDPLearner(step_mode=step_mode, synapse=net[i], sn=net[i+1], tau_pre=tau_pre, tau_post=tau_post,
+                                    f_pre=f_weight, f_post=f_weight)
+            )
+
+
+    params_stdp = []
+    for m in net.modules():
+        if isinstance(m, instances_stdp):
+            for p in m.parameters():
+                params_stdp.append(p)
+
+    params_stdp_set = set(params_stdp)
+    params_gradient_descent = []
+    for p in net.parameters():
+        if p not in params_stdp_set:
+            params_gradient_descent.append(p)
+
+    optimizer_gd = Adam(params_gradient_descent, lr=lr)
+    optimizer_stdp = SGD(params_stdp, lr=lr, momentum=0.)
+
+
+
+    x_seq = (torch.rand([T, N, C, H, W]) > 0.5).float()
+    target = torch.randint(low=0, high=10, size=[N])
+
+    optimizer_gd.zero_grad()
+    optimizer_stdp.zero_grad()
+
+    y = net(x_seq).mean(0)
+    loss = F.cross_entropy(y, target)
+    loss.backward()
+
+
+
+    optimizer_stdp.zero_grad()
+
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].step(on_grad=True)
+
+    optimizer_gd.step()
+    optimizer_stdp.step()
+
+
+
+
+
+
+
 .. [#STDP] Bi, Guo-qiang, and Mu-ming Poo. "Synaptic modifications in cultured hippocampal neurons: dependence on spike timing, synaptic strength, and postsynaptic cell type." Journal of neuroscience 18.24 (1998): 10464-10472.
 
 .. [#STDP_figure] Froemke, Robert C., et al. "Contribution of individual spikes in burst-induced long-term synaptic modification." Journal of neurophysiology (2006).
