@@ -1,5 +1,6 @@
 import torch
 
+
 @torch.jit.script
 def k_bit_quantize_forward(x: torch.Tensor, k: int):
     c = float(1 << k) - 1.
@@ -74,15 +75,21 @@ def step_quantize(x: torch.Tensor, step: float = 1.):
     :rtype: torch.Tensor
 
     The step quantizer defined in `Lava`.
+
+    Denote ``k`` as an ``int``, ``x[i]`` will be quantized to the nearest ``k * step``.
     """
     return step_quantize_atgf.apply(x, step)
 
 
-def quantize_8b(x, scale, descale = False):
+def quantize_8b(x, scale, descale=False):
+    """
+    Denote ``k`` as an ``int``, ``x[i]`` will be quantized to the nearest ``2 * k / scale``, \
+    and ``k = {-128, -127, ..., 126, 127}``.
+    """
     if not descale:
-        return step_quantize(x, step = 2 / scale).clamp(-256/scale, 255/scale)
+        return step_quantize(x, step=2 / scale).clamp(-256 / scale, 255 / scale)
     else:
-        return step_quantize(x, step = 2 / scale).clamp(-256/scale, 255/scale) * scale
+        return step_quantize(x, step=2 / scale).clamp(-256 / scale, 255 / scale) * scale
 
 
 @torch.jit.script
@@ -90,21 +97,15 @@ def norm_to_01_by_sigmoid(x: torch.Tensor):
     sgx = torch.sigmoid(x)
     return sgx / torch.max(sgx)
 
+
 @torch.jit.script
 def norm_to_01_by_linear(x: torch.Tensor, eps: float = 1e-5):
     x_max = torch.max(x) + eps
     x_min = torch.min(x)
     return (x - x_min) / (x_max - x_min)
 
-
-def right_shift_to_zero(x, bits):
-    data_type = x.dtype
-    if data_type not in (torch.int32, torch.int64):
-        raise AssertionError(
-            f"Expected x.dtype to be torch.int32 or torch.int64,"
-            f"but get {data_type} instead."
-        )
-
-    sign_x = ((x > 0) << 1) - 1
-    abs_x = sign_x * x
-    return (sign_x * (abs_x >> bits)).to(data_type)
+@torch.jit.script
+def right_shift_to_zero(x: torch.Tensor, bits: int):
+    dtype = x.dtype
+    assert dtype in (torch.int32, torch.int64)
+    return (torch.sign(x) * (torch.abs(x) >> bits)).to(dtype)

@@ -1,110 +1,64 @@
-from typing import Union
+from typing import Union, Callable
 
 import numpy as np
 import torch
+import torch.nn as nn
 
 from .quantize import step_quantize, quantize_8b, right_shift_to_zero
 from .base import MemoryModule
-from .surrogate import cuba_spike
+from . import surrogate
 
 
-SCALE_GRAD_MULT = 0.1
-TAU_GRAD_MULT = 100
+hw_bits = 12
 
 
-def _listep_forward(input, decay, state, w_scale, dtype = torch.int32):
-    device = input.device
-    scaled_state = (state * w_scale).clone().detach().to(
-        dtype = dtype, device = device
-    )
-    decay_int = (1<<12) - decay.clone().detach().to(
-        dtype = dtype, device = device
-    )
-    output = right_shift_to_zero(scaled_state * decay_int, 12) \
-        + (w_scale * input).to(dtype = dtype)
+def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int, dtype=torch.int32):
+    # y = (state * w_scale * ((1 << hw_bits) - decay) / (1 << hw_bits) + w_scale * x) / w_scale
+    # y = state * (1 - decay / (1 << hw_bits)) + x
+    scaled_state = (state * w_scale).to(dtype=dtype)
+    decay_int = (1 << hw_bits) - decay.to(dtype=dtype)
+    output = right_shift_to_zero(scaled_state * decay_int, hw_bits) + (w_scale * x).to(dtype=dtype)
     return output / w_scale
 
 
-def _listep_backward_correct(grad_output, decay, state,):
-    with torch.no_grad():
-        decay_factor = 1 - decay / (1<<12)
-        grad_input = grad_output
-        grad_state = grad_output * decay_factor
-        grad_decay = -grad_output * state
-        if torch.numel(decay) == 1:
-            grad_decay = torch.sum(grad_decay).unsqueeze(dim = 0)
-        else:
-            grad_decay = torch.sum(grad_decay, dim = 0)
-    return grad_input, grad_decay, grad_state
+def _listep_backward(grad_output: torch.Tensor, decay: torch.Tensor, state: torch.Tensor):
+    grad_state = (1 - decay / (1 << hw_bits)) * grad_output
+    grad_decay = - state / (1 << hw_bits) * grad_output
 
+    grad_decay = grad_decay.sum()
 
-def _listep_backward_lava(grad_output, decay, state, last_state_before_spike,):
-    with torch.no_grad():
-        decay_factor = 1 - decay / (1 << 12)
-        grad_input = grad_output
-        grad_state = grad_output * decay_factor
-        if last_state_before_spike is not None:
-            grad_decay = grad_output * last_state_before_spike
-        else:
-            grad_decay = grad_output * state
-        if torch.numel(decay) == 1:
-            grad_decay = torch.sum(grad_decay).unsqueeze(dim = 0)
-        else:
-            grad_decay = torch.sum(grad_decay, dim = 0) 
-    return grad_input, grad_decay, grad_state
+    return grad_output, grad_decay, grad_state
+    # x, decay, state
 
 
 class LeakyIntegratorStep(torch.autograd.Function):
     @staticmethod
     def forward(
-        ctx, input, decay, state, w_scale, 
-        lava_charge_bp, last_state_before_spike
-    ):
-        output = _listep_forward(input, decay, state, w_scale, dtype = torch.int64)
-        if input.requires_grad or state.requires_grad:
-            ctx.lava_charge_bp = lava_charge_bp
-            if lava_charge_bp:
-                ctx.save_for_backward(decay, state, last_state_before_spike)
-            else:
-                ctx.save_for_backward(decay, state)
+            ctx, x, decay, state, w_scale):
+        output = _listep_forward(x, decay, state, w_scale, dtype=torch.int64)
+        if x.requires_grad or state.requires_grad:
+            ctx.save_for_backward(decay, state)
         return output
 
     @staticmethod
     def backward(ctx, grad_output):
-        if ctx.lava_charge_bp:
-            decay, state, last_state_before_spike = ctx.saved_tensors
-            grad_input, grad_decay, grad_state = _listep_backward_lava(
-                grad_output, decay, state, last_state_before_spike
-            )
-        else:
-            decay, state = ctx.saved_tensors
-            grad_input, grad_decay, grad_state = _listep_backward_correct(
-                grad_output, decay, state
-            )
-        return grad_input, grad_decay, grad_state, None, None, None,
-
-
-class CubaNeuronReset(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, v, spike, v_reset):
-        v_after = (1. - spike) * v + spike * v_reset
-        return v_after
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        return grad_output, None, None
+        decay, state = ctx.saved_tensors
+        grad_input, grad_decay, grad_state = _listep_backward(
+            grad_output, decay, state
+        )
+        return grad_input, grad_decay, grad_state, None
 
 
 class CubaLIFNode(MemoryModule):
     def __init__(
-        self, current_decay: Union[float, torch.Tensor], voltage_decay: Union[float, torch.Tensor],
-        v_threshold: float = 1., v_reset: float = 0.,
-        tau_grad = 1, scale_grad = 1, scale = 1 << 6,
-        requires_grad = False, graded_spike = False,  
-        normalization = None, lava_style = True,
-        detach_reset = False, soft_reset = False,
-        step_mode = "s", backend = "torch",
-        store_v_seq: bool = False, store_i_seq: bool = False,
+            self, current_decay: Union[float, torch.Tensor], voltage_decay: Union[float, torch.Tensor],
+            v_threshold: float = 1., v_reset: float = 0.,
+            scale=1 << 6,
+            requires_grad=False,
+            surrogate_function: Callable = surrogate.Sigmoid(),
+            detach_reset=False,
+            step_mode="s", backend="torch",
+            store_v_seq: bool = False, store_i_seq: bool = False,
     ):
         """
         * :ref:`API in English <CubaLIFNode.__init__-en>`
@@ -124,11 +78,6 @@ class CubaLIFNode(MemoryModule):
             若不为 ``None``，则取决于 ``soft_reset``的值来进行软/硬重置
         :type v_reset: float, None
 
-        :param tau_grad: 控制梯度替代函数的陡峭程度，默认为1。
-        :type tau_grad: float
-
-        :param scale_grad: 控制梯度替代函数的幅度，默认为1。
-        :type scale_grad: float
 
         :param scale: 量化参数，控制神经元的量化精度（参考了lava-dl的cuba.Neuron）。默认为 ``1<<6`` 。
             等效于``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``。
@@ -136,18 +85,6 @@ class CubaLIFNode(MemoryModule):
 
         :param requires_grad: 指明 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数是否可学习（是否需要梯度），默认为 ``False`` 。
         :type requires_grad: bool
-
-        :param graded_spike: 指明输出的形式，默认为 ``False`` 。
-            若为 ``False`` ，则为常规脉冲输出形式；输出取值为0或1。
-            若为 ``True`` ，则输出为0（若不发放脉冲）或脉冲前电压（若发放脉冲）。
-        :type graded_spike: bool
-
-        :param normalization: 对电流的normalization函数，默认为 ``None`` 。
-        :type normalization: Callable
-
-        :param lava_style: 是否严格按照lava-dl中 ``cuba.Neuron`` 的机制进行计算，默认为 ``True`` 。
-            若为 ``True`` ，则 ``detach_reset, soft_reset``这两个自定义选项均将被无视。
-        :type lava_style: bool
 
         :param detach_reset: 是否将reset的计算图分离，默认为 ``False`` 。
         :type detach_reset: bool
@@ -196,12 +133,6 @@ class CubaLIFNode(MemoryModule):
             If not ``None`` , the type of reset depends on the value of ``soft_reset``.
         :type v_reset: float, None
 
-        :param tau_grad: control the steepness of the surrogate gradient function. Default to 1.
-        :type tau_grad: float
-
-        :param scale_grad: control the scale of the surrogate gradient function. Default to 1.
-        :type scale_grad: float
-
         :param scale: quantization precision (ref: lava-dl cuba.Neuron). Default to ``1<<6`` .
             Equivalent to ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
         :type scale: float
@@ -209,17 +140,6 @@ class CubaLIFNode(MemoryModule):
         :param requires_grad: whether ``current_decay`` and ``voltage_decay`` are learnable. Default to ``False`` .
         :type requires_grad: bool
 
-        :param graded_spike: the form of spike output. Default to ``False`` .
-            If ``False`` , the spike output takes value from 0 and 1.
-            If ``True`` , the spike output is 0 if a spike is not emitted and takes the value of the pre-spike voltage if there's a spike.
-        :type graded_spike: bool
-
-        :param normalization: normalization function acting on neuronal current. Default to ``None`` .
-        :type normalization: Callable
-
-        :param lava_style: whether to strictly follow the computation of ``cuba.Neuron`` . Default to ``True`` .
-            If ``True``, optional arguments ``detach_reset, soft_reset`` will have no effect.
-        :type lava_style: bool
 
         :param detach_reset: whether to detach the computational graph of reset in backward pass. Default to ``False`` .
         :type detach_reset: bool
@@ -252,74 +172,51 @@ class CubaLIFNode(MemoryModule):
 
         """
         super().__init__()
-        self.lava_style = lava_style
         self.detach_reset = detach_reset
-        self.soft_reset = soft_reset
         self.step_mode = step_mode
         self.backend = backend
         self.store_v_seq = store_v_seq
         self.store_i_seq = store_i_seq
         self.v_reset = v_reset
+        self.surrogate_function = surrogate_function
+        self.requires_grad = requires_grad
 
         # the default quantization parameter setting in lava
         self._scale = int(scale)
-        self._s_scale = int(scale * (1<<6))
+        self._s_scale = int(scale * (1 << 6))
         # Which is equivalent to:
         # self.p_scale = 1<<12
         # self.w_scale = int(scale)
         # self.s_scale = int(scale * (1<<6))
 
-        self._v_threshold = int(v_threshold*self.scale) / self.scale
-        self.tau_grad = tau_grad * self.v_threshold
-        self.scale_grad = scale_grad
-        self.requires_grad = requires_grad
-        self.graded_spike = graded_spike
+        self._v_threshold = int(v_threshold * self.scale) / self.scale
+        # ``_v_threshold`` is the nearest and no more than ``k / scale`` to ``v_threshold`` where ``k`` is an ``int``
+
         self.v_threshold_eps = 0.01 / self.s_scale
+        # loihi use s[t] = v[t] > v_th, but we use s[t] = v[t] >= v_th. Thus, we use v[t] + eps >= v_th to approximate
 
-        self.normalization = normalization
-        if self.normalization is not None and hasattr(self.normalization, "pre_hook_fx"):
-            self.normalization.pre_hook_fx = self.quantize_8bit
+        current_decay = torch.tensor((1 << hw_bits) * current_decay, dtype=torch.float32)
+        voltage_decay = torch.tensor((1 << hw_bits) * voltage_decay, dtype=torch.float32)
 
-        self.current_decay = torch.nn.Parameter(
-            torch.tensor(
-                [(1<<12) * current_decay] 
-                    if np.isscalar(current_decay) 
-                    else (1<<12) * current_decay,
-                dtype = torch.float32,
-            ),
-            requires_grad = self.requires_grad,
-        )
-        self.voltage_decay = torch.nn.Parameter(
-            torch.tensor(
-                [(1<<12) * voltage_decay] 
-                    if np.isscalar(voltage_decay) 
-                    else (1<<12) * voltage_decay, 
-                dtype = torch.float32,
-            ),
-            requires_grad = self.requires_grad,
-        )
+        if requires_grad:
+            self.current_decay = nn.Parameter(current_decay)
+            self.voltage_decay = nn.Parameter(voltage_decay)
+        else:
+            self.register_buffer('current_decay', current_decay)
+            self.register_buffer('voltage_decay', voltage_decay)
 
-        self.register_memory(
-            "current_state",
-            torch.zeros(1, dtype = torch.float)
-        )
-        self.register_memory(
-            "voltage_state",
-            torch.zeros(1, dtype = torch.float)
-        )
-        self.register_memory("shape", None)
-        self.register_memory("num_neuron", None)
-        self.register_memory("last_voltage_before_spike", None)
+        self.register_memory('current_state', 0.)
+        self.register_memory('voltage_state', 0.)
 
         self.clamp_decay_parameters()
 
-    def quantize_8bit(self, x, descale = False):
-        return quantize_8b(x, scale = self.scale, descale = descale)
+    def quantize_8bit(self, x, descale=False):
+        return quantize_8b(x, scale=self.scale, descale=descale)
 
     def clamp_decay_parameters(self):
         with torch.no_grad():
-            self.current_decay.data.clamp_(min = 0., max = 1<<12)
-            self.voltage_decay.data.clamp_(min = 0., max = 1<<12)
+            self.current_decay.data.clamp_(min=0., max=1 << hw_bits)
+            self.voltage_decay.data.clamp_(min=0., max=1 << hw_bits)
 
     # properties
     @property
@@ -329,7 +226,7 @@ class CubaLIFNode(MemoryModule):
     @property
     def scale(self):
         """Read-only attribute: scale"""
-        return self._scale 
+        return self._scale
 
     @property
     def s_scale(self):
@@ -366,26 +263,12 @@ class CubaLIFNode(MemoryModule):
     @property
     def supported_backends(self):
         if self.step_mode == "m" or self.step_mode == "s":
-            return ("torch", )
+            return ("torch",)
         else:
             raise ValueError(
                 f"self.step_mode should be 's' or 'm', "
                 f"but get {self.step_mode} instead."
             )
-
-    @property
-    def device_params(self):
-        self.clamp_decay_parameters()
-        cd_val = step_quantize(self.current_decay).cpu().data.numpy().astype(int)
-        vd_val = step_quantize(self.voltage_decay).cpu().data.numpy().astype(int)
-        return {
-            'type': 'CUBA',
-            'iDecay': cd_val[0] if len(cd_val) == 1 else cd_val,
-            'vDecay': vd_val[0] if len(vd_val) == 1 else vd_val,
-            'vThMant': int(self.v_threshold * self.scale),
-            'refDelay': 1,
-            'gradedSpike': self.graded_spike,
-        }
 
     # static jit methods
     @staticmethod
@@ -394,37 +277,12 @@ class CubaLIFNode(MemoryModule):
         v = (1. - spike) * v + spike * v_reset
         return v
 
-    @staticmethod
-    @torch.jit.script
-    def jit_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
-        v = v - spike * v_threshold
-        return v
-
     # computation process
     def state_initialization(self, x: torch.Tensor):
-        self.shape = x.shape[1:] # x.shape = [batch_size, ......]
-        if len(self.shape) <= 0:
-            raise ValueError(
-                "x.shape of neuronal_charge() should be"
-                "[batch_size, ......]"
-            )
-        self.num_neurons = int(np.prod(self.shape))
-
-        self.current_state = self.current_state * torch.ones(x.shape).to(
-            dtype = self.current_state.dtype,
-            device = self.current_state.device,
-        )
-        self.voltage_state = self.voltage_state * torch.ones(x.shape).to(
-            dtype = self.voltage_state.dtype,
-            device = self.voltage_state.device,
-        )
+        self.current_state = torch.zeros_like(x.data)
+        self.voltage_state = torch.zeros_like(x.data)
 
     def neuronal_charge(self, x: torch.Tensor):
-        if x.shape[1:] != self.shape:
-            raise AssertionError(
-                f"x.shape of neuronal_charge should be"
-                f"{self.shape}"
-            )
         if self.requires_grad:
             self.clamp_decay_parameters()
 
@@ -433,66 +291,40 @@ class CubaLIFNode(MemoryModule):
             step_quantize(self.current_decay),
             self.current_state.contiguous(),
             self.s_scale,
-            self.lava_style, None
         )
-        if self.normalization is not None:
-            current = self.normalization(current)
+
         voltage = LeakyIntegratorStep.apply(
             current,
             step_quantize(self.voltage_decay),
             self.voltage_state.contiguous(),
             self.s_scale,
-            self.lava_style, self.last_voltage_before_spike
         )
 
         self.current_state = current
         self.voltage_state = voltage
 
     def neuronal_fire(self):
-        return cuba_spike.apply(
-            self.voltage_state,
-            self.v_threshold + self.v_threshold_eps,
-            self.tau_grad * TAU_GRAD_MULT,
-            self.scale_grad * SCALE_GRAD_MULT,
-            self.graded_spike,
-        )
+        return self.surrogate_function(self.voltage_state - (self.v_threshold + self.v_threshold_eps))
 
     def neuronal_reset(self, spike):
-        if self.graded_spike:
-            spike = (spike >= self.v_threshold).to(dtype = torch.float32)
-
-        if self.lava_style:
+        if self.detach_reset:
             spike_d = spike.detach()
-            v_after = CubaNeuronReset.apply(self.voltage_state, spike_d, self.v_reset)
-            self.voltage_state = v_after
-
         else:
-            if self.detach_reset:
-                spike_d = spike.detach()
-            else:
-                spike_d = spike
+            spike_d = spike
 
-            if (self.v_reset is None) or self.soft_reset: 
-                self.voltage_state = self.jit_soft_reset(
-                    self.voltage_state, spike_d, self.v_threshold+self.v_threshold_eps
-                )
-            else:
-                self.voltage_state = self.jit_hard_reset(
-                    self.voltage_state, spike_d, self.v_reset
-                )
+
+        self.voltage_state = self.jit_hard_reset(self.voltage_state, spike_d, self.v_reset)
 
     def single_step_forward(self, x):
-        if self.shape is None:
+        if isinstance(self.current_state, float) or isinstance(self.voltage_state, float):
             self.state_initialization(x)
         self.neuronal_charge(x)
-        if self.lava_style:
-            self.last_voltage_before_spike = self.voltage_state
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
         return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor):
-        if self.shape is None:
+        if isinstance(self.current_state, float) or isinstance(self.voltage_state, float):
             self.state_initialization(x_seq[0])
         T = x_seq.shape[0]
         y_seq = []
@@ -505,13 +337,13 @@ class CubaLIFNode(MemoryModule):
             y = self.single_step_forward(x_seq[t])
             y_seq.append(y.unsqueeze(0))
             if self.store_v_seq:
-                v_seq.append(self.voltage_state.unsqueeze(0))
+                v_seq.append(self.voltage_state)
             if self.store_i_seq:
-                i_seq.append(self.current_state.unsqueeze(0))
+                i_seq.append(self.current_state)
 
         if self.store_v_seq:
-            self.v_seq = torch.cat(v_seq, dim = 0)
+            self.v_seq = torch.stack(v_seq)
         if self.store_i_seq:
-            self.i_seq = torch.cat(i_seq, dim = 0)
+            self.i_seq = torch.stack(i_seq)
 
-        return torch.cat(y_seq, dim = 0)
+        return torch.cat(y_seq, dim=0)
