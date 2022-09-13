@@ -298,7 +298,7 @@ class CubaLIFNode(neuron.BaseNode):
 
         for t in range(T):
             y = self.single_step_forward(x_seq[t])
-            y_seq.append(y.unsqueeze(0))
+            y_seq.append(y)
             if self.store_v_seq:
                 v_seq.append(self.voltage_state)
             if self.store_i_seq:
@@ -309,4 +309,4 @@ class CubaLIFNode(neuron.BaseNode):
         if self.store_i_seq:
             self.i_seq = torch.stack(i_seq)
 
-        return torch.cat(y_seq, dim=0)
+        return torch.stack(y_seq)
