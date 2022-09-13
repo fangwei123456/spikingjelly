@@ -247,14 +247,14 @@ class BaseNode(base.MemoryModule):
             v_seq = []
         for t in range(T):
             y = self.single_step_forward(x_seq[t])
-            y_seq.append(y.unsqueeze(0))
+            y_seq.append(y)
             if self.store_v_seq:
-                v_seq.append(self.v.unsqueeze(0))
+                v_seq.append(self.v)
 
         if self.store_v_seq:
-            self.v_seq = torch.cat(v_seq)
+            self.v_seq = torch.stack(v_seq)
 
-        return torch.cat(y_seq, 0)
+        return torch.stack(y_seq)
 
     def v_float_to_tensor(self, x: torch.Tensor):
         if isinstance(self.v, float):
