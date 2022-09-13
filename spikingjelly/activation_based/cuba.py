@@ -6,8 +6,7 @@ import torch.nn as nn
 
 from .quantize import step_quantize, quantize_8b, right_shift_to_zero
 from .base import MemoryModule
-from . import surrogate
-
+from . import surrogate, neuron
 
 hw_bits = 12
 
@@ -49,7 +48,7 @@ class LeakyIntegratorStep(torch.autograd.Function):
         return grad_input, grad_decay, grad_state, None
 
 
-class CubaLIFNode(MemoryModule):
+class CubaLIFNode(neuron.BaseNode):
     def __init__(
             self, current_decay: Union[float, torch.Tensor], voltage_decay: Union[float, torch.Tensor],
             v_threshold: float = 1., v_reset: float = 0.,
@@ -74,8 +73,7 @@ class CubaLIFNode(MemoryModule):
         :param v_threshold: 神经元阈值电压。默认为1。
         :type v_threshold: float
 
-        :param v_reset: 重置电压，默认为0。若为 ``None``，则必为软·重置；
-            若不为 ``None``，则取决于 ``soft_reset``的值来进行软/硬重置
+        :param v_reset: 重置电压，默认为0
         :type v_reset: float, None
 
 
@@ -88,10 +86,6 @@ class CubaLIFNode(MemoryModule):
 
         :param detach_reset: 是否将reset的计算图分离，默认为 ``False`` 。
         :type detach_reset: bool
-
-        :param soft_reset: 是否进行软重制，默认为 ``False`` 。
-            注意：即使这个值为 ``False`` ，倘若 ``v_reset`` 为 ``None`` 的话，也会强行进行软重制。
-        :type soft_reset: bool
 
         :param step_mode: 步进模式，可以为 `'s'` （单步）或 `'m'` （多步），默认为 `'s'` 。
         :type step_mode: str
@@ -128,10 +122,8 @@ class CubaLIFNode(MemoryModule):
         :param v_threshold: threshold of the the neurons in this layer. Default to 1.
         :type v_threshold: float
 
-        :param v_reset: reset potential of the neurons in this layer, 0 by default.
-            If ``None`` , do soft reset.
-            If not ``None`` , the type of reset depends on the value of ``soft_reset``.
-        :type v_reset: float, None
+        :param v_reset: reset potential of the neurons in this layer, 0 by default
+        :type v_reset: float
 
         :param scale: quantization precision (ref: lava-dl cuba.Neuron). Default to ``1<<6`` .
             Equivalent to ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
@@ -143,10 +135,6 @@ class CubaLIFNode(MemoryModule):
 
         :param detach_reset: whether to detach the computational graph of reset in backward pass. Default to ``False`` .
         :type detach_reset: bool
-
-        :param soft_reset: whether to do soft reset. Default to ``False`` .
-            Notice: even if the value is ``False`` , soft reset will be done if ``v_reset`` is ``None`` .
-        :type soft_reset: bool
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step). Default to `'s'` .
         :type step_mode: str
@@ -171,19 +159,16 @@ class CubaLIFNode(MemoryModule):
             V[t] = (1 - \\alpha_{V})V[t-1] + I[t]
 
         """
-        super().__init__()
-        self.detach_reset = detach_reset
-        self.step_mode = step_mode
-        self.backend = backend
-        self.store_v_seq = store_v_seq
+        super().__init__(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate_function, detach_reset=detach_reset, step_mode=step_mode, backend=backend, store_v_seq=store_v_seq)
+
         self.store_i_seq = store_i_seq
-        self.v_reset = v_reset
-        self.surrogate_function = surrogate_function
+        assert v_reset == 0., 'CubaLIFNode only supports for hard reset with v_reset = 0. !'
         self.requires_grad = requires_grad
 
         # the default quantization parameter setting in lava
         self._scale = int(scale)
         self._s_scale = int(scale * (1 << 6))
+        self._p_scale = 1 << hw_bits
         # Which is equivalent to:
         # self.p_scale = 1<<12
         # self.w_scale = int(scale)
@@ -195,8 +180,8 @@ class CubaLIFNode(MemoryModule):
         self.v_threshold_eps = 0.01 / self.s_scale
         # loihi use s[t] = v[t] > v_th, but we use s[t] = v[t] >= v_th. Thus, we use v[t] + eps >= v_th to approximate
 
-        current_decay = torch.tensor((1 << hw_bits) * current_decay, dtype=torch.float32)
-        voltage_decay = torch.tensor((1 << hw_bits) * voltage_decay, dtype=torch.float32)
+        current_decay = torch.tensor(self.p_scale * current_decay, dtype=torch.float32)
+        voltage_decay = torch.tensor(self.p_scale * voltage_decay, dtype=torch.float32)
 
         if requires_grad:
             self.current_decay = nn.Parameter(current_decay)
@@ -215,13 +200,9 @@ class CubaLIFNode(MemoryModule):
 
     def clamp_decay_parameters(self):
         with torch.no_grad():
-            self.current_decay.data.clamp_(min=0., max=1 << hw_bits)
-            self.voltage_decay.data.clamp_(min=0., max=1 << hw_bits)
+            self.current_decay.data.clamp_(min=0., max=self.p_scale)
+            self.voltage_decay.data.clamp_(min=0., max=self.p_scale)
 
-    # properties
-    @property
-    def device(self):
-        return self.current_decay.device
 
     @property
     def scale(self):
@@ -234,20 +215,9 @@ class CubaLIFNode(MemoryModule):
         return self._s_scale
 
     @property
-    def v_threshold(self):
-        """Read-only attribute: v_threshold"""
-        return self._v_threshold
-
-    @property
-    def store_v_seq(self):
-        return self._store_v_seq
-
-    @store_v_seq.setter
-    def store_v_seq(self, value: bool):
-        self._store_v_seq = value
-        if value:
-            if not hasattr(self, "v_seq"):
-                self.register_memory("v_seq", None)
+    def p_scale(self):
+        """Read-only attribute: s_scale"""
+        return self._p_scale
 
     @property
     def store_i_seq(self):
@@ -270,17 +240,13 @@ class CubaLIFNode(MemoryModule):
                 f"but get {self.step_mode} instead."
             )
 
-    # static jit methods
-    @staticmethod
-    @torch.jit.script
-    def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
-        v = (1. - spike) * v + spike * v_reset
-        return v
-
     # computation process
     def state_initialization(self, x: torch.Tensor):
-        self.current_state = torch.zeros_like(x.data)
-        self.voltage_state = torch.zeros_like(x.data)
+        if isinstance(self.current_state, float):
+            self.current_state = torch.zeros_like(x.data)
+
+        if isinstance(self.voltage_state, float):
+            self.voltage_state = torch.zeros_like(x.data)
 
     def neuronal_charge(self, x: torch.Tensor):
         if self.requires_grad:
@@ -316,16 +282,13 @@ class CubaLIFNode(MemoryModule):
         self.voltage_state = self.jit_hard_reset(self.voltage_state, spike_d, self.v_reset)
 
     def single_step_forward(self, x):
-        if isinstance(self.current_state, float) or isinstance(self.voltage_state, float):
-            self.state_initialization(x)
+        self.state_initialization(x)
         self.neuronal_charge(x)
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
         return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor):
-        if isinstance(self.current_state, float) or isinstance(self.voltage_state, float):
-            self.state_initialization(x_seq[0])
         T = x_seq.shape[0]
         y_seq = []
         if self.store_v_seq:
