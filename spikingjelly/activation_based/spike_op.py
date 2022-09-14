@@ -157,7 +157,7 @@ class spikeLinear(torch.autograd.Function):
             if ctx.needs_input_grad[1]:
                 ctx.s_shape = spike.shape
                 ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-            if ctx.needs_input_grad[1]:
+            if ctx.needs_input_grad[0]:
                 ctx.save_for_backward(weight)
         return F.linear(spike, weight, bias)
 
