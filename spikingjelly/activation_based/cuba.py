@@ -159,7 +159,16 @@ class CubaLIFNode(neuron.BaseNode):
             V[t] = (1 - \\alpha_{V})V[t-1] + I[t]
 
         """
+
+        self.lava_cuba_neuron_params = {
+            'threshold': v_threshold,
+            'current_decay': current_decay,
+            'voltage_decay': voltage_decay,
+            'scale': scale,
+        }
+
         super().__init__(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate_function, detach_reset=detach_reset, step_mode=step_mode, backend=backend, store_v_seq=store_v_seq)
+
 
         self.store_i_seq = store_i_seq
         assert v_reset == 0., 'CubaLIFNode only supports for hard reset with v_reset = 0. !'
@@ -310,3 +319,5 @@ class CubaLIFNode(neuron.BaseNode):
             self.i_seq = torch.stack(i_seq)
 
         return torch.stack(y_seq)
+
+

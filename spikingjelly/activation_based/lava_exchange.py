@@ -2,105 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import logging
-from . import neuron
+from . import neuron, base, cuba
 try:
     import lava.lib.dl.slayer as slayer
-
-
-    class FasterLavaDense(slayer.synapse.Dense):
-        @staticmethod
-        def convert_from(slayer_dense: slayer.synapse.Dense):
-            fc = FasterLavaDense(slayer_dense.in_channels, slayer_dense.out_channels)
-            fc.weight.data = slayer_dense.weight.data.clone()
-            fc.to(slayer_dense.weight)
-            return fc
-
-        def convert_to(self):
-            slayer_dense = slayer.synapse.Dense(self.in_channels, self.out_channels)
-            slayer_dense.weight.data = self.weight.data.clone()
-            slayer_dense.to(self.weight)
-            return slayer_dense
-
-        def forward(self, x_seq: torch.Tensor):
-            # x_seq.shape = [N, C, T]
-            if self._pre_hook_fx is None:
-                weight = self.weight
-            else:
-                weight = self._pre_hook_fx(self.weight)
-
-            x_seq = x_seq.transpose(1, 2)
-
-            x_seq = F.linear(x_seq, weight[:, :, 0, 0, 0], self.bias)
-
-            x_seq = x_seq.transpose(1, 2)
-            return x_seq
-
-
-    class FasterLavaConv(slayer.synapse.Conv):
-        @staticmethod
-        def convert_from(slayer_conv: slayer.synapse.Conv):
-            conv = FasterLavaConv(in_features=slayer_conv.in_channels, out_features=slayer_conv.out_channels,
-                                  kernel_size=slayer_conv.kernel_size[: 2], stride=slayer_conv.stride[: 2],
-                                  padding=slayer_conv.padding[: 2], dilation=slayer_conv.dilation[: 2],
-                                  groups=slayer_conv.groups)
-            conv.weight.data = slayer_conv.weight.data.clone()
-            conv.to(slayer_conv.weight)
-            return conv
-
-        def convert_to(self):
-            slayer_conv = slayer.synapse.Conv(in_features=self.in_channels, out_features=self.out_channels,
-                                              kernel_size=self.kernel_size[: 2], stride=self.stride[: 2],
-                                              padding=self.padding[: 2], dilation=self.dilation[: 2],
-                                              groups=self.groups)
-            slayer_conv.weight.data = self.weight.data.clone()
-            slayer_conv.to(self.weight)
-            return slayer_conv
-
-        def forward(self, x_seq: torch.Tensor):
-            # x_seq.shape = [N, C, H, W, T]
-            N, C, H, W, T = x_seq.shape
-            x_seq = x_seq.permute(4, 0, 1, 2, 3)  # [T, N, C, H, W]
-            x_seq = x_seq.flatten(0, 1)  # [TN, C, H, W]
-
-            if self._pre_hook_fx is None:
-                weight = self.weight
-            else:
-                weight = self._pre_hook_fx(self.weight)
-
-            x_seq = F.conv2d(x_seq,
-                             weight[:, :, :, :, 0], self.bias,
-                             self.stride[: 2], self.padding[: 2], self.dilation[: 2], self.groups)
-
-            x_seq = x_seq.view(T, N, x_seq.shape[1], x_seq.shape[2], x_seq.shape[3])
-            x_seq = x_seq.permute(1, 2, 3, 4, 0)  # [N, C, H, W, T]
-            return x_seq
-
-
-    class FasterLavaPool(slayer.synapse.Pool):
-        @staticmethod
-        def convert_from(slayer_pool: slayer.synapse.Pool):
-            pool = FasterLavaPool(slayer_pool.kernel_size[: 2], slayer_pool.stride[: 2], slayer_pool.padding[: 2])
-            pool.to(slayer_pool.weight)
-            return pool
-
-        def convert_to(self):
-            slayer_pool = slayer.synapse.Pool(self.kernel_size[: 2], self.stride[: 2], self.padding[: 2])
-            slayer_pool.to(self.weight)
-            return slayer_pool
-
-        def forward(self, x_seq: torch.Tensor):
-            # x_seq.shape = [N, C, H, W, T]
-            N, C, H, W, T = x_seq.shape
-            x_seq = x_seq.permute(4, 0, 1, 2, 3)  # [T, N, C, H, W]
-            x_seq = x_seq.flatten(0, 1)  # [TN, C, H, W]
-
-            x_seq = F.avg_pool2d(x_seq, self.kernel_size[: 2], self.stride[: 2], self.padding[: 2]) * (
-                        self.kernel_size[0] * self.kernel_size[1])
-
-            x_seq = x_seq.view(T, N, C, H, W)
-            x_seq = x_seq.permute(1, 2, 3, 4, 0)  # [N, C, H, W, T]
-            return x_seq
-
 
     # ----------------------------------------
     # data reshape function
@@ -501,6 +405,132 @@ try:
                 break
 
         return blocks
+
+
+    class SumPool2d(nn.Module):
+        def __init__(self, kernel_size, stride=None, padding=0, dilation=1):
+            """
+            .. code-block:: python
+
+                x = torch.rand([4, 2, 4, 16, 16])
+
+                with torch.no_grad():
+                    sp_sj = SumPool2d(kernel_size=2, stride=2)
+                    y_sj = functional.seq_to_ann_forward(x, sp_sj)
+
+                    sp_la = slayer.synapse.Pool(kernel_size=2, stride=2)
+                    y_la = lava_exchange.NXT_to_TNX(sp_la(lava_exchange.TNX_to_NXT(x)))
+                    print((y_sj - y_la).abs().sum())
+            """
+            super().__init__()
+            temp_conv = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=kernel_size, stride=stride,
+                                  padding=padding,
+                                  dilation=dilation, bias=False)
+
+            self.weight = torch.ones_like(temp_conv.weight.data)
+            self.kernel_size = temp_conv.kernel_size
+            self.stride = temp_conv.stride
+            self.padding = temp_conv.padding
+            self.dilation = temp_conv.dilation
+            del temp_conv
+
+        def forward(self, x: torch.Tensor):
+            # x.shape = [N, C, H, W]
+            if self.dilation == (1, 1):
+                return F.avg_pool2d(x, self.kernel_size, self.stride, self.padding) * self.weight.numel()
+            else:
+                N, C, H, W = x.shape
+                x = x.view(N * C, 1, H, W)
+                x = F.conv2d(x, weight=self.weight, bias=None, stride=self.stride, padding=self.padding,
+                             dilation=self.dilation)
+                x = x.view(N, C, x.shape[2], x.shape[3])
+
+                return x
+
+    class BlockContainer(nn.Module, base.StepModule):
+
+        @property
+        def step_mode(self):
+            return self._step_mode
+
+        @step_mode.setter
+        def step_mode(self, value: str):
+            if value not in self.supported_step_mode():
+                raise ValueError(f'step_mode can only be {self.supported_step_mode()}, but got "{value}"!')
+            self._step_mode = value
+            if isinstance(self.neuron, base.StepModule):
+                self.neuron.step_mode = value
+
+            if isinstance(self.synapse, base.StepModule):
+                self.synapse.step_mode = value
+
+
+        def __init__(self, neu: cuba.CubaLIFNode, synapse: nn.Conv2d or nn.Linear or nn.AvgPool2d, step_mode: str = 's'):
+            super().__init__()
+            assert isinstance(neu, cuba.CubaLIFNode)
+            self.neuron = neu
+            self.synapse = synapse
+            if isinstance(self.synapse, (nn.Conv2d, nn.Linear)):
+                assert self.synapse.bias is None
+
+            self.step_mode = step_mode
+
+        def forward(self, x: torch.Tensor):
+            if self.step_mode == 'm':
+                T = x.shape[0]
+                N = x.shape[1]
+                x = x.flatten(0, 1)
+
+
+            if isinstance(self.synapse, (nn.Conv2d, nn.Linear)):
+                weight = self.neuron.quantize_8bit(self.synapse.weight)
+                # 量化到 2k / self.neuron.scale, k = -128, -127, ..., 127，共有256个取值
+
+
+                if isinstance(self.synapse, nn.Conv2d):
+                    x = F.conv2d(x, weight=weight, bias=self.synapse.bias, stride=self.synapse.stride, padding=self.synapse.padding, dilation=self.synapse.dilation, groups=self.synapse.groups)
+
+                elif isinstance(self.synapse, nn.Linear):
+                    x = F.linear(x, weight, self.synapse.bias)
+
+            elif isinstance(self.synapse, SumPool2d):
+                x = self.synapse(x)
+            else:
+                raise NotImplementedError(type(self.synapse))
+
+
+
+            if self.step_mode == 'm':
+                x = x.view([T, N, *x.shape[1:]])
+
+            x = self.neuron(x)
+
+            return x
+
+        def to_lava_block(self):
+            if isinstance(self.synapse, nn.Linear):
+                lava_block = slayer.block.cuba.Dense(self.neuron.lava_cuba_neuron_params, self.synapse.in_features, self.synapse.out_features, delay_shift=False)
+                lava_block.synapse.weight.data[:, :, 0, 0, 0] = self.synapse.weight.data.clone()
+
+            elif isinstance(self.synapse, nn.Conv2d):
+                lava_block = slayer.block.cuba.Conv(self.neuron.lava_cuba_neuron_params, in_features=self.synapse.in_channels,
+                                        out_features=self.synapse.out_channels, kernel_size=self.synapse.kernel_size,
+                                        stride=self.synapse.stride, padding=self.synapse.padding, dilation=self.synapse.dilation,
+                                        groups=self.synapse.groups, delay_shift=False)
+                lava_block.synapse.weight.data[:, :, :, :, 0] = self.synapse.weight.data.clone()
+
+            elif isinstance(self.synapse, SumPool2d):
+                lava_block = slayer.block.cuba.Pool(self.neuron.lava_cuba_neuron_params, self.synapse.kernel_size, self.synapse.stride, self.synapse.padding, self.synapse.dilation, delay_shift=False)
+
+            else:
+                raise NotImplementedError
+            return lava_block
+
+
+
+
+
+
 
 
 except BaseException as e:
