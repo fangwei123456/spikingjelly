@@ -63,7 +63,7 @@ def right_shift_to_zero(x: torch.Tensor, bits: int):
 
 
 @torch.jit.script
-def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int, dtype=torch.int32, hw_bits:int = 12):
+def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int, dtype:torch.dtype=torch.int32, hw_bits:int = 12):
     # y = (state * w_scale * ((1 << hw_bits) - decay) / (1 << hw_bits) + w_scale * x) / w_scale
     # y = state * (1 - decay / (1 << hw_bits)) + x
     scaled_state = (state * w_scale).to(dtype=dtype)
