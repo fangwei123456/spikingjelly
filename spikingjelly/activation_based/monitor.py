@@ -846,7 +846,7 @@ class GPUMonitor(threading.Thread):
         The GPU monitor, which starts a new thread to record the utilization and memory used of ``gpu_ids`` every ``interval`` seconds.
 
         .. admonition:: Warning
-        :class: warning
+            :class: warning
 
             Do not forget to call this module's ``stop()`` after the main thread finishes its job, otherwise the main thread will never stop!
 
