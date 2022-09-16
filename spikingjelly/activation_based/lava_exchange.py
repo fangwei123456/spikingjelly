@@ -5,7 +5,7 @@ import logging
 from typing import Union, Callable
 from . import neuron, base, surrogate
 
-hw_bits = 12
+_hw_bits = 12
 
 
 @torch.jit.script
@@ -63,7 +63,7 @@ def right_shift_to_zero(x: torch.Tensor, bits: int):
 
 
 @torch.jit.script
-def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int, dtype=torch.int32):
+def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int, dtype=torch.int32, hw_bits:int = 12):
     # y = (state * w_scale * ((1 << hw_bits) - decay) / (1 << hw_bits) + w_scale * x) / w_scale
     # y = state * (1 - decay / (1 << hw_bits)) + x
     scaled_state = (state * w_scale).to(dtype=dtype)
@@ -72,7 +72,7 @@ def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w
     return output / w_scale
 
 @torch.jit.script
-def _listep_backward(grad_output: torch.Tensor, decay: torch.Tensor, state: torch.Tensor):
+def _listep_backward(grad_output: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, hw_bits:int = 12):
     grad_state = (1 - decay / (1 << hw_bits)) * grad_output
     grad_decay = - state / (1 << hw_bits) * grad_output
 
@@ -86,7 +86,7 @@ class LeakyIntegratorStep(torch.autograd.Function):
     @staticmethod
     def forward(
             ctx, x, decay, state, w_scale):
-        output = _listep_forward(x, decay, state, w_scale, dtype=torch.int64)
+        output = _listep_forward(x, decay, state, w_scale, dtype=torch.int64, hw_bits=_hw_bits)
         if x.requires_grad or state.requires_grad:
             ctx.save_for_backward(decay, state)
         return output
@@ -95,7 +95,7 @@ class LeakyIntegratorStep(torch.autograd.Function):
     def backward(ctx, grad_output):
         decay, state = ctx.saved_tensors
         grad_input, grad_decay, grad_state = _listep_backward(
-            grad_output, decay, state
+            grad_output, decay, state, hw_bits=_hw_bits
         )
         return grad_input, grad_decay, grad_state, None
 
@@ -229,7 +229,7 @@ class CubaLIFNode(neuron.BaseNode):
         # the default quantization parameter setting in lava
         self._scale = int(scale)
         self._s_scale = int(scale * (1 << 6))
-        self._p_scale = 1 << hw_bits
+        self._p_scale = 1 << _hw_bits
         # Which is equivalent to:
         # self.p_scale = 1<<12
         # self.w_scale = int(scale)
