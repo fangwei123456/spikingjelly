@@ -2,7 +2,7 @@ from abc import abstractmethod
 from typing import Callable
 import torch
 import torch.nn as nn
-from . import surrogate, base, lava_exchange
+from . import surrogate, base
 from .. import configure
 import math
 import numpy as np
@@ -16,12 +16,6 @@ except BaseException as e:
     neuron_kernel = None
     cuda_utils = None
 
-try:
-    import lava.lib.dl.slayer as slayer
-
-except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.neuron: {e}')
-    slayer = None
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
