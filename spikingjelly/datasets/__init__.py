@@ -634,7 +634,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, ``duration`` is ``None``, and ``custom_integrate_function`` is not ``None``:
             events will be integrated by the user-defined function and saved to the ``custom_integrated_frames_dir_name`` directory in ``root`` directory.
             Here is an example from SpikingJelly's tutorials:
+
             .. code-block:: python
+
                 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
                 from typing import Dict
                 import numpy as np
