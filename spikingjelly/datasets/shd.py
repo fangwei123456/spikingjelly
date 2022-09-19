@@ -134,12 +134,16 @@ class SpikingHeidelbergDigits(Dataset):
             target_transform: Optional[Callable] = None,
     ) -> None:
         """
-        The Spiking Heidelberg Digits (SHD) dataset, which is proposed by `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks
- <https://doi.org/10.1109/TNNLS.2020.3044364>`_.
+        The Spiking Heidelberg Digits (SHD) dataset, which is proposed by `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_.
 
         Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
 
-        :class:`spikingjelly.datasets.shd.custom_integrate_function_example` is an example of ``custom_integrate_function``.
+        .. admonition:: Note
+            :class: note
+
+            Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``. Thus, this dataset is not inherited from :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` directly. But their procedures are similar.
+
+        :class:`spikingjelly.datasets.shd.custom_integrate_function_example` is an example of ``custom_integrate_function``, which is similar to the cunstom function for DVS Gesture in the ``Neuromorphic Datasets Processing`` tutorial.
         """
         super().__init__()
         self.root = root

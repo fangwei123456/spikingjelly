@@ -913,7 +913,9 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
     :rtype: torch.Tensor or np.ndarray
     The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
     Codes example:
+
     .. code-block:: python
+
         import torch
         from spikingjelly.datasets import random_temporal_delete
         T = 8
@@ -922,8 +924,11 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
         x_seq = torch.arange(0, N*T).view([N, T])
         print('x_seq=\\n', x_seq)
         print('random_temporal_delete(x_seq)=\\n', random_temporal_delete(x_seq, T_remain, batch_first=True))
+
     Outputs:
+
     .. code-block:: shell
+
         x_seq=
          tensor([[ 0,  1,  2,  3,  4,  5,  6,  7],
                 [ 8,  9, 10, 11, 12, 13, 14, 15],
