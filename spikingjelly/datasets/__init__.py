@@ -634,7 +634,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         If ``data_type == 'frame'``, ``frames_number`` is ``None``, ``duration`` is ``None``, and ``custom_integrate_function`` is not ``None``:
             events will be integrated by the user-defined function and saved to the ``custom_integrated_frames_dir_name`` directory in ``root`` directory.
             Here is an example from SpikingJelly's tutorials:
+
             .. code-block:: python
+
                 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
                 from typing import Dict
                 import numpy as np
@@ -911,7 +913,9 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
     :rtype: torch.Tensor or np.ndarray
     The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
     Codes example:
+
     .. code-block:: python
+
         import torch
         from spikingjelly.datasets import random_temporal_delete
         T = 8
@@ -920,8 +924,11 @@ def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, bat
         x_seq = torch.arange(0, N*T).view([N, T])
         print('x_seq=\\n', x_seq)
         print('random_temporal_delete(x_seq)=\\n', random_temporal_delete(x_seq, T_remain, batch_first=True))
+
     Outputs:
+
     .. code-block:: shell
+
         x_seq=
          tensor([[ 0,  1,  2,  3,  4,  5,  6,  7],
                 [ 8,  9, 10, 11, 12, 13, 14, 15],

@@ -60,6 +60,14 @@ spikingjelly.datasets.nav\_gesture module
    :undoc-members:
    :show-inheritance:
 
+spikingjelly.datasets.shd module
+-----------------------------------------
+
+.. automodule:: spikingjelly.datasets.shd
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 spikingjelly.datasets.speechcommands module
 -------------------------------------------
 
