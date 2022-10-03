@@ -6,7 +6,21 @@ from typing import Callable, Optional, Tuple, Union,Any, List
 # Code adapted from https://github.com/uzh-rpg/rpg_e2vid/blob/master/utils/inference_utils.py#L431,
 # https://github.com/neuromorphs/tonic/blob/develop/tonic/transforms.py,
 # and https://github.com/neuromorphs/tonic/blob/develop/tonic/functional/to_bina_rep.py
-
+'''
+#使用举例说明：（Directions for use）
+#在头部导入方法（import method)
+from spikingjelly.datasets.to_X_rep import Compose,ToFrame,ToBinaRep,ToVoxelGrid
+transform = Compose(
+            [
+                ToFrame(
+                    sensor_size=None,
+                    n_time_bins=self.T * self.tbin,
+                    ),
+                    ToBinaRep(n_frames=self.T, n_bits=self.tbin),
+                    ]
+                    )
+        frames = transform(events)
+'''
 class Compose:
     """Composes several transforms together. This a literal copy of torchvision.transforms.Compose function for convenience.
     Parameters:
