@@ -269,12 +269,17 @@ def cal_fixed_frames_number_segment_index(events_t: np.ndarray, split_by: str, f
     :return: a tuple ``(j_l, j_r)``
     :rtype: tuple
     Denote ``frames_num`` as :math:`M`, if ``split_by`` is ``'time'``, then
+
     .. math::
+
         \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
         j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
         j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+
     If ``split_by`` is ``'number'``, then
+
     .. math::
+
         j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
         j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
     '''
