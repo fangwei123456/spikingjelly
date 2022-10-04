@@ -208,7 +208,7 @@ def integrate_events_segment_to_frame(x: np.ndarray, y: np.ndarray, p: np.ndarra
 
         F(p, x, y) = \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
-    where :math:`\lfloor \cdot \rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
+    where :math:`\\lfloor \\cdot \\rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
     '''
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
     # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
