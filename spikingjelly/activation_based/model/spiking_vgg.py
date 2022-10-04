@@ -167,7 +167,7 @@ def spiking_vgg11_bn(pretrained=False, progress=True, norm_layer: callable = Non
         A spiking version of VGG-11-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg11', 'A', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
+    return _spiking_vgg('vgg11_bn', 'A', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
 
 
 
@@ -210,7 +210,7 @@ def spiking_vgg13_bn(pretrained=False, progress=True, norm_layer: callable = Non
         A spiking version of VGG-13-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg13', 'B', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
+    return _spiking_vgg('vgg13_bn', 'B', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
 
 
 
@@ -253,7 +253,7 @@ def spiking_vgg16_bn(pretrained=False, progress=True, norm_layer: callable = Non
         A spiking version of VGG-16-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg16', 'D', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
+    return _spiking_vgg('vgg16_bn', 'D', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
 
 
 
@@ -295,6 +295,6 @@ def spiking_vgg19_bn(pretrained=False, progress=True, norm_layer: callable = Non
     A spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
-    return _spiking_vgg('vgg19', 'E', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
+    return _spiking_vgg('vgg19_bn', 'E', True, pretrained, progress, norm_layer, spiking_neuron, **kwargs)
 
 
