@@ -4,7 +4,9 @@ Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 As mentioned in :doc:`../activation_based_en/neuron`, the Heaviside function :math:`S[t] = \Theta(H[t] - V_{threshold})` is used to describe the neuronal firing.\
 The Heaviside function is:
+
 .. math::
+
     \Theta(x) =
     \begin{cases}
     1, & x \geq 0 \\
