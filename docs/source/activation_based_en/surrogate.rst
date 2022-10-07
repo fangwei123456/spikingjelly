@@ -11,8 +11,6 @@ The Heaviside function is:
     0, & x < 0
     \end{cases}
 
-按照定义，其导数为冲激函数：
-
 Its derivative is the unit impulse function, which is defined by: 
 
 .. math::
