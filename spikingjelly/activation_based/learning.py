@@ -394,41 +394,43 @@ class STDPLearner(base.MemoryModule):
         :rtype: None or torch.Tensor
         """
         length = self.in_spike_monitor.records.__len__()
-        for i in range(length):
+        delta_w = None
+
+        if self.step_mode == 's':
+            if isinstance(self.synapse, nn.Conv2d):
+                stdp_f = stdp_conv2d_single_step
+            elif isinstance(self.synapse, nn.Linear):
+                stdp_f = stdp_linear_single_step
+            else:
+                raise NotImplementedError(self.synapse)
+        elif self.step_mode == 'm':
+            if (isinstance(self.synapse, nn.Conv2d) or 
+                isinstance(self.synapse, nn.Linear)):
+                stdp_f = stdp_multi_step
+            else:
+                raise NotImplementedError(self.synapse)
+        else:
+            raise ValueError(self.step_mode)
+
+        for _ in range(length):
             in_spike = self.in_spike_monitor.records.pop(0)
             out_spike = self.out_spike_monitor.records.pop(0)
 
-            if self.step_mode == 's':
-                if isinstance(self.synapse, nn.Conv2d):
-                    stdp_f = stdp_conv2d_single_step
-                elif isinstance(self.synapse, nn.Linear):
-                    stdp_f = stdp_linear_single_step
-                else:
-                    raise NotImplementedError(self.synapse)
-
-            elif self.step_mode == 'm':
-                if (isinstance(self.synapse, nn.Conv2d) or 
-                    isinstance(self.synapse, nn.Linear)):
-                    stdp_f = stdp_multi_step
-                else:
-                    raise NotImplementedError(self.synapse)
-
-            else:
-                raise ValueError(self.step_mode)
-
-            self.trace_pre, self.trace_post, delta_w = stdp_f(
+            self.trace_pre, self.trace_post, dw = stdp_f(
                 self.synapse, in_spike, out_spike,
                 self.trace_pre, self.trace_post, 
                 self.tau_pre, self.tau_post,
                 self.f_pre, self.f_post
             )
             if scale != 1.:
-                delta_w *= scale
+                dw *= scale
 
-            if on_grad:
-                if self.synapse.weight.grad is None:
-                    self.synapse.weight.grad = - delta_w
-                else:
-                    self.synapse.weight.grad = self.synapse.weight.grad - delta_w
+            delta_w = dw if (delta_w is None) else (delta_w + dw)
+
+        if on_grad:
+            if self.synapse.weight.grad is None:
+                self.synapse.weight.grad = -delta_w
             else:
-                return delta_w
+                self.synapse.weight.grad = self.synapse.weight.grad - delta_w
+        else:
+            return delta_w
