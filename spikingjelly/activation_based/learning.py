@@ -26,8 +26,11 @@ def stdp_linear_single_step(
     trace_post = trace_post - trace_post / tau_post + out_spike
     # shape = [N, C_out]
 
-    delta_w_pre = - f_pre(weight) * (trace_pre * in_spike).sum(0)
-    delta_w_post = f_post(weight) * (trace_post * out_spike).sum(0).unsqueeze(1)
+    # [N, out, in] -> [out, in]
+    delta_w_pre = - (f_pre(weight) * 
+                (trace_post.unsqueeze(2) * in_spike.unsqueeze(1)).sum(0))
+    delta_w_post = (f_post(weight) * 
+                (trace_pre.unsqueeze(1) * out_spike.unsqueeze(2)).sum(0))
     return trace_pre, trace_post, delta_w_pre + delta_w_post
 
 
@@ -76,6 +79,9 @@ def stdp_conv2d_single_step(
             device = in_spike.device, dtype = in_spike.dtype
         )
 
+    trace_pre = trace_pre - trace_pre / tau_pre + pre_spike
+    trace_post = trace_post - trace_post / tau_post + post_spike
+
     delta_w = torch.zeros_like(conv.weight.data)
     for h in range(conv.weight.shape[2]):
         for w in range(conv.weight.shape[3]):
@@ -83,24 +89,23 @@ def stdp_conv2d_single_step(
             w_end = in_spike.shape[3] - conv.weight.shape[3] + 1 + w
 
             pre_spike = in_spike[:, :, h:h_end:stride_h, w:w_end:stride_w]
-
-            # shape = [N, C_in, ?, ?]
+            # pre_spike.shape = [N, C_in, h_out, w_out]
             post_spike = out_spike
-            # shape = [N, C_out, ?, ?]
+            # post_spike.shape = [N, C_out, h_out, h_out]
             weight = conv.weight.data[:, :, h, w]
-            # shape = [C_out, C_in]
-            tr_pre = trace_pre[h][w]
-            tr_post = trace_post[h][w]
+            # weight.shape = [C_out, C_in]
 
-            tr_pre = tr_pre - tr_pre / tau_pre + pre_spike
-            tr_post = tr_post - tr_post / tau_post + post_spike
-            trace_pre[h][w] = tr_pre
-            trace_post[h][w] = tr_post
+            tr_pre = trace_pre[:, :, h:h_end:stride_h, w:w_end:stride_w]
+            # tr_pre.shape = [N, C_in, h_out, w_out]
+            tr_post = trace_post
+            # tr_post.shape = [N, C_out, h_out, w_out]
 
-            delta_w_pre = (- f_pre(weight) * (tr_pre * pre_spike)
-                .transpose(0, 1).flatten(1).sum(1))
-            delta_w_post = (f_post(weight) * (tr_post * post_spike)
-                .transpose(0, 1).flatten(1).sum(1, keepdims=True))
+            delta_w_pre = - (f_pre(weight) * 
+			    (tr_post.unsqueeze(2) * pre_spike.unsqueeze(1))
+                .permute([1, 2, 0, 3, 4]).sum(dim = [2, 3, 4]))
+            delta_w_post = f_post(weight) * \
+                        (tr_pre.unsqueeze(1) * post_spike.unsqueeze(1))\
+                        .permute([1, 2, 0, 3, 4]).sum(dim = [2, 3, 4])
             delta_w[:, :, h, w] += delta_w_pre + delta_w_post
 
     return trace_pre, trace_post, delta_w
