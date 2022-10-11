@@ -106,67 +106,27 @@ def stdp_conv2d_single_step(
     return trace_pre, trace_post, delta_w
 
 
-def stdp_linear_multi_step(
-    fc: nn.Linear, in_spike: torch.Tensor, out_spike: torch.Tensor,
+def stdp_multi_step(
+    layer: Union[nn.Linear, nn.Conv2d], 
+    in_spike: torch.Tensor, out_spike: torch.Tensor,
     trace_pre: Union[float, torch.Tensor, None],
-    trace_post: Union[float, torch.Tensor, None],
-    tau_pre: float, tau_post: float, 
-    f_pre: Callable = lambda x: x, f_post: Callable = lambda x: x
-):
-    """
-    T = 4
-    N = 2
-    C_in = 4
-    C_out = 8
-    in_spike = (torch.rand([T, N, C_in]) > 0.9).float()
-    out_spike = (torch.rand([T, N, C_out]) > 0.8).float()
-    fc = nn.Linear(C_in, C_out)
-    delta_w = stdp_linear_multi_step(fc, in_spike=in_spike, out_spike=out_spike, tau_pre=10., tau_post=20.)
-    print(delta_w)
-    """
-    weight = fc.weight.data
-    # weight.shape = [C_out, C_in]
-    # in_spike.shape = [T, N, C_in]
-    # out_spike.shape = [T, N, C_out]
-    delta_w = torch.zeros_like(weight)
-
-    for t in range(in_spike.shape[0]):
-        trace_pre, trace_post, dw = stdp_linear_single_step(
-            fc, in_spike[t], out_spike[t], trace_pre, trace_post,
-            tau_pre, tau_post, f_pre, f_post
-        )
-        delta_w += dw
-    return trace_pre, trace_post, delta_w
-
-
-def stdp_conv2d_multi_step(
-    conv: nn.Conv2d, in_spike: torch.Tensor, out_spike: torch.Tensor,
-    trace_pre: Union[torch.Tensor, None], trace_post: Union[torch.Tensor, None], 
+    trace_post: Union[float, torch.Tensor, None], 
     tau_pre: float, tau_post: float,
-    f_pre: Callable = lambda x: x, f_post: Callable = lambda x: x
+    f_pre: Callable = lambda x: x, f_post: Callable = lambda x: x 
 ):
-    """
-    T = 4
-    N = 2
-    C_in = 4
-    C_out = 8
-    in_spike = (torch.rand([T, N, C_in, 16, 16]) > 0.9).float()
-    out_spike = (torch.rand([T, N, C_out, 16, 16]) > 0.8).float()
-    conv = nn.Conv2d(C_in, C_out, kernel_size=3, padding=1, bias=False)
+    weight = layer.weight.data
+    delta_w = torch.zeros_like(weight)
+    T = in_spike.shape[0]
+    stdp_single_step = (stdp_linear_single_step if isinstance(layer, nn.Linear)
+        else stdp_conv2d_single_step)
 
-    delta_w = stdp_conv2d_multi_step(conv, in_spike=in_spike, out_spike=out_spike, tau_pre=10., tau_post=20.)
-    print(delta_w)
-
-    """
-
-    delta_w = torch.zeros_like(conv.weight.data)
-
-    for t in range(in_spike.shape[0]):
-        trace_pre, trace_post, dw = stdp_conv2d_single_step(
-            conv, in_spike[t], out_spike[t], trace_pre, trace_post,
+    for t in range(T):
+        trace_pre, trace_post, dw = stdp_single_step(
+            layer, in_spike[t], out_spike[t], trace_pre, trace_post,
             tau_pre, tau_post, f_pre, f_post
         )
         delta_w += dw
+
     return trace_pre, trace_post, delta_w
 
 
@@ -447,12 +407,12 @@ class STDPLearner(base.MemoryModule):
                     raise NotImplementedError(self.synapse)
 
             elif self.step_mode == 'm':
-                if isinstance(self.synapse, nn.Conv2d):
-                    stdp_f = stdp_conv2d_multi_step
-                elif isinstance(self.synapse, nn.Linear):
-                    stdp_f = stdp_linear_multi_step
+                if (isinstance(self.synapse, nn.Conv2d) or 
+                    isinstance(self.synapse, nn.Linear)):
+                    stdp_f = stdp_multi_step
                 else:
                     raise NotImplementedError(self.synapse)
+
             else:
                 raise ValueError(self.step_mode)
 
