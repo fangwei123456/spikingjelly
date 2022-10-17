@@ -12,7 +12,7 @@ if __name__ == '__main__':
         return torch.clamp(x, -1, 1.)
 
     tau_pre = 2.
-    tau_post = 100.
+    tau_post = 2.
     T = 128
     N = 1
     lr = 0.01

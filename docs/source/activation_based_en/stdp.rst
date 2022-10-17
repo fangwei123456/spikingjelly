@@ -55,7 +55,7 @@ The update of weight is:
 
 .. math::
 
-    \Delta W[i][j][t] = F_{post}(w[i][j][t]) \cdot tr_{j}[t] \cdot s[j][t] - F_{pre}(w[i][j][t]) \cdot tr_{i}[t] \cdot s[i][t]
+    \Delta W[i][j][t] = F_{post}(w[i][j][t]) \cdot tr_{i}[t] \cdot s[j][t] - F_{pre}(w[i][j][t]) \cdot tr_{j}[t] \cdot s[i][t]
 
 where :math:`F_{pre}, F_{post}` are functions that control how weight changes.
 
@@ -79,7 +79,7 @@ And we set the weight as ``0.4``:
         return torch.clamp(x, -1, 1.)
 
     tau_pre = 2.
-    tau_post = 100.
+    tau_post = 2.
     T = 128
     N = 1
     lr = 0.01
