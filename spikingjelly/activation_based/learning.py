@@ -177,7 +177,7 @@ class STDPLearner(base.MemoryModule):
 
         .. math::
 
-            \\Delta W[i][j][t] = F_{post}(w[i][j][t]) \\cdot tr_{j}[t] \\cdot s[j][t] - F_{pre}(w[i][j][t]) \\cdot tr_{i}[t] \\cdot s[i][t]
+            \\Delta W[i][j][t] = F_{post}(w[i][j][t]) \\cdot tr_{i}[t] \\cdot s[j][t] - F_{pre}(w[i][j][t]) \\cdot tr_{j}[t] \\cdot s[i][t]
 
         其中 :math:`F_{pre}, F_{post}` 即为参数 ``f_pre`` 和 ``f_post``。
 
@@ -269,7 +269,7 @@ class STDPLearner(base.MemoryModule):
 
         .. math::
 
-            \\Delta W[i][j][t] = F_{post}(w[i][j][t]) \\cdot tr_{j}[t] \\cdot s[j][t] - F_{pre}(w[i][j][t]) \\cdot tr_{i}[t] \\cdot s[i][t]
+            \\Delta W[i][j][t] = F_{post}(w[i][j][t]) \\cdot tr_{i}[t] \\cdot s[j][t] - F_{pre}(w[i][j][t]) \\cdot tr_{j}[t] \\cdot s[i][t]
 
         where :math:`F_{pre}, F_{post}` are ``f_pre`` and ``f_post``.
 

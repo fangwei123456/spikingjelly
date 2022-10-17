@@ -54,7 +54,7 @@ STDP可以使用如下公式进行拟合：
 
 .. math::
 
-    \Delta W[i][j][t] = F_{post}(w[i][j][t]) \cdot tr_{j}[t] \cdot s[j][t] - F_{pre}(w[i][j][t]) \cdot tr_{i}[t] \cdot s[i][t]
+    \Delta W[i][j][t] = F_{post}(w[i][j][t]) \cdot tr_{i}[t] \cdot s[j][t] - F_{pre}(w[i][j][t]) \cdot tr_{j}[t] \cdot s[i][t]
 
 其中 :math:`F_{pre}, F_{post}` 是控制突触改变量的函数。
 
