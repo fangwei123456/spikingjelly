@@ -140,3 +140,4 @@ dmypy.json
 *.bin
 *.dat
 *.pt
+/test*.py
