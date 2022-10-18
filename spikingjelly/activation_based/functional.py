@@ -1016,3 +1016,116 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     for m in net.modules():
         if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
+
+@torch.jit.script
+def delay(x_seq: torch.Tensor, delay_steps: int):
+    """
+    * :ref:`API in English <delay.__init__-en>`
+
+    .. _delay.__init__-cn:
+
+    :param x_seq: 输入的序列，``shape = [T, *]``
+    :type x_seq: torch.Tensor
+    :param delay_steps: 延迟的时间步数
+    :type delay_steps: int
+    :return: 延迟后的序列
+    :rtype: torch.Tensor
+
+    延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
+
+    代码示例：
+
+        .. code-block:: python
+
+            x = torch.rand([5, 2])
+            x[3:].zero_()
+            x.requires_grad = True
+            y = delay(x, 1)
+            print('x=')
+            print(x)
+            print('y=')
+            print(y)
+            y.sum().backward()
+            print('x.grad=')
+            print(x.grad)
+
+    输出为：
+
+        .. code-block:: bash
+
+            x=
+            tensor([[0.1084, 0.5698],
+                    [0.4563, 0.3623],
+                    [0.0556, 0.4704],
+                    [0.0000, 0.0000],
+                    [0.0000, 0.0000]], requires_grad=True)
+            y=
+            tensor([[0.0000, 0.0000],
+                    [0.1084, 0.5698],
+                    [0.4563, 0.3623],
+                    [0.0556, 0.4704],
+                    [0.0000, 0.0000]], grad_fn=<CatBackward0>)
+            x.grad=
+            tensor([[1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [0., 0.]])
+
+    * :ref:`中文API <delay.__init__-cn>`
+
+    .. _delay.__init__-en:
+
+    :param x_seq: the input sequence with ``shape = [T, *]``
+    :type x_seq: torch.Tensor
+    :param delay_steps: the number of delayed time-steps
+    :type delay_steps: int
+    :return: the delayed sequence
+    :rtype: torch.Tensor
+
+
+    A delay function that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
+
+    Codes example:
+
+        .. code-block:: python
+
+            x = torch.rand([5, 2])
+            x[3:].zero_()
+            x.requires_grad = True
+            y = delay(x, 1)
+            print('x=')
+            print(x)
+            print('y=')
+            print(y)
+            y.sum().backward()
+            print('x.grad=')
+            print(x.grad)
+
+    The outputs are:
+
+        .. code-block:: bash
+
+            x=
+            tensor([[0.1084, 0.5698],
+                    [0.4563, 0.3623],
+                    [0.0556, 0.4704],
+                    [0.0000, 0.0000],
+                    [0.0000, 0.0000]], requires_grad=True)
+            y=
+            tensor([[0.0000, 0.0000],
+                    [0.1084, 0.5698],
+                    [0.4563, 0.3623],
+                    [0.0556, 0.4704],
+                    [0.0000, 0.0000]], grad_fn=<CatBackward0>)
+            x.grad=
+            tensor([[1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [0., 0.]])
+
+    """
+    # x_seq.shape = [T, *]
+    y = torch.zeros_like(x_seq[0: delay_steps].data)
+    return torch.cat((y, x_seq[0: x_seq.shape[0] - delay_steps]), 0)
