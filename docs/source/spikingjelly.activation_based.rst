@@ -14,6 +14,7 @@ spikingjelly.activation\_based package
    ./sub_module/spikingjelly.activation_based.monitor
    ./sub_module/spikingjelly.activation_based.neuron
    ./sub_module/spikingjelly.activation_based.neuron_kernel
+   ./sub_module/spikingjelly.activation_based.quantize
    ./sub_module/spikingjelly.activation_based.rnn
    ./sub_module/spikingjelly.activation_based.spike_op
    ./sub_module/spikingjelly.activation_based.surrogate
