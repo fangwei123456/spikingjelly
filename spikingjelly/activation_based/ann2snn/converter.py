@@ -1,8 +1,11 @@
+import torch.nn as nn
 from spikingjelly.activation_based.ann2snn.modules import *
 from tqdm import tqdm
 from spikingjelly.activation_based import neuron
 import copy
-
+from typing import Type, Dict, Any, Tuple, Iterable, Optional, List, cast
+from torch import fx
+from torch.nn.utils.fusion import fuse_conv_bn_eval
 
 class Converter(nn.Module):
 
@@ -45,17 +48,22 @@ class Converter(nn.Module):
         self.dataloader = dataloader
         self._check_mode()
         self.device = None
-        
-    def forward(self, relu_model):
-        relu_model = copy.deepcopy(relu_model)
+
+    def forward(self, ann):
+        #print(id(ann))
+        ann = fx.symbolic_trace(ann).to(self.device)
+        #print(id(ann))
         if self.device is None:
-            self.device = next(relu_model.parameters()).device
-        relu_model.eval()
-        model = self.set_voltagehook(relu_model, mode=self.mode).to(self.device)
+            self.device = next(ann.parameters()).device
+        ann.eval()
+        ann_fused = self.fuse(ann).to(self.device)
+        #print(id(ann_fused))
+        ann_with_hook = self.set_voltagehook(ann_fused, mode=self.mode).to(self.device)
+        #print(id(ann_with_hook))
         for _, (imgs, _) in enumerate(tqdm(self.dataloader)):
-            model(imgs.to(self.device))
-        model = self.replace_by_ifnode(model)
-        return model
+            ann_with_hook(imgs.to(self.device))
+        snn = self.replace_by_ifnode(ann_with_hook).to(self.device)
+        return snn   # return type: GraphModule
 
     def _check_mode(self):
         err_msg = 'You have used a non-defined VoltageScale Method.'
@@ -64,44 +72,103 @@ class Converter(nn.Module):
                 try:
                     float(self.mode[:-1])
                 except ValueError:
-                    raise NotImplemented(err_msg)
+                    raise NotImplementedError(err_msg)
             elif self.mode.lower() in ['max']:
                 pass
             else:
-                raise NotImplemented(err_msg)
+                raise NotImplementedError(err_msg)
         elif isinstance(self.mode, float):
             try:
-                assert(self.mode <= 1 and self.mode > 0)
+                assert (self.mode <= 1 and self.mode > 0)
             except AssertionError:
-                raise NotImplemented(err_msg)
+                raise NotImplementedError(err_msg)
         else:
-            raise NotImplemented(err_msg)
+            raise NotImplementedError(err_msg)
+
+    def fuse(self, fx_model: torch.nn.Module) -> torch.nn.Module:
+
+        patterns = [(nn.Conv1d, nn.BatchNorm1d),
+                    (nn.Conv2d, nn.BatchNorm2d),
+                    (nn.Conv3d, nn.BatchNorm3d)]
+
+        modules = dict(fx_model.named_modules())
+
+        for pattern in patterns:
+            for node in fx_model.graph.nodes:
+                if self._matches_module_pattern(pattern, node,
+                                                modules):
+                    if len(node.args[0].users) > 1:  # Output of conv is used by other nodes
+                        continue
+                    conv = modules[node.args[0].target]
+                    bn = modules[node.target]
+                    fused_conv = fuse_conv_bn_eval(conv, bn)
+                    self._replace_node_module(node.args[0], modules,
+                                              fused_conv)
+                    node.replace_all_uses_with(node.args[0])
+                    fx_model.graph.erase_node(node)
+        fx_model.graph.lint()
+        fx_model.delete_all_unused_submodules()  #remove unused bn modules
+        fx_model.recompile()
+        return fx_model
+
+    def set_voltagehook(self, fx_model: nn.Module, mode='Max') -> torch.nn.Module:
+        modules = dict(fx_model.named_modules())
+        for node in fx_model.graph.nodes:
+            if node.op != 'call_module':
+                continue
+            if type(modules[node.target]) is nn.ReLU:
+                seq = nn.Sequential(modules[node.target], VoltageHook(mode=mode))
+                self._replace_node_module(node, modules, seq)
+        fx_model.graph.lint()
+        fx_model.recompile()
+        return fx_model
+
+    def replace_by_ifnode(self, fx_model) -> torch.nn.Module:
+        modules = dict(fx_model.named_modules())
+        for node in fx_model.graph.nodes:  # Seq as one node
+            if node.op != 'call_module':
+                continue
+            if type(modules[node.target]) is nn.Sequential:  #因为最开始的计算图会把所以嵌套的seq块拆解掉，所以这里识别到的seq块，一定是set_voltagehook中添加的
+                s = modules[node.target][1].scale.item()
+                seq = nn.Sequential(
+                    VoltageScaler(1.0 / s),
+                    neuron.IFNode(v_threshold=1., v_reset=None),
+                    VoltageScaler(s)
+                )
+                self._replace_node_module(node, modules, seq)
+        fx_model.graph.lint()
+        fx_model.recompile()
+        return fx_model
 
 
-    @staticmethod
-    def set_voltagehook(model, mode='MaxNorm'):
-        for name, module in model._modules.items():
-            if hasattr(module, "_modules"):
-                model._modules[name] = Converter.set_voltagehook(module, mode=mode)
-                if module.__class__.__name__ == 'ReLU':
-                    model._modules[name] = nn.Sequential(
-                        nn.ReLU(),
-                        VoltageHook(mode=mode)
-                    )
-        return model
+    def _replace_node_module(self, node: fx.Node, modules: Dict[str, Any],
+                             new_module: torch.nn.Module):
+        assert (isinstance(node.target, str))
+        parent_name, name = self._parent_name(node.target)
+        modules[node.target] = new_module
+        setattr(modules[parent_name], name, new_module)
 
-    @staticmethod
-    def replace_by_ifnode(model):
-        for name,module in model._modules.items():
-            if hasattr(module, "_modules"):
-                model._modules[name] = Converter.replace_by_ifnode(module)
-                if module.__class__.__name__ == 'Sequential' and len(module) == 2 and \
-                    module[0].__class__.__name__ == 'ReLU' and \
-                    module[1].__class__.__name__ == 'VoltageHook':
-                    s = module[1].scale.item()
-                    model._modules[name] = nn.Sequential(
-                        VoltageScaler(1.0 / s),
-                        neuron.IFNode(v_threshold=1., v_reset=None),
-                        VoltageScaler(s)
-                    )
-        return model
+    def _parent_name(self, target: str) -> Tuple[str, str]:
+        """
+        Splits a qualname into parent path and last atom.
+        For example, `foo.bar.baz` -> (`foo.bar`, `baz`)
+        """
+        *parent, name = target.rsplit('.', 1)
+        return parent[0] if parent else '', name
+
+    def _matches_module_pattern(self, pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]):
+        if len(node.args) == 0:
+            return False
+        nodes: Tuple[Any, fx.Node] = (node.args[0], node)
+        for expected_type, current_node in zip(pattern, nodes):
+            if not isinstance(current_node, fx.Node):
+                return False
+            if current_node.op != 'call_module':
+                return False
+            if not isinstance(current_node.target, str):
+                return False
+            if current_node.target not in modules:
+                return False
+            if type(modules[current_node.target]) is not expected_type:
+                return False
+        return True
