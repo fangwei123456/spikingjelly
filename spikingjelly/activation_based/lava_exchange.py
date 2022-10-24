@@ -54,7 +54,6 @@ def quantize_8b(x, scale, descale=False):
         return step_quantize(x, step=2 / scale).clamp(-256 / scale, 255 / scale) * scale
 
 
-
 @torch.jit.script
 def right_shift_to_zero(x: torch.Tensor, bits: int):
     dtype = x.dtype
@@ -63,7 +62,8 @@ def right_shift_to_zero(x: torch.Tensor, bits: int):
 
 
 @torch.jit.script
-def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int, dtype:torch.dtype=torch.int32, hw_bits:int = 12):
+def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w_scale: int,
+                    dtype: torch.dtype = torch.int32, hw_bits: int = 12):
     # y = (state * w_scale * ((1 << hw_bits) - decay) / (1 << hw_bits) + w_scale * x) / w_scale
     # y = state * (1 - decay / (1 << hw_bits)) + x
     scaled_state = (state * w_scale).to(dtype=dtype)
@@ -71,8 +71,9 @@ def _listep_forward(x: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, w
     output = right_shift_to_zero(scaled_state * decay_int, hw_bits) + (w_scale * x).to(dtype=dtype)
     return output / w_scale
 
+
 @torch.jit.script
-def _listep_backward(grad_output: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, hw_bits:int = 12):
+def _listep_backward(grad_output: torch.Tensor, decay: torch.Tensor, state: torch.Tensor, hw_bits: int = 12):
     grad_state = (1 - decay / (1 << hw_bits)) * grad_output
     grad_decay = - state / (1 << hw_bits) * grad_output
 
@@ -81,6 +82,54 @@ def _listep_backward(grad_output: torch.Tensor, decay: torch.Tensor, state: torc
     return grad_output, grad_decay, grad_state
     # x, decay, state
 
+class BatchNorm2d(nn.Module):
+    def __init__(self, num_features: int, eps: float = 1e-05, momentum: float = 0.1,
+                 track_running_stats: bool = True, weight_exp_bits: int = 3, pre_hook_fx: Callable = lambda x: x):
+        super().__init__()
+        # lava.lib.dl.slayer.neuron.norm.WgtScaleBatchNorm
+        self.num_features = num_features
+        self.eps = eps
+        self.momentum = momentum
+        self.track_running_stats = track_running_stats
+        self.weight_exp_bits = weight_exp_bits
+
+        self.pre_hook_fx = pre_hook_fx
+        self.register_buffer(
+            'running_mean',
+            torch.zeros(num_features)
+        )
+        self.register_buffer(
+            'running_var',
+            torch.zeros(1)
+        )
+
+    def to_lava(self):
+        bn = slayer.neuron.norm.WgtScaleBatchNorm(num_features=self.num_features, momentum=self.momentum, weight_exp_bits=self.weight_exp_bits, eps=self.eps, pre_hook_fx=self.pre_hook_fx)
+        bn.load_state_dict(self.state_dict())
+        print(self.state_dict())
+        return bn
+
+    def forward(self, x: torch.Tensor):
+        if self.track_running_stats and self.training:
+            x_mean = torch.mean(x, dim=(0, 2, 3), keepdim=True)
+            x_var = torch.var(x, unbiased=False)
+            numel = x.numel() / self.num_features
+            with torch.no_grad():
+                self.running_mean = (1. - self.momentum) * self.running_mean + self.momentum * x_mean.squeeze()
+                self.running_var = (1. - self.momentum) * self.running_var + self.momentum * x_var * numel / (numel + 1)
+
+        else:
+            x_mean = self.running_mean.view(1, -1, 1, 1)
+            x_var = self.running_var.view(1, -1, 1, 1)
+
+        x_std = torch.sqrt(x_var + self.eps)
+
+
+        x_std = torch.pow(2., torch.ceil(torch.log2(x_std)).clamp(
+            -self.weight_exp_bits, self.weight_exp_bits
+        ))
+
+        return (x - self.pre_hook_fx(x_mean)) / x_std
 
 class LeakyIntegratorStep(torch.autograd.Function):
     @staticmethod
@@ -100,6 +149,8 @@ class LeakyIntegratorStep(torch.autograd.Function):
         return grad_input, grad_decay, grad_state, None
 
 
+
+
 class CubaLIFNode(neuron.BaseNode):
     def __init__(
             self, current_decay: Union[float, torch.Tensor], voltage_decay: Union[float, torch.Tensor],
@@ -107,10 +158,12 @@ class CubaLIFNode(neuron.BaseNode):
             scale=1 << 6,
             requires_grad=False,
             surrogate_function: Callable = surrogate.Sigmoid(),
+            norm: BatchNorm2d = None,
             detach_reset=False,
             step_mode="s", backend="torch",
             store_v_seq: bool = False, store_i_seq: bool = False,
     ):
+        # author: https://github.com/AllenYolk
         """
         * :ref:`API in English <CubaLIFNode.__init__-en>`
 
@@ -211,12 +264,11 @@ class CubaLIFNode(neuron.BaseNode):
             V[t] = (1 - \\alpha_{V})V[t-1] + I[t]
 
         """
-
         self.lava_cuba_neuron_params = {
             'threshold': v_threshold,
             'current_decay': current_decay,
             'voltage_decay': voltage_decay,
-            'scale': scale,
+            'scale': scale
         }
 
         super().__init__(v_threshold=v_threshold, v_reset=v_reset, surrogate_function=surrogate_function,
@@ -255,6 +307,19 @@ class CubaLIFNode(neuron.BaseNode):
         self.register_memory('voltage_state', 0.)
 
         self.clamp_decay_parameters()
+
+        self.norm = norm
+
+        if isinstance(self.norm, BatchNorm2d):
+            self.norm.pre_hook_fx = self.quantize_8bit
+
+        else:
+            raise NotImplementedError(self.norm)
+
+
+
+
+
 
     def quantize_8bit(self, x, descale=False):
         return quantize_8b(x, scale=self.scale, descale=descale)
@@ -319,6 +384,9 @@ class CubaLIFNode(neuron.BaseNode):
             self.s_scale,
         )
 
+        if self.norm is not None:
+            current = self.norm(current)
+
         voltage = LeakyIntegratorStep.apply(
             current,
             step_quantize(self.voltage_decay),
@@ -371,10 +439,9 @@ class CubaLIFNode(neuron.BaseNode):
         return torch.stack(y_seq)
 
 
-
-
 try:
     import lava.lib.dl.slayer as slayer
+
 
     # ----------------------------------------
     # data reshape function
@@ -817,6 +884,8 @@ try:
 
                 return x
 
+
+
     class BlockContainer(nn.Module, base.StepModule):
 
         @property
@@ -834,8 +903,8 @@ try:
             if isinstance(self.synapse, base.StepModule):
                 self.synapse.step_mode = value
 
-
-        def __init__(self, synapse: nn.Conv2d or nn.Linear or nn.AvgPool2d or nn.Flatten, neu: CubaLIFNode or None, step_mode: str = 's'):
+        def __init__(self, synapse: nn.Conv2d or nn.Linear or nn.AvgPool2d or nn.Flatten, neu: CubaLIFNode or None,
+                     step_mode: str = 's'):
             super().__init__()
             if isinstance(synapse, nn.Flatten):
                 assert neu is None
@@ -858,14 +927,14 @@ try:
                 N = x.shape[1]
                 x = x.flatten(0, 1)
 
-
             if isinstance(self.synapse, (nn.Conv2d, nn.Linear)):
                 weight = self.neuron.quantize_8bit(self.synapse.weight)
                 # 量化到 2k / self.neuron.scale, k = -128, -127, ..., 127，共有256个取值
 
-
                 if isinstance(self.synapse, nn.Conv2d):
-                    x = F.conv2d(x, weight=weight, bias=self.synapse.bias, stride=self.synapse.stride, padding=self.synapse.padding, dilation=self.synapse.dilation, groups=self.synapse.groups)
+                    x = F.conv2d(x, weight=weight, bias=self.synapse.bias, stride=self.synapse.stride,
+                                 padding=self.synapse.padding, dilation=self.synapse.dilation,
+                                 groups=self.synapse.groups)
 
                 elif isinstance(self.synapse, nn.Linear):
                     x = F.linear(x, weight, self.synapse.bias)
@@ -876,8 +945,6 @@ try:
             else:
                 raise NotImplementedError(type(self.synapse))
 
-
-
             if self.step_mode == 'm':
                 x = x.view([T, N, *x.shape[1:]])
 
@@ -887,24 +954,37 @@ try:
             return x
 
         def to_lava_block(self):
+
+
             if isinstance(self.synapse, nn.Linear):
-                lava_block = slayer.block.cuba.Dense(self.neuron.lava_cuba_neuron_params, self.synapse.in_features, self.synapse.out_features, delay_shift=False)
+                lava_block = slayer.block.cuba.Dense(self.neuron.lava_cuba_neuron_params, self.synapse.in_features,
+                                                     self.synapse.out_features, delay_shift=False)
                 lava_block.synapse.weight.data[:, :, 0, 0, 0] = self.synapse.weight.data.clone()
 
             elif isinstance(self.synapse, nn.Conv2d):
-                lava_block = slayer.block.cuba.Conv(self.neuron.lava_cuba_neuron_params, in_features=self.synapse.in_channels,
-                                        out_features=self.synapse.out_channels, kernel_size=self.synapse.kernel_size,
-                                        stride=self.synapse.stride, padding=self.synapse.padding, dilation=self.synapse.dilation,
-                                        groups=self.synapse.groups, delay_shift=False)
+                lava_block = slayer.block.cuba.Conv(self.neuron.lava_cuba_neuron_params,
+                                                    in_features=self.synapse.in_channels,
+                                                    out_features=self.synapse.out_channels,
+                                                    kernel_size=self.synapse.kernel_size,
+                                                    stride=self.synapse.stride, padding=self.synapse.padding,
+                                                    dilation=self.synapse.dilation,
+                                                    groups=self.synapse.groups, delay_shift=False)
                 lava_block.synapse.weight.data[:, :, :, :, 0] = self.synapse.weight.data.clone()
 
             elif isinstance(self.synapse, SumPool2d):
-                lava_block = slayer.block.cuba.Pool(self.neuron.lava_cuba_neuron_params, self.synapse.kernel_size, self.synapse.stride, self.synapse.padding, self.synapse.dilation, delay_shift=False)
+                lava_block = slayer.block.cuba.Pool(self.neuron.lava_cuba_neuron_params, self.synapse.kernel_size,
+                                                    self.synapse.stride, self.synapse.padding, self.synapse.dilation,
+                                                    delay_shift=False)
 
             elif isinstance(self.synapse, nn.Flatten):
                 return slayer.block.cuba.Flatten()
             else:
                 raise NotImplementedError
+
+
+            # 补上norm
+            if self.neuron is not None:
+                lava_block.neuron.norm = self.neuron.norm.to_lava()
             return lava_block
 
 
