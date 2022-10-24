@@ -20,7 +20,7 @@ def cpu_timer(f: Callable, *args, **kwargs):
 
     :param f: 函数
     :type f: Callable
-    :return: 用时，单位是秒
+    :return: 用时，单位是毫秒
     :rtype: float
 
     * :ref:`中文 API <cpu_timer-cn>`
@@ -31,7 +31,7 @@ def cpu_timer(f: Callable, *args, **kwargs):
 
     :param f: a function
     :type f: Callable
-    :return: used time in seconds
+    :return: used time in milliseconds
     :rtype: float
     """
     start = time.perf_counter()
@@ -50,7 +50,7 @@ def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
     :type device: torch.device or int
     :param f: 函数
     :type f: Callable
-    :return: 用时，单位是秒
+    :return: 用时，单位是毫秒
     :rtype: float
 
     * :ref:`中文 API <cuda_timer-cn>`
@@ -63,7 +63,7 @@ def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
     :type device: torch.device or int
     :param f: a function
     :type f: Callable
-    :return: used time in seconds
+    :return: used time in milliseconds
     :rtype: float
     """
     torch.cuda.set_device(device)
@@ -93,7 +93,7 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
     :type device: str or torch.device or int
     :param f: 函数
     :type f: Callable
-    :return: 用时，单位是秒
+    :return: 用时，单位是毫秒
     :rtype: float
 
     * :ref:`中文 API <cal_fun_t-cn>`
@@ -114,7 +114,7 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
     :type device: str or torch.device or int
     :param f: function
     :type f: Callable
-    :return: used time in seconds
+    :return: used time in milliseconds
     :rtype: float
 
     """
