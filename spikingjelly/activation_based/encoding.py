@@ -61,8 +61,7 @@ class StatefulEncoder(base.MemoryModule):
         :param T: 编码周期。通常情况下，与SNN的仿真周期（总步长一致）
         :type T: int
 
-        有状态编码器的基类。有状态编码器 ``encoder = StatefulEncoder(T)``，编码器会在首次调用 ``encoder(x)`` 时对 ``x` 进行编码。在
-        第 ``t`` 次调用 ``encoder(x)`` 时会输出 ``spike[t % T]``
+        有状态编码器的基类。有状态编码器 ``encoder = StatefulEncoder(T)``，编码器会在首次调用 ``encoder(x)`` 时对 ``x`` 进行编码。在第 ``t`` 次调用 ``encoder(x)`` 时会输出 ``spike[t % T]``
 
         .. code-block:: python
 
@@ -214,7 +213,7 @@ class LatencyEncoder(StatefulEncoder):
             print('x', x)
             T = 20
             encoder = LatencyEncoder(T)
-            for t range(T):
+            for t om range(T):
                 print(encoder(x))
 
         .. warning::
@@ -252,7 +251,7 @@ class LatencyEncoder(StatefulEncoder):
             print('x', x)
             T = 20
             encoder = LatencyEncoder(T)
-            for t range(T):
+            for t in range(T):
                 print(encoder(x))
 
         .. admonition:: Warning
