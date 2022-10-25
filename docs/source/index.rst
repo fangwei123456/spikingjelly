@@ -62,6 +62,7 @@ https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
     /activation_based/recurrent_connection_and_stateful_synapse
     /activation_based/train_large_scale_snn
     /activation_based/stdp
+    /activation_based/ann2snn
     /legacy_tutorials
     /activation_based/inference_on_lynxi
 
@@ -179,6 +180,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/recurrent_connection_and_stateful_synapse
     /activation_based_en/train_large_scale_snn
     /activation_based_en/stdp
+    /activation_based_en/ann2snn
     /legacy_tutorials_en
 
 
