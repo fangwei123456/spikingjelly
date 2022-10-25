@@ -165,6 +165,12 @@ class PeriodicEncoder(StatefulEncoder):
 
         周期性编码器，在第 ``t`` 次调用时输出 ``spike[t % T]``，其中 ``T = spike.shape[0]``
 
+
+        .. warning::
+
+            不要忘记调用reset，因为这个编码器是有状态的。
+
+
         * :ref:`中文API <PeriodicEncoder.__init__-cn>`
 
         .. _PeriodicEncoder.__init__-en:
@@ -173,6 +179,12 @@ class PeriodicEncoder(StatefulEncoder):
         :type spike: torch.Tensor
 
         The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``
+
+        .. admonition:: Warning
+            :class: warning
+
+            Do not forget to reset the encoder because the encoder is stateful!
+
         """
         super().__init__(spike.shape[0], step_mode)
 
@@ -220,6 +232,10 @@ class LatencyEncoder(StatefulEncoder):
 
             必须确保 ``0 <= x <= 1``。
 
+        .. warning::
+
+            不要忘记调用reset，因为这个编码器是有状态的。
+
 
         * :ref:`中文API <LatencyEncoder.__init__-cn>`
 
@@ -258,6 +274,11 @@ class LatencyEncoder(StatefulEncoder):
             :class: warning
 
             The user must assert ``0 <= x <= 1``.
+
+        .. admonition:: Warning
+            :class: warning
+
+            Do not forget to reset the encoder because the encoder is stateful!
 
         """
         super().__init__(T, step_mode)
@@ -342,6 +363,12 @@ class WeightedPhaseEncoder(StatefulEncoder):
         | 255/256                          | 1              | 1              | 1              | 1              | 1              | 1              | 1              | 1              |
         +----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
 
+
+        .. warning::
+
+            不要忘记调用reset，因为这个编码器是有状态的。
+
+
         * :ref:`中文API <WeightedPhaseEncoder.__init__-cn>`
 
         .. _WeightedPhaseEncoder.__init__-en:
@@ -366,6 +393,10 @@ class WeightedPhaseEncoder(StatefulEncoder):
         | 255/256                          | 1              | 1              | 1              | 1              | 1              | 1              | 1              | 1              |
         +----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
 
+        .. admonition:: Warning
+            :class: warning
+
+            Do not forget to reset the encoder because the encoder is stateful!
 
         """
         super().__init__(K, step_mode)
