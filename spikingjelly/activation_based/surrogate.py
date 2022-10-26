@@ -2,9 +2,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from .auto_cuda import cfunction
+
 tab4_str = '\t\t\t\t'  # used for aligning code
 curly_bracket_l = '{'
 curly_bracket_r = '}'
+
 
 @torch.jit.script
 def heaviside(x: torch.Tensor):
@@ -46,6 +49,7 @@ def heaviside(x: torch.Tensor):
     '''
     return (x >= 0).to(x)
 
+
 def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     '''
     :param primitive_function: 梯度替代函数的原函数
@@ -82,6 +86,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     print(f'x[{idx}] = {x[idx]}')
     print('auto   grad', x_grad_auto[idx])
     print('manual grad', x_grad_manual[idx])
+
 
 def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     # check_cuda_grad(neuron.IFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
@@ -145,6 +150,10 @@ class SurrogateFunctionBase(nn.Module):
         else:
             return self.primitive_function(x, self.alpha)
 
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        # new version
+        raise NotImplementedError
+
 
 class MultiArgsSurrogateFunctionBase(nn.Module):
     def __init__(self, spiking: bool, *args, **kwargs):
@@ -163,12 +172,18 @@ class MultiArgsSurrogateFunctionBase(nn.Module):
     def cuda_code_end_comments(self):
         return f'// end: spikingjelly.activation_based.surrogate.{self._get_name()}.cuda_code'
 
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        # new version
+        raise NotImplementedError
+
+
 @torch.jit.script
 def piecewise_quadratic_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     x_abs = x.abs()
     mask = (x_abs > (1 / alpha))
     grad_x = (grad_output * (- (alpha ** 2) * x_abs + alpha)).masked_fill_(mask, 0)
     return grad_x, None
+
 
 class piecewise_quadratic(torch.autograd.Function):
     @staticmethod
@@ -196,16 +211,16 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         反向传播时使用分段二次函数的梯度（三角形函数）的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = 
+            g'(x) =
             \\begin{cases}
             0, & |x| > \\frac{1}{\\alpha} \\\\
-            -\\alpha^2|x|+\\alpha, & |x| \\leq \\frac{1}{\\alpha} 
+            -\\alpha^2|x|+\\alpha, & |x| \\leq \\frac{1}{\\alpha}
             \\end{cases}
 
         对应的原函数为
 
         .. math::
-            g(x) = 
+            g(x) =
             \\begin{cases}
             0, & x < -\\frac{1}{\\alpha} \\\\
             -\\frac{1}{2}\\alpha^2|x|x + \\alpha x + \\frac{1}{2}, & |x| \\leq \\frac{1}{\\alpha}  \\\\
@@ -228,16 +243,16 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         The piecewise quadratic surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = 
+            g'(x) =
             \\begin{cases}
             0, & |x| > \\frac{1}{\\alpha} \\\\
-            -\\alpha^2|x|+\\alpha, & |x| \\leq \\frac{1}{\\alpha} 
+            -\\alpha^2|x|+\\alpha, & |x| \\leq \\frac{1}{\\alpha}
             \\end{cases}
 
         The primitive function is defined by
 
         .. math::
-            g(x) = 
+            g(x) =
             \\begin{cases}
             0, & x < -\\frac{1}{\\alpha} \\\\
             -\\frac{1}{2}\\alpha^2|x|x + \\alpha x + \\frac{1}{2}, & |x| \\leq \\frac{1}{\\alpha}  \\\\
@@ -286,9 +301,11 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+
 @torch.jit.script
 def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return alpha / 2 * (- alpha * x.abs()).exp_() * grad_output, None
+
 
 class piecewise_exp(torch.autograd.Function):
     @staticmethod
@@ -321,10 +338,10 @@ class PiecewiseExp(SurrogateFunctionBase):
         对应的原函数为
 
         .. math::
-            g(x) = 
+            g(x) =
             \\begin{cases}
             \\frac{1}{2}e^{\\alpha x}, & x < 0 \\\\
-            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
+            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0
             \\end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseExp.*
@@ -348,10 +365,10 @@ class PiecewiseExp(SurrogateFunctionBase):
         The primitive function is defined by
 
         .. math::
-            g(x) = 
+            g(x) =
             \\begin{cases}
             \\frac{1}{2}e^{\\alpha x}, & x < 0 \\\\
-            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0 
+            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0
             \\end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseExp.*
@@ -400,6 +417,7 @@ class PiecewiseExp(SurrogateFunctionBase):
 def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     sgax = (x * alpha).sigmoid_()
     return grad_output * (1. - sgax) * sgax * alpha, None
+
 
 class sigmoid(torch.autograd.Function):
     @staticmethod
@@ -464,7 +482,6 @@ class Sigmoid(SurrogateFunctionBase):
         '''
         super().__init__(alpha, spiking)
 
-
     @staticmethod
     def spiking_function(x, alpha):
         return sigmoid.apply(x, alpha)
@@ -499,6 +516,9 @@ class Sigmoid(SurrogateFunctionBase):
         '''
         return code
 
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -521,9 +541,11 @@ class Sigmoid(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+
 @torch.jit.script
 def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return grad_output / (2 * alpha * (1 / alpha + x.abs()).pow_(2)), None
+
 
 class soft_sign(torch.autograd.Function):
     @staticmethod
@@ -621,9 +643,11 @@ class SoftSign(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+
 @torch.jit.script
 def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
-    return alpha / 2 / (1 + (math.pi / 2 *alpha * x).pow_(2)) * grad_output, None
+    return alpha / 2 / (1 + (math.pi / 2 * alpha * x).pow_(2)) * grad_output, None
+
 
 class atan(torch.autograd.Function):
     @staticmethod
@@ -636,6 +660,7 @@ class atan(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         return atan_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
 
 class ATan(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
@@ -674,7 +699,6 @@ class ATan(SurrogateFunctionBase):
         '''
         super().__init__(alpha, spiking)
 
-
     @staticmethod
     def spiking_function(x, alpha):
         return atan.apply(x, alpha)
@@ -708,6 +732,9 @@ class ATan(SurrogateFunctionBase):
         '''
         return code
 
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.atan_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -729,9 +756,12 @@ class ATan(SurrogateFunctionBase):
     # plt.ylabel('Output')
     # plt.grid(linestyle='--')
     # plt.show()
+
+
 @torch.jit.script
 def nonzero_sign_log_abs_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return grad_output / (1 / alpha + x.abs()), None
+
 
 class nonzero_sign_log_abs(torch.autograd.Function):
     @staticmethod
@@ -820,7 +850,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         '''
         super().__init__(alpha, spiking)
 
-
     @staticmethod
     def spiking_function(x, alpha):
         return nonzero_sign_log_abs.apply(x, alpha)
@@ -854,9 +883,11 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+
 @torch.jit.script
 def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return grad_output * (- (x * alpha).pow_(2)).exp_() * (alpha / math.sqrt(math.pi)), None
+
 
 class erf(torch.autograd.Function):
     @staticmethod
@@ -899,7 +930,7 @@ class Erf(SurrogateFunctionBase):
 
         .. image:: ../_static/API/activation_based/surrogate/Erf.*
             :width: 100%
-        
+
         该函数在文章 [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_ 中使用。
 
         * :ref:`中文API <Erf.__init__-cn>`
@@ -933,7 +964,6 @@ class Erf(SurrogateFunctionBase):
         '''
         super().__init__(alpha, spiking)
 
-
     @staticmethod
     def spiking_function(x, alpha):
         return erf.apply(x, alpha)
@@ -965,11 +995,13 @@ class Erf(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+
 @torch.jit.script
 def piecewise_leaky_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, w: float, c: float):
     mask_width = (x.abs() < w)
     mask_c = mask_width.logical_not()
     return grad_output * x.masked_fill(mask_width, 1 / w).masked_fill(mask_c, c), None, None
+
 
 class piecewise_leaky_relu(torch.autograd.Function):
     @staticmethod
@@ -1059,7 +1091,6 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
         self.c = c
         self.spiking = spiking
 
-
     def forward(self, x):
         if self.spiking:
             f = self.spiking_function
@@ -1119,6 +1150,9 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
             {tab4_str}{self.cuda_code_end_comments()}
         '''
         return code
+
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.piecewise_leaky_relu_backward(y=y, x=x, w=self.w, c=self.c, dtype=dtype)
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
@@ -1259,6 +1293,7 @@ class SquarewaveFourierSeries(MultiArgsSurrogateFunctionBase):
     # plt.savefig('./docs/source/_static/API/activation_based/surrogate/SquarewaveFourierSeries2.pdf')
     # plt.savefig('./docs/source/_static/API/activation_based/surrogate/SquarewaveFourierSeries2.svg')
 
+
 class s2nn(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, alpha: float, beta: float):
@@ -1274,6 +1309,7 @@ class s2nn(torch.autograd.Function):
         sgax = torch.sigmoid(ctx.alpha * x)
         grad_x = torch.where(x < 0., ctx.alpha * sgax * (1. - sgax), ctx.beta / (x + 1.))
         return grad_x * grad_output, None, None
+
 
 class S2NN(MultiArgsSurrogateFunctionBase):
     def __init__(self, alpha=4., beta=1., spiking=True):
@@ -1384,6 +1420,9 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         '''
         return code
 
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.s2nn_backward(y=y, x=x, alpha=self.alpha, beta=self.beta, dtype=dtype)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200, figsize=(6, 4))
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -1408,6 +1447,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
     # plt.savefig('./S2NN.svg')
     # plt.savefig('./S2NN.pdf')
 
+
 class q_pseudo_spike(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
@@ -1423,6 +1463,7 @@ class q_pseudo_spike(torch.autograd.Function):
         if ctx.needs_input_grad[0]:
             grad_x = ((1 + 2 / (ctx.alpha - 1) * x.abs()).pow_(-ctx.alpha)) * grad_output
         return grad_x, None
+
 
 class QPseudoSpike(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
@@ -1482,7 +1523,6 @@ class QPseudoSpike(SurrogateFunctionBase):
         '''
         super().__init__(alpha, spiking)
 
-
     @staticmethod
     def spiking_function(x, alpha):
         return q_pseudo_spike.apply(x, alpha)
@@ -1519,6 +1559,9 @@ class QPseudoSpike(SurrogateFunctionBase):
         '''
         return code
 
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.q_pseudo_spike_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200, figsize=(6, 4))
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -1548,6 +1591,7 @@ def leaky_k_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, leak: floa
     mask1 = (x >= 0.).to(x)
     grad_x = mask1 * k + (1. - mask1) * leak
     return grad_output * grad_x, None, None
+
 
 class leaky_k_relu(torch.autograd.Function):
     @staticmethod
@@ -1654,7 +1698,6 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
 
         return f(x, self.leak, self.k)
 
-
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
         leak = str(self.leak) + 'f'
@@ -1679,6 +1722,10 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
             {tab4_str}{self.cuda_code_end_comments()}
         '''
         return code
+
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.leaky_k_relu_backward(y=y, x=x, leak=self.leak, k=self.k, dtype=dtype)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200, figsize=(6, 4))
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -1707,6 +1754,7 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
 def fake_numerical_gradient_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     grad_x = torch.clamp_max(((x >= 0.) * 2. - 1.) / x, alpha)
     return grad_output * grad_x, None
+
 
 class fake_numerical_gradient(torch.autograd.Function):
     @staticmethod
@@ -1759,6 +1807,11 @@ class FakeNumericalGradient(SurrogateFunctionBase):
         '''
         return code
 
+
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.fake_numerical_gradient_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
+
+
 @torch.jit.script
 def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     mask_gt1 = x > 1.
@@ -1780,6 +1833,7 @@ class log_tailed_relu(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         return log_tailed_relu_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
 
 class LogTailedReLU(SurrogateFunctionBase):
     def __init__(self, alpha=0., spiking=True):
@@ -1847,7 +1901,6 @@ class LogTailedReLU(SurrogateFunctionBase):
         '''
         super().__init__(alpha, spiking)
 
-
     @staticmethod
     def spiking_function(x, alpha):
         return log_tailed_relu.apply(x, alpha)
@@ -1858,8 +1911,6 @@ class LogTailedReLU(SurrogateFunctionBase):
         mask_ge1 = (x > 1.).to(x)
         y = (1. - mask_ge1) * F.leaky_relu(x, alpha) + mask_ge1 * (torch.log(x) + 1.)
         return y
-
-
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
@@ -1881,7 +1932,7 @@ class LogTailedReLU(SurrogateFunctionBase):
         elif dtype == 'fp16':
             code += f'''
             {tab4_str}const half {sg_name}_alpha = __float2half_rn({alpha});
-            
+
             {tab4_str}half {sg_name}_{y}_low;
             {tab4_str}const half {sg_name}_{x}_low = __low2half({x});
             {tab4_str}if(__hle({sg_name}_{x}_low, __float2half_rn(0.0f)))
@@ -1890,7 +1941,7 @@ class LogTailedReLU(SurrogateFunctionBase):
             {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = __float2half_rn(1.0f);{curly_bracket_r}
             {tab4_str}else
             {tab4_str}{curly_bracket_l}{sg_name}_{y}_low = __hdiv(__float2half_rn(1.0f), {sg_name}_{x}_low);{curly_bracket_r}
-            
+
             {tab4_str}half {sg_name}_{y}_high;
             {tab4_str}const half {sg_name}_{x}_high = __high2half({x});
             {tab4_str}if(__hle({sg_name}_{x}_high, __float2half_rn(0.0f)))
@@ -1899,8 +1950,8 @@ class LogTailedReLU(SurrogateFunctionBase):
             {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = __float2half_rn(1.0f);{curly_bracket_r}
             {tab4_str}else
             {tab4_str}{curly_bracket_l}{sg_name}_{y}_high = __hdiv(__float2half_rn(1.0f), {sg_name}_{x}_high);{curly_bracket_r}
-            
-            
+
+
             {tab4_str}const half2 {y} = __halves2half2({sg_name}_{y}_low, {sg_name}_{y}_high);
 
             '''
@@ -1910,6 +1961,9 @@ class LogTailedReLU(SurrogateFunctionBase):
             {tab4_str}{self.cuda_code_end_comments()}
         '''
         return code
+
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        return cfunction.log_tailed_relu_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200, figsize=(6, 4))

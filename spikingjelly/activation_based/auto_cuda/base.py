@@ -183,7 +183,7 @@ class CKernel2D(CKernel):
 
         if self.reverse:
             codes += '''
-                for(int t = index + N * (T - 1); t >= numel; t -= dt)
+                for(int t = numel - N + index; t >= numel; t -= dt)
                 {
             '''
         else:
