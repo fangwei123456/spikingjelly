@@ -45,15 +45,15 @@ class VoltageHook(nn.Module):
                 try:
                     s_t = torch.tensor(np.percentile(x.detach().cpu(), float(self.mode[:-1])))
                 except ValueError:
-                    raise NotImplemented(err_msg)
+                    raise NotImplementedError(err_msg)
             elif self.mode.lower() in ['max']:
                 s_t = x.max().detach()
             else:
-                raise NotImplemented(err_msg)
+                raise NotImplementedError(err_msg)
         elif isinstance(self.mode, float) and self.mode <= 1 and self.mode > 0:
             s_t = x.max().detach() * self.mode
         else:
-            raise NotImplemented(err_msg)
+            raise NotImplementedError(err_msg)
         
         if self.num_batches_tracked == 0:
             self.scale = s_t

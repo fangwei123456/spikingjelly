@@ -86,7 +86,7 @@ class Converter(nn.Module):
         else:
             raise NotImplementedError(err_msg)
 
-    def fuse(self, fx_model:torch.fx.GraphModule, fuse_flag=True) -> torch.fx.GraphModule:
+    def fuse(self, fx_model: torch.fx.GraphModule, fuse_flag=True) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.fuse-en>`
 
@@ -181,7 +181,7 @@ class Converter(nn.Module):
         fx_model.recompile()
         return fx_model
 
-    def replace_by_ifnode(self, fx_model:torch.fx.GraphModule) -> torch.fx.GraphModule:
+    def replace_by_ifnode(self, fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.replace_by_ifnode-en>`
 
@@ -210,7 +210,8 @@ class Converter(nn.Module):
         for node in fx_model.graph.nodes:  # Seq as one node
             if node.op != 'call_module':
                 continue
-            if type(modules[node.target]) is nn.Sequential:
+            if type(modules[node.target]) is nn.Sequential and len(modules[node.target]) == 2 and type(
+                    modules[node.target][0]) is nn.ReLU and type(modules[node.target][1]) is VoltageHook:
                 s = modules[node.target][1].scale.item()
                 seq = nn.Sequential(
                     VoltageScaler(1.0 / s),
