@@ -171,9 +171,9 @@ def detach_net(net: nn.Module):
     Detach the computation graph of the whole network from previous time-steps.  Walk through every ``Module`` as ``m``, and call ``m.detach()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.
     """
     for m in net.modules():
-        if hasattr(m, 'reset'):
+        if hasattr(m, 'detach'):
             if not isinstance(m, base.MemoryModule):
-                logging.warning(f'Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base'
+                logging.warning(f'Trying to call `detach()` of {m}, which is not spikingjelly.activation_based.base'
                                 f'.MemoryModule')
             m.detach()
 
