@@ -1,5 +1,5 @@
 import logging
-
+import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -147,6 +147,35 @@ def set_backend(net: nn.Module, backend: str, instance: object or tuple = (nn.Mo
                 else:
                     logging.warning(f'{m} does not supports for backend={backend}. It will still use backend={m.backend}.')
 
+
+def detach_net(net: nn.Module):
+    """
+    * :ref:`API in English <detach_net-en>`
+
+    .. _detach_net-cn:
+
+    :param net: 任何属于 ``nn.Module`` 子类的网络
+
+    :return: None
+
+    将网络与之前的时间步的计算图断开。做法是遍历网络中的所有 ``Module``，若 ``m `` 为 ``base.MemoryModule`` 函数或者是拥有 ``detach()`` 方法，则调用 ``m.detach()``。
+
+    * :ref:`中文API <detach_net-cn>`
+
+    .. _detach_net-en:
+
+    :param net: Any network inherits from ``nn.Module``
+
+    :return: None
+
+    Detach the computation graph of the whole network from previous time-steps.  Walk through every ``Module`` as ``m``, and call ``m.detach()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.
+    """
+    for m in net.modules():
+        if hasattr(m, 'reset'):
+            if not isinstance(m, base.MemoryModule):
+                logging.warning(f'Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base'
+                                f'.MemoryModule')
+            m.detach()
 
 def spike_similar_loss(spikes: Tensor, labels: Tensor, kernel_type='linear', loss_type='mse', *args):
     """
@@ -1129,3 +1158,123 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     # x_seq.shape = [T, *]
     y = torch.zeros_like(x_seq[0: delay_steps].data)
     return torch.cat((y, x_seq[0: x_seq.shape[0] - delay_steps]), 0)
+
+def fptt_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
+    w_ra = []
+    for item in optimizer.param_groups:
+        for w in item['params']:
+            w_ra.append(w.data)
+
+    return w_ra
+
+def fptt(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, alpha: float, w_ra: list) -> None:
+    """
+    :param model: the neural network
+    :type model: nn.Module
+    :param optimizer: the optimizer for the network
+    :type optimizer: torch.optim.Optimizer
+    :param x_seq: the input sequence
+    :type x_seq: torch.Tensor
+    :param target_seq: the output sequence
+    :type target_seq: torch.Tensor
+    :param f_loss_t: the loss function, which should has the formulation of ``def f_loss_t(x_t, y_t) -> torch.Tensor``
+    :type f_loss_t: Callable
+    :param alpha: the hyper-parameter
+    :type alpha: float
+    :param w_ra: the running average of params, which can be initialized by :class:`spikingjelly.activation_based.functional.fptt_init_w_ra`
+    :type w_ra: list
+
+
+    The FPTT online learning method proposed by `Training Recurrent Neural Networks via Forward Propagation Through Time <https://proceedings.mlr.press/v139/kag21a.html>`_ and used for SNN in `Accurate online training of dynamical spiking neural networks through Forward Propagation Through Time <https://arxiv.org/abs/2112.11231>`_ .
+
+    Example:
+
+    .. code-block:: python
+
+        from spikingjelly.activation_based import neuron
+
+        net = nn.Sequential(
+            nn.Linear(8, 4),
+            neuron.IFNode(),
+            nn.Linear(4, 2),
+            neuron.IFNode()
+        )
+
+        optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
+
+        T = 4
+        N = 2
+        w_ra = fptt_init_w_ra(optimizer)
+        for epoch in range(2):
+
+            x_seq = torch.rand([T, N, 8])
+            target_seq = torch.rand([T, N, 2])
+
+            fptt(model=net, optimizer=optimizer, x_seq=x_seq, target_seq=target_seq, f_loss_t=F.mse_loss, alpha=0.1, w_ra=w_ra)
+            functional.reset_net(net)
+
+    """
+    T = x_seq.shape[0]
+
+    grad__l_t_last__to__w_t = []
+
+    for item in optimizer.param_groups:
+        for w in item['params']:
+            grad__l_t_last__to__w_t.append(0.)
+
+
+
+    for t in range(T):
+        optimizer.zero_grad()
+
+        y_t = model(x_seq[t])
+        loss_t = f_loss_t(y_t, target_seq[t])
+        loss_reg = 0.
+        i = 0
+        for item in optimizer.param_groups:
+            for w in item['params']:
+                loss_reg = loss_reg + F.mse_loss(w, w_ra[i] + grad__l_t_last__to__w_t[i] / (2. * alpha))
+                i += 1
+
+        loss_reg = loss_reg * (alpha / 2.)
+
+        loss = loss_t + loss_reg
+        loss.backward()
+
+        # update params
+        optimizer.step()
+        detach_net(model)
+
+        # store hidden states
+        states = []
+        i = 0
+        for m in model.modules():
+            if isinstance(m, base.MemoryModule):
+                states.append(copy.deepcopy(m._memories))
+                i += 1
+
+        # update w_ra
+        optimizer.zero_grad()
+        if t < T - 1:
+            y_t = model(x_seq[t])
+            loss_t = f_loss_t(y_t, target_seq[t])
+            loss_t.backward()
+            with torch.no_grad():
+                i = 0
+                for item in optimizer.param_groups:
+                    for w in item['params']:
+                        grad__l_t_last__to__w_t[i] = w.grad
+                        w_ra[i] = (w_ra[i] + w) / 2. - w.grad / (2. * alpha)
+                        i += 1
+        optimizer.zero_grad()
+
+        # recover hidden states
+        i = 0
+        for m in model.modules():
+            if isinstance(m, base.MemoryModule):
+                m._memories = states[i]
+                i += 1
+
+
+
+
