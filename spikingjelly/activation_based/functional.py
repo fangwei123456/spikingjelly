@@ -1159,7 +1159,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     y = torch.zeros_like(x_seq[0: delay_steps].data)
     return torch.cat((y, x_seq[0: x_seq.shape[0] - delay_steps]), 0)
 
-def fptt_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
+def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     w_ra = []
     for item in optimizer.param_groups:
         for w in item['params']:
@@ -1167,7 +1167,7 @@ def fptt_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
 
     return w_ra
 
-def fptt(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, alpha: float, w_ra: list) -> None:
+def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, alpha: float, w_ra: list) -> None:
     """
     :param model: the neural network
     :type model: nn.Module
@@ -1181,7 +1181,7 @@ def fptt(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor
     :type f_loss_t: Callable
     :param alpha: the hyper-parameter
     :type alpha: float
-    :param w_ra: the running average of params, which can be initialized by :class:`spikingjelly.activation_based.functional.fptt_init_w_ra`
+    :param w_ra: the running average of params, which can be initialized by :class:`spikingjelly.activation_based.functional.fptt_online_training_init_w_ra`
     :type w_ra: list
 
 
