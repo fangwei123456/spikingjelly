@@ -100,7 +100,7 @@ def stdp_conv2d_single_step(
 			    (tr_post.unsqueeze(2) * pre_spike.unsqueeze(1))
                 .permute([1, 2, 0, 3, 4]).sum(dim = [2, 3, 4]))
             delta_w_post = f_post(weight) * \
-                        (tr_pre.unsqueeze(1) * post_spike.unsqueeze(1))\
+                        (tr_pre.unsqueeze(1) * post_spike.unsqueeze(2))\
                         .permute([1, 2, 0, 3, 4]).sum(dim = [2, 3, 4])
             delta_w[:, :, h, w] += delta_w_pre + delta_w_post
 
