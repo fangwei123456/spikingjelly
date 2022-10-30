@@ -66,21 +66,17 @@ def stdp_conv2d_single_step(
             in_spike = F.pad(in_spike, pad=(pW, pW, pH, pH))
 
     if trace_pre is None:
-        trace_pre = torch.zeros(
-            size = [conv.weight.shape[2], conv.weight.shape[3],
-            in_spike.shape[0], in_spike.shape[1],
-            out_spike.shape[2], out_spike.shape[3]], 
-            device=in_spike.device, dtype=in_spike.dtype
+        trace_pre = torch.zeros_like(
+            in_spike, device=in_spike.device, dtype=in_spike.dtype
         )
 
     if trace_post is None:
-        trace_post = torch.zeros(
-            [conv.weight.shape[2], conv.weight.shape[3], *out_spike.shape],
-            device = in_spike.device, dtype = in_spike.dtype
+        trace_post = torch.zeros_like(
+            out_spike, device = in_spike.device, dtype = in_spike.dtype
         )
 
-    trace_pre = trace_pre - trace_pre / tau_pre + pre_spike
-    trace_post = trace_post - trace_post / tau_post + post_spike
+    trace_pre = trace_pre - trace_pre / tau_pre + in_spike
+    trace_post = trace_post - trace_post / tau_post + out_spike
 
     delta_w = torch.zeros_like(conv.weight.data)
     for h in range(conv.weight.shape[2]):
