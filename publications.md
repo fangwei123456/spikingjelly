@@ -41,6 +41,7 @@
 | [Spikformer: When Spiking Neural Network Meets Transformer](https://arxiv.org/abs/2209.15425) | https://github.com/ZK-Zhou/spikformer                        |                                                              |
 | [S-JSCC: A Digital Joint Source-Channel Coding Framework based on Spiking Neural Network](https://arxiv.org/abs/2210.06836) |                                                              |                                                              |
 | [STSC-SNN: Spatio-Temporal Synaptic Connection with Temporal Convolution and Attention for Spiking Neural Networks](https://arxiv.org/abs/2210.05241) |                                                              |                                                              |
+| [Online Training Through Time for Spiking Neural Networks](https://arxiv.org/abs/2210.04195) | https://github.com/pkuxmq/OTTT-SNN   | NeurIPS 2022                                                 |
 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
