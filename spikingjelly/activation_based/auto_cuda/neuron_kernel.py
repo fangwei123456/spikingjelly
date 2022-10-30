@@ -20,7 +20,7 @@ def neuronal_hard_reset(v_next: str, h: str, spike: str, v_reset: str, dtype: st
     if dtype == 'float':
         return f'{v_next} = {h} * (1.0f - {spike}) + {v_reset} * {spike};'
     elif dtype == 'half2':
-        return f'{v_next} = __hfma2({h}, __hsub2(__float2half2_rn(1.0f), {spike}), __hmul2(v_reset, spike));'
+        return f'{v_next} = __hfma2({h}, __hsub2(__float2half2_rn(1.0f), {spike}), __hmul2(v_reset, {spike}));'
     else:
         raise NotImplementedError(dtype)
 
@@ -36,7 +36,7 @@ def neuronal_soft_reset(v_next: str, h: str, spike: str, v_th: str, dtype: str =
 
 def neuronal_fire(spike: str, v: str, v_th: str, dtype: str = 'float'):
     if dtype == 'float':
-        return cfunction.heaviside(y=spike, x=f'{v} - {v_th}', dtype=dtype)
+        return cfunction.heaviside(y=spike, x=f'({v} - {v_th})', dtype=dtype)
     elif dtype == 'half2':
         return cfunction.heaviside(y=spike, x=f'__hsub2({v}, {v_th})', dtype=dtype)
     else:
@@ -70,14 +70,14 @@ class NeuronFPTT(base.CKernel2D):
 
         core_codes.append(self.neuronal_charge)
 
-        core_codes.append(neuronal_fire(spike='spike[t]', v='v_v_seq[t]', v_th='v_th', dtype=self.dtype))
+        core_codes.append(neuronal_fire(spike='spike_seq[t]', v='h_seq[t]', v_th='v_th', dtype=self.dtype))
 
         if self.hard_reset:
             core_codes.append(
-                neuronal_hard_reset(v_next='v_v_seq[t]', h='h_seq[t]', spike='spike_seq[t]', v_reset='v_reset',
+                neuronal_hard_reset(v_next='v_v_seq[t + dt]', h='h_seq[t]', spike='spike_seq[t]', v_reset='v_reset',
                                     dtype=self.dtype))
         else:
-            core_codes.append(neuronal_soft_reset(v_next='v_v_seq[t]', h='h_seq[t]', spike='spike_seq[t]', v_th='v_th',
+            core_codes.append(neuronal_soft_reset(v_next='v_v_seq[t + dt]', h='h_seq[t]', spike='spike_seq[t]', v_th='v_th',
                                                   dtype=self.dtype))
 
         self._core = core_codes.codes
@@ -133,30 +133,33 @@ class NeuronBPTT(base.CKernel2D):
         core_codes.append(self.surrogate_function(y=f'const {self.dtype} grad_s_to_h', x='over_th', dtype=self.dtype))
 
         if self.hard_reset:
-            core_codes.append(cfunction.sub(z=f'{self.dtype} grad_v_to_h', x=cfunction.constant(x=1., dtype=self.dtype),
+            core_codes.append(cfunction.sub(z=f'{self.dtype} grad_v_to_h', x=cfunction.constant(y=None, x=1., dtype=self.dtype),
                                             y='spike_seq_t', dtype=self.dtype))
 
             if not self.detach_reset:
-                core_codes.append(
-                    cfunction.sub(z=f'{self.dtype} temp_var', x='v_reset', y='h_seq[t]', dtype=self.dtype))
-                core_codes.append(cfunction.mul(z=f'temp_var', x='temp_var', y='grad_s_to_h', dtype=self.dtype))
-                core_codes.append(cfunction.add(z=f'grad_v_to_h', x='temp_var', y='grad_v_to_h', dtype=self.dtype))
+                with base.CodeBlock(core_codes):
+                    core_codes.append(
+                        cfunction.sub(z=f'{self.dtype} temp_var', x='v_reset', y='h_seq[t]', dtype=self.dtype))
+                    core_codes.append(cfunction.mul(z=f'temp_var', x='temp_var', y='grad_s_to_h', dtype=self.dtype))
+                    core_codes.append(cfunction.add(z=f'grad_v_to_h', x='temp_var', y='grad_v_to_h', dtype=self.dtype))
 
 
         else:
-            core_codes.append(f'{self.dtype} grad_v_to_h = {cfunction.constant(1., dtype=self.dtype)}')
+            core_codes.append(f'{self.dtype} grad_v_to_h = {cfunction.constant(None, 1., dtype=self.dtype)}')
 
             if not self.detach_reset:
-                core_codes.append(
-                    cfunction.mul(z=f'{self.dtype} temp_var', x='v_th', y='grad_s_to_h', dtype=self.dtype))
-                core_codes.append(cfunction.add(z=f'grad_v_to_h', x='temp_var', y='grad_v_to_h', dtype=self.dtype))
+                with base.CodeBlock(core_codes):
+                    core_codes.append(
+                        cfunction.mul(z=f'{self.dtype} temp_var', x='v_th', y='grad_s_to_h', dtype=self.dtype))
+                    core_codes.append(cfunction.sub(z=f'grad_v_to_h', x='grad_v_to_h', y='temp_var', dtype=self.dtype))
 
         core_codes.append(cfunction.mul(z=f'grad_h', x='grad_h', y=self.grad_h_next_to_v, dtype=self.dtype))
         core_codes.append(cfunction.add(z='grad_h', x='grad_v_seq[t]', y='grad_h', dtype=self.dtype))
         core_codes.append(cfunction.mul(z='grad_h', x='grad_h', y='grad_v_to_h', dtype=self.dtype))
-        core_codes.append(
-            cfunction.mul(z=f'{self.dtype} temp_var', x='grad_spike_seq[t]', y='grad_s_to_h', dtype=self.dtype))
-        core_codes.append(cfunction.add(z='grad_h', x='grad_h', y='temp_var', dtype=self.dtype))
+        with base.CodeBlock(core_codes):
+            core_codes.append(
+                cfunction.mul(z=f'{self.dtype} temp_var', x='grad_spike_seq[t]', y='grad_s_to_h', dtype=self.dtype))
+            core_codes.append(cfunction.add(z='grad_h', x='grad_h', y='temp_var', dtype=self.dtype))
 
         core_codes.append(cfunction.mul(z='grad_x_seq[t]', x='grad_h', y=self.grad_h_to_x, dtype=self.dtype))
 
@@ -173,11 +176,11 @@ class IFNodeFPTT(NeuronFPTT):
 class IFNodeBPTT(NeuronBPTT):
     @property
     def grad_h_next_to_v(self) -> str:
-        return cfunction.constant(x=1., dtype=self.dtype)
+        return cfunction.constant(y=None, x=1., dtype=self.dtype)
 
     @property
     def grad_h_to_x(self) -> str:
-        return cfunction.constant(x=1., dtype=self.dtype)
+        return cfunction.constant(y=None, x=1., dtype=self.dtype)
 
 
 def as_cp_array(x: float or int, dtype: str = None):
@@ -217,7 +220,7 @@ def neuron_kernel_py_param_pre_processing(*args):
                     use_pad = True
                     break
 
-    ret = [requires_grad, device, dtype, use_pad]
+    ret = []
     for item in args:
         if isinstance(item, torch.Tensor):
             assert item.get_device() == device
@@ -239,17 +242,17 @@ def neuron_kernel_py_param_pre_processing(*args):
             pass
 
         ret.append(item)
+    return requires_grad, device, dtype, use_pad, ret
 
-    return ret
 
-
-class MultiStepIFNodePTT(torch.autograd.Function):
+class IFNodePTT(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, forward_kernel: IFNodeFPTT, backward_kernel: IFNodeBPTT):
 
-        requires_grad, device, dtype, use_pad, x_seq, v_init, v_th, v_reset = neuron_kernel_py_param_pre_processing(
+        requires_grad, device, dtype, use_pad, ret = neuron_kernel_py_param_pre_processing(
             x_seq, v_init, v_th, v_reset)
 
+        x_seq, v_init, v_th, v_reset = ret
 
         zero_shape = list(x_seq.shape)
         zero_shape[0] *= 3
@@ -265,13 +268,12 @@ class MultiStepIFNodePTT(torch.autograd.Function):
             threads = configure.cuda_threads
             if dtype == 'half2':
                 assert N % 2 == 0
-                blocks = cuda_utils.cal_blocks(N >> 1)
                 # we will take two neurons to calculate as one neuron in cuda half2
-            else:
-                blocks = cuda_utils.cal_blocks(N)
+                N = N // 2
+                numel = numel // 2
 
-
-            # kernel = IFNodeFPTT(hard_reset=v_reset is not None, dtype=dtype)
+            blocks = cuda_utils.cal_blocks(N)
+            print(forward_kernel.full_codes)
             kernel = cupy.RawKernel(forward_kernel.full_codes, forward_kernel.kernel_name, options=configure.cuda_compiler_options,
                            backend=configure.cuda_compiler_backend)
 
@@ -347,6 +349,8 @@ class MultiStepIFNodePTT(torch.autograd.Function):
 
 
         with cuda_utils.DeviceEnvironment(device):
+            print(backward_kernel.full_codes)
+
             kernel = cupy.RawKernel(backward_kernel.full_codes, backward_kernel.kernel_name,
                                     options=configure.cuda_compiler_options,
                                     backend=configure.cuda_compiler_backend)

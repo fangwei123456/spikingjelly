@@ -1327,7 +1327,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         .. math::
             g'(x) = \\begin{cases}
                 \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta (x + 1), x \ge 0
+                \\\\frac{beta}{(x + 1)}, x \ge 0
             \\end{cases}
 
         对应的原函数为

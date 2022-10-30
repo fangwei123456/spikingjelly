@@ -183,7 +183,7 @@ class CKernel2D(CKernel):
 
         if self.reverse:
             codes += '''
-                for(int t = numel - N + index; t >= numel; t -= dt)
+                for(int t = numel - N + index; t >= 0; t -= dt)
                 {
             '''
         else:
@@ -214,13 +214,28 @@ class CodeTyper:
         self.codes = '\n'
 
     def append(self, codes: str):
-        if '\n' in codes:
-            codes = codes.split('\n')
-            for i in range(codes.__len__()):
-                self.codes += (self.indent + codes[i] + '\n')
-        else:
-            self.codes += (self.indent + codes + '\n')
+        codes = codes.replace('\n', '')
+        codes = codes.split(';')
+        for i in range(codes.__len__()):
+            if codes[i].__len__() > 0:
+                if codes[i] in ('{', '}'):
+                    self.codes += (self.indent + codes[i] + '\n')
+                else:
+                    self.codes += (self.indent + codes[i] + ';\n')
 
+
+
+class CodeBlock:
+    def __init__(self, env: CodeTyper):
+        self.env = env
+
+    def __enter__(self):
+        self.env.append('{')
+        self.env.indent += ' '
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.env.indent = self.env.indent[: -1]
+        self.env.append('}')
 
 
 if __name__ == '__main__':
