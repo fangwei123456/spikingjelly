@@ -245,7 +245,6 @@ def wrap_args_to_raw_kernel(device: int, *args):
 
         else:
             raise TypeError
-
     return tuple(ret_list)
 
 class DeviceEnvironment:

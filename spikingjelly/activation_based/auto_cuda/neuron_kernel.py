@@ -12,7 +12,7 @@ except BaseException as e:
 
 from .. import cuda_utils, surrogate
 from ... import configure
-from typing import Callable
+from typing import Callable, Iterable
 from . import base, cfunction
 
 
@@ -43,7 +43,7 @@ def neuronal_fire(spike: str, v: str, v_th: str, dtype: str = 'float'):
         raise NotImplementedError(dtype)
 
 
-class NeuronFPTT(base.CKernel2D):
+class NeuronFPTTKernel(base.CKernel2D):
     def __init__(self, hard_reset: bool, dtype: str):
         super().__init__(
             kernel_name=f'{self.__class__.__name__}_{dtype}_{"hard_reset" if hard_reset else "soft_reset"}',
@@ -77,14 +77,14 @@ class NeuronFPTT(base.CKernel2D):
                 neuronal_hard_reset(v_next='v_v_seq[t + dt]', h='h_seq[t]', spike='spike_seq[t]', v_reset='v_reset',
                                     dtype=self.dtype))
         else:
-            core_codes.append(neuronal_soft_reset(v_next='v_v_seq[t + dt]', h='h_seq[t]', spike='spike_seq[t]', v_th='v_th',
-                                                  dtype=self.dtype))
+            core_codes.append(
+                neuronal_soft_reset(v_next='v_v_seq[t + dt]', h='h_seq[t]', spike='spike_seq[t]', v_th='v_th',
+                                    dtype=self.dtype))
 
-        self._core = core_codes.codes
-        return self._core
+        return core_codes.codes
 
 
-class NeuronBPTT(base.CKernel2D):
+class NeuronBPTTKernel(base.CKernel2D):
     def __init__(self, surrogate_function: Callable, hard_reset: bool, detach_reset: bool, dtype: str):
         super().__init__(
             kernel_name=f'{__class__.__name__}_{dtype}_{"hard_reset" if hard_reset else "soft_reset"}_{"detach_reset" if detach_reset else "nodetach_reset"}',
@@ -102,25 +102,36 @@ class NeuronBPTT(base.CKernel2D):
         if hard_reset:
             self.add_param(ctype=f'{dtype} &', cname='v_reset')
 
-        codes = base.CodeTyper(16)
-        if dtype == 'float':
-            codes.append('float grad_h = 0.0f;')
-        elif dtype == 'half2':
-            codes.append(cfunction.float2half2(y='half2 grad_h', x='0.0f'))
-        else:
-            raise NotImplementedError(dtype)
 
-        self.pre_core = codes.codes
 
-        codes = base.CodeTyper(16)
-        codes.append(cfunction.mul(z='grad_v_init[index]', x='grad_h', y=self.grad_h_to_x, dtype=self.dtype))
-        self.post_core = codes.codes
+
+
+
 
     @property
+    def pre_core(self):
+        codes = base.CodeTyper(16)
+        if self.dtype == 'float':
+            codes.append('float grad_h = 0.0f;')
+        elif self.dtype == 'half2':
+            codes.append(cfunction.float2half2(y='half2 grad_h', x='0.0f'))
+        else:
+            raise NotImplementedError(self.dtype)
+
+        return codes.codes
+
+
+    @property
+    def post_core(self):
+
+        codes = base.CodeTyper(16)
+        codes.append(self.grad_h_to_x())
+        codes.append(cfunction.mul(z='grad_v_init[index]', x='grad_h', y='grad_h_to_x', dtype=self.dtype))
+        return codes.codes
+
     def grad_h_next_to_v(self) -> str:
         raise NotImplementedError
 
-    @property
     def grad_h_to_x(self) -> str:
         raise NotImplementedError
 
@@ -133,8 +144,9 @@ class NeuronBPTT(base.CKernel2D):
         core_codes.append(self.surrogate_function(y=f'const {self.dtype} grad_s_to_h', x='over_th', dtype=self.dtype))
 
         if self.hard_reset:
-            core_codes.append(cfunction.sub(z=f'{self.dtype} grad_v_to_h', x=cfunction.constant(y=None, x=1., dtype=self.dtype),
-                                            y='spike_seq_t', dtype=self.dtype))
+            core_codes.append(
+                cfunction.sub(z=f'{self.dtype} grad_v_to_h', x=cfunction.constant(y=None, x=1., dtype=self.dtype),
+                              y='spike_seq_t', dtype=self.dtype))
 
             if not self.detach_reset:
                 with base.CodeBlock(core_codes):
@@ -153,7 +165,8 @@ class NeuronBPTT(base.CKernel2D):
                         cfunction.mul(z=f'{self.dtype} temp_var', x='v_th', y='grad_s_to_h', dtype=self.dtype))
                     core_codes.append(cfunction.sub(z=f'grad_v_to_h', x='grad_v_to_h', y='temp_var', dtype=self.dtype))
 
-        core_codes.append(cfunction.mul(z=f'grad_h', x='grad_h', y=self.grad_h_next_to_v, dtype=self.dtype))
+        core_codes.append(self.grad_h_next_to_v())
+        core_codes.append(cfunction.mul(z=f'grad_h', x='grad_h', y='grad_h_next_to_v', dtype=self.dtype))
         core_codes.append(cfunction.add(z='grad_h', x='grad_v_seq[t]', y='grad_h', dtype=self.dtype))
         core_codes.append(cfunction.mul(z='grad_h', x='grad_h', y='grad_v_to_h', dtype=self.dtype))
         with base.CodeBlock(core_codes):
@@ -161,184 +174,134 @@ class NeuronBPTT(base.CKernel2D):
                 cfunction.mul(z=f'{self.dtype} temp_var', x='grad_spike_seq[t]', y='grad_s_to_h', dtype=self.dtype))
             core_codes.append(cfunction.add(z='grad_h', x='grad_h', y='temp_var', dtype=self.dtype))
 
-        core_codes.append(cfunction.mul(z='grad_x_seq[t]', x='grad_h', y=self.grad_h_to_x, dtype=self.dtype))
+        core_codes.append(self.grad_h_to_x())
+        core_codes.append(cfunction.mul(z='grad_x_seq[t]', x='grad_h', y='grad_h_to_x', dtype=self.dtype))
 
-        self._core = core_codes.codes
-        return self._core
+        return core_codes.codes
 
 
-class IFNodeFPTT(NeuronFPTT):
+class IFNodeFPTTKernel(NeuronFPTTKernel):
     @property
     def neuronal_charge(self) -> str:
         return cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=self.dtype)
 
 
-class IFNodeBPTT(NeuronBPTT):
-    @property
+class IFNodeBPTTKernel(NeuronBPTTKernel):
     def grad_h_next_to_v(self) -> str:
-        return cfunction.constant(y=None, x=1., dtype=self.dtype)
+        return cfunction.constant(y=f'const {self.dtype} grad_h_next_to_v', x=1., dtype=self.dtype)
 
-    @property
     def grad_h_to_x(self) -> str:
-        return cfunction.constant(y=None, x=1., dtype=self.dtype)
+        return cfunction.constant(y=f'const {self.dtype} grad_h_to_x', x=1., dtype=self.dtype)
 
 
-def as_cp_array(x: float or int, dtype: str = None):
-    if isinstance(x, int):
-        return cupy.asarray(x)
-    elif isinstance(x, float):
-        if dtype == 'float':
-            return cupy.asarray(x, dtype=np.float32)
-        elif dtype == 'half2':
-            return cupy.asarray([x, x], dtype=np.half)
 
-def neuron_kernel_py_param_pre_processing(*args):
+def if_requires_grad(items: Iterable):
     requires_grad = False
-    for item in args:
+    for item in items:
         if isinstance(item, torch.Tensor):
             if item.requires_grad:
                 requires_grad = True
                 break
 
-    device = None
-    dtype = None
-
-    for item in args:
-        if isinstance(item, torch.Tensor):
-            device = item.get_device()
-            if item.dtype == torch.float32:
-                dtype = 'float'
-            elif item.dtype == torch.float16:
-                dtype = 'half2'
-
-    use_pad = False
-    if dtype == 'half2':
-        for item in args:
-            if isinstance(item, torch.Tensor):
-                if item.dim() == 2 and item.shape[1] % 2 != 0:
-                    # shape = [T, N] and N % 2 != 0
-                    use_pad = True
-                    break
-
-    ret = []
-    for item in args:
-        if isinstance(item, torch.Tensor):
-            assert item.get_device() == device
-            if dtype == 'float':
-                assert item.dtype == torch.float32
-            elif dtype == 'half2':
-                assert item.dtype == torch.float16
-
-            assert item.dim() <= 2
-            if use_pad:
-                item = F.pad(item, (0, 1))  # [T, N] -> [T, N + 1]
+    return requires_grad
 
 
-        elif isinstance(item, (float, int)):
-            with cuda_utils.DeviceEnvironment(device):
-                item = as_cp_array(item, dtype)
+def pad_half2(py_dict: dict, ref: str = 'v_init'):
+    if py_dict[ref].numel() % 2 == 0:
+        return False
 
-        else:
-            pass
+    for key, value in py_dict.items():
+        if isinstance(value, torch.Tensor):
+            if value.dtype == torch.float16:
+                assert value.dim() <= 2
+                value = F.pad(value, (0, 1))
+                py_dict[key] = value
 
-        ret.append(item)
-    return requires_grad, device, dtype, use_pad, ret
+    return True
 
 
-class IFNodePTT(torch.autograd.Function):
+def scalar_to_cupy(py_dict: dict, ref: str = 'x_seq'):
+    device = py_dict[ref].get_device()
+    dtype = py_dict[ref].dtype
+
+    with cuda_utils.DeviceEnvironment(device):
+        for key, value in py_dict.items():
+            if isinstance(value, float):
+                if dtype == torch.float32:
+                    value = cupy.asarray(value, dtype=np.float32)
+                elif dtype == torch.float16:
+                    value = cupy.asarray([value, value], dtype=np.float16)
+                else:
+                    raise NotImplementedError(dtype)
+                py_dict[key] = value
+
+            elif isinstance(value, int):
+                py_dict[key] = cupy.asarray(value)
+
+def new_tensors(news: tuple, py_dict: dict, ref: str = 'x_seq'):
+    ref = py_dict[ref]
+    zero_shape = list(ref.shape)
+    zero_shape[0] *= news.__len__()
+    for i, item in enumerate(torch.split(torch.zeros(zero_shape, device=ref.device, dtype=ref.dtype),ref.shape[0])):
+        py_dict[news[i]] = item
+
+class NeuronATGFBase:
     @staticmethod
-    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, forward_kernel: IFNodeFPTT, backward_kernel: IFNodeBPTT):
+    def pre_forward(py_dict: dict):
+        device = py_dict['x_seq'].get_device()
+        requires_grad = if_requires_grad(py_dict.values())
+        scalar_to_cupy(py_dict)
+        use_pad = pad_half2(py_dict)
+        new_tensors(('h_seq', 'spike_seq', 'v_seq'), py_dict)
+        py_dict['v_v_seq'] = torch.cat((py_dict.pop('v_init').unsqueeze(0), py_dict.pop('v_seq')))
+        numel = py_dict['x_seq'].numel()
+        N = py_dict['x_seq'].shape[1]
+        threads = configure.cuda_threads
+        if py_dict['x_seq'].dtype == torch.float16:
+            assert N % 2 == 0
+            # we will take two neurons to calculate as one neuron in cuda half2
+            N = N // 2
+            numel = numel // 2
 
-        requires_grad, device, dtype, use_pad, ret = neuron_kernel_py_param_pre_processing(
-            x_seq, v_init, v_th, v_reset)
-
-        x_seq, v_init, v_th, v_reset = ret
-
-        zero_shape = list(x_seq.shape)
-        zero_shape[0] *= 3
-        v_seq, h_seq, spike_seq = torch.split(torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype),
-                                              x_seq.shape[0])
-
-        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq))
+        blocks = cuda_utils.cal_blocks(N)
 
         with cuda_utils.DeviceEnvironment(device):
-            numel = x_seq.numel()
-            N = x_seq.shape[1]
+            numel = cupy.asarray(numel)
+            N = cupy.asarray(N)
 
-            threads = configure.cuda_threads
-            if dtype == 'half2':
-                assert N % 2 == 0
-                # we will take two neurons to calculate as one neuron in cuda half2
-                N = N // 2
-                numel = numel // 2
+        py_dict['numel'] = numel
+        py_dict['N'] = N
 
-            blocks = cuda_utils.cal_blocks(N)
-            print(forward_kernel.full_codes)
-            kernel = cupy.RawKernel(forward_kernel.full_codes, forward_kernel.kernel_name, options=configure.cuda_compiler_options,
-                           backend=configure.cuda_compiler_backend)
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
 
-            numel = as_cp_array(numel)
-            N = as_cp_array(N)
-
-            if v_reset is not None:
-                numel, N, x_seq, v_v_seq, h_seq, spike_seq, v_th, v_reset = cuda_utils.get_contiguous(numel, N, x_seq, v_v_seq, h_seq, spike_seq, v_th, v_reset)
-                kernel_args = (numel, N, x_seq, v_v_seq, h_seq, spike_seq, v_th, v_reset)
-            else:
-                numel, N, x_seq, v_v_seq, h_seq, spike_seq, v_th = cuda_utils.get_contiguous(numel, N, x_seq,
-                                                                                                      v_v_seq, h_seq,
-                                                                                                      spike_seq, v_th)
-                kernel_args = (numel, N, x_seq, v_v_seq, h_seq, spike_seq, v_th)
-
-
-            kernel(
-                (blocks,), (threads,),
-                cuda_utils.wrap_args_to_raw_kernel(
-                    device,
-                    *kernel_args
-                )
-            )
-
-        if requires_grad:
-            ctx.save_for_backward(h_seq)
-
-            ctx.use_pad = use_pad
-            ctx.backward_kernel = backward_kernel
-
-            ctx.blocks = blocks
-            ctx.threads = threads
-
-            ctx.numel = numel
-            ctx.N = N
-            ctx.v_th = v_th
-            ctx.v_reset = v_reset
-
-        if use_pad:
-            return spike_seq[..., :-1], v_v_seq[1:, ..., :-1]
-        else:
-            return spike_seq, v_v_seq[1:, ]
+        return requires_grad, use_pad, blocks, threads, py_dict
 
     @staticmethod
-    def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
+    def ctx_save(ctx, requires_grad: bool, *args, **kwargs):
+        if requires_grad:
+            ctx.save_for_backward(*args)
+            for key, value in kwargs.items():
+                ctx.__setattr__(key, value)
 
-        h_seq = ctx.saved_tensors[0]
 
-        use_pad = ctx.use_pad
+
+    @staticmethod
+    def pre_backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
         backward_kernel = ctx.backward_kernel
-
         blocks = ctx.blocks
         threads = ctx.threads
 
+        h_seq = ctx.saved_tensors[0]
+        use_pad = ctx.use_pad
         numel = ctx.numel
         N = ctx.N
         v_th = ctx.v_th
         v_reset = ctx.v_reset
 
-
         if use_pad:
             grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
             grad_v_seq = F.pad(grad_v_seq, (0, 1))
-
-        device = grad_spike_seq.get_device()
 
         zero_shape = list(grad_spike_seq.shape)
         zero_shape[0] += 1
@@ -346,31 +309,135 @@ class IFNodePTT(torch.autograd.Function):
         grad_x_seq = zero_data[0: -1]
         grad_v_init = zero_data[-1]
 
+        py_dict = {
+            'numel': numel,
+            'N': N,
+            'grad_spike_seq': grad_spike_seq,
+            'grad_v_seq': grad_v_seq,
+            'h_seq': h_seq,
+            'grad_x_seq': grad_x_seq,
+            'grad_v_init': grad_v_init,
+            'v_th': v_th,
+        }
+        if v_reset is not None:
+            py_dict['v_reset'] = v_reset
+
+        return backward_kernel, blocks, threads, py_dict
 
 
-        with cuda_utils.DeviceEnvironment(device):
-            print(backward_kernel.full_codes)
+class IFNodeATGF(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None,
+                forward_kernel: IFNodeFPTTKernel, backward_kernel: IFNodeBPTTKernel):
+        py_dict = {
+            'x_seq': x_seq,
+            'v_init': v_init,
+            'v_th': v_th,
+            'v_reset': v_reset
+        }
+        requires_grad, use_pad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
-            kernel = cupy.RawKernel(backward_kernel.full_codes, backward_kernel.kernel_name,
-                                    options=configure.cuda_compiler_options,
-                                    backend=configure.cuda_compiler_backend)
-            if v_reset is not None:
-                numel, N, grad_spike_seq, grad_v_seq, h_seq, grad_x_seq, grad_v_init, v_th, v_reset = cuda_utils.get_contiguous(numel, N, grad_spike_seq, grad_v_seq, h_seq, grad_x_seq, grad_v_init, v_th, v_reset)
-                kernel_args = [numel, N, grad_spike_seq, grad_v_seq, h_seq, grad_x_seq, grad_v_init, v_th, v_reset]
-            else:
-                numel, N, grad_spike_seq, grad_v_seq, h_seq, grad_x_seq, grad_v_init, v_th = cuda_utils.get_contiguous(
-                    numel, N, grad_spike_seq, grad_v_seq, h_seq, grad_x_seq, grad_v_init, v_th)
-                kernel_args = [numel, N, grad_spike_seq, grad_v_seq, h_seq, grad_x_seq, grad_v_init, v_th]
+        forward_kernel((blocks,), (threads,), py_dict)
 
-            kernel(
-                (blocks,), (threads,),
-                cuda_utils.wrap_args_to_raw_kernel(
-                    device,
-                    *kernel_args
-                )
-            )
+        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], use_pad=use_pad, blocks=blocks, threads=threads,
+                           numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
+                           backward_kernel=backward_kernel)
 
         if use_pad:
-            return grad_x_seq[..., :-1], grad_v_init[..., :-1], None, None, None, None
+            return py_dict['spike_seq'][..., :-1], py_dict['v_v_seq'][1:, ..., :-1]
         else:
-            return grad_x_seq, grad_v_init, None, None, None, None
+            return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
+
+    @staticmethod
+    def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
+
+        backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(ctx, grad_spike_seq, grad_v_seq)
+        backward_kernel((blocks,), (threads,), py_dict)
+
+        if ctx.use_pad:
+            return py_dict['grad_x_seq'][..., :-1], py_dict['grad_v_init'][..., :-1], None, None, None, None
+        else:
+            return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None
+
+
+class LIFNodeFPTTKernel(NeuronFPTTKernel):
+    def __init__(self, decay_input: bool, hard_reset: bool, dtype: str):
+        super().__init__(hard_reset, dtype)
+        self.decay_input = decay_input
+        self.add_param(ctype=f'const {dtype} &', cname='decay')
+
+    @property
+    def neuronal_charge(self) -> str:
+        codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
+        if self.decay_input:
+            codes += cfunction.sub(z='LIFNodeFPTTKernel_temp_var', x='x_seq[t]', y='LIFNodeFPTTKernel_temp_var', dtype=self.dtype)
+            codes += cfunction.mul(z='LIFNodeFPTTKernel_temp_var', x='decay', y='LIFNodeFPTTKernel_temp_var', dtype=self.dtype)
+        else:
+            codes += cfunction.mul(z='LIFNodeFPTTKernel_temp_var', x='decay', y='LIFNodeFPTTKernel_temp_var',
+                                   dtype=self.dtype)
+            codes += cfunction.sub(z='LIFNodeFPTTKernel_temp_var', x='x_seq[t]', y='LIFNodeFPTTKernel_temp_var',
+                                   dtype=self.dtype)
+
+        codes += cfunction.add(z='h_seq[t]', x='LIFNodeFPTTKernel_temp_var', y='v_v_seq[t]', dtype=self.dtype)
+
+        return codes
+
+
+
+class LIFNodeBPTTKernel(NeuronBPTTKernel):
+    def __init__(self, decay_input: bool, surrogate_function: Callable, hard_reset: bool, detach_reset: bool, dtype: str):
+        super().__init__(surrogate_function, hard_reset, detach_reset, dtype)
+        self.decay_input = decay_input
+        self.add_param(ctype=f'const {dtype} &', cname='decay')
+
+    def grad_h_next_to_v(self) -> str:
+        return cfunction.sub(z=f'const {self.dtype} grad_h_next_to_v', x=cfunction.constant(None, x=1., dtype=self.dtype), y='decay', dtype=self.dtype)
+
+    def grad_h_to_x(self) -> str:
+        if not self.decay_input:
+            return cfunction.constant(y=f'const {self.dtype} grad_h_to_x', x=1., dtype=self.dtype)
+        else:
+            return f'const {self.dtype} grad_h_to_x = decay;'
+
+
+
+class LIFNodeATGF(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, decay: float,
+                forward_kernel: LIFNodeFPTTKernel, backward_kernel: LIFNodeBPTTKernel):
+        py_dict = {
+            'x_seq': x_seq,
+            'v_init': v_init,
+            'v_th': v_th,
+            'v_reset': v_reset,
+            'decay': decay,
+        }
+        requires_grad, use_pad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+
+        forward_kernel((blocks,), (threads,), py_dict)
+
+        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], use_pad=use_pad, blocks=blocks, threads=threads,
+                           numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
+                           backward_kernel=backward_kernel, decay=py_dict['decay'])
+
+        if use_pad:
+            return py_dict['spike_seq'][..., :-1], py_dict['v_v_seq'][1:, ..., :-1]
+        else:
+            return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
+
+    @staticmethod
+    def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
+
+        backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(ctx, grad_spike_seq, grad_v_seq)
+        py_dict['decay'] = ctx.decay
+        backward_kernel((blocks,), (threads,), py_dict)
+
+
+        if ctx.use_pad:
+            return py_dict['grad_x_seq'][..., :-1], py_dict['grad_v_init'][..., :-1], None, None, None, None, None
+        else:
+            return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None, None
+
+
+
+

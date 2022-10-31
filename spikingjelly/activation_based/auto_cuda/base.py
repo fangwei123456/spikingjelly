@@ -1,9 +1,65 @@
+import cupy
+import torch
+import sys
+import logging
+from .. import cuda_utils
+from ... import configure
+
 class CKernel:
     def __init__(self, kernel_name: str):
         self.cparams = {'numel': 'const int &'}
         self.reserved_cnames = ['index']
         self.kernel_name = kernel_name
-        self._core = ''
+
+    def check_attributes(self, **kwargs):
+        for key, value in kwargs.items():
+            if value != self.__getattribute__(key):
+                return False
+
+        else:
+            return True
+
+    def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
+
+        assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
+        # python >= 3.6时，字典默认是有序的
+
+        assert py_dict.keys() == self.cparams.keys(), f'{(py_dict.keys() | self.cparams.keys()) - (py_dict.keys() & self.cparams.keys())} is not in both dicts!'
+
+        py_dict = dict(sorted(py_dict.items()))
+        self.cparams = dict(sorted(self.cparams.items()))
+
+        device = None
+
+        # get contiguous
+        for key, value in py_dict.items():
+            if isinstance(value, torch.Tensor):
+                value = value.contiguous()
+                device = value.get_device()
+
+            elif isinstance(value, cupy.ndarray):
+                value = cupy.ascontiguousarray(value)
+            else:
+                raise TypeError(type(value))
+
+            py_dict[key] = value
+
+
+        cp_kernel = cupy.RawKernel(self.full_codes, self.kernel_name, options=configure.cuda_compiler_options,
+                           backend=configure.cuda_compiler_backend)
+
+        with cuda_utils.DeviceEnvironment(device):
+            cp_kernel(grid, block, cuda_utils.wrap_args_to_raw_kernel(device, *list(py_dict.values())))
+
+
+
+
+
+
+
+
+
+
 
     def add_param(self, ctype: str, cname: str):
         # example: ctype = 'const float *', cname = 'x'
@@ -18,11 +74,9 @@ class CKernel:
 
     @property
     def core(self):
-        return self._core
+        return ''
 
-    @core.setter
-    def core(self, codes: str):
-        self._core = codes
+
 
     @property
     def declaration(self):
@@ -150,24 +204,19 @@ class CKernel2D(CKernel):
         self.cparams['N'] = 'const int &'
         self.reserved_cnames.append('dt')
         self.reserved_cnames.append('t')
-        self._pre_core = ''
-        self._post_core = ''
+
 
     @property
     def pre_core(self):
-        return self._pre_core
+        return ''
 
-    @pre_core.setter
-    def pre_core(self, codes: str):
-        self._pre_core = codes
+
 
     @property
     def post_core(self):
-        return self._post_core
+        return ''
 
-    @post_core.setter
-    def post_core(self, codes: str):
-        self._post_core = codes
+
 
     @property
     def head(self):
