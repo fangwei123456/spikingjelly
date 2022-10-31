@@ -61,8 +61,7 @@ class StatefulEncoder(base.MemoryModule):
         :param T: 编码周期。通常情况下，与SNN的仿真周期（总步长一致）
         :type T: int
 
-        有状态编码器的基类。有状态编码器 ``encoder = StatefulEncoder(T)``，编码器会在首次调用 ``encoder(x)`` 时对 ``x` 进行编码。在
-        第 ``t`` 次调用 ``encoder(x)`` 时会输出 ``spike[t % T]``
+        有状态编码器的基类。有状态编码器 ``encoder = StatefulEncoder(T)``，编码器会在首次调用 ``encoder(x)`` 时对 ``x`` 进行编码。在第 ``t`` 次调用 ``encoder(x)`` 时会输出 ``spike[t % T]``
 
         .. code-block:: python
 
@@ -166,6 +165,12 @@ class PeriodicEncoder(StatefulEncoder):
 
         周期性编码器，在第 ``t`` 次调用时输出 ``spike[t % T]``，其中 ``T = spike.shape[0]``
 
+
+        .. warning::
+
+            不要忘记调用reset，因为这个编码器是有状态的。
+
+
         * :ref:`中文API <PeriodicEncoder.__init__-cn>`
 
         .. _PeriodicEncoder.__init__-en:
@@ -174,6 +179,12 @@ class PeriodicEncoder(StatefulEncoder):
         :type spike: torch.Tensor
 
         The periodic encoder that outputs ``spike[t % T]`` at ``t`` -th calling, where ``T = spike.shape[0]``
+
+        .. admonition:: Warning
+            :class: warning
+
+            Do not forget to reset the encoder because the encoder is stateful!
+
         """
         super().__init__(spike.shape[0], step_mode)
 
@@ -214,12 +225,16 @@ class LatencyEncoder(StatefulEncoder):
             print('x', x)
             T = 20
             encoder = LatencyEncoder(T)
-            for t range(T):
+            for t om range(T):
                 print(encoder(x))
 
         .. warning::
 
             必须确保 ``0 <= x <= 1``。
+
+        .. warning::
+
+            不要忘记调用reset，因为这个编码器是有状态的。
 
 
         * :ref:`中文API <LatencyEncoder.__init__-cn>`
@@ -252,13 +267,18 @@ class LatencyEncoder(StatefulEncoder):
             print('x', x)
             T = 20
             encoder = LatencyEncoder(T)
-            for t range(T):
+            for t in range(T):
                 print(encoder(x))
 
         .. admonition:: Warning
             :class: warning
 
             The user must assert ``0 <= x <= 1``.
+
+        .. admonition:: Warning
+            :class: warning
+
+            Do not forget to reset the encoder because the encoder is stateful!
 
         """
         super().__init__(T, step_mode)
@@ -343,6 +363,12 @@ class WeightedPhaseEncoder(StatefulEncoder):
         | 255/256                          | 1              | 1              | 1              | 1              | 1              | 1              | 1              | 1              |
         +----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
 
+
+        .. warning::
+
+            不要忘记调用reset，因为这个编码器是有状态的。
+
+
         * :ref:`中文API <WeightedPhaseEncoder.__init__-cn>`
 
         .. _WeightedPhaseEncoder.__init__-en:
@@ -367,6 +393,10 @@ class WeightedPhaseEncoder(StatefulEncoder):
         | 255/256                          | 1              | 1              | 1              | 1              | 1              | 1              | 1              | 1              |
         +----------------------------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+----------------+
 
+        .. admonition:: Warning
+            :class: warning
+
+            Do not forget to reset the encoder because the encoder is stateful!
 
         """
         super().__init__(K, step_mode)

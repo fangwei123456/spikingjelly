@@ -36,6 +36,12 @@
 | [Spiking Neural Network Based on Layer-Wise Compensation for Event-Stream Image Classification](https://link.springer.com/chapter/10.1007/978-981-19-3927-3_72) |                                                              | International Technical Conference on Advances in Computing, Control and Industrial Engineering (CCIE 2021) |
 | [A calibratable sensory neuron based on epitaxial VO2 for spike-based neuromorphic multisensory system](https://www.nature.com/articles/s41467-022-31747-w) | https://github.com/billyuanpku96/SNN-for-sensory-neuron      | Nature Communications                                        |
 | [A model of TaOx threshold switching memristor for neuromorphic computing](https://aip.scitation.org/doi/full/10.1063/5.0096643) |                                                              | Journal of Applied Physics                                   |
+| [Label Distribution Learning via Implicit Distribution Representation](https://arxiv.org/abs/2209.13824) |                                                              |                                                              |
+| [Spiking SiamFC++: Deep Spiking Neural Network for Object Tracking](https://arxiv.org/abs/2209.12010) |                                                              |                                                              |
+| [Spikformer: When Spiking Neural Network Meets Transformer](https://arxiv.org/abs/2209.15425) | https://github.com/ZK-Zhou/spikformer                        |                                                              |
+| [S-JSCC: A Digital Joint Source-Channel Coding Framework based on Spiking Neural Network](https://arxiv.org/abs/2210.06836) |                                                              |                                                              |
+| [STSC-SNN: Spatio-Temporal Synaptic Connection with Temporal Convolution and Attention for Spiking Neural Networks](https://arxiv.org/abs/2210.05241) |                                                              |                                                              |
+| [Online Training Through Time for Spiking Neural Networks](https://arxiv.org/abs/2210.04195) | https://github.com/pkuxmq/OTTT-SNN   | NeurIPS 2022                                                 |
 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.

@@ -1460,7 +1460,7 @@ class VotingLayer(nn.Module, base.StepModule):
 
         :param voting_size: the voting numbers for determine a class
         :type voting_size: int
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
         Applies average pooling with ``kernel_size = voting_size, stride = voting_size`` on the last dimension of the input with ``shape = [..., C * voting_size]``
@@ -1481,3 +1481,131 @@ class VotingLayer(nn.Module, base.StepModule):
             return self.single_step_forward(x)
         elif self.step_mode == 'm':
             return functional.seq_to_ann_forward(x, self.single_step_forward)
+
+class Delay(base.MemoryModule):
+    def __init__(self, delay_steps: int, step_mode='s'):
+        """
+        * :ref:`API in English <Delay.__init__-en>`
+
+        .. _Delay.__init__-cn:
+
+        :param delay_steps: 延迟的时间步数
+        :type delay_steps: int
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        延迟层，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
+
+        代码示例：
+
+        .. code-block:: python
+
+            delay_layer = Delay(delay=1, step_mode='m')
+            x = torch.rand([5, 2])
+            x[3:].zero_()
+            x.requires_grad = True
+            y = delay_layer(x)
+            print('x=')
+            print(x)
+            print('y=')
+            print(y)
+            y.sum().backward()
+            print('x.grad=')
+            print(x.grad)
+
+        输出为：
+
+        .. code-block:: bash
+
+            x=
+            tensor([[0.2510, 0.7246],
+                    [0.5303, 0.3160],
+                    [0.2531, 0.5961],
+                    [0.0000, 0.0000],
+                    [0.0000, 0.0000]], requires_grad=True)
+            y=
+            tensor([[0.0000, 0.0000],
+                    [0.2510, 0.7246],
+                    [0.5303, 0.3160],
+                    [0.2531, 0.5961],
+                    [0.0000, 0.0000]], grad_fn=<CatBackward0>)
+            x.grad=
+            tensor([[1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [0., 0.]])
+
+
+        * :ref:`中文API <Delay.__init__-cn>`
+
+        .. _Delay.__init__-en:
+
+        :param delay_steps: the number of delayed time-steps
+        :type delay_steps: int
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        A delay layer that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
+
+        Codes example:
+
+        .. code-block:: python
+
+            delay_layer = Delay(delay=1, step_mode='m')
+            x = torch.rand([5, 2])
+            x[3:].zero_()
+            x.requires_grad = True
+            y = delay_layer(x)
+            print('x=')
+            print(x)
+            print('y=')
+            print(y)
+            y.sum().backward()
+            print('x.grad=')
+            print(x.grad)
+
+        The outputs are:
+
+        .. code-block:: bash
+
+            x=
+            tensor([[0.2510, 0.7246],
+                    [0.5303, 0.3160],
+                    [0.2531, 0.5961],
+                    [0.0000, 0.0000],
+                    [0.0000, 0.0000]], requires_grad=True)
+            y=
+            tensor([[0.0000, 0.0000],
+                    [0.2510, 0.7246],
+                    [0.5303, 0.3160],
+                    [0.2531, 0.5961],
+                    [0.0000, 0.0000]], grad_fn=<CatBackward0>)
+            x.grad=
+            tensor([[1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [1., 1.],
+                    [0., 0.]])
+        """
+        super().__init__()
+        assert delay_steps >= 0 and isinstance(delay_steps, int)
+        self._delay_steps = delay_steps
+        self.step_mode = step_mode
+
+        self.register_memory('queue', [])
+        # used for single step mode
+
+    @property
+    def delay_steps(self):
+        return self._delay_steps
+
+    def single_step_forward(self, x: torch.Tensor):
+        self.queue.append(x)
+        if self.queue.__len__() > self.delay_steps:
+            return self.queue.pop(0)
+        else:
+            return torch.zeros_like(x)
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        return functional.delay(x_seq, self.delay_steps)
