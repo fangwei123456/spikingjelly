@@ -18,17 +18,24 @@ class Converter(nn.Module):
         :type dataloader: Dataloader
         :param device: device
         :type device: str
-        :param mode: 转换模式。目前支持三种模式，最大电流转换模式，99.9%电流转换模式，以及缩放转换模式
+        :param mode: 转换模式。目前支持三种模式: 最大电流转换模式mode='max'，99.9%电流转换模式mode='99%'，以及缩放转换模式mode=x（0<x<=1）
         :type mode: str, float
         :param momentum: 动量值，用于VoltageHook
         :type momentum: float
         :param fuse_flag: 标志位，设置为True，则进行conv与bn的融合，反之不进行。
         :type mode: bool
 
-        ``Converter`` 用于将ReLU的ANN转换为SNN。这里实现了常见的三种模式。
-        最常见的是最大电流转换模式，它利用前后层的激活上限，使发放率最高的情况能够对应激活取得最大值的情况。
-        99.9%电流转换模式利用99.9%的激活分位点限制了激活上限。
-        缩放转换模式下，用户需要给定缩放参数到模式中，即可利用缩放后的激活最大值对电流进行限制。
+        ``Converter`` 用于将带有ReLU的ANN转换为SNN。
+
+        目前支持三种转换模式，由参数mode进行设置。
+
+        转换后ReLU模块被删除，SNN需要的新模块（包括VoltageScaler、IFNode等)被创建并存放在snn tailor父模块中。
+
+        由于返回值的类型为fx.GraphModule，所以您可以使用print(fx.GraphModule.graph)查看计算图及前向传播关系。更多API参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+
+        .. warning::
+
+            必须确保ANN中的 ``ReLU`` 为module而非function。
 
         * :ref:`中文API <Converter.__init__-cn>`
 
@@ -45,14 +52,17 @@ class Converter(nn.Module):
         :param fuse_flag: Bool specifying if fusion of the conv and the bn happens, by default it happens.
         :type mode: bool
 
-        ``Converter`` is used to convert ReLU's ANN to SNN. Three common methods are implemented here.
-        The most common is the maximum mode, which utilizes the upper activation limits of
-        the front and rear layers so that the case with the highest firing rate corresponds to the case where the
-        activation achieves the maximum value.
-        The 99.9% mode utilizes the 99.9% activation quantile to limit the upper activation limit.
-        In the scaling conversion mode, the user needs to specify the scaling parameters into the mode, and the current
-        can be limited by the activated maximum value after scaling.
+        ``Converter`` is used to convert ANN with to SNN.
 
+        Three common methods are implemented here, which can be selected by the value of parameter mode.
+
+        After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module 'snn tailor'.
+
+        Due to the type of the return model is fx.GraphModule, you can use 'print(fx.GraphModule.graph)' to view how modules links and the how the forward method works. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+
+        .. warning::
+
+            Make sure that ``ReLU`` is module rather than function.
         """
         super().__init__()
         self.mode = mode
@@ -63,6 +73,24 @@ class Converter(nn.Module):
         self.momentum = momentum
 
     def forward(self, ann: nn.Module):
+        """
+        * :ref:`API in English <Converter.forward-en>`
+
+            .. _Converter.forward-cn:
+            :param ann: 待转换的ann
+            :type ann: torch.nn.Module
+            :return: 转换得到的snn
+            :rtype: torch.fx.GraphModule
+
+        * :ref:`API in Chinese <Converter.forward-cn>`
+
+        .. _Converter.forward-en:
+        :param ann: ann to be converted
+        :type ann: torch.nn.Module
+        :return: snn
+        :rtype: torch.fx.GraphModule
+
+        """
         if self.device is None:
             self.device = next(ann.parameters()).device
         ann = fx.symbolic_trace(ann).to(self.device)
@@ -225,8 +253,9 @@ class Converter(nn.Module):
             if type(fx_model.get_submodule(node.target)) is nn.ReLU:
                 hook_cnt += 1
                 target = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_hook
-                new_node = Converter._add_module_and_node(fx_model, target, node,
-                                                          VoltageHook(momentum=momentum, mode=mode), (node,))
+                m = VoltageHook(momentum=momentum, mode=mode)
+                new_node = Converter._add_module_and_node(fx_model, target, node, m
+                                                          , (node,))
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
@@ -274,12 +303,14 @@ class Converter(nn.Module):
                     target0 = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_scaler
                     target1 = 'snn tailor.' + str(hook_cnt) + '.1'  # IF_node
                     target2 = 'snn tailor.' + str(hook_cnt) + '.2'  # voltage_scaler
-
-                    node0 = Converter._add_module_and_node(fx_model, target0, hook_node, VoltageScaler(1.0 / s),
+                    m0 = VoltageScaler(1.0 / s)
+                    m1 = neuron.IFNode(v_threshold=1., v_reset=None)
+                    m2 = VoltageScaler(s)
+                    node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0,
                                                            (relu_node_in,))
-                    node1 = Converter._add_module_and_node(fx_model, target1, node0,
-                                                           neuron.IFNode(v_threshold=1., v_reset=None), (node0,))
-                    node2 = Converter._add_module_and_node(fx_model, target2, node1, VoltageScaler(s), args=(node1,))
+                    node1 = Converter._add_module_and_node(fx_model, target1, node0, m1
+                                                           , (node0,))
+                    node2 = Converter._add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
 
                     relu_node.replace_all_uses_with(node2)
                     node2.args = (node1,)
