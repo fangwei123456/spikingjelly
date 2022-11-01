@@ -1162,11 +1162,34 @@ class ParametricLIFNode(BaseNode):
         if self.backend == 'torch':
             return super().multi_step_forward(x_seq)
         elif self.backend == 'cupy':
+            hard_reset = self.v_reset is not None
+            if x_seq.dtype == torch.float:
+                dtype = 'float'
+            elif x_seq.dtype == torch.half:
+                dtype = 'half2'
+            else:
+                raise NotImplementedError(x_seq.dtype)
+
+            if self.forward_kernel is None or not self.forward_kernel.check_attributes(hard_reset=hard_reset,
+                                                                                       dtype=dtype,
+                                                                                       decay_input=self.decay_input):
+                self.forward_kernel = ac_neuron_kernel.ParametricLIFNodeFPTTKernel(decay_input=self.decay_input,
+                                                                         hard_reset=hard_reset, dtype=dtype)
+
+            if self.backward_kernel is None or not self.backward_kernel.check_attributes(
+                    surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset,
+                    detach_reset=self.detach_reset, dtype=dtype, decay_input=self.decay_input):
+                self.backward_kernel = ac_neuron_kernel.ParametricLIFNodeBPTTKernel(decay_input=self.decay_input,
+                                                                          surrogate_function=self.surrogate_function.cuda_codes,
+                                                                          hard_reset=hard_reset,
+                                                                          detach_reset=self.detach_reset, dtype=dtype)
+
+
             self.v_float_to_tensor(x_seq[0])
 
-            spike_seq, v_seq = neuron_kernel.MultiStepParametricLIFNodePTT.apply(
-                x_seq.flatten(1), self.v.flatten(0), self.w.sigmoid(), self.decay_input, self.v_threshold, self.v_reset,
-                self.detach_reset, self.surrogate_function.cuda_code)
+            spike_seq, v_seq = ac_neuron_kernel.ParametricLIFNodeATGF.apply(
+                x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.w.sigmoid(),
+                self.forward_kernel, self.backward_kernel)
 
             spike_seq = spike_seq.reshape(x_seq.shape)
             v_seq = v_seq.reshape(x_seq.shape)

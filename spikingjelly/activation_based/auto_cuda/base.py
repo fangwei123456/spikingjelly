@@ -1,9 +1,20 @@
+import numpy as np
+
 import cupy
 import torch
 import sys
 import logging
 from .. import cuda_utils
 from ... import configure
+
+def startswiths(x: str, prefixes: tuple):
+    ret = False
+    for prefix in prefixes:
+        if x.startswith(prefix):
+            ret = True
+
+    return ret
+
 
 class CKernel:
     def __init__(self, kernel_name: str):
@@ -19,23 +30,12 @@ class CKernel:
         else:
             return True
 
-    def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
-
-        assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
-        # python >= 3.6时，字典默认是有序的
-
-        assert py_dict.keys() == self.cparams.keys(), f'{(py_dict.keys() | self.cparams.keys()) - (py_dict.keys() & self.cparams.keys())} is not in both dicts!'
-
-        py_dict = dict(sorted(py_dict.items()))
-        self.cparams = dict(sorted(self.cparams.items()))
-
-        device = None
-
+    def set_contiguous(self, py_dict: dict):
         # get contiguous
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
                 value = value.contiguous()
-                device = value.get_device()
+
 
             elif isinstance(value, cupy.ndarray):
                 value = cupy.ascontiguousarray(value)
@@ -44,12 +44,102 @@ class CKernel:
 
             py_dict[key] = value
 
+    def get_device(self, py_dict: dict) -> int:
+        for item in py_dict.values():
+            if isinstance(item, torch.Tensor):
+                return item.get_device()
+
+            elif isinstance(item, cupy.ndarray):
+                return item.device.id
+
+        raise ValueError
+
+
+    def check_device(self, device: int, py_dict: dict):
+        for item in py_dict.values():
+            if isinstance(item, torch.Tensor):
+                assert item.get_device() == device
+
+            elif isinstance(item, cupy.ndarray):
+                assert item.device.id == device
+
+    def check_keys(self, py_dict: dict):
+        if py_dict.keys() != self.cparams.keys():
+            missed_keys = (py_dict.keys() | self.cparams.keys()) - (py_dict.keys() & self.cparams.keys())
+
+            if missed_keys.__len__() > 0:
+                if (missed_keys & py_dict.keys()).__len__() > 0:
+                    msg = f'{missed_keys} is in py_dict but not in cparams!'
+                else:
+                    msg = f'{missed_keys} is in cparams but not in py_dict!'
+                raise ValueError(msg)
+
+    def check_ctypes(self, py_dict: dict):
+        for key, value in py_dict.items():
+            ctype: str = self.cparams[key]
+            if isinstance(value, torch.Tensor):
+                if value.dtype == torch.float:
+                    assert startswiths(ctype, ('const float', 'float'))
+
+                elif value.dtype == torch.half:
+                    assert startswiths(ctype, ('const half2', 'half2'))
+
+
+            if isinstance(value, cupy.ndarray):
+                if value.dtype == np.float32:
+                    assert startswiths(ctype, ('const float', 'float'))
+
+                elif value.dtype == np.float16:
+                    assert startswiths(ctype, ('const half2', 'half2'))
+
+                elif value.dtype == np.int:
+                    assert startswiths(ctype, ('const int', 'int'))
+
+
+    def check_shape(self, py_dict: dict):
+        raise NotImplementedError
+
+    def get_ptr(self, py_dict: dict):
+        ret_list = []
+        for item in py_dict.values():
+            if isinstance(item, torch.Tensor):
+                ret_list.append(item.data_ptr())
+
+            elif isinstance(item, cupy.ndarray):
+                ret_list.append(item)
+
+            else:
+                raise TypeError
+        return tuple(ret_list)
+
+    def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
+
+
+        self.check_keys(py_dict)
+
+
+        assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
+        # 需要使用有序词典
+        # python >= 3.6时，字典默认是有序的
+        py_dict = dict(sorted(py_dict.items()))
+        self.cparams = dict(sorted(self.cparams.items()))
+
+        device = self.get_device(py_dict)
+
+        self.check_device(device, py_dict)
+
+        self.set_contiguous(py_dict)
+
+        self.check_ctypes(py_dict)
+
+        self.check_shape(py_dict)
+
 
         cp_kernel = cupy.RawKernel(self.full_codes, self.kernel_name, options=configure.cuda_compiler_options,
                            backend=configure.cuda_compiler_backend)
 
         with cuda_utils.DeviceEnvironment(device):
-            cp_kernel(grid, block, cuda_utils.wrap_args_to_raw_kernel(device, *list(py_dict.values())))
+            cp_kernel(grid, block, self.get_ptr(py_dict))
 
 
 
@@ -158,6 +248,17 @@ class CKernel1D(CKernel):
         return codes
 
 
+    def check_shape(self, py_dict: dict):
+        for key, value in py_dict.items():
+            if isinstance(value, torch.Tensor):
+                if value.dtype == torch.half:
+                    assert value.numel() % 2 == 0, f'please pad the numel of {key} to assert mod 2 == 0! (for half2)'
+
+            if isinstance(value, cupy.ndarray):
+                if value.dtype == np.float16:
+                    assert value.size % 2 == 0, f'please pad the numel of {key} to assert mod 2 == 0! (for half2)'
+
+
 class CKernel2D(CKernel):
     """
     c_sum_T = CKernel2D(kernel_name='sum_T')
@@ -204,6 +305,25 @@ class CKernel2D(CKernel):
         self.cparams['N'] = 'const int &'
         self.reserved_cnames.append('dt')
         self.reserved_cnames.append('t')
+
+    def check_shape(self, py_dict: dict):
+        for key, value in py_dict.items():
+            if isinstance(value, torch.Tensor):
+                assert value.dim() <= 2
+                if value.dtype == torch.half:
+                    if value.dim() == 1:
+                        assert value.numel() % 2 == 0
+                    elif value.dim() == 2:
+                        assert value.shape[1] % 2 == 0
+
+            if isinstance(value, cupy.ndarray):
+                if value.dtype == np.float16:
+                    assert value.ndim <= 2
+                    if value.ndim == 1:
+                        assert value.size % 2 == 0
+                    elif value.dim == 2:
+                        assert value.shape[1] % 2 == 0
+
 
 
     @property
