@@ -206,18 +206,7 @@ def if_requires_grad(items: Iterable):
     return requires_grad
 
 
-def pad_half2(py_dict: dict, ref: str = 'v_init'):
-    if py_dict[ref].numel() % 2 == 0:
-        return False
 
-    for key, value in py_dict.items():
-        if isinstance(value, torch.Tensor):
-            if value.dtype == torch.float16:
-                assert value.dim() <= 2
-                value = F.pad(value, (0, 1))
-                py_dict[key] = value
-
-    return True
 
 
 def scalar_to_cupy(py_dict: dict, ref: str = 'x_seq'):
@@ -251,7 +240,7 @@ class NeuronATGFBase:
         device = py_dict['x_seq'].get_device()
         requires_grad = if_requires_grad(py_dict.values())
         scalar_to_cupy(py_dict)
-        use_pad = pad_half2(py_dict)
+
         new_tensors(('h_seq', 'spike_seq', 'v_seq'), py_dict)
         py_dict['v_v_seq'] = torch.cat((py_dict.pop('v_init').unsqueeze(0), py_dict.pop('v_seq')))
         numel = py_dict['x_seq'].numel()
@@ -275,7 +264,7 @@ class NeuronATGFBase:
         if py_dict['v_reset'] is None:
             py_dict.pop('v_reset')
 
-        return requires_grad, use_pad, blocks, threads, py_dict
+        return requires_grad, blocks, threads, py_dict
 
     @staticmethod
     def ctx_save(ctx, requires_grad: bool, *args, **kwargs):
@@ -293,15 +282,10 @@ class NeuronATGFBase:
         threads = ctx.threads
 
         h_seq = ctx.saved_tensors[0]
-        use_pad = ctx.use_pad
         numel = ctx.numel
         N = ctx.N
         v_th = ctx.v_th
         v_reset = ctx.v_reset
-
-        if use_pad:
-            grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
-            grad_v_seq = F.pad(grad_v_seq, (0, 1))
 
         zero_shape = list(grad_spike_seq.shape)
         zero_shape[0] += 1
@@ -335,18 +319,16 @@ class IFNodeATGF(torch.autograd.Function):
             'v_th': v_th,
             'v_reset': v_reset
         }
-        requires_grad, use_pad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+        requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
         forward_kernel((blocks,), (threads,), py_dict)
 
-        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], use_pad=use_pad, blocks=blocks, threads=threads,
+        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], blocks=blocks, threads=threads,
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
                            backward_kernel=backward_kernel)
 
-        if use_pad:
-            return py_dict['spike_seq'][..., :-1], py_dict['v_v_seq'][1:, ..., :-1]
-        else:
-            return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
+
+        return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
 
     @staticmethod
     def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
@@ -354,10 +336,7 @@ class IFNodeATGF(torch.autograd.Function):
         backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(ctx, grad_spike_seq, grad_v_seq)
         backward_kernel((blocks,), (threads,), py_dict)
 
-        if ctx.use_pad:
-            return py_dict['grad_x_seq'][..., :-1], py_dict['grad_v_init'][..., :-1], None, None, None, None
-        else:
-            return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None
+        return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None
 
 
 class LIFNodeFPTTKernel(NeuronFPTTKernel):
@@ -412,18 +391,16 @@ class LIFNodeATGF(torch.autograd.Function):
             'v_reset': v_reset,
             'decay': decay,
         }
-        requires_grad, use_pad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+        requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
         forward_kernel((blocks,), (threads,), py_dict)
 
-        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], use_pad=use_pad, blocks=blocks, threads=threads,
+        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], blocks=blocks, threads=threads,
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
                            backward_kernel=backward_kernel, decay=py_dict['decay'])
 
-        if use_pad:
-            return py_dict['spike_seq'][..., :-1], py_dict['v_v_seq'][1:, ..., :-1]
-        else:
-            return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
+
+        return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
 
     @staticmethod
     def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
@@ -433,10 +410,7 @@ class LIFNodeATGF(torch.autograd.Function):
         backward_kernel((blocks,), (threads,), py_dict)
 
 
-        if ctx.use_pad:
-            return py_dict['grad_x_seq'][..., :-1], py_dict['grad_v_init'][..., :-1], None, None, None, None, None
-        else:
-            return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None, None
+        return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None, None
 
 
 class ParametricLIFNodeFPTTKernel(NeuronFPTTKernel):
@@ -445,7 +419,6 @@ class ParametricLIFNodeFPTTKernel(NeuronFPTTKernel):
         self.decay_input = decay_input
         self.add_param(ctype=f'const {dtype} *', cname='decay')
 
-        print(self.full_codes)
 
     @property
     def neuronal_charge(self) -> str:
@@ -472,7 +445,6 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
         # float to avoid overflow
         self.add_param(ctype=f'const {dtype} *', cname='v_v_seq')
 
-        print(self.full_codes)
 
     def grad_h_next_to_v(self) -> str:
         return cfunction.sub(z=f'const {self.dtype} grad_h_next_to_v', x=cfunction.constant(None, x=1., dtype=self.dtype), y='decay[0]', dtype=self.dtype)
@@ -590,9 +562,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
 class ParametricLIFNodeATGF(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, decay: torch.Tensor, forward_kernel: ParametricLIFNodeFPTTKernel, backward_kernel: ParametricLIFNodeBPTTKernel):
-        if x_seq.dtype == torch.half:
-            # pad half
-            decay = torch.stack((decay, decay)).squeeze(0)
+
         py_dict = {
             'x_seq': x_seq,
             'v_init': v_init,
@@ -600,18 +570,16 @@ class ParametricLIFNodeATGF(torch.autograd.Function):
             'v_reset': v_reset,
             'decay': decay,
         }
-        requires_grad, use_pad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+        requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
         forward_kernel((blocks,), (threads,), py_dict)
 
-        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], py_dict['v_v_seq'], use_pad=use_pad, blocks=blocks, threads=threads,
+        NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], py_dict['v_v_seq'], blocks=blocks, threads=threads,
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
                            backward_kernel=backward_kernel, decay=py_dict['decay'])
 
-        if use_pad:
-            return py_dict['spike_seq'][..., :-1], py_dict['v_v_seq'][1:, ..., :-1]
-        else:
-            return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
+
+        return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
 
     @staticmethod
     def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
@@ -624,7 +592,5 @@ class ParametricLIFNodeATGF(torch.autograd.Function):
         backward_kernel((blocks,), (threads,), py_dict)
 
 
-        if ctx.use_pad:
-            return py_dict['grad_x_seq'][..., :-1], py_dict['grad_v_init'][..., :-1], None, None,  py_dict['grad_decay'], None, None
-        else:
-            return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None,  py_dict['grad_decay'], None, None
+
+        return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None,  py_dict['grad_decay'], None, None

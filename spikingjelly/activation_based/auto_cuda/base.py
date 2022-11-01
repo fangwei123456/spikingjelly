@@ -1,7 +1,7 @@
 import numpy as np
-
 import cupy
 import torch
+import torch.nn.functional as F
 import sys
 import logging
 from .. import cuda_utils
@@ -21,6 +21,7 @@ class CKernel:
         self.cparams = {'numel': 'const int &'}
         self.reserved_cnames = ['index']
         self.kernel_name = kernel_name
+
 
     def check_attributes(self, **kwargs):
         for key, value in kwargs.items():
@@ -96,7 +97,7 @@ class CKernel:
                     assert startswiths(ctype, ('const int', 'int'))
 
 
-    def check_shape(self, py_dict: dict):
+    def check_half2(self, py_dict: dict):
         raise NotImplementedError
 
     def get_ptr(self, py_dict: dict):
@@ -113,11 +114,7 @@ class CKernel:
         return tuple(ret_list)
 
     def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
-
-
         self.check_keys(py_dict)
-
-
         assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
         # 需要使用有序词典
         # python >= 3.6时，字典默认是有序的
@@ -132,22 +129,14 @@ class CKernel:
 
         self.check_ctypes(py_dict)
 
-        self.check_shape(py_dict)
+        self.check_half2(py_dict)
 
 
         cp_kernel = cupy.RawKernel(self.full_codes, self.kernel_name, options=configure.cuda_compiler_options,
                            backend=configure.cuda_compiler_backend)
 
         with cuda_utils.DeviceEnvironment(device):
-            cp_kernel(grid, block, self.get_ptr(py_dict))
-
-
-
-
-
-
-
-
+            cp_kernel(grid, block, self.get_ptr(py_dict), *args_1, **kwargs)
 
 
 
@@ -248,7 +237,7 @@ class CKernel1D(CKernel):
         return codes
 
 
-    def check_shape(self, py_dict: dict):
+    def check_half2(self, py_dict: dict):
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
                 if value.dtype == torch.half:
@@ -258,6 +247,49 @@ class CKernel1D(CKernel):
                 if value.dtype == np.float16:
                     assert value.size % 2 == 0, f'please pad the numel of {key} to assert mod 2 == 0! (for half2)'
 
+    def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
+
+        # pad half2
+        pad_keys = []
+        pad_shapes = []
+        for key, value in py_dict.items():
+            if isinstance(value, torch.Tensor) and value.dtype == torch.half:
+                if value.numel() % 2 != 0:
+
+                    pad_shapes.append(value.shape)
+                    pad_keys.append(key)
+                    value = value.flatten()
+
+                    value = torch.cat((value, value[-1].view(1)))
+
+                    py_dict[key] = value
+
+
+            elif isinstance(value, cupy.ndarray) and value.dtype == np.float16:
+                if value.size % 2 != 0:
+                    pad_shapes.append(value.shape)
+                    pad_keys.append(key)
+                    value = cupy.reshape(value, -1)
+
+                    value = cupy.concatenate((value, cupy.reshape(value[-1], 1)))
+
+                    py_dict[key] = value
+
+
+        super().__call__(grid, block, py_dict, *args_1, **kwargs)
+
+        # move pad values
+        for key, shape in zip(pad_keys, pad_shapes):
+            value = py_dict[key]
+            value = value[: -1]
+
+            if isinstance(value, torch.Tensor):
+                value = value.view(shape)
+
+            elif isinstance(value, cupy.ndarray):
+                value = cupy.reshape(value, shape)
+
+            py_dict[key] = value
 
 class CKernel2D(CKernel):
     """
@@ -307,23 +339,110 @@ class CKernel2D(CKernel):
         self.reserved_cnames.append('t')
 
     def check_shape(self, py_dict: dict):
+        # all tensors should be ndim <= 2
+        for value in py_dict.values():
+            if isinstance(value, torch.Tensor):
+                assert value.ndim <= 2
+
+            elif isinstance(value, cupy.ndarray):
+                assert value.ndim <= 2
+
+    def check_half2(self, py_dict: dict):
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
-                assert value.dim() <= 2
+
                 if value.dtype == torch.half:
-                    if value.dim() == 1:
+                    if value.ndim <= 1:
                         assert value.numel() % 2 == 0
-                    elif value.dim() == 2:
+                    elif value.ndim == 2:
                         assert value.shape[1] % 2 == 0
 
-            if isinstance(value, cupy.ndarray):
+            elif isinstance(value, cupy.ndarray):
                 if value.dtype == np.float16:
-                    assert value.ndim <= 2
-                    if value.ndim == 1:
+                    if value.ndim <= 1:
                         assert value.size % 2 == 0
-                    elif value.dim == 2:
+                    elif value.ndim == 2:
                         assert value.shape[1] % 2 == 0
 
+    def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
+
+        self.check_shape(py_dict)
+
+        # pad half2
+        pad_keys = []
+        pad_shapes = []
+        for key, value in py_dict.items():
+            if isinstance(value, torch.Tensor) and value.dtype == torch.half:
+
+                if value.ndim <= 1:
+                    # 1D tensor
+                    if value.numel() % 2 != 0:
+                        pad_shapes.append(value.shape)
+                        pad_keys.append(key)
+                        value = value.flatten()
+
+                        value = torch.cat((value, value[-1].view(1)))
+
+                        py_dict[key] = value
+
+
+
+                elif value.shape[1] % 2 != 0:
+                    # 2D tensor with shape = [T, N] and N % 2 != 0
+                    pad_shapes.append(value.shape)
+                    pad_keys.append(key)
+
+                    value = torch.cat((value, value[:, -1].view(-1, 1)), dim=1)
+                    # [T, N] -> [T, N + 1]
+                    py_dict[key] = value
+
+
+
+            elif isinstance(value, cupy.ndarray) and value.dtype == np.float16:
+
+                if value.ndim <= 1:
+                    # 1D tensor
+                    if value.size % 2 != 0:
+                        pad_shapes.append(value.shape)
+                        pad_keys.append(key)
+                        value = cupy.reshape(value, -1)
+
+                        value = cupy.concatenate((value, cupy.reshape(value[-1], 1)))
+
+                        py_dict[key] = value
+
+
+                elif value.shape[1] % 2 != 0:
+                    pad_shapes.append(value.shape)
+                    pad_keys.append(key)
+                    # [T, N] -> [T, N + 1]
+
+                    value = cupy.concatenate((value, cupy.reshape(value[:, -1], (-1, 1))), axis=1)
+                    py_dict[key] = value
+
+
+        super().__call__(grid, block, py_dict, *args_1, **kwargs)
+
+        # move pad values
+        for i, key in enumerate(pad_keys):
+            value = py_dict[key]
+            shape = pad_shapes[i]
+            if isinstance(value, torch.Tensor):
+                if value.ndim <= 1:
+                    value = value[: -1]
+                    value = value.view(shape)
+                else:
+                    value = value[:, : -1]
+
+            elif isinstance(value, cupy.ndarray):
+                if value.ndim <= 1:
+                    value = value[:, -1]
+                    value = cupy.reshape(value, shape)
+
+                else:
+                    value = value[:, : -1]
+
+            py_dict[key] = value
 
 
     @property
