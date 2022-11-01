@@ -37,6 +37,8 @@ class Converter(nn.Module):
 
             必须确保ANN中的 ``ReLU`` 为module而非function。
 
+            您最好在ANN模型中使用平均池化而不是最大池化。否则，可能会损害转换后的SNN模型的性能。
+
         * :ref:`中文API <Converter.__init__-cn>`
 
         .. _Converter.__init__-en:
@@ -63,6 +65,8 @@ class Converter(nn.Module):
         .. warning::
 
             Make sure that ``ReLU`` is module rather than function.
+
+            You'd better use ``avgpool`` rather than ``maxpool`` in your ann model. If not, the performance of the converted snn model may be ruined.
         """
         super().__init__()
         self.mode = mode
@@ -298,7 +302,6 @@ class Converter(nn.Module):
                     relu_node = node.args[0]
                     if len(relu_node.args) != 1:
                         raise NotImplementedError('The number of relu_node.args should be 1.')
-                    relu_node_in = relu_node.args[0]
                     s = fx_model.get_submodule(node.target).scale.item()
                     target0 = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_scaler
                     target1 = 'snn tailor.' + str(hook_cnt) + '.1'  # IF_node
@@ -307,7 +310,7 @@ class Converter(nn.Module):
                     m1 = neuron.IFNode(v_threshold=1., v_reset=None)
                     m2 = VoltageScaler(s)
                     node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0,
-                                                           (relu_node_in,))
+                                                           relu_node.args)
                     node1 = Converter._add_module_and_node(fx_model, target1, node0, m1
                                                            , (node0,))
                     node2 = Converter._add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
