@@ -1,15 +1,14 @@
-import torch.nn as nn
-from spikingjelly.activation_based.ann2snn.modules import *
-from tqdm import tqdm
+from typing import Type, Dict, Any, Tuple, Iterable
 from spikingjelly.activation_based import neuron
-from typing import Type, Dict, Any, Tuple, Iterable, Optional, List, cast
+from spikingjelly.activation_based.ann2snn.modules import *
 from torch import fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
+from tqdm import tqdm
 
 
 class Converter(nn.Module):
 
-    def __init__(self, dataloader, mode='Max', fuse_flag=True):
+    def __init__(self, dataloader, device=None, mode='Max', momentum=0.1, fuse_flag=True):
         """
         * :ref:`API in English <Converter.__init__-en>`
 
@@ -17,8 +16,12 @@ class Converter(nn.Module):
 
         :param dataloader: 数据加载器
         :type dataloader: Dataloader
+        :param device: device
+        :type device: str
         :param mode: 转换模式。目前支持三种模式，最大电流转换模式，99.9%电流转换模式，以及缩放转换模式
         :type mode: str, float
+        :param momentum: 动量值，用于VoltageHook
+        :type momentum: float
         :param fuse_flag: 标志位，设置为True，则进行conv与bn的融合，反之不进行。
         :type mode: bool
 
@@ -33,8 +36,12 @@ class Converter(nn.Module):
 
         :param dataloader: Dataloader for converting
         :type dataloader: Dataloader
+        :param device: device
+        :type device: str
         :param mode: Conversion mode. Now support three mode, MaxNorm, RobustNorm(99.9%), and scaling mode
         :type mode: str, float
+        :param momentum: momentum value used by VoltageHook
+        :type momentum: float
         :param fuse_flag: Bool specifying if fusion of the conv and the bn happens, by default it happens.
         :type mode: bool
 
@@ -52,15 +59,16 @@ class Converter(nn.Module):
         self.fuse_flag = fuse_flag
         self.dataloader = dataloader
         self._check_mode()
-        self.device = None
+        self.device = device
+        self.momentum = momentum
 
-    def forward(self, ann):
-        ann = fx.symbolic_trace(ann).to(self.device)
+    def forward(self, ann: nn.Module):
         if self.device is None:
             self.device = next(ann.parameters()).device
+        ann = fx.symbolic_trace(ann).to(self.device)
         ann.eval()
         ann_fused = self.fuse(ann, fuse_flag=self.fuse_flag).to(self.device)
-        ann_with_hook = self.set_voltagehook(ann_fused, mode=self.mode).to(self.device)
+        ann_with_hook = self.set_voltagehook(ann_fused, momentum=self.momentum, mode=self.mode).to(self.device)
         for _, (imgs, _) in enumerate(tqdm(self.dataloader)):
             ann_with_hook(imgs.to(self.device))
         snn = self.replace_by_ifnode(ann_with_hook).to(self.device)
@@ -86,7 +94,8 @@ class Converter(nn.Module):
         else:
             raise NotImplementedError(err_msg)
 
-    def fuse(self, fx_model: torch.fx.GraphModule, fuse_flag=True) -> torch.fx.GraphModule:
+    @staticmethod
+    def fuse(fx_model: torch.fx.GraphModule, fuse_flag: bool = True) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.fuse-en>`
 
@@ -115,6 +124,39 @@ class Converter(nn.Module):
         ``fuse`` is used to fuse conv layer and bn layer.
 
         """
+
+        def matches_module_pattern(pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]) -> bool:
+            if len(node.args) == 0:
+                return False
+            nodes: Tuple[Any, fx.Node] = (node.args[0], node)
+            for expected_type, current_node in zip(pattern, nodes):
+                if not isinstance(current_node, fx.Node):
+                    return False
+                if current_node.op != 'call_module':
+                    return False
+                if not isinstance(current_node.target, str):
+                    return False
+                if current_node.target not in modules:
+                    return False
+                if type(modules[current_node.target]) is not expected_type:
+                    return False
+            return True
+
+        def replace_node_module(node: fx.Node, modules: Dict[str, Any],
+                                new_module: torch.nn.Module):
+            def parent_name(target: str) -> Tuple[str, str]:
+                """
+                Splits a qualname into parent path and last atom.
+                For example, `foo.bar.baz` -> (`foo.bar`, `baz`)
+                """
+                *parent, name = target.rsplit('.', 1)
+                return parent[0] if parent else '', name
+
+            assert (isinstance(node.target, str))
+            parent_name, name = parent_name(node.target)
+            modules[node.target] = new_module
+            setattr(modules[parent_name], name, new_module)
+
         if not fuse_flag:
             return fx_model
         patterns = [(nn.Conv1d, nn.BatchNorm1d),
@@ -125,15 +167,15 @@ class Converter(nn.Module):
 
         for pattern in patterns:
             for node in fx_model.graph.nodes:
-                if self._matches_module_pattern(pattern, node,
-                                                modules):
+                if matches_module_pattern(pattern, node,
+                                          modules):
                     if len(node.args[0].users) > 1:  # Output of conv is used by other nodes
                         continue
                     conv = modules[node.args[0].target]
                     bn = modules[node.target]
                     fused_conv = fuse_conv_bn_eval(conv, bn)
-                    self._replace_node_module(node.args[0], modules,
-                                              fused_conv)
+                    replace_node_module(node.args[0], modules,
+                                        fused_conv)
                     node.replace_all_uses_with(node.args[0])
                     fx_model.graph.erase_node(node)
         fx_model.graph.lint()
@@ -141,7 +183,8 @@ class Converter(nn.Module):
         fx_model.recompile()
         return fx_model
 
-    def set_voltagehook(self, fx_model: torch.fx.GraphModule, mode='Max') -> torch.fx.GraphModule:
+    @staticmethod
+    def set_voltagehook(fx_model: torch.fx.GraphModule, mode='Max', momentum=0.1) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.set_voltagehook-en>`
 
@@ -151,6 +194,8 @@ class Converter(nn.Module):
         :type fx_model: torch.fx.GraphModule
         :param mode: 转换模式。目前支持三种模式，最大电流转换模式，99.9%电流转换模式，以及缩放转换模式
         :type mode: str, float
+        :param momentum: 动量值，用于VoltageHook
+        :type momentum: float
         :return: 带有VoltageHook的模型.
         :rtype: torch.fx.GraphModule
 
@@ -164,24 +209,30 @@ class Converter(nn.Module):
         :type fx_model: torch.fx.GraphModule
         :param mode: Conversion mode. Now support three mode, MaxNorm, RobustNorm(99.9%), and scaling mode
         :type mode: str, float
+        :param momentum: momentum value used by VoltageHook
+        :type momentum: float
         :return: fx_model with VoltageHook.
         :rtype: torch.fx.GraphModule
 
         ``set_voltagehook`` is used to add VoltageHook to fx_model. Three common methods are implemented here, the same as Converter.mode.
 
         """
-        modules = dict(fx_model.named_modules())
+
+        hook_cnt = -1
         for node in fx_model.graph.nodes:
             if node.op != 'call_module':
                 continue
-            if type(modules[node.target]) is nn.ReLU:
-                seq = nn.Sequential(modules[node.target], VoltageHook(mode=mode))
-                self._replace_node_module(node, modules, seq)
+            if type(fx_model.get_submodule(node.target)) is nn.ReLU:
+                hook_cnt += 1
+                target = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_hook
+                new_node = Converter._add_module_and_node(fx_model, target, node,
+                                                          VoltageHook(momentum=momentum, mode=mode), (node,))
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
 
-    def replace_by_ifnode(self, fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
+    @staticmethod
+    def replace_by_ifnode(fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.replace_by_ifnode-en>`
 
@@ -206,51 +257,43 @@ class Converter(nn.Module):
         ``replace_by_ifnode`` is used to replace ReLU with IF neuron.
 
         """
-        modules = dict(fx_model.named_modules())
-        for node in fx_model.graph.nodes:  # Seq as one node
+
+        hook_cnt = -1
+        for node in fx_model.graph.nodes:
             if node.op != 'call_module':
                 continue
-            if type(modules[node.target]) is nn.Sequential and len(modules[node.target]) == 2 and type(
-                    modules[node.target][0]) is nn.ReLU and type(modules[node.target][1]) is VoltageHook:
-                s = modules[node.target][1].scale.item()
-                seq = nn.Sequential(
-                    VoltageScaler(1.0 / s),
-                    neuron.IFNode(v_threshold=1., v_reset=None),
-                    VoltageScaler(s)
-                )
-                self._replace_node_module(node, modules, seq)
+            if type(fx_model.get_submodule(node.target)) is VoltageHook:
+                if type(fx_model.get_submodule(node.args[0].target)) is nn.ReLU:
+                    hook_cnt += 1
+                    hook_node = node
+                    relu_node = node.args[0]
+                    if len(relu_node.args) != 1:
+                        raise NotImplementedError('The number of relu_node.args should be 1.')
+                    relu_node_in = relu_node.args[0]
+                    s = fx_model.get_submodule(node.target).scale.item()
+                    target0 = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_scaler
+                    target1 = 'snn tailor.' + str(hook_cnt) + '.1'  # IF_node
+                    target2 = 'snn tailor.' + str(hook_cnt) + '.2'  # voltage_scaler
+
+                    node0 = Converter._add_module_and_node(fx_model, target0, hook_node, VoltageScaler(1.0 / s),
+                                                           (relu_node_in,))
+                    node1 = Converter._add_module_and_node(fx_model, target1, node0,
+                                                           neuron.IFNode(v_threshold=1., v_reset=None), (node0,))
+                    node2 = Converter._add_module_and_node(fx_model, target2, node1, VoltageScaler(s), args=(node1,))
+
+                    relu_node.replace_all_uses_with(node2)
+                    node2.args = (node1,)
+                    fx_model.graph.erase_node(hook_node)
+                    fx_model.graph.erase_node(relu_node)
+                    fx_model.delete_all_unused_submodules()
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
 
-    def _replace_node_module(self, node: fx.Node, modules: Dict[str, Any],
-                             new_module: torch.nn.Module):
-        assert (isinstance(node.target, str))
-        parent_name, name = self._parent_name(node.target)
-        modules[node.target] = new_module
-        setattr(modules[parent_name], name, new_module)
-
-    def _parent_name(self, target: str) -> Tuple[str, str]:
-        """
-        Splits a qualname into parent path and last atom.
-        For example, `foo.bar.baz` -> (`foo.bar`, `baz`)
-        """
-        *parent, name = target.rsplit('.', 1)
-        return parent[0] if parent else '', name
-
-    def _matches_module_pattern(self, pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]) -> bool:
-        if len(node.args) == 0:
-            return False
-        nodes: Tuple[Any, fx.Node] = (node.args[0], node)
-        for expected_type, current_node in zip(pattern, nodes):
-            if not isinstance(current_node, fx.Node):
-                return False
-            if current_node.op != 'call_module':
-                return False
-            if not isinstance(current_node.target, str):
-                return False
-            if current_node.target not in modules:
-                return False
-            if type(modules[current_node.target]) is not expected_type:
-                return False
-        return True
+    @staticmethod
+    def _add_module_and_node(fx_model: fx.GraphModule, target: str, after: fx.Node, m: nn.Module,
+                             args: Tuple) -> fx.Node:
+        fx_model.add_submodule(target=target, m=m)
+        with fx_model.graph.inserting_after(n=after):
+            new_node = fx_model.graph.call_module(module_name=target, args=args)
+        return new_node
