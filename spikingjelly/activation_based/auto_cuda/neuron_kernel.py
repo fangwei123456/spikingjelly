@@ -14,7 +14,7 @@ from .. import cuda_utils, surrogate
 from ... import configure
 from typing import Callable, Iterable
 from . import base, cfunction
-
+import math
 
 def neuronal_hard_reset(v_next: str, h: str, spike: str, v_reset: str, dtype: str = 'float'):
     if dtype == 'float':
@@ -81,7 +81,8 @@ class NeuronFPTTKernel(base.CKernel2D):
                 neuronal_soft_reset(v_next='v_v_seq[t + dt]', h='h_seq[t]', spike='spike_seq[t]', v_th='v_th',
                                     dtype=self.dtype))
 
-        return core_codes.codes
+        self._core = core_codes.codes
+        return self._core
 
 
 class NeuronBPTTKernel(base.CKernel2D):
@@ -118,7 +119,8 @@ class NeuronBPTTKernel(base.CKernel2D):
         else:
             raise NotImplementedError(self.dtype)
 
-        return codes.codes
+        self._pre_core = codes.codes
+        return self._pre_core
 
 
     @property
@@ -127,7 +129,8 @@ class NeuronBPTTKernel(base.CKernel2D):
         codes = base.CodeTyper(16)
         codes.append(self.grad_h_to_x())
         codes.append(cfunction.mul(z='grad_v_init[index]', x='grad_h', y='grad_h_to_x', dtype=self.dtype))
-        return codes.codes
+        self._post_core = codes.codes
+        return self._post_core
 
     def grad_h_next_to_v(self) -> str:
         raise NotImplementedError
@@ -177,7 +180,8 @@ class NeuronBPTTKernel(base.CKernel2D):
         core_codes.append(self.grad_h_to_x())
         core_codes.append(cfunction.mul(z='grad_x_seq[t]', x='grad_h', y='grad_h_to_x', dtype=self.dtype))
 
-        return core_codes.codes
+        self._core = core_codes.codes
+        return self._core
 
 
 class IFNodeFPTTKernel(NeuronFPTTKernel):
@@ -247,10 +251,10 @@ class NeuronATGFBase:
         N = py_dict['x_seq'].shape[1]
         threads = configure.cuda_threads
         if py_dict['x_seq'].dtype == torch.float16:
-            assert N % 2 == 0
             # we will take two neurons to calculate as one neuron in cuda half2
-            N = N // 2
-            numel = numel // 2
+            # pad will be implemented by the kernel.__call__
+            N = math.ceil(N / 2)
+            numel = N * py_dict['x_seq'].shape[0]
 
         blocks = cuda_utils.cal_blocks(N)
 
@@ -562,7 +566,8 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
 class ParametricLIFNodeATGF(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, decay: torch.Tensor, forward_kernel: ParametricLIFNodeFPTTKernel, backward_kernel: ParametricLIFNodeBPTTKernel):
-
+        if x_seq.dtype == torch.float16 and v_init.numel() % 2 != 0:
+            raise ValueError('When using the the PLIF neuron with half2 cupy backend, the numer of neurons should be even to avoid the wrong gradient of tau caused by padding!')
         py_dict = {
             'x_seq': x_seq,
             'v_init': v_init,

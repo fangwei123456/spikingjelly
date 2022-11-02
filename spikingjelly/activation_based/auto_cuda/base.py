@@ -21,7 +21,15 @@ class CKernel:
         self.cparams = {'numel': 'const int &'}
         self.reserved_cnames = ['index']
         self.kernel_name = kernel_name
+        self._core = ''
 
+    @property
+    def core(self):
+        return self._core
+
+    @core.setter
+    def core(self, value):
+        self._core = value
 
     def check_attributes(self, **kwargs):
         for key, value in kwargs.items():
@@ -54,7 +62,6 @@ class CKernel:
                 return item.device.id
 
         raise ValueError
-
 
     def check_device(self, device: int, py_dict: dict):
         for item in py_dict.values():
@@ -96,11 +103,10 @@ class CKernel:
                 elif value.dtype == np.int:
                     assert startswiths(ctype, ('const int', 'int'))
 
-
     def check_half2(self, py_dict: dict):
         raise NotImplementedError
 
-    def get_ptr(self, py_dict: dict):
+    def get_ptrs(self, py_dict: dict):
         ret_list = []
         for item in py_dict.values():
             if isinstance(item, torch.Tensor):
@@ -136,9 +142,7 @@ class CKernel:
                            backend=configure.cuda_compiler_backend)
 
         with cuda_utils.DeviceEnvironment(device):
-            cp_kernel(grid, block, self.get_ptr(py_dict), *args_1, **kwargs)
-
-
+            cp_kernel(grid, block, self.get_ptrs(py_dict), *args_1, **kwargs)
 
     def add_param(self, ctype: str, cname: str):
         # example: ctype = 'const float *', cname = 'x'
@@ -150,10 +154,6 @@ class CKernel:
                 f'{cname} is the reserved cname. You should change the name of your variable to avoid conflict.')
 
         self.cparams[cname] = ctype
-
-    @property
-    def core(self):
-        return ''
 
 
 
@@ -338,6 +338,26 @@ class CKernel2D(CKernel):
         self.reserved_cnames.append('dt')
         self.reserved_cnames.append('t')
 
+        self._pre_core = ''
+        self._post_core = ''
+
+    @property
+    def pre_core(self):
+        return self._pre_core
+
+    @pre_core.setter
+    def pre_core(self, value: str):
+        self._pre_core = value
+
+
+    @property
+    def post_core(self):
+        return self._post_core
+
+    @post_core.setter
+    def post_core(self, value: str):
+        self._post_core = value
+
     def check_shape(self, py_dict: dict):
         # all tensors should be ndim <= 2
         for value in py_dict.values():
@@ -443,19 +463,6 @@ class CKernel2D(CKernel):
                     value = value[:, : -1]
 
             py_dict[key] = value
-
-
-    @property
-    def pre_core(self):
-        return ''
-
-
-
-    @property
-    def post_core(self):
-        return ''
-
-
 
     @property
     def head(self):
