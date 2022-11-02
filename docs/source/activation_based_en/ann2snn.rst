@@ -1,8 +1,10 @@
 ANN2SNN
 =======================================
-Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_, `Lyu6PosHao <https://github.com/Lyu6PosHao>`_
+Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_, `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``, introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
+
+ANN2SNN api references are here `api references <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_ .
 
 There are two sets of implementations in earlier implementations: ONNX-based and PyTorch-based. This version is based on torch.fx. Fx is specially used to transform nn.Module instances, and will natively decouple complex models when building graph intermediate representation. Let's have a look!
 
@@ -196,6 +198,11 @@ The optional fuse_conv_bn feature is realized:
 
 You can set ``fuse_flag`` to ``True`` (by default), in order to fuse fuse the conv layer and the bn layer.
 
+After converting, ReLU modules will be removed. And new modules needed by SNN, such as VoltageScaler and IFNode, will be created and stored in the parent module ``snn tailor``.
+
+Due to the type of the return model is fx.GraphModule, you can use 'print(fx.GraphModule.graph)' to view how modules links and the how the forward method works. More APIs are here `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+
+
 Classify MNIST
 --------------
 
@@ -262,7 +269,7 @@ If you want to train, you also need to initialize the data loader, optimizer, lo
 
 Train the ANN. In the example, our model is trained for 10 epochs. The test set accuracy changes during training are as follows:
 
-.. code-block:: python
+.. code-block::
 
     Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
     Validating Accuracy: 0.972
@@ -295,7 +302,7 @@ After training the model, we quickly load the model to test the performance of t
 
 The output is as follows:
 
-.. code-block:: python
+.. code-block::
 
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870
@@ -318,46 +325,48 @@ snn_model is the output SNN model. View the network structure of the snn_model (
     ANN(
       (network): Module(
         (0): Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1))
-        (2): Sequential(
-          (0): VoltageScaler(0.226026)
-          (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (2): VoltageScaler(4.424271)
-        )
         (3): AvgPool2d(kernel_size=2, stride=2, padding=0)
         (4): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (6): Sequential(
-          (0): VoltageScaler(0.301661)
-          (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (2): VoltageScaler(3.314982)
-        )
         (7): AvgPool2d(kernel_size=2, stride=2, padding=0)
         (8): Conv2d(32, 32, kernel_size=(3, 3), stride=(1, 1))
-        (10): Sequential(
-          (0): VoltageScaler(0.136841)
-          (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False
-            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
-          )
-          (2): VoltageScaler(7.307729)
-        )
         (11): AvgPool2d(kernel_size=2, stride=2, padding=0)
         (12): Flatten(start_dim=1, end_dim=-1)
         (13): Linear(in_features=32, out_features=10, bias=True)
-        (14): Sequential(
-          (0): VoltageScaler(0.056421)
+        (15): Softmax(dim=1)
+      )
+      (snn tailor): Module(
+        (0): Module(
+          (0): VoltageScaler(0.240048)
           (1): IFNode(
-            v_threshold=1.0, v_reset=None, detach_reset=False
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
             (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
           )
-          (2): VoltageScaler(17.723749)
+          (2): VoltageScaler(4.165831)
         )
-        (15): Softmax(dim=1)
+        (1): Module(
+          (0): VoltageScaler(0.307485)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(3.252196)
+        )
+        (2): Module(
+          (0): VoltageScaler(0.141659)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(7.059210)
+        )
+        (3): Module(
+          (0): VoltageScaler(0.060785)
+          (1): IFNode(
+            v_threshold=1.0, v_reset=None, detach_reset=False, step_mode=s, backend=torch
+            (surrogate_function): Sigmoid(alpha=4.0, spiking=True)
+          )
+          (2): VoltageScaler(16.451399)
+        )
       )
     )
 
@@ -368,23 +377,31 @@ Call the ``GraphModule.graph.print_tabular()`` method to view the graph of the i
 .. code-block:: python
 
     #snn_model.graph.print_tabular()
-    opcode       name        target      args           kwargs
-    -----------  ----------  ----------  -------------  --------
-    placeholder  x           x           ()             {}
-    call_module  network_0   network.0   (x,)           {}
-    call_module  network_2   network.2   (network_0,)   {}
-    call_module  network_3   network.3   (network_2,)   {}
-    call_module  network_4   network.4   (network_3,)   {}
-    call_module  network_6   network.6   (network_4,)   {}
-    call_module  network_7   network.7   (network_6,)   {}
-    call_module  network_8   network.8   (network_7,)   {}
-    call_module  network_10  network.10  (network_8,)   {}
-    call_module  network_11  network.11  (network_10,)  {}
-    call_module  network_12  network.12  (network_11,)  {}
-    call_module  network_13  network.13  (network_12,)  {}
-    call_module  network_14  network.14  (network_13,)  {}
-    call_module  network_15  network.15  (network_14,)  {}
-    output       output      output      (network_15,)  {}
+    opcode       name            target          args               kwargs
+    -----------  --------------  --------------  -----------------  --------
+    placeholder  x               x               ()                 {}
+    call_module  network_0       network.0       (x,)               {}
+    call_module  snn_tailor_0_1  snn tailor.0.0  (network_0,)       {}
+    call_module  snn_tailor_0_2  snn tailor.0.1  (snn_tailor_0_1,)  {}
+    call_module  snn_tailor_0_3  snn tailor.0.2  (snn_tailor_0_2,)  {}
+    call_module  network_3       network.3       (snn_tailor_0_3,)  {}
+    call_module  network_4       network.4       (network_3,)       {}
+    call_module  snn_tailor_1_1  snn tailor.1.0  (network_4,)       {}
+    call_module  snn_tailor_1_2  snn tailor.1.1  (snn_tailor_1_1,)  {}
+    call_module  snn_tailor_1_3  snn tailor.1.2  (snn_tailor_1_2,)  {}
+    call_module  network_7       network.7       (snn_tailor_1_3,)  {}
+    call_module  network_8       network.8       (network_7,)       {}
+    call_module  snn_tailor_2_1  snn tailor.2.0  (network_8,)       {}
+    call_module  snn_tailor_2_2  snn tailor.2.1  (snn_tailor_2_1,)  {}
+    call_module  snn_tailor_2_3  snn tailor.2.2  (snn_tailor_2_2,)  {}
+    call_module  network_11      network.11      (snn_tailor_2_3,)  {}
+    call_module  network_12      network.12      (network_11,)      {}
+    call_module  network_13      network.13      (network_12,)      {}
+    call_module  snn_tailor_3_1  snn tailor.3.0  (network_13,)      {}
+    call_module  snn_tailor_3_2  snn tailor.3.1  (snn_tailor_3_1,)  {}
+    call_module  snn_tailor_3_3  snn tailor.3.2  (snn_tailor_3_2,)  {}
+    call_module  network_15      network.15      (snn_tailor_3_3,)  {}
+    output       output          output          (network_15,)      {}
 
 Comparison of different converting modes
 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -443,7 +460,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
 
 Observe the control bar output:
 
-.. code-block:: python
+.. code-block::
 
     ---------------------------------------------
     Converting using MaxNorm
