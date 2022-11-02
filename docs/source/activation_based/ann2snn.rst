@@ -4,6 +4,8 @@ ANN转换SNN
 
 本节教程主要关注 ``spikingjelly.activation_based.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
+相关API见此处 `API参考 <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_ 。
+
 较早的实现方案中有两套实现：基于ONNX 和 基于PyTorch。本版本基于torch.fx。fx专门用于对nn.Module实例进行转换，而且在构建计算图时会原生地将复杂模型解耦合。一起来看看吧！
 
 ANN转换SNN的理论基础
@@ -264,7 +266,7 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 
 训练ANN。示例中，我们的模型训练了10个epoch。训练时测试集准确率变化情况如下：
 
-.. code-block:: python
+.. code-block::
 
     Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
     Validating Accuracy: 0.972
@@ -297,7 +299,7 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 
 输出结果如下：
 
-.. code-block:: python
+.. code-block::
 
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870
@@ -454,7 +456,7 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
 
 观察控制栏输出：
 
-.. code-block:: python
+.. code-block::
 
     ---------------------------------------------
     Converting using MaxNorm

@@ -16,22 +16,24 @@ class Converter(nn.Module):
 
         :param dataloader: 数据加载器
         :type dataloader: Dataloader
-        :param device: device
+        :param device: Device
         :type device: str
-        :param mode: 转换模式。目前支持三种模式: 最大电流转换模式mode='max'，99.9%电流转换模式mode='99%'，以及缩放转换模式mode=x（0<x<=1）
+        :param mode: 转换模式。目前支持三种模式: 最大电流转换模式mode='max'，99.9%电流转换模式mode='99.9%'，以及缩放转换模式mode=x（0<x<=1）
         :type mode: str, float
-        :param momentum: 动量值，用于VoltageHook
+        :param momentum: 动量值，用于modules.VoltageHook
         :type momentum: float
         :param fuse_flag: 标志位，设置为True，则进行conv与bn的融合，反之不进行。
-        :type mode: bool
+        :type fuse_flag: bool
 
         ``Converter`` 用于将带有ReLU的ANN转换为SNN。
+
+        ANN2SNN教程见此处 `ANN转换SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/ann2snn.html>`_ 。
 
         目前支持三种转换模式，由参数mode进行设置。
 
         转换后ReLU模块被删除，SNN需要的新模块（包括VoltageScaler、IFNode等)被创建并存放在snn tailor父模块中。
 
-        由于返回值的类型为fx.GraphModule，所以您可以使用print(fx.GraphModule.graph)查看计算图及前向传播关系。更多API参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ .
+        由于返回值的类型为fx.GraphModule，建议使用print(fx.GraphModule.graph)查看计算图及前向传播关系。更多API参见 `GraphModule <https://pytorch.org/docs/stable/fx.html?highlight=graphmodule#torch.fx.GraphModule>`_ 。
 
         .. warning::
 
@@ -45,16 +47,18 @@ class Converter(nn.Module):
 
         :param dataloader: Dataloader for converting
         :type dataloader: Dataloader
-        :param device: device
+        :param device: Device
         :type device: str
-        :param mode: Conversion mode. Now support three mode, MaxNorm, RobustNorm(99.9%), and scaling mode
+        :param mode: Conversion mode. Now support three mode, MaxNorm(mode='max'), RobustNorm(mode='99.9%'), and scaling mode(mode=x, where 0<x<=1)
         :type mode: str, float
-        :param momentum: momentum value used by VoltageHook
+        :param momentum: Momentum value used by modules.VoltageHook
         :type momentum: float
         :param fuse_flag: Bool specifying if fusion of the conv and the bn happens, by default it happens.
-        :type mode: bool
+        :type fuse_flag: bool
 
         ``Converter`` is used to convert ANN with to SNN.
+
+        ANN2SNN tutorial is here `ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/ann2snn.html>`_ .
 
         Three common methods are implemented here, which can be selected by the value of parameter mode.
 
@@ -80,11 +84,11 @@ class Converter(nn.Module):
         """
         * :ref:`API in English <Converter.forward-en>`
 
-            .. _Converter.forward-cn:
-            :param ann: 待转换的ann
-            :type ann: torch.nn.Module
-            :return: 转换得到的snn
-            :rtype: torch.fx.GraphModule
+        .. _Converter.forward-cn:
+        :param ann: 待转换的ann
+        :type ann: torch.nn.Module
+        :return: 转换得到的snn
+        :rtype: torch.fx.GraphModule
 
         * :ref:`API in Chinese <Converter.forward-cn>`
 
