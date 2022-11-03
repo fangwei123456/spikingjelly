@@ -19,7 +19,7 @@ You can @ the corresponding developers for your issue. Here is the division:
 
 | Features                         | Developers                                                   |
 | -------------------------------- | ------------------------------------------------------------ |
-| Neurons and Surrogate Functions  | [fangwei123456](https://github.com/fangwei123456)<<br />[Yanqi-Chen](https://github.com/Yanqi-Chen) |
+| Neurons and Surrogate Functions  | [fangwei123456](https://github.com/fangwei123456)<br />[Yanqi-Chen](https://github.com/Yanqi-Chen) |
 | CUDA Acceleration                | [fangwei123456](https://github.com/fangwei123456)<br />[Yanqi-Chen](https://github.com/Yanqi-Chen) |
 | Reinforcement Learning           | [lucifer2859](https://github.com/lucifer2859)                |
 | ANN to SNN Conversion            | [DingJianhao](https://github.com/DingJianhao)<br />[Lyu6PosHao](https://github.com/Lyu6PosHao) |
