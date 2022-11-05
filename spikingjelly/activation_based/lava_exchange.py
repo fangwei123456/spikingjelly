@@ -310,11 +310,13 @@ class CubaLIFNode(neuron.BaseNode):
 
         self.norm = norm
 
-        if isinstance(self.norm, BatchNorm2d):
-            self.norm.pre_hook_fx = self.quantize_8bit
+        if self.norm is not None:
 
-        else:
-            raise NotImplementedError(self.norm)
+            if isinstance(self.norm, BatchNorm2d):
+                self.norm.pre_hook_fx = self.quantize_8bit
+
+            else:
+                raise NotImplementedError(self.norm)
 
 
 
