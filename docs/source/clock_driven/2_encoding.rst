@@ -118,7 +118,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 
 周期编码器
 -----------------
-周期编码器 :class:`spikingjelly.clock_driven.encoding.PoissonEncoder` 是周期性输出给定的脉冲序列的编码器。``PeriodicEncoder`` 在
+周期编码器 :class:`spikingjelly.clock_driven.encoding.PeriodicEncoder` 是周期性输出给定的脉冲序列的编码器。``PeriodicEncoder`` 在
 初始化时可以设定好要输出的脉冲序列 ``spike`` ，也可以随时调用 :class:`spikingjelly.clock_driven.encoding.PoissonEncoder.encode` 重
 新设定。
 
@@ -220,7 +220,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 带权相位编码器
 --------------
 
-一种基于二进制表示的编码方法。
+延迟编码器 :class:`spikingjelly.clock_driven.encoding.WeightedPhaseEncoder` 是一种基于二进制表示的编码方法的编码器。
 
 将输入数据按照二进制各位展开，从高位到低位遍历输入进行脉冲编码。相比于频率编码，每一位携带的信息量更多。编码相位数为 :math:`K` 时，可以对于处于区间 :math:`[0, 1-2^{-K}]` 的数进行编码。以下为原始论文 [#kim2018deep]_ 中 :math:`K=8` 的示例：
 
