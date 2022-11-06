@@ -38,7 +38,7 @@ LIF神经元层有一些构造参数，在API文档中对这些参数有详细�
 
 其中 ``surrogate_function`` 参数，在前向传播时的行为与阶跃函数完全相同；我们暂时不会用到反向传播，因此可以先不关心反向传播。
 
-你可能会好奇这一层神经元的数量是多少。对于 :class:`spikingjelly.clock_driven.neuron.LIFNode` 中的绝大多数神经元层，神经元的数量是在初始化或调用 ``reset()`` 函数重新初始化后，根据第一次接收的输入的 ``shape`` 自动决定的。
+你可能会好奇这一层神经元的数量是多少。对于 :class:`spikingjelly.clock_driven.neuron` 中的绝大多数神经元层，神经元的数量是在初始化或调用 ``reset()`` 函数重新初始化后，根据第一次接收的输入的 ``shape`` 自动决定的。
 
 与RNN中的神经元非常类似，脉冲神经元也是有状态的，或者说是有记忆。脉冲神经元的状态变量，一般是它的膜电位 :math:`V[t]`。因此，:class:`spikingjelly.clock_driven.neuron` 中的神经元，都有成员变量 ``v``。可以打印出刚才新建的LIF神经元层的膜电位：
 
