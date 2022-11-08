@@ -384,6 +384,8 @@ class SpikingHeidelbergDigits(Dataset):
                     )
                     self.frames_label.append(i)
 
+            self.length = self.frames_label.__len__()
+
         else:
                 raise NotImplementedError(self.data_type)
 
