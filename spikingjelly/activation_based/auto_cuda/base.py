@@ -7,6 +7,14 @@ import logging
 from .. import cuda_utils
 from ... import configure
 
+
+def wrap_with_comment(code: str, comment: str):
+    if logging.DEBUG >= logging.root.level:
+        return '\n//------' + comment + ' start------\n' + code + '\n//------' + comment + ' end--------\n\n'
+    else:
+        return code
+
+
 def startswiths(x: str, prefixes: tuple):
     ret = False
     for prefix in prefixes:
@@ -18,6 +26,10 @@ def startswiths(x: str, prefixes: tuple):
 
 class CKernel:
     def __init__(self, kernel_name: str):
+        """
+        :param kernel_name: the name of kernel
+        :type kernel_name: str
+        """
         self.cparams = {'numel': 'const int &'}
         self.reserved_cnames = ['index']
         self.kernel_name = kernel_name
@@ -92,7 +104,6 @@ class CKernel:
                 elif value.dtype == torch.half:
                     assert startswiths(ctype, ('const half2', 'half2'))
 
-
             if isinstance(value, cupy.ndarray):
                 if value.dtype == np.float32:
                     assert startswiths(ctype, ('const float', 'float'))
@@ -137,9 +148,8 @@ class CKernel:
 
         self.check_half2(py_dict)
 
-
         cp_kernel = cupy.RawKernel(self.full_codes, self.kernel_name, options=configure.cuda_compiler_options,
-                           backend=configure.cuda_compiler_backend)
+                                   backend=configure.cuda_compiler_backend)
 
         with cuda_utils.DeviceEnvironment(device):
             cp_kernel(grid, block, self.get_ptrs(py_dict), *args_1, **kwargs)
@@ -154,8 +164,6 @@ class CKernel:
                 f'{cname} is the reserved cname. You should change the name of your variable to avoid conflict.')
 
         self.cparams[cname] = ctype
-
-
 
     @property
     def declaration(self):
@@ -185,14 +193,16 @@ class CKernel:
 
     @property
     def full_codes(self):
-        return self.declaration + self.head + self.core + self.tail
+        return wrap_with_comment(self.declaration, 'declaration') + wrap_with_comment(self.head,
+                                                                                      'head') + wrap_with_comment(
+            self.core, 'core') + wrap_with_comment(self.tail, 'tail')
 
 
 class CKernel1D(CKernel):
     """
-    
+
     example:
-    
+
         c_heaviside = CKernel1D(kernel_name='heaviside')
         c_heaviside.add_param(ctype='const float *', cname='x')
         c_heaviside.add_param(ctype='float *', cname='y')
@@ -236,7 +246,6 @@ class CKernel1D(CKernel):
         '''
         return codes
 
-
     def check_half2(self, py_dict: dict):
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
@@ -255,7 +264,6 @@ class CKernel1D(CKernel):
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor) and value.dtype == torch.half:
                 if value.numel() % 2 != 0:
-
                     pad_shapes.append(value.shape)
                     pad_keys.append(key)
                     value = value.flatten()
@@ -275,7 +283,6 @@ class CKernel1D(CKernel):
 
                     py_dict[key] = value
 
-
         super().__call__(grid, block, py_dict, *args_1, **kwargs)
 
         # move pad values
@@ -290,6 +297,7 @@ class CKernel1D(CKernel):
                 value = cupy.reshape(value, shape)
 
             py_dict[key] = value
+
 
 class CKernel2D(CKernel):
     """
@@ -331,6 +339,7 @@ class CKernel2D(CKernel):
 
 
     """
+
     def __init__(self, kernel_name: str, reverse: bool = False):
         super().__init__(kernel_name)
         self.reverse = reverse
@@ -348,7 +357,6 @@ class CKernel2D(CKernel):
     @pre_core.setter
     def pre_core(self, value: str):
         self._pre_core = value
-
 
     @property
     def post_core(self):
@@ -440,7 +448,6 @@ class CKernel2D(CKernel):
                     value = cupy.concatenate((value, cupy.reshape(value[:, -1], (-1, 1))), axis=1)
                     py_dict[key] = value
 
-
         super().__call__(grid, block, py_dict, *args_1, **kwargs)
 
         # move pad values
@@ -474,7 +481,7 @@ class CKernel2D(CKernel):
                 const int dt = N;
         '''
 
-        codes += self.pre_core
+        codes += wrap_with_comment(self.pre_core, 'pre_core')
 
         if self.reverse:
             codes += '''
@@ -494,7 +501,7 @@ class CKernel2D(CKernel):
                 }
         '''
 
-        codes += self.post_core
+        codes += wrap_with_comment(self.post_core, 'post_core')
 
         codes += '''
             }
@@ -517,7 +524,6 @@ class CodeTyper:
                     self.codes += (self.indent + codes[i] + '\n')
                 else:
                     self.codes += (self.indent + codes[i] + ';\n')
-
 
 
 class CodeBlock:
