@@ -108,7 +108,7 @@
 
 .. code-block:: shell
 
-    $ python <PATH>/lif_fc_mnist.py --help
+    $ python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
     usage: lif_fc_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N]
                         [-data-dir DATA_DIR] [-out-dir OUT_DIR]
                         [-resume RESUME] [-amp] [-opt {sgd,adam}]
