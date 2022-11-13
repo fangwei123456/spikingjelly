@@ -64,6 +64,7 @@ https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
     /activation_based/stdp
     /activation_based/ann2snn
     /legacy_tutorials
+    /activation_based/cupy_neuron
     /activation_based/inference_on_lynxi
 
 

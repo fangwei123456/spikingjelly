@@ -62,7 +62,7 @@ class NeuronFPTTKernel(base.CKernel2D):
     def neuronal_charge(self) -> str:
         # e.g., for IFNode, this function shoule return:
         #   cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=dtype)
-        raise NotImplementedError
+        return '// neuronal charge should be defined in this function!'
 
     @property
     def core(self):
