@@ -135,7 +135,7 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
     t_list = np.asarray(t_list)
     return t_list[n:].mean()
 
-def cal_blocks(numel: int):
+def cal_blocks(numel: int, threads: int = -1):
     """
     * :ref:`API in English <cal_blocks-en>`
 
@@ -143,10 +143,12 @@ def cal_blocks(numel: int):
 
     :param numel: 并行执行的CUDA内核的数量
     :type numel: int
+    :param threads: 每个cuda block中threads的数量，默认为-1，表示使用 ``configure.cuda_threads``
+    :type threads: int
     :return: blocks的数量
     :rtype: int
 
-    此函数返回 blocks，用来按照 ``kernel((blocks,), (configure.cuda_threads,), ...)`` 调用 :class:`cupy.RawKernel`
+    此函数返回 blocks的数量，用来按照 ``kernel((blocks,), (configure.cuda_threads,), ...)`` 调用 :class:`cupy.RawKernel`
 
     * :ref:`中文 API <cal_blocks-cn>`
 
@@ -154,13 +156,18 @@ def cal_blocks(numel: int):
 
     :param numel: the number of parallel CUDA kernels
     :type numel: int
+    :param threads: the number of threads in each cuda block.
+        The defaule value is -1, indicating to use ``configure.cuda_threads``
+    :type threads: int
     :return: the number of blocks
     :rtype: int
 
-    Returns blocks to call :class:`cupy.RawKernel` by ``kernel((blocks,), (configure.cuda_threads,), ...)``
+    Returns the number of blocks to call :class:`cupy.RawKernel` by ``kernel((blocks,), (threads,), ...)``
 
     """
-    return (numel + configure.cuda_threads - 1) // configure.cuda_threads
+    if threads == -1:
+        threads = configure.cuda_threads
+    return (numel + threads - 1) // threads
 
 def get_contiguous(*args):
     """
