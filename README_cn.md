@@ -42,9 +42,9 @@ git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-通过[OpenI](https://git.openi.org.cn/OpenI/spikingjelly):
+通过[OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
 ```bash
-git clone https://git.openi.org.cn/OpenI/spikingjelly.git
+git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
@@ -208,7 +208,7 @@ for x, y, x_len in train_data_loader:
 
 如果用户无法下载某些数据集，可以尝试从OpenI的数据集镜像下载：
 
-https://git.openi.org.cn/OpenI/spikingjelly/datasets?type=0
+https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
 
 只有原始数据集所使用的协议允许分发，或原始数据集作者已经同意分发的数据集才会被建立镜像。 
 
