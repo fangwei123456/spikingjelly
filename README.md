@@ -42,9 +42,9 @@ git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-From [OpenI](https://git.openi.org.cn/OpenI/spikingjelly):
+From [OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
 ```bash
-git clone https://git.openi.org.cn/OpenI/spikingjelly.git
+git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
@@ -206,7 +206,7 @@ More datasets will be included in the future.
 
 If some datasets' download link are not available for some users, the users can download from the OpenI mirror:
 
-https://git.openi.org.cn/OpenI/spikingjelly/datasets?type=0
+https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
 
 All datasets saved in the OpenI mirror are allowable by their licence or authors' agreement.
 
