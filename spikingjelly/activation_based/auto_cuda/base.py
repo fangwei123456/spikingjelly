@@ -110,6 +110,23 @@ class CKernel:
         self.kernel_name = kernel_name
         self._core = ''
 
+    def check_attributes(self, **kwargs):
+        """
+        :param kwargs: a dict of attributes
+        :type kwargs: dict
+        :return: if all ``value`` in ``kwargs[key]`` is identical to ``self.__getattribute__(key)``
+        :rtype: bool
+
+        This function can be used to check if a ``CKernel`` is changed by if any of its attributes changes.
+        """
+        for key, value in kwargs.items():
+            if value != self.__getattribute__(key):
+                return False
+
+        else:
+            return True
+
+
     @property
     def core(self):
         return self._core

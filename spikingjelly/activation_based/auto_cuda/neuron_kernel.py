@@ -58,17 +58,31 @@ class NeuronFPTTKernel(base.CKernel2D):
         if hard_reset:
             self.add_param(ctype=f'{dtype} &', cname='v_reset')
 
-    @property
     def neuronal_charge(self) -> str:
-        # e.g., for IFNode, this function shoule return:
-        #   cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=dtype)
-        return '// neuronal charge should be defined in this function!'
+        """
+        :return: CUDA code
+        :rtype: str
+
+        Returns CUDA code for calculating :math:`H[t] = f(X[t], V[t-1], ...)`.
+
+        This function should define how ``h_seq[t]`` is calculated by ``x_seq[t], v_v_seq[t]`` and other params if
+        the neuron needs.
+
+        For example, the IF neuron define this function as:
+
+        .. code-block:: python
+
+            def neuronal_charge(self) -> str:
+                # note that v_v_seq[t] is v_seq[t - dt]
+                return cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=self.dtype)
+        """
+        return '// neuronal_charge should be defined here!'
 
     @property
     def core(self):
         core_codes = base.CodeTyper(18)
 
-        core_codes.append(self.neuronal_charge)
+        core_codes.append(self.neuronal_charge())
 
         core_codes.append(neuronal_fire(spike='spike_seq[t]', v='h_seq[t]', v_th='v_th', dtype=self.dtype))
 
@@ -103,12 +117,6 @@ class NeuronBPTTKernel(base.CKernel2D):
         if hard_reset:
             self.add_param(ctype=f'{dtype} &', cname='v_reset')
 
-
-
-
-
-
-
     @property
     def pre_core(self):
         codes = base.CodeTyper(16)
@@ -122,7 +130,6 @@ class NeuronBPTTKernel(base.CKernel2D):
         self._pre_core = codes.codes
         return self._pre_core
 
-
     @property
     def post_core(self):
 
@@ -133,10 +140,43 @@ class NeuronBPTTKernel(base.CKernel2D):
         return self._post_core
 
     def grad_h_next_to_v(self) -> str:
-        raise NotImplementedError
+        """
+        :return: CUDA code
+        :rtype: str
+
+        Returns CUDA code for calculating :math:`\\frac{\\mathrm{d} H[t+1]}{\\mathrm{d} V[t]}`.
+
+        This function should define how ``grad_h_next_to_v`` is calculated. Note that ``grad_h_next_to_v`` has not been
+        declared. Thus, this function should also declare ``grad_h_next_to_v``.
+
+        For example, the IF neuron define this function as:
+
+        .. code-block:: python
+
+            def grad_h_next_to_v(self) -> str:
+                return cfunction.constant(y=f'const {self.dtype} grad_h_next_to_v', x=1., dtype=self.dtype)
+        """
+        return '// grad_h_next_to_v should be defined here!'
+
 
     def grad_h_to_x(self) -> str:
-        raise NotImplementedError
+        """
+        :return: CUDA code
+        :rtype: str
+
+        Returns CUDA code for calculating :math:`\\frac{\\mathrm{d} H[t]}{\\mathrm{d} X[t]}`.
+
+        This function should define how ``grad_h_to_x`` is calculated. Note that ``grad_h_to_x`` has not been
+        declared. Thus, this function should also declare ``grad_h_to_x``.
+
+        For example, the IF neuron define this function as:
+
+        .. code-block:: python
+
+            def grad_h_to_x(self) -> str:
+                return cfunction.constant(y=f'const {self.dtype} grad_h_to_x', x=1., dtype=self.dtype)
+        """
+        return '// grad_h_to_x should be defined here!'
 
     @property
     def core(self):
@@ -185,7 +225,7 @@ class NeuronBPTTKernel(base.CKernel2D):
 
 
 class IFNodeFPTTKernel(NeuronFPTTKernel):
-    @property
+
     def neuronal_charge(self) -> str:
         return cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=self.dtype)
 
@@ -241,6 +281,40 @@ def new_tensors(news: tuple, py_dict: dict, ref: str = 'x_seq'):
 class NeuronATGFBase:
     @staticmethod
     def pre_forward(py_dict: dict):
+        """
+        :param py_dict: a dict built from the neuron's forward autograd function. It should at least contain ``x_seq, v_init, v_reset``
+        :type py_dict: dict
+        :return: requires_grad, blocks, threads, py_dict
+
+            requires_grad: bool
+                if any tensor in ``py_dict`` requires grad, then ``requires_grad = True``;else ``requires_grad = False``
+
+            blocks: int
+                CUDA param used in calling CUDA kernel
+
+            threads: int
+                CUDA param used in calling CUDA kernel. The default value is ``spikingjelly.configure.cuda_threads``
+
+            py_dict: dict
+                Compared with the input ``py_dict``, the returned ``py_dict`` will:
+
+                    * convert all ``float/int`` scalars in ``py_dict`` to ``cupy.ndarray``
+
+                    * add ``h_seq, spike_seq, v_v_seq`` to ``py_dict``. ``h_seq, spike_seq`` are zero tensors
+                      with the same shape with ``x_seq``. ``v_v_seq`` is concatenated from ``v_init`` and
+                      ``v_seq``, which is zero tensors with the same shape with ``x_seq``
+
+                    * add ``N, numel`` to ``py_dict``. Note that ``x_seq.shape = [T, N]`` and ``numel = T * N``.
+                      A specific case is that ``x_seq.dtype == torch.half``, then ``N = math.ceil(N / 2)``, and
+                      ``numel = N * x_seq.shape[0]``.
+                      Note that ``N, numel`` in the returned ``py_dict`` are ``cupy.ndarray``
+
+                    * if ``v_reset`` in the origin ``py_dict`` is ``None``, then it will be popped because it
+                      will not be used as the CUDA kernel param.
+
+
+        :rtype: tuple
+        """
         device = py_dict['x_seq'].get_device()
         requires_grad = if_requires_grad(py_dict.values())
         scalar_to_cupy(py_dict)
@@ -272,6 +346,15 @@ class NeuronATGFBase:
 
     @staticmethod
     def ctx_save(ctx, requires_grad: bool, *args, **kwargs):
+        """
+        :param ctx: ``ctx`` in :class:`torch.autograd.Function`
+        :param requires_grad: if any tensor in forward params requires grad
+        :type requires_grad: bool
+        :param args: tensors that need to be saved by ``ctx.save_for_backward``
+        :param kwargs: items that need to be saved by ``ctx.xx = xx``
+
+        Saves ``*args, **kwargs`` in ``ctx`` by ``ctx.save_for_backward(*args)`` and ``ctx.xx = xx`` for all ``xx`` in ``kwargs.items()``.
+        """
         if requires_grad:
             ctx.save_for_backward(*args)
             for key, value in kwargs.items():
@@ -281,6 +364,24 @@ class NeuronATGFBase:
 
     @staticmethod
     def pre_backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
+        """
+        :param ctx: ``ctx`` in :class:`torch.autograd.Function`
+        :param grad_spike_seq: gradients of ``spike_seq``
+        :type grad_spike_seq: torch.Tensor
+        :param grad_v_seq: gradients of ``v_seq``
+        :type grad_v_seq: torch.Tensor
+        :return: backward_kernel, blocks, threads, py_dict
+
+            backward_kernel: NeuronBPTTKernel
+                The CUDA kernel used for backward. It should be provided in ``ctx.backward_kernel``
+
+            blocks: int
+                CUDA param used in calling CUDA kernel. It should be provided in ``ctx.blocks``
+
+            threads: int
+                CUDA param used in calling CUDA kernel. It should be provided in ``ctx.threads``
+        :rtype: tuple
+        """
         backward_kernel = ctx.backward_kernel
         blocks = ctx.blocks
         threads = ctx.threads
@@ -349,7 +450,7 @@ class LIFNodeFPTTKernel(NeuronFPTTKernel):
         self.decay_input = decay_input
         self.add_param(ctype=f'const {dtype} &', cname='decay')
 
-    @property
+
     def neuronal_charge(self) -> str:
         codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
         if self.decay_input:
@@ -424,7 +525,7 @@ class ParametricLIFNodeFPTTKernel(NeuronFPTTKernel):
         self.add_param(ctype=f'const {dtype} *', cname='decay')
 
 
-    @property
+
     def neuronal_charge(self) -> str:
         codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
         if self.decay_input:
