@@ -183,6 +183,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/stdp
     /activation_based_en/ann2snn
     /legacy_tutorials_en
+    /activation_based_en/cupy_neuron
 
 
 

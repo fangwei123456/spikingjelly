@@ -1,46 +1,48 @@
-编写CUPY神经元
+Implement CUPY Neuron
 =======================================
-本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
-本教程介绍如何编写CUPY后端的神经元。本教程需要如下的前置知识：
+This tutorial will introduce how to implement the cupy backend for spiking neurons. We suppose the reader:
 
-#. 了解CUDA，能够实现简单的逐元素CUDA内核
+#. Can implement simple element-wise CUDA kernels
 
-#. 能够使用 :class:`torch.autograd.Function` 实现自定义反向传播
+#. Can implement custom backward with :class:`torch.autograd.Function`
 
-#. 已经阅读了 :class:`spikingjelly.activation_based.auto_cuda.base` 的全部API文档，\
-   能够使用 :class:`spikingjelly.activation_based.auto_cuda.base` 编写2D CUDA内核
+#. Has read all APIs doc in :class:`spikingjelly.activation_based.auto_cuda.base`, and can implement 2D CUDA kernel by :class:`spikingjelly.activation_based.auto_cuda.base` 
 
-实现IF神经元的CUDA多步前向传播
+
+Implement Forward Propagation Through Time 
 ----------------------------------------------------------
+If we want to implement Forward Propagation Through Time (FPTT) by a python function, then the function should \
+use the following input args: 
 
-假设我们要编写一个python函数用于神经元进行多步前向传播(FPTT)，则这个函数的输入应该至少包括：
+* ``v_init``: ``shape = [N]``, which is the initial membrane potential at current time-step 
+  (the membrane potential after neuronal firing at the last time-step), where ``N`` is the number
+  of neurons. When the neurons are multidimensional, ``N`` should be the number of neurons after
+  flattening
 
-* ``v_init``: ``shape = [N]``，表示神经元在当前时刻的初始电压（上一个时刻的放电后的电压）。其中 ``N`` 为神经元的数量。\
-  当神经元是多维时，``N`` 应该是神经元展平后的数量
+* ``x_seq``: ``shape = [T, N]``, the input of ``T`` time-steps
 
-* ``x_seq``: ``shape = [T, N]``，表示 ``T`` 个time-steps的输入
+* ``v_th``: ``float``, the threshold potential
 
-* ``v_th``: ``float``，表示阈值电压
+If we use hard reset, we need an extra arg:
 
-如果使用 hard reset，则还需要增加一个参数：
-
-* ``v_reset``: ``float``，表示重置电压
-
-这个函数的输出应该包括：
-
-* ``spike_seq``: ``shape = [T, N]``，表示输出的 ``T`` 个time-steps的脉冲
-
-* ``v_seq``: ``shape = [T, N]``，表示 ``T`` 个time-steps的放电后的电压。我们需要输出所有时刻而不仅仅是最后时刻的电压，因为有时可能会用到这些数据
+* ``v_reset``: ``float``, the reset potential
 
 
-若将FPTT写成CUDA函数，则函数参数仍然包括上述参数，但还需要一些额外的参数。
+The output of the python FPTT function should include:
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronFPTTKernel` 继承自\
-:class:`spikingjelly.activation_based.auto_cuda.base.CKernel2D`。``NeuronFPTTKernel`` \
-是神经元进行多步前向传播(FPTT)的CUDA内核基类。
+* ``spike_seq``: ``shape = [T, N]``, the output spikes at ``T`` time-steps
 
-我们可以查看其默认的CUDA参数声明：
+* ``v_seq``: ``shape = [T, N]``, the membrane potential after neuronal firing at ``T`` time-steps. 
+  We output the membrane potential of all time-steps rather than only the last time-step, because we may use this data
+
+
+If we implement the FPTT by CUDA, we will use some extra args, which will be introduced later.
+
+:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronFPTTKernel` is inherited from :class:`spikingjelly.activation_based.auto_cuda.base.CKernel2D`. \
+``NeuronFPTTKernel`` is the base class for FPTT. Let us print its CUDA kernel declaration:
+
 
 .. code-block:: python
 
@@ -51,7 +53,7 @@
         print(f'key="{key}",'.ljust(20), f'value="{value}"'.ljust(20))
 
 
-输出为：
+The outputs are:
 
 .. code-block:: bash
 
@@ -64,20 +66,23 @@
     key="v_th",          value="float &"     
     key="v_reset",       value="float &" 
 
-绝大多数参数与之前相同，不同的参数包括
+Most args have been introduced before. The new args are:
 
-* ``numel``: 元素总数，即 ``numel = T * N``
+* ``numel``: the number of elements in input/output tensors, which is ``numel = T * N``
 
-* ``N``: 神经元的数量
+* ``N``: the number of neurons
 
-* ``v_v_seq``: ``shape = [T + 1, N]``，合并 ``v_init`` 和 ``v_seq`` 得到的
+* ``v_v_seq``: ``shape = [T + 1, N]``, which is concatenated from ``v_init`` and ``v_seq``
 
-* ``h_seq``: ``shape = [T, N]``，充电后放电前的电压，反向传播时需要用到
+* ``h_seq``: ``shape = [T, N]``, the membrane potential after neuronal charging but before 
+  neuronal firing, which will be used in backward
 
-``NeuronFPTTKernel`` 作为神经元FPTT的基类，类似于 :class:`spikingjelly.activation_based.neuron.BaseNode`，已经实现了\
-放电和重置方程。我们在实现新神经元的FPTT CUDA内核时，只需要继承 ``NeuronFPTTKernel`` 并补充充电方程即可。
 
-我们首先查看一下 ``NeuronFPTTKernel`` 的完整代码：
+``NeuronFPTTKernel`` is the base class of neurons' FPTT CUDA kernels. Similar to :class:`spikingjelly.activation_based.neuron.BaseNode`, \
+it has implemented the neuronal fire and neuronal reset functions. When we want to implement a neuron FPTT kernel, we only \
+need to inherit it and implement the neuronal charge function.
+
+Firstly, let us check the full codes of ``NeuronFPTTKernel``:
 
 .. code-block:: python
 
@@ -87,7 +92,7 @@
     print(base_kernel.full_codes)
     
 
-输出为：
+The outputs are:
 
 .. code-block:: c++
 
@@ -115,9 +120,9 @@
             }
         }
 
-可以发现，这个内核已经比较完善，仅需要我们补充部分代码。
+We can find that this kernel is almost finished. We only need to add the neuronal charge function.
 
-``NeuronFPTTKernel`` 提供了 ``neuronal_charge`` 函数：
+The ``neuronal_charge`` function in ``NeuronFPTTKernel`` is:
 
 .. code-block:: python
 
@@ -134,7 +139,7 @@
             This function should define how ``h_seq[t]`` is calculated by ``x_seq[t], v_v_seq[t]`` and other params if
             the neuron needs.
 
-            For example, the IF neuron define this function as:
+            For example, the IF neuron defines this function as:
 
             .. code-block:: python
 
@@ -145,13 +150,14 @@
             return '// neuronal_charge should be defined here!'
 
 
-如果想要实现新的神经元，只需要重定义这个函数。现在以最简单的IF神经元为例，其充电方程为
+To implement the new neuron, we only need to define the ``neuronal_charge`` function.
+Take the IF neuron as the example, whose neuronal charge function is:
 
 .. math::
     
     H[t] = V[t - 1] + X[t]
 
-则实现方式为：
+And we can implement it as:
 
 .. code-block:: python
 
@@ -167,7 +173,7 @@
     if_fptt_kernel = IFNodeFPTTKernel(hard_reset=True, dtype='float')
     print(if_fptt_kernel.full_codes)
 
-输出为：
+The outputs are:
 
 .. code-block:: c++
 
@@ -195,9 +201,10 @@
             }
         }
 
-这其实就是一个完整的CUDA内核了。可以发现，``NeuronFPTTKernel`` 给编写CUDA内核带来了极大的方便。
+The above codes have implemented a complete CUDA kernel. We can find that it is easy to implement the kernel \
+with ``NeuronFPTTKernel``.
 
-需要注意的是，这里我们使用：
+Note that we use ``cfunction.add``:
 
 .. code-block:: python
 
@@ -206,7 +213,7 @@
         # note that v_v_seq[t] is v_seq[t - dt]
         return cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=self.dtype)
 
-而不是手动编写：
+We do not write codes like:
 
 .. code-block:: python
 
@@ -215,10 +222,11 @@
         # note that v_v_seq[t] is v_seq[t - dt]
         return 'h_seq[t] = x_seq[t] + v_v_seq[t];'
 
-原因在于 :class:`spikingjelly.activation_based.auto_cuda.cfunction` 提供的函数，通常包括 ``float``\
-和 ``half2`` 两种数据类型的实现，比我们手动编写两种更便捷。
+The reason is functions in :class:`spikingjelly.activation_based.auto_cuda.cfunction` provide both ``float`` \
+and ``half2`` implementation. Thus, it is more convenient than we write CUDA code with different data types manually.
 
-若设置 ``dtype='half2'``，可以直接得到半精度的内核：
+
+If we set ``dtype='half2'``, we will get the kernel of ``half2``:
 
 .. code-block:: python
 
@@ -234,7 +242,7 @@
     if_fptt_kernel = IFNodeFPTTKernel(hard_reset=True, dtype='half2')
     print(if_fptt_kernel.full_codes)
 
-输出为：
+The outputs are:
 
 .. code-block:: c++
 
@@ -263,9 +271,12 @@
             }
         }
 
-实现IF神经元的CUDA多步反向传播
+Implement Back Propagation Through Time
 ----------------------------------------------------------
-多步反向传播(BPTT)要比多步前向传播更为复杂。我们首先回顾SpikingJelly中的前向传播定义：
+
+It is harder to implement Back Propagation Through Time (BPTT) than FPTT. Firstly, let us \
+review how the forward of the neuron is defined in SpikingJelly:
+
 
 .. math::
 
@@ -278,13 +289,13 @@
     \end{cases}
     \end{align}
 
-我们在前文中实现的前向传播可以表示为：
+The FPTT has the formulation:
 
 .. math::
 
     S[1,2,...,T], V[1,2,...,T] = F_{fp}(X[1,2,...,T], V[0])
 
-相应的，我们需要实现的反向传播为：
+Correspondingly, the BPTT should use the formulation as:
 
 .. math::
 
@@ -292,19 +303,19 @@
      F_{bp}(\frac{\partial L}{\partial S[1,2,...,T]},\frac{\partial L}{\partial V[1,2,...,T]})
 
 
-因而，BPTT函数所需要的输入为：
+Thus, the input args for the BPTT function are:
 
-* ``grad_spike_seq``: ``shape = [T, N]``，表示损失对 ``T`` 个时刻的输出脉冲 ``spike_seq`` 的梯度
+* ``grad_spike_seq``: ``shape = [T, N]``, the gradients of ``spike_seq``
 
-* ``grad_v_seq``: ``shape = [T, N]``，表示损失对 ``T`` 个时刻的放电后的电压 ``v_seq`` 的梯度
+* ``grad_v_seq``: ``shape = [T, N]``, the gradients of ``v_seq``
 
-BPTT函数的输出为：
+The outputs of BPTT function are:
 
-* ``grad_x_seq``: ``shape = [T, N]``，表示损失对 ``T`` 个时刻的输入 ``x_seq`` 的梯度
+* ``grad_x_seq``: ``shape = [T, N]``, the gradients of ``x_seq``
 
-* ``grad_v_init``: ``shape = [N]``，表示损失对 ``v_init`` 的梯度
+* ``grad_v_init``: ``shape = [N]``, the gradients of ``v_init``
 
-根据前向传播，推出反向传播的计算式为：
+According to the forward, we can calculate the backward as:
 
 .. math::
 
@@ -319,7 +330,7 @@ BPTT函数的输出为：
         \end{cases}
     \end{align}
 
-其中 :math:`D_{reset}` 表示是否detach reset：
+where :math:`D_{reset}` denotes whether we detach the neuronal reset:
 
 .. math::
 
@@ -328,7 +339,7 @@ BPTT函数的输出为：
         0, &\text{Not Detach Reset}\\
     \end{cases}
 
-合并公式得到：
+Finally, we get the backward formulation:
 
 .. math::
 
@@ -338,12 +349,12 @@ BPTT函数的输出为：
     \frac{\mathrm{d} L}{\mathrm{d} V[0]} &= \frac{\mathrm{d} L}{\mathrm{d} H[1]}\frac{\mathrm{d} H[1]}{\mathrm{d} V[0]}
     \end{align}
 
-上述公式中，:math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}, \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}` 是由神经元的充电方程\
-:math:`H[t] = f(V[t - 1], X[t])` 决定，与特定的神经元相关；:math:`\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}` 由替代函数决定；\
-其余部分则是通用的。
+where :math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}, \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}` are determined by the \
+neuron's charge function :math:`H[t] = f(V[t - 1], X[t])`. :math:`\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}` is determined \
+by the surrogate function. While other gradients compilation is general and can be used for all kinds of neurons.
 
-因而，:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronBPTTKernel` 也实现了通用的计算部分。我们首先查看其函数参数：
-
+:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronBPTTKernel` has implemented the general compilation. Let us \
+check its declaration:
 
 .. code-block:: python
 
@@ -354,7 +365,7 @@ BPTT函数的输出为：
     for key, value in base_kernel.cparams.items():
         print(f'key="{key}",'.ljust(22), f'value="{value}"'.ljust(20))
 
-输出为：
+The outputs are:
 
 .. code-block:: bash
 
@@ -368,12 +379,12 @@ BPTT函数的输出为：
     key="v_th",            value="float &"     
     key="v_reset",         value="float &"   
 
-参数含义在前文中已经介绍过。
+We have introduced these args before.
 
-这里需要注意，我们设置 ``NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, ...``，因为在反向传播时需要指定替代函数。
+Note that we use ``NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, ...`` because we need to define the surrogate function before applying backward.
 
-在SpikingJelly的替代函数类中，提供了 ``cuda_codes`` 函数以生成反向传播的CUDA代码。以 :class:`spikingjelly.activation_based.surrogate.Sigmoid` \
-为例，其定义为：
+Surrogate functions in SpikingJelly provide the ``cuda_codes`` function to create CUDA codes for backward. Let us check this function in \
+:class:`spikingjelly.activation_based.surrogate.Sigmoid`: 
 
 .. code-block:: python
 
@@ -382,14 +393,14 @@ BPTT函数的输出为：
         def cuda_codes(self, y: str, x: str, dtype: str):
             return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
-我们尝试打印出反向传播的代码：
+Now let us print its codes:
 
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
     print(surrogate.Sigmoid().cuda_codes(y='grad_s', x='over_th', dtype='float'))
 
-输出为：
+The outputs are:
 
 .. code-block:: c++
 
@@ -397,7 +408,8 @@ BPTT函数的输出为：
     grad_s = (1.0f - sigmoid_backward__sigmoid_ax) * sigmoid_backward__sigmoid_ax * (4.0f);
 
 
-如果我们要自行实现支持CUDA反向传播的替代函数，也应该遵循类似的规范，按照如下格式进行定义：
+To implement the custom surrogate function with support for CUDA kernel, we need to define the ``cuda_codes`` function by the \
+following formulation:
 
 .. code-block:: python
 
@@ -407,7 +419,7 @@ BPTT函数的输出为：
             # ...
 
 
-接下来查看 ``NeuronBPTTKernel`` 完整内核代码：
+Now let us check the full codes of ``NeuronBPTTKernel``:
 
 .. code-block:: python
 
@@ -417,7 +429,7 @@ BPTT函数的输出为：
     base_kernel = neuron_kernel.NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, hard_reset=True, detach_reset=False, dtype='float')
     print(base_kernel.full_codes)
 
-输出为：
+The outputs are:
 
 
 .. code-block:: c++
@@ -467,9 +479,8 @@ BPTT函数的输出为：
 
             }
         }
-        
 
-上述代码中注释的位置，即提示我们需要补充的位置。它们在 ``NeuronBPTTKernel`` 中有对应的函数：
+The comments in the above codes are what we should complete. These functions to be completed are defined in ``NeuronBPTTKernel``:
 
 .. code-block:: python
 
@@ -485,7 +496,7 @@ BPTT函数的输出为：
             This function should define how ``grad_h_next_to_v`` is calculated. Note that ``grad_h_next_to_v`` has not been
             declared. Thus, this function should also declare ``grad_h_next_to_v``.
 
-            For example, the IF neuron define this function as:
+            For example, the IF neuron defines this function as:
 
             .. code-block:: python
 
@@ -505,7 +516,7 @@ BPTT函数的输出为：
             This function should define how ``grad_h_to_x`` is calculated. Note that ``grad_h_to_x`` has not been
             declared. Thus, this function should also declare ``grad_h_to_x``.
 
-            For example, the IF neuron define this function as:
+            For example, the IF neuron defines this function as:
 
             .. code-block:: python
 
@@ -515,9 +526,8 @@ BPTT函数的输出为：
             return '// grad_h_to_x should be defined here!'
 
 
-
-对于IF神经元，:math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}=1, \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}=1`。\
-因此，可以很容易实现IF神经元的BPTT内核：
+For the IF neuron, :math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}=1, \frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}=1`. \
+Thus, we can implement the BPTT kernel easily:
 
 
 .. code-block:: python
@@ -529,7 +539,7 @@ BPTT函数的输出为：
         def grad_h_to_x(self) -> str:
             return cfunction.constant(y=f'const {self.dtype} grad_h_to_x', x=1., dtype=self.dtype)
 
-接下来，就可以打印出完整的IF神经元BPTT的CUDA内核：
+Then we can print the full codes of the BPTT kernel of the IF neuron:
 
 .. code-block:: python
 
@@ -595,15 +605,15 @@ BPTT函数的输出为：
         }
         
 
-Python包装
+Python Wrap
 ----------------------------------------------------------
-接下来，使用 :class:`torch.autograd.Function` 对FPTT和BPTT进行包装。
+Now we need to use :class:`torch.autograd.Function to wrap the FPTT and BPTT CUDA kernel.
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase` 提供了一些通用的函数用来包装。我们将在实现IF神经元的\
-autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase>` 的API文档，\
-我们在下文中会默认读者已经了解其各个函数的使用。
+:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase` provides some useful functions to help us wrap. We suppose that \
+the user has read the APIs docs of :class:`NeuronATGFBase <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase>`.
 
-首先需要确定输入。在SpikingJelly中，CUDA内核会被作为前向传播的输入，是由神经元的类去生成，而不是autograd Function生成（在0.0.0.0.12及之前的老版本中是这样做的）。前向传播的定义如下：
+Firstly, we should determine the input. In SpikingJelly, the CUDA kernels will be used as input args, rather than created by the autograd Function (we did this before version 0.0.0.0.12).\
+The forward function is defined as:
 
 .. code-block:: python
 
@@ -612,8 +622,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
         def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None,
                     forward_kernel: IFNodeFPTTKernel, backward_kernel: IFNodeBPTTKernel):
 
-接下来根据输入，生成 ``py_dict``，并交给 :class:`NeuronATGFBase.pre_forward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_forward>` 处理：
-
+Then, we will create ``py_dict`` and use :class:`NeuronATGFBase.pre_forward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_forward>` to preprocess it:
 
 .. code-block:: python
 
@@ -625,13 +634,13 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
         }
         requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
-接下来就可以直接调用前向传播了：
+And we can call the forward CUDA kernel directly:
 
 .. code-block:: python
 
     forward_kernel((blocks,), (threads,), py_dict)
 
-接下来，我们需要保存反向传播所需的参数：
+Do not forget to save the params for backward:
 
 .. code-block:: python
 
@@ -639,13 +648,14 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
                            backward_kernel=backward_kernel)
  
-最后返回 ``T`` 个time-steps的脉冲和电压。不要忘了 ``v_v_seq[1:]`` 才是要返回的 ``v_seq``，因此返回值为：
+Finally, we return the spikes and membrane potential of ``T`` time-steps. Note that we should return ``v_v_seq[1:]`` because \
+``v_v_seq[0]`` is ``v_init``:
 
 .. code-block:: python
 
     return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
 
-完整的前向传播代码为：
+The full codes of the python forward autograd function are:
 
 .. code-block:: python
 
@@ -670,7 +680,9 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
 
             return py_dict['spike_seq'], py_dict['v_v_seq'][1:, ]
 
-接下来实现反向传播。反向传播函数的输入，是前向传播函数的输出tensor的梯度tensor，因此输入是：
+
+Now we need to implement the backward autograd function. Note that the input args for backward are the gradients of output args of \
+forward. Thus, the input args are:
 
 .. code-block:: python
 
@@ -678,26 +690,27 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
         @staticmethod
         def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
 
-借助 :class:`NeuronATGFBase.pre_backward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_backward>`，进行预处理，\
-得到执行反向传播内核的参数：
+We use :class:`NeuronATGFBase.pre_backward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_backward>` to preprocess args to \
+get the args for the CUDA kernel:
 
 .. code-block:: python
 
     backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(ctx, grad_spike_seq, grad_v_seq)
 
-然后直接执行反向传播内核：
+
+And then we can call the backward kernel:
 
 .. code-block:: python
 
     backward_kernel((blocks,), (threads,), py_dict)
 
-最后返回梯度。前向传播有几个输入，反向传播就有几个返回值：
+Finally, we return the gradients. Note that the number of return args is identical to the number of input args for forward:
 
 .. code-block:: python
 
     return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None
 
-完整的代码为：
+The full codes are:
 
 .. code-block:: python
 
@@ -731,11 +744,12 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
             return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None
 
 
-实现CUPY后端
+Implement the CUPY backend
 -------------------------------------
-利用之前我们已经定义好的 ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF``，我们实现一个简化的IF神经元，并添加CUPY后端。
+We have implemented  ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF``. Now we can use them to implement the simplified IF neuron with CUPY backend. 
 
-完整的代码如下：
+
+Here are the codes:
 
 
 .. code-block:: python
@@ -785,8 +799,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
 
             return spike_seq
 
-接下来，让我们与纯pytorch实现对比输出误差：
-
+Let us check the output error compared with the python neuron:
 
 .. code-block:: python
 
@@ -816,17 +829,16 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
     print('max error of y_seq', max_error(y_cupy, y_torch))
     print('max error of x_seq.grad', max_error(x_grad_cupy, x_grad_torch))
 
-输出为：
+The outputs are:
 
 .. code-block:: bash
 
     max error of y_seq tensor(0., device='cuda:0')
     max error of x_seq.grad tensor(1.3113e-06, device='cuda:0')
 
-可以发现，基本没有误差，我们的实现是正确的。
+We can find that the error is almost zero, indicating that our implementation is correct.
 
-接下来对比速度。实验在 ``NVIDIA Quadro RTX 6000`` 上进行：
-
+Then let us evaluate the speed. The following experiment is running on ``NVIDIA Quadro RTX 6000``: 
 
 .. code-block:: python
         
@@ -857,7 +869,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
 
             print(f'dtype={dtype}, T={T},'.ljust(30), f't_torch / t_cupy = {round(t_torch / t_cupy, 2)}')
 
-输出为：
+The outputs are:
 
 .. code-block:: bash
 
@@ -872,6 +884,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
     dtype=torch.float16, T=16,     t_torch / t_cupy = 4.77
     dtype=torch.float16, T=32,     t_torch / t_cupy = 6.7
 
-可以发现，在是使用梯度替代法训练时常用的 ``T >= 4`` 时，手动编写的 ``CUPY`` 内核拥有较大的加速效果。
-当 ``T`` 较小时，由于SpikingJelly中的pytorch函数大多使用jit进行了封装，因此速度比手写CUPY快是正常的。因为手写的CUPY逐元素内核，\
-速度慢于jit优化后的pytorch逐元素操作。
+We can find that when using ``T >= 4``, our neuron with CUPY kernel is much faster than the python neuron.
+
+When ``T`` is small, due to the jit acceleration used in SpikingJelly, the python neuron is faster. It is caused by that the \
+jit is faster when the operation is simple. For example, we can hardly write an element-wise CUDA kernel that is faster than jit.
