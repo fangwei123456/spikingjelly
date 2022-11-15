@@ -607,7 +607,7 @@ Then we can print the full codes of the BPTT kernel of the IF neuron:
 
 Python Wrap
 ----------------------------------------------------------
-Now we need to use :class:`torch.autograd.Function to wrap the FPTT and BPTT CUDA kernel.
+Now we need to use :class:`torch.autograd.Function` to wrap the FPTT and BPTT CUDA kernel.
 
 :class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase` provides some useful functions to help us wrap. We suppose that \
 the user has read the APIs docs of :class:`NeuronATGFBase <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase>`.
