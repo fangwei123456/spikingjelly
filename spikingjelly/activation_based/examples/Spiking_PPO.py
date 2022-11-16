@@ -12,7 +12,7 @@ from torch.distributions import Normal
 from torch.utils.tensorboard import SummaryWriter
 from spikingjelly.activation_based.examples.common.multiprocessing_env import SubprocVecEnv
 
-from spikingjelly.activation_based import neuron, functional
+from spikingjelly.activation_based import neuron, functional, layer
 
 
 # Use CUDA
@@ -28,6 +28,8 @@ np.random.seed(seed)
 torch.cuda.manual_seed(seed)
 torch.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
+
+
 if __name__ == '__main__':
     # Create Environments
     num_envs = 4
@@ -52,27 +54,41 @@ if __name__ == '__main__':
     class NonSpikingLIFNode(neuron.LIFNode):
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
-        def forward(self, dv: torch.Tensor):
-            self.neuronal_charge(dv)
-            # self.neuronal_fire()
-            # self.neuronal_reset()
-            return self.v
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+
+            if self.training:
+                self.neuronal_charge(x)
+            else:
+                if self.v_reset is None:
+                    if self.decay_input:
+                        self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
+                    else:
+                        self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
+                    
+                else:
+                    if self.decay_input:
+                        self.v = self.neuronal_charge_decay_input(x, self.v, self.v_reset, self.tau)
+                    else:
+                        self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau)
+
 
     class ActorCritic(nn.Module):
         def __init__(self, num_inputs, num_outputs, hidden_size, T=16, std=0.0):
             super(ActorCritic, self).__init__()
 
             self.critic = nn.Sequential(
-                nn.Linear(num_inputs, hidden_size),
+                layer.Linear(num_inputs, hidden_size),
                 neuron.IFNode(),
-                nn.Linear(hidden_size, 1),
+                layer.Linear(hidden_size, 1),
                 NonSpikingLIFNode(tau=2.0)
             )
 
             self.actor = nn.Sequential(
-                nn.Linear(num_inputs, hidden_size),
+                layer.Linear(num_inputs, hidden_size),
                 neuron.IFNode(),
-                nn.Linear(hidden_size, num_outputs),
+                layer.Linear(hidden_size, num_outputs),
                 NonSpikingLIFNode(tau=2.0)
             )
 
