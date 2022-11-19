@@ -72,6 +72,56 @@ class StepModeContainer(nn.Sequential, base.StepModule):
                 return functional.seq_to_ann_forward(x, super().forward)
 
 
+class Conv1d(nn.Conv1d, base.StepModule):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_1_t,
+            stride: _size_1_t = 1,
+            padding: Union[str, _size_1_t] = 0,
+            dilation: _size_1_t = 1,
+            groups: int = 1,
+            bias: bool = True,
+            padding_mode: str = 'zeros',
+            step_mode: str = 's'
+    ) -> None:
+        """
+        * :ref:`API in English <Conv1d-en>`
+
+        .. _Conv1d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.Conv1d`
+
+        * :ref:`中文 API <Conv1d-cn>`
+
+        .. _Conv1d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.Conv1d` for other parameters' API
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 4:
+                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
 class Conv2d(nn.Conv2d, base.StepModule):
     def __init__(
             self,
@@ -122,6 +172,253 @@ class Conv2d(nn.Conv2d, base.StepModule):
 
         return x
 
+class Conv3d(nn.Conv3d, base.StepModule):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_3_t,
+            stride: _size_3_t = 1,
+            padding: Union[str, _size_3_t] = 0,
+            dilation: _size_3_t = 1,
+            groups: int = 1,
+            bias: bool = True,
+            padding_mode: str = 'zeros',
+            step_mode: str = 's'
+    ) -> None:
+        """
+        * :ref:`API in English <Conv3d-en>`
+
+        .. _Conv3d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.Conv3d`
+
+        * :ref:`中文 API <Conv3d-cn>`
+
+        .. _Conv3d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.Conv3d` for other parameters' API
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 6:
+                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_1_t,
+            stride: _size_1_t = 1,
+            padding: _size_1_t = 0,
+            output_padding: _size_1_t = 0,
+            groups: int = 1,
+            bias: bool = True,
+            dilation: _size_1_t = 1,
+            padding_mode: str = 'zeros',
+            step_mode: str = 's'
+    ) -> None:
+        """
+        * :ref:`API in English <ConvTranspose1d-en>`
+
+        .. _ConvTranspose1d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.ConvTranspose1d`
+
+        * :ref:`中文 API <ConvTranspose1d-cn>`
+
+        .. _ConvTranspose1d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.ConvTranspose1d` for other parameters' API
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, bias, dilation, padding_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 4:
+                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_2_t,
+            stride: _size_2_t = 1,
+            padding: _size_2_t = 0,
+            output_padding: _size_2_t = 0,
+            groups: int = 1,
+            bias: bool = True,
+            dilation: int = 1,
+            padding_mode: str = 'zeros',
+            step_mode: str = 's'
+    ) -> None:
+        """
+        * :ref:`API in English <ConvTranspose2d-en>`
+
+        .. _ConvTranspose2d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.ConvTranspose2d`
+
+        * :ref:`中文 API <ConvTranspose2d-cn>`
+
+        .. _ConvTranspose2d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.ConvTranspose2d` for other parameters' API
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, bias, dilation, padding_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 5:
+                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_3_t,
+            stride: _size_3_t = 1,
+            padding: _size_3_t = 0,
+            output_padding: _size_3_t = 0,
+            groups: int = 1,
+            bias: bool = True,
+            dilation: _size_3_t = 1,
+            padding_mode: str = 'zeros',
+            step_mode: str = 's'
+    ) -> None:
+        """
+        * :ref:`API in English <ConvTranspose3d-en>`
+
+        .. _ConvTranspose3d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.ConvTranspose3d`
+
+        * :ref:`中文 API <ConvTranspose3d-cn>`
+
+        .. _ConvTranspose3d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.ConvTranspose3d` for other parameters' API
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, bias, dilation, padding_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 6:
+                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+
+class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
+    def __init__(
+            self,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            step_mode='s'
+    ):
+        """
+        * :ref:`API in English <BatchNorm1d-en>`
+
+        .. _BatchNorm1d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.BatchNorm1d`
+
+        * :ref:`中文 API <BatchNorm1d-cn>`
+
+        .. _BatchNorm1d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.BatchNorm1d` for other parameters' API
+        """
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            return super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 4:
+                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+            return functional.seq_to_ann_forward(x, super().forward)
 
 class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
     def __init__(
@@ -167,6 +464,50 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
                 raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
             return functional.seq_to_ann_forward(x, super().forward)
 
+class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
+    def __init__(
+            self,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            step_mode='s'
+    ):
+        """
+        * :ref:`API in English <BatchNorm3d-en>`
+
+        .. _BatchNorm3d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.BatchNorm3d`
+
+        * :ref:`中文 API <BatchNorm3d-cn>`
+
+        .. _BatchNorm3d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.BatchNorm3d` for other parameters' API
+        """
+        super().__init__(num_features, eps, momentum, affine, track_running_stats)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            return super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 6:
+                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+            return functional.seq_to_ann_forward(x, super().forward)
+
 class GroupNorm(nn.GroupNorm, base.StepModule):
     def __init__(
             self,
@@ -205,10 +546,49 @@ class GroupNorm(nn.GroupNorm, base.StepModule):
         elif self.step_mode == 'm':
             return functional.seq_to_ann_forward(x, super().forward)
 
+class MaxPool1d(nn.MaxPool1d, base.StepModule):
+    def __init__(self, kernel_size: _size_1_t, stride: Optional[_size_1_t] = None,
+                 padding: _size_1_t = 0, dilation: _size_1_t = 1,
+                 return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+        """
+        * :ref:`API in English <MaxPool1d-en>`
+
+        .. _MaxPool1d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.MaxPool1d`
+
+        * :ref:`中文 API <MaxPool1d-cn>`
+
+        .. _MaxPool1d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.MaxPool1d` for other parameters' API
+        """
+        super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 4:
+                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
 
 class MaxPool2d(nn.MaxPool2d, base.StepModule):
-    def __init__(self, kernel_size: _size_any_t, stride: Optional[_size_any_t] = None,
-                 padding: _size_any_t = 0, dilation: _size_any_t = 1,
+    def __init__(self, kernel_size: _size_2_t, stride: Optional[_size_2_t] = None,
+                 padding: _size_2_t = 0, dilation: _size_2_t = 1,
                  return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
         """
         * :ref:`API in English <MaxPool2d-en>`
@@ -242,6 +622,85 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
         elif self.step_mode == 'm':
             if x.dim() != 5:
                 raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class MaxPool3d(nn.MaxPool3d, base.StepModule):
+    def __init__(self, kernel_size: _size_3_t, stride: Optional[_size_3_t] = None,
+                 padding: _size_3_t = 0, dilation: _size_3_t = 1,
+                 return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+        """
+        * :ref:`API in English <MaxPool3d-en>`
+
+        .. _MaxPool3d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.MaxPool3d`
+
+        * :ref:`中文 API <MaxPool3d-cn>`
+
+        .. _MaxPool3d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.MaxPool3d` for other parameters' API
+        """
+        super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 6:
+                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class AvgPool1d(nn.AvgPool1d, base.StepModule):
+    def __init__(self, kernel_size: _size_1_t, stride: _size_1_t = None, padding: _size_1_t = 0, ceil_mode: bool = False,
+                 count_include_pad: bool = True, step_mode='s') -> None:
+        """
+        * :ref:`API in English <AvgPool1d-en>`
+
+        .. _AvgPool1d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.AvgPool1d`
+
+        * :ref:`中文 API <AvgPool1d-cn>`
+
+        .. _AvgPool1d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.AvgPool1d` for other parameters' API
+        """
+        super().__init__(kernel_size, stride, padding, ceil_mode, count_include_pad)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 4:
+                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -285,6 +744,83 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
 
         return x
 
+class AvgPool3d(nn.AvgPool3d, base.StepModule):
+    def __init__(self, kernel_size: _size_3_t, stride: Optional[_size_3_t] = None, padding: _size_3_t = 0,
+                 ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None, step_mode='s') -> None:
+        """
+        * :ref:`API in English <AvgPool3d-en>`
+
+        .. _AvgPool3d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.AvgPool3d`
+
+        * :ref:`中文 API <AvgPool3d-cn>`
+
+        .. _AvgPool3d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.AvgPool3d` for other parameters' API
+        """
+        super().__init__(kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 6:
+                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
+    def __init__(self, output_size, step_mode='s') -> None:
+        """
+        * :ref:`API in English <AdaptiveAvgPool1d-en>`
+
+        .. _AdaptiveAvgPool1d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.AdaptiveAvgPool1d`
+
+        * :ref:`中文 API <AdaptiveAvgPool1d-cn>`
+
+        .. _AdaptiveAvgPool1d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.AdaptiveAvgPool1d` for other parameters' API
+        """
+        super().__init__(output_size)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 4:
+                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
     def __init__(self, output_size, step_mode='s') -> None:
         """
@@ -319,6 +855,44 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
         elif self.step_mode == 'm':
             if x.dim() != 5:
                 raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
+    def __init__(self, output_size, step_mode='s') -> None:
+        """
+        * :ref:`API in English <AdaptiveAvgPool3d-en>`
+
+        .. _AdaptiveAvgPool3d-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.AdaptiveAvgPool3d`
+
+        * :ref:`中文 API <AdaptiveAvgPool3d-cn>`
+
+        .. _AdaptiveAvgPool3d-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.AdaptiveAvgPool3d` for other parameters' API
+        """
+        super().__init__(output_size)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 6:
+                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
