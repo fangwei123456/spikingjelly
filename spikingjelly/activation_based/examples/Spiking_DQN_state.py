@@ -11,10 +11,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-from spikingjelly.activation_based import neuron, functional
+from spikingjelly.activation_based import monitor, neuron, functional, layer
 import os
 
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
@@ -42,21 +42,34 @@ class NonSpikingLIFNode(neuron.LIFNode):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def forward(self, dv: torch.Tensor):
-        self.neuronal_charge(dv)
-        # self.neuronal_fire()
-        # self.neuronal_reset()
-        return self.v
+    def single_step_forward(self, x: torch.Tensor):
+        self.v_float_to_tensor(x)
+
+        if self.training:
+            self.neuronal_charge(x)
+        else:
+            if self.v_reset is None:
+                if self.decay_input:
+                    self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
+                else:
+                    self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
+                
+            else:
+                if self.decay_input:
+                    self.v = self.neuronal_charge_decay_input(x, self.v, self.v_reset, self.tau)
+                else:
+                    self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau)
 
 
 # Spiking DQN algorithm
 class DQSN(nn.Module):
     def __init__(self, input_size, hidden_size, output_size, T=16):
         super().__init__()
+
         self.fc = nn.Sequential(
-            nn.Linear(input_size, hidden_size),
+            layer.Linear(input_size, hidden_size),
             neuron.IFNode(),
-            nn.Linear(hidden_size, output_size),
+            layer.Linear(hidden_size, output_size),
             NonSpikingLIFNode(tau=2.0)
         )
 
@@ -151,6 +164,9 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
         optimizer.step()
         functional.reset_net(policy_net)
 
+    if not os.path.isdir(model_dir):
+        os.makedirs(model_dir)
+
     max_reward = 0
     max_pt_path = os.path.join(model_dir, f'policy_net_{hidden_size}_max.pt')
     pt_path = os.path.join(model_dir, f'policy_net_{hidden_size}.pt')
@@ -219,7 +235,8 @@ def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_nu
     state = torch.zeros([1, n_states], dtype=torch.float, device=device)
 
     with torch.no_grad():
-        functional.set_monitor(policy_net, True)
+        spike_seq_monitor = monitor.OutputMonitor(policy_net, neuron.IFNode)
+
         delta_lim = 0
         over_score = 1e9
 
@@ -246,8 +263,8 @@ def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_nu
             if LIF_v.min() - delta_lim < 0:
                 plt.axhline(0, color='black', linewidth=0.1)
 
-            IF_spikes = np.asarray(policy_net.fc[1].monitor['s'])  # shape=[16, 1, 256]
-            firing_rates = IF_spikes.mean(axis=0).squeeze()
+            IF_spikes = torch.cat(spike_seq_monitor.records, 0)
+            firing_rates = IF_spikes.mean(axis=0)
             
             if firing_rates_plot_type == 'bar':
                 plt.subplot2grid((2, 9), (0, 4), rowspan=2, colspan=5)
@@ -260,9 +277,9 @@ def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_nu
                 # 绘制柱状图
                 plt.xlabel('Neuron index')
                 plt.ylabel('Firing rate')
-                plt.xlim(0, firing_rates.size)
+                plt.xlim(0, firing_rates.size(0))
                 plt.ylim(0, 1.01)
-                plt.bar(np.arange(firing_rates.size), firing_rates, width=0.5)
+                plt.bar(np.arange(firing_rates.size(0)), firing_rates, width=0.5)
 
             elif firing_rates_plot_type == 'heatmap':
                 # 绘制热力图
@@ -304,10 +321,11 @@ def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_nu
                 plt.close()
                 break
 
-    '''
-    train(use_cuda=False, model_dir='./model/CartPole-v0/state', log_dir='./log', env_name='CartPole-v0', \
-            hidden_size=256, num_episodes=500, seed=1)
-    '''
-
-    play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', \
-            hidden_size=256, played_frames=300)
+'''
+train(use_cuda=False, model_dir='./model/CartPole-v0', log_dir='./log', env_name='CartPole-v0', \
+        hidden_size=256, num_episodes=500, seed=1)
+'''
+'''
+play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', \
+        hidden_size=256, played_frames=300)
+'''

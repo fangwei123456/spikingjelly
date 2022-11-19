@@ -139,7 +139,7 @@ STDP优化器
 
 将 ``in_spike, out_spike, trace_pre, trace_post, weight`` 画出，得到下图：
 
-.. image:: ../_static/tutorials/activation_based/stdp/trace.*
+.. image:: ../_static/tutorials/activation_based/stdp/stdp_trace.*
     :width: 100%
 
 这与 [#Trace]_ 中的Fig.3是一致的（注意下图中使用 `j` 表示pre神经元，`i` 表示后神经元，与我们相反）：
