@@ -1204,13 +1204,13 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
 
         T = 4
         N = 2
-        w_ra = fptt_init_w_ra(optimizer)
+        w_ra = fptt_online_training_init_w_ra(optimizer)
         for epoch in range(2):
 
             x_seq = torch.rand([T, N, 8])
             target_seq = torch.rand([T, N, 2])
 
-            fptt(model=net, optimizer=optimizer, x_seq=x_seq, target_seq=target_seq, f_loss_t=F.mse_loss, alpha=0.1, w_ra=w_ra)
+            fptt_online_training(model=net, optimizer=optimizer, x_seq=x_seq, target_seq=target_seq, f_loss_t=F.mse_loss, alpha=0.1, w_ra=w_ra)
             functional.reset_net(net)
 
     """
