@@ -102,7 +102,7 @@ class NeuronFPTTKernel(base.CKernel2D):
 class NeuronBPTTKernel(base.CKernel2D):
     def __init__(self, surrogate_function: Callable, hard_reset: bool, detach_reset: bool, dtype: str):
         super().__init__(
-            kernel_name=f'{__class__.__name__}_{dtype}_{"hard_reset" if hard_reset else "soft_reset"}_{"detach_reset" if detach_reset else "nodetach_reset"}',
+            kernel_name=f'{self.__class__.__name__}_{dtype}_{"hard_reset" if hard_reset else "soft_reset"}_{"detach_reset" if detach_reset else "nodetach_reset"}',
             reverse=True)
         self.surrogate_function = surrogate_function
         self.hard_reset = hard_reset
@@ -225,10 +225,8 @@ class NeuronBPTTKernel(base.CKernel2D):
 
 
 class IFNodeFPTTKernel(NeuronFPTTKernel):
-
     def neuronal_charge(self) -> str:
         return cfunction.add(z='h_seq[t]', x='x_seq[t]', y='v_v_seq[t]', dtype=self.dtype)
-
 
 class IFNodeBPTTKernel(NeuronBPTTKernel):
     def grad_h_next_to_v(self) -> str:
