@@ -985,8 +985,8 @@ try:
 
 
             # 补上norm
-            if self.neuron is not None:
-                lava_block.neuron = self.neuron.to_lava()
+            if self.neuron.norm is not None:
+                lava_block.neuron.norm = self.neuron.norm.to_lava()
             return lava_block
 
 
