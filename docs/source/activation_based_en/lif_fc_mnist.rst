@@ -2,6 +2,8 @@ Single Fully Connected Layer SNN to Classify MNIST
 ====================================
 Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
 
+Translator: `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
+
 The tutorial will introduce how to train a simple SNN using the encoder and the surrogate gradient method to classify MNIST.
 
 Build a simple SNN
