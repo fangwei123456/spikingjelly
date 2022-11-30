@@ -174,7 +174,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/neuron
     /activation_based_en/surrogate
     /activation_based_en/monitor
-    .. /activation_based_en/lif_fc_mnist
+    /activation_based_en/lif_fc_mnist
     /activation_based_en/conv_fashion_mnist
     /activation_based_en/neuromorphic_datasets
     /activation_based_en/classify_dvsg
