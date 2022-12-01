@@ -260,6 +260,7 @@ def atan_backward(y: str, x: str, alpha: float, dtype: str):
     elif dtype == 'half2':
         codes = f'const half2 atan_backward__alpha_x = __hmul2(__hmul2(__float2half2_rn((float) 1.57079632679489661923), {alpha}), {x});'
         codes += f'{y} = __h2div({alpha}, __hmul2(__float2half2_rn(2.0f), __hfma2(atan_backward__alpha_x, atan_backward__alpha_x, __float2half2_rn(1.0f))));'
+        return codes
 
     else:
         raise NotImplementedError(dtype)
