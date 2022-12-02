@@ -1,5 +1,11 @@
 import numpy as np
-import cupy
+import logging
+try:
+    import cupy
+except BaseException as e:
+    logging.info(f'spikingjelly.activation_based.auto_cuda.base: {e}')
+    cupy = None
+
 import torch
 import torch.nn.functional as F
 import sys

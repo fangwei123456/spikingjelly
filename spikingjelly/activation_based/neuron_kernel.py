@@ -4,7 +4,7 @@ try:
     import cupy
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.neuron_kernel: {e}')
-    pass
+    cupy = None
 
 import torch
 import torch.nn.functional as F

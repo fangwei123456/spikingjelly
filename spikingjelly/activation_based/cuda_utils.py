@@ -8,7 +8,7 @@ try:
     import cupy
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.cuda_utils: {e}')
-    pass
+    cupy = None
 
 def cpu_timer(f: Callable, *args, **kwargs):
     """

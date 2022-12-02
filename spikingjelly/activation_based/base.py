@@ -1,11 +1,13 @@
 import torch
 import torch.nn as nn
 import copy
+import logging
 from abc import abstractmethod
 
 try:
     import cupy
 except BaseException as e:
+    logging.info(f'spikingjelly.activation_based.base: {e}')
     cupy = None
 
 try:

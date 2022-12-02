@@ -8,7 +8,7 @@ try:
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.auto_cuda.neuronal_kernel: {e}')
     cupy = None
-    pass
+    
 
 from .. import cuda_utils, surrogate
 from ... import configure
