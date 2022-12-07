@@ -1,5 +1,5 @@
 from torchvision.datasets import DatasetFolder
-from typing import  Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple
 from abc import abstractmethod
 import scipy.io
 import struct
@@ -68,22 +68,6 @@ def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
             img_list.append(to_img(img_tensor[t]))
         img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:], loop=0)
         print(f'Save frames to [{save_gif_to}].')
-
-
-def load_matlab_mat(file_name: str) -> Dict:
-    '''
-    :param file_name: path of the matlab's mat file
-    :type file_name: str
-    :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-    :rtype: Dict
-    '''
-    events = scipy.io.loadmat(file_name)
-    return {
-        't': events['ts'].squeeze(),
-        'x': events['x'].squeeze(),
-        'y': events['y'].squeeze(),
-        'p': events['pol'].squeeze()
-    }
 
 
 def load_aedat_v3(file_name: str) -> Dict:

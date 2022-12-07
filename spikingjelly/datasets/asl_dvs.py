@@ -1,5 +1,6 @@
 from typing import Callable, Dict,  Optional, Tuple
 import spikingjelly.datasets as sjds
+import scipy.io
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
@@ -84,8 +85,15 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
 
         This function defines how to read the origin binary data.
         '''
+        events = scipy.io.loadmat(file_name)
+        events = {
+            't': events['ts'].squeeze(),
+            'x': 239 - events['x'].squeeze(),
+            'y': 179 - events['y'].squeeze(),
+            'p': events['pol'].squeeze()
+        }
 
-        return sjds.load_matlab_mat(file_name)
+        return events
 
     @staticmethod
     def get_H_W() -> Tuple:
