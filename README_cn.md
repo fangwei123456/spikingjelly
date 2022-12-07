@@ -226,7 +226,7 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 | ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/neuromorphic_datasets.html) |
 | ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/classify_dvsg.html) |
 | ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/recurrent_connection_and_stateful_synapse.html) |
-| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/trace.png) | [STDP学习](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/stdp.html) |
+| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP学习](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/stdp.html) |
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 
@@ -261,4 +261,3 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 <img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" /><img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
 
 开发人员名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
-
