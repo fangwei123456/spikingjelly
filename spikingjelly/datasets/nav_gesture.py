@@ -249,6 +249,14 @@ class NAVGestureWalk(sjds.NeuromorphicDatasetFolder):
         '''
         return 240, 304  # this camera is 240*320, but x.max() = 303. So, I set W = 304.
 
+
+    @staticmethod
+    def load_origin_data(file_name: str) -> Dict:
+        t, xy, p, _ = readATIS_tddat(file_name, verbose=False)
+        x = xy[:, 0]
+        y = 239 - xy[:, 1]
+        return {'t': t, 'x': x, 'y': y, 'p': p}
+
     @staticmethod
     def read_aedat_save_to_np(bin_file: str, np_file: str):
         t, xy, p, _ = readATIS_tddat(bin_file, verbose=False)
