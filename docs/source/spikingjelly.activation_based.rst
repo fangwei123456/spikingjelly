@@ -5,6 +5,7 @@ spikingjelly.activation\_based package
    :hidden:
 
    ./sub_module/spikingjelly.activation_based.auto_cuda
+   ./sub_module/spikingjelly.activation_based.attention
    ./sub_module/spikingjelly.activation_based.base
    ./sub_module/spikingjelly.activation_based.cuda_utils
    ./sub_module/spikingjelly.activation_based.encoding
