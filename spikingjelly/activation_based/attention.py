@@ -396,9 +396,9 @@ class CA(nn.Module):
 class SA(nn.Module):
     def __init__(self):
         """
-                * :ref:`API in English <CA.__init__-en>`
+                * :ref:`API in English <SA.__init__-en>`
 
-                .. _CA.__init__-cn:
+                .. _SA.__init__-cn:
 
                 `Attention Spiking Neural Networks <https://arxiv.org/abs/2209.13929>`_ 中提出
                 的SA层。这一模块主要提供在Spatial维度上的Attention实现。
