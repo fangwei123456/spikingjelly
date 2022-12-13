@@ -41,7 +41,7 @@ class HARDVS(sjds.NeuromorphicDatasetFolder):
         '''
         url = 'https://github.com/Event-AHU/HARDVS'
         return [
-            ('MINI_HARDVS_files.zip', url, None),
+            ('MINI_HARDVS_files.zip', url, '9c4cc0d9ba043faa17f6f1a9e9aff982'),
             ('test_label.txt', url, '5b664af5843f9b476a9c22626f7f5a59'),
             ('train_label.txt', url, '0d642b6e6871034f151b2649a89d8d3c'),
             ('val_label.txt', url, 'cd2cebcba80e4552102bbacf2b5df812'),
