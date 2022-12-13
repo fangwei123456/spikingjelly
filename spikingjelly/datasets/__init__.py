@@ -823,9 +823,15 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                 _root = os.path.join(_root, 'train')
             else:
                 _root = os.path.join(_root, 'test')
+        else:
+            _root = self.set_root_when_train_is_none(_root)
 
         super().__init__(root=_root, loader=_loader, extensions=('.npz', ), transform=_transform,
                          target_transform=_target_transform)
+
+    def set_root_when_train_is_none(self, _root: str):
+        return _root
+
 
     @staticmethod
     @abstractmethod
@@ -983,7 +989,10 @@ def create_sub_dataset(source_dir: str, target_dir:str, ratio: float, use_soft_l
     for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
         if e_files.__len__() > 0:
             output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
-            samples_number = int(ratio * e_files.__len__())
+            if ratio >= 1.:
+                samples_number = e_files.__len__()
+            else:
+                samples_number = int(ratio * e_files.__len__())
             if samples_number == 0:
                 warnings_info.append(f'Warning: the samples number is 0 in [{output_dir}].')
             if randomly:
