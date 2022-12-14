@@ -144,7 +144,7 @@ The complete codes are available at ``spikingjelly/activation_based/examples/std
 
 Let us plot ``in_spike, out_spike, trace_pre, trace_post, weight``:
 
-.. image:: ../_static/tutorials/activation_based/stdp/trace.*
+.. image:: ../_static/tutorials/activation_based/stdp/stdp_trace.*
     :width: 100%
 
 This figure is similar to Fig.3 in [#Trace]_  (note that they use `j` as the pre neuron and `i` as the post neuron, while we use the opposite symbol):
