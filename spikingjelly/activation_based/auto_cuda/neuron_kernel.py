@@ -307,9 +307,6 @@ class NeuronATGFBase:
                       ``numel = N * x_seq.shape[0]``.
                       Note that ``N, numel`` in the returned ``py_dict`` are ``cupy.ndarray``
 
-                    * if ``v_reset`` in the origin ``py_dict`` is ``None``, then it will be popped because it
-                      will not be used as the CUDA kernel param.
-
 
         :rtype: tuple
         """
@@ -336,9 +333,6 @@ class NeuronATGFBase:
 
         py_dict['numel'] = numel
         py_dict['N'] = N
-
-        if py_dict['v_reset'] is None:
-            py_dict.pop('v_reset')
 
         return requires_grad, blocks, threads, py_dict
 
@@ -405,9 +399,8 @@ class NeuronATGFBase:
             'grad_x_seq': grad_x_seq,
             'grad_v_init': grad_v_init,
             'v_th': v_th,
+            'v_reset': v_reset
         }
-        if v_reset is not None:
-            py_dict['v_reset'] = v_reset
 
         return backward_kernel, blocks, threads, py_dict
 
@@ -424,7 +417,13 @@ class IFNodeATGF(torch.autograd.Function):
         }
         requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
+
         forward_kernel((blocks,), (threads,), py_dict)
+
+        if 'v_reset' not in py_dict:
+            py_dict['v_reset'] = None
 
         NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], blocks=blocks, threads=threads,
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
@@ -437,7 +436,14 @@ class IFNodeATGF(torch.autograd.Function):
     def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
 
         backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(ctx, grad_spike_seq, grad_v_seq)
+
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
+
         backward_kernel((blocks,), (threads,), py_dict)
+
+        if 'v_reset' not in py_dict:
+            py_dict['v_reset'] = None
 
         return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None
 
@@ -496,7 +502,13 @@ class LIFNodeATGF(torch.autograd.Function):
         }
         requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
+
         forward_kernel((blocks,), (threads,), py_dict)
+
+        if 'v_reset' not in py_dict:
+            py_dict['v_reset'] = None
 
         NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], blocks=blocks, threads=threads,
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
@@ -510,7 +522,15 @@ class LIFNodeATGF(torch.autograd.Function):
 
         backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(ctx, grad_spike_seq, grad_v_seq)
         py_dict['decay'] = ctx.decay
+
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
+
+
         backward_kernel((blocks,), (threads,), py_dict)
+
+        if 'v_reset' not in py_dict:
+            py_dict['v_reset'] = None
 
 
         return py_dict['grad_x_seq'], py_dict['grad_v_init'], None, None, None, None, None
@@ -676,7 +696,14 @@ class ParametricLIFNodeATGF(torch.autograd.Function):
         }
         requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
 
+
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
+
         forward_kernel((blocks,), (threads,), py_dict)
+
+        if 'v_reset' not in py_dict:
+            py_dict['v_reset'] = None
 
         NeuronATGFBase.ctx_save(ctx, requires_grad, py_dict['h_seq'], py_dict['v_v_seq'], blocks=blocks, threads=threads,
                            numel=py_dict['numel'], N=py_dict['N'], v_th=py_dict['v_th'], v_reset=py_dict['v_reset'],
@@ -693,7 +720,14 @@ class ParametricLIFNodeATGF(torch.autograd.Function):
         py_dict['grad_decay'] = torch.zeros_like(ctx.decay, dtype=torch.float)
         py_dict['v_v_seq'] = ctx.saved_tensors[1]
 
+
+        if py_dict['v_reset'] is None:
+            py_dict.pop('v_reset')
+
         backward_kernel((blocks,), (threads,), py_dict)
+
+        if 'v_reset' not in py_dict:
+            py_dict['v_reset'] = None
 
 
 
