@@ -2,6 +2,10 @@ import torch
 import torch.nn as nn
 from spikingjelly.activation_based import neuron, layer, learning
 from matplotlib import pyplot as plt
+
+def f_weight(x):
+    return torch.clamp(x, -1, 1.)
+
 torch.manual_seed(0)
 # plt.style.use(['science'])
 
@@ -29,8 +33,7 @@ if __name__ == '__main__':
     in_spike = (torch.rand([T, batch_size, N_in]) > 0.7).float()
     learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1], 
                                    tau_pre=tau_pre, tau_post=tau_post,
-                                   w_min=w_min, w_max=w_max,
-                                   f_pre=f_pre, f_post=f_post)
+                                   f_pre=f_weight, f_post=f_weight)
 
     out_spike = []
     trace_pre = []
