@@ -1188,7 +1188,7 @@ class ParametricLIFNode(BaseNode):
             self.v_float_to_tensor(x_seq[0])
 
             spike_seq, v_seq = ac_neuron_kernel.ParametricLIFNodeATGF.apply(
-                x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.w.sigmoid(),
+                x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.w.sigmoid().to(x_seq),
                 self.forward_kernel, self.backward_kernel)
 
             spike_seq = spike_seq.reshape(x_seq.shape)
