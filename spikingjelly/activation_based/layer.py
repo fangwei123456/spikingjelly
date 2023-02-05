@@ -2033,7 +2033,7 @@ class MultiDimensionalAttention(base.MultiStepModule):
         `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_ 中提出
         的MA-SNN模型以及MultiStepMultiDimensionalAttention层。
 
-        你可以从以下链接中找到MA-SNN的示例项目:
+        您可以从以下链接中找到MA-SNN的示例项目:
         - https://github.com/MA-SNN/MA-SNN
         - https://github.com/ridgerchu/SNN_Attention_VGG
 
