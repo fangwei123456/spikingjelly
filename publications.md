@@ -46,6 +46,7 @@
 | [GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks](https://openreview.net/forum?id=UmFSx2c4ubT) | https://github.com/Ikarosy/Gated-LIF                         | NeurIPS 2022                                                 |
 | [Temporal Effective Batch Normalization in Spiking Neural Networks](https://openreview.net/forum?id=fLIgyyQiJqz) |                                                              | NeurIPS 2022                                                 |
 | [Attention Spiking Neural Networks](https://ieeexplore.ieee.org/document/10032591) | https://github.com/fangwei123456/spikingjelly/pull/329       | IEEE Transactions on Pattern Analysis and Machine Intelligence |
+| [Training Full Spike Neural Networks via Auxiliary Accumulation Pathway](https://arxiv.org/abs/2301.11929) |                                                              |                                                              |
 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
