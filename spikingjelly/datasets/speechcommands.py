@@ -184,7 +184,7 @@ class SPEECHCOMMANDS(Dataset):
             # Silence data are randomly and dynamically generated from noise data
 
             # Load random noise
-            noisepath = os.path.join(self._path, choice(self.noise_list))
+            noisepath = choice(self.noise_list)
             waveform, sample_rate = torchaudio.load(noisepath)
 
             # Random crop
