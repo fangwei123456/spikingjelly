@@ -279,6 +279,10 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
 
         return mask0 + mask1 * (-(alpha ** 2) / 2 * x.square() * x.sign() + alpha * x + 0.5)
 
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return piecewise_quadratic_backward(grad_output, x, alpha)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -390,6 +394,10 @@ class PiecewiseExp(SurrogateFunctionBase):
         exp_x = (mask_sign * x * -alpha).exp_() / 2.
         return mask_nonnegative - exp_x * mask_sign
 
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return piecewise_exp_backward(grad_output, x, alpha)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -490,6 +498,10 @@ class Sigmoid(SurrogateFunctionBase):
     @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha: float):
         return (x * alpha).sigmoid()
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return sigmoid_backward(grad_output, x, alpha)
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
@@ -621,6 +633,10 @@ class SoftSign(SurrogateFunctionBase):
     def primitive_function(x: torch.Tensor, alpha: float):
         return (F.softsign(x * alpha) + 1.) / 2.
 
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return soft_sign_backward(grad_output, x, alpha)
+
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
     # x = torch.arange(-2.5, 2.5, 0.001)
@@ -707,6 +723,10 @@ class ATan(SurrogateFunctionBase):
     @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha: float):
         return (math.pi / 2 * alpha * x).atan_() / math.pi + 0.5
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return atan_backward(grad_output, x, alpha)
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
@@ -855,6 +875,10 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         return nonzero_sign_log_abs.apply(x, alpha)
 
     @staticmethod
+    def backward(grad_output, x, alpha):
+        return nonzero_sign_log_abs_backward(grad_output, x, alpha)
+
+    @staticmethod
     @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha: float):
         # the gradient of ``(heaviside(x) * 2 - 1) * (alpha * x.abs() + 1).log()`` by autograd is wrong at ``x==0``
@@ -972,6 +996,10 @@ class Erf(SurrogateFunctionBase):
     @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha: float):
         return torch.erfc_(-alpha * x) / 2.
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return erf_backward(grad_output, x, alpha)
 
     # plt.style.use(['science', 'muted', 'grid'])
     # fig = plt.figure(dpi=200)
@@ -1102,6 +1130,10 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
     @staticmethod
     def spiking_function(x: torch.Tensor, w, c):
         return piecewise_leaky_relu.apply(x, w, c)
+
+    @staticmethod
+    def backward(grad_output, x, w, c):
+        return piecewise_leaky_relu_backward(grad_output, x, w, c)
 
     @staticmethod
     @torch.jit.script
@@ -1690,6 +1722,10 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
         mask1 = (x >= 0.).to(x)
         return (leak * (1. - mask1) + k * mask1) * x
 
+    @staticmethod
+    def backward(grad_output, x, leak, k):
+        return leaky_k_relu_backward(grad_output, x, leak, k)
+
     def forward(self, x):
         if self.spiking:
             f = self.spiking_function
@@ -1776,6 +1812,10 @@ class FakeNumericalGradient(SurrogateFunctionBase):
     @staticmethod
     def spiking_function(x, alpha):
         return fake_numerical_gradient.apply(x, alpha)
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return fake_numerical_gradient_backward(grad_output, x, alpha)
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
@@ -1911,6 +1951,10 @@ class LogTailedReLU(SurrogateFunctionBase):
         mask_ge1 = (x > 1.).to(x)
         y = (1. - mask_ge1) * F.leaky_relu(x, alpha) + mask_ge1 * (torch.log(x) + 1.)
         return y
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return log_tailed_relu_backward(grad_output, x, alpha)
 
     def cuda_code(self, x: str, y: str, dtype='fp32'):
         sg_name = 'sg_' + self._get_name()
