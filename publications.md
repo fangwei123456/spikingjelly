@@ -69,7 +69,7 @@
 | [Supervised Learning Algorithm Based on Spike Train Inner Product for Deep Spiking Neural Networks](https://www.mdpi.com/2076-3425/13/2/168) |                                                              | Brain Sciences                                               |
 | [Mitigating Catastrophic Forgetting in Spiking Neural Networks through Threshold Modulation](https://openreview.net/forum?id=15SoThZmtU) | https://github.com/Thvnvtos/Nm-SNN                           | Transactions on Machine Learning Research                    |
 | [Optical Flow estimation with Event-based Cameras and Spiking Neural Networks](https://arxiv.org/abs/2302.06492) | https://github.com/J-Cuadrado/OF_EV_SNN                      |                                                              |
-| [Poster: Backdoor Attacks on Spiking NNs and Neuromorphic Datasets](https://dl.acm.org/doi/pdf/10.1145/3548606.3563532) | https://github.com/GorkaAbad/NeuromorphicBackdoors | CCS 2023
+| [Poster: Backdoor Attacks on Spiking NNs and Neuromorphic Datasets](https://dl.acm.org/doi/pdf/10.1145/3548606.3563532) | https://github.com/GorkaAbad/NeuromorphicBackdoors | CCS 2022
 | [Sneaky Spikes: Uncovering Stealthy Backdoor Attacks in Spiking Neural Networks with Neuromorphic Data](https://arxiv.org/pdf/2302.06279.pdf) | | 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
