@@ -1,7 +1,7 @@
 ## Publications using SpikingJelly
 
 | Papers                                                       | Codes                                                        | Publisher                                                    |
-| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |   
 | [Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks](https://arxiv.org/abs/2007.05785) | https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron | ICCV 2021                                                    |
 | [Pruning of Deep Spiking Neural Networks through Gradient Rewiring](https://arxiv.org/abs/2105.04916) | https://github.com/Yanqi-Chen/Gradient-Rewiring              | IJCAI 2021                                                   |
 | [Optimal ANN-SNN Conversion for Fast and Accurate Inference in Deep Spiking Neural Networks](https://arxiv.org/abs/2105.11654) | https://github.com/DingJianhao/OptSNNConvertion-RNL-RIL      | IJCAI 2021                                                   |
@@ -69,7 +69,8 @@
 | [Supervised Learning Algorithm Based on Spike Train Inner Product for Deep Spiking Neural Networks](https://www.mdpi.com/2076-3425/13/2/168) |                                                              | Brain Sciences                                               |
 | [Mitigating Catastrophic Forgetting in Spiking Neural Networks through Threshold Modulation](https://openreview.net/forum?id=15SoThZmtU) | https://github.com/Thvnvtos/Nm-SNN                           | Transactions on Machine Learning Research                    |
 | [Optical Flow estimation with Event-based Cameras and Spiking Neural Networks](https://arxiv.org/abs/2302.06492) | https://github.com/J-Cuadrado/OF_EV_SNN                      |                                                              |
-
+| [Poster: Backdoor Attacks on Spiking NNs and Neuromorphic Datasets](https://dl.acm.org/doi/pdf/10.1145/3548606.3563532) | https://github.com/GorkaAbad/NeuromorphicBackdoors | CCS 2023
+| [Sneaky Spikes: Uncovering Stealthy Backdoor Attacks in Spiking Neural Networks with Neuromorphic Data](https://arxiv.org/pdf/2302.06279.pdf) | | 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
