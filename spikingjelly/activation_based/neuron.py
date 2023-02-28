@@ -406,7 +406,7 @@ class IFNode(BaseNode):
         Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减。其阈下神经动力学方程为：
 
         .. math::
-            V[t] = V[t-1] + X[t]
+            H[t] = V[t-1] + X[t]
 
         * :ref:`中文API <IFNode.__init__-cn>`
 
@@ -443,7 +443,7 @@ class IFNode(BaseNode):
         as that of the LIF neuron. The sub-threshold neural dynamics of it is as followed:
 
         .. math::
-            V[t] = V[t-1] + X[t]
+            H[t] = V[t-1] + X[t]
 
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
@@ -645,12 +645,12 @@ class LIFNode(BaseNode):
         若 ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
 
         若 ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
 
         * :ref:`中文API <LIFNode.__init__-cn>`
@@ -696,12 +696,12 @@ class LIFNode(BaseNode):
         IF ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
 
         IF ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         """
         assert isinstance(tau, float) and tau > 1.
@@ -1060,12 +1060,12 @@ class ParametricLIFNode(BaseNode):
         若 ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
 
         若 ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
 
@@ -1116,12 +1116,12 @@ class ParametricLIFNode(BaseNode):
         IF ``decay_input == True``:
 
             .. math::
-                V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+                H = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
 
         IF ``decay_input == False``:
 
             .. math::
-                V[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
@@ -1255,7 +1255,7 @@ class QIFNode(BaseNode):
         Quadratic Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，也是指数积分发放神经元(Exponential Integrate-and-Fire)的近似版本。其阈下神经动力学方程为：
 
         .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
+            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
 
         * :ref:`中文API <QIFNode.__init__-cn>`
 
@@ -1301,7 +1301,7 @@ class QIFNode(BaseNode):
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
+            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
         """
 
         assert isinstance(tau, float) and tau > 1.
@@ -1402,7 +1402,7 @@ class EIFNode(BaseNode):
         Exponential Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，是由HH神经元模型(Hodgkin-Huxley model)简化后推导出的一维模型。在 :math:`\\Delta_T\\to 0` 时退化为LIF模型。其阈下神经动力学方程为：
 
         .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
+            H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
 
         * :ref:`中文API <EIFNode.__init__-cn>`
 
@@ -1448,7 +1448,7 @@ class EIFNode(BaseNode):
         The subthreshold neural dynamics of it is as followed:
 
         .. math::
-            V[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
+            H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
         """
 
         assert isinstance(tau, float) and tau > 1.
@@ -1624,5 +1624,175 @@ class LIAFNode(LIFNode):
         spike = self.neuronal_fire()
         self.neuronal_reset(spike)
         return y
+
+
+class KLIFNode(BaseNode):
+    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
+        """
+        * :ref:`API in English <KLIFNode.__init__-en>`
+
+        .. _KLIFNode.__init__-cn:
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+
+        :param decay_input: 输入是否也会参与衰减
+        :type decay_input: bool
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
+            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否将reset过程的计算图分离
+        :type detach_reset: bool
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+        :type backend: str
+
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
+            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
+            通常设置成 ``False`` ，可以节省内存
+        :type store_v_seq: bool
+
+        `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_ 提出的K-based Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
+
+        若 ``decay_input == True``:
+
+            .. math::
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
+        注意，KLIF神经元的放电和重置与普通的神经元不同，为：
+
+            .. math::
+
+                F[t] &= \\mathrm{ReLU}(kH[t])
+
+                S[t] &= \\Theta(F[t] - V_{th})
+
+                V[t] &= \\begin{cases}
+                    F[t](1-S[t]) + V_{reset}S[t], hard reset\\
+                    F[t] - F[t]V_{th}, soft reset
+                \\end{cases}
+
+
+
+        * :ref:`中文API <KLIFNode.__init__-cn>`
+
+        .. _KLIFNode.__init__-en:
+
+        :param tau: membrane time constant
+        :type tau: float
+
+        :param decay_input: whether the input will decay
+        :type decay_input: bool
+
+        :param v_threshold: threshold of this neurons layer
+        :type v_threshold: float
+
+        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
+            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
+        :type v_reset: float
+
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether detach the computation graph of reset in backward
+        :type detach_reset: bool
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` backend will have the fastest training speed
+        :type backend: str
+
+        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
+            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
+            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+            memory consumption
+        :type store_v_seq: bool
+
+        The K-based Leaky Integrate-and-Fire neuron proposed by `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_, which can be seen as a leaky integrator.
+        The subthreshold neural dynamics of it is as followed:
+
+        IF ``decay_input == True``:
+
+            .. math::
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        IF ``decay_input == False``:
+
+            .. math::
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
+        Note that the neuronal fire and reset of the KLIF neuron is different from native neurons:
+
+            .. math::
+
+                F[t] &= \\mathrm{ReLU}(kH[t])
+
+                S[t] &= \\Theta(F[t] - V_{th})
+
+                V[t] &= \\begin{cases}
+                    F[t](1-S[t]) + V_{reset}S[t], hard reset\\
+                    F[t] - F[t]V_{th}, soft reset
+                \\end{cases}
+
+
+        """
+        assert isinstance(tau, float) and tau > 1.
+        if backend == 'cupy':
+            raise NotImplementedError("The CuPy backend for the KLIF neuron has not been implemented!")
+
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
+
+        self.tau = tau
+        self.decay_input = decay_input
+
+        self.k = nn.Parameter(torch.as_tensor(1.))
+
+
+    @staticmethod
+    @torch.jit.script
+    def neuronal_charge_decay_input(x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor):
+        v = v + (x - (v - v_reset)) / tau
+        v = torch.relu_(k * v)
+        return v
+
+
+    @staticmethod
+    @torch.jit.script
+    def neuronal_charge_no_decay_input(x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor):
+        v = v - (v - v_reset) / tau + x
+        v = torch.relu_(k * v)
+        return v
+
+
+    def neuronal_charge(self, x: torch.Tensor):
+        if self.decay_input:
+            self.v = self.neuronal_charge_decay_input(x, self.v, self.v_reset, self.tau, self.k)
+
+        else:
+
+            self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau, self.k)
+
 
 
