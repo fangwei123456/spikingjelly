@@ -1687,7 +1687,7 @@ class KLIFNode(BaseNode):
                 S[t] &= \\Theta(F[t] - V_{th})
 
                 V[t] &= \\begin{cases}
-                    F[t](1-S[t]) + V_{reset}S[t], hard reset\\
+                    F[t](1-S[t]) + V_{reset}S[t], hard reset\\\\
                     F[t] - F[t]V_{th}, soft reset
                 \\end{cases}
 
@@ -1752,7 +1752,7 @@ class KLIFNode(BaseNode):
                 S[t] &= \\Theta(F[t] - V_{th})
 
                 V[t] &= \\begin{cases}
-                    F[t](1-S[t]) + V_{reset}S[t], hard reset\\
+                    F[t](1-S[t]) + V_{reset}S[t], hard reset \\\\
                     F[t] - F[t]V_{th}, soft reset
                 \\end{cases}
 
