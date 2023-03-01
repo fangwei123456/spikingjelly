@@ -1627,13 +1627,16 @@ class LIAFNode(LIFNode):
 
 
 class KLIFNode(BaseNode):
-    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
+    def __init__(self, scale_reset: bool=False, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
         * :ref:`API in English <KLIFNode.__init__-en>`
 
         .. _KLIFNode.__init__-cn:
+
+        :param scale_reset: 是否在 ``neuronal_reset`` 时将 ``v`` 进行缩放
+        :type scale_reset: bool
 
         :param tau: 膜电位时间常数
         :type tau: float
@@ -1686,9 +1689,20 @@ class KLIFNode(BaseNode):
 
                 S[t] &= \\Theta(F[t] - V_{th})
 
-                V[t] &= \\begin{cases}
-                    F[t](1-S[t]) + V_{reset}S[t], hard reset\\\\
-                    F[t] - F[t]V_{th}, soft reset
+        如果 ``scale_reset == False``，则
+
+            .. math::
+                V[t] = \\begin{cases}
+                    F[t](1-S[t]) + V_{reset}S[t], hard~~reset \\\\
+                    F[t] - S[t]V_{th}, soft~~reset
+                \\end{cases}
+
+        如果 ``scale_reset == True``，则
+
+            .. math::
+                V[t] = \\begin{cases}
+                    \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], hard~~reset \\\\
+                    \\frac{1}{k}(F[t] - S[t]V_{th}), soft~~reset
                 \\end{cases}
 
 
@@ -1696,6 +1710,9 @@ class KLIFNode(BaseNode):
         * :ref:`中文API <KLIFNode.__init__-cn>`
 
         .. _KLIFNode.__init__-en:
+
+        :param scale_reset: whether scale ``v`` in ``neuronal_reset``
+        :type scale_reset: bool
 
         :param tau: membrane time constant
         :type tau: float
@@ -1751,9 +1768,20 @@ class KLIFNode(BaseNode):
 
                 S[t] &= \\Theta(F[t] - V_{th})
 
-                V[t] &= \\begin{cases}
-                    F[t](1-S[t]) + V_{reset}S[t], hard reset \\\\
-                    F[t] - F[t]V_{th}, soft reset
+        If ``scale_reset == False``, then
+
+            .. math::
+                V[t] = \\begin{cases}
+                    F[t](1-S[t]) + V_{reset}S[t], hard~~reset \\\\
+                    F[t] - S[t]V_{th}, soft~~reset
+                \\end{cases}
+
+        Elif ``scale_reset == True``, then
+
+            .. math::
+                V[t] = \\begin{cases}
+                    \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], hard~~reset \\\\
+                    \\frac{1}{k}(F[t] - S[t]V_{th}), soft~~reset
                 \\end{cases}
 
 
@@ -1764,6 +1792,7 @@ class KLIFNode(BaseNode):
 
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
 
+        self.scale_reset = scale_reset
         self.tau = tau
         self.decay_input = decay_input
 
@@ -1794,5 +1823,31 @@ class KLIFNode(BaseNode):
 
             self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau, self.k)
 
+
+    def neuronal_reset(self, spike):
+        if self.detach_reset:
+            spike_d = spike.detach()
+        else:
+            spike_d = spike
+
+
+        if self.scale_reset:
+            if self.v_reset is None:
+                # soft reset
+                self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold) / self.k
+
+            else:
+                # hard reset
+                self.v = self.jit_hard_reset(self.v / self.k, spike_d, self.v_reset)
+
+        else:
+
+            if self.v_reset is None:
+                # soft reset
+                self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold)
+
+            else:
+                # hard reset
+                self.v = self.jit_hard_reset(self.v, spike_d, self.v_reset)
 
 
