@@ -71,6 +71,7 @@
 | [Optical Flow estimation with Event-based Cameras and Spiking Neural Networks](https://arxiv.org/abs/2302.06492) | https://github.com/J-Cuadrado/OF_EV_SNN                      |                                                              |
 | [Poster: Backdoor Attacks on Spiking NNs and Neuromorphic Datasets](https://dl.acm.org/doi/10.1145/3548606.3563532) | https://github.com/GorkaAbad/NeuromorphicBackdoors           | CCS 2022                                                     |
 | [Sneaky Spikes: Uncovering Stealthy Backdoor Attacks in Spiking Neural Networks with Neuromorphic Data](https://arxiv.org/abs/2302.06279) |                                                              |                                                              |
+| [SpikeGPT: Generative Pre-trained Language Model with Spiking Neural Networks](https://arxiv.org/abs/2302.13939) | https://github.com/ridgerchu/SpikeGPT |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
