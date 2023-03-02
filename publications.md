@@ -38,8 +38,8 @@
 | [A model of TaOx threshold switching memristor for neuromorphic computing](https://aip.scitation.org/doi/full/10.1063/5.0096643) |                                                              | Journal of Applied Physics                                   |
 | [Label Distribution Learning via Implicit Distribution Representation](https://arxiv.org/abs/2209.13824) |                                                              |                                                              |
 | [Spiking SiamFC++: Deep Spiking Neural Network for Object Tracking](https://arxiv.org/abs/2209.12010) |                                                              |                                                              |
-| [Spikformer: When Spiking Neural Network Meets Transformer](https://arxiv.org/abs/2209.15425) | https://github.com/ZK-Zhou/spikformer                        | ICLR 2023                                                    |
-| [S-JSCC: A Digital Joint Source-Channel Coding Framework based on Spiking Neural Network](https://arxiv.org/abs/2210.06836) |                                                              |                                                              |
+| [Spikformer: When Spiking Neural Network Meets Transformer](https://openreview.net/forum?id=frE4fUwz_h) | https://github.com/ZK-Zhou/spikformer                        | ICLR 2023                                                    |
+| [SNN-SC: A Spiking Semantic Communication Framework for Classification](https://arxiv.org/abs/2210.06836) |                                                              |                                                              |
 | [STSC-SNN: Spatio-Temporal Synaptic Connection with Temporal Convolution and Attention for Spiking Neural Networks](https://arxiv.org/abs/2210.05241) |                                                              |                                                              |
 | [Online Training Through Time for Spiking Neural Networks](https://arxiv.org/abs/2210.04195) | https://github.com/pkuxmq/OTTT-SNN                           | NeurIPS 2022                                                 |
 | [Training Spiking Neural Networks with Event-driven Backpropagation](https://openreview.net/forum?id=nC8VC8gVGPo) | https://github.com/zhuyaoyu/SNN-event-driven-learning        | NeurIPS 2022                                                 |
@@ -51,7 +51,7 @@
 | [A Unified Framework of Soft Threshold Pruning](https://openreview.net/forum?id=cCFqcrq0d8) |                                                              | ICLR 2023                                                    |
 | [Reducing ANN-SNN Conversion Error through Residual Membrane Potential](https://arxiv.org/abs/2302.02091) | https://github.com/hzc1208/ANN2SNN_SRP                       | AAAI 2023                                                    |
 | [MSS-DepthNet: Depth Prediction with Multi-Step Spiking Neural Network](https://arxiv.org/abs/2211.12156) |                                                              |                                                              |
-| [An Analytical Estimation of Spiking Neural Networks Energy Efficiency](https://arxiv.org/abs/2210.13107) |                                                              |                                                              |
+| [An Analytical Estimation of Spiking Neural Networks Energy Efficiency](https://arxiv.org/abs/2210.13107) |                                                              | ICONIP 2022                                                  |
 | [Spikeformer: A Novel Architecture for Training High-Performance Low-Latency Spiking Neural Network](https://arxiv.org/abs/2211.10686) |                                                              |                                                              |
 | [A Low Latency Adaptive Coding Spiking Framework for Deep Reinforcement Learning](https://arxiv.org/abs/2211.11760) |                                                              |                                                              |
 | [Skin Cancer Classification Using Deep Spiking Neural Network](https://link.springer.com/article/10.1007/s10278-023-00776-2) |                                                              | Journal of Digital Imaging                                   |
@@ -71,7 +71,7 @@
 | [Optical Flow estimation with Event-based Cameras and Spiking Neural Networks](https://arxiv.org/abs/2302.06492) | https://github.com/J-Cuadrado/OF_EV_SNN                      |                                                              |
 | [Poster: Backdoor Attacks on Spiking NNs and Neuromorphic Datasets](https://dl.acm.org/doi/10.1145/3548606.3563532) | https://github.com/GorkaAbad/NeuromorphicBackdoors           | CCS 2022                                                     |
 | [Sneaky Spikes: Uncovering Stealthy Backdoor Attacks in Spiking Neural Networks with Neuromorphic Data](https://arxiv.org/abs/2302.06279) |                                                              |                                                              |
-| [SpikeGPT: Generative Pre-trained Language Model with Spiking Neural Networks](https://arxiv.org/abs/2302.13939) | https://github.com/ridgerchu/SpikeGPT |
+| [SpikeGPT: Generative Pre-trained Language Model with Spiking Neural Networks](https://arxiv.org/abs/2302.13939) | https://github.com/ridgerchu/SpikeGPT                        |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
