@@ -66,6 +66,7 @@ https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
     /legacy_tutorials
     /activation_based/cupy_neuron
     /activation_based/inference_on_lynxi
+    /activation_based/lava_exchange
 
 
 模块文档
@@ -184,6 +185,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /activation_based_en/ann2snn
     /legacy_tutorials_en
     /activation_based_en/cupy_neuron
+    /activation_based_en/lava_exchange
 
 
 

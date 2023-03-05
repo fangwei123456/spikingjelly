@@ -915,7 +915,21 @@ try:
                 if synapse.start_dim != 1:
                     raise ValueError('lava only supports for torch.nn.Flatten with start_dim == 1!')
             else:
-                assert isinstance(neu, CubaLIFNode)
+
+                if isinstance(neu, neuron.IFNode):
+                    if neu.v_reset != 0.:
+                        raise ValueError('lava only supports for v_reset == 0!')
+                    neu = CubaLIFNode(current_decay=1., voltage_decay=0., v_threshold=neu.v_threshold, scale=neu.lava_s_cale)
+
+                elif isinstance(neu, neuron.LIFNode):
+                    if neu.v_reset != 0.:
+                        raise ValueError('lava only supports for v_reset == 0!')
+                    if neu.decay_input:
+                        raise ValueError('lava only supports for decay_input == False!')
+                    neu = CubaLIFNode(current_decay=1., voltage_decay=1. / neu.tau, v_threshold=neu.v_threshold,
+                                      scale=neu.lava_s_cale)
+                else:
+                    assert isinstance(neu, CubaLIFNode)
                 self.synapse = synapse
                 self.neuron = neu
                 if isinstance(self.synapse, (nn.Conv2d, nn.Linear)):
