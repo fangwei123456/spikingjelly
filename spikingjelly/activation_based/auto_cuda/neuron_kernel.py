@@ -456,7 +456,11 @@ class LIFNodeFPTTKernel(NeuronFPTTKernel):
 
 
     def neuronal_charge(self) -> str:
-        codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
+        if self.hard_reset:
+            codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
+        else:
+            codes = f'{self.dtype} LIFNodeFPTTKernel_temp_var = v_v_seq[t];'
+
         if self.decay_input:
             codes += cfunction.sub(z='LIFNodeFPTTKernel_temp_var', x='x_seq[t]', y='LIFNodeFPTTKernel_temp_var', dtype=self.dtype)
             codes += cfunction.mul(z='LIFNodeFPTTKernel_temp_var', x='decay', y='LIFNodeFPTTKernel_temp_var', dtype=self.dtype)
@@ -545,7 +549,10 @@ class ParametricLIFNodeFPTTKernel(NeuronFPTTKernel):
 
 
     def neuronal_charge(self) -> str:
-        codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
+        if self.hard_reset:
+            codes = cfunction.sub(z=f'{self.dtype} LIFNodeFPTTKernel_temp_var', x='v_v_seq[t]', y='v_reset', dtype=self.dtype)
+        else:
+            codes = f'{self.dtype} LIFNodeFPTTKernel_temp_var = v_v_seq[t];'
         if self.decay_input:
             codes += cfunction.sub(z='LIFNodeFPTTKernel_temp_var', x='x_seq[t]', y='LIFNodeFPTTKernel_temp_var', dtype=self.dtype)
             codes += cfunction.mul(z='LIFNodeFPTTKernel_temp_var', x='decay[0]', y='LIFNodeFPTTKernel_temp_var', dtype=self.dtype)
