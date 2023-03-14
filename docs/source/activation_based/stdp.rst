@@ -279,6 +279,17 @@ STDP优化器
     optimizer_stdp.step()
 
 
+以 ``STDPLearner`` 为代表的所有学习器都是 ``MemoryModule`` 的子类，其内部记忆状态包括了突触前后神经元的迹 ``trace_pre, trace_post`` ；\
+另外，学习器内部用于记录神经元活动的监视器存储了突触前后神经元的发放历史；这些发放历史也可以视作学习器的内部记忆状态。因此，必须及时调用学习器的 ``reset()`` 方法，\
+来清空其内部记忆状态，从而防止内存/显存消耗量随着训练而不断增长！通常的做法是：在每个batch结束后，将学习器和网络一起重制：
+
+.. code-block:: python
+
+    functional.reset_net(net)
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].reset()
+
+
 完整的示例代码如下：
 
 .. code-block:: python
@@ -367,6 +378,10 @@ STDP优化器
 
     optimizer_gd.step()
     optimizer_stdp.step()
+
+    functional.reset_net(net)
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].reset()
 
 
 
