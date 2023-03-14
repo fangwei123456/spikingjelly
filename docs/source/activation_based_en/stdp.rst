@@ -290,6 +290,19 @@ Then we need to use ``STDPLearner`` to get "gradients", and use two optimizers t
     optimizer_stdp.step()
 
 
+All the learners ( ``STDPLearner`` , for instance) inherit from ``MemoryModule``. \
+Hence, they have internal memories ( ``trace_pre, trace_post`` for ``STDPLearner`` ). \
+In addition, the monitors inside the learners record the firing histories of the pre-synaptic and post-synaptic neurons; these histories \
+may also be considered as internal memories of the learners. We should call the ``reset()`` method to clear the internal memory promptly \
+so as to avoid the nonstop growing of memory consumption. We suggest resetting the learners together with the network after each batch:
+
+.. code-block:: python
+
+    functional.reset_net(net)
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].reset()
+
+
 The complete codes are as follows:
 
 .. code-block:: python
@@ -378,6 +391,10 @@ The complete codes are as follows:
 
     optimizer_gd.step()
     optimizer_stdp.step()
+
+    functional.reset_net(net)
+    for i in range(stdp_learners.__len__()):
+        stdp_learners[i].reset()
 
 
 
