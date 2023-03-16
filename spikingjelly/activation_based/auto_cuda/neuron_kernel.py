@@ -134,8 +134,8 @@ class NeuronBPTTKernel(base.CKernel2D):
     def post_core(self):
 
         codes = base.CodeTyper(16)
-        codes.append(self.grad_h_to_x())
-        codes.append(cfunction.mul(z='grad_v_init[index]', x='grad_h', y='grad_h_to_x', dtype=self.dtype))
+        codes.append(self.grad_h_next_to_v())
+        codes.append(cfunction.mul(z='grad_v_init[index]', x='grad_h', y='grad_h_next_to_v', dtype=self.dtype))
         self._post_core = codes.codes
         return self._post_core
 

@@ -317,15 +317,8 @@ class CKernel:
         The keys order is arbitrary because this function will sort keys to align formal and actual parameters.
 
         """
-        self.check_keys(py_dict)
-        assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
-        # 需要使用有序词典
-        # python >= 3.6时，字典默认是有序的
-        py_dict = dict(sorted(py_dict.items()))
-        self.cparams = dict(sorted(self.cparams.items()))
 
         device = self.get_device(py_dict)
-
         self.check_device(device, py_dict)
 
         self.set_contiguous(py_dict)
@@ -333,6 +326,13 @@ class CKernel:
         self.check_ctypes(py_dict)
 
         self.check_half2(py_dict)
+
+        py_dict = dict(sorted(py_dict.items()))
+        self.check_keys(py_dict)
+        assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
+        # 需要使用有序词典
+        # python >= 3.6时，字典默认是有序的
+
 
         cp_kernel = cupy.RawKernel(self.full_codes, self.kernel_name, options=configure.cuda_compiler_options,
                                    backend=configure.cuda_compiler_backend)
@@ -410,6 +410,7 @@ class CKernel:
         extern "C" __global__
         void {self.kernel_name}(
         '''
+        self.cparams = dict(sorted(self.cparams.items()))
         params_list = []
         for cname, ctype in self.cparams.items():
             params_list.append(f'{ctype} {cname}')
