@@ -10,7 +10,7 @@
 
 版本说明
 ----------------
-自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 `从老版本迁移 </activation_based/migrate_from_legacy>`_。
+自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`./activation_based/migrate_from_legacy.html`。
 
 不同版本文档的地址（其中 `latest` 是开发版）：
 
@@ -144,7 +144,7 @@ Welcome to SpikingJelly's documentation
 Notification
 ----------------
 From the version ``0.0.0.0.14``, modules including ``clock_driven`` and ``event_driven`` are renamed. \
-Please refer to the tutorial `Migrate From Old Versions </activation_based_en/migrate_from_legacy>_`.
+Please refer to the tutorial :doc:`./activation_based_en/migrate_from_legacy.html`.
 
 Docs for different versions (`latest` is the developing version):
 
@@ -169,7 +169,7 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
 
-Install the last stable version from `PyPI <https://pypi.org/project/spikingjelly/>`_：
+Install the last stable version from `PyPI <https://pypi.org/project/spikingjelly/>`_:
 
 .. code-block:: bash
 
