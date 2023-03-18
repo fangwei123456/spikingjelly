@@ -26,6 +26,8 @@
 
 - `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/>`_
 
+- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_
+
 - `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/>`_
   
 安装
@@ -159,6 +161,8 @@ Docs for different versions (`latest` is the developing version):
 - `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
 
 - `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en>`_
+
+- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_
 
 - `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en>`_
 
