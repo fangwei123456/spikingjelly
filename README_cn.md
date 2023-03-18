@@ -30,7 +30,7 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 
 默认的文档与最新的开发版匹配，如果你使用的是稳定版，不要忘记切换到对应的文档版本。
 
-自`0.0.0.0.14`版本开始，包括`clock_driven`和 `event_driven`在内的模块被重命名了，请参考教程[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/migrate_from_legacy.html)。
+自`0.0.0.0.14`版本开始，包括`clock_driven`和 `event_driven`在内的模块被重命名了，请参考教程[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/migrate_from_legacy.html)。
 
 如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。推荐使用最新的稳定版或开发版。
 

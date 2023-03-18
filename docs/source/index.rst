@@ -10,7 +10,7 @@
 
 版本说明
 ----------------
-自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`./activation_based/migrate_from_legacy`。
+自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`../activation_based/migrate_from_legacy`。
 
 不同版本文档的地址（其中 `latest` 是开发版）：
 
@@ -146,7 +146,7 @@ Welcome to SpikingJelly's documentation
 Notification
 ----------------
 From the version ``0.0.0.0.14``, modules including ``clock_driven`` and ``event_driven`` are renamed. \
-Please refer to the tutorial :doc:`./activation_based_en/migrate_from_legacy`.
+Please refer to the tutorial :doc:`../activation_based_en/migrate_from_legacy`.
 
 Docs for different versions (`latest` is the developing version):
 
