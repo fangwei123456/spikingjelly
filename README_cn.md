@@ -24,9 +24,26 @@ SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedoc
 
 注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
 
+**版本说明**
+
 奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
 
-默认的文档与最新的开发版匹配，如果你使用的是稳定版，不要忘记切换到对应的文档版本，例如 https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/。
+默认的文档与最新的开发版匹配，如果你使用的是稳定版，不要忘记切换到对应的文档版本。
+
+自`0.0.0.0.14`版本开始，包括`clock_driven`和 `event_driven`在内的模块被重命名了，请参考教程[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/migrate_from_legacy.html)。
+
+如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。推荐使用最新的稳定版或开发版。
+
+**不同版本的文档：**
+
+- [zero](https://spikingjelly.readthedocs.io/zh_CN/zero/)
+- [0.0.0.0.4](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/)
+- [0.0.0.0.6](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/)
+- [0.0.0.0.8](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/)
+- [0.0.0.0.10](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/)
+- [0.0.0.0.12](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/)
+- [0.0.0.0.14](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/)
+- [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/)
 
 **从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本**：
 
@@ -48,8 +65,6 @@ git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。推荐使用最新的稳定版或开发版。
-
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
@@ -62,7 +77,7 @@ nn.Sequential(
         )
 ```
 
-这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见[时间驱动的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial.activation_based.html)。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
+这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见教程。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：
 
 ```python
 python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
@@ -102,7 +117,7 @@ class ANN(nn.Module):
         return x
 ```
 
-在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读[ann2snn的教程](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html)。可以在Python命令行中通过如下命令，在MNIST上使用ANN2SNN：
+在MNIST测试数据集上进行收敛之后，这种具有模拟编码的简单网络可以达到98.51％的精度。有关更多详细信息，请阅读教程。可以在Python命令行中通过如下命令，在MNIST上使用ANN2SNN：
 
 ```python
 >>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
@@ -142,6 +157,7 @@ SpikingJelly 已经将下列数据集纳入：
 | CIFAR10-DVS                     | [CIFAR10-DVS: An Event-Stream Dataset for Object Classification](https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full) |
 | DVS128 Gesture                  | [A Low Power, Fully Event-Based Gesture Recognition System](https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html) |
 | ES-ImageNet                     | [ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks](https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full) |
+| HARDVS                          | [HARDVS: Revisiting Human Activity Recognition with Dynamic Vision Sensors](https://arxiv.org/abs/2211.09648) |
 | N-Caltech101                    | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
 | N-MNIST                         | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
 | Nav Gesture                     | [Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full) |
@@ -218,15 +234,15 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
 | 图例                                                         | 教程                                                         |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [基本概念](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/basic_concept.html) |
-| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/neuron.html) |
-| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/lif_fc_mnist.html) |
-| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/conv_fashion_mnist.html) |
-| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN(老版本教程，新版编写中)](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven/5_ann2snn.html) |
-| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/neuromorphic_datasets.html) |
-| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/classify_dvsg.html) |
-| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/recurrent_connection_and_stateful_synapse.html) |
-| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP学习](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/stdp.html) |
+| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [基本概念](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/basic_concept.html) |
+| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/neuron.html) |
+| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [使用单层全连接SNN识别MNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/lif_fc_mnist.html) |
+| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [使用卷积SNN识别Fashion-MNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/conv_fashion_mnist.html) |
+| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/ann2snn.html) |
+| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [神经形态数据集处理](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/neuromorphic_datasets.html) |
+| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/classify_dvsg.html) |
+| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/recurrent_connection_and_stateful_synapse.html) |
+| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP学习](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/stdp.html) |
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 

@@ -8,12 +8,26 @@
 
 * :ref:`Homepage in English <index_en>`
 
-注意
+版本说明
 ----------------
-此文档为最新的开发版的文档，如果你使用的是稳定版（例如从PIP安装的就是稳定版），请跳转到稳定版文档：
+自 `0.0.0.0.14` 版本开始，包括 `clock_driven` 和 `event_driven` 在内的模块被重命名了，请参考教程 `从老版本迁移 </activation_based/migrate_from_legacy>`_。
 
-https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
+不同版本文档的地址（其中 `latest` 是开发版）：
 
+- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`_
+
+- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/>`_
+
+- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/>`_
+  
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/>`_
+
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`_
+
+- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/>`_
+
+- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/>`_
+  
 安装
 ----------------
 
@@ -129,9 +143,24 @@ Welcome to SpikingJelly's documentation
 
 Notification
 ----------------
-This doc is for the latest developing version. If you use the stable version (e.g., install from PIP), please use the doc for the stable version:
+From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. \
+Please refer to the tutorial `Migrate From Old Versions </activation_based_en/migrate_from_legacy>_`.
 
-https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
+Docs for different versions (`latest` is the developing version):
+
+- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`_
+
+- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en>`_
+
+- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en>`_
+  
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en>`_
+
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
+
+- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en>`_
+
+- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en>`_
 
 Installation
 ----------------
