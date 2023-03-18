@@ -10,7 +10,7 @@
 
 版本说明
 ----------------
-自 `0.0.0.0.14` 版本开始，包括 `clock_driven` 和 `event_driven` 在内的模块被重命名了，请参考教程 `从老版本迁移 </activation_based/migrate_from_legacy>`_。
+自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 `从老版本迁移 </activation_based/migrate_from_legacy>`_。
 
 不同版本文档的地址（其中 `latest` 是开发版）：
 
@@ -22,7 +22,7 @@
   
 - `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/>`_
 
-- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`_
+- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`_
 
 - `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/>`_
 
@@ -143,7 +143,7 @@ Welcome to SpikingJelly's documentation
 
 Notification
 ----------------
-From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. \
+From the version ``0.0.0.0.14``, modules including ``clock_driven`` and ``event_driven`` are renamed. \
 Please refer to the tutorial `Migrate From Old Versions </activation_based_en/migrate_from_legacy>_`.
 
 Docs for different versions (`latest` is the developing version):
@@ -156,7 +156,7 @@ Docs for different versions (`latest` is the developing version):
   
 - `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en>`_
 
-- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
+- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
 
 - `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en>`_
 
