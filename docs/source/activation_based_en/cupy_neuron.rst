@@ -437,7 +437,7 @@ The outputs are:
         #include <cuda_fp16.h>
         extern "C" __global__
         void NeuronBPTTKernel_float_hard_reset_nodetach_reset(
-        const int & numel, const int & N, const float * grad_spike_seq, const float * grad_v_seq, const float * h_seq, float * grad_x_seq, float * grad_v_init, float & v_th, float & v_reset
+        const int & N, const float * grad_spike_seq, float * grad_v_init, const float * grad_v_seq, float * grad_x_seq, const float * h_seq, const int & numel, float & v_reset, float & v_th
         )
         
         {
@@ -474,8 +474,8 @@ The outputs are:
 
                 }
         
-                // grad_h_to_x should be defined here!;
-                grad_v_init[index] = grad_h * grad_h_to_x;
+                // grad_h_next_to_v should be defined here!;
+                grad_v_init[index] = grad_h * grad_h_next_to_v;
 
             }
         }
@@ -560,8 +560,8 @@ Then we can print the full codes of the BPTT kernel of the IF neuron:
 
         #include <cuda_fp16.h>
         extern "C" __global__
-        void NeuronBPTTKernel_float_hard_reset_nodetach_reset(
-        const int & numel, const int & N, const float * grad_spike_seq, const float * grad_v_seq, const float * h_seq, float * grad_x_seq, float * grad_v_init, float & v_th, float & v_reset
+        void IFNodeBPTTKernel_float_hard_reset_nodetach_reset(
+        const int & N, const float * grad_spike_seq, float * grad_v_init, const float * grad_v_seq, float * grad_x_seq, const float * h_seq, const int & numel, float & v_reset, float & v_th
         )
         
         {
@@ -598,8 +598,8 @@ Then we can print the full codes of the BPTT kernel of the IF neuron:
 
                 }
         
-                const float grad_h_to_x = 1.0f;
-                grad_v_init[index] = grad_h * grad_h_to_x;
+                const float grad_h_next_to_v = 1.0f;
+                grad_v_init[index] = grad_h * grad_h_next_to_v;
 
             }
         }
