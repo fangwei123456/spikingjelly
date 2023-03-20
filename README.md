@@ -24,9 +24,26 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 
 Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
 
+**Version notes**
+
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI. 
 
-Note that the default doc is for the latest developing version. If you are using the  stable version, do not forget to switch to the doc in the corresponding version: https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/.
+The default doc is for the latest developing version. If you are using the  stable version, do not forget to switch to the doc in the corresponding version.
+
+From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. Please refer to the tutorial [Migrate From Old Versions](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html).
+
+If you use an old version of SpikingJelly, you may meet some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
+
+**Docs for different versions:**
+
+- [zero](https://spikingjelly.readthedocs.io/zh_CN/zero/)
+- [0.0.0.0.4](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en)
+- [0.0.0.0.6](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en)
+- [0.0.0.0.8](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en)
+- [0.0.0.0.10](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en)
+- [0.0.0.0.12](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en)
+- [0.0.0.0.14](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en)
+- [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en)
 
 **Install the last stable version from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
@@ -48,8 +65,6 @@ git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
-If you use an old version of SpikingJelly, you may meet some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
-
 ## Build SNN In An Unprecedented Simple Way
 
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
@@ -62,7 +77,7 @@ nn.Sequential(
         )
 ```
 
-This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read [the tutorial of clock driven](https://spikingjelly.readthedocs.io/zh_CN/latest/tutorial_en.activation_based.html) for more details. You can also run this code in Python terminal for training on classifying MNIST:
+This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read refer to the tutorial for more details. You can also run this code in Python terminal for training on classifying MNIST:
 
 ```python
 python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
@@ -101,7 +116,7 @@ class ANN(nn.Module):
         return x
 ```
 
-This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read [the tutorial of ann2snn](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/5_ann2snn.html) for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
+This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read the tutorial for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
 
 ```python
 >>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
@@ -110,7 +125,7 @@ This simple network with analog encoding can achieve 98.44% accuracy after conve
 
 ## CUDA-Enhanced Neuron
 
-SpikingJelly provides two backends for multi-step neurons (read [Tutorials](#Tutorials) for more details). You can use the user-friendly `torch` backend for easily codding and debugging, and use `cupy` backend for faster training speed.
+SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily codding and debugging, and use `cupy` backend for faster training speed.
 
 The followed figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
 
@@ -141,6 +156,7 @@ SpikingJelly includes the following neuromorphic datasets:
 | CIFAR10-DVS    | [CIFAR10-DVS: An Event-Stream Dataset for Object Classification](https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full) |
 | DVS128 Gesture | [A Low Power, Fully Event-Based Gesture Recognition System](https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html) |
 | ES-ImageNet    | [ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks](https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full) |
+| HARDVS | [HARDVS: Revisiting Human Activity Recognition with Dynamic Vision Sensors](https://arxiv.org/abs/2211.09648) |
 | N-Caltech101   | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
 | N-MNIST        | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
 | Nav Gesture    | [Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full) |
@@ -216,15 +232,15 @@ SpikingJelly provides elaborate tutorials. Here are some of tutorials:
 
 | Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/basic_concept.html) |
-| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/neuron.html) |
-| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [Use single-layer fully connected SNN to identify MNIST(old version, the new version is under developing)](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/3_fc_mnist.html) |
-| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [Convolutional SNN to Classify FMNIST](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/conv_fashion_mnist.html) |
-| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN(old version, the new version is under developing)](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/clock_driven_en/5_ann2snn.html) |
-| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/neuromorphic_datasets.html) |
-| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/classify_dvsg.html) |
-| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
-| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/stdp.html) |
+| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/basic_concept.html) |
+| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuron.html) |
+| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [Single Fully Connected Layer SNN to Classify MNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/lif_fc_mnist.html) |
+| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [Convolutional SNN to Classify FMNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/conv_fashion_mnist.html) |
+| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/ann2snn.html) |
+| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuromorphic_datasets.html) |
+| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/classify_dvsg.html) |
+| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
+| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/stdp.html) |
 
 Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
 

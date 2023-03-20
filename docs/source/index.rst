@@ -8,12 +8,28 @@
 
 * :ref:`Homepage in English <index_en>`
 
-注意
+版本说明
 ----------------
-此文档为最新的开发版的文档，如果你使用的是稳定版（例如从PIP安装的就是稳定版），请跳转到稳定版文档：
+自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`../activation_based/migrate_from_legacy`。
 
-https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
+不同版本文档的地址（其中 `latest` 是开发版）：
 
+- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`_
+
+- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/>`_
+
+- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/>`_
+  
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/>`_
+
+- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`_
+
+- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/>`_
+
+- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_
+
+- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/>`_
+  
 安装
 ----------------
 
@@ -129,9 +145,26 @@ Welcome to SpikingJelly's documentation
 
 Notification
 ----------------
-This doc is for the latest developing version. If you use the stable version (e.g., install from PIP), please use the doc for the stable version:
+From the version ``0.0.0.0.14``, modules including ``clock_driven`` and ``event_driven`` are renamed. \
+Please refer to the tutorial :doc:`../activation_based_en/migrate_from_legacy`.
 
-https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/
+Docs for different versions (`latest` is the developing version):
+
+- `zero <https://spikingjelly.readthedocs.io/zh_CN/zero/>`_
+
+- `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en>`_
+
+- `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en>`_
+  
+- `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en>`_
+
+- `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
+
+- `0.0.0.0.12 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en>`_
+
+- `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en>`_
+
+- `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en>`_
 
 Installation
 ----------------
@@ -140,7 +173,7 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
 
-Install the last stable version from `PyPI <https://pypi.org/project/spikingjelly/>`_：
+Install the last stable version from `PyPI <https://pypi.org/project/spikingjelly/>`_:
 
 .. code-block:: bash
 
