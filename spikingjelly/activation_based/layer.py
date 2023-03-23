@@ -2131,6 +2131,7 @@ class MultiDimensionalAttention(base.MultiStepModule):
         self.ca = ChannelAttention(C, reduction_c)
         self.sa = SpatialAttention(kernel_size)
         self.sigmoid = nn.Sigmoid()
+        self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor):
         assert x.dim() == 5, ValueError(
