@@ -251,7 +251,7 @@ class MemoryModule(nn.Module, StepModule):
         :param x: input tensor with ``shape = [T, N, *] ``
         :type x: torch.Tensor
 
-        The multi-step forward function for this module, which is implementd by calling ``single_step_forward(x[t], *args, **kwargs)`` over ``T`` times
+        The multi-step forward function for this module, which is implemented by calling ``single_step_forward(x[t], *args, **kwargs)`` over ``T`` times
 
         """
 
