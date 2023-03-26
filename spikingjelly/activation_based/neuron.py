@@ -1816,12 +1816,15 @@ class KLIFNode(BaseNode):
 
 
     def neuronal_charge(self, x: torch.Tensor):
+        if self.v_reset is None:
+            v_reset = 0.
+        else:
+            v_reset = self.v_reset
         if self.decay_input:
-            self.v = self.neuronal_charge_decay_input(x, self.v, self.v_reset, self.tau, self.k)
+            self.v = self.neuronal_charge_decay_input(x, self.v, v_reset, self.tau, self.k)
 
         else:
-
-            self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau, self.k)
+            self.v = self.neuronal_charge_no_decay_input(x, self.v, v_reset, self.tau, self.k)
 
 
     def neuronal_reset(self, spike):
