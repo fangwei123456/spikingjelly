@@ -72,7 +72,7 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number_shd(h5_file: h5p
 def integrate_events_by_fixed_duration_shd(events: Dict, duration: int, W: int) -> np.ndarray:
 
     x = events['x']
-    t = events['t']
+    t = 1000*events['t']
     N = t.size
 
     frames = []
