@@ -15,5 +15,5 @@ Some fatal bugs and when the bug is fixed are shown in this table. Note that the
 | Bug: When using CuPy with `version >= 10`, CuPy will change `torch.cuda.current_device()` to 0, https://github.com/cupy/cupy/issues/6569. This bug will break training when using Distributed Data Parallel (DDP). | 2022-03-22 |
 | **Release: 0.0.0.0.12**                                      | 2022-05-01 |
 | **Release: 0.0.0.0.14**                                      | 2023-03-20 |
-| Bug: The SHD dataset can not be integrated  to frame by fixed duration correctly, https://github.com/fangwei123456/spikingjelly/issues/361. | 2023-04-01 |
+| Bug: The SHD dataset can not be integrated  to frames by fixed duration correctly, https://github.com/fangwei123456/spikingjelly/issues/361. This bug will create wrong frames if the user uses `spikingjelly.datasets.SpikingHeidelbergDigits(duration=duration, ...)` when `duration` is not `None`.| 2023-04-01 |
 
