@@ -11,6 +11,9 @@ Some fatal bugs and when the bug is fixed are shown in this table. Note that the
 | Bug: Cupy backend for spiking neurons, https://github.com/fangwei123456/spikingjelly/issues/106. This bug makes spiking neurons with cupy backend output wrong spikes and voltages. This bug has no influence on release 0.0.0.0.4, which does not use cupy. | 2021-09-16 |
 | **Release: 0.0.0.0.8**                                       | 2021-11-21 |
 | Bug: MultiStepParametricLIFNode, https://github.com/fangwei123456/spikingjelly/issues/151. This bug makes the gradient of the learnable parameter in MultiStepParametricLIFNode incomplete when backend is cupy. | 2021-12-10 |
-| **Release: 0.0.0.0.10**                                      |            |
+| **Release: 0.0.0.0.10**                                      | 2022-03-04 |
 | Bug: When using CuPy with `version >= 10`, CuPy will change `torch.cuda.current_device()` to 0, https://github.com/cupy/cupy/issues/6569. This bug will break training when using Distributed Data Parallel (DDP). | 2022-03-22 |
+| **Release: 0.0.0.0.12**                                      | 2022-05-01 |
+| **Release: 0.0.0.0.14**                                      | 2023-03-20 |
+| Bug: The SHD dataset can not be integrated  to frame by fixed duration correctly, https://github.com/fangwei123456/spikingjelly/issues/361. | 2023-04-01 |
 
