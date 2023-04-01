@@ -1931,7 +1931,7 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         super().__init__(alpha, v_th, *args, **kwargs)
 
 
-class TemporalWiseAttention(base.MultiStepModule):
+class TemporalWiseAttention(nn.Module, base.MultiStepModule):
     def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
         """
         * :ref:`API in English <MultiStepTemporalWiseAttention.__init__-en>`
@@ -2013,7 +2013,7 @@ class TemporalWiseAttention(base.MultiStepModule):
         y_seq = y_seq.transpose(0, 1)
         return y_seq
 
-class MultiDimensionalAttention(base.MultiStepModule):
+class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
     def __init__(self, T: int, C: int, reduction_t: int = 16, reduction_c: int = 16, kernel_size=3):
         """
         * :ref:`API in English <MultiStepMultiDimensionalAttention.__init__-en>`
