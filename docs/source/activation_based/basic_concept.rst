@@ -26,7 +26,7 @@ SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly�
 在 ``spikingjelly.activation_based`` 中，数据有两种格式，分别为：
 
 * 表示单个时刻的数据，其 ``shape = [N, *]``，其中 ``N`` 是batch维度，``*`` 表示任意额外的维度
-* 表示多个时刻的数据，其 ``shape = [T, N, *]``，其中 ``T`` 是数据的时间维度， ``N`` 是batch维度，`*` 表示任意额外的维度
+* 表示多个时刻的数据，其 ``shape = [T, N, *]``，其中 ``T`` 是数据的时间维度， ``N`` 是batch维度，``*`` 表示任意额外的维度
 
 
 步进模式
