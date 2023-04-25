@@ -46,7 +46,7 @@ def check_backend_library(backend: str):
             raise ImportError('Lava-DL is not installed! You can install it from ' \
                               '"https://github.com/lava-nc/lava-dl". ')
     else:
-        raise NotImplementedError(backend)
+        pass
 
 
 class StepModule:
