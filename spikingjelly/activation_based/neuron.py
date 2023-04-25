@@ -1989,6 +1989,9 @@ class MaskedPSN(base.MemoryModule):
         self._k = value
 
     def single_step_forward(self, x: torch.Tensor):
+        if self.k < 1.:
+            raise ValueError("The masked PSN can not work in single-step mode when k < 1!")
+
         self.queue.append(x.flatten())
         if self.queue.__len__() > self.order:
             self.queue.pop(0)
@@ -1996,11 +1999,15 @@ class MaskedPSN(base.MemoryModule):
         if self.time_step + 1 > self.T:
             raise OverflowError(f"The MaskedPSN(T={self.T}) has run {self.time_step + 1} time-steps!")
 
-        weight = self.masked_weight()[self.time_step][self.time_step + 1 - self.queue.__len__(): self.time_step + 1]
+
+        weight = self.masked_weight()[self.time_step, self.time_step + 1 - self.queue.__len__(): self.time_step + 1]
         x_seq = torch.stack(self.queue)
+
+
 
         for i in range(x.dim()):
             weight = weight.unsqueeze(-1)
+
 
         h = torch.sum(weight * x_seq, 0)
         spike = self.surrogate_function(h + self.bias[self.time_step])
