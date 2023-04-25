@@ -2002,8 +2002,6 @@ class MaskedPSN(base.MemoryModule):
         for i in range(x.dim()):
             weight = weight.unsqueeze(-1)
 
-        print(weight.shape, x_seq.shape)
-
         h = torch.sum(weight * x_seq, 0)
         spike = self.surrogate_function(h + self.bias[self.time_step])
 
