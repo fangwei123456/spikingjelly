@@ -1908,7 +1908,7 @@ class MaskedPSN(base.MemoryModule):
 
     def masked_weight(self):
         if self.k >= 1.:
-            return self.weight
+            return self.weight * self.mask0
         else:
             return self.gen_masked_weight(self.k, self.mask0, self.mask1, self.weight)
 
