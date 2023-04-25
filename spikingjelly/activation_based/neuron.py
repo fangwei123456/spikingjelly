@@ -1938,7 +1938,7 @@ class MaskedPSN(base.MemoryModule):
         .. math::
 
             {M}_{order}[i][j] = \\begin{cases}
-                1, ~~ j \\leq i \\leq j + k - 1 \\\\
+                1, ~~ j \\leq i \\leq j + \\mathrm{order} - 1 \\\\
                 0, \\mathrm{otherwise}
             \\end{cases}.
 
