@@ -1874,7 +1874,7 @@ class PSN(nn.Module, base.MultiStepModule):
             H &= WX, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\label{eq psn neuronal charge}\\\\
             S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
 
-        where :math`W` is the learnable weight matrix, and :math:`B` is the learnable threshold.
+        where :math:`W` is the learnable weight matrix, and :math:`B` is the learnable threshold.
 
         .. admonition:: Note
             :class: note
