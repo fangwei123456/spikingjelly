@@ -1903,24 +1903,24 @@ class PSN(nn.Module, base.MultiStepModule):
 class MaskedPSN(base.MemoryModule):
     @staticmethod
     @torch.jit.script
-    def gen_masked_weight(k: float, mask0: torch.Tensor, mask1: torch.Tensor, weight: torch.Tensor):
-        return (k * mask0 + (1. - k) * mask1) * weight
+    def gen_masked_weight(lambda_: float, mask0: torch.Tensor, mask1: torch.Tensor, weight: torch.Tensor):
+        return (lambda_ * mask0 + (1. - lambda_) * mask1) * weight
 
     def masked_weight(self):
-        if self.k >= 1.:
+        if self.lambda_ >= 1.:
             return self.weight * self.mask0
         else:
-            return self.gen_masked_weight(self.k, self.mask0, self.mask1, self.weight)
+            return self.gen_masked_weight(self.lambda_, self.mask0, self.mask1, self.weight)
 
-    def __init__(self, order: int, T: int, k_init: float = 0.,
+    def __init__(self, k: int, T: int, lambda_init: float = 0.,
                  surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(), step_mode: str = 's'):
         """
-        :param order: the order of the Masked PSN
-        :type order: int
+        :param k: the order of the Masked PSN
+        :type k: int
         :param T: the number of time-steps
         :type T: int
-        :param k_init: the initial value of ``k`` to adjust the progressive masking process
-        :type k_init: float
+        :param lambda_init: the initial value of :math:`\\lambda` to adjust the progressive masking process
+        :type lambda_init: float
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
@@ -1930,15 +1930,15 @@ class MaskedPSN(base.MemoryModule):
 
         .. math::
 
-            H &= (W \\cdot {M}_{order})X, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, {M}_{order} \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\\\
+            H &= (W \\cdot {M}_{k})X, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, {M}_{k} \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\\\
             S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
 
-        where :math`W` is the learnable weight matrix, :math:`B` is the learnable threshold, and :math:`{M}_{order}` is defined as
+        where :math`W` is the learnable weight matrix, :math:`B` is the learnable threshold, and :math:`{M}_{k}` is defined as
 
         .. math::
 
-            {M}_{order}[i][j] = \\begin{cases}
-                1, ~~ j \\leq i \\leq j + \\mathrm{order} - 1 \\\\
+            {M}_{k}[i][j] = \\begin{cases}
+                1, ~~ j \\leq i \\leq j + k - 1 \\\\
                 0, \\mathrm{otherwise}
             \\end{cases}.
 
@@ -1946,11 +1946,11 @@ class MaskedPSN(base.MemoryModule):
 
         .. math::
 
-            M_{order}(k) = k \\cdot M_{order} + (1 - k) \\cdot J,
+            M_{k}(\\lambda) = \\lambda \\cdot M_{k} + (1 - \\lambda) \\cdot J,
 
         where :math:`J` is an all-one matrix.
 
-        The user can set :math:`k` during training by calling ``self.k = ...``.
+        The user can set :math:`k` during training by calling ``self.lambda_ = ...``.
 
         .. admonition:: Note
             :class: note
@@ -1962,7 +1962,7 @@ class MaskedPSN(base.MemoryModule):
         self.register_memory('time_step', 0)
         self.register_memory('queue', [])
         self.step_mode = step_mode
-        self.order = order
+        self.k = k
         self.T = T
         self.surrogate_function = surrogate_function
         weight = torch.zeros([T, T])
@@ -1974,26 +1974,19 @@ class MaskedPSN(base.MemoryModule):
         nn.init.kaiming_uniform_(self.weight, a=math.sqrt(5))
         nn.init.constant_(self.bias, -1.)
 
-        self._k = k_init
+        self.lambda_ = lambda_init
         mask1 = torch.ones([T, T])
-        mask0 = torch.tril(mask1) * torch.triu(mask1, -(order - 1))
+        mask0 = torch.tril(mask1) * torch.triu(mask1, -(self.k - 1))
         self.register_buffer('mask0', mask0)
         self.register_buffer('mask1', mask1)
 
-    @property
-    def k(self):
-        return self._k
-
-    @k.setter
-    def k(self, value: float):
-        self._k = value
 
     def single_step_forward(self, x: torch.Tensor):
-        if self.k < 1.:
+        if self.lambda_ < 1.:
             raise ValueError("The masked PSN can not work in single-step mode when k < 1!")
 
         self.queue.append(x.flatten())
-        if self.queue.__len__() > self.order:
+        if self.queue.__len__() > self.k:
             self.queue.pop(0)
 
         if self.time_step + 1 > self.T:
@@ -2024,14 +2017,14 @@ class MaskedPSN(base.MemoryModule):
 
     def state_dict(self, *args, **kwargs):
         sd = super().state_dict()
-        sd['k'] = torch.as_tensor(self.k)
+        sd['lambda_'] = torch.as_tensor(self.lambda_)
         return sd
 
     def load_state_dict(self, state_dict: 'OrderedDict[str, Tensor]',
                         strict: bool = True):
 
-        self.k = state_dict['k'].item()
-        state_dict.pop('k')
+        self.lambda_ = state_dict['lambda_'].item()
+        state_dict.pop('lambda_')
         super().load_state_dict(state_dict, strict)
 
 
@@ -2045,18 +2038,18 @@ class SlidingPSN(base.MemoryModule):
         weight = torch.zeros([T, T], device=self.weight.device)
         for i in range(T):
             end = i + 1
-            start = max(0, i + 1 - self.order)
-            length = min(end - start, self.order)
-            weight[i][start: end] = self.weight[self.order - length: self.order]
+            start = max(0, i + 1 - self.k)
+            length = min(end - start, self.k)
+            weight[i][start: end] = self.weight[self.k - length: self.k]
 
         return weight
 
-    def __init__(self, order: int, exp_init: bool = True,
+    def __init__(self, k: int, exp_init: bool = True,
                  surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(), step_mode: str = 's',
                  backend: str = 'gemm'):
         """
-        :param order: the order of the Masked PSN
-        :type order: int
+        :param k: the order of the Masked PSN
+        :type k: int
         :param exp_init: if ``True``, the weight will be initialized as ``(..., 1/4, 1/2, 1)``. If ``False``, the weight    will be initialized by the kaiming uniform
         :type exp_init: bool
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
@@ -2092,16 +2085,16 @@ class SlidingPSN(base.MemoryModule):
         super().__init__()
         self.register_memory('queue', [])
         self.step_mode = step_mode
-        self.order = order
+        self.k = k
         self.surrogate_function = surrogate_function
         self.backend = backend
 
         if exp_init:
-            weight = torch.ones([order])
-            for i in range(order - 2, -1, -1):
+            weight = torch.ones([k])
+            for i in range(k - 2, -1, -1):
                 weight[i] = weight[i + 1] / 2.
         else:
-            weight = torch.ones([1, order])
+            weight = torch.ones([1, k])
             nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
             weight = weight[0]
 
@@ -2110,10 +2103,10 @@ class SlidingPSN(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor):
         self.queue.append(x.flatten())
-        if self.queue.__len__() > self.order:
+        if self.queue.__len__() > self.k:
             self.queue.pop(0)
 
-        weight = self.weight[self.order - self.queue.__len__(): self.order]
+        weight = self.weight[self.k - self.queue.__len__(): self.k]
         x_seq = torch.stack(self.queue)
 
         for i in range(x.dim()):
@@ -2134,7 +2127,7 @@ class SlidingPSN(base.MemoryModule):
             x_seq_shape = x_seq.shape
             # [T, N, *] -> [T, N] -> [N, T] -> [N, 1, T]
             x_seq = x_seq.flatten(1).t().unsqueeze(1)
-            x_seq = F.pad(x_seq, pad=(self.order - 1, 0))
+            x_seq = F.pad(x_seq, pad=(self.k - 1, 0))
             x_seq = F.conv1d(x_seq, self.weight.view(1, 1, -1), stride=1)
             x_seq = x_seq.squeeze(1).t().view(x_seq_shape)
             return self.surrogate_function(x_seq + self.bias)
