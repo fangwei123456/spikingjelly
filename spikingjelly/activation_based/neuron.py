@@ -1950,7 +1950,7 @@ class MaskedPSN(base.MemoryModule):
 
         where :math:`J` is an all-one matrix.
 
-        The user can set :math:`k` during training by calling ``self.k = a``.
+        The user can set :math:`k` during training by calling ``self.k = ...``.
 
         .. admonition:: Note
             :class: note
