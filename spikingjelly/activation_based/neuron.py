@@ -1942,7 +1942,7 @@ class MaskedPSN(base.MemoryModule):
                 0, \\mathrm{otherwise}
             \\end{cases}.
 
-        :math:`k` is used to adjust the progressive masking process, which is
+        :math:`\\lambda` is used to adjust the progressive masking process, which is
 
         .. math::
 
@@ -1950,7 +1950,7 @@ class MaskedPSN(base.MemoryModule):
 
         where :math:`J` is an all-one matrix.
 
-        The user can set :math:`k` during training by calling ``self.lambda_ = ...``.
+        The user can set :math:`\\lambda` during training by calling ``self.lambda_ = ...``.
 
         .. admonition:: Note
             :class: note
