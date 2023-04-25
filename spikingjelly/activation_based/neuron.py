@@ -2048,7 +2048,7 @@ class SlidingPSN(base.MemoryModule):
                  surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(), step_mode: str = 's',
                  backend: str = 'gemm'):
         """
-        :param k: the order of the Masked PSN
+        :param k: the order of the Sliding PSN
         :type k: int
         :param exp_init: if ``True``, the weight will be initialized as ``(..., 1/4, 1/2, 1)``. If ``False``, the weight    will be initialized by the kaiming uniform
         :type exp_init: bool
@@ -2073,7 +2073,7 @@ class SlidingPSN(base.MemoryModule):
         .. admonition:: Note
             :class: note
 
-            The sliding PSN supports both single-step and multi-step mode. But using the multi-step mode is much faster than the single-step mode.
+            The Sliding PSN supports both single-step and multi-step mode. But using the multi-step mode is much faster than the single-step mode.
 
         .. admonition:: Note
             :class: note
