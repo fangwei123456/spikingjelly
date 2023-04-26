@@ -1867,7 +1867,7 @@ class PSN(nn.Module, base.MultiStepModule):
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
 
-        The Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability`. The neuronal dynamics are defined as
+        The Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as
 
         .. math::
 
@@ -1926,7 +1926,7 @@ class MaskedPSN(base.MemoryModule):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        The Masked Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability`. The neuronal dynamics are defined as
+        The Masked Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as
 
         .. math::
 
@@ -2059,7 +2059,7 @@ class SlidingPSN(base.MemoryModule):
         :param backend: backend fot this neuron layer, which can be "gemm" or "conv"
         :type backend: str
 
-        The Sliding Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability`. The neuronal dynamics are defined as
+        The Sliding Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as
 
         .. math::
 
