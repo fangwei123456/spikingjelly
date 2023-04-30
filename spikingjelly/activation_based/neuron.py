@@ -1906,7 +1906,7 @@ class PSN(nn.Module, base.MultiStepModule):
 class MaskedPSN(base.MemoryModule):
     @staticmethod
     @torch.jit.script
-    def gen_masked_weight(lambda_: float, mask0: torch.Tensor, mask1: torch.Tensor, weight: torch.Tensor):
+    def gen_masked_weight(lambda_: torch.Tensor, mask0: torch.Tensor, mask1: torch.Tensor, weight: torch.Tensor):
         return (lambda_ * mask0 + (1. - lambda_) * mask1) * weight
 
     def masked_weight(self):
