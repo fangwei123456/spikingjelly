@@ -2077,11 +2077,6 @@ class SlidingPSN(base.MemoryModule):
 
             The Sliding PSN supports both single-step and multi-step mode. But using the multi-step mode is much faster than the single-step mode.
 
-        .. admonition:: Note
-            :class: note
-
-            The "gemm" backend is much faster than the "conv" backend when ``T`` is small. But when ``T`` is large, the ``conv`` backend is faster.
-
 
         """
 
