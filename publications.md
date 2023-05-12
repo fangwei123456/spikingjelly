@@ -85,6 +85,8 @@
 | [Constructing Deep Spiking Neural Networks from Artificial Neural Networks with Knowledge Distillation](https://arxiv.org/abs/2304.05627) |                                                              | CVPR 2022                                                    |
 | [Spiking-Fer: Spiking Neural Network for Facial Expression Recognition With Event Cameras](https://arxiv.org/abs/2304.10211) |                                                              |                                                              |
 | [Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability](https://arxiv.org/abs/2304.12760) | https://github.com/fangwei123456/Parallel-Spiking-Neuron     |                                                              |
+| [Spikingformer: Spike-driven Residual Learning for Transformer-based Spiking Neural Network](https://arxiv.org/abs/2304.11954) | https://github.com/zhouchenlin2096/Spikingformer     |                                                              |
+| [Enhancing the Performance of Transformer-based Spiking Neural Networks by Improved Downsampling with Precise Gradient Backpropagation](https://arxiv.org/abs/2305.05954) | https://github.com/zhouchenlin2096/Spikingformer-CML     |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
