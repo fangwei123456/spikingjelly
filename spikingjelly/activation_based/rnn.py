@@ -487,11 +487,15 @@ class SpikingRNNBase(nn.Module):
                 else:
                     output.append(new_states_list[0, -1].clone().unsqueeze(0))
                 states_list = new_states_list.clone()
+
             if self.states_num() == 1:
                 return torch.cat(output, dim=0), new_states_list
             else:
                 # split使得返回值是tuple
-                return torch.cat(output, dim=0), torch.split(new_states_list, 1, dim=0)
+                new_states_list = list(torch.split(new_states_list, 1, dim=0))
+                for i in range(new_states_list.__len__()):
+                    new_states_list[i] = new_states_list[i].squeeze(0)
+                return torch.cat(output, dim=0), new_states_list
 
 class SpikingLSTMCell(SpikingRNNCellBase):
     def __init__(self, input_size: int, hidden_size: int, bias=True,
