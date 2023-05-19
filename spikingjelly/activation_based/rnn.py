@@ -422,8 +422,17 @@ class SpikingRNNBase(nn.Module):
             # states非None且为tuple，则合并成tensor
             states_list = torch.stack(states)
             # shape = [self.states_num(), self.num_layers * 2, batch_size, self.hidden_size]
-        elif states.dim() == 3:
-            states_list = states
+        elif isinstance(states, torch.Tensor):
+            if states.dim() == 3:
+                states_list = states
+            else:
+                raise TypeError
+        elif states == None:
+            if self.bidirectional == True:
+                states_list = torch.zeros(size=[self.states_num(), self.num_layers*2, x.shape[1], self.hidden_size], dtype=torch.float, device=x.device).squeeze(0)
+            else:
+                states_list = torch.zeros(size=[self.states_num(), self.num_layers, x.shape[1], self.hidden_size], dtype=torch.float, device=x.device).squeeze(0)
+            
         else:
             raise TypeError
             
