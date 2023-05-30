@@ -256,19 +256,28 @@ class SpikingHeidelbergDigits(Dataset):
                     # use multi-thread to accelerate
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                        sub_threads = []
+
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i, 
-                                       frames_np_train_root, self.split_by, frames_number, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
+                                       frames_np_train_root, self.split_by, frames_number, self.get_W(), True))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
+                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True))
 
+
+
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
 
 
 
@@ -303,19 +312,26 @@ class SpikingHeidelbergDigits(Dataset):
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                        sub_threads = []
+
                         h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_train_root, self.duration, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
+                                       frames_np_train_root, self.duration, self.get_W(), True))
 
                         h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_test_root, self.duration, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
+                                       frames_np_test_root, self.duration, self.get_W(), True))
+
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
                 self.frames_np_root = frames_np_root
@@ -348,20 +364,26 @@ class SpikingHeidelbergDigits(Dataset):
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                        sub_threads = []
 
                         h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_train_root, self.get_W())
+                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
+                                       frames_np_train_root, self.get_W()))
 
                         h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_test_root, self.get_W())
+                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
+                                       frames_np_test_root, self.get_W()))
+
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
 
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
@@ -452,10 +474,16 @@ class SpikingHeidelbergDigits(Dataset):
         This function defines how to extract download files.
         '''
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
+            sub_threads = []
             for zip_file in os.listdir(download_root):
                 zip_file = os.path.join(download_root, zip_file)
                 print(f'Extract [{zip_file}] to [{extract_root}].')
-                tpe.submit(extract_archive, zip_file, extract_root)
+                sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
 
     @staticmethod
     def get_W():
@@ -607,24 +635,33 @@ class SpikingSpeechCommands(Dataset):
                     # use multi-thread to accelerate
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                        sub_threads = []
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, 
-                                       i, frames_np_train_root, self.split_by, frames_number, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file,
+                                       i, frames_np_train_root, self.split_by, frames_number, self.get_W(), True))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
+                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
+                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True))
+
+
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
 
 
 
@@ -666,27 +703,36 @@ class SpikingSpeechCommands(Dataset):
                     # use multi-thread to accelerate
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                        sub_threads = []
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_train_root, self.duration, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
+                                       frames_np_train_root, self.duration, self.get_W(), True))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_valid_root, self.duration, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
+                                       frames_np_valid_root, self.duration, self.get_W(), True))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_test_root, self.duration, self.get_W(), True)
+                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
+                                       frames_np_test_root, self.duration, self.get_W(), True))
+
+
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
                 self.frames_np_root = frames_np_root
@@ -726,27 +772,36 @@ class SpikingSpeechCommands(Dataset):
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                        sub_threads = []
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_train_root, self.get_W())
+                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
+                                       frames_np_train_root, self.get_W()))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
-                            tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_valid_root, self.get_W())
+                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
+                                       frames_np_valid_root, self.get_W()))
+
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
                         for i in range(h5_file['labels'].__len__()):
                             print(
                                 f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_test_root, self.get_W())
+                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
+                                       frames_np_test_root, self.get_W()))
+
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
+
 
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
@@ -839,10 +894,16 @@ class SpikingSpeechCommands(Dataset):
         This function defines how to extract download files.
         '''
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
+            sub_threads = []
             for zip_file in os.listdir(download_root):
                 zip_file = os.path.join(download_root, zip_file)
                 print(f'Extract [{zip_file}] to [{extract_root}].')
-                tpe.submit(extract_archive, zip_file, extract_root)
+                sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
 
     @staticmethod
     def get_W():

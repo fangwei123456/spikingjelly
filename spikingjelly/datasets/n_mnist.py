@@ -61,10 +61,16 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
         This function defines how to extract download files.
         '''
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
+            sub_threads = []
             for zip_file in os.listdir(download_root):
                 zip_file = os.path.join(download_root, zip_file)
                 print(f'Extract [{zip_file}] to [{extract_root}].')
-                tpe.submit(extract_archive, zip_file, extract_root)
+                sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
 
 
     @staticmethod
@@ -114,6 +120,7 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
         '''
         t_ckp = time.time()
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+            sub_threads = []
             # too many threads will make the disk overload
             for train_test_dir in ['Train', 'Test']:
                 source_dir = os.path.join(extract_root, train_test_dir)
@@ -129,8 +136,14 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
                         source_file = os.path.join(bin_dir, bin_file)
                         target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
                         print(f'Start to convert [{source_file}] to [{target_file}].')
-                        tpe.submit(NMNIST.read_bin_save_to_np, source_file,
-                                   target_file)
+                        sub_threads.append(tpe.submit(NMNIST.read_bin_save_to_np, source_file,
+                                   target_file))
+
+
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
 
 
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')

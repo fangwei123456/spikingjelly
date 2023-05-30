@@ -113,6 +113,7 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
         t_ckp = time.time()
         extract_root = os.path.join(extract_root, 'Caltech101')
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+            sub_threads = []
             # too many threads will make the disk overload
             for class_name in os.listdir(extract_root):
                 bin_dir = os.path.join(extract_root, class_name)
@@ -123,8 +124,12 @@ class NCaltech101(sjds.NeuromorphicDatasetFolder):
                     source_file = os.path.join(bin_dir, bin_file)
                     target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
                     print(f'Start to convert [{source_file}] to [{target_file}].')
-                    tpe.submit(NCaltech101.read_bin_save_to_np, source_file,
-                               target_file)
+                    sub_threads.append(tpe.submit(NCaltech101.read_bin_save_to_np, source_file,
+                               target_file))
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
 
 
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')

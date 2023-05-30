@@ -66,11 +66,17 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         print(f'Mkdir [{temp_ext_dir}].')
         extract_archive(os.path.join(download_root, 'ICCV2019_DVS_dataset.zip'), temp_ext_dir)
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
+            sub_threads = []
             for zip_file in os.listdir(temp_ext_dir):
                 if os.path.splitext(zip_file)[1] == '.zip':
                     zip_file = os.path.join(temp_ext_dir, zip_file)
                     print(f'Extract [{zip_file}] to [{extract_root}].')
-                    tpe.submit(extract_archive, zip_file, extract_root)
+                    sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
+
 
         shutil.rmtree(temp_ext_dir)
         print(f'Rmtree [{temp_ext_dir}].')
@@ -129,6 +135,7 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         '''
         t_ckp = time.time()
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+            sub_threads = []
             for class_name in os.listdir(extract_root):
                 mat_dir = os.path.join(extract_root, class_name)
                 np_dir = os.path.join(events_np_root, class_name)
@@ -138,8 +145,13 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
                     source_file = os.path.join(mat_dir, bin_file)
                     target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
                     print(f'Start to convert [{source_file}] to [{target_file}].')
-                    tpe.submit(ASLDVS.read_mat_save_to_np, source_file,
-                               target_file)
+                    sub_threads.append(tpe.submit(ASLDVS.read_mat_save_to_np, source_file,
+                               target_file))
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
+
 
 
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')

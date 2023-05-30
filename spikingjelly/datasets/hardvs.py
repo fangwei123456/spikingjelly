@@ -73,11 +73,17 @@ class HARDVS(sjds.NeuromorphicDatasetFolder):
         print(f'Mkdir [{temp_ext_dir}].')
         extract_archive(os.path.join(download_root, 'MINI_HARDVS_files.zip'), temp_ext_dir)
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
+            sub_threads = []
             for i in range(1, 301):
                 zip_file = os.path.join(temp_ext_dir, 'MINI_HARDVS_files',  'action_' + str(i).zfill(3) + '.zip')
                 target_dir = os.path.join(extract_root, 'action_' + str(i).zfill(3))
                 print(f'Extract [{zip_file}] to [{target_dir}].')
-                tpe.submit(extract_archive, zip_file, target_dir)
+                sub_threads.append(tpe.submit(extract_archive, zip_file, target_dir))
+
+            for sub_thread in sub_threads:
+                if sub_thread.exception():
+                    print(sub_thread.exception())
+                    exit(-1)
 
         shutil.rmtree(temp_ext_dir)
         print(f'Rmtree [{temp_ext_dir}].')

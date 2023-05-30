@@ -284,22 +284,31 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
             # use multi-thread to accelerate
             t_ckp = time.time()
             with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+                sub_threads = []
                 print(f'Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+
 
                 for fname in trials_to_train_txt.readlines():
                     fname = fname.strip()
                     if fname.__len__() > 0:
                         aedat_file = os.path.join(aedat_dir, fname)
                         fname = os.path.splitext(fname)[0]
-                        tpe.submit(DVS128Gesture.split_aedat_files_to_np, fname, aedat_file, os.path.join(aedat_dir, fname + '_labels.csv'), train_dir)
+                        sub_threads.append(tpe.submit(DVS128Gesture.split_aedat_files_to_np, fname, aedat_file, os.path.join(aedat_dir, fname + '_labels.csv'), train_dir))
+
 
                 for fname in trials_to_test_txt.readlines():
                     fname = fname.strip()
                     if fname.__len__() > 0:
                         aedat_file = os.path.join(aedat_dir, fname)
                         fname = os.path.splitext(fname)[0]
-                        tpe.submit(DVS128Gesture.split_aedat_files_to_np, fname, aedat_file,
-                                   os.path.join(aedat_dir, fname + '_labels.csv'), test_dir)
+                        sub_threads.append(tpe.submit(DVS128Gesture.split_aedat_files_to_np, fname, aedat_file,
+                                   os.path.join(aedat_dir, fname + '_labels.csv'), test_dir))
+
+
+                for sub_thread in sub_threads:
+                    if sub_thread.exception():
+                        print(sub_thread.exception())
+                        exit(-1)
 
             print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
         print(f'All aedat files have been split to samples and saved into [{train_dir, test_dir}].')
