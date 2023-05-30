@@ -736,6 +736,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     # use multi-thread to accelerate
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                        sub_threads = []
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
@@ -743,7 +744,14 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                                 for e_file in e_files:
                                     events_np_file = os.path.join(e_root, e_file)
                                     print(f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
-                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number, self.load_events_np, events_np_file, output_dir, split_by, frames_number, H, W, True)
+                                    sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number, self.load_events_np, events_np_file, output_dir, split_by, frames_number, H, W, True))
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
+
+
+
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
@@ -767,13 +775,18 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                        sub_threads = []
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
                                 output_dir = os.path.join(frames_np_root, os.path.relpath(e_root, events_np_root))
                                 for e_file in e_files:
                                     events_np_file = os.path.join(e_root, e_file)
                                     print(f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
-                                    tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration, self.load_events_np, events_np_file, output_dir, duration, H, W, True)
+                                    sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration, self.load_events_np, events_np_file, output_dir, duration, H, W, True))
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
 
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
@@ -798,6 +811,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                     t_ckp = time.time()
                     with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
                         print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                        sub_threads = []
                         for e_root, e_dirs, e_files in os.walk(events_np_root):
                             if e_files.__len__() > 0:
                                 output_dir = os.path.join(frames_np_root, os.path.relpath(e_root, events_np_root))
@@ -805,8 +819,12 @@ class NeuromorphicDatasetFolder(DatasetFolder):
                                     events_np_file = os.path.join(e_root, e_file)
                                     print(
                                         f'Start to integrate [{events_np_file}] to frames and save to [{output_dir}].')
-                                    tpe.submit(save_frames_to_npz_and_print, os.path.join(output_dir, os.path.basename(events_np_file)), custom_integrate_function(np.load(events_np_file), H, W))
+                                    sub_threads.append(tpe.submit(save_frames_to_npz_and_print, os.path.join(output_dir, os.path.basename(events_np_file)), custom_integrate_function(np.load(events_np_file), H, W)))
 
+                        for sub_thread in sub_threads:
+                            if sub_thread.exception():
+                                print(sub_thread.exception())
+                                exit(-1)
                     print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
                 _root = frames_np_root
