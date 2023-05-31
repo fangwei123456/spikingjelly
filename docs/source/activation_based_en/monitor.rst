@@ -378,7 +378,7 @@ The outputs are:
     torch.bool size = 1024
 
 
-:classl:`spikingjelly.activation_based.tensor_cache` provides functions to compress a float32/float16 tensor to an uint8 tensor, whose each element saves 8 spikes. This uint8 tensor can be regarded as a "true bool" tensor. Here is an example:
+:class:`spikingjelly.activation_based.tensor_cache` provides functions to compress a float32/float16 tensor to an uint8 tensor, whose each element saves 8 spikes. This uint8 tensor can be regarded as a "true bool" tensor. Here is an example:
 
 .. code-block:: python
 

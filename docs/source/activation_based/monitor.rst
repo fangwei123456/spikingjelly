@@ -401,7 +401,7 @@
     float32 size = 4096
     torch.bool size = 1024
 
-在 :classl:`spikingjelly.activation_based.tensor_cache` 中提供了将float32/float16类型的脉冲tensor压缩到uint8类型脉冲tensor的函数，其中uint8的tensor，每个\
+在 :class:`spikingjelly.activation_based.tensor_cache` 中提供了将float32/float16类型的脉冲tensor压缩到uint8类型脉冲tensor的函数，其中uint8的tensor，每个\
 元素使用8比特，保存8个脉冲，相当于是“真正的bool”类型。示例如下：
 
 .. code-block:: python
