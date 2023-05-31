@@ -89,6 +89,19 @@ class DataTypeConvertCUDACode:
             }
     '''
 def float_spike_to_bool(spike: torch.Tensor):
+    """
+    :param spike: a spike tensor whose ``dtype=torch.float`` or ``dtype=torch.half`` and all elements are 0 or 1
+    :type spike: torch.Tensor
+    :return: (spike_b, s_dtype, s_shape, s_padding)
+        spike_b: a compressed spike tensor with ``dtype=torch.uint8`` and each element stores 8 spikes
+        s_dtype: the dtype of the original spike
+        s_shape: the shape of the original spike
+        s_padding: the number of padding elements
+    :rtype: tuple
+
+    Compress a float/half spike tensor ``spike`` to an uint8 tensor ``spike_b``. Each element in ``spike_b``
+    represents 8 elements of ``spike``.
+    """
     s_dtype = spike.dtype
     if s_dtype == torch.float:
         kernel_codes = DataTypeConvertCUDACode.float2bool
@@ -107,27 +120,46 @@ def float_spike_to_bool(spike: torch.Tensor):
         spike = F.pad(spike, (0, s_padding))
     device_id = spike.get_device()
     spike_b = torch.zeros([spike.numel() // 8], device=spike.device, dtype=torch.uint8)
-    with cuda_utils.DeviceEnvironment(device_id):
-        numel = spike_b.numel()
-        blocks = cuda_utils.cal_blocks(numel)
-        numel = cupy.asarray(numel)
-        spike, spike_b, numel = cuda_utils.get_contiguous(spike, spike_b, numel)
-        kernel_args = [spike, spike_b, numel]
-        kernel = cupy.RawKernel(
-            kernel_codes,
-            kernel_name,
-            options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
-        )
-        kernel(
-            (blocks,), (configure.cuda_threads,),
-            cuda_utils.wrap_args_to_raw_kernel(
-                device_id,
-                *kernel_args
+
+    if device_id >= 0 and cupy is not None:
+        with cuda_utils.DeviceEnvironment(device_id):
+            numel = spike_b.numel()
+            blocks = cuda_utils.cal_blocks(numel)
+            numel = cupy.asarray(numel)
+            spike, spike_b, numel = cuda_utils.get_contiguous(spike, spike_b, numel)
+            kernel_args = [spike, spike_b, numel]
+            kernel = cupy.RawKernel(
+                kernel_codes,
+                kernel_name,
+                options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
             )
-        )
+            kernel(
+                (blocks,), (configure.cuda_threads,),
+                cuda_utils.wrap_args_to_raw_kernel(
+                    device_id,
+                    *kernel_args
+                )
+            )
+    else:
+        spike = spike.view(-1, 8).to(torch.uint8)
+        for i in range(8):
+            spike_b += spike[:, i] << i
+
     return spike_b, s_dtype, s_shape, s_padding
 
 def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0):
+    """
+    :param spike_b: a compressed spike tensor with ``dtype=torch.uint8`` and each element stores 8 spikes
+    :type spike_b: torch.Tensor
+    :param s_dtype: the dtype of the original spike
+    :type s_dtype: torch.dtype
+    :param s_shape: the shape of the original spike
+    :type s_shape: torch.Size
+    :param s_padding: the number of padding elements
+    :type s_padding: int
+    :return: the original tensor
+    :rtype: torch.Tensor
+    """
     device_id = spike_b.get_device()
     spike = torch.zeros(spike_b.numel() * 8, device=spike_b.device, dtype=s_dtype)
     if s_dtype == torch.float:
@@ -138,24 +170,33 @@ def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: to
         kernel_name = 'bool2half'
     else:
         raise NotImplementedError
-    with cuda_utils.DeviceEnvironment(device_id):
-        numel = spike_b.numel()
-        blocks = cuda_utils.cal_blocks(numel)
-        numel = cupy.asarray(numel)
-        spike_b, spike, numel = cuda_utils.get_contiguous(spike_b, spike, numel)
-        kernel_args = [spike_b, spike, numel]
-        kernel = cupy.RawKernel(
-            kernel_codes,
-            kernel_name,
-            options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
-        )
-        kernel(
-            (blocks,), (configure.cuda_threads,),
-            cuda_utils.wrap_args_to_raw_kernel(
-                device_id,
-                *kernel_args
+
+    if device_id >= 0 and cupy is not None:
+        with cuda_utils.DeviceEnvironment(device_id):
+            numel = spike_b.numel()
+            blocks = cuda_utils.cal_blocks(numel)
+            numel = cupy.asarray(numel)
+            spike_b, spike, numel = cuda_utils.get_contiguous(spike_b, spike, numel)
+            kernel_args = [spike_b, spike, numel]
+            kernel = cupy.RawKernel(
+                kernel_codes,
+                kernel_name,
+                options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
             )
-        )
+            kernel(
+                (blocks,), (configure.cuda_threads,),
+                cuda_utils.wrap_args_to_raw_kernel(
+                    device_id,
+                    *kernel_args
+                )
+            )
+    else:
+        spike = spike.view(-1, 8)
+        for i in range(8):
+            spike[:, i] = spike_b % 2
+            spike_b = spike_b >> 1
+
+
     if s_padding != 0 and s_padding != 8:
         spike = spike[0: spike.numel() - s_padding]
     return spike.reshape(s_shape)
