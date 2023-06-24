@@ -1,19 +1,16 @@
-from typing import Optional, Callable, List, Tuple
-import os
-import json
-from concurrent.futures import ThreadPoolExecutor
 import multiprocessing
+import os
 import shutil
 import time
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
-from torch.utils.data import Dataset
 from torchvision.datasets import utils
 
+from .. import configure
 from .. import datasets as sjds
 from ..datasets import np_savez
-from .. import configure
-
 
 CATEGORY_LABEL = {
     "handshake": 0,
