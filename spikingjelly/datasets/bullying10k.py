@@ -39,49 +39,52 @@ class Bullying10k(Dataset):
         resource_list = self.resource_url_md5()
 
         if not os.path.exists(events_np_root):
-            if not os.path.exists(extract_root):
-                if not os.path.exists(download_root):
-                    # download the dataset ()
-                    os.mkdir(download_root)
-                    print(f'Mkdir [{download_root}] to save downloaded files.')
-                    if self.downloadable():
-                        for file_name, url, md5 in resource_list:
+            os.removedirs(extract_root)
+
+            if not os.path.exists(download_root):
+                # download the dataset ()
+                os.mkdir(download_root)
+                print(f'Mkdir [{download_root}] to save downloaded files.')
+                if self.downloadable():
+                    for file_name, url, md5 in resource_list:
+                        print(f'Download [{file_name}] from [{url}] to [{download_root}]')
+                        utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
+                else:
+                    raise NotImplementedError(
+                        f'This dataset can not be downloaded by SpikingJelly, '
+                        f'please download files manually and put files at [{download_root}]. '
+                        f'The resources file_name, url, and md5 are: \n{resource_list}'
+                    )
+            else:
+                # check the integrity of downloaded files
+                print(
+                    f"The [{download_root}] directory for saving downloaded "
+                    f"files already exists, check files..."
+                )
+                for file_name, url, md5 in resource_list:
+                    fpath = os.path.join(download_root, file_name)
+                    if not utils.check_integrity(fpath=fpath, md5=md5):
+                        print(f'The file [{fpath}] does not exist or is corrupted.')
+                        if os.path.exists(fpath):
+                            # If file is corrupted, remove it.
+                            os.remove(fpath)
+                            print(f'Remove [{fpath}]')
+                        # download a new one
+                        if self.downloadable():
                             print(f'Download [{file_name}] from [{url}] to [{download_root}]')
                             utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
-                    else:
-                        raise NotImplementedError(
-                            f'This dataset can not be downloaded by SpikingJelly, '
-                            f'please download files manually and put files at [{download_root}]. '
-                            f'The resources file_name, url, and md5 are: \n{resource_list}'
-                        )
-                else:
-                    # check the integrity of downloaded files
-                    print(
-                        f"The [{download_root}] directory for saving downloaded "
-                        f"files already exists, check files..."
-                    )
-                    for file_name, url, md5 in resource_list:
-                        fpath = os.path.join(download_root, file_name)
-                        if not utils.check_integrity(fpath=fpath, md5=md5):
-                            print(f'The file [{fpath}] does not exist or is corrupted.')
-                            if os.path.exists(fpath):
-                                # If file is corrupted, remove it.
-                                os.remove(fpath)
-                                print(f'Remove [{fpath}]')
-                            # download a new one
-                            if self.downloadable():
-                                print(f'Download [{file_name}] from [{url}] to [{download_root}]')
-                                utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
-                            else:
-                                raise NotImplementedError(
-                                    f"This dataset can not be downloaded by SpikingJelly, "
-                                    f"please download [{file_name}] from [{url}] manually "
-                                    f"and put files at {download_root}."
-                                )
-                # extract the files
-                os.mkdir(extract_root)
-                print(f'Mkdir [{extract_root}].')
-                self.extract_downloaded_files(download_root, extract_root)
+                        else:
+                            raise NotImplementedError(
+                                f"This dataset can not be downloaded by SpikingJelly, "
+                                f"please download [{file_name}] from [{url}] manually "
+                                f"and put files at {download_root}."
+                            )
+
+            # extract the files
+            os.mkdir(extract_root)
+            print(f'Mkdir [{extract_root}].')
+            self.extract_downloaded_files(download_root, extract_root)
+
             # convert the original data to npz files
             os.mkdir(events_np_root)
             print(f'Mkdir [{events_np_root}].')
