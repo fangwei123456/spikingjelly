@@ -18,8 +18,21 @@ import numpy as np
 import argparse
 
 
-### components ###
+### Components ###
 def network_layer_to_space(net_arch):
+    """
+    :param net_arch: network level sample rate
+        0: down 1: None 2: Up
+    :type net_arch: numpy.array
+    :return: network level architecture
+        network_space[layer][level][sample]:
+        layer: 0 - 8
+        level: sample_level {0: 1, 1: 2, 2: 4, 3: 8}
+        sample: 0: down 1: None 2: Up
+    :rtype: numpy.array
+
+    Convert network level sample rate like [0,0,1,1,1,2,2,2] to network architecture.
+    """
     for i, layer in enumerate(net_arch):
         if i == 0:
             space = np.zeros((1, 4, 3))
@@ -36,97 +49,8 @@ def network_layer_to_space(net_arch):
             space1[0][layer][sample] = 1
             space = np.concatenate([space, space1], axis=0)
             prev = layer
-    """
-        return:
-        network_space[layer][level][sample]:
-        layer: 0 - 12
-        level: sample_level {0: 1, 1: 2, 2: 4, 3: 8}
-        sample: 0: down 1: None 2: Up
-    """
     return space
-
-class Decoder(object):
-    def __init__(self, alphas, betas, steps):
-        self._betas = betas
-        self._alphas = alphas
-        self._steps = steps
-        self._num_layers = self._betas.shape[0]
-        self.network_space = torch.zeros(self._num_layers, 4, 3)
-
-        for layer in range(self._num_layers):
-            if layer == 0:
-                self.network_space[layer][0][1:] = F.softmax(self._betas[layer][0][1:], dim=-1)  * (2/3)
-            elif layer == 1:
-                self.network_space[layer][0][1:] = F.softmax(self._betas[layer][0][1:], dim=-1) * (2/3)
-                self.network_space[layer][1] = F.softmax(self._betas[layer][1], dim=-1)
-
-            elif layer == 2:
-                self.network_space[layer][0][1:] = F.softmax(self._betas[layer][0][1:], dim=-1) * (2/3)
-                self.network_space[layer][1] = F.softmax(self._betas[layer][1], dim=-1)            
-                self.network_space[layer][2] = F.softmax(self._betas[layer][2], dim=-1)
-
-
-            else:
-                self.network_space[layer][0][1:] = F.softmax(self._betas[layer][0][1:], dim=-1) * (2/3)
-                self.network_space[layer][1] = F.softmax(self._betas[layer][1], dim=-1)
-                self.network_space[layer][2] = F.softmax(self._betas[layer][2], dim=-1)
-                self.network_space[layer][3][:2] = F.softmax(self._betas[layer][3][:2], dim=-1) * (2/3)
-        
-    def viterbi_decode(self):
-
-        prob_space = np.zeros((self.network_space.shape[:2]))
-        path_space = np.zeros((self.network_space.shape[:2])).astype('int8')
-
-        for layer in range(self.network_space.shape[0]):
-            if layer == 0:
-                prob_space[layer][0] = self.network_space[layer][0][1]
-                prob_space[layer][1] = self.network_space[layer][0][2]
-                path_space[layer][0] = 0
-                path_space[layer][1] = -1
-            else:
-                for sample in range(self.network_space.shape[1]):
-                    if layer - sample < - 1:
-                        continue
-                    local_prob = []
-                    for rate in range(self.network_space.shape[2]):  # k[0 : ➚, 1: ➙, 2 : ➘]
-                        if (sample == 0 and rate == 2) or (sample == 3 and rate == 0):
-                            continue
-                        else:
-                            local_prob.append(prob_space[layer - 1][sample + 1 - rate] *
-                                              self.network_space[layer][sample + 1 - rate][rate])
-                    prob_space[layer][sample] = np.max(local_prob, axis=0)
-                    rate = np.argmax(local_prob, axis=0)
-                    path = 1 - rate if sample != 3 else -rate
-                    path_space[layer][sample] = path  # path[1 : ➚, 0: ➙, -1 : ➘]
-
-        output_sample = prob_space[-1, :].argmax(axis=-1)
-        actual_path = np.zeros(self._num_layers).astype('uint8')
-        actual_path[-1] = output_sample
-        for i in range(1, self._num_layers):
-            actual_path[-i - 1] = actual_path[-i] + path_space[self._num_layers - i, actual_path[-i]]
-        return actual_path, network_layer_to_space(actual_path)
-
-    def genotype_decode(self):
-        def _parse(alphas, steps):
-            gene = []
-            start = 0
-            n = 2
-            for i in range(steps):
-                end = start + n
-                edges = sorted(range(start, end), key=lambda x: -np.max(alphas[x, 1:]))  
-                top2edges = edges[:2]
-                for j in top2edges:
-                    best_op_index = np.argmax(alphas[j])  
-                    gene.append([j, best_op_index])
-                start = end
-                n += 1
-            return np.array(gene)
-
-        normalized_alphas = F.softmax(self._alphas, dim=-1).data.cpu().numpy()
-        gene_cell = _parse(normalized_alphas, self._steps)
-        return gene_cell
-
-    
+ 
 Genotype = namedtuple('Genotype_2D', 'cell cell_concat')
 PRIMITIVES = [
     'skip_connect',
@@ -140,15 +64,13 @@ OPS = {
     'snn_b5': lambda Cin,Cout, stride, signal: SpikingConv2d(Cin, Cout, kernel_size=3, stride=stride, padding=1, spiking=False)
 }
 
-
 @script
-def dSpike_backward(grad_output: Tensor, x: Tensor, alpha: float):
+def dSpike_backward(grad_output: Tensor, x: Tensor, alpha: float): 
     mask = x.abs() > 0.5
     const = alpha/(2.*tanh(alpha/2.))
     grad_x = (grad_output * const / (alpha*x).cosh_().square_()
               ).masked_fill_(mask, 0)
     return grad_x, None
-
 
 class dSpike(Function):
     @staticmethod
@@ -162,7 +84,6 @@ class dSpike(Function):
     def backward(ctx, grad_output):
         return dSpike_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
 
-
 class DSpike(SurrogateFunctionBase):
     def __init__(self, alpha: float = 3, spiking=True):
         super().__init__(alpha, spiking)
@@ -171,7 +92,6 @@ class DSpike(SurrogateFunctionBase):
     @staticmethod
     def spiking_function(x: Tensor, alpha: float):
         return dSpike.apply(x, alpha)
-
 
 class save_v_LIFNode(LIFNode):
     def single_step_forward(self, x: torch.Tensor):
@@ -198,7 +118,6 @@ class save_v_LIFNode(LIFNode):
 
         return torch.stack(y_seq)
 
-
 def getSpikingNode(v_threshold=0.5):
     return LIFNode(tau=1.25, decay_input=False, v_threshold=v_threshold, detach_reset=True, surrogate_function=DSpike())
 
@@ -219,7 +138,6 @@ class SpikingConv2d(nn.Module):
     if self.spiking:
       x = self.spike(x)
     return x
-
 
 class SearchSpikingConv2d_stem(nn.Module):
   def __init__(self, input_c, output_c, kernel_size=3, stride=1, padding=1, b=3, spiking=True, v_threshold=0.5):
@@ -274,7 +192,6 @@ class SearchSpikingConv2d_stem(nn.Module):
     else:
         x = self.spike_m(self.bn_m(self.conv_m(x)))
     return x
-
 
 class SearchSpikingConv2d_cell(nn.Module):
   def __init__(self, io_c, kernel_size=3, stride=1, padding=1, b=3, spiking=True, v_threshold=0.5):
@@ -346,7 +263,6 @@ class SearchSpikingConv2d_cell(nn.Module):
         x = self.spike_m(self.bn1_m(self.conv1_m(x1)) + self.bn2_m(self.conv2_m(x2)))
     return x
 
-
 class SpikingLinear(nn.Module):
   def __init__(self, input_c, output_c, spiking=True):
      super(SpikingLinear, self).__init__()
@@ -361,7 +277,6 @@ class SpikingLinear(nn.Module):
       x = self.spike(x)
     return x
 
-
 class SpikingAvgPool2d(nn.Module):
   def __init__(self, kernel_size=5, stride=3, padding=0, b=3, spiking=True):
      super(SpikingAvgPool2d, self).__init__()
@@ -370,7 +285,6 @@ class SpikingAvgPool2d(nn.Module):
 
   def forward(self, x):
     return self.spike(self.pooling(x))
-
 
 class SpikingAdaptiveAvgPool2d(nn.Module):
   def __init__(self, dimension, b=3, spiking=True):
@@ -381,7 +295,6 @@ class SpikingAdaptiveAvgPool2d(nn.Module):
   def forward(self, x):
     return self.spike(self.pooling(x))
 
-
 class Nearest(nn.Module):
   def __init__(self,shape) -> None:
      super().__init__()
@@ -390,59 +303,37 @@ class Nearest(nn.Module):
   def forward(self,x):
     return interpolate(x,self._shape,mode = "nearest")
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-### model ###
-class MixedOp(nn.Module):
-    def __init__(self):
-        super(MixedOp, self).__init__()
-        self._ops = nn.ModuleList()
-
-
-    def forward(self, x, weights, left_or_right):
-        opt_outs = []
-        for i in range(3):
-            opt_out = self._ops[i](x, left_or_right)
-            opt_out = weights[i] * opt_out
-            opt_outs.append(opt_out)
-        return sum(opt_outs)  
+### Model ###
 
 class Cell(nn.Module):
     def __init__(self, steps, block_multiplier, prev_prev_fmultiplier,
                  prev_filter_multiplier, cell_arch, network_arch,
                  filter_multiplier, downup_sample, args=None):
-        super(Cell, self).__init__()
-        self.cell_arch = cell_arch
+        """
+        :param steps: number of nodes
+        :type steps: int
+        :param block_multiplier: The change factor for the channel for current node 
+        :type block_multiplier: int
+        :param prev_prev_fmultiplier: The change factor for the channel for previous previous node
+        :type prev_prev_fmultiplier: int
+        :param prev_filter_multiplier: The change factor for the channel for previous node
+        :type prev_filter_multiplier: int
+        :param cell_arch: cell level architecture
+        :type cell_arch: numpy.array
+        :param network_arch: layer level architecture
+        :type network_arch: numpy.array
+        :param filter_multiplier: filter channel multiplier
+        :type filter_multiplier: int
+        :param downup_sample: sample rate, -1:downsample, 1:upsample, 0: no change
+        :type downup_sample: int
+        :param args: additional arguments
 
+        A cell is defined as a repeated and searchable unit, which is a directed acyclic graph with N nodes.
+        """
+        super(Cell, self).__init__()
+
+
+        self.cell_arch = cell_arch
         self.C_in = block_multiplier * filter_multiplier
         self.C_out = filter_multiplier
         self.C_prev = int(block_multiplier * prev_filter_multiplier)
@@ -472,7 +363,7 @@ class Cell(nn.Module):
 
             ops_channel.append([C_in, C_out, primitive])
             if i%2 == 1:
-                op = SearchSpikingConv2d_cell(io_c=ops_channel)
+                op = SearchSpikingConv2d_cell(io_c=ops_chann;el)
                 self._ops.append(op)
                 ops_channel = []
 
@@ -483,11 +374,9 @@ class Cell(nn.Module):
     def scale_dimension(self, dim, scale):
         return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
 
-
     def forward(self, prev_prev_input, prev_input):
         s0 = prev_prev_input
         s1 = prev_input
-        ## BUG?
         if self.downup_sample != 0:
             feature_size_h = self.scale_dimension(s1.shape[3], self.scale)
             feature_size_w = self.scale_dimension(s1.shape[4], self.scale)
@@ -501,6 +390,7 @@ class Cell(nn.Module):
 
         states = [s0, s1]
 
+        # Cell structure is fixed, it can be change.
         spike = self._ops[0](states[0], states[1])
         states.append(spike)
 
@@ -514,9 +404,21 @@ class Cell(nn.Module):
         return prev_input, concat_feature
 
 
-
 class newFeature(nn.Module):
     def __init__(self, frame_rate, network_arch, cell_arch, cell=Cell, args=None):
+        """
+        :param frame_rate: input channel
+        :type frame_rate: int
+        :param network_arch: layer level architecture
+        :type network_arch: numpy.array
+        :param cell_arch: cell level architecture
+        :type cell_arch: numpy.array
+        :param cell: choice the type of cell, defaults to Cell
+        :type cell: Cell class
+        :param args: additional arguments
+
+        newFeature is used to extract feature. 
+        """        
         super(newFeature, self).__init__()
         self.args = args
         self.cells = nn.ModuleList()
@@ -628,10 +530,16 @@ class AuxiliaryHeadCIFAR(nn.Module):
     result = self.classifier(spike2.view(*shape,-1))
     return result
 
-
-
 class SpikeDHS(nn.Module):
     def __init__(self, init_channels=3, args=None):
+        """
+        :param init_channels: channel size, defaults to 3
+        :type init_channels: int
+        :param args: additional arguments
+
+        The SpikeDHS (Auto-Spikformer: Spikformer Architecture Search) implementation by Spikingjelly.
+        
+        """        
         super(SpikeDHS, self).__init__()
         p=0.0
         network_path_fea = [0,0,1,1,1,2,2,2]
@@ -680,7 +588,7 @@ class SpikeDHS(nn.Module):
         for name,value in self.named_parameters():
             value.requires_grad_(True)
 
-
+### Example ###
 
 parser = argparse.ArgumentParser("cifar")
 
