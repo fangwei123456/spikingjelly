@@ -215,6 +215,23 @@ def k_bit_quantize(x: torch.Tensor, k: int):
     """
     return k_bit_quantize_atgf.apply(x, k)
 
+def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Tensor):
+    """
+    :param x: a float tensor whose range is ``[0, 1]``.
+    :type x: torch.Tensor
+    :param k: the bit number of output
+    :type k: int
+    :param w: the weight of the affine transform
+    :type w: torch.Tensor
+    :param b: the bias of the affine transform
+    :type b: torch.Tensor
+    :return: ``y = w * round((2 ** k - 1) * x) / (2 ** k - 1) + b``
+    :rtype: torch.Tensor
+
+    Apply an affine quantization with ``y = w * round((2 ** k - 1) * x) / (2 ** k - 1) + b``.
+    """
+    return w * k_bit_quantize(x, k) + b
+
 """
 import torch
 from spikingjelly.activation_based import quantize
