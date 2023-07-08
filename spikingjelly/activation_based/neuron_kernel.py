@@ -1309,6 +1309,56 @@ def check_multi_step_neuron_output_and_grad(device, multi_step_neuron, shape = [
                         print(f'y_torch[{key}]={y_torch[key]}, y_cupy[{key}]={y_cupy[key]}')
                 print('\n')
 
+def check_single_step_neuron_output_and_grad(device, single_step_neuron, shape = [65, 15, 511], *neu_args, **neu_kwargs):
+    @torch.no_grad()
+    def max_error(x, y):
+        return (x - y).abs().max().item()
+
+    def fbp(m, x: torch.Tensor):
+        x = x.detach()
+        x.requires_grad_(True)
+        T = x.size(0)
+        for i in range(T):
+            spike = m(x[i])
+        (spike * m.v ** 2).sum().backward()
+        ret = {
+            'spike': spike.detach().clone(),
+            'v': m.v.detach().clone(),
+            'x.grad': x.grad.clone()
+        }
+        for i, param in enumerate(m.parameters()):
+            ret[f'param_{i}.grad'] = param.grad.detach().clone()
+            param.grad.zero_()
+        x.grad.zero_()
+        m.reset()
+        return ret
+
+    for hard_reset in [True, False]:
+        for detach_reset in [False, True]:
+            for dtype in ['fp32', 'fp16']:
+                x = (torch.rand(shape, device=device) - 0.5) * 3.
+                if dtype == 'fp16':
+                    x = x.half()
+                print(f'hard_reset={hard_reset}, detach_reset={detach_reset}, dtype={dtype}')
+                model = single_step_neuron(v_reset=0. if hard_reset else None, detach_reset=detach_reset, step_mode='s', *neu_args,
+                                            **neu_kwargs)
+                # print(model)
+                model.to(device)
+                if dtype == 'fp16':
+                    model = model.half()
+                model.backend = 'torch'
+                y_torch = fbp(model, x)
+
+                model.backend = 'cupy'
+                y_cupy = fbp(model, x)
+
+                for key in y_torch.keys():
+                    me = max_error(y_torch[key], y_cupy[key])
+                    print(key, 'max error', me)
+                    if me > 0.5:
+                        print(f'y_torch[{key}]={y_torch[key]}, y_cupy[{key}]={y_cupy[key]}')
+                print('\n')
+
 class MultiStepQIFNodePTT(torch.autograd.Function):
     @staticmethod
     def create_fptt_kernel(hard_reset: bool, dtype: str):

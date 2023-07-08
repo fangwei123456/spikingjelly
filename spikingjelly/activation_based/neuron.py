@@ -9,7 +9,7 @@ import logging
 
 from . import surrogate, base
 from .auto_cuda import neuron_kernel as ac_neuron_kernel
-
+from .auto_cuda import ss_neuron_kernel as ss_ac_neuron_kernel
 try:
     import cupy
     from . import neuron_kernel, cuda_utils
@@ -452,7 +452,7 @@ class IFNode(BaseNode):
     @property
     def supported_backends(self):
         if self.step_mode == 's':
-            return ('torch',)
+            return ('torch', 'cupy')
         elif self.step_mode == 'm':
             return ('torch', 'cupy')
         else:
@@ -593,7 +593,45 @@ class IFNode(BaseNode):
 
     def single_step_forward(self, x: torch.Tensor):
         if self.training:
-            return super().single_step_forward(x)
+            if self.backend == 'torch':
+                return super().single_step_forward(x)
+            elif self.backend == 'cupy':
+                hard_reset = self.v_reset is not None
+
+                if x.dtype == torch.float:
+                    dtype = 'float'
+                elif x.dtype == torch.half:
+                    dtype = 'half2'
+                else:
+                    raise NotImplementedError(x.dtype)
+                
+                if self.forward_kernel is None or not self.forward_kernel.check_attributes(hard_reset=hard_reset,
+                                                                                           dtype=dtype):
+                    self.forward_kernel = ss_ac_neuron_kernel.IFNodeFPKernel(hard_reset=hard_reset, dtype=dtype)
+
+                if self.backward_kernel is None or not self.backward_kernel.check_attributes(
+                        surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset,
+                        detach_reset=self.detach_reset, dtype=dtype):
+                    self.backward_kernel = ss_ac_neuron_kernel.IFNodeBPKernel(
+                        surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset,
+                        detach_reset=self.detach_reset, dtype=dtype)
+
+                self.v_float_to_tensor(x)
+
+                spike, v = ss_ac_neuron_kernel.IFNodeATGF.apply(x.flatten(0), self.v.flatten(0),
+                                                                     self.v_threshold, self.v_reset,
+                                                                     self.forward_kernel,
+                                                                     self.backward_kernel)
+
+                spike = spike.reshape(x.shape)
+                v = v.reshape(x.shape)
+
+                self.v = v
+
+                return spike
+            else:
+                raise ValueError(self.backend)
+
         else:
             self.v_float_to_tensor(x)
             if self.v_reset is None:
@@ -717,7 +755,7 @@ class LIFNode(BaseNode):
     @property
     def supported_backends(self):
         if self.step_mode == 's':
-            return ('torch',)
+            return ('torch', 'cupy')
         elif self.step_mode == 'm':
             return ('torch', 'cupy')
         else:
@@ -907,7 +945,48 @@ class LIFNode(BaseNode):
 
     def single_step_forward(self, x: torch.Tensor):
         if self.training:
-            return super().single_step_forward(x)
+            if self.backend == 'torch':
+                return super().single_step_forward(x)
+            elif self.backend == 'cupy':
+                hard_reset = self.v_reset is not None
+
+                if x.dtype == torch.float:
+                    dtype = 'float'
+                elif x.dtype == torch.half:
+                    dtype = 'half2'
+                else:
+                    raise NotImplementedError(x.dtype)
+                
+                if self.forward_kernel is None or not self.forward_kernel.check_attributes(hard_reset=hard_reset,
+                                                                                           dtype=dtype,
+                                                                                           decay_input=self.decay_input):
+                    self.forward_kernel = ss_ac_neuron_kernel.LIFNodeFPKernel(decay_input=self.decay_input,
+                                                                              hard_reset=hard_reset, dtype=dtype)
+
+                if self.backward_kernel is None or not self.backward_kernel.check_attributes(
+                        surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset,
+                        detach_reset=self.detach_reset, dtype=dtype, decay_input=self.decay_input):
+                    self.backward_kernel = ss_ac_neuron_kernel.LIFNodeBPKernel(
+                        decay_input=self.decay_input,
+                        surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset,
+                        detach_reset=self.detach_reset, dtype=dtype)
+
+                self.v_float_to_tensor(x)
+
+                spike, v = ss_ac_neuron_kernel.LIFNodeATGF.apply(x.flatten(0), self.v.flatten(0),
+                                                                 self.v_threshold, self.v_reset, 1. / self.tau,
+                                                                 self.forward_kernel,
+                                                                 self.backward_kernel)
+
+                spike = spike.reshape(x.shape)
+                v = v.reshape(x.shape)
+
+                self.v = v
+
+                return spike
+            else:
+                raise ValueError(self.backend)
+
         else:
             self.v_float_to_tensor(x)
             if self.v_reset is None:
