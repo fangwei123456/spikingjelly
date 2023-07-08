@@ -6,7 +6,7 @@ import logging
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.auto_cuda.neuronal_kernel: {e}')
+    logging.info(f'spikingjelly.activation_based.auto_cuda.ss_neuronal_kernel: {e}')
     cupy = None
     
 
