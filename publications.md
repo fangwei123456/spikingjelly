@@ -97,6 +97,7 @@
 | [Spiking-Fer: Spiking Neural Network for Facial Expression Recognition With Event Cameras](https://arxiv.org/abs/2304.10211) |                                                              |                                                              |
 | [Configurable NbOx Memristors as Artificial Synapses or Neurons Achieved by Regulating the Forming Compliance Current for the Spiking Neural Network](https://onlinelibrary.wiley.com/doi/abs/10.1002/aelm.202300018) |                                                              | Advanced Electronic Materials                                |
 | [Learning Delays in Spiking Neural Networks using Dilated Convolutions with Learnable Spacings](https://arxiv.org/abs/2306.17670) | https://github.com/Thvnvtos/SNN-delays                       |                                                              |
+| [Spike-driven Transformer](https://arxiv.org/abs/2307.01694) | https://github.com/BICLab/Spike-Driven-Transformer           |                                                              |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
