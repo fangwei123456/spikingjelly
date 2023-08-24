@@ -1028,7 +1028,7 @@ class Erf(SurrogateFunctionBase):
 def piecewise_leaky_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, w: float, c: float):
     mask_width = (x.abs() < w)
     mask_c = mask_width.logical_not()
-    return grad_output * x.masked_fill(mask_width, 1 / w).masked_fill(mask_c, c), None, None
+    return grad_output * x.masked_fill(mask_width, 1 / 2*w).masked_fill(mask_c, c), None, None
 
 
 class piecewise_leaky_relu(torch.autograd.Function):
