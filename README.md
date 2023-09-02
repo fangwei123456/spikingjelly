@@ -253,7 +253,7 @@ If you use SpikingJelly in your work, please cite it as follows:
 ```
 @misc{SpikingJelly,
 	title = {SpikingJelly},
-	author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Timothée Masquelier and Tian, Yonghong and other contributors},
+	author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Yu, Zhaofei and Masquelier, Timothée and Chen, Ding and Huang, Liwei and Zhou, Huihui and Li, Guoqi and Tian, Yonghong and others},
 	year = {2020},
 	howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
 	note = {Accessed: YYYY-MM-DD},

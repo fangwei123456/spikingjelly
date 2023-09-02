@@ -255,7 +255,7 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 ```
 @misc{SpikingJelly,
 	title = {SpikingJelly},
-	author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Chen, Ding and Yu, Zhaofei and Zhou, Huihui and Timothée Masquelier and Tian, Yonghong and other contributors},
+	author = {Fang, Wei and Chen, Yanqi and Ding, Jianhao and Yu, Zhaofei and Masquelier, Timothée and Chen, Ding and Huang, Liwei and Zhou, Huihui and Li, Guoqi and Tian, Yonghong and others},
 	year = {2020},
 	howpublished = {\url{https://github.com/fangwei123456/spikingjelly}},
 	note = {Accessed: YYYY-MM-DD},
