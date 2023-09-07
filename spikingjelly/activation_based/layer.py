@@ -2313,3 +2313,171 @@ class Delay(base.MemoryModule):
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         return functional.delay(x_seq, self.delay_steps)
+
+
+class TemporalEffectiveBatchNormNd(base.MemoryModule):
+
+    bn_instance = _BatchNorm
+
+    def __init__(
+            self,
+            T: int,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            step_mode='s'
+    ):
+        super().__init__()
+
+        self.bn = self.bn_instance(num_features, eps, momentum, affine, track_running_stats, step_mode)
+        self.scale = nn.Parameter(torch.ones([T]))
+        self.register_memory('t', 0)
+
+    def single_step_forward(self, x: torch.Tensor):
+        return self.bn(x) * self.scale[self.t]
+
+class TemporalEffectiveBatchNorm1d(TemporalEffectiveBatchNormNd):
+    bn_instance = BatchNorm1d
+    def __init__(
+            self,
+            T: int,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            step_mode='s'
+    ):
+        """
+        * :ref:`API in English <TemporalEffectiveBatchNorm1d-en>`
+
+        .. _TemporalEffectiveBatchNorm1d-cn:
+
+        :param T: 总时间步数
+        :type T: int
+
+        其他参数的API参见 :class:`BatchNorm1d`
+
+        `Temporal Effective Batch Normalization in Spiking Neural Networks <https://openreview.net/forum?id=fLIgyyQiJqz>`_ 一文提出的Temporal Effective Batch Normalization (TEBN)。
+
+        TEBN给每个时刻的输出增加一个缩放。若普通的BN在 ``t`` 时刻的输出是 ``y[t]``，则TEBN的输出为 ``k[t] * y[t]``，其中 ``k[t]`` 是可
+        学习的参数。
+
+        * :ref:`中文 API <TemporalEffectiveBatchNorm1d-cn>`
+
+        .. _TemporalEffectiveBatchNorm1d-en:
+
+        :param T: the number of time-steps
+        :type T: int
+
+        Refer to :class:`BatchNorm1d` for other parameters' API
+
+        Temporal Effective Batch Normalization (TEBN) proposed by `Temporal Effective Batch Normalization in Spiking Neural Networks <https://openreview.net/forum?id=fLIgyyQiJqz>`_.
+
+        TEBN adds a scale on outputs of each time-step from the native BN. Denote the output at time-step ``t`` of the native BN as ``y[t]``, then the output of TEBN is ``k[t] * y[t]``, where ``k[t]`` is the learnable scale.
+
+        """
+        super().__init__(T, num_features, eps, momentum, affine, track_running_stats, step_mode)
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        # x.shape = [T, N, C, L]
+        return self.bn(x_seq) * self.scale.view(-1, 1, 1, 1)
+
+
+class TemporalEffectiveBatchNorm2d(TemporalEffectiveBatchNormNd):
+    bn_instance = BatchNorm2d
+    def __init__(
+            self,
+            T: int,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            step_mode='s'
+    ):
+        """
+        * :ref:`API in English <TemporalEffectiveBatchNorm2d-en>`
+
+        .. _TemporalEffectiveBatchNorm2d-cn:
+
+        :param T: 总时间步数
+        :type T: int
+
+        其他参数的API参见 :class:`BatchNorm2d`
+
+        `Temporal Effective Batch Normalization in Spiking Neural Networks <https://openreview.net/forum?id=fLIgyyQiJqz>`_ 一文提出的Temporal Effective Batch Normalization (TEBN)。
+
+        TEBN给每个时刻的输出增加一个缩放。若普通的BN在 ``t`` 时刻的输出是 ``y[t]``，则TEBN的输出为 ``k[t] * y[t]``，其中 ``k[t]`` 是可
+        学习的参数。
+
+        * :ref:`中文 API <TemporalEffectiveBatchNorm2d-cn>`
+
+        .. _TemporalEffectiveBatchNorm2d-en:
+
+        :param T: the number of time-steps
+        :type T: int
+
+        Refer to :class:`BatchNorm2d` for other parameters' API
+
+        Temporal Effective Batch Normalization (TEBN) proposed by `Temporal Effective Batch Normalization in Spiking Neural Networks <https://openreview.net/forum?id=fLIgyyQiJqz>`_.
+
+        TEBN adds a scale on outputs of each time-step from the native BN. Denote the output at time-step ``t`` of the native BN as ``y[t]``, then the output of TEBN is ``k[t] * y[t]``, where ``k[t]`` is the learnable scale.
+
+        """
+        super().__init__(T, num_features, eps, momentum, affine, track_running_stats, step_mode)
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        # x.shape = [T, N, C, H, W]
+        return self.bn(x_seq) * self.scale.view(-1, 1, 1, 1, 1)
+
+
+
+class TemporalEffectiveBatchNorm3d(TemporalEffectiveBatchNormNd):
+    bn_instance = BatchNorm3d
+    def __init__(
+            self,
+            T: int,
+            num_features,
+            eps=1e-5,
+            momentum=0.1,
+            affine=True,
+            track_running_stats=True,
+            step_mode='s'
+    ):
+        """
+        * :ref:`API in English <TemporalEffectiveBatchNorm3d-en>`
+
+        .. _TemporalEffectiveBatchNorm3d-cn:
+
+        :param T: 总时间步数
+        :type T: int
+
+        其他参数的API参见 :class:`BatchNorm3d`
+
+        `Temporal Effective Batch Normalization in Spiking Neural Networks <https://openreview.net/forum?id=fLIgyyQiJqz>`_ 一文提出的Temporal Effective Batch Normalization (TEBN)。
+
+        TEBN给每个时刻的输出增加一个缩放。若普通的BN在 ``t`` 时刻的输出是 ``y[t]``，则TEBN的输出为 ``k[t] * y[t]``，其中 ``k[t]`` 是可
+        学习的参数。
+
+        * :ref:`中文 API <TemporalEffectiveBatchNorm3d-cn>`
+
+        .. _TemporalEffectiveBatchNorm3d-en:
+
+        :param T: the number of time-steps
+        :type T: int
+
+        Refer to :class:`BatchNorm3d` for other parameters' API
+
+        Temporal Effective Batch Normalization (TEBN) proposed by `Temporal Effective Batch Normalization in Spiking Neural Networks <https://openreview.net/forum?id=fLIgyyQiJqz>`_.
+
+        TEBN adds a scale on outputs of each time-step from the native BN. Denote the output at time-step ``t`` of the native BN as ``y[t]``, then the output of TEBN is ``k[t] * y[t]``, where ``k[t]`` is the learnable scale.
+
+        """
+        super().__init__(T, num_features, eps, momentum, affine, track_running_stats, step_mode)
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        # x.shape = [T, N, C, H, W, D]
+        return self.bn(x_seq) * self.scale.view(-1, 1, 1, 1, 1, 1)
