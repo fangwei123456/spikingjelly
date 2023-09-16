@@ -6,7 +6,7 @@ import torch.nn.functional as F
 import math
 from . import base, functional
 from torch import Tensor
-from torch.nn.common_types import _size_any_t, _size_1_t, _size_2_t, _size_3_t
+from torch.nn.common_types import _size_any_t, _size_1_t, _size_2_t, _size_3_t, _ratio_any_t
 from typing import Optional, List, Tuple, Union
 from typing import Callable
 from torch.nn.modules.batchnorm import _BatchNorm
@@ -218,6 +218,49 @@ class Conv3d(nn.Conv3d, base.StepModule):
         elif self.step_mode == 'm':
             if x.dim() != 6:
                 raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, super().forward)
+
+        return x
+
+class Upsample(nn.Upsample, base.StepModule):
+    def __init__(self,
+                 size: Optional[_size_any_t] = None,
+                 scale_factor: Optional[_ratio_any_t] = None,
+                 mode: str = 'nearest',
+                 align_corners: Optional[bool] = None,
+                 recompute_scale_factor: Optional[bool] = None,
+                 step_mode: str = 's'
+    ) -> None:
+        """
+        * :ref:`API in English <Upsample-en>`
+
+        .. _Upsample-cn:
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        其他的参数API参见 :class:`torch.nn.Upsample`
+
+        * :ref:`中文 API <Upsample-cn>`
+
+        .. _Upsample-en:
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        Refer to :class:`torch.nn.Upsample` for other parameters' API
+        """
+        super().__init__(size, scale_factor, mode, align_corners, recompute_scale_factor)
+        self.step_mode = step_mode
+
+    def extra_repr(self):
+        return super().extra_repr() + f', step_mode={self.step_mode}'
+
+    def forward(self, x: Tensor) -> Tensor:
+        if self.step_mode == 's':
+            x = super().forward(x)
+
+        elif self.step_mode == 'm':
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
