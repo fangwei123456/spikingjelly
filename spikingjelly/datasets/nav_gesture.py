@@ -213,7 +213,8 @@ class NAVGestureWalk(sjds.NeuromorphicDatasetFolder):
         :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
         :rtype: bool
         '''
-        return True
+        print('This dataset can not be downloaded now. Refer to https://github.com/fangwei123456/spikingjelly/issues/423 for more details.')
+        return False
 
     @staticmethod
     def extract_downloaded_files(download_root: str, extract_root: str):
