@@ -125,6 +125,7 @@
 | [Bioinspired Spiking Spatiotemporal Attention Framework for Lithium-Ion Batteries Capacity and RUL Prediction by Electrochemical Impedance Spectroscopy](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4472252) |                                                              |                                                              |
 | [Spiking neural network with working memory can integrate and rectify spatiotemporal features](https://www.frontiersin.org/articles/10.3389/fnins.2023.1167134/full) |                                                              |                                                              |
 | [CMOS-PCM Based Artificial Thermosensory Neuron for Bio-Inspired Sensing](https://ieeexplore.ieee.org/abstract/document/10231240) |                                                              | 2023 IEEE 23rd International Conference on Nanotechnology (NANO) |
+| [SpikingJelly: An open-source machine learning infrastructure platform for spike-based intelligence](https://www.science.org/doi/10.1126/sciadv.adi1480) | https://doi.org/10.5281/zenodo.8310901                       | Science Advances                                             |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
