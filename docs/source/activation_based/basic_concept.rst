@@ -259,13 +259,13 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
     x_seq = torch.rand([T, N, C, H, W]) * 64.
 
     net = nn.Sequential(
-    layer.Conv2d(3, 8, kernel_size=3, padding=1, stride=1, bias=False),
-    neuron.IFNode(),
-    layer.MaxPool2d(2, 2),
-    neuron.IFNode(),
-    layer.Flatten(start_dim=1),
-    layer.Linear(8 * H // 2 * W // 2, 10),
-    neuron.IFNode(),
+        layer.Conv2d(3, 8, kernel_size=3, padding=1, stride=1, bias=False),
+        neuron.IFNode(),
+        layer.MaxPool2d(2, 2),
+        neuron.IFNode(),
+        layer.Flatten(start_dim=1),
+        layer.Linear(8 * H // 2 * W // 2, 10),
+        neuron.IFNode(),
     )
 
     print(f'net={net}')
