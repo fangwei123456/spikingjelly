@@ -75,7 +75,6 @@
 | [Trainable quantization for Speedy Spiking Neural Networks](https://www.frontiersin.org/articles/10.3389/fnins.2023.1154241/full) |                                                              | Frontiers in Neuroscience                                    |
 | [Training-aware Low Precision Quantization in Spiking Neural Networks](https://ieeexplore.ieee.org/abstract/document/10051957) |                                                              | Asilomar Conference on Signals, Systems & Computers 2022     |
 | [Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks](https://arxiv.org/abs/2302.14311) | https://github.com/qymeng94/SLTT                             | ICCV 2023                                                    |
-| [Masked Spiking Transformer](https://openaccess.thecvf.com/content/ICCV2023/html/Wang_Masked_Spiking_Transformer_ICCV_2023_paper.html) | https://github.com/bic-L/Masked-Spiking-Transformer                             | ICCV 2023                                                    |
 | [Biologically inspired structure learning with reverse knowledge distillation for spiking neural networks](https://arxiv.org/abs/2304.09500) |                                                              |                                                              |
 | [Detecting COVID-19 on CT Images with Impulsive-Backpropagation Neural Networks](https://ieeexplore.ieee.org/abstract/document/10033991) |                                                              | Chinese Control and Decision Conference, CCDC 2022           |
 | [Rethinking Deep Spiking Neural Networks: A Multi-Layer Perceptron Approach](https://openreview.net/forum?id=-1x2-lp1eZf) |                                                              |                                                              |
@@ -127,6 +126,7 @@
 | [Spiking neural network with working memory can integrate and rectify spatiotemporal features](https://www.frontiersin.org/articles/10.3389/fnins.2023.1167134/full) |                                                              |                                                              |
 | [CMOS-PCM Based Artificial Thermosensory Neuron for Bio-Inspired Sensing](https://ieeexplore.ieee.org/abstract/document/10231240) |                                                              | 2023 IEEE 23rd International Conference on Nanotechnology (NANO) |
 | [SpikingJelly: An open-source machine learning infrastructure platform for spike-based intelligence](https://www.science.org/doi/10.1126/sciadv.adi1480) | https://doi.org/10.5281/zenodo.8310901                       | Science Advances                                             |
+| [Masked Spiking Transformer](https://openaccess.thecvf.com/content/ICCV2023/html/Wang_Masked_Spiking_Transformer_ICCV_2023_paper.html) | https://github.com/bic-L/Masked-Spiking-Transformer          | ICCV 2023                                                    |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
