@@ -125,7 +125,7 @@ This simple network with analog encoding can achieve 98.44% accuracy after conve
 
 ## CUDA-Enhanced Neuron
 
-SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily codding and debugging, and use `cupy` backend for faster training speed.
+SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily coding and debugging, and use `cupy` backend for faster training speed.
 
 The followed figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
 
