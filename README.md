@@ -116,7 +116,7 @@ class ANN(nn.Module):
         return x
 ```
 
-This simple network with analog encoding can achieve 98.44% accuracy after converiosn on MNIST test dataset. Read the tutorial for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
+This simple network with analog encoding can achieve 98.44% accuracy after conversion on MNIST test dataset. Read the tutorial for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
 
 ```python
 >>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
