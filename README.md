@@ -32,7 +32,7 @@ The default doc is for the latest developing version. If you are using the  stab
 
 From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. Please refer to the tutorial [Migrate From Old Versions](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html).
 
-If you use an old version of SpikingJelly, you may meet some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
+If you use an old version of SpikingJelly, you may encounter some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
 
 **Docs for different versions:**
 
@@ -127,7 +127,7 @@ This simple network with analog encoding can achieve 98.44% accuracy after conve
 
 SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily coding and debugging, and use `cupy` backend for faster training speed.
 
-The followed figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
+The following figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
 
 <img src="./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
@@ -224,7 +224,7 @@ If some datasets' download link are not available for some users, the users can 
 
 https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
 
-All datasets saved in the OpenI mirror are allowable by their licence or authors' agreement.
+All datasets saved in the OpenI mirror are allowable by their license or authors' agreement.
 
 ## Tutorials
 
