@@ -1,0 +1,65 @@
+# LICENSE
+
+## Language 
+
+[English](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE) | French(français) | [中文(Chinese)](https://github.com/fangwei123456/spikingjelly/blob/master/LICENSE-CN)
+
+
+Licence Open Source à intelligence ouverte
+V1.0
+
+I.Définition
+1. « Œuvre » désigne toute œuvre d'auteur, que ce soit en code source ou en code objet, mise à disposition dans le cadre de la présente Licence.
+2. « Concédant de licence » désigne le titulaire du droit d'auteur, ou une personne physique ou morale autorisée par le titulaire du droit d'auteur qui accorde la licence.
+3. « Utilisateur » désigne une personne physique ou morale exerçant les autorisations accordées par la présente Licence.
+4. « Distributeur/Redistributeur » désigne une personne physique ou morale qui distribue l'œuvre ou son œuvre dérivée sur n'importe quel support.
+
+II. Licence de droit d'auteur
+1. Portée de la licence
+Le Concédant accorde à l'Utilisateur le droit d'utiliser et de redistribuer l'œuvre logicielle, qu'elle soit révisée ou non, que ce soit en code source ou en code exécutable, à condition que l'Utilisateur remplisse les conditions suivantes fixées à l'article 2.
+2.Conditions de la licence
+(1) Vous devez conserver, dans le code source que vous distribuez, les conditions fixées à l'article 2, section II, l'avis de licence dans la section III, l'avis de non-responsabilité dans la section VI.
+(2) Vous devez joindre, dans le code exécutable que vous distribuez, un fichier ou autre pièce jointe contenant les conditions définies à l'article 2, section II, l'avis de licence dans la section III, l'avis de non-responsabilité dans la section VI.
+(3),Pour l'utilisation et la distribution à des fins commerciales, vous devez remplir les conditions de la section V.
+(4) Concernant l'avis « Le titulaire du droit d'auteur s'engage à suivre le « Règlement de gestion de la plate-forme Open-Intelligence Open Source V1.0 », qui est fourni par l'Alliance stratégique pour l'innovation technologique de la nouvelle génération d'intelligence artificielle (l'AITISA), veuillez vous référer à www. .aitisa.org.cn.
+
+
+III.Avis de licence
+L'avis de licence est le suivant :
+
+Copyright (c) [xxxx] [Name of Copyright owner]
+The software is released under the Open-Intelligence Open Source License V1.0.
+[Voluntary Patent Announcement] The software is granted a patent license in a way of ( authorization ).
+The copyright owner promises to follow “Open-Intelligence Open Source Platform Management Regulation V1.0”, 
+which is provided by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA)
+
+IV.Patent License [Voluntary Patent Announcement]
+If the Licensor owns a patent  covering the Software,
+1.He grants a license  as the following (  2  )to any user or distributor that does not own any patent that cover the software:
+(1)A royalty free license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND RF”);
+(2)Join a patent pool established by The New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA);
+(3)A license under Fair, Reasonable, and Non-discriminatory conditions (“FRAND”);
+2.He may, grants a reciprocal patent license, to any user or distributor that also owns a patent that cover the software:
+
+V.Commercial Use 
+1.Disclosure of Commercial Use
+For commercial use of the Software, regardless revised or not, any user or distributor of the Software, shall disclose the following information at www.aitisa.org.cn/OI_Statement/ of the New Generation of Artificial Intelligence Technology Innovation Strategic Alliance (the AITISA):
+User/Distributor：
+Contact of User/Distributor：
+Address
+Telephone:
+Email:
+Purpose of the Use/Distribution (including name, brief description of the functions of Product, Software, or Application which the software is applied):
+
+2.Patent License for Commercial Use
+Pour une utilisation commerciale du Logiciel, tout utilisateur ou distributeur du Logiciel qui possède un brevet couvrant le Logiciel doit également divulguer les informations de brevet associées dans l'article 1 de la présente section et accorder expressément une licence de l'une des manières suivantes au propriétaire du droit d'auteur : distributeur ou un utilisateur tiers ( ) :
+(1) Une licence libre de droits dans des conditions équitables, raisonnables et non discriminatoires (« FRAND RF ») ;
+(2) Rejoignez un pool de brevets établi par l'Alliance stratégique pour l'innovation technologique de nouvelle génération d'intelligence artificielle (AITISA) ;
+(3) Une licence dans des conditions équitables, raisonnables et non discriminatoires (« FRAND ») ;
+(4) AUCUNE LICENCE
+
+Concernant le choix de licence fait par l'utilisateur ou le distributeur à des fins commerciales, pour le brevet que le titulaire du droit d'auteur possède couvrant le logiciel, si le titulaire du droit d'auteur ne fait aucun choix dans l'annonce volontaire de brevet ci-dessus, il accorde par la présente à l'utilisateur et au distributeur le même licence choisie au cours de cette période.
+
+VI. Avis de non-responsabilité
+Le logiciel est fourni sous cette licence par le propriétaire des droits d'auteur et d'autres contributeurs « tel quel », et géré par l'Alliance stratégique pour l'innovation technologique de la nouvelle génération d'intelligence artificielle (l'AITISA) « tel quel ».
+Ce logiciel ne fournit aucune garantie expresse ou implicite, y compris, mais sans s'y limiter, les garanties implicites de qualité marchande, d'adéquation à un usage particulier et de non-contrefaçon. Le titulaire des droits d'auteur et les contributeurs du logiciel, quelles que soient les conditions, quelle que soit la cause ou tout principe de responsabilité, que la responsabilité soit due à la relation contractuelle, au principe de responsabilité sans faute ou à une contrefaçon (y compris la négligence ou autres raisons, etc.), ne sont pas responsables de tout dommage (y compris, mais sans s'y limiter : achat de biens ou de services de remplacement, perte d'usage, perte de données, etc. découlant de tout dommage direct, indirect, accidentel, spécial, punitif ou tout dommage résultant de l'utilisation du Logiciel, perte de profits, interruptions d'activité, etc.), même si cet utilisateur a été préalablement informé de la possibilité de tels dommages. En plus des concessions expresses mentionnées dans l'annonce de brevet ci-dessus, l'utilisation du logiciel peut également être soumise à d'autres droits (y compris les droits de brevet). En vertu de cette licence, il n'y a aucune concession expresse ou implicite à quiconque de ces autres droits (y compris les droits de brevet).
