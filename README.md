@@ -288,3 +288,8 @@ Not all API documents are written in both English and Chinese. We welcome users 
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
+## All Thanks to Our Contributors
+
+<a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />
+</a>
