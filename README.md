@@ -51,7 +51,7 @@ If you use an old version of SpikingJelly, you may encounter some fatal bugs. Re
 pip install spikingjelly
 ```
 
-**Install the latest developing version from the source codes**:
+**Install the latest developing version from the source code**:
 
 From [GitHub](https://github.com/fangwei123456/spikingjelly):
 ```bash
@@ -162,7 +162,7 @@ SpikingJelly includes the following neuromorphic datasets:
 | Nav Gesture    | [Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full) |
 | Spiking Heidelberg Digits (SHD) | [The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks](https://doi.org/10.1109/TNNLS.2020.3044364) |
 
-Users can use both the origin events data and frames data integrated by SpikingJelly:
+Users can use both the origin event data and frame data integrated by SpikingJelly:
 
 ```python
 import torch
@@ -228,7 +228,7 @@ for x, y, x_len in train_data_loader:
 ```
 More datasets will be included in the future.
 
-If some datasets' download link are not available for some users, the users can download from the OpenI mirror:
+If some datasets' download links are not available for some users, the users can download from the OpenI mirror:
 
 https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
 
@@ -236,7 +236,7 @@ All datasets saved in the OpenI mirror are allowable by their license or authors
 
 ## Tutorials
 
-SpikingJelly provides elaborate tutorials. Here are some of tutorials:
+SpikingJelly provides elaborate tutorials. Here are some tutorials:
 
 | Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
