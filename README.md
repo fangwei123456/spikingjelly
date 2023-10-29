@@ -1,7 +1,7 @@
 # SpikingJelly
 ![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) ![repo size](https://img.shields.io/github/repo-size/fangwei123456/spikingjelly)
 
-English | [中文](./README_cn.md)
+English | [中文(Chinese)](./README_cn.md)
 
 ![demo](./docs/source/_static/logo/demo.png)
 
@@ -51,7 +51,7 @@ If you use an old version of SpikingJelly, you may encounter some fatal bugs. Re
 pip install spikingjelly
 ```
 
-**Install the latest developing version from the source codes**:
+**Install the latest developing version from the source code**:
 
 From [GitHub](https://github.com/fangwei123456/spikingjelly):
 ```bash
@@ -162,7 +162,7 @@ SpikingJelly includes the following neuromorphic datasets:
 | Nav Gesture    | [Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full) |
 | Spiking Heidelberg Digits (SHD) | [The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks](https://doi.org/10.1109/TNNLS.2020.3044364) |
 
-Users can use both the origin events data and frames data integrated by SpikingJelly:
+Users can use both the origin event data and frame data integrated by SpikingJelly:
 
 ```python
 import torch
@@ -228,15 +228,15 @@ for x, y, x_len in train_data_loader:
 ```
 More datasets will be included in the future.
 
-If some datasets' download link are not available for some users, the users can download from the OpenI mirror:
+If some dataset's download links are not available for some users, the users can download from the OpenI mirror:
 
 https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
 
-All datasets saved in the OpenI mirror are allowable by their license or authors' agreement.
+All datasets saved in the OpenI mirror are allowable by their license or author's agreement.
 
 ## Tutorials
 
-SpikingJelly provides elaborate tutorials. Here are some of tutorials:
+SpikingJelly provides elaborate tutorials. Here are some tutorials:
 
 | Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
@@ -284,7 +284,9 @@ Not all API documents are written in both English and Chinese. We welcome users 
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
 
-<img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" /><img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
+<img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" />
+
+<img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
 
 The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
