@@ -228,7 +228,7 @@ for x, y, x_len in train_data_loader:
 ```
 More datasets will be included in the future.
 
-If some dataset's download links are not available for some users, the users can download from the OpenI mirror:
+If some datasets' download links are not available for some users, the users can download from the OpenI mirror:
 
 https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
 
