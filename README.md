@@ -1,5 +1,4 @@
 # SpikingJelly
-![Github](https://img.shields.io/github/license/fangwei123456/spikingjelly)
 ![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) 
 [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) 
 [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) 
