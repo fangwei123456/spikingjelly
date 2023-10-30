@@ -309,3 +309,5 @@ The list of developers can be found [here](https://github.com/fangwei123456/spik
 <a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />
 </a>
+
+<p align="right"><a href="#top"><img src="https://cdn-icons-png.flaticon.com/512/892/892692.png" height="50px"></a></p>
