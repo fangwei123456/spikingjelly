@@ -1,10 +1,19 @@
 # SpikingJelly
-![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) ![repo size](https://img.shields.io/github/repo-size/fangwei123456/spikingjelly)
 ![Github](https://img.shields.io/github/license/fangwei123456/spikingjelly)
+![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) 
+[![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) 
+[![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) 
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) 
+![repo size](https://img.shields.io/github/repo-size/fangwei123456/spikingjelly)
 ![GitHub issues](https://img.shields.io/github/issues/fangwei123456/spikingjelly)
 ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/fangwei123456/spikingjelly)
 ![GitHub pull requests](https://img.shields.io/github/issues-pr/fangwei123456/spikingjelly)
 ![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/fangwei123456/spikingjelly)
+![Visitors](https://api.visitorbadge.io/api/visitors?path=fangwei123456%2Fspikingjelly%20&countColor=%23263759&style=flat)
+![GitHub forks](https://img.shields.io/github/forks/fangwei123456/spikingjelly)
+![GitHub Repo stars](https://img.shields.io/github/stars/fangwei123456/spikingjelly)
+![GitHub contributors](https://img.shields.io/github/contributors/fangwei123456/spikingjelly)
+
 
 English | [中文(Chinese)](./README_cn.md)
 
