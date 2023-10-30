@@ -39,9 +39,9 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 **Version notes**
 
-The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI. 
+The odd version number is the developing version, updated with the GitHub/OpenI repository. The even version number is the stable version and is available at PyPI. 
 
-The default doc is for the latest developing version. If you are using the  stable version, do not forget to switch to the doc in the corresponding version.
+The default doc is for the latest developing version. If you are using the stable version, do not forget to switch to the doc in the corresponding version.
 
 From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. Please refer to the tutorial [Migrate From Old Versions](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html).
 
@@ -90,7 +90,7 @@ nn.Sequential(
         )
 ```
 
-This simple network with a Poisson encoder can achieve 92% accuracy on MNIST test dataset. Read refer to the tutorial for more details. You can also run this code in Python terminal for training on classifying MNIST:
+This simple network with a Poisson encoder can achieve 92% accuracy on the MNIST test dataset. Read refer to the tutorial for more details. You can also run this code in a Python terminal for training on classifying MNIST:
 
 ```python
 python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
@@ -129,7 +129,7 @@ class ANN(nn.Module):
         return x
 ```
 
-This simple network with analog encoding can achieve 98.44% accuracy after conversion on MNIST test dataset. Read the tutorial for more details. You can also run this code in Python terminal for training on classifying MNIST using converted model:
+This simple network with analog encoding can achieve 98.44% accuracy after conversion on MNIST test dataset. Read the tutorial for more details. You can also run this code in a Python terminal for training on classifying MNIST using the converted model:
 
 ```python
 >>> import spikingjelly.activation_based.ann2snn.examples.cnn_mnist as cnn_mnist
@@ -138,9 +138,9 @@ This simple network with analog encoding can achieve 98.44% accuracy after conve
 
 ## CUDA-Enhanced Neuron
 
-SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily coding and debugging, and use `cupy` backend for faster training speed.
+SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily coding and debugging and use `cupy` backend for faster training speed.
 
-The following figure compares execution time of two backends of Multi-Step LIF neurons (`float32`):
+The following figure compares the execution time of two backends of Multi-Step LIF neurons (`float32`):
 
 <img src="./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
@@ -209,7 +209,7 @@ for i in rand_index:
 # frame[308].shape=[T, C, H, W]=(20, 2, 128, 128)
 # frame[453].shape=[T, C, H, W]=(20, 2, 128, 128)
 
-# Load a dataset with fixed duration and print the shapes of the first 5 samples
+# Load a dataset with a fixed duration and print the shapes of the first 5 samples
 fixed_duration_frame_set = DVS128Gesture(root_dir, data_type='frame', duration=1000000, train=True)
 for i in range(5):
     x, y = fixed_duration_frame_set[i]
@@ -284,14 +284,14 @@ year = {2023},
 doi = {10.1126/sciadv.adi1480},
 URL = {https://www.science.org/doi/abs/10.1126/sciadv.adi1480},
 eprint = {https://www.science.org/doi/pdf/10.1126/sciadv.adi1480},
-abstract = {Spiking neural networks (SNNs) aim to realize brain-inspired intelligence on neuromorphic chips with high energy efficiency by introducing neural dynamics and spike properties. As the emerging spiking deep learning paradigm attracts increasing interest, traditional programming frameworks cannot meet the demands of the automatic differentiation, parallel computation acceleration, and high integration of processing neuromorphic datasets and deployment. In this work, we present the SpikingJelly framework to address the aforementioned dilemma. We contribute a full-stack toolkit for preprocessing neuromorphic datasets, building deep SNNs, optimizing their parameters, and deploying SNNs on neuromorphic chips. Compared to existing methods, the training of deep SNNs can be accelerated 11×, and the superior extensibility and flexibility of SpikingJelly enable users to accelerate custom models at low costs through multilevel inheritance and semiautomatic code generation. SpikingJelly paves the way for synthesizing truly energy-efficient SNN-based machine intelligence systems, which will enrich the ecology of neuromorphic computing. Motivation and introduction of the software framework SpikingJelly for spiking deep learning.}}
+abstract = {Spiking neural networks (SNNs) aim to realize brain-inspired intelligence on neuromorphic chips with high energy efficiency by introducing neural dynamics and spike properties. As the emerging spiking deep learning paradigm attracts increasing interest, traditional programming frameworks cannot meet the demands of automatic differentiation, parallel computation acceleration, and high integration of processing neuromorphic datasets and deployment. In this work, we present the SpikingJelly framework to address the aforementioned dilemma. We contribute a full-stack toolkit for preprocessing neuromorphic datasets, building deep SNNs, optimizing their parameters, and deploying SNNs on neuromorphic chips. Compared to existing methods, the training of deep SNNs can be accelerated 11×, and the superior extensibility and flexibility of SpikingJelly enable users to accelerate custom models at low costs through multilevel inheritance and semiautomatic code generation. SpikingJelly paves the way for synthesizing truly energy-efficient SNN-based machine intelligence systems, which will enrich the ecology of neuromorphic computing. Motivation and introduction of the software framework SpikingJelly for spiking deep learning.}}
 ```
 
 ## Contribution
 
-You can read the issues and get the problems to be solved and latest development plans. We welcome all users to join the discussion of development plans, solve issues, and send pull requests.
+You can read the issues and get the problems to be solved and the latest development plans. We welcome all users to join the discussion of development plans, solve issues, and send pull requests.
 
-Not all API documents are written in both English and Chinese. We welcome users to complete translation (from English to Chinese, or from Chinese to English).
+Not all API documents are written in both English and Chinese. We welcome users to complete translation (from English to Chinese or from Chinese to English).
 
 ## About
 
