@@ -1979,7 +1979,7 @@ class PSN(nn.Module, base.MultiStepModule):
         return spike_seq.view(x_seq.shape)
 
     def extra_repr(self):
-        return super().extra_repr() + f', T={self.T}'
+        return super().extra_repr() + f'T={self.T}, '
 
 
 class MaskedPSN(base.MemoryModule):
