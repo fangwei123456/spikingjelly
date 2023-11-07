@@ -66,7 +66,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 通常使用阈下（指的是膜电位不超过阈值电压 ``V_{threshold}`` 时）神经动态方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于IF神经元，充电方程为：
 
 .. math::
-    \frac{\mathrm{d}V(t)}{\mathrm{d}t} = V(t) + X(t)
+    \frac{\mathrm{d}V(t)}{\mathrm{d}t} = X(t)
 
 :class:`spikingjelly.activation_based.neuron` 中的神经元，使用离散的差分方程来近似连续的微分方程。在差分方程的视角下，IF神经元的充电方程为：
 

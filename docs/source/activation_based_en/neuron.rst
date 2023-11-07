@@ -69,7 +69,7 @@ We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{
 
 
 .. math::
-    \frac{\mathrm{d}V(t)}{\mathrm{d}t} = V(t) + X(t)
+    \frac{\mathrm{d}V(t)}{\mathrm{d}t} = X(t)
 
 :class:`spikingjelly.activation_based.neuron` uses the discrete-time difference equation to approximate the continuous-time ordinary differential equation. The discrete-time difference equation of the IF neuron is:
 
