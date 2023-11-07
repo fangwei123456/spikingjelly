@@ -29,3 +29,6 @@ python:
 
 build:
   image: stable
+  os: ubuntu-20.04  # <- add this line
+  tools:
+    python: "3.7"
