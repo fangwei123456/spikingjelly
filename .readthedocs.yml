@@ -20,7 +20,7 @@ formats:
 
 # Optionally set the version of Python and requirements required to build your docs
 python:
-   version: "3.11"
+   version: "3.7"
    install:
       - requirements: docs/requirements.txt
    system_packages: true
@@ -30,4 +30,4 @@ python:
 build:
   os: "ubuntu-22.04"
   tools:
-    python: "3.11"
+    python: "3.7"
