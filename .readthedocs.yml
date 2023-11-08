@@ -31,4 +31,4 @@ build:
   image: stable
   os: ubuntu-20.04  # <- add this line
   tools:
-    python: "3.7"
+    python: "3.10"
