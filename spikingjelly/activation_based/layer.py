@@ -1872,6 +1872,7 @@ class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
         torch.nn.init.constant_(self.weight, alpha * v_th)
 
     def forward(self, x_seq):
+        assert self.step_mode == 'm', "ThresholdDependentBatchNormBase can only be used in the multi-step mode!"
         return functional.seq_to_ann_forward(x_seq, super().forward)
 
 
@@ -1907,6 +1908,10 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
+    def _check_input_dim(self, input):
+        assert input.dim() == 4 - 1  # [T * N, C, L]
+
+
 
 class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
@@ -1940,6 +1945,8 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         """
         super().__init__(alpha, v_th, *args, **kwargs)
 
+    def _check_input_dim(self, input):
+        assert input.dim() == 5 - 1  # [T * N, C, H, W]
 
 class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
@@ -1972,6 +1979,9 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         The Threshold-Dependent Batch Normalization (tdBN) proposed in `Going Deeper With Directly-Trained Larger Spiking Neural Networks <https://arxiv.org/abs/2011.05280>`_.
         """
         super().__init__(alpha, v_th, *args, **kwargs)
+
+    def _check_input_dim(self, input):
+        assert input.dim() == 6 - 1  # [T * N, C, H, W, D]
 
 
 class TemporalWiseAttention(nn.Module, base.MultiStepModule):
