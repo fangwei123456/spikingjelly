@@ -844,7 +844,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         else:
             _root = self.set_root_when_train_is_none(_root)
 
-        super().__init__(root=_root, loader=_loader, extensions=('.npz', ), transform=_transform,
+        super().__init__(root=_root, loader=_loader, extensions=('.npz', '.npy'), transform=_transform,
                          target_transform=_target_transform)
 
     def set_root_when_train_is_none(self, _root: str):
