@@ -118,20 +118,27 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
     :rtype: float
 
     """
-    if device == 'cpu':
-        c_timer = cpu_timer
-    else:
-        c_timer = cuda_timer
-
     if n == 1:
-        return c_timer(device, f, *args, **kwargs)
+        if device == 'cpu':
+            return cpu_timer(f, *args, **kwargs)
+        else:
+            return cuda_timer(device, f, *args, **kwargs)
 
     # warm up
-    c_timer(device, f, *args, **kwargs)
+    if device == 'cpu':
+        cpu_timer(f, *args, **kwargs)
+    else:
+        cuda_timer(device, f, *args, **kwargs)
 
     t_list = []
     for _ in range(n * 2):
-        t_list.append(c_timer(device, f, *args, **kwargs))
+        if device == 'cpu':
+            ti = cpu_timer(f, *args, **kwargs)
+        else:
+            ti = cuda_timer(device, f, *args, **kwargs)
+        t_list.append(ti)
+
+
     t_list = np.asarray(t_list)
     return t_list[n:].mean()
 
