@@ -1277,4 +1277,84 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
 
 
 
+def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, online: bool) -> None:
+    """
+    :param model: the neural network
+    :type model: nn.Module
+    :param optimizer: the optimizer for the network
+    :type optimizer: torch.optim.Optimizer
+    :param x_seq: the input sequence
+    :type x_seq: torch.Tensor
+    :param target_seq: the output sequence
+    :type target_seq: torch.Tensor
+    :param f_loss_t: the loss function, which should has the formulation of ``def f_loss_t(x_t, y_t) -> torch.Tensor``
+    :type f_loss_t: Callable
+    :param online: whether online update parameters or accumulate gradients through time steps
+    :type online: bool
+
+
+    The OTTT online training method is proposed by `Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>`_. 
+    This function can also be used for SLTT training method proposed by `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks <https://openaccess.thecvf.com/content/ICCV2023/html/Meng_Towards_Memory-_and_Time-Efficient_Backpropagation_for_Training_Spiking_Neural_Networks_ICCV_2023_paper.html>`_ .
+
+    Example:
+
+    .. code-block:: python
+
+        from spikingjelly.activation_based import neuron, layer, functional
+
+        net = layer.OTTTSequential(
+            nn.Linear(8, 4),
+            neuron.OTTTLIFNode(),
+            nn.Linear(4, 2),
+            neuron.LIFNode()
+        )
+
+        optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
+
+        T = 4
+        N = 2
+        online = True
+        for epoch in range(2):
+
+            x_seq = torch.rand([N, T, 8])
+            target_seq = torch.rand([N, T, 2])
+
+            functional.ottt_online_training(model=net, optimizer=optimizer, x_seq=x_seq, target_seq=target_seq, f_loss_t=F.mse_loss, online=online)
+            functional.reset_net(net)
+
+    """
+
+    # input x_seq/target_seq: [B, T, ...]
+    # transpose to [T, B, ...]
+    x_seq = x_seq.transpose(0, 1)
+    target_seq = target_seq.transpose(0, 1)
+    T = x_seq.shape[0]
+
+    batch_loss = 0.
+    y_all = []
+    if not online:
+        optimizer.zero_grad()
+    for t in range(T):
+        if online:
+            optimizer.zero_grad()
+
+        y_t = model(x_seq[t])
+        loss = f_loss_t(y_t, target_seq[t].contiguous())
+
+        loss.backward()
+
+        # update params
+        if online:
+            optimizer.step()
+
+        batch_loss += loss.data
+        y_all.append(y_t.detach())
+
+    if not online:
+        optimizer.step()
+
+    # y_all: [B, T, ...]
+    y_all = torch.stack(y_all, dim=1)
+
+    return batch_loss, y_all
 
