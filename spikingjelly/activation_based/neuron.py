@@ -21,6 +21,43 @@ except BaseException as e:
     cuda_utils = None
 
 
+class SimpleBaseNode(base.MemoryModule):
+    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
+                 step_mode='s'):
+        """
+        A simple version of ``BaseNode``. The user can modify this neuron easily.
+        """
+        super().__init__()
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
+        self.surrogate_function = surrogate_function
+        self.detach_reset = detach_reset
+        self.step_mode = step_mode
+        self.register_memory(name='v', value=0.)
+
+    def neuronal_charge(self, x: torch.Tensor):
+        raise NotImplementedError
+
+    def neuronal_fire(self):
+        return self.surrogate_function(self.v - self.v_threshold)
+
+    def neuronal_reset(self, spike):
+        if self.detach_reset:
+            spike_d = spike.detach()
+        else:
+            spike_d = spike
+
+        if self.v_reset is None:
+            # soft reset
+            self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold)
+
+        else:
+            # hard reset
+            self.v = self.jit_hard_reset(self.v, spike_d, self.v_reset)
+
+
+
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
