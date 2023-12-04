@@ -36,6 +36,13 @@ class SimpleBaseNode(base.MemoryModule):
         self.step_mode = step_mode
         self.register_memory(name='v', value=0.)
 
+    def single_step_forward(self, x: torch.Tensor):
+
+        self.neuronal_charge(x)
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return spike
+
     def neuronal_charge(self, x: torch.Tensor):
         raise NotImplementedError
 
