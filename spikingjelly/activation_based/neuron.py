@@ -57,11 +57,11 @@ class SimpleBaseNode(base.MemoryModule):
 
         if self.v_reset is None:
             # soft reset
-            self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold)
+            self.v = self.v - self.v_threshold * spike_d
 
         else:
             # hard reset
-            self.v = self.jit_hard_reset(self.v, spike_d, self.v_reset)
+            self.v = spike_d * self.v_reset + (1. - spike_d) * self.v
 
 
 
