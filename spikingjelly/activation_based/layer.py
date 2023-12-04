@@ -10,6 +10,7 @@ from torch.nn.common_types import _size_any_t, _size_1_t, _size_2_t, _size_3_t, 
 from typing import Optional, List, Tuple, Union
 from typing import Callable
 from torch.nn.modules.batchnorm import _BatchNorm
+import numpy as np
 
 
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):
@@ -2534,3 +2535,229 @@ class TemporalEffectiveBatchNorm3d(TemporalEffectiveBatchNormNd):
     def multi_step_forward(self, x_seq: torch.Tensor):
         # x.shape = [T, N, C, H, W, D]
         return self.bn(x_seq) * self.scale.view(-1, 1, 1, 1, 1, 1)
+
+
+# OTTT modules
+
+class ReplaceforGrad(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, x_r):
+        return x_r
+
+    @staticmethod
+    def backward(ctx, grad):
+        return (grad, grad)
+
+
+class GradwithTrace(nn.Module):
+    def __init__(self, module):
+        """
+        * :ref:`API in English <GradwithTrace-en>`
+
+        .. _GradwithTrace-cn:
+
+        :param module: 需要包装的模块
+
+        用于随时间在线训练时，根据神经元的迹计算梯度
+        出处：'Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>'
+
+        * :ref:`中文 API <GradwithTrace-cn>`
+
+        .. _GradwithTrace-en:
+
+        :param module: the module that requires wrapping
+
+        Used for online training through time, calculate gradients by the traces of neurons
+        Reference: 'Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>'
+
+        """
+        super().__init__()
+        self.module = module
+
+    def forward(self, x: Tensor):
+        # x: [spike, trace], defined in OTTTLIFNode in neuron.py
+        spike, trace = x[0], x[1]
+        
+        with torch.no_grad():
+            out = self.module(spike).detach()
+
+        in_for_grad = ReplaceforGrad.apply(spike, trace)
+        out_for_grad = self.module(in_for_grad)
+
+        x = ReplaceforGrad.apply(out_for_grad, out)
+
+        return x
+
+
+class SpikeTraceOp(nn.Module):
+    def __init__(self, module):
+        """
+        * :ref:`API in English <SpikeTraceOp-en>`
+
+        .. _SpikeTraceOp-cn:
+
+        :param module: 需要包装的模块
+
+        对脉冲和迹进行相同的运算，如Dropout，AvgPool等
+
+        * :ref:`中文 API <GradwithTrace-cn>`
+
+        .. _SpikeTraceOp-en:
+
+        :param module: the module that requires wrapping
+
+        perform the same operations for spike and trace, such as Dropout, Avgpool, etc.
+
+        """
+        super().__init__()
+        self.module = module
+
+    def forward(self, x: Tensor):
+        # x: [spike, trace], defined in OTTTLIFNode in neuron.py
+        spike, trace = x[0], x[1]
+        
+        spike = self.module(spike)
+        with torch.no_grad():
+            trace = self.module(trace)
+
+        x = [spike, trace]
+
+        return x
+
+
+class OTTTSequential(nn.Sequential):
+    def __init__(self, *args):
+        super().__init__(*args)
+
+    def forward(self, input):
+        for module in self:
+            if not isinstance(input, list):
+                input = module(input)
+            else:
+                if len(list(module.parameters())) > 0: # e.g., Conv2d, Linear, etc.
+                    module = GradwithTrace(module)
+                else: # e.g., Dropout, AvgPool, etc.
+                    module = SpikeTraceOp(module)
+                input = module(input)
+        return input
+
+
+# weight standardization modules
+
+class WSConv2d(Conv2d):
+    def __init__(
+            self,
+            in_channels: int,
+            out_channels: int,
+            kernel_size: _size_2_t,
+            stride: _size_2_t = 1,
+            padding: Union[str, _size_2_t] = 0,
+            dilation: _size_2_t = 1,
+            groups: int = 1,
+            bias: bool = True,
+            padding_mode: str = 'zeros',
+            step_mode: str = 's',
+            gain: bool = True,
+            eps: float = 1e-4
+    ) -> None:
+        """
+        * :ref:`API in English <WSConv2d-en>`
+
+        .. _WSConv2d-cn:
+
+        :param gain: 是否对权重引入可学习的缩放系数
+        :type gain: bool
+
+        :param eps: 预防数值问题的小量
+        :type eps: float
+
+        其他的参数API参见 :class:`Conv2d`
+
+        * :ref:`中文 API <WSConv2d-cn>`
+
+        .. _WSConv2d-en:
+
+        :param gain: whether introduce learnable scale factors for weights
+        :type step_mode: bool
+
+        :param eps: a small number to prevent numerical problems
+        :type eps: float
+
+        Refer to :class:`Conv2d` for other parameters' API
+        """
+        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode, step_mode)
+        if gain:
+            self.gain = nn.Parameter(torch.ones(self.out_channels, 1, 1, 1))
+        else:
+            self.gain = None
+        self.eps = eps
+
+    def get_weight(self):
+        fan_in = np.prod(self.weight.shape[1:])
+        mean = torch.mean(self.weight, axis=[1, 2, 3], keepdims=True)
+        var = torch.var(self.weight, axis=[1, 2, 3], keepdims=True)
+        weight = (self.weight - mean) / ((var * fan_in + self.eps) ** 0.5)
+        if self.gain is not None:
+            weight = weight * self.gain
+        return weight
+
+    def _forward(self, x: Tensor):
+        return F.conv2d(x, self.get_weight(), self.bias, self.stride, self.padding, self.dilation, self.groups)
+
+    def forward(self, x: Tensor):
+        if self.step_mode == 's':
+            x = self._forward(x)
+
+        elif self.step_mode == 'm':
+            if x.dim() != 5:
+                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+            x = functional.seq_to_ann_forward(x, self._forward)
+
+        return x
+
+
+class WSLinear(Linear):
+    def __init__(self, in_features: int, out_features: int, bias: bool = True, step_mode='s', gain=True, eps=1e-4) -> None:
+        """
+        * :ref:`API in English <WSLinear-en>`
+
+        .. _WSLinear-cn:
+
+        :param gain: 是否对权重引入可学习的缩放系数
+        :type gain: bool
+
+        :param eps: 预防数值问题的小量
+        :type eps: float
+
+        其他的参数API参见 :class:`Linear`
+
+        * :ref:`中文 API <WSLinear-cn>`
+
+        .. _WSLinear-en:
+
+        :param gain: whether introduce learnable scale factors for weights
+        :type step_mode: bool
+
+        :param eps: a small number to prevent numerical problems
+        :type eps: float
+
+        Refer to :class:`Linear` for other parameters' API
+        """
+        super().__init__(in_features, out_features, bias, step_mode)
+        if gain:
+            self.gain = nn.Parameter(torch.ones(self.out_channels, 1))
+        else:
+            self.gain = None
+        self.eps = eps
+
+    def get_weight(self):
+        fan_in = np.prod(self.weight.shape[1:])
+        mean = torch.mean(self.weight, axis=[1], keepdims=True)
+        var = torch.var(self.weight, axis=[1], keepdims=True)
+        weight = (self.weight - mean) / ((var * fan_in + self.eps) ** 0.5)
+        if self.gain is not None:
+            weight = weight * self.gain
+        return weight
+
+    def forward(self, x: Tensor):
+        return F.linear(x, self.get_weight(), self.bias)
