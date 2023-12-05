@@ -460,8 +460,8 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
             return super().forward(x)
 
         elif self.step_mode == 'm':
-            if x.dim() != 4:
-                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+            if x.dim() != 4 or x.dim() != 3:
+                raise ValueError(f'expected x with shape [T, N, C, L] or [T, N, C], but got x with shape {x.shape}!')
             return functional.seq_to_ann_forward(x, super().forward)
 
 class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
@@ -1910,7 +1910,7 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         super().__init__(alpha, v_th, *args, **kwargs)
 
     def _check_input_dim(self, input):
-        assert input.dim() == 4 - 1  # [T * N, C, L]
+        assert input.dim() == 4 - 1 or input.dim() == 3 - 1  # [T * N, C, L]
 
 
 
