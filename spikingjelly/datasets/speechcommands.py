@@ -6,7 +6,7 @@ import torch
 import torchaudio
 from torch.utils.data import Dataset
 from torch import Tensor
-from torchaudio.datasets.utils import (
+from torchvision.datasets.utils import (
     download_url,
     extract_archive
 )
@@ -122,7 +122,7 @@ class SPEECHCOMMANDS(Dataset):
             if not os.path.isdir(self._path):
                 if not os.path.isfile(archive):
                     checksum = _CHECKSUMS.get(url, None)
-                    download_url(url, root, hash_value=checksum, hash_type="md5")
+                    download_url(url, root, md5=checksum)
                 extract_archive(archive, self._path)
         elif not os.path.isdir(self._path):
             raise FileNotFoundError("Audio data not found. Please specify \"download=True\" and try again.")
