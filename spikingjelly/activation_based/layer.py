@@ -460,7 +460,7 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
             return super().forward(x)
 
         elif self.step_mode == 'm':
-            if x.dim() != 4 or x.dim() != 3:
+            if x.dim() != 4 and x.dim() != 3:
                 raise ValueError(f'expected x with shape [T, N, C, L] or [T, N, C], but got x with shape {x.shape}!')
             return functional.seq_to_ann_forward(x, super().forward)
 
