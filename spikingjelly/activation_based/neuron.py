@@ -63,7 +63,23 @@ class SimpleBaseNode(base.MemoryModule):
             # hard reset
             self.v = spike_d * self.v_reset + (1. - spike_d) * self.v
 
+class SimpleIFNode(SimpleBaseNode):
+    def neuronal_charge(self, x: torch.Tensor):
+        return self.v + x
 
+class SimpleLIFNode(SimpleBaseNode):
+    def __init__(self, tau:float, decay_input: bool, v_threshold: float = 1., v_reset: float = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
+                 step_mode='s'):
+        super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode)
+        self.tau = tau
+        self.decay_input = decay_input
+
+    def neuronal_charge(self, x: torch.Tensor):
+        if self.decay_input:
+            self.v = self.v + (self.v_reset - self.v + x) / self.tau
+        else:
+            self.v = self.v + (self.v_reset - self.v) / self.tau + x
 
 class BaseNode(base.MemoryModule):
     def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
