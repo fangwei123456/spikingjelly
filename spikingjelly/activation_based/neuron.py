@@ -65,7 +65,7 @@ class SimpleBaseNode(base.MemoryModule):
 
 class SimpleIFNode(SimpleBaseNode):
     def neuronal_charge(self, x: torch.Tensor):
-        return self.v + x
+        self.v = self.v + x
 
 class SimpleLIFNode(SimpleBaseNode):
     def __init__(self, tau:float, decay_input: bool, v_threshold: float = 1., v_reset: float = 0.,
