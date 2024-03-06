@@ -1,3 +1,5 @@
+### Fully Spiking Actor Network with Intralayer Connections for Reinforcement Learning ###
+
 from collections import OrderedDict
 
 import torch
