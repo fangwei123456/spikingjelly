@@ -11,7 +11,7 @@ from spikingjelly.clock_driven import functional
 
 from tensorboardX import SummaryWriter
 
-from lib import model, common, atari_wrappers
+from utils import model, common, atari_wrappers
 
 PLAY_STEPS = 4
 MODEL_SAVE_FREQUENCY = 10 ** 5

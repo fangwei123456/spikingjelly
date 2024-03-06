@@ -1,9 +1,9 @@
 
-# Deep Reinforcement Learning with Spiking Q-learning (Based on SpikingJelly and PTAN)
+# Deep Reinforcement Learning with Spiking Q-learning (Based on PTAN)
 
 ## Installation
 
-From sources:
+From pypi:
 ```bash
-python setup.py install
+pip install ptan
 ```
