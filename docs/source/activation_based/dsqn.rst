@@ -35,149 +35,68 @@ Atari游戏的观察经过预处理成为尺寸为\ :math:`84\times 84`\ 的灰�
 .. code-block:: python
 
     nn.Sequential(
-        layer.Flatten(),
-        layer.Linear(28 * 28, 10, bias=False),
-        neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
+            layer.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+            neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
+
+            layer.Conv2d(32, 64, kernel_size=4, stride=2),
+            neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
+
+            layer.Conv2d(64, 64, kernel_size=3, stride=1),
+            neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
+
+            layer.Flatten(),
+            layer.Linear(64 * 7 * 7, 512),
+            neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
+
+            layer.Linear(512, n_actions),
+            neuron.NonSpikingLIFNode(decode=dec_type)
         )
 
-其中膜电位衰减常数\ :math:`\tau`\ 需要通过参数\ ``tau``\ 设置，替代函数这里选择\ ``surrogate.ATan``\。
+其中非脉冲神经元的膜电压编码方法需要通过参数\ ``dec_type``\ 设置，替代函数这里选择\ ``surrogate.ATan``\。
 
-训练SNN网络
+SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表最大绝对值的膜电压，而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，适用于强化学习中的Q值。
+
+训练DSQN
 -----------
 
 首先指定好训练参数如学习率等以及若干其他配置
 
-优化器默认使用Adam，以及使用泊松编码器，在每次输入图片时进行脉冲编码
-
-.. code-block:: python
-
-    # 使用Adam优化器
-    optimizer = torch.optim.Adam(net.parameters(), lr=lr)
-    # 使用泊松编码器
-    encoder = encoding.PoissonEncoder()
+优化器默认使用Adam，并且使用第一个卷积层与随后的脉冲神经元层作为可学习的编码器
 
 训练代码的编写需要遵循以下三个要点：
 
-1. 脉冲神经元的输出是二值的，而直接将单次运行的结果用于分类极易受到编码带来的噪声干扰。因此一般认为脉冲网络的输出是输出层一段时间内的\ **发放频率**\ （或称发放率），发放率的高低表示该类别的响应大小。因此网络需要运行一段时间，即使用\ ``T``\ 个时刻后的\ **平均发放率**\ 作为分类依据。
+1. 脉冲神经元的输出是二值的。因此网络需要运行一段时间，即使用\ ``T``\ 个时刻后非脉冲神经元的膜电压统计量作为决策依据。
 
-2. 我们希望的理想结果是除了正确的神经元\ **以最高频率发放**\ ，其他神经元\ **保持静默**\ 。常常采用交叉熵损失或者MSE损失，这里我们使用实际效果更好的MSE损失。
+2. DSQN的损失函数与DQN算法相同。
 
 3. 每次网络仿真结束后，需要\ **重置**\ 网络状态
 
-结合以上三点，得到训练循环的核心代码如下：
-
-.. code-block:: python
-
-    for epoch in range(start_epoch, args.epochs):
-        start_time = time.time()
-        net.train()
-        train_loss = 0
-        train_acc = 0
-        train_samples = 0
-        for img, label in train_data_loader:
-            optimizer.zero_grad()
-            img = img.to(args.device)
-            label = label.to(args.device)
-            label_onehot = F.one_hot(label, 10).float()
-
-            # 混合精度训练
-            if scaler is not None:
-                with amp.autocast():
-                    out_fr = 0.
-                    # 运行T个时间步
-                    for t in range(args.T):
-                        encoded_img = encoder(img)
-                        out_fr += net(encoded_img)
-                    out_fr = out_fr / args.T
-                    # out_fr是shape=[batch_size, 10]的tensor
-                    # 记录整个仿真时长内，输出层的10个神经元的脉冲发放率
-                    loss = F.mse_loss(out_fr, label_onehot)
-                    # 损失函数为输出层神经元的脉冲发放频率，与真实类别的MSE
-                    # 这样的损失函数会使得：当标签i给定时，输出层中第i个神经元的脉冲发放频率趋近1，而其他神经元的脉冲发放频率趋近0
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                out_fr = 0.
-                for t in range(args.T):
-                    encoded_img = encoder(img)
-                    out_fr += net(encoded_img)
-                out_fr = out_fr / args.T
-                loss = F.mse_loss(out_fr, label_onehot)
-                loss.backward()
-                optimizer.step()
-
-            train_samples += label.numel()
-            train_loss += loss.item() * label.numel()
-            # 正确率的计算方法如下。认为输出层中脉冲发放频率最大的神经元的下标i是分类结果
-            train_acc += (out_fr.argmax(1) == label).float().sum().item()
-            
-            # 优化一次参数后，需要重置网络的状态，因为SNN的神经元是有“记忆”的
-            functional.reset_net(net)
-
-完整的代码位于\ ``activation_based.examples.lif_fc_mnist.py``\ ，在代码中我们还使用了Tensorboard来保存训练日志。可以直接在命令行运行它：
+DSQN的完整代码位于\ ``activation_based.examples.dsqn.train.py``\。
 
 .. code-block:: shell
 
-    $ python -m spikingjelly.activation_based.examples.lif_fc_mnist --help
-    usage: lif_fc_mnist.py [-h] [-T T] [-device DEVICE] [-b B] [-epochs N] [-j N]
-                        [-data-dir DATA_DIR] [-out-dir OUT_DIR]
-                        [-resume RESUME] [-amp] [-opt {sgd,adam}]
-                        [-momentum MOMENTUM] [-lr LR] [-tau TAU]
+    python train.py --cuda --game breakout --T 8 --dec_type max-mem --seed 123
 
-    LIF MNIST Training
+    usage: train.py [--cuda] [--game GAME] [--T T] [--dec_type DEC] [--early_stop]
+                    [--eval_q] [--sticky_actions] [--frame_num FN] [--seed SEED]
+
+    LIF DSQN Training
 
     optional arguments:
-    -h, --help          show this help message and exit
-    -T T                simulating time-steps
-    -device DEVICE      device
-    -b B                batch size
-    -epochs N           number of total epochs to run
-    -j N                number of data loading workers (default: 4)
-    -data-dir DATA_DIR  root dir of MNIST dataset
-    -out-dir OUT_DIR    root dir for saving logs and checkpoint
-    -resume RESUME      resume from the checkpoint path
-    -amp                automatic mixed precision training
-    -opt {sgd,adam}     use which optimizer. SGD or Adam
-    -momentum MOMENTUM  momentum for SGD
-    -lr LR              learning rate
-    -tau TAU            parameter tau of LIF neuron
+    --cuda              enable cuda
+    --game GAME         ATARI game (gym)
+    --T T               simulation time
+    --dec_type DEC      type of SNN decoder, e.g. max-mem, mean-mem, max-abs-mem, last-mem, fr-mlp
+    --early_stop        use stop reward to stop early
+    --eval_q            record the Q-value (eval)
+    --sticky_actions    use sticky actions
+    --frame_num FN      number of frames
+    --seed SEED         random seed to use
 
 需要注意的是，训练这样的SNN，所需显存数量与仿真时长 ``T`` 线性相关，更长的 ``T`` 相当于使用更小的仿真步长，训练更为“精细”，但训练效果不一定更好。\ ``T``
 太大时，SNN在时间上展开后会变成一个非常深的网络，这将导致BPTT计算梯度时容易衰减或爆炸。
 
-另外由于我们使用了泊松编码器，因此需要较大的 ``T``\ 保证编码带来的噪声不太大。
-
 训练结果
 --------
 
-取\ ``tau=2.0,T=100,batch_size=64,lr=1e-3``\ ，对应的运行命令为
-
-.. code-block:: shell
-
-    python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -device cuda:0 -b 64 -epochs 100 -data-dir <PATH to MNIST> -amp -opt adam -lr 1e-3 -j 8
-
-其中为了加快训练速度，启用了混合精度训练。训练100个Epoch后，将会输出两个npy文件以及训练日志。测试集上的最高正确率为92.9%，通过matplotlib可视化得到的正确率曲线如下
-
-.. image:: ../_static/tutorials/activation_based/lif_fc_mnist/acc.*
-    :width: 100%
-
-选取测试集中第一张图片：
-
-.. image:: ../_static/tutorials/activation_based/lif_fc_mnist/input.png
-
-用训好的模型进行分类，得到分类结果
-
-.. code-block:: shell
-
-   Firing rate: [[0. 0. 0. 0. 0. 0. 0. 1. 0. 0.]]
-
-通过\ ``visualizing``\ 模块中的函数可视化得到输出层的电压以及脉冲如下图所示
-
-.. image:: ../_static/tutorials/activation_based/lif_fc_mnist/1d_spikes.*
-    :width: 100%
-
-.. image:: ../_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.*
-    :width: 100%
-
-可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ 。
+详细的训练结果与分析可以参见 `相关论文 <https://arxiv.org/abs/2201.09754>`_。
