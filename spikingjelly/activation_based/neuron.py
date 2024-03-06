@@ -3146,7 +3146,7 @@ class SLTTLIFNode(LIFNode):
 ##########################################################################################################
 
 class CLIFNode(BaseNode):
-    def __init__(self, c_decay=0.5, v_decay=0.75, v_threshold: float = 0.5,
+    def __init__(self, c_decay: float = 0.5, v_decay: float = 0.75, v_threshold: float = 0.5,
                  v_reset: float = 0., surrogate_function: Callable = surrogate.Rect()):
 
         super().__init__(v_threshold, v_reset, surrogate_function)
@@ -3215,7 +3215,10 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
         return self.surrogate_function(self.v - self.v_threshold)
 
     def neuronal_reset(self, spike):
-        self.v = (1. - spike) * self.v + spike * self.v_reset
+        if self.v_reset is None:
+            self.v = self.v - spike * self.v_threshold
+        else:
+            self.v = (1. - spike) * self.v + spike * self.v_reset
 
     def init_tensor(self, data: torch.Tensor):
         self.v = torch.full_like(data, fill_value=self.v_reset)
@@ -3238,7 +3241,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
 
 class ILCCLIFNode(ILCBaseNode):
-    def __init__(self, act_dim, dec_pop_dim, c_decay=0.5, v_decay=0.75, 
+    def __init__(self, act_dim, dec_pop_dim, c_decay: float = 0.5, v_decay: float = 0.75,
                  v_threshold: float = 0.5, v_reset: float = 0., 
                  surrogate_function: Callable = surrogate.Rect()):
 
@@ -3257,7 +3260,7 @@ class ILCCLIFNode(ILCBaseNode):
 
 
 class ILCLIFNode(ILCBaseNode):
-    def __init__(self, act_dim, dec_pop_dim, v_decay=0.75, 
+    def __init__(self, act_dim, dec_pop_dim, v_decay: float = 0.75,
                  v_threshold: float = 1.0, v_reset: float = 0., 
                  surrogate_function: Callable = surrogate.Rect()):
 
