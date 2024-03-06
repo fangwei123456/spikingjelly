@@ -1,4 +1,4 @@
-### Fully Spiking Actor Network with Intralayer Connections for Reinforcement Learning ###
+### Fully Spiking Actor Network with Intralayer Connections for Reinforcement Learning (TNNLS 2024) ###
 
 from collections import OrderedDict
 
