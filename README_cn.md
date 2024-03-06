@@ -244,6 +244,7 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 | ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [分类DVS128 Gesture](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/classify_dvsg.html) |
 | ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [自连接和有状态突触](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/recurrent_connection_and_stateful_synapse.html) |
 | ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP学习](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/stdp.html) |
+| ![reinforcement_learning](./docs/source/_static/tutorials/activation_based/snn_for_rl/snn_for_rl.png) | [强化学习](https://github.com/fangwei123456/spikingjelly/blob/master/docs/source/activation_based/ilc_san.rst) |
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 
