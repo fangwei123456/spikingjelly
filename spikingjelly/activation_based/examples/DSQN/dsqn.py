@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-from spikingjelly.clock_driven import functional
+from spikingjelly.activation_based import functional
 
 from tensorboardX import SummaryWriter
 
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--cuda", default=False, action="store_true", help="Enable cuda")
     parser.add_argument("--game", type=str, default="breakout", help="ATARI game (gym)")
-    parser.add_argument("--T", type=int, default=5, help="The simulation time")
+    parser.add_argument("--T", type=int, default=8, help="The simulation time")
     parser.add_argument("--dec_type", type=str, default="max-mem", help="The type of SNN decoder, e.g. max-mem, mean-mem, max-abs-mem, last-mem, fr-mlp")
     parser.add_argument("--early_stop", default=False, action="store_true", help="Use stop reward to stop early")
     parser.add_argument("--eval_q", default=False, action="store_true", help="Record the Q-value (eval)")
@@ -136,8 +136,8 @@ if __name__ == "__main__":
 
     suffix = "" if args.seed is None else "_seed=%s" % args.seed
     writer = SummaryWriter(comment="-" + params['run_name'] + "-dsqn%s" % (suffix))
-    net = model.DSQN(env.observation_space.shape, env.action_space.n, args.T, args.dec_type).to(device)
-    net_ = model.DSQN(env.observation_space.shape, env.action_space.n, args.T, args.dec_type).to(device)
+    net = model.DSQN(env.observation_space.shape, env.action_space.n, args.T, args.dec_type, args.cuda).to(device)
+    net_ = model.DSQN(env.observation_space.shape, env.action_space.n, args.T, args.dec_type, args.cuda).to(device)
     tgt_net = ptan.agent.TargetNet(net, net_)
     selector = ptan.actions.EpsilonGreedyActionSelector(epsilon=params['epsilon_start'])
     epsilon_tracker = common.EpsilonTracker(selector, params)

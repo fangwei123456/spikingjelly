@@ -8,7 +8,7 @@ from spikingjelly.activation_based import layer, neuron, surrogate
 
 # Deep Reinforcement Learning with Spiking Q-learning
 class DSQN(nn.Module):
-    def __init__(self, input_shape, n_actions, T=5, dec_type='max-mem'):
+    def __init__(self, input_shape, n_actions, T=5, dec_type='max-mem', use_cuda=False):
         super(DSQN, self).__init__()
 
         self.dec_type = dec_type
@@ -53,7 +53,8 @@ class DSQN(nn.Module):
         self.T = T
 
         functional.set_step_mode(self.network, step_mode='m')
-        functional.set_backend(self.network, backend='cupy')
+        if use_cuda:
+            functional.set_backend(self.network, backend='cupy')
 
     def forward(self, x):
         x_seq = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]

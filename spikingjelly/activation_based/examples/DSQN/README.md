@@ -7,3 +7,9 @@ From pypi:
 ```bash
 pip install ptan
 ```
+
+## Training
+
+```bash
+python dsqn.py --cuda --game breakout --T 8 --dec_type max-mem --seed 123
+```
