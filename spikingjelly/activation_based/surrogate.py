@@ -2033,6 +2033,89 @@ class LogTailedReLU(SurrogateFunctionBase):
     # plt.savefig('LogTailedReLU.pdf')
 
 
+@torch.jit.script
+def deterministic_pass_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return grad_output, None
+
+
+class deterministic_pass(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return deterministic_pass_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
+
+class DeterministicPass(SurrogateFunctionBase):
+    def __init__(self, alpha=1.0, spiking=True):
+        super().__init__(alpha, spiking)
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return deterministic_pass.apply(x, alpha)
+
+    @staticmethod
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
+        return x
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return deterministic_pass_backward(grad_output, x, alpha)[0]
+
+
+@torch.jit.script
+def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return (x.abs() < 0.5).to(x) * grad_output, None
+
+
+class rect(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return rect_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
+
+class Rect(SurrogateFunctionBase):
+    def __init__(self, alpha=1.0, spiking=True):
+        super().__init__(alpha, spiking)
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return rect.apply(x, alpha)
+
+    @staticmethod
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
+        return torch.clamp(x, min=-0.5, max=0.5)
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return rect_backward(grad_output, x, alpha)[0]
+
+
+class poisson_pass(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return torch.bernoulli(x).float()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        grad_input = grad_output.clone()
+        return grad_input
+
+
 _has_cuda_ = [
     ATan,
     Sigmoid,

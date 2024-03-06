@@ -3139,3 +3139,201 @@ class SLTTLIFNode(LIFNode):
                                                                                                 self.v_reset,
                                                                                                 self.tau)
             return spike
+
+
+##########################################################################################################
+# Current-based LIF (CLIF) modules
+##########################################################################################################
+
+class CLIFNode(BaseNode):
+    def __init__(self, c_decay=0.5, v_decay=0.75, v_threshold: float = 0.5,
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Rect()):
+
+        super().__init__(v_threshold, v_reset, surrogate_function)
+
+        self.register_memory('c', 0.)
+
+        self.c_decay = c_decay
+        self.v_decay = v_decay
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.c = self.c * self.c_decay + x
+        self.v = self.v * self.v_decay + self.c
+
+    def single_step_forward(self, x: torch.Tensor):
+        self.v_float_to_tensor(x)
+        self.c_float_to_tensor(x)
+        self.neuronal_charge(x)
+        spike = self.neuronal_fire()
+        self.neuronal_reset(spike)
+        return spike
+
+    def multi_step_forward(self, x_seq: torch.Tensor):
+        T = x_seq.shape[0]
+        spike_seq = []
+
+        for t in range(T):
+            spike = self.single_step_forward(x_seq[t])
+            spike_seq.append(spike)
+
+        return torch.stack(spike_seq)
+
+    def c_float_to_tensor(self, c: torch.Tensor):
+        if isinstance(self.c, float):
+            c_init = self.c
+            self.c = torch.full_like(c.data, fill_value=c_init)
+
+
+##########################################################################################################
+# Inter-Layer Connections (ILC) modules for population-coded spiking actor network
+##########################################################################################################
+
+class ILCBaseNode(nn.Module, base.MultiStepModule):
+    def __init__(self, act_dim, dec_pop_dim, v_threshold: float = 1.0, v_reset: float = 0., 
+                 surrogate_function: Callable = surrogate.Rect()):
+
+        assert isinstance(v_reset, float) or v_reset is None
+        assert isinstance(v_threshold, float)
+        super().__init__()
+
+        self.act_dim = act_dim
+        self.out_pop_dim = act_dim * dec_pop_dim
+        self.dec_pop_dim = dec_pop_dim
+
+        self.conn = nn.Conv1d(act_dim, self.out_pop_dim, dec_pop_dim, groups=act_dim)
+
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
+
+        self.surrogate_function = surrogate_function
+
+    @abstractmethod
+    def neuronal_charge(self, x: torch.Tensor):
+        raise NotImplementedError
+
+    def neuronal_fire(self):
+        return self.surrogate_function(self.v - self.v_threshold)
+
+    def neuronal_reset(self, spike):
+        self.v = (1. - spike) * self.v + spike * self.v_reset
+
+    def init_tensor(self, data: torch.Tensor):
+        self.v = torch.full_like(data, fill_value=self.v_reset)
+
+    def forward(self, x_seq: torch.Tensor):
+        self.init_tensor(x_seq[0].data)
+
+        T = x_seq.shape[0]
+        spike_seq = []
+
+        for t in range(T):
+            self.neuronal_charge(x_seq[t])
+            spike = self.neuronal_fire()
+            self.neuronal_reset(spike)
+            spike_seq.append(spike)
+            if t < T - 1:
+                x_seq[t + 1] = x_seq[t + 1] + self.conn(spike.view(-1, self.act_dim, self.dec_pop_dim)).view(-1, self.out_pop_dim)
+
+        return torch.stack(spike_seq)
+
+
+class ILCCLIFNode(ILCBaseNode):
+    def __init__(self, act_dim, dec_pop_dim, c_decay=0.5, v_decay=0.75, 
+                 v_threshold: float = 0.5, v_reset: float = 0., 
+                 surrogate_function: Callable = surrogate.Rect()):
+
+        super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
+
+        self.c_decay = c_decay
+        self.v_decay = v_decay
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.c = self.c * self.c_decay + x
+        self.v = self.v * self.v_decay + self.c
+
+    def init_tensor(self, data: torch.Tensor):
+        self.c = torch.full_like(data, fill_value=0.0)
+        self.v = torch.full_like(data, fill_value=self.v_reset)
+
+
+class ILCLIFNode(ILCBaseNode):
+    def __init__(self, act_dim, dec_pop_dim, v_decay=0.75, 
+                 v_threshold: float = 1.0, v_reset: float = 0., 
+                 surrogate_function: Callable = surrogate.Rect()):
+
+        super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
+
+        self.v_decay = v_decay
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v * self.v_decay + x
+
+
+class ILCIFNode(ILCBaseNode):
+    def __init__(self, act_dim, dec_pop_dim, v_threshold: float = 1.0, v_reset: float = 0., 
+                 surrogate_function: Callable = surrogate.Rect()):
+
+        super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + x
+
+
+##########################################################################################################
+# Non-spiking modules for floating-point output
+##########################################################################################################
+
+class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
+    def __init__(self, decode='last-mem'):
+        super().__init__()
+
+        self.decode = decode
+
+    @abstractmethod
+    def neuronal_charge(self, x: torch.Tensor):
+        raise NotImplementedError
+
+    def forward(self, x_seq: torch.Tensor):
+        self.v = torch.full_like(x_seq[0].data, fill_value=0.0)
+
+        T = x_seq.shape[0]
+        v_seq = []
+
+        for t in range(T):
+            self.neuronal_charge(x_seq[t])
+            v_seq.append(self.v)
+
+        if self.decode == 'max-mem':
+            mem = torch.max(torch.stack(v_seq, 0), 0).values
+
+        elif self.decode == 'max-abs-mem':
+            v_stack = torch.stack(v_seq, 0)
+            max_mem = torch.max(v_stack, 0).values
+            min_mem = torch.min(v_stack, 0).values
+            mem = max_mem * (max_mem.abs() > min_mem.abs()) + min_mem * (max_mem.abs() <= min_mem.abs())
+
+        elif self.decode == 'mean-mem':
+            mem = torch.mean(torch.stack(v_seq, 0), 0)
+
+        else:  # 'last-mem'
+            mem = v_seq[-1]
+
+        return mem
+
+
+class NonSpikingIFNode(NonSpikingBaseNode):
+    def __init__(self, decode='last-mem'):
+        super().__init__(decode)
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + x
+
+
+class NonSpikingLIFNode(NonSpikingBaseNode):
+    def __init__(self, tau: float = 2., decode='last-mem'):
+        super().__init__(decode)
+
+        self.tau = tau
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + (x - self.v) / self.tau
