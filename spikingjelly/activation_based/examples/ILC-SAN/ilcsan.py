@@ -11,29 +11,24 @@ from spikingjelly.activation_based import functional, layer, neuron, encoding, s
 class SpikeMLP(nn.Module):
     def __init__(self, in_pop_dim, act_dim, dec_pop_dim, hidden_sizes):
         super().__init__()
-        self.in_pop_dim = in_pop_dim
-        self.out_pop_dim = act_dim * dec_pop_dim
-        self.act_dim = act_dim
-        self.hidden_sizes = hidden_sizes
-        self.hidden_num = len(hidden_sizes)
+        hidden_num = len(hidden_sizes)
         
         # Define Layers
         hidden_layers = OrderedDict([
             ('Linear0', layer.Linear(in_pop_dim, hidden_sizes[0])),
             (neuron_type + '0', neuron.CLIFNode(surrogate_function=surrogate.Rect()))
         ])
-        if self.hidden_num > 1:
-            for hidden_layer in range(1, self.hidden_num):
+        if hidden_num > 1:
+            for hidden_layer in range(1, hidden_num):
                 hidden_layers['Linear' + str(hidden_layer)] = layer.Linear(hidden_sizes[hidden_layer-1], hidden_sizes[hidden_layer])
                 hidden_layers[neuron_type + str(hidden_layer)] = neuron.CLIFNode(surrogate_function=surrogate.Rect())
 
-        hidden_layers['Linear' + str(self.hidden_num)] = layer.Linear(hidden_sizes[-1], self.out_pop_dim)
-        hidden_layers[neuron_type + str(self.hidden_num)] = neuron.ILCCLIFNode(act_dim, dec_pop_dim, surrogate_function=surrogate.Rect())
+        hidden_layers['Linear' + str(hidden_num)] = layer.Linear(hidden_sizes[-1], act_dim * dec_pop_dim)
+        hidden_layers[neuron_type + str(hidden_num)] = neuron.ILCCLIFNode(act_dim, dec_pop_dim, surrogate_function=surrogate.Rect())
 
         self.hidden_layers = nn.Sequential(hidden_layers)
 
         functional.set_step_mode(self, step_mode='m')
-        functional.set_backend(self, backend='torch')
 
     def forward(self, in_pop_spikes):
         return self.hidden_layers(in_pop_spikes)
@@ -57,7 +52,6 @@ class PopDecoder(nn.Module):
             )
 
             functional.set_step_mode(self, step_mode='m')
-            functional.set_backend(self, backend='torch')
 
     def forward(self, out_pop_spikes):
         if self.decode == 'fr-mlp':
@@ -73,9 +67,6 @@ class PopSpikeActor(nn.Module):
                  mean_range, std, spike_ts, encode, decode, act_limit):
         super().__init__()
         self.act_limit = act_limit
-        self.obs_dim = obs_dim
-        self.act_dim = act_dim
-        self.spike_ts = spike_ts
 
         if encode == 'pop-det':
             self.encoder = encoding.PopSpikeEncoderDeterministic(obs_dim, enc_pop_dim, spike_ts, mean_range, std)

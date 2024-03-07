@@ -3185,6 +3185,123 @@ class CLIFNode(BaseNode):
 
 
 ##########################################################################################################
+# Noisy modules for exploration of RL
+##########################################################################################################
+
+import colorednoise as cn
+
+class NoisyBaseNode(nn.Module, base.MultiStepModule):
+    def __init__(self, num_node, is_training: bool = True, T: int = 5, sigma_init: float = 0.5, 
+                 beta: float = 0.0, v_threshold: float = 0.5, v_reset: float = 0., 
+                 surrogate_function: Callable = surrogate.Rect()):
+        assert isinstance(v_reset, float) or v_reset is None
+        assert isinstance(v_threshold, float)
+        super().__init__()
+
+        self.num_node = num_node
+        self.is_training = is_training
+        self.T = T
+        self.beta = beta
+
+        self.sigma_v = sigma_init / math.sqrt(num_node)
+        self.cn_v = None
+
+        self.sigma_s = sigma_init / math.sqrt(num_node)
+        self.cn_s = None
+
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
+
+        self.surrogate_function = surrogate_function
+
+    @abstractmethod
+    def neuronal_charge(self, x: torch.Tensor):
+        raise NotImplementedError
+
+    def neuronal_fire(self):
+        return self.surrogate_function(self.v - self.v_threshold)
+
+    def neuronal_reset(self, spike):
+        if self.v_reset is None:
+            self.v = self.v - spike * self.v_threshold
+        else:
+            self.v = (1. - spike) * self.v + spike * self.v_reset
+
+    def init_tensor(self, data: torch.Tensor):
+        self.v = torch.full_like(data, fill_value=self.v_reset)
+
+    def forward(self, x_seq: torch.Tensor):
+        self.init_tensor(x_seq[0].data)
+        
+        y = []
+
+        if self.is_training:
+            if self.cn_v is None or self.cn_s is None:
+                self.noise_step += 1
+
+            for t in range(self.T):      
+                if self.cn_v is None:
+                    self.neuronal_charge(x_seq[t] + self.sigma_v * self.eps_v_seq[self.noise_step][t].to(x_seq.device))
+                else:
+                    self.neuronal_charge(x_seq[t] + self.sigma_v * self.cn_v[:, t])
+                spike = self.neuronal_fire()
+                self.neuronal_reset(spike)
+                if self.cn_s is None:
+                    spike = spike + self.sigma_s * self.eps_s_seq[self.noise_step][t].to(x_seq.device)
+                else:
+                    spike = spike + self.sigma_s * self.cn_s[:, t]
+                y.append(spike)
+            
+        else:
+            for t in range(self.T):
+                self.neuronal_charge(x_seq[t])
+                spike = self.neuronal_fire()
+                self.neuronal_reset(spike)
+                y.append(spike)
+
+        return torch.stack(y)
+        
+    def reset_noise(self, num_rl_step):
+        eps_shape = [self.num_node, num_rl_step * self.T]
+        per_order = [1, 2, 0]
+        # (nodes, steps * T) -> (nodes, steps, T) -> (steps, T, nodes)
+        self.eps_v_seq = torch.FloatTensor(cn.powerlaw_psd_gaussian(self.beta, eps_shape).reshape(self.num_node, num_rl_step, self.T)).permute(per_order)
+        self.eps_s_seq = torch.FloatTensor(cn.powerlaw_psd_gaussian(self.beta, eps_shape).reshape(self.num_node, num_rl_step, self.T)).permute(per_order)
+        self.noise_step = -1
+
+    def get_colored_noise(self):
+        cn = [self.eps_v_seq[self.noise_step], self.eps_s_seq[self.noise_step]]
+        return torch.cat(cn, dim=1)
+
+    def load_colored_noise(self, cn):
+        self.cn_v = cn[:, :, :self.num_node]
+        self.cn_s = cn[:, :, self.num_node:]
+
+    def cancel_load(self):
+        self.cn_v = None
+        self.cn_s = None
+
+
+class NoisyCLIFNode(NoisyBaseNode):
+    def __init__(self, num_node, c_decay: float = 0.5, v_decay: float = 0.75, is_training: bool = True, 
+                 T: int = 5, sigma_init: float = 0.5, beta: float = 0.0, v_threshold: float = 0.5, 
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Rect()):
+        super().__init__(num_node, is_training, T, sigma_init, beta, v_threshold, 
+                         v_reset, surrogate_function)
+
+        self.c_decay = c_decay
+        self.v_decay = v_decay
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.c = self.c * self.c_decay + x
+        self.v = self.v * self.v_decay + self.c
+
+    def init_tensor(self, data: torch.Tensor):
+        self.c = torch.full_like(data, fill_value=0.0)
+        self.v = torch.full_like(data, fill_value=self.v_reset)
+
+
+##########################################################################################################
 # Inter-Layer Connections (ILC) modules for population-coded spiking actor network
 ##########################################################################################################
 
@@ -3283,6 +3400,134 @@ class ILCIFNode(ILCBaseNode):
 
 
 ##########################################################################################################
+# Noisy modules with Inter-Layer Connections (ILC)
+##########################################################################################################
+
+class NoisyILCBaseNode(nn.Module, base.MultiStepModule):
+    def __init__(self, act_dim, dec_pop_dim, is_training: bool = True, T: int = 5, 
+                 sigma_init: float = 0.5, beta: float = 0.0, v_threshold: float = 1.0, 
+                 v_reset: float = 0., surrogate_function: Callable = surrogate.Rect()):
+
+        assert isinstance(v_reset, float) or v_reset is None
+        assert isinstance(v_threshold, float)
+        super().__init__()
+
+        self.act_dim = act_dim
+        self.num_node = act_dim * dec_pop_dim
+        self.dec_pop_dim = dec_pop_dim
+
+        self.conn = nn.Conv1d(act_dim, self.num_node, dec_pop_dim, groups=act_dim)
+
+        self.is_training = is_training
+        self.T = T
+        self.beta = beta
+
+        self.sigma_v = sigma_init / math.sqrt(self.num_node)
+        self.cn_v = None
+
+        self.sigma_s = sigma_init / math.sqrt(self.num_node)
+        self.cn_s = None
+
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
+
+        self.surrogate_function = surrogate_function
+
+    @abstractmethod
+    def neuronal_charge(self, x: torch.Tensor):
+        raise NotImplementedError
+
+    def neuronal_fire(self):
+        return self.surrogate_function(self.v - self.v_threshold)
+
+    def neuronal_reset(self, spike):
+        if self.v_reset is None:
+            self.v = self.v - spike * self.v_threshold
+        else:
+            self.v = (1. - spike) * self.v + spike * self.v_reset
+
+    def init_tensor(self, data: torch.Tensor):
+        self.v = torch.full_like(data, fill_value=self.v_reset)
+
+    def forward(self, x_seq: torch.Tensor):
+        self.init_tensor(x_seq[0].data)
+
+        y = []
+
+        if self.is_training:
+            if self.cn_v is None or self.cn_s is None:
+                self.noise_step += 1
+
+            for t in range(self.T):      
+                if self.cn_v is None:
+                    self.neuronal_charge(x_seq[t] + self.sigma_v * self.eps_v_seq[self.noise_step][t].to(x_seq.device))
+                else:
+                    self.neuronal_charge(x_seq[t] + self.sigma_v * self.cn_v[:, t])
+                spike = self.neuronal_fire()
+                self.neuronal_reset(spike)
+                if self.cn_s is None:
+                    spike = spike + self.sigma_s * self.eps_s_seq[self.noise_step][t].to(x_seq.device)
+                else:
+                    spike = spike + self.sigma_s * self.cn_s[:, t]
+                y.append(spike)
+
+                if t < self.T - 1:
+                    x_seq[t + 1] = x_seq[t + 1] + self.conn(spike.view(-1, self.act_dim, self.dec_pop_dim)).view(-1, self.num_node)
+            
+        else:
+            for t in range(self.T):
+                self.neuronal_charge(x_seq[t])
+                spike = self.neuronal_fire()
+                self.neuronal_reset(spike)
+                y.append(spike)
+
+                if t < self.T - 1:
+                    x_seq[t + 1] = x_seq[t + 1] + self.conn(spike.view(-1, self.act_dim, self.dec_pop_dim)).view(-1, self.num_node)
+
+        return torch.stack(y)
+        
+    def reset_noise(self, num_rl_step):
+        eps_shape = [self.num_node, num_rl_step * self.T]
+        per_order = [1, 2, 0]
+        # (nodes, steps * T) -> (nodes, steps, T) -> (steps, T, nodes)
+        self.eps_v_seq = torch.FloatTensor(cn.powerlaw_psd_gaussian(self.beta, eps_shape).reshape(self.num_node, num_rl_step, self.T)).permute(per_order)
+        self.eps_s_seq = torch.FloatTensor(cn.powerlaw_psd_gaussian(self.beta, eps_shape).reshape(self.num_node, num_rl_step, self.T)).permute(per_order)
+        self.noise_step = -1
+
+    def get_colored_noise(self):
+        cn = [self.eps_v_seq[self.noise_step], self.eps_s_seq[self.noise_step]]
+        return torch.cat(cn, dim=1)
+
+    def load_colored_noise(self, cn):
+        self.cn_v = cn[:, :, :self.num_node]
+        self.cn_s = cn[:, :, self.num_node:]
+
+    def cancel_load(self):
+        self.cn_v = None
+        self.cn_s = None
+
+
+class NoisyILCCLIFNode(NoisyILCBaseNode):
+    def __init__(self, act_dim, dec_pop_dim, c_decay: float = 0.5, v_decay: float = 0.75,
+                 is_training: bool = True, T: int = 5, sigma_init: float = 0.5, 
+                 beta: float = 0.0, v_threshold: float = 1.0, v_reset: float = 0., 
+                 surrogate_function: Callable = surrogate.Rect()):
+        super().__init__(act_dim, dec_pop_dim, is_training, T, sigma_init, beta, v_threshold, 
+                         v_reset, surrogate_function)
+
+        self.c_decay = c_decay
+        self.v_decay = v_decay
+
+    def neuronal_charge(self, x: torch.Tensor):
+        self.c = self.c * self.c_decay + x
+        self.v = self.v * self.v_decay + self.c
+
+    def init_tensor(self, data: torch.Tensor):
+        self.c = torch.full_like(data, fill_value=0.0)
+        self.v = torch.full_like(data, fill_value=self.v_reset)
+
+
+##########################################################################################################
 # Non-spiking modules for floating-point output
 ##########################################################################################################
 
@@ -3340,3 +3585,88 @@ class NonSpikingLIFNode(NonSpikingBaseNode):
 
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + (x - self.v) / self.tau
+
+
+##########################################################################################################
+# Noisy Non-spiking modules
+##########################################################################################################
+
+class NoisyNonSpikingBaseNode(nn.Module, base.MultiStepModule):
+    def __init__(self, num_node, is_training: bool = True, T: int = 5, 
+                 sigma_init: float = 0.5, beta: float = 0.0, decode: str = 'last-mem'):
+        super().__init__()
+
+        self.num_node = num_node
+        self.is_training = is_training
+        self.T = T
+        self.beta = beta
+        self.decode = decode
+
+        self.sigma = nn.Parameter(torch.FloatTensor(num_node))
+        self.sigma.data.fill_(sigma_init / math.sqrt(num_node))
+        self.cn = None
+
+    @abstractmethod
+    def neuronal_charge(self, x: torch.Tensor):
+        raise NotImplementedError
+
+    def init_tensor(self, data: torch.Tensor):
+        self.v = torch.full_like(data, fill_value=0.0)
+
+    def forward(self, x_seq: torch.Tensor):
+        self.init_tensor(x_seq[0].data)
+
+        v_seq = []
+
+        if self.is_training:
+            if self.cn is None:
+                self.noise_step += 1
+
+            for t in range(self.T):
+                if self.cn is None:
+                    self.neuronal_charge(x_seq[t] + self.sigma.mul(self.eps_seq[self.noise_step][t].to(x_seq.device)))
+                else:
+                    self.neuronal_charge(x_seq[t] + self.sigma.mul(self.cn[:, t].to(x_seq.device)))
+                v_seq.append(self.v)
+                
+        else:
+            for t in range(self.T):
+                self.neuronal_charge(x_seq[t])
+                v_seq.append(self.v)
+
+        if self.decode == 'max-mem':
+            mem = torch.max(torch.stack(v_seq, 0), 0).values
+
+        elif self.decode == 'max-abs-mem':
+            v_stack = torch.stack(v_seq, 0)
+            max_mem = torch.max(v_stack, 0).values
+            min_mem = torch.min(v_stack, 0).values
+            mem = max_mem * (max_mem.abs() > min_mem.abs()) + min_mem * (max_mem.abs() <= min_mem.abs())
+
+        elif self.decode == 'mean-mem':
+            mem = torch.mean(torch.stack(v_seq, 0), 0)
+
+        else:  # 'last-mem'
+            mem = v_seq[-1]
+
+        return mem
+
+    def reset_noise(self, num_rl_step):
+        eps_shape = [self.num_node, num_rl_step * self.T]
+        per_order = [1, 2, 0]
+        self.eps_seq = torch.FloatTensor(cn.powerlaw_psd_gaussian(self.beta, eps_shape).reshape(self.num_node, num_rl_step, self.T)).permute(per_order)
+        self.noise_step = -1
+
+    def get_colored_noise(self):
+        return self.eps_seq[self.noise_step]
+
+    def load_colored_noise(self, cn):
+        self.cn = cn
+
+    def cancel_load(self):
+        self.cn = None
+
+
+class NoisyNonSpikingIFNode(NoisyNonSpikingBaseNode):
+    def neuronal_charge(self, x: torch.Tensor):
+        self.v = self.v + x
