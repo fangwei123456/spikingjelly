@@ -263,7 +263,7 @@ SpikingJelly provides elaborate tutorials. Here are some tutorials:
 | ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/classify_dvsg.html) |
 | ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
 | ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/stdp.html) |
-| ![reinforcement_learning](./docs/source/_static/tutorials/activation_based/snn_for_rl/snn_for_rl.png) | [Reinforcement Learning](https://github.com/fangwei123456/spikingjelly/blob/master/docs/source/activation_based/ilc_san.rst) |
+| ![reinforcement_learning](./docs/source/_static/tutorials/activation_based/snn_for_rl/snn_for_rl.png) | [Reinforcement Learning](https://spikingjelly.readthedocs.io/zh-cn/latest/activation_based/ilc_san.html) |
 
 Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
 
