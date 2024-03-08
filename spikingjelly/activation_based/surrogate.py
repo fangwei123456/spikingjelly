@@ -2071,7 +2071,7 @@ class DeterministicPass(SurrogateFunctionBase):
 
 @torch.jit.script
 def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
-    return (x.abs() < 0.5).to(x) * grad_output, None
+    return alpha * (x.abs() < 0.5 / alpha).to(x) * grad_output, None
 
 
 class rect(torch.autograd.Function):
@@ -2098,7 +2098,7 @@ class Rect(SurrogateFunctionBase):
     @staticmethod
     @torch.jit.script
     def primitive_function(x: torch.Tensor, alpha: float):
-        return torch.clamp(x, min=-0.5, max=0.5)
+        return torch.clamp(alpha * x + 0.5, min=0.0, max=1.0)
 
     @staticmethod
     def backward(grad_output, x, alpha):
