@@ -192,6 +192,8 @@
 | [Event-based classification of defects in civil infrastructures with Artificial and Spiking Neural Networks](https://link.springer.com/chapter/10.1007/978-3-031-43078-7_51) |                                                              | International Work-Conference on Artificial Neural Networks, 2023 |
 | [NeuroBench: A Framework for Benchmarking Neuromorphic Computing Algorithms and Systems](https://arxiv.org/abs/2304.04640) |                                                              |                                                              |
 | [Optimal ANN-SNN Conversion with Group Neurons](https://arxiv.org/abs/2402.19061) | https://github.com/Lyu6PosHao/ANN2SNN_GN                     | ICASSP 2024                                                  |
+| [SGLFormer: Spiking Global-Local-Fusion Transformer with high performance](https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1371290/full) | https://github.com/ZhangHanN1/SGLFormer                     | Frontiers in Neuroscience 2024   |
+| [QKFormer: Hierarchical Spiking Transformer using Q-K Attention](https://arxiv.org/pdf/2403.16552.pdf) | https://github.com/zhouchenlin2096/QKFormer                   | 2024.03   |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
