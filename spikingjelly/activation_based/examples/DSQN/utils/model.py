@@ -11,6 +11,8 @@ class DSQN(nn.Module):
     def __init__(self, input_shape, n_actions, T=5, dec_type='max-mem', use_cuda=False):
         super(DSQN, self).__init__()
 
+        self.model_name = 'spiking_dqn'
+
         self.dec_type = dec_type
 
         if 'mem' in dec_type:
