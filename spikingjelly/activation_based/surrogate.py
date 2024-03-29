@@ -659,6 +659,63 @@ class SoftSign(SurrogateFunctionBase):
     # plt.grid(linestyle='--')
     # plt.show()
 
+@torch.jit.script
+def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    return alpha * grad_output / torch.pow(torch.abs(x) + 1., 2), None
+
+class super_spike(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x, alpha):
+        if x.requires_grad:
+            ctx.save_for_backward(x)
+            ctx.alpha = alpha
+        return heaviside(x)
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return super_spike_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+
+
+class SuperSpike(SurrogateFunctionBase):
+    def __init__(self, alpha=1.0, spiking=True):
+        '''
+        * :ref:`API in English <SuperSpike.__init__-en>`
+        .. _SuperSpike.__init__-cn:
+    
+        `SuperSpike: Supervised learning in multi-layer spiking neural networks <https://arxiv.org/abs/1705.11146>`_ 提出的反向传播时使用SuperSpike的梯度的脉冲发放函数。反向传播为
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{(1 + (|x|))^2}
+
+
+        * :ref:`中文API <ATan.__init__-cn>`
+        .. _ATan.__init__-en:
+
+        The SuperSpike surrogate spiking function proposed by `SuperSpike: Supervised learning in multi-layer spiking neural networks <https://arxiv.org/abs/1705.11146>`_. The gradient is defined by
+
+        .. math::
+            g'(x) = \\frac{\\alpha}{(1 + (|x|))^2}
+        '''
+        super().__init__(alpha, spiking)
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return atan.apply(x, alpha)
+
+    @staticmethod
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
+        raise NotImplementedError
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return super_spike_backward(grad_output, x, alpha)[0]
+
+    def cuda_code(self, x: str, y: str, dtype='fp32'):
+        raise NotImplementedError
+    def cuda_codes(self, y: str, x: str, dtype: str):
+        raise NotImplementedError
+
 
 @torch.jit.script
 def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
