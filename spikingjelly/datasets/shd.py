@@ -9,6 +9,8 @@ import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
+import math
+import bisect
 from .. import configure
 from ..datasets import np_savez
 
@@ -73,26 +75,22 @@ def integrate_events_by_fixed_duration_shd(events: Dict, duration: int, W: int) 
 
     x = events['x']
     t = 1000*events['t']
+    t = t - t[0]
+    
     N = t.size
 
-    frames = []
+    frames_num = int(math.ceil(t[-1] / duration))
+    frames = np.zeros([frames_num, W])
+    frame_index = t // duration
     left = 0
-    right = 0
-    while True:
-        t_l = t[left]
-        while True:
-            if right == N or t[right] - t_l > duration:
-                break
-            else:
-                right += 1
-        # integrate from index [left, right)
-        frames.append(np.expand_dims(integrate_events_segment_to_frame_shd(x, W, left, right), 0))
 
+    for i in range(frames_num - 1):
+        right = np.searchsorted(frame_index, i + 1, side='left')
+        frames[i] = integrate_events_segment_to_frame_shd(x, W, left, right)
         left = right
 
-        if right == N:
-            return np.concatenate(frames)
-
+    frames[-1] = integrate_events_segment_to_frame_shd(x, W, left, N)
+    return frames
 
 def integrate_events_file_to_frames_file_by_fixed_duration_shd(h5_file: h5py.File, i: int, output_dir: str, duration: int, W: int, print_save: bool = False) -> None:
     events = {'t': h5_file['spikes']['times'][i], 'x': h5_file['spikes']['units'][i]}
