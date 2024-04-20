@@ -212,6 +212,7 @@
 | [Application of SNNS Model Based On Multi-Dimensional Attention In Drone Radio Frequency Signal Classification](https://ieeexplore.ieee.org/abstract/document/10446694) |                                                              | ICASSP 2024                                                  |
 | [Fourier or Wavelet bases as counterpart self-attention in spikformer for efficient visual classification](https://arxiv.org/abs/2403.18228) |                                                              |                                                              |
 | [Spikewhisper: Temporal Spike Backdoor Attacks on Federated Neuromorphic Learning over Low-power Devices](https://arxiv.org/abs/2403.18607) |                                                              |                                                              |
+| [GET: Group Event Transformer for Event-Based Vision](https://openaccess.thecvf.com/content/ICCV2023/html/Peng_GET_Group_Event_Transformer_for_Event-Based_Vision_ICCV_2023_paper.html) | https://github.com/Peterande/GET-Group-Event-Transformer     | ICCV 2023                                                    |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
