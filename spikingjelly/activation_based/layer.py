@@ -51,6 +51,43 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         return functional.seq_to_ann_forward(x_seq, super().forward)
 
 
+
+class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
+    def __init__(self, *args):
+        super().__init__(*args)
+        for m in self:
+            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            if isinstance(m, base.StepModule):
+                if 'm' in m.supported_step_mode():
+                    logging.warning(f"{m} supports for step_mode == 's', which should not be contained by MultiStepContainer!")
+    def forward(self, x_seq: Tensor):
+        """
+        :param x_seq: ``shape=[batch_size, ..., T]``
+        :type x_seq: Tensor
+        :return: y_seq with ``shape=[batch_size, ..., T]``
+        :rtype: Tensor
+        """
+        return functional.t_last_seq_to_ann_forward(x_seq, super().forward)
+    
+class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
+    def __init__(self, *args):
+        super().__init__(*args)
+        for m in self:
+            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            if isinstance(m, base.StepModule):
+                if 'm' in m.supported_step_mode():
+                    logging.warning(f"{m} supports for step_mode == 's', which should not be contained by SeqToANNContainer!")
+
+
+    def forward(self, x_seq: Tensor):
+        """
+        :param x_seq: shape=[batch_size, ..., T]
+        :type x_seq: Tensor
+        :return: y_seq, shape=[batch_size, ..., T]
+        :rtype: Tensor
+        """
+        return functional.t_last_seq_to_ann_forward(x_seq, super().forward) 
+
 class StepModeContainer(nn.Sequential, base.StepModule):
     def __init__(self, stateful: bool, *args):
         super().__init__(*args)

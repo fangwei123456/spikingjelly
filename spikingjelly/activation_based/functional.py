@@ -564,6 +564,50 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.M
 
     return torch.stack(y_seq)
 
+
+def t_last_multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.Module] or tuple[nn.Module] or nn.Sequential or Callable):
+    """
+    * :ref:`API in English <t_last_multi_step_forward-en>`
+
+    .. _t_last_multi_step_forward-cn:
+
+    :param x_seq: ``shape=[batch_size, ..., T]`` 的输入tensor
+    :type x_seq: Tensor
+    :param single_step_module: 一个或多个单步模块
+    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :return: ``shape=[batch_size, ..., T]`` 的输出tensor
+    :rtype: torch.Tensor
+
+    在单步模块 ``single_step_module`` 上使用多步前向传播。
+
+    * :ref:`中文 API <t_last_multi_step_forward-cn>`
+
+    .. _t_last_multi_step_forward-en:
+
+    :param x_seq: the input tensor with ``shape=[batch_size, ..., T]``
+    :type x_seq: torch.Tensor
+    :param single_step_module: one or many single-step modules
+    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :return: the output tensor with ``shape=[batch_size, ..., T]``
+    :rtype: torch.torch.Tensor
+
+    Applies multi-step forward on ``single_step_module``.
+
+    """
+    y_seq = []
+    if isinstance(single_step_module, (list, tuple, nn.Sequential)):
+        for t in range(x_seq.shape[-1]):
+            x_seq_t = x_seq[..., t]
+            for m in single_step_module:
+                x_seq_t = m(x_seq_t)
+            y_seq.append(x_seq_t)
+    else:
+        for t in range(x_seq.shape[-1]):
+            y_seq.append(single_step_module(x_seq[..., t]))
+
+    return torch.stack(y_seq, dim=-1)
+
+
 def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: nn.Module):
     """
     * :ref:`API in English <chunk_multi_step_forward-en>`
@@ -663,6 +707,8 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: Tensor
 
+    使用无状态层进行多步前向传播。
+
     * :ref:`中文 API <seq_to_ann_forward-cn>`
 
     .. _seq_to_ann_forward-en:
@@ -674,7 +720,7 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: Tensor
 
-    Applied forward on stateless modules
+    Applied forward on stateless modules.
 
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
@@ -686,6 +732,54 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
         y = stateless_module(y)
     y_shape.extend(y.shape[1:])
     return y.view(y_shape)
+
+
+def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential or Callable):
+    """
+    * :ref:`API in English <t_last_seq_to_ann_forward-en>`
+
+    .. _t_last_seq_to_ann_forward-cn:
+
+    :param x_seq: ``shape=[batch_size, ..., T]`` 的输入tensor
+    :type x_seq: Tensor
+    :param stateless_module: 单个或多个无状态网络层
+    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :return: the output tensor with ``shape=[batch_size, ..., T]``
+    :rtype: Tensor
+
+    使用无状态层进行多步前向传播。
+
+    .. note::
+        SpikingJelly中默认序列数据的 ``shape=[T, batch_size, ...]``，但此函数是用于另一种格式，即 ``shape=[batch_size, ..., T]``。当使用 ``torch >= 2.0.0`` 时也有并行加速的效果。
+
+
+    * :ref:`中文 API <t_last_seq_to_ann_forward-cn>`
+
+    .. _t_last_seq_to_ann_forward-en:
+
+    :param x_seq: the input tensor with ``shape=[batch_size, ..., T]``
+    :type x_seq: Tensor
+    :param stateless_module: one or many stateless modules
+    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :return: the output tensor with ``shape=[batch_size, ..., T]``
+    :rtype: Tensor
+
+    Applied forward on stateless modules.
+
+    .. admonition:: Note
+        :class: note
+
+        The default shape of sequence data in SpikingJelly is ``shape=[T, batch_size, ...]``. However, this function is used for the other data format where  ``shape=[batch_size, ..., T]``. When using ``torch >= 2.0.0``, this function is computing in parallel.
+
+    """
+
+    if hasattr(torch, 'vmap'):
+        vmap_f = torch.vmap(stateless_module, in_dims=-1, out_dims=-1)
+        return vmap_f(x_seq)
+    else:
+        return t_last_multi_step_forward(x_seq, stateless_module)
+            
+
 
 
 def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
