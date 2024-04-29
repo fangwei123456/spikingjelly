@@ -2,6 +2,7 @@
 
 | Papers                                                       | Codes                                                        | Publisher                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
+|[Tensor decomposition based attention module for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0950705124004143)| https://github.com/RisingEntropy/PFA| Knowledge-Based Systems|
 | [Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks](https://arxiv.org/abs/2007.05785) | https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron | ICCV 2021                                                    |
 | [Pruning of Deep Spiking Neural Networks through Gradient Rewiring](https://arxiv.org/abs/2105.04916) | https://github.com/Yanqi-Chen/Gradient-Rewiring              | IJCAI 2021                                                   |
 | [Optimal ANN-SNN Conversion for Fast and Accurate Inference in Deep Spiking Neural Networks](https://arxiv.org/abs/2105.11654) | https://github.com/DingJianhao/OptSNNConvertion-RNL-RIL      | IJCAI 2021                                                   |
