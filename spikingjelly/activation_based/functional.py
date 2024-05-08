@@ -752,6 +752,9 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list
     .. note::
         SpikingJelly中默认序列数据的 ``shape=[T, batch_size, ...]``，但此函数是用于另一种格式，即 ``shape=[batch_size, ..., T]``。当使用 ``torch >= 2.0.0`` 时也有并行加速的效果。
 
+    .. note::
+        不能用于BN层，因为BN层的running mean/var是输入依赖的。对于BN层，只需要输入被当作是 ``shape = [N, C, ..]`` 即可并行计算，需要用户手动实现。
+
 
     * :ref:`中文 API <t_last_seq_to_ann_forward-cn>`
 
@@ -771,6 +774,10 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list
 
         The default shape of sequence data in SpikingJelly is ``shape=[T, batch_size, ...]``. However, this function is used for the other data format where  ``shape=[batch_size, ..., T]``. When using ``torch >= 2.0.0``, this function is computing in parallel.
 
+    .. admonition:: Note
+        :class: note
+
+        This function can not be applied to wrap BN because its running mean/var depends on inputs. The BN can be computed in parallel as long as the input is regarded as ``shape = [N, C, ..]``, which can be implemented by user manually.
     """
 
     if hasattr(torch, 'vmap'):

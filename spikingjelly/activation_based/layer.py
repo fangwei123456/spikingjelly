@@ -71,6 +71,9 @@ class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
     
 class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
+        """
+        Please refer to :class:`spikingjelly.activation_based.functional.t_last_seq_to_ann_forward` .
+        """
         super().__init__(*args)
         for m in self:
             assert not hasattr(m, 'step_mode') or m.step_mode == 's'
