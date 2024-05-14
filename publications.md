@@ -2,7 +2,6 @@
 
 | Papers                                                       | Codes                                                        | Publisher                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
-|[Tensor decomposition based attention module for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0950705124004143)| https://github.com/RisingEntropy/PFA| Knowledge-Based Systems|
 | [Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks](https://arxiv.org/abs/2007.05785) | https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron | ICCV 2021                                                    |
 | [Pruning of Deep Spiking Neural Networks through Gradient Rewiring](https://arxiv.org/abs/2105.04916) | https://github.com/Yanqi-Chen/Gradient-Rewiring              | IJCAI 2021                                                   |
 | [Optimal ANN-SNN Conversion for Fast and Accurate Inference in Deep Spiking Neural Networks](https://arxiv.org/abs/2105.11654) | https://github.com/DingJianhao/OptSNNConvertion-RNL-RIL      | IJCAI 2021                                                   |
@@ -214,6 +213,7 @@
 | [Fourier or Wavelet bases as counterpart self-attention in spikformer for efficient visual classification](https://arxiv.org/abs/2403.18228) |                                                              |                                                              |
 | [Spikewhisper: Temporal Spike Backdoor Attacks on Federated Neuromorphic Learning over Low-power Devices](https://arxiv.org/abs/2403.18607) |                                                              |                                                              |
 | [GET: Group Event Transformer for Event-Based Vision](https://openaccess.thecvf.com/content/ICCV2023/html/Peng_GET_Group_Event_Transformer_for_Event-Based_Vision_ICCV_2023_paper.html) | https://github.com/Peterande/GET-Group-Event-Transformer     | ICCV 2023                                                    |
+|[Tensor decomposition based attention module for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0950705124004143)| https://github.com/RisingEntropy/PFA| Knowledge-Based Systems|
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
