@@ -42,6 +42,79 @@ except BaseException as e:
     cupy = None
     pass
 
+
+def save_every_frame_of_an_entire_DVS_dataset(dataset: str, dataset_path: str, time_steps: int, save_pic_to: str = './', number_of_threads: int = 4):
+    '''
+    :param dataset: Name of the dataset to be saved. The current options available are: DVS128Gesture, CIFAR10DVS and NCaltech101.
+    :type dataset: str
+    :param dataset_path: Same storage path as loading dataset.
+    :type dataset_path: str
+    :param time_steps: Same T as loading the dataset.
+    :type time_steps: int
+    :param save_pic_to: Where to store each frame's image.
+    :type save_pic_to: str
+    :param number_of_threads: How many threads are used to save images.
+    :type number_of_threads: int
+    
+    demo:
+    save_every_frame_of_an_entire_DVS_dataset(dataset='DVS128Gesture', dataset_path="../../datasets/DVS128Gesture",
+                                              time_steps=16, save_pic_to='./demo', number_of_threads=20)
+    save_every_frame_of_an_entire_DVS_dataset(dataset='CIFAR10DVS', dataset_path="../../datasets/cifar10dvs",
+                                              time_steps=10, save_pic_to='./demo', number_of_threads=20)
+    save_every_frame_of_an_entire_DVS_dataset(dataset='NCaltech101', dataset_path="../../datasets/NCaltech101",
+                                              time_steps=14, save_pic_to='./demo', number_of_threads=20)
+    '''
+    if not dataset or not dataset_path or time_steps is None or not save_pic_to:
+        raise ValueError("All parameters(dataset, dataset_path, time_steps and save_pic_to) must be provided and cannot be empty.")
+    if dataset == 'DVS128Gesture':
+        from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+        data = DVS128Gesture(root=dataset_path, train=False, data_type='frame', split_by='number', frames_number=time_steps)
+    elif dataset == 'CIFAR10DVS':
+        from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
+        data = CIFAR10DVS(root=dataset_path, data_type='frame', split_by='number', frames_number=time_steps)
+    elif dataset == 'NCaltech101':
+        from spikingjelly.datasets.n_caltech101 import NCaltech101
+        data = NCaltech101(root=dataset_path, data_type='frame', split_by='number', frames_number=time_steps)
+    else:
+        raise ValueError("The dataset attribute can only be DVS128Gesture, CIFAR10DVS or NCaltech101")
+    import multiprocessing
+    multiprocessing.freeze_support()
+    pool = multiprocessing.Pool(processes=number_of_threads)
+    for i in range(len(data)):
+        frame, _ = data[i]
+        pool.apply_async(save_as_pic, args=(frame, save_pic_to, str(i)))
+    pool.close()
+    pool.join()
+    print('complete!!!')
+
+
+def save_as_pic(x: torch.Tensor or np.ndarray, save_pic_to: str = './', pic_first_name: str = 'pic') -> None:
+    '''
+    :param x: frames with ``shape=[T, 2, H, W]``
+    :type x: torch.Tensor or np.ndarray
+    :param save_pic_to: Where to store images.
+    :type save_pic_to: str
+    :param pic_first_name: Prefix for image names before _t (stored image names are: ``pic_first_name``_t.png)
+    :type pic_first_name: str
+    :return: None
+    
+    demo:
+    save_as_pic(frame, './demo', 'first_pic')
+    '''
+    if isinstance(x, np.ndarray):
+        x = torch.from_numpy(x)
+    if not save_pic_to.endswith('/'):       # Prevent users from forgetting to join the end '/'
+        save_pic_to += '/'
+    to_img = transforms.ToPILImage()
+    img_tensor = torch.zeros([x.shape[0], 3, x.shape[2], x.shape[3]])
+    img_tensor[:, 1] = x[:, 0]
+    img_tensor[:, 2] = x[:, 1]
+    for t in range(img_tensor.shape[0]):
+        plt.imshow(to_img(img_tensor[t]))
+        plt.axis('off')
+        plt.savefig(save_pic_to + pic_first_name + '_' + str(t) + '.png', bbox_inches='tight', pad_inches=0)
+
+
 def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
     '''
     :param x: frames with ``shape=[T, 2, H, W]``
