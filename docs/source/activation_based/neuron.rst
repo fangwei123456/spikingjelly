@@ -6,7 +6,7 @@
 
 脉冲神经元模型
 -------------------------------------------
-在 ``spikingjelly`` 中，我们约定，只能输出脉冲，即0或1的神经元，都可以称之为“脉冲神经元”。使用脉冲神经元的网络，进而也可以称之为脉冲神经元网络(Spiking Neural Networks, SNNs)。\
+在 ``spikingjelly`` 中，我们约定，只要是输出脉冲，即0或1的神经元，都可以称之为“脉冲神经元”。使用脉冲神经元的网络，进而也可以称之为脉冲神经元网络(Spiking Neural Networks, SNNs)。\
 :class:`spikingjelly.activation_based.neuron` 中定义了各种常见的脉冲神经元模型，我们以 :class:`spikingjelly.activation_based.neuron.IFNode` 为例来介绍脉冲神经元。
 
 首先导入相关的模块：
@@ -63,7 +63,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 
 :math:`V[t]` 和输入 :math:`X[t]` 的关系是什么样的？在脉冲神经元中，:math:`V[t]` 不仅取决于当前时刻的输入 :math:`X[t]`，还取决于它在上一个时刻末的膜电位 :math:`V[t-1]`。
 
-通常使用阈下（指的是膜电位不超过阈值电压 ``V_{threshold}`` 时）神经动态方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于IF神经元，充电方程为：
+通常使用阈下（指的是膜电位不超过阈值电压 :math:`V_{threshold}` 时）神经动态方程 :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` 描述连续时间的脉冲神经元的充电过程，例如对于IF神经元，充电方程为：
 
 .. math::
     \frac{\mathrm{d}V(t)}{\mathrm{d}t} = X(t)
