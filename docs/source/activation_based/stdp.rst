@@ -114,7 +114,7 @@ STDP优化器
                                    tau_pre=tau_pre, tau_post=tau_post,
                                    f_pre=f_weight, f_post=f_weight)
 
-接下来送入数据计算。需要注意的是，为了便于画图，我们对数据与权重进行切片，这样使得 ``shape = [T, *, *]`` 的数据变为 ``shape = [T]``：
+接下来送入数据计算。需要注意的是，为了便于画图，我们对数据与权重进行切片，这样使得 ``shape = [T, *, *]`` 变为 ``shape = [T]``：
 
 .. code-block:: python
 
