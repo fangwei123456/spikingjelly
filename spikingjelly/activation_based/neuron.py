@@ -82,7 +82,7 @@ class SimpleLIFNode(SimpleBaseNode):
             self.v = self.v + (self.v_reset - self.v) / self.tau + x
 
 class BaseNode(base.MemoryModule):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+    def __init__(self, v_threshold: float = 1., v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
                  step_mode='s', backend='torch', store_v_seq: bool = False):
         """
@@ -95,7 +95,7 @@ class BaseNode(base.MemoryModule):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -126,7 +126,7 @@ class BaseNode(base.MemoryModule):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -325,7 +325,7 @@ class BaseNode(base.MemoryModule):
 
 
 class AdaptBaseNode(BaseNode):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+    def __init__(self, v_threshold: float = 1., v_reset: float or None = 0.,
                  v_rest: float = 0., w_rest: float = 0., tau_w: float = 2., a: float = 0., b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
@@ -431,7 +431,7 @@ class AdaptBaseNode(BaseNode):
 
 
 class IFNode(BaseNode):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0.,
+    def __init__(self, v_threshold: float = 1., v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
         """
@@ -444,7 +444,7 @@ class IFNode(BaseNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -478,7 +478,7 @@ class IFNode(BaseNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -703,7 +703,7 @@ class IFNode(BaseNode):
 
 class LIFNode(BaseNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float or None = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
         * :ref:`API in English <LIFNode.__init__-en>`
@@ -721,7 +721,7 @@ class LIFNode(BaseNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -769,7 +769,7 @@ class LIFNode(BaseNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -1161,7 +1161,7 @@ class LIFNode(BaseNode):
 
 class ParametricLIFNode(BaseNode):
     def __init__(self, init_tau: float = 2.0, decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float or None = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
         * :ref:`API in English <ParametricLIFNode.__init__-en>`
@@ -1179,7 +1179,7 @@ class ParametricLIFNode(BaseNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -1233,7 +1233,7 @@ class ParametricLIFNode(BaseNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -1355,7 +1355,7 @@ class ParametricLIFNode(BaseNode):
 
 class QIFNode(BaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1., v_rest: float = 0.,
-                 v_reset: float = -0.1,
+                 v_reset: float or None = -0.1,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
         """
@@ -1380,7 +1380,7 @@ class QIFNode(BaseNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -1424,7 +1424,7 @@ class QIFNode(BaseNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -1505,7 +1505,7 @@ class QIFNode(BaseNode):
 
 class EIFNode(BaseNode):
     def __init__(self, tau: float = 2., delta_T: float = 1., theta_rh: float = .8, v_threshold: float = 1.,
-                 v_rest: float = 0., v_reset: float = -0.1,
+                 v_rest: float = 0., v_reset: float or None = -0.1,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
         """
@@ -1527,7 +1527,7 @@ class EIFNode(BaseNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -1571,7 +1571,7 @@ class EIFNode(BaseNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -1657,7 +1657,7 @@ class EIFNode(BaseNode):
 
 class IzhikevichNode(AdaptBaseNode):
     def __init__(self, tau: float = 2., v_c: float = 0.8, a0: float = 1., v_threshold: float = 1.,
-                 v_reset: float = 0., v_rest: float = -0.1, w_rest: float = 0., tau_w: float = 2., a: float = 0.,
+                 v_reset: float or None = 0., v_rest: float = -0.1, w_rest: float = 0., tau_w: float = 2., a: float = 0.,
                  b: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
@@ -1777,7 +1777,7 @@ class LIAFNode(LIFNode):
 
 class KLIFNode(BaseNode):
     def __init__(self, scale_reset: bool = False, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float or None = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
         * :ref:`API in English <KLIFNode.__init__-en>`
@@ -1798,7 +1798,7 @@ class KLIFNode(BaseNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -1874,7 +1874,7 @@ class KLIFNode(BaseNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -2798,7 +2798,7 @@ class DSRLIFNode(base.MemoryModule):
 
 class OTTTLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = False, v_threshold: float = 1.,
-                 v_reset: float = None, surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float or None = None, surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = True, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
         * :ref:`API in English <OTTTLIFNode.__init__-en>`
@@ -2816,7 +2816,7 @@ class OTTTLIFNode(LIFNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -2855,7 +2855,7 @@ class OTTTLIFNode(LIFNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -2987,7 +2987,7 @@ class OTTTLIFNode(LIFNode):
 
 class SLTTLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
+                 v_reset: float or None = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = True, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
         * :ref:`API in English <SLTTLIFNode.__init__-en>`
@@ -3005,7 +3005,7 @@ class SLTTLIFNode(LIFNode):
 
         :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
             如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
@@ -3044,7 +3044,7 @@ class SLTTLIFNode(LIFNode):
 
         :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
             after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
-        :type v_reset: float
+        :type v_reset: float or None
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: Callable
@@ -3346,7 +3346,7 @@ def _get_normal_distribution(random_state: Optional[Union[int, Generator, Random
 
 class NoisyBaseNode(nn.Module, base.MultiStepModule):
     def __init__(self, num_node, is_training: bool = True, T: int = 5, sigma_init: float = 0.5, 
-                 beta: float = 0.0, v_threshold: float = 0.5, v_reset: float = 0., 
+                 beta: float = 0.0, v_threshold: float = 0.5, v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Rect()):
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -3439,7 +3439,7 @@ class NoisyBaseNode(nn.Module, base.MultiStepModule):
 class NoisyCLIFNode(NoisyBaseNode):
     def __init__(self, num_node, c_decay: float = 0.5, v_decay: float = 0.75, is_training: bool = True, 
                  T: int = 5, sigma_init: float = 0.5, beta: float = 0.0, v_threshold: float = 0.5, 
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Rect()):
+                 v_reset: float or None = 0., surrogate_function: Callable = surrogate.Rect()):
         super().__init__(num_node, is_training, T, sigma_init, beta, v_threshold, 
                          v_reset, surrogate_function)
 
@@ -3460,7 +3460,7 @@ class NoisyCLIFNode(NoisyBaseNode):
 ##########################################################################################################
 
 class ILCBaseNode(nn.Module, base.MultiStepModule):
-    def __init__(self, act_dim, dec_pop_dim, v_threshold: float = 1.0, v_reset: float = 0., 
+    def __init__(self, act_dim, dec_pop_dim, v_threshold: float = 1.0, v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Rect()):
 
         assert isinstance(v_reset, float) or v_reset is None
@@ -3513,7 +3513,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
 class ILCCLIFNode(ILCBaseNode):
     def __init__(self, act_dim, dec_pop_dim, c_decay: float = 0.5, v_decay: float = 0.75,
-                 v_threshold: float = 0.5, v_reset: float = 0., 
+                 v_threshold: float = 0.5, v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Rect()):
 
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
@@ -3532,7 +3532,7 @@ class ILCCLIFNode(ILCBaseNode):
 
 class ILCLIFNode(ILCBaseNode):
     def __init__(self, act_dim, dec_pop_dim, v_decay: float = 0.75,
-                 v_threshold: float = 1.0, v_reset: float = 0., 
+                 v_threshold: float = 1.0, v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Rect()):
 
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
@@ -3544,7 +3544,7 @@ class ILCLIFNode(ILCBaseNode):
 
 
 class ILCIFNode(ILCBaseNode):
-    def __init__(self, act_dim, dec_pop_dim, v_threshold: float = 1.0, v_reset: float = 0., 
+    def __init__(self, act_dim, dec_pop_dim, v_threshold: float = 1.0, v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Rect()):
 
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
@@ -3560,7 +3560,7 @@ class ILCIFNode(ILCBaseNode):
 class NoisyILCBaseNode(nn.Module, base.MultiStepModule):
     def __init__(self, act_dim, dec_pop_dim, is_training: bool = True, T: int = 5, 
                  sigma_init: float = 0.5, beta: float = 0.0, v_threshold: float = 1.0, 
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Rect()):
+                 v_reset: float or None = 0., surrogate_function: Callable = surrogate.Rect()):
 
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -3664,7 +3664,7 @@ class NoisyILCBaseNode(nn.Module, base.MultiStepModule):
 class NoisyILCCLIFNode(NoisyILCBaseNode):
     def __init__(self, act_dim, dec_pop_dim, c_decay: float = 0.5, v_decay: float = 0.75,
                  is_training: bool = True, T: int = 5, sigma_init: float = 0.5, 
-                 beta: float = 0.0, v_threshold: float = 1.0, v_reset: float = 0., 
+                 beta: float = 0.0, v_threshold: float = 1.0, v_reset: float or None = 0.,
                  surrogate_function: Callable = surrogate.Rect()):
         super().__init__(act_dim, dec_pop_dim, is_training, T, sigma_init, beta, v_threshold, 
                          v_reset, surrogate_function)
