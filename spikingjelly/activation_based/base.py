@@ -238,8 +238,8 @@ class MemoryModule(nn.Module, StepModule):
 
         .. _MemoryModule.multi_step_forward-cn:
 
-        :param x: input tensor with ``shape = [T, N, *] ``
-        :type x: torch.Tensor
+        :param x_seq: input tensor with ``shape = [T, N, *] ``
+        :type x_seq: torch.Tensor
 
         本模块的多步的前向传播函数，通过调用 ``T`` 次 ``single_step_forward(x[t], *args, **kwargs)`` 实现
 
@@ -248,8 +248,8 @@ class MemoryModule(nn.Module, StepModule):
 
         .. _MemoryModule.multi_step_forward-en:
 
-        :param x: input tensor with ``shape = [T, N, *] ``
-        :type x: torch.Tensor
+        :param x_seq: input tensor with ``shape = [T, N, *] ``
+        :type x_seq: torch.Tensor
 
         The multi-step forward function for this module, which is implemented by calling ``single_step_forward(x[t], *args, **kwargs)`` over ``T`` times
 
