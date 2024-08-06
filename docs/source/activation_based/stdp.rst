@@ -62,7 +62,7 @@ STDP优化器
 -----------------------------------------------------
 :class:`spikingjelly.activation_based.learning.STDPLearner` 提供了STDP优化器的实现，支持卷积和全连接层，请读者先阅读其API文档以获取使用方法。
 
-我们使用 ``STDPLearner`` 搭建一个最简单的 ``1x1`` 网络，pre和post都只有一个神经元，并且将权重设置为 ``0.4``：
+我们使用 ``STDPLearner`` 搭建一个简单的 ``4x3`` 网络，并且将权重设置为 ``0.4``：
 
 .. code-block:: python
 
@@ -70,18 +70,20 @@ STDP优化器
     import torch.nn as nn
     from spikingjelly.activation_based import neuron, layer, learning
     from matplotlib import pyplot as plt
-    torch.manual_seed(0)
 
     def f_weight(x):
         return torch.clamp(x, -1, 1.)
 
-    tau_pre = 2.
-    tau_post = 2.
+    torch.manual_seed(0)
+
+    w_min, w_max = -1., 1.
+    tau_pre, tau_post = 2., 2.
+    N_in, N_out = 4, 3
     T = 128
-    N = 1
+    batch_size = 2
     lr = 0.01
     net = nn.Sequential(
-        layer.Linear(1, 1, bias=False),
+        layer.Linear(N_in, N_out, bias=False),
         neuron.IFNode()
     )
     nn.init.constant_(net[0].weight.data, 0.4)
@@ -107,11 +109,12 @@ STDP优化器
 
 .. code-block:: python
 
-    in_spike = (torch.rand([T, N, 1]) > 0.7).float()
-    stdp_learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1], tau_pre=tau_pre, tau_post=tau_post,
-                                        f_pre=f_weight, f_post=f_weight)
+    in_spike = (torch.rand([T, batch_size, N_in]) > 0.7).float()
+    learner = learning.STDPLearner(step_mode='s', synapse=net[0], sn=net[1], 
+                                   tau_pre=tau_pre, tau_post=tau_post,
+                                   f_pre=f_weight, f_post=f_weight)
 
-接下来送入数据计算。需要注意的是，为了便于画图，我们会将输出数据进行 ``squeeze()``，这样使得 ``shape = [T, N, 1]`` 的数据变为 ``shape = [T]``：
+接下来送入数据计算。需要注意的是，为了便于画图，我们对数据与权重进行切片，这样使得 ``shape = [T, *, *]`` 变为 ``shape = [T]``：
 
 .. code-block:: python
 
@@ -122,18 +125,24 @@ STDP优化器
     with torch.no_grad():
         for t in range(T):
             optimizer.zero_grad()
-            out_spike.append(net(in_spike[t]).squeeze())
-            stdp_learner.step(on_grad=True)  # 将STDP学习得到的参数更新量叠加到参数的梯度上
+            out_spike.append(net(in_spike[t]))
+            learner.step(on_grad=True)
             optimizer.step()
-            weight.append(net[0].weight.data.clone().squeeze())
-            trace_pre.append(stdp_learner.trace_pre.squeeze())
-            trace_post.append(stdp_learner.trace_post.squeeze())
+            net[0].weight.data.clamp_(w_min, w_max)
+            weight.append(net[0].weight.data.clone())
+            trace_pre.append(learner.trace_pre)
+            trace_post.append(learner.trace_post)
 
-    in_spike = in_spike.squeeze()
-    out_spike = torch.stack(out_spike)
-    trace_pre = torch.stack(trace_pre)
-    trace_post = torch.stack(trace_post)
-    weight = torch.stack(weight)
+    out_spike = torch.stack(out_spike)   # [T, batch_size, N_out]
+    trace_pre = torch.stack(trace_pre)   # [T, batch_size, N_in]
+    trace_post = torch.stack(trace_post) # [T, batch_size, N_out]
+    weight = torch.stack(weight)         # [T, N_out, N_in]
+
+    in_spike = in_spike[:, 0, 0]
+    out_spike = out_spike[:, 0, 0]
+    trace_pre = trace_pre[:, 0, 0]
+    trace_post = trace_post[:, 0, 0]
+    weight = weight[:, 0, 0]
 
 完整的代码位于 ``spikingjelly/activation_based/examples/stdp_trace.py``。
 
