@@ -106,7 +106,7 @@ class BaseNode(base.MemoryModule):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -455,7 +455,7 @@ class IFNode(BaseNode):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -732,7 +732,7 @@ class LIFNode(BaseNode):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -1190,7 +1190,7 @@ class ParametricLIFNode(BaseNode):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -1391,7 +1391,7 @@ class QIFNode(BaseNode):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -1538,7 +1538,7 @@ class EIFNode(BaseNode):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -1809,7 +1809,7 @@ class KLIFNode(BaseNode):
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -2827,7 +2827,7 @@ class OTTTLIFNode(LIFNode):
         :param step_mode: 步进模式，为了保证神经元的显存占用小，仅可以为 `'s'` (单步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
@@ -3016,7 +3016,7 @@ class SLTTLIFNode(LIFNode):
         :param step_mode: 步进模式，为了保证神经元的显存占用小，仅可以为 `'s'` (单步)
         :type step_mode: str
 
-        :param backend: 使用那种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
+        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
         :type backend: str
 
