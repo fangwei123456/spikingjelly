@@ -1451,7 +1451,7 @@ class SynapseFilter(base.MemoryModule):
 
 class DropConnectLinear(base.MemoryModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
-                 invariant: bool = False, activation: Optional[nn.Module] = nn.ReLU(), state_mode='s') -> None:
+                 invariant: bool = False, activation: Optional[nn.Module] = nn.ReLU(), step_mode='s') -> None:
         """
         * :ref:`API in English <DropConnectLinear.__init__-en>`
 
@@ -1528,7 +1528,7 @@ class DropConnectLinear(base.MemoryModule):
             ``activation`` as a member variable of this module.
         """
         super().__init__()
-        self.state_mode = state_mode
+        self.step_mode = step_mode
         self.in_features = in_features
         self.out_features = out_features
         self.weight = nn.Parameter(Tensor(out_features, in_features))
