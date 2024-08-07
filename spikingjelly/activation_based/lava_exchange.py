@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import logging
-from typing import Union, Callable
+from typing import Union, Callable, Optional
 from . import neuron, base, surrogate
 
 _hw_bits = 12
@@ -170,10 +170,10 @@ class CubaLIFNode(neuron.BaseNode):
         .. _CubaLIFNode.__init__-cn:
 
         :param current_decay: 电流衰减常数
-        :type current_decay: float | torch.Tensor
+        :type current_decay: Union[float, torch.Tensor]
 
         :param voltage_decay: 电压衰减常数
-        :type voltage_decay: float | torch.Tensor
+        :type voltage_decay: Union[float, torch.Tensor]
 
         :param v_threshold: 神经元阈值电压。默认为1。
         :type v_threshold: float
@@ -219,10 +219,10 @@ class CubaLIFNode(neuron.BaseNode):
         .. CubaLIFNode.__init__-en:
 
         :param current_decay: current decay constant
-        :type current_decay: float | torch.Tensor
+        :type current_decay: Union[float, torch.Tensor]
 
         :param voltage_decay: voltage decay constant
-        :type voltage_decay: float | torch.Tensor
+        :type voltage_decay: Union[float, torch.Tensor]
 
         :param v_threshold: threshold of the the neurons in this layer. Default to 1.
         :type v_threshold: float
@@ -462,7 +462,7 @@ try:
         return x_seq.permute(permute_args)
 
 
-    def lava_neuron_forward(lava_neuron: nn.Module, x_seq: torch.Tensor, v: torch.Tensor or float):
+    def lava_neuron_forward(lava_neuron: nn.Module, x_seq: torch.Tensor, v: Union[torch.Tensor, float]):
         # x_seq.shape = [T, N, *]
         # lave uses shape = [*, T], while SJ uses shape = [T, *]
         unsqueeze_flag = False
@@ -779,7 +779,7 @@ try:
         return slayer.block.cuba.Flatten()
 
 
-    def to_lava_blocks(net: list or tuple or nn.Sequential):
+    def to_lava_blocks(net: Union[list, tuple, nn.Sequential]):
         # https://lava-nc.org/lava-lib-dl/netx/netx.html
         '''
         Supported layer types
@@ -905,7 +905,7 @@ try:
             if isinstance(self.synapse, base.StepModule):
                 self.synapse.step_mode = value
 
-        def __init__(self, synapse: nn.Conv2d or nn.Linear or nn.AvgPool2d or nn.Flatten, neu: CubaLIFNode or None,
+        def __init__(self, synapse: Union[nn.Conv2d, nn.Linear, nn.AvgPool2d, nn.Flatten], neu: Optional[CubaLIFNode],
                      step_mode: str = 's'):
             super().__init__()
             if isinstance(synapse, nn.Flatten):

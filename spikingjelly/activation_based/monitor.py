@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
-from typing import Callable, Any
+from typing import Callable, Any, Union
 from spikingjelly.activation_based import neuron
 import threading
 from torch.utils.tensorboard import SummaryWriter
@@ -10,7 +10,7 @@ import time
 import re
 import datetime
 
-def unpack_len1_tuple(x: tuple or torch.Tensor):
+def unpack_len1_tuple(x: Union[tuple, torch.Tensor]):
     if isinstance(x, tuple) and x.__len__() == 1:
         return x[0]
     else:

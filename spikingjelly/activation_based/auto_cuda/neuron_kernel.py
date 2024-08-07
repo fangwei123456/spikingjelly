@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -407,7 +408,7 @@ class NeuronATGFBase:
 
 class IFNodeATGF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None,
+    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: Optional[float],
                 forward_kernel: IFNodeFPTTKernel, backward_kernel: IFNodeBPTTKernel):
         py_dict = {
             'x_seq': x_seq,
@@ -495,7 +496,7 @@ class LIFNodeBPTTKernel(NeuronBPTTKernel):
 
 class LIFNodeATGF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, decay: float,
+    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: Optional[float], decay: float,
                 forward_kernel: LIFNodeFPTTKernel, backward_kernel: LIFNodeBPTTKernel):
         py_dict = {
             'x_seq': x_seq,
@@ -691,7 +692,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
 
 class ParametricLIFNodeATGF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None, decay: torch.Tensor, forward_kernel: ParametricLIFNodeFPTTKernel, backward_kernel: ParametricLIFNodeBPTTKernel):
+    def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: Optional[float], decay: torch.Tensor, forward_kernel: ParametricLIFNodeFPTTKernel, backward_kernel: ParametricLIFNodeBPTTKernel):
         if x_seq.dtype == torch.float16 and v_init.numel() % 2 != 0:
             raise ValueError('When using the the PLIF neuron with half2 cupy backend, the numer of neurons should be even to avoid the wrong gradient of tau caused by padding!')
         py_dict = {

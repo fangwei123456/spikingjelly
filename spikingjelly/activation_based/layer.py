@@ -1451,7 +1451,7 @@ class SynapseFilter(base.MemoryModule):
 
 class DropConnectLinear(base.MemoryModule):
     def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
-                 invariant: bool = False, activation: None or nn.Module = nn.ReLU(), state_mode='s') -> None:
+                 invariant: bool = False, activation: Optional[nn.Module] = nn.ReLU(), state_mode='s') -> None:
         """
         * :ref:`API in English <DropConnectLinear.__init__-en>`
 
@@ -1475,7 +1475,7 @@ class DropConnectLinear(base.MemoryModule):
             默认为 ``False``
         :type invariant: bool
         :param activation: 在线性层后的激活层
-        :type activation: None or nn.Module
+        :type activation: Optional[nn.Module]
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
@@ -1510,7 +1510,7 @@ class DropConnectLinear(base.MemoryModule):
             for more information to understand this parameter. Default: ``False``
         :type invariant: bool
         :param activation: the activation layer after the linear layer
-        :type activation: None or nn.Module
+        :type activation: Optional[nn.Module]
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 

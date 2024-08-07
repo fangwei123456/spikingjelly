@@ -382,11 +382,11 @@ class SpikingRNNBase(nn.Module):
             所有的tensor的尺寸均为 ``shape = [num_layers * num_directions, batch, hidden_size]``, 包含 ``self.states_num()``
             个初始状态
             如果RNN是双向的, ``num_directions`` 为 ``2``, 否则为 ``1``
-        :type states: torch.Tensor or tuple
+        :type states: Union[torch.Tensor, tuple]
         :return: output, output_states
             output: torch.Tensor
                 ``shape = [T, batch, num_directions * hidden_size]``，最后一层在所有时刻的输出
-            output_states: torch.Tensor or tuple
+            output_states: Union[torch.Tensor, tuple]
                 ``self.states_num()`` 为 ``1`` 时是单个tensor, 否则是一个tuple，包含 ``self.states_num()`` 个tensors。
                 所有的tensor的尺寸均为 ``shape = [num_layers * num_directions, batch, hidden_size]``, 包含 ``self.states_num()``
                 个最后时刻的状态
@@ -402,12 +402,12 @@ class SpikingRNNBase(nn.Module):
             ``shape = [num_layers * num_directions, batch, hidden_size]`` for all tensors, containing the ``self.states_num()``
             initial states for each element in the batch.
             If the RNN is bidirectional, ``num_directions`` should be ``2``, else it should be ``1``
-        :type states: torch.Tensor or tuple
+        :type states: Union[torch.Tensor, tuple]
         :return: output, output_states
             output: torch.Tensor
                 ``shape = [T, batch, num_directions * hidden_size]``, tensor containing the output features from the last
                 layer of the RNN, for each ``t``
-            output_states: torch.Tensor or tuple
+            output_states: Union[torch.Tensor, tuple]
                 a single tensor when ``self.states_num()`` is ``1``, otherwise a tuple with ``self.states_num()``
                 tensors.
                 ``shape = [num_layers * num_directions, batch, hidden_size]`` for all tensors, containing the ``self.states_num()``
@@ -549,7 +549,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         :type surrogate_function1: spikingjelly.activation_based.surrogate.SurrogateFunctionBase
         :param surrogate_function2: 反向传播时用来计算脉冲函数梯度的替代函数, 计算 ``g`` 反向传播时使用。 若为 ``None``, 则设置成
             ``surrogate_function1``。默认为 ``None``
-        :type surrogate_function2: None or spikingjelly.activation_based.surrogate.SurrogateFunctionBase
+        :type surrogate_function2: Optional[spikingjelly.activation_based.surrogate.SurrogateFunctionBase]
 
 
         .. note::
@@ -611,7 +611,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
             will be set as ``surrogate_function1``. Default: ``None``
-        :type surrogate_function2: None or spikingjelly.activation_based.surrogate.SurrogateFunctionBase
+        :type surrogate_function2: Optional[spikingjelly.activation_based.surrogate.SurrogateFunctionBase]
 
         .. admonition:: Note
             :class: note
@@ -666,7 +666,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
                 c_0 : torch.Tensor
                     ``shape = [batch_size, hidden_size]``，起始细胞状态
                 如果不提供(h_0, c_0)，``h_0`` 默认 ``c_0`` 默认为0
-        :type hc: tuple or None
+        :type hc: Optional[tuple]
         :return: (h_1, c_1) :
                 h_1 : torch.Tensor
                     ``shape = [batch_size, hidden_size]``，下一个时刻的隐藏状态
@@ -687,7 +687,7 @@ class SpikingLSTMCell(SpikingRNNCellBase):
                 c_0 : torch.Tensor
                     ``shape = [batch_size, hidden_size]``, tensor containing the initial cell state for each element in the batch
                 If (h_0, c_0) is not provided, both ``h_0`` and ``c_0`` default to zero
-        :type hc: tuple or None
+        :type hc: Optional[tuple]
         :return: (h_1, c_1) :
                 h_1 : torch.Tensor
                     ``shape = [batch_size, hidden_size]``, tensor containing the next hidden state for each element in the batch
@@ -777,7 +777,7 @@ class SpikingLSTM(SpikingRNNBase):
         :type surrogate_function1: spikingjelly.activation_based.surrogate.SurrogateFunctionBase
         :param surrogate_function2: 反向传播时用来计算脉冲函数梯度的替代函数, 计算 ``g`` 反向传播时使用。 若为 ``None``, 则设置成
             ``surrogate_function1``。默认为 ``None``
-        :type surrogate_function2: None or spikingjelly.activation_based.surrogate.SurrogateFunctionBase
+        :type surrogate_function2: Optional[spikingjelly.activation_based.surrogate.SurrogateFunctionBase]
 
 
         * :ref:`中文API <SpikingLSTM.__init__-cn>`
@@ -831,7 +831,7 @@ class SpikingLSTM(SpikingRNNBase):
         :param surrogate_function2: surrogate function for replacing gradient of spiking functions during
             back-propagation, which is used for generating ``g``. If ``None``, the surrogate function for generating ``g``
             will be set as ``surrogate_function1``. Default: ``None``
-        :type surrogate_function2: None or spikingjelly.activation_based.surrogate.SurrogateFunctionBase
+        :type surrogate_function2: Optional[spikingjelly.activation_based.surrogate.SurrogateFunctionBase]
         '''
         super().__init__(input_size, hidden_size, num_layers, bias, dropout_p, invariant_dropout_mask, bidirectional,
                          surrogate_function1, surrogate_function2)

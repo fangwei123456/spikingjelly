@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from typing import Callable
+from typing import Callable, Union
 
 from . import neuron, base
 
@@ -106,7 +106,7 @@ def set_step_mode(net: nn.Module, step_mode: str):
                 m.step_mode = step_mode
 
 
-def set_backend(net: nn.Module, backend: str, instance: object or tuple = (nn.Module, )):
+def set_backend(net: nn.Module, backend: str, instance: Union[nn.Module, tuple[nn.Module, ...]] = (nn.Module, )):
     """
     * :ref:`API in English <set_backend-en>`
 
@@ -117,7 +117,7 @@ def set_backend(net: nn.Module, backend: str, instance: object or tuple = (nn.Mo
     :param backend: 使用哪个后端
     :type backend: str
     :param instance: 类型为 ``instance`` 的模块后端会被改变
-    :type instance: nn.Module or tuple[nn.Module]
+    :type instance: Union[nn.Module, tuple[nn.Module, ...]]
     :return: None
 
     将 ``net`` 中 所有类型为 ``instance`` 的模块后端更改为 ``backend``
@@ -131,7 +131,7 @@ def set_backend(net: nn.Module, backend: str, instance: object or tuple = (nn.Mo
     :param backend: the backend to be set
     :type backend: str
     :param instance: the backend of which instance will be changed
-    :type instance: nn.Module or tuple[nn.Module]
+    :type instance: Union[nn.Module, tuple[nn.Module, ...]]
     :return: None
 
     Sets backends of all modules whose instance is ``instance`` in ``net`` to ``backend``
@@ -522,7 +522,7 @@ def first_spike_index(spikes: Tensor):
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
 
-def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.Module] or tuple[nn.Module] or nn.Sequential or Callable):
+def multi_step_forward(x_seq: Tensor, single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]):
     """
     * :ref:`API in English <multi_step_forward-en>`
 
@@ -531,7 +531,7 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.M
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
     :type x_seq: Tensor
     :param single_step_module: 一个或多个单步模块
-    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :type single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
     :return: ``shape=[T, batch_size, ...]`` 的输出tensor
     :rtype: torch.Tensor
 
@@ -544,7 +544,7 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.M
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
     :type x_seq: torch.Tensor
     :param single_step_module: one or many single-step modules
-    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :type single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: torch.torch.Tensor
 
@@ -565,7 +565,7 @@ def multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.M
     return torch.stack(y_seq)
 
 
-def t_last_multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or list[nn.Module] or tuple[nn.Module] or nn.Sequential or Callable):
+def t_last_multi_step_forward(x_seq: Tensor, single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]):
     """
     * :ref:`API in English <t_last_multi_step_forward-en>`
 
@@ -574,7 +574,7 @@ def t_last_multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or li
     :param x_seq: ``shape=[batch_size, ..., T]`` 的输入tensor
     :type x_seq: Tensor
     :param single_step_module: 一个或多个单步模块
-    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :type single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
     :return: ``shape=[batch_size, ..., T]`` 的输出tensor
     :rtype: torch.Tensor
 
@@ -587,7 +587,7 @@ def t_last_multi_step_forward(x_seq: Tensor, single_step_module: nn.Module or li
     :param x_seq: the input tensor with ``shape=[batch_size, ..., T]``
     :type x_seq: torch.Tensor
     :param single_step_module: one or many single-step modules
-    :type single_step_module: torch.nn.Module or list[nn.Module] or tuple[nn.Module] or torch.nn.Sequential or Callable
+    :type single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
     :return: the output tensor with ``shape=[batch_size, ..., T]``
     :rtype: torch.torch.Tensor
 
@@ -694,7 +694,7 @@ def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: 
         y_seq.append(multi_step_module(x))
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential or Callable):
+def seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]):
     """
     * :ref:`API in English <seq_to_ann_forward-en>`
 
@@ -703,7 +703,7 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
     :type x_seq: Tensor
     :param stateless_module: 单个或多个无状态网络层
-    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :type stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: Tensor
 
@@ -716,7 +716,7 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
     :type x_seq: Tensor
     :param stateless_module: one or many stateless modules
-    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :type stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: Tensor
 
@@ -734,7 +734,7 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tup
     return y.view(y_shape)
 
 
-def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list or tuple or nn.Sequential or Callable):
+def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]):
     """
     * :ref:`API in English <t_last_seq_to_ann_forward-en>`
 
@@ -743,7 +743,7 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list
     :param x_seq: ``shape=[batch_size, ..., T]`` 的输入tensor
     :type x_seq: Tensor
     :param stateless_module: 单个或多个无状态网络层
-    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :type stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
     :return: the output tensor with ``shape=[batch_size, ..., T]``
     :rtype: Tensor
 
@@ -763,7 +763,7 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: nn.Module or list
     :param x_seq: the input tensor with ``shape=[batch_size, ..., T]``
     :type x_seq: Tensor
     :param stateless_module: one or many stateless modules
-    :type stateless_module: torch.nn.Module or list or tuple or torch.nn.Sequential or Callable
+    :type stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
     :return: the output tensor with ``shape=[batch_size, ..., T]``
     :rtype: Tensor
 

@@ -1,6 +1,6 @@
 import copy
 import os
-from typing import Dict
+from typing import Dict, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -167,7 +167,7 @@ def to_lynxi_supported_module(m_in: nn.Module, T: int):
 
     return m_out
 
-def to_lynxi_supported_modules(net: list or tuple or nn.Sequential, T: int):
+def to_lynxi_supported_modules(net: Union[list, tuple, nn.Sequential], T: int):
     output_net = []
     for i in range(net.__len__()):
         m_in = net[i]
@@ -197,7 +197,7 @@ try:
         return x
 
 
-    def lynxi_tensor_to_torch(x: lynpy.Tensor, shape: tuple or list = None, dtype: str = None):
+    def lynxi_tensor_to_torch(x: lynpy.Tensor, shape: Union[tuple, list] = None, dtype: str = None):
         if shape is not None and dtype is not None:
             x = x.view_as(shape, dtype)
         if x.devptr is not None:
