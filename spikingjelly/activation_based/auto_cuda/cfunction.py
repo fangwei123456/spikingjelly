@@ -1,16 +1,19 @@
-def wrap_return_codes(y: str or None, codes: str):
+from typing import Optional
+
+
+def wrap_return_codes(y: Optional[str], codes: str):
     if y is None:
         return f'({codes})'
     else:
         return f'{y} = {codes};'
 
 
-def float2half2(y: str or None, x: str):
+def float2half2(y: Optional[str], x: str):
     codes = f'__float2half2_rn({x})'
     return wrap_return_codes(y, codes)
 
 
-def constant(y: str or None, x: float, dtype: str):
+def constant(y: Optional[str], x: float, dtype: str):
     if dtype == 'float':
         codes = f'{x}f'
     elif dtype == 'half2':
@@ -22,7 +25,7 @@ def constant(y: str or None, x: float, dtype: str):
 
 
 
-def abs(y: str or None, x: str, dtype: str):
+def abs(y: Optional[str], x: str, dtype: str):
     if dtype == 'float':
         codes = f'fabsf({x})'
     elif dtype == 'half2':
@@ -32,7 +35,7 @@ def abs(y: str or None, x: str, dtype: str):
     return wrap_return_codes(y, codes)
 
 
-def power(z: str or None, x: str, y: str, dtype: str):
+def power(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
         codes = f'__powf({x, y})'
     elif dtype == 'half2':
@@ -42,7 +45,7 @@ def power(z: str or None, x: str, y: str, dtype: str):
         raise NotImplementedError(dtype)
     return wrap_return_codes(z, codes)
 
-def if_else(z: str or None, x: str, y: str, mask: str, dtype: str):
+def if_else(z: Optional[str], x: str, y: str, mask: str, dtype: str):
     # z = x * mask + y * (1. - mask)
     if dtype == 'float':
         codes = f'{x} * {mask} + {y} * (1.0f - {mask})'
@@ -53,7 +56,7 @@ def if_else(z: str or None, x: str, y: str, mask: str, dtype: str):
 
     return wrap_return_codes(z, codes)
 
-def if_else_else(w: str or None, x: str, y: str, z: str, mask_x: str, mask_y: str, dtype: str):
+def if_else_else(w: Optional[str], x: str, y: str, z: str, mask_x: str, mask_y: str, dtype: str):
     # w = mask_x * x + mask_y * y + (1. - mask_x * mask_y) * z
     if dtype == 'float':
         codes = f'{mask_x} * {x} + {mask_y} * {y} + (1. - {mask_x} * {mask_y}) * {z}'
@@ -64,7 +67,7 @@ def if_else_else(w: str or None, x: str, y: str, z: str, mask_x: str, mask_y: st
 
 
 
-def greater_equal(z: str or None, x: str, y: str, dtype: str):
+def greater_equal(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
         codes = f'(float) ({x} >= {y})'
     elif dtype == 'half2':
@@ -73,7 +76,7 @@ def greater_equal(z: str or None, x: str, y: str, dtype: str):
         raise NotImplementedError(dtype)
     return wrap_return_codes(z, codes)
 
-def greater_than(z: str or None, x: str, y: str, dtype: str):
+def greater_than(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
         codes = f'(float) ({x} > {y})'
     elif dtype == 'half2':
@@ -82,7 +85,7 @@ def greater_than(z: str or None, x: str, y: str, dtype: str):
         raise NotImplementedError(dtype)
     return wrap_return_codes(z, codes)
 
-def minimal(z: str or None, x: str, y: str, dtype: str):
+def minimal(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
         codes = f'min({x}, {y})'
     elif dtype == 'half2':
@@ -91,7 +94,7 @@ def minimal(z: str or None, x: str, y: str, dtype: str):
         raise NotImplementedError(dtype)
     return wrap_return_codes(z, codes)
 
-def maximum(z: str or None, x: str, y: str, dtype: str):
+def maximum(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
         codes = f'max({x}, {y})'
     elif dtype == 'half2':
@@ -100,7 +103,7 @@ def maximum(z: str or None, x: str, y: str, dtype: str):
         raise NotImplementedError(dtype)
     return wrap_return_codes(z, codes)
 
-def add(z: str or None, x: str, y: str, dtype: str):
+def add(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
 
         if x == '0.0f':
@@ -126,7 +129,7 @@ def add(z: str or None, x: str, y: str, dtype: str):
     return wrap_return_codes(z, codes)
 
 
-def sub(z: str or None, x: str, y: str, dtype: str):
+def sub(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
 
         if y == '0.0f':
@@ -146,7 +149,7 @@ def sub(z: str or None, x: str, y: str, dtype: str):
     return wrap_return_codes(z, codes)
 
 
-def mul(z: str or None, x: str, y: str, dtype: str):
+def mul(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
 
         if x == '1.0f':
@@ -175,7 +178,7 @@ def mul(z: str or None, x: str, y: str, dtype: str):
     return wrap_return_codes(z, codes)
 
 
-def div(z: str or None, x: str, y: str, dtype: str):
+def div(z: Optional[str], x: str, y: str, dtype: str):
     if dtype == 'float':
 
         if y == '1.0f':
@@ -193,7 +196,7 @@ def div(z: str or None, x: str, y: str, dtype: str):
     return wrap_return_codes(z, codes)
 
 
-def neg(y: str or None, x: str, dtype: str):
+def neg(y: Optional[str], x: str, dtype: str):
     if dtype == 'float':
         codes = f'- {x}'
     elif dtype == 'half2':
@@ -203,7 +206,7 @@ def neg(y: str or None, x: str, dtype: str):
     return wrap_return_codes(y, codes)
 
 
-def heaviside(y: str or None, x: str, dtype: str):
+def heaviside(y: Optional[str], x: str, dtype: str):
     if dtype == 'float':
         codes = f'{x} >= 0.0f ? 1.0f: 0.0f'
     elif dtype == 'half2':
@@ -213,7 +216,7 @@ def heaviside(y: str or None, x: str, dtype: str):
     return wrap_return_codes(y, codes)
 
 
-def exp(y: str or None, x: str, dtype: str):
+def exp(y: Optional[str], x: str, dtype: str):
     if dtype == 'float':
         codes = f'expf({x})'
     elif dtype == 'half2':
@@ -223,7 +226,7 @@ def exp(y: str or None, x: str, dtype: str):
     return wrap_return_codes(y, codes)
 
 
-def sigmoid(y: str or None, x: str, alpha: float, dtype: str):
+def sigmoid(y: Optional[str], x: str, alpha: float, dtype: str):
     alpha = constant(None, alpha, dtype)
     if dtype == 'float':
         codes = f'1.0f / (1.0f + expf(- {alpha} * {x}))'

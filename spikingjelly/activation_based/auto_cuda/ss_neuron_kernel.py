@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -376,7 +377,7 @@ class IFNodeBPKernel(NeuronBPKernel):
     
 class IFNodeATGF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, v: torch.Tensor, v_th: float, v_reset: float or None,
+    def forward(ctx, x: torch.Tensor, v: torch.Tensor, v_th: float, v_reset: Optional[float],
                 forward_kernel: IFNodeFPKernel, backward_kernel: IFNodeBPKernel):
         py_dict = {
             'x': x,
@@ -459,7 +460,7 @@ class LIFNodeBPKernel(NeuronBPKernel):
         
 class LIFNodeATGF(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x: torch.Tensor, v: torch.Tensor, v_th: float, v_reset: float or None, decay: float,
+    def forward(ctx, x: torch.Tensor, v: torch.Tensor, v_th: float, v_reset: Optional[float], decay: float,
                 forward_kernel: LIFNodeFPKernel, backward_kernel: LIFNodeBPKernel):
         py_dict = {
             'x': x,

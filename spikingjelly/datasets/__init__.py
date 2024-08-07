@@ -1,5 +1,5 @@
 from torchvision.datasets import DatasetFolder
-from typing import Callable, Dict, Optional, Tuple
+from typing import Callable, Dict, Optional, Tuple, Union
 from abc import abstractmethod
 import scipy.io
 import struct
@@ -88,10 +88,10 @@ def save_every_frame_of_an_entire_DVS_dataset(dataset: str, dataset_path: str, t
     print('complete!!!')
 
 
-def save_as_pic(x: torch.Tensor or np.ndarray, save_pic_to: str = './', pic_first_name: str = 'pic') -> None:
+def save_as_pic(x: Union[torch.Tensor, np.ndarray], save_pic_to: str = './', pic_first_name: str = 'pic') -> None:
     '''
     :param x: frames with ``shape=[T, 2, H, W]``
-    :type x: torch.Tensor or np.ndarray
+    :type x: Union[torch.Tensor, np.ndarray]
     :param save_pic_to: Where to store images.
     :type save_pic_to: str
     :param pic_first_name: Prefix for image names before _t (stored image names are: ``pic_first_name``_t.png)
@@ -115,10 +115,10 @@ def save_as_pic(x: torch.Tensor or np.ndarray, save_pic_to: str = './', pic_firs
         plt.savefig(save_pic_to + pic_first_name + '_' + str(t) + '.png', bbox_inches='tight', pad_inches=0)
 
 
-def play_frame(x: torch.Tensor or np.ndarray, save_gif_to: str = None) -> None:
+def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> None:
     '''
     :param x: frames with ``shape=[T, 2, H, W]``
-    :type x: torch.Tensor or np.ndarray
+    :type x: Union[torch.Tensor, np.ndarray]
     :param save_gif_to: If ``None``, this function will play the frames. If ``True``, this function will not play the frames
         but save frames to a gif file in the directory ``save_gif_to``
     :type save_gif_to: str
@@ -263,9 +263,9 @@ def integrate_events_segment_to_frame(x: np.ndarray, y: np.ndarray, p: np.ndarra
 
     .. math::
 
-        F(p, x, y) = \sum_{i = j_{l}}^{j_{r} - 1} \mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+        F(p, x, y) = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
 
-    where :math:`\\lfloor \\cdot \\rfloor` is the floor operation, :math:`\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
+    where :math:`\\lfloor \\cdot \\rfloor` is the floor operation, :math:`\\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` is an indicator function and it equals 1 only when :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})`.
     '''
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
     # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
@@ -675,7 +675,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type custom_integrate_function: Callable
         :param custom_integrated_frames_dir_name: The name of directory for saving frames integrating by ``custom_integrate_function``.
             If ``custom_integrated_frames_dir_name`` is ``None``, it will be set to ``custom_integrate_function.__name__``
-        :type custom_integrated_frames_dir_name: str or None
+        :type custom_integrated_frames_dir_name: Optional[str]
         :param transform: a function/transform that takes in
             a sample and returns a transformed version.
             E.g, ``transforms.RandomCrop`` for images.
@@ -987,16 +987,16 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
 
 
-def random_temporal_delete(x_seq: torch.Tensor or np.ndarray, T_remain: int, batch_first):
+def random_temporal_delete(x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first):
     """
     :param x_seq: a sequence with `shape = [T, N, *]`, where `T` is the sequence length and `N` is the batch size
-    :type x_seq: torch.Tensor or np.ndarray
+    :type x_seq: Union[torch.Tensor, np.ndarray]
     :param T_remain: the remained length
     :type T_remain: int
     :param batch_first: if `True`, `x_seq` will be regarded as `shape = [N, T, *]`
     :type batch_first: bool
     :return: the sequence with length `T_remain`, which is obtained by randomly removing `T - T_remain` slices
-    :rtype: torch.Tensor or np.ndarray
+    :rtype: Union[torch.Tensor, np.ndarray]
     The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
     Codes example:
 
@@ -1050,11 +1050,11 @@ class RandomTemporalDelete(torch.nn.Module):
         self.T_remain = T_remain
         self.batch_first = batch_first
 
-    def forward(self, x_seq: torch.Tensor or np.ndarray):
+    def forward(self, x_seq: Union[torch.Tensor, np.ndarray]):
         return random_temporal_delete(x_seq, self.T_remain, self.batch_first)
 
 
-def create_sub_dataset(source_dir: str, target_dir:str, ratio: float, use_soft_link=True, randomly=False):
+def create_sub_dataset(source_dir: str, target_dir: str, ratio: float, use_soft_link=True, randomly=False):
     """
     :param source_dir: the directory path of the origin dataset
     :type source_dir: str

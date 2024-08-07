@@ -1,3 +1,4 @@
+from typing import Union
 import torch
 import torch.nn.functional as F
 import threading
@@ -213,7 +214,7 @@ class BoolTensorCache:
         self.cache_refcount_dict = {}
         self.lock = threading.Lock()
 
-    def store_bool(self, spike: torch.FloatTensor or torch.HalfTensor):
+    def store_bool(self, spike: Union[torch.FloatTensor, torch.HalfTensor]):
         tk = tensor_key(spike)
 
         self.lock.acquire()

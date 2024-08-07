@@ -996,7 +996,7 @@ class Erf(SurrogateFunctionBase):
         反向传播时使用高斯误差函数(erf)的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{\\sqrt{\pi}}e^{-\\alpha^2x^2}
+            g'(x) = \\frac{\\alpha}{\\sqrt{\\pi}}e^{-\\alpha^2x^2}
 
         对应的原函数为
 
@@ -1006,7 +1006,7 @@ class Erf(SurrogateFunctionBase):
             \\begin{split}
             g(x) &= \\frac{1}{2}(1-\\text{erf}(-\\alpha x)) \\\\
             &= \\frac{1}{2} \\text{erfc}(-\\alpha x) \\\\
-            &= \\frac{1}{\\sqrt{\\pi}}\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
+            &= \\frac{1}{\\sqrt{\\pi}}\\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
             \\end{split}
 
         .. image:: ../_static/API/activation_based/surrogate/Erf.*
@@ -1025,7 +1025,7 @@ class Erf(SurrogateFunctionBase):
         The Gaussian error (erf) surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{\\sqrt{\pi}}e^{-\\alpha^2x^2}
+            g'(x) = \\frac{\\alpha}{\\sqrt{\\pi}}e^{-\\alpha^2x^2}
 
         The primitive function is defined by
 
@@ -1035,7 +1035,7 @@ class Erf(SurrogateFunctionBase):
             \\begin{split}
             g(x) &= \\frac{1}{2}(1-\\text{erf}(-\\alpha x)) \\\\
             &= \\frac{1}{2} \\text{erfc}(-\\alpha x) \\\\
-            &= \\frac{1}{\\sqrt{\\pi}}\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
+            &= \\frac{1}{\\sqrt{\\pi}}\\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
             \\end{split}
 
         .. image:: ../_static/API/activation_based/surrogate/Erf.*
@@ -1416,7 +1416,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         .. math::
             g'(x) = \\begin{cases}
                 \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\\\frac{beta}{(x + 1)}, x \ge 0
+                \\\\frac{beta}{(x + 1)}, x \\ge 0
             \\end{cases}
 
         对应的原函数为
@@ -1424,7 +1424,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         .. math::
             g(x) = \\begin{cases}
                 \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta \\mathrm{ln}(x + 1) + 1, x \ge 0
+                \\beta \\mathrm{ln}(x + 1) + 1, x \\ge 0
             \\end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/S2NN.*
@@ -1445,7 +1445,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         .. math::
             g'(x) = \\begin{cases}
                 \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta (x + 1), x \ge 0
+                \\beta (x + 1), x \\ge 0
             \\end{cases}
 
         The primitive function is defined by
@@ -1453,7 +1453,7 @@ class S2NN(MultiArgsSurrogateFunctionBase):
         .. math::
             g(x) = \\begin{cases}
                 \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta \\mathrm{ln}(x + 1) + 1, x \ge 0
+                \\beta \\mathrm{ln}(x + 1) + 1, x \\ge 0
             \\end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/S2NN.*

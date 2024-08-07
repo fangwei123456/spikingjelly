@@ -3,7 +3,7 @@ import torch
 import time
 import numpy as np
 from .. import configure
-from typing import Callable
+from typing import Callable, Union
 try:
     import cupy
 except BaseException as e:
@@ -38,7 +38,7 @@ def cpu_timer(f: Callable, *args, **kwargs):
     f(*args, **kwargs)
     return time.perf_counter() - start
 
-def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
+def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     """
     * :ref:`API in English <cuda_timer-en>`
 
@@ -47,7 +47,7 @@ def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
     计算在CUDA上执行 ``f(*args, **kwargs)`` 所需的时间
 
     :param device: ``f`` 运行的CUDA设备
-    :type device: torch.device or int
+    :type device: Union[torch.device, int]
     :param f: 函数
     :type f: Callable
     :return: 用时，单位是毫秒
@@ -60,7 +60,7 @@ def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
     Returns the used time for calling ``f(*args, **kwargs)`` in CUDA
 
     :param device: on which cuda device that ``f`` is running
-    :type device: torch.device or int
+    :type device: Union[torch.device, int]
     :param f: a function
     :type f: Callable
     :return: used time in milliseconds
@@ -75,7 +75,7 @@ def cuda_timer(device: torch.device or int, f: Callable, *args, **kwargs):
     torch.cuda.synchronize(device)
     return start.elapsed_time(end)
 
-def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **kwargs):
+def cal_fun_t(n: int, device: Union[str, torch.device, int], f: Callable, *args, **kwargs):
     """
     * :ref:`API in English <cal_fun_t-en>`
 
@@ -90,7 +90,7 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
     :param n: 重复的次数
     :type n: int
     :param device: ``f`` 执行的设备，可以为 'cpu' 或CUDA设备
-    :type device: str or torch.device or int
+    :type device: Union[str, torch.device, int]
     :param f: 函数
     :type f: Callable
     :return: 用时，单位是毫秒
@@ -111,7 +111,7 @@ def cal_fun_t(n: int, device: str or torch.device or int, f: Callable, *args, **
     :param n: repeat times
     :type n: int
     :param device: on which cuda device that ``f`` is running. It can be 'cpu' or a cuda deivce
-    :type device: str or torch.device or int
+    :type device: Union[str, torch.device, int]
     :param f: function
     :type f: Callable
     :return: used time in milliseconds
