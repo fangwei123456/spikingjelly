@@ -688,8 +688,8 @@ class SuperSpike(SurrogateFunctionBase):
             g'(x) = \\frac{\\alpha}{(1 + (|x|))^2}
 
 
-        * :ref:`中文API <ATan.__init__-cn>`
-        .. _ATan.__init__-en:
+        * :ref:`中文API <SuperSpike.__init__-cn>`
+        .. _SuperSpike.__init__-en:
 
         The SuperSpike surrogate spiking function proposed by `SuperSpike: Supervised learning in multi-layer spiking neural networks <https://arxiv.org/abs/1705.11146>`_. The gradient is defined by
 

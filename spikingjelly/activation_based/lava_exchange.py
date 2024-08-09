@@ -216,7 +216,7 @@ class CubaLIFNode(neuron.BaseNode):
 
         * :ref:`中文API <CubaLIFNode.__init__-cn>`
 
-        .. CubaLIFNode.__init__-en:
+        .. _CubaLIFNode.__init__-en:
 
         :param current_decay: current decay constant
         :type current_decay: Union[float, torch.Tensor]
