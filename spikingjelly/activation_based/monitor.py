@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from torch import nn
-from typing import Callable, Any, Union
+from typing import Callable, Union, Optional
 from spikingjelly.activation_based import neuron
 import threading
 from torch.utils.tensorboard import SummaryWriter
@@ -59,7 +59,7 @@ class BaseMonitor:
 
 
 class OutputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_output: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Optional[Union[type, tuple[type, ...]]] = None, function_on_output: Callable = lambda x: x):
         """
         * :ref:`API in English <OutputMonitor-en>`
 
@@ -68,7 +68,7 @@ class OutputMonitor(BaseMonitor):
         :param net: 一个神经网络
         :type net: nn.Module
         :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_output: 作用于被监控的模块输出的自定义的函数
         :type function_on_output: Callable
 
@@ -123,7 +123,7 @@ class OutputMonitor(BaseMonitor):
         :param net: a network
         :type net: nn.Module
         :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_output: the function that applies on the monitored modules' outputs
         :type function_on_output: Callable
 
@@ -191,7 +191,7 @@ class OutputMonitor(BaseMonitor):
 
 
 class InputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_input: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Optional[Union[type, tuple[type, ...]]] = None, function_on_input: Callable = lambda x: x):
         """
         * :ref:`API in English <InputMonitor-en>`
 
@@ -200,7 +200,7 @@ class InputMonitor(BaseMonitor):
         :param net: 一个神经网络
         :type net: nn.Module
         :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_input: 作用于被监控的模块输入的自定义的函数
         :type function_on_input: Callable
 
@@ -332,7 +332,7 @@ class InputMonitor(BaseMonitor):
 
 
 class AttributeMonitor(BaseMonitor):
-    def __init__(self, attribute_name: str, pre_forward: bool, net: nn.Module, instance: Any or tuple = None,
+    def __init__(self, attribute_name: str, pre_forward: bool, net: nn.Module, instance: Optional[Union[type, tuple[type, ...]]] = None,
                  function_on_attribute: Callable = lambda x: x):
         """
         * :ref:`API in English <AttributeMonitor-en>`
@@ -346,7 +346,7 @@ class AttributeMonitor(BaseMonitor):
         :param net: 一个神经网络
         :type net: nn.Module
         :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_attribute: 作用于被监控的模块 ``m`` 的成员 ``m.attribute_name`` 的自定义的函数
         :type function_on_attribute: Callable
 
@@ -412,7 +412,7 @@ class AttributeMonitor(BaseMonitor):
         :param net: a network
         :type net: nn.Module
         :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_attribute: the function that applies on each monitored module's attribute
         :type function_on_attribute: Callable
 
@@ -493,7 +493,7 @@ class AttributeMonitor(BaseMonitor):
         return hook
 
 class GradInputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_grad_input: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Optional[Union[type, tuple[type, ...]]] = None, function_on_grad_input: Callable = lambda x: x):
         """
         * :ref:`API in English <GradInputMonitor-en>`
 
@@ -502,7 +502,7 @@ class GradInputMonitor(BaseMonitor):
         :param net: 一个神经网络
         :type net: nn.Module
         :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_grad_input: 作用于被监控的模块输出的输入的梯度的函数
         :type function_on_grad_input: Callable
 
@@ -563,7 +563,7 @@ class GradInputMonitor(BaseMonitor):
         :param net: a network
         :type net: nn.Module
         :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_grad_input: the function that applies on the grad of monitored modules' inputs
         :type function_on_grad_input: Callable
 
@@ -640,7 +640,7 @@ class GradInputMonitor(BaseMonitor):
 
 
 class GradOutputMonitor(BaseMonitor):
-    def __init__(self, net: nn.Module, instance: Any or tuple = None, function_on_grad_output: Callable = lambda x: x):
+    def __init__(self, net: nn.Module, instance: Optional[Union[type, tuple[type, ...]]] = None, function_on_grad_output: Callable = lambda x: x):
         """
         * :ref:`API in English <GradOutputMonitor-en>`
 
@@ -649,7 +649,7 @@ class GradOutputMonitor(BaseMonitor):
         :param net: 一个神经网络
         :type net: nn.Module
         :param instance: 被监视的模块的数据类型。若为 ``None`` 则表示类型为 ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_grad_output: 作用于被监控的模块输出的输出的的梯度的函数
         :type function_on_grad_output: Callable
 
@@ -712,7 +712,7 @@ class GradOutputMonitor(BaseMonitor):
         :param net: a network
         :type net: nn.Module
         :param instance: the instance of modules to be monitored. If ``None``, it will be regarded as ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
         :param function_on_grad_output: the function that applies on the grad of monitored modules' inputs
         :type function_on_grad_output: Callable
 
@@ -793,14 +793,14 @@ class GradOutputMonitor(BaseMonitor):
         return hook
 
 class GPUMonitor(threading.Thread):
-    def __init__(self, log_dir: str = None, gpu_ids: tuple = (0,), interval: float = 600., start_now=True):
+    def __init__(self, log_dir: Optional[str] = None, gpu_ids: tuple = (0,), interval: float = 600., start_now=True):
         """
         * :ref:`API in English <GPUMonitor.__init__-en>`
 
         .. _GPUMonitor.__init__-cn:
 
         :param log_dir: 使用 ``tensorboard`` 保存GPU数据的文件夹. 若为None，则日志不会保存，而是直接 ``print``
-        :type log_dir: str
+        :type log_dir: Optional[str]
         :param gpu_ids: 监视的GPU，例如 ``(0, 1, 2, 3)``。默认为 ``(0, )``
         :type gpu_ids: tuple
         :param interval: 记录数据的间隔，单位是秒
@@ -835,7 +835,7 @@ class GPUMonitor(threading.Thread):
         .. _GPUMonitor.__init__-en:
 
         :param log_dir: the directory for saving logs with tensorboard. If it is None, this module will print logs
-        :type log_dir: str
+        :type log_dir: Optional[str]
         :param gpu_ids: the id of GPUs to be monitored, e.g., ``(0, 1, 2, 3)``. The default value is ``(0, )``
         :type gpu_ids: tuple
         :param interval: the recording interval (in seconds)
