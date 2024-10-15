@@ -1118,7 +1118,7 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
         .. math::
             g'(x) =
             \\begin{cases}
-            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
+            \\frac{1}{2w}, & -w \\leq x \\leq w \\\\
             c, & x < -w ~or~ x > w
             \\end{cases}
 
@@ -1151,7 +1151,7 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
         .. math::
             g'(x) =
             \\begin{cases}
-            \\frac{1}{w}, & -w \\leq x \\leq w \\\\
+            \\frac{1}{2w}, & -w \\leq x \\leq w \\\\
             c, & x < -w ~or~ x > w
             \\end{cases}
 
