@@ -2246,8 +2246,7 @@ class SlidingPSN(base.MemoryModule):
         weight = self.weight[self.k - self.queue.__len__(): self.k]
         x_seq = torch.stack(self.queue)
 
-        for i in range(x.dim()):
-            weight = weight.unsqueeze(-1)
+        weight = weight.unsqueeze(-1)
 
         h = torch.sum(weight * x_seq, 0)
         spike = self.surrogate_function(h + self.bias)
