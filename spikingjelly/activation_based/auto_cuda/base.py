@@ -246,7 +246,7 @@ class CKernel:
                 elif value.dtype == np.float16:
                     assert startswiths(ctype, ('const half2', 'half2'))
 
-                elif value.dtype == int_:
+                elif value.dtype == int or (hasattr(np, 'int') and value.dtype == np.int):
                     assert startswiths(ctype, ('const int', 'int'))
 
     def check_half2(self, py_dict: dict):
