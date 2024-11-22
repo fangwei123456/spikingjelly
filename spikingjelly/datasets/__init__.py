@@ -543,6 +543,57 @@ def split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data
 
     return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(origin_dataset, test_idx)
 
+def fast_split_to_train_test_set(train_ratio: float, origin_dataset: torch.utils.data.Dataset, num_classes: int, random_split: bool = False, batch_size: int = 16):
+    '''
+    :param train_ratio: split the ratio of the origin dataset as the train set
+    :type train_ratio: float
+    :param origin_dataset: the origin dataset
+    :type origin_dataset: torch.utils.data.Dataset
+    :param num_classes: total classes number, e.g., ``10`` for the MNIST dataset
+    :type num_classes: int
+    :param random_split: If ``False``, the front ratio of samples in each classes will
+            be included in train set, while the reset will be included in test set.
+            If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
+            ``numpy.random.seed``
+    :type random_split: int
+    :param batch_size: the number of samples to process in each batch
+    :type batch_size: int
+    :return: a tuple ``(train_set, test_set)``
+    :rtype: tuple
+    '''
+    label_idx = [[] for _ in range(num_classes)]
+
+    def process_batch(start_idx, end_idx):
+        for i in range(start_idx, end_idx):
+            item = origin_dataset[i]
+            y = item[1]
+            if isinstance(y, np.ndarray) or isinstance(y, torch.Tensor):
+                y = y.item()
+            label_idx[y].append(i)
+
+    num_samples = len(origin_dataset)
+    with ThreadPoolExecutor() as executor:
+        futures = []
+        for start_idx in range(0, num_samples, batch_size):
+            end_idx = min(start_idx + batch_size, num_samples)
+            futures.append(executor.submit(process_batch, start_idx, end_idx))
+        
+        for future in tqdm.tqdm(futures, desc="Processing batches"):
+            future.result()
+
+    train_idx = []
+    test_idx = []
+    if random_split:
+        for i in range(num_classes):
+            np.random.shuffle(label_idx[i])
+
+    for i in range(num_classes):
+        pos = math.ceil(len(label_idx[i]) * train_ratio)
+        train_idx.extend(label_idx[i][:pos])
+        test_idx.extend(label_idx[i][pos:])
+
+    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(origin_dataset, test_idx)
+
 def pad_sequence_collate(batch: list):
     '''
     :param batch: a list of samples that contains ``(x, y)``, where ``x`` is a list containing sequences with different length and ``y`` is the label
