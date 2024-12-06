@@ -248,6 +248,8 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
 其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
 
+社区用户[赵振宇](https://github.com/15947470421)提供了[jupyter教程](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)。
+
 ## 出版物与引用
 
 [出版物列表](./publications.md)中保存了已知的使用惊蜇(SpikingJelly)的出版物。如果你的文章也使用了惊蜇(SpikingJelly)，可以通过提交pull request的方式来更新出版物列表。
