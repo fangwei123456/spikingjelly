@@ -443,7 +443,7 @@ def integrate_events_by_fixed_duration(events: Dict, duration: int, H: int, W: i
     N = t.size
 
     frames_num = int(math.ceil(t[-1] / duration))
-    frames = np.zeros([frames_num, W])
+    frames = np.zeros([frames_num, 2, H, W])
     frame_index = t // duration
     left = 0
 
