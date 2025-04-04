@@ -646,7 +646,7 @@ class SpikingSpeechCommands(Dataset):
                         for i in range(h5_file['labels'].__len__()):
                             print(f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
                             sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True))
+                                       frames_np_valid_root, self.split_by, frames_number, self.get_W(), True))
 
 
                         h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
