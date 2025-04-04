@@ -37,6 +37,12 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         :rtype: list
         '''
         print('The ICCV2019_DVS_dataset.zip is packed by dropbox. We find that the MD5 of this zip file can change. So, MD5 check will not be used for this ASL-DVS dataset.')
+        print('Update: The Dropbox link is expired now. You can download this dataset from the OpenI mirror manually by the following commands:\n'
+              '----------\n'
+              'pip install openi\n'
+              'openi dataset download OpenI/spikingjelly ASLDVS.zip  --cluster NPU --save_path .\n'
+              '----------\n'
+              'Then you can extract "ASLDVS.zip" and get "ICCV2019_DVS_dataset.zip".')
         url = 'https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CAa?dl=0'
         return [
             ('ICCV2019_DVS_dataset.zip', url, None)
