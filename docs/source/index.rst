@@ -85,7 +85,7 @@
     /activation_based/cupy_neuron
     /activation_based/inference_on_lynxi
     /activation_based/lava_exchange
-
+    /activation_based/spikformer
 
 模块文档
 -------------------------
@@ -225,7 +225,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /legacy_tutorials_en
     /activation_based_en/cupy_neuron
     /activation_based_en/lava_exchange
-
+    /activation_based_en/spikformer
 
 
 
