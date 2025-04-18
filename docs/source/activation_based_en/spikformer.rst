@@ -2,9 +2,13 @@ Spiking Transformer Construction, Training, and Improvements
 ===============================================================
 Tutorial author: `Zhou Zhaokun <https://github.com/ZK-Zhou>`_
 
-This tutorial mainly introduces the construction of the Spiking Transformer (Spiking Transformer, Spikformer) model based on Spikingjelly, the details of training the Spiking Transformer, and the key points of improving the Spiking Transformer architecture.
+This tutorial mainly introduces the construction of the Spiking Transformer (Spiking Transformer, Spikformer [#spikformer]_ ) model based on Spikingjelly, the details of training the Spiking Transformer, and the key points of improving the Spiking Transformer architecture.
 Compared to SEW ResNet, the structure and stacking method of Spikformer are relatively simple, specifically consisting of three main components: Spiking Patch Splitting (SPS), Spiking Self Attention (SSA), and Multi-Layer Perceptron (MLP).
-The stacking method is one SPS followed by multiple SSA-MLP combination blocks.
+The stacking method is one SPS followed by multiple SSA-MLP combination blocks. The specific SSA and Spikformer are shown in the figure:
+
+.. image:: ../_static/tutorials/activation_based/spikformer/spikformer-overview.png
+    :width: 100%
+
 
 Building a Spiking Transformer
 -----------------------------
@@ -106,4 +110,15 @@ Improving Spiking Transformer
 -----------------------------
 The modeling form of Spiking Self Attention mechanism is still in open exploration, and there are multiple improvements, including: improving the form and calculation method of QKV, enhancing spatial-temporal attention capability of QKV, designing spike position encoding, and accelerating SSA block splitting.
 Readers can explore new mechanisms suitable for SNN based on actual task requirements and performance orientation. Furthermore, the improvement of MLP and SPS feedforward modules in Spiking Transformer will also significantly affect its performance.
-Some Spikformer variants include: SpikingResformer, Spike-driven Transformer V1, V2, and V3, and QKformer, etc. See `here <https://scholar.google.com.hk/scholar?oi=bibs&hl=en&cites=12209743464525142624&as_sdt=5>`_ for details.
+Some Spikformer variants include: SpikingResformer, as shown in:
+
+.. image:: ../_static/tutorials/activation_based/spikformer/spikingresformer.png
+    :width: 100%
+
+
+As well as Spike-driven Transformer V1, V2, and V3, and QKformer, etc. See `here <https://scholar.google.com.hk/scholar?oi=bibs&hl=en&cites=12209743464525142624&as_sdt=5>`_ for details.
+
+
+
+.. [#spikformer] Zhou Zhaokun, Zhu Yuesheng, He Chao, Wang Yaowei, Yan Shuicheng, Tian Yonghong, Yuan Li. Spikformer: When Spiking Neural Network Meets Transformer [C]. Proceedings of International Conference on Learning Representations, 2023.
+.. [#spikingresformer] Shi Xinyu, Hao Zecheng, Yu Zhaofei. SpikingResformer: Bridging ResNet and Vision Transformer in Spiking Neural Networks [C]. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2024: 5610-5619.

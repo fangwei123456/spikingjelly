@@ -2,9 +2,12 @@
 =======================================
 本教程作者： `周昭坤 <https://github.com/ZK-Zhou>`_
 
-本节教程主要介绍基于Spikingjelly构建脉冲Transformer （Spiking Transformer，Spikformer）模型，训练脉冲Transformer的细节以及改进脉冲Transformer架构的关键点。
+本节教程主要介绍基于Spikingjelly构建脉冲Transformer （Spiking Transformer，Spikformer [#spikformer]_ ）模型，训练脉冲Transformer的细节以及改进脉冲Transformer架构的关键点。
 和SEW ResNet相比，Spikformer的结构和堆叠方式较为简单，具体来说由三个主要组件，即脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP）组成。
-堆叠方式则为一个SPS加若干个SSA-MLP组合块。
+堆叠方式则为一个SPS加若干个SSA-MLP组合块。具体的SSA和Spikformer如图所示：
+
+.. image:: ../_static/tutorials/activation_based/spikformer/spikformer-overview.png
+    :width: 100%
 
 构建脉冲Transformer
 ----------------
@@ -105,4 +108,13 @@
 ----------------
 脉冲自注意力机制的建模形式尚处于开放探索阶段，已有多种改进，改进点的具体位置有：改进QKV的形式和计算方式，增强QKV的时空关注能力，设计脉冲位置编码和SSA分块加速等。
 读者可根据实际任务需求和性能导向探索符合SNN的新型机制。此外，针对脉冲Transformer中的MLP和SPS前馈模块的改进也会显著影响其性能。
-一些Spikformer变体有：SpikingResformer、Spike-driven Transformer V1、V2和V3和QKformer等等，详见 `此处 <https://scholar.google.com.hk/scholar?oi=bibs&hl=zh-CN&cites=12209743464525142624&as_sdt=5>`_
+一些Spikformer变体有：SpikingResformer [#spikingresformer]_ ,如下图
+
+.. image:: ../_static/tutorials/activation_based/spikformer/spikingresformer.png
+    :width: 100%
+
+以及Spike-driven Transformer V1、V2和V3和QKformer等等，详见 `此处 <https://scholar.google.com.hk/scholar?oi=bibs&hl=zh-CN&cites=12209743464525142624&as_sdt=5>`_
+
+
+.. [#spikformer] Zhou Zhaokun, Zhu Yuesheng, He Chao, Wang Yaowei, Yan Shuicheng, Tian Yonghong, Yuan Li. Spikformer: When Spiking Neural Network Meets Transformer [C]. Proceedings of International Conference on Learning Representations, 2023.
+.. [#spikingresformer] Shi Xinyu, Hao Zecheng, Yu Zhaofei. SpikingResformer: Bridging ResNet and Vision Transformer in Spiking Neural Networks [C]. Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition, 2024: 5610-5619.
