@@ -4,3 +4,4 @@ numpy
 tqdm
 torchvision
 scipy
+tensorboard
