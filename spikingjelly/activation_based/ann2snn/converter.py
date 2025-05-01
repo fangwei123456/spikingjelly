@@ -105,7 +105,9 @@ class Converter(nn.Module):
         ann.eval()
         ann_fused = self.fuse(ann, fuse_flag=self.fuse_flag).to(self.device)
         ann_with_hook = self.set_voltagehook(ann_fused, momentum=self.momentum, mode=self.mode).to(self.device)
-        for _, (imgs, _) in enumerate(tqdm(self.dataloader)):
+        for _, data in enumerate(tqdm(self.dataloader)):
+            # changed this because I was using a detection dataset
+            imgs = data[0].float()
             ann_with_hook(imgs.to(self.device))
         snn = self.replace_by_ifnode(ann_with_hook).to(self.device)
         return snn  # return type: GraphModule
@@ -161,6 +163,11 @@ class Converter(nn.Module):
 
         """
 
+        # return asap is no fuse is needed
+        if not fuse_flag:
+            return fx_model
+
+
         def matches_module_pattern(pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]) -> bool:
             if len(node.args) == 0:
                 return False
@@ -193,8 +200,6 @@ class Converter(nn.Module):
             modules[node.target] = new_module
             setattr(modules[parent_name], name, new_module)
 
-        if not fuse_flag:
-            return fx_model
         patterns = [(nn.Conv1d, nn.BatchNorm1d),
                     (nn.Conv2d, nn.BatchNorm2d),
                     (nn.Conv3d, nn.BatchNorm3d)]
@@ -254,16 +259,22 @@ class Converter(nn.Module):
 
         """
 
-        hook_cnt = -1
+        hook_cnt = 0
         for node in fx_model.graph.nodes:
             if node.op != 'call_module':
                 continue
+
             if type(fx_model.get_submodule(node.target)) is nn.ReLU:
+                # use the input to ReLU to get the prefix
+                prefix = str(node.args[0])
+                prefix = prefix.split('_')
+                prefix = ".".join(prefix[:-1])
+
+                # name/node for voltage_hook
+                target = f"{prefix}.voltage_hook"  # voltage_hook
                 hook_cnt += 1
-                target = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_hook
                 m = VoltageHook(momentum=momentum, mode=mode)
-                new_node = Converter._add_module_and_node(fx_model, target, node, m
-                                                          , (node,))
+                _ = Converter._add_module_and_node(fx_model, target, node, m, (node,))
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
@@ -299,24 +310,30 @@ class Converter(nn.Module):
         for node in fx_model.graph.nodes:
             if node.op != 'call_module':
                 continue
-            if type(fx_model.get_submodule(node.target)) is VoltageHook:
-                if type(fx_model.get_submodule(node.args[0].target)) is nn.ReLU:
+            if (type(fx_model.get_submodule(node.target)) is VoltageHook and
+                type(fx_model.get_submodule(node.args[0].target)) is nn.ReLU):
                     hook_cnt += 1
                     hook_node = node
                     relu_node = node.args[0]
                     if len(relu_node.args) != 1:
                         raise NotImplementedError('The number of relu_node.args should be 1.')
+
+                    # get the voltage hook prefix
+                    prefix = node.target
+                    prefix = prefix.split('.')
+                    prefix = ".".join(prefix[:-1])
+
                     s = fx_model.get_submodule(node.target).scale.item()
-                    target0 = 'snn tailor.' + str(hook_cnt) + '.0'  # voltage_scaler
-                    target1 = 'snn tailor.' + str(hook_cnt) + '.1'  # IF_node
-                    target2 = 'snn tailor.' + str(hook_cnt) + '.2'  # voltage_scaler
+                    # this allows for easier import/export of the model
+                    target0 = f"{prefix}.scaler0"  # voltage_scaler
+                    target1 = f"{prefix}.if_node"  # IF_node
+                    target2 = f"{prefix}.scaler1"  # voltage_scaler
+
                     m0 = VoltageScaler(1.0 / s)
                     m1 = neuron.IFNode(v_threshold=1., v_reset=None)
                     m2 = VoltageScaler(s)
-                    node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0,
-                                                           relu_node.args)
-                    node1 = Converter._add_module_and_node(fx_model, target1, node0, m1
-                                                           , (node0,))
+                    node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0, relu_node.args)
+                    node1 = Converter._add_module_and_node(fx_model, target1, node0, m1, (node0,))
                     node2 = Converter._add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
 
                     relu_node.replace_all_uses_with(node2)
@@ -324,6 +341,7 @@ class Converter(nn.Module):
                     fx_model.graph.erase_node(hook_node)
                     fx_model.graph.erase_node(relu_node)
                     fx_model.delete_all_unused_submodules()
+
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
