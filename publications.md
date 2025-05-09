@@ -216,6 +216,7 @@
 |[Tensor decomposition based attention module for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0950705124004143)| https://github.com/RisingEntropy/PFA| Knowledge-Based Systems                                                                                                    |
 |[Fast gradient-free activation maximization for neurons in spiking neural networks](https://arxiv.org/abs/2401.10748)| https://github.com/iabs-neuro/mango |  |
 |[Direct training high-performance deep spiking neural networks: a review of theories and methods](https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1383844/full)|  |Frontiers in Neuroscience 2024|
+|[Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks](https://arxiv.org/abs/2505.05375)| https://github.com/NneurotransmitterR/TM-OTTA-SNN | IJCNN 2025
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
