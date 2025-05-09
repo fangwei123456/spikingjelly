@@ -213,9 +213,10 @@
 | [Fourier or Wavelet bases as counterpart self-attention in spikformer for efficient visual classification](https://arxiv.org/abs/2403.18228) |                                                              |                                                              |
 | [Spikewhisper: Temporal Spike Backdoor Attacks on Federated Neuromorphic Learning over Low-power Devices](https://arxiv.org/abs/2403.18607) |                                                              |                                                              |
 | [GET: Group Event Transformer for Event-Based Vision](https://openaccess.thecvf.com/content/ICCV2023/html/Peng_GET_Group_Event_Transformer_for_Event-Based_Vision_ICCV_2023_paper.html) | https://github.com/Peterande/GET-Group-Event-Transformer     | ICCV 2023                                                    |
-|[Tensor decomposition based attention module for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0950705124004143)| https://github.com/RisingEntropy/PFA| Knowledge-Based Systems                                                                                                    |
-|[Fast gradient-free activation maximization for neurons in spiking neural networks](https://arxiv.org/abs/2401.10748)| https://github.com/iabs-neuro/mango |  |
-|[Direct training high-performance deep spiking neural networks: a review of theories and methods](https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1383844/full)|  |Frontiers in Neuroscience 2024|
+| [Tensor decomposition based attention module for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0950705124004143)| https://github.com/RisingEntropy/PFA| Knowledge-Based Systems                                                                                                    |
+| [Fast gradient-free activation maximization for neurons in spiking neural networks](https://arxiv.org/abs/2401.10748)| https://github.com/iabs-neuro/mango |  |
+| [Direct training high-performance deep spiking neural networks: a review of theories and methods](https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1383844/full)|  |Frontiers in Neuroscience 2024|
+| [Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks](https://arxiv.org/abs/2505.05375)| https://github.com/NneurotransmitterR/TM-OTTA-SNN | IJCNN 2025
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
 
