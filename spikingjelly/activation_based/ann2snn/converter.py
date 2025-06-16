@@ -259,7 +259,7 @@ class Converter(nn.Module):
 
         """
 
-        hook_cnt = 0
+        hook_counts_per_prefix = {}
         for node in fx_model.graph.nodes:
             if node.op != 'call_module':
                 continue
@@ -268,13 +268,24 @@ class Converter(nn.Module):
                 # use the input to ReLU to get the prefix
                 prefix = str(node.args[0])
                 prefix = prefix.split('_')
-                prefix = ".".join(prefix[:-1])
 
-                # name/node for voltage_hook
-                target = f"{prefix}.voltage_hook"  # voltage_hook
-                hook_cnt += 1
+                # if we have a prefix, it means we are at a submodule
+                if len(prefix) > 1:
+                    prefix = ".".join(prefix[:-1])
+                    counter = hook_counts_per_prefix.get(prefix, 0)
+                    hook_counts_per_prefix[prefix] = counter + 1
+                    target = f"{prefix}.voltage_hook_{counter}"  # voltage_hook
+
+                # if we don't have a prefix, it means we are at the first level of the module
+                else:
+                    prefix = "__FIRST_LEVEL_OF_MODULE__"
+                    counter = hook_counts_per_prefix.get(prefix, 0)
+                    hook_counts_per_prefix[prefix] = counter + 1
+                    target = f"voltage_hook_{counter}"  # voltage_hook
+
                 m = VoltageHook(momentum=momentum, mode=mode)
                 _ = Converter._add_module_and_node(fx_model, target, node, m, (node,))
+
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
@@ -319,9 +330,9 @@ class Converter(nn.Module):
                         raise NotImplementedError('The number of relu_node.args should be 1.')
 
                     # get the voltage hook prefix
-                    prefix = node.target
-                    prefix = prefix.split('.')
-                    prefix = ".".join(prefix[:-1])
+                    prefix = node.name.replace("voltage_hook_", "spiking")
+                    prefix = prefix.split('_')
+                    prefix = ".".join(prefix)
 
                     s = fx_model.get_submodule(node.target).scale.item()
                     # this allows for easier import/export of the model
@@ -332,6 +343,7 @@ class Converter(nn.Module):
                     m0 = VoltageScaler(1.0 / s)
                     m1 = neuron.IFNode(v_threshold=1., v_reset=None)
                     m2 = VoltageScaler(s)
+
                     node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0, relu_node.args)
                     node1 = Converter._add_module_and_node(fx_model, target1, node0, m1, (node0,))
                     node2 = Converter._add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
