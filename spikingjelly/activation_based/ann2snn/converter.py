@@ -269,13 +269,16 @@ class Converter(nn.Module):
                 prefix = str(node.args[0])
                 prefix = prefix.split('_')
 
+                # if we have a prefix, it means we are at a submodule
                 if len(prefix) > 1:
                     prefix = ".".join(prefix[:-1])
                     counter = hook_counts_per_prefix.get(prefix, 1)
                     hook_counts_per_prefix[prefix] = counter + 1
                     target = f"{prefix}.voltage_hook_{counter}"  # voltage_hook
+
+                # if we don't have a prefix, it means we are at the first level of the module
                 else:
-                    prefix = "FLAT_MODEL_FIRST_LEVEL"
+                    prefix = "__FIRST_LEVEL_OF_MODULE__"
                     counter = hook_counts_per_prefix.get(prefix, 1)
                     hook_counts_per_prefix[prefix] = counter + 1
                     target = f"voltage_hook_{counter}"  # voltage_hook
