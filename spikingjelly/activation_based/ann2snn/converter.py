@@ -330,7 +330,7 @@ class Converter(nn.Module):
                         raise NotImplementedError('The number of relu_node.args should be 1.')
 
                     # get the voltage hook prefix
-                    prefix = node.name.replace("voltage_hook_", "")
+                    prefix = node.name.replace("voltage_hook_", "spiking")
                     prefix = prefix.split('_')
                     prefix = ".".join(prefix)
 
