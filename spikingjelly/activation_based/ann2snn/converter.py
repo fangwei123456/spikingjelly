@@ -259,7 +259,7 @@ class Converter(nn.Module):
 
         """
 
-        hook_cnt = 0
+        hook_counts_per_prefix = {}
         for node in fx_model.graph.nodes:
             if node.op != 'call_module':
                 continue
@@ -268,13 +268,21 @@ class Converter(nn.Module):
                 # use the input to ReLU to get the prefix
                 prefix = str(node.args[0])
                 prefix = prefix.split('_')
-                prefix = ".".join(prefix[:-1])
 
-                # name/node for voltage_hook
-                target = f"{prefix}.voltage_hook"  # voltage_hook
-                hook_cnt += 1
+                if len(prefix) > 1:
+                    prefix = ".".join(prefix[:-1])
+                    counter = hook_counts_per_prefix.get(prefix, 1)
+                    hook_counts_per_prefix[prefix] = counter + 1
+                    target = f"{prefix}.voltage_hook_{counter}"  # voltage_hook
+                else:
+                    prefix = "FLAT_MODEL_FIRST_LEVEL"
+                    counter = hook_counts_per_prefix.get(prefix, 1)
+                    hook_counts_per_prefix[prefix] = counter + 1
+                    target = f"voltage_hook_{counter}"  # voltage_hook
+
                 m = VoltageHook(momentum=momentum, mode=mode)
                 _ = Converter._add_module_and_node(fx_model, target, node, m, (node,))
+
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
@@ -319,9 +327,7 @@ class Converter(nn.Module):
                         raise NotImplementedError('The number of relu_node.args should be 1.')
 
                     # get the voltage hook prefix
-                    prefix = node.target
-                    prefix = prefix.split('.')
-                    prefix = ".".join(prefix[:-1])
+                    prefix = node.name.replace("voltage_hook_", "")
 
                     s = fx_model.get_submodule(node.target).scale.item()
                     # this allows for easier import/export of the model
