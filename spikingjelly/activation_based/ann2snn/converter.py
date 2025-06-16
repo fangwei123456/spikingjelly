@@ -331,6 +331,8 @@ class Converter(nn.Module):
 
                     # get the voltage hook prefix
                     prefix = node.name.replace("voltage_hook_", "")
+                    prefix = prefix.split('_')
+                    prefix = ".".join(prefix)
 
                     s = fx_model.get_submodule(node.target).scale.item()
                     # this allows for easier import/export of the model
@@ -341,6 +343,7 @@ class Converter(nn.Module):
                     m0 = VoltageScaler(1.0 / s)
                     m1 = neuron.IFNode(v_threshold=1., v_reset=None)
                     m2 = VoltageScaler(s)
+
                     node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0, relu_node.args)
                     node1 = Converter._add_module_and_node(fx_model, target1, node0, m1, (node0,))
                     node2 = Converter._add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
