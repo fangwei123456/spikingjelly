@@ -1,8 +1,9 @@
 # SpikingJelly
-![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) 
-[![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) 
-[![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) 
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) 
+
+![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly)
+[![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest)
+[![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly)
 ![repo size](https://img.shields.io/github/repo-size/fangwei123456/spikingjelly)
 ![GitHub issues](https://img.shields.io/github/issues/fangwei123456/spikingjelly)
 ![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/fangwei123456/spikingjelly)
@@ -13,14 +14,13 @@
 ![GitHub Repo stars](https://img.shields.io/github/stars/fangwei123456/spikingjelly)
 ![GitHub contributors](https://img.shields.io/github/contributors/fangwei123456/spikingjelly)
 
-
 English | [中文(Chinese)](./README_cn.md)
 
 ![demo](./docs/source/_static/logo/demo.png)
 
 SpikingJelly is an open-source deep learning framework for Spiking Neural Network (SNN) based on [PyTorch](https://pytorch.org/).
 
-The documentation of SpikingJelly is written in both English and Chinese: https://spikingjelly.readthedocs.io.
+The [documentation](https://spikingjelly.readthedocs.io) of SpikingJelly is written in both English and Chinese.
 
 - [Installation](#installation)
 - [Build SNN In An Unprecedented Simple Way](#build-snn-in-an-unprecedented-simple-way)
@@ -28,7 +28,7 @@ The documentation of SpikingJelly is written in both English and Chinese: https:
 - [CUDA-Enhanced Neuron](#cuda-enhanced-neuron)
 - [Device Supports](#device-supports)
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
-- [Tutorials](#Tutorials)
+- [Tutorials](#tutorials)
 - [Publications and Citation](#publications-and-citation)
 - [Contribution](#contribution)
 - [About](#about)
@@ -39,7 +39,7 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 **Version notes**
 
-The odd version number is the developing version, updated with the GitHub/OpenI repository. The even version number is the stable version and is available at PyPI. 
+The odd version number is the developing version, updated with the GitHub/OpenI repository. The even version number is the stable version and is available at PyPI.
 
 The default doc is for the latest developing version. If you are using the stable version, do not forget to switch to the doc in the corresponding version.
 
@@ -67,27 +67,31 @@ pip install spikingjelly
 **Install the latest developing version from the source code**:
 
 From [GitHub](https://github.com/fangwei123456/spikingjelly):
+
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
+
 From [OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
+
 ```bash
 git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
+
 ## Build SNN In An Unprecedented Simple Way
 
 SpikingJelly is user-friendly. Building SNN with SpikingJelly is as simple as building ANN in PyTorch:
 
 ```python
 nn.Sequential(
-        layer.Flatten(),
-        layer.Linear(28 * 28, 10, bias=False),
-        neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
-        )
+    layer.Flatten(),
+    layer.Linear(28 * 28, 10, bias=False),
+    neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
+)
 ```
 
 This simple network with a Poisson encoder can achieve 92% accuracy on the MNIST test dataset. Read refer to the tutorial for more details. You can also run this code in a Python terminal for training on classifying MNIST:
@@ -98,7 +102,7 @@ python -m spikingjelly.activation_based.examples.lif_fc_mnist -tau 2.0 -T 100 -d
 
 ## Fast And Handy ANN-SNN Conversion
 
-SpikingJelly implements a relatively general ANN-SNN Conversion interface. Users can realize the conversion through PyTorch. What's more, users can customize the conversion mode. 
+SpikingJelly implements a relatively general ANN-SNN Conversion interface. Users can realize the conversion through PyTorch. What's more, users can customize the conversion mode.
 
 ```python
 class ANN(nn.Module):
@@ -150,8 +154,9 @@ To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable
 
 ## Device Supports
 
--   [x] Nvidia GPU
--   [x] CPU
+- [x] Nvidia GPU
+- [x] CPU
+- [ ] Huawei NPU
 
 As simple as using PyTorch.
 
@@ -161,6 +166,7 @@ As simple as using PyTorch.
 ```
 
 ## Neuromorphic Datasets Supports
+
 SpikingJelly includes the following neuromorphic datasets:
 
 | Dataset | Source |
@@ -240,11 +246,10 @@ for x, y, x_len in train_data_loader:
 #         [1, 1, 1, 1, 1, 0, 0],
 #         [1, 1, 1, 1, 1, 1, 1]], dtype=torch.int32)
 ```
+
 More datasets will be included in the future.
 
-If some datasets' download links are not available for some users, the users can download from the OpenI mirror:
-
-https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
+If some datasets' download links are not available for some users, the users can download from the [OpenI mirror](https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0).
 
 All datasets saved in the OpenI mirror are allowable by their license or author's agreement.
 
@@ -265,7 +270,9 @@ SpikingJelly provides elaborate tutorials. Here are some tutorials:
 | ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/stdp.html) |
 | ![reinforcement_learning](./docs/source/_static/tutorials/activation_based/snn_for_rl/snn_for_rl.png) | [Reinforcement Learning](https://spikingjelly.readthedocs.io/zh-cn/latest/activation_based/ilc_san.html) |
 
-Other tutorials that are not listed here are also available at the document https://spikingjelly.readthedocs.io.
+Other tutorials that are not listed here are also available at the [document](https://spikingjelly.readthedocs.io).
+
+[ZhenyuZhao](https://github.com/15947470421) provides [jupyter tutorial notebooks in Chinese](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)。
 
 ## Publications and Citation
 
@@ -273,7 +280,7 @@ Publications using SpikingJelly are recorded in [Publications](./publications.md
 
 If you use SpikingJelly in your work, please cite it as follows:
 
-```
+```bibtex
 @article{
 doi:10.1126/sciadv.adi1480,
 author = {Wei Fang  and Yanqi Chen  and Jianhao Ding  and Zhaofei Yu  and Timothée Masquelier  and Ding Chen  and Liwei Huang  and Huihui Zhou  and Guoqi Li  and Yonghong Tian },
@@ -303,9 +310,9 @@ Not all API documents are written in both English and Chinese. We welcome users 
 
 <img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
 
-The list of developers can be found [here](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
-
 ## All Thanks to Our Contributors
+
+The list of developers can be found [in the contributor page](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
 <a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />

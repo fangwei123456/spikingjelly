@@ -1,5 +1,18 @@
 # 惊蜇(SpikingJelly)
-![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly) [![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest) [![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly) [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly) ![repo size](https://img.shields.io/github/repo-size/fangwei123456/spikingjelly)
+
+![GitHub last commit](https://img.shields.io/github/last-commit/fangwei123456/spikingjelly)
+[![Documentation Status](https://readthedocs.org/projects/spikingjelly/badge/?version=latest)](https://spikingjelly.readthedocs.io/zh_CN/latest)
+[![PyPI](https://img.shields.io/pypi/v/spikingjelly)](https://pypi.org/project/spikingjelly)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/spikingjelly)](https://pypi.org/project/spikingjelly)
+![repo size](https://img.shields.io/github/repo-size/fangwei123456/spikingjelly)
+![GitHub issues](https://img.shields.io/github/issues/fangwei123456/spikingjelly)
+![GitHub closed issues](https://img.shields.io/github/issues-closed-raw/fangwei123456/spikingjelly)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/fangwei123456/spikingjelly)
+![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/fangwei123456/spikingjelly)
+![Visitors](https://api.visitorbadge.io/api/visitors?path=fangwei123456%2Fspikingjelly%20&countColor=%23263759&style=flat)
+![GitHub forks](https://img.shields.io/github/forks/fangwei123456/spikingjelly)
+![GitHub Repo stars](https://img.shields.io/github/stars/fangwei123456/spikingjelly)
+![GitHub contributors](https://img.shields.io/github/contributors/fangwei123456/spikingjelly)
 
 [English](./README.md) | 中文
 
@@ -7,12 +20,12 @@
 
 [SpikingJelly](https://github.com/fangwei123456/spikingjelly) 是一个基于 [PyTorch](https://pytorch.org/) ，使用脉冲神经网络(Spiking Neural Network, SNN)进行深度学习的框架。
 
-SpikingJelly的文档使用中英双语编写： https://spikingjelly.readthedocs.io。
+SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语编写。
 
 - [安装](#安装)
-- [以前所未有的简单方式搭建SNN](#以前所未有的简单方式搭建SNN)
-- [快速好用的ANN-SNN转换](#快速好用的ANN-SNN转换)
-- [CUDA增强的神经元](#CUDA增强的神经元)
+- [以前所未有的简单方式搭建SNN](#以前所未有的简单方式搭建snn)
+- [快速好用的ANN-SNN转换](#快速好用的ann-snn转换)
+- [CUDA增强的神经元](#cuda增强的神经元)
 - [设备支持](#设备支持)
 - [神经形态数据集支持](#神经形态数据集支持)
 - [教程](#教程)
@@ -54,17 +67,21 @@ pip install spikingjelly
 **从源代码安装最新的开发版**：
 
 通过[GitHub](https://github.com/fangwei123456/spikingjelly)：
+
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
+
 通过[OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
+
 ```bash
 git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 python setup.py install
 ```
+
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
@@ -138,8 +155,9 @@ SpikingJelly为部分神经元提供给了2种后端。可以使用对用户友�
 
 ## 设备支持
 
--   [x] Nvidia GPU
--   [x] CPU
+- [x] Nvidia GPU
+- [x] CPU
+- [ ] Huawei NPU
 
 像使用PyTorch一样简单。
 
@@ -149,6 +167,7 @@ SpikingJelly为部分神经元提供给了2种后端。可以使用对用户友�
 ```
 
 ## 神经形态数据集支持
+
 SpikingJelly 已经将下列数据集纳入：
 
 | 数据集                          | 来源                                                         |
@@ -223,11 +242,9 @@ for x, y, x_len in train_data_loader:
 
 未来将会纳入更多数据集。
 
-如果用户无法下载某些数据集，可以尝试从OpenI的数据集镜像下载：
+如果用户无法下载某些数据集，可以尝试从[OpenI的数据集镜像](https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0)下载：
 
-https://openi.pcl.ac.cn/OpenI/spikingjelly/datasets?type=0
-
-只有原始数据集所使用的协议允许分发，或原始数据集作者已经同意分发的数据集才会被建立镜像。 
+只有原始数据集所使用的协议允许分发，或原始数据集作者已经同意分发的数据集才会被建立镜像。
 
 ## 教程
 
@@ -246,7 +263,7 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 | ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP学习](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/stdp.html) |
 | ![reinforcement_learning](./docs/source/_static/tutorials/activation_based/snn_for_rl/snn_for_rl.png) | [强化学习](https://spikingjelly.readthedocs.io/zh-cn/latest/activation_based/ilc_san.html) |
 
-其他没有列出在此处的教程可以在文档 https://spikingjelly.readthedocs.io 中获取。
+其他没有列出在此处的教程可以在[文档](https://spikingjelly.readthedocs.io)中获取。
 
 社区用户[赵振宇](https://github.com/15947470421)提供了[jupyter教程](https://github.com/fangwei123456/spikingjelly/tree/8932ac0668fe19b3efd0afedb3ca454cd8c126d3/community_tutorials/jupyter/chinese)。
 
@@ -256,7 +273,7 @@ SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
 如果您在自己的工作中用到了惊蜇(SpikingJelly)，您可以按照下列格式进行引用：
 
-```
+```bibtex
 @article{
 doi:10.1126/sciadv.adi1480,
 author = {Wei Fang  and Yanqi Chen  and Jianhao Ding  and Zhaofei Yu  and Timothée Masquelier  and Ding Chen  and Liwei Huang  and Huihui Zhou  and Guoqi Li  and Yonghong Tian },
