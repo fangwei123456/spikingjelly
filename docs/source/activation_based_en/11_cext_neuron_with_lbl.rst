@@ -11,7 +11,8 @@ than naive pytorch backend. Let us run a simple experiment to compare LIF neuron
 
 .. code-block:: python
 
-    from spikingjelly.activation_based import neuron, surrogate, cuda_utils
+    from spikingjelly.activation_based import neuron, surrogate
+    from spikingjelly.activation_based.cuda_kernel import cuda_utils
     import torch
 
 

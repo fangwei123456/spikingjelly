@@ -6,7 +6,6 @@ spikingjelly.activation\_based package
 
    ./sub_module/spikingjelly.activation_based.auto_cuda
    ./sub_module/spikingjelly.activation_based.base
-   ./sub_module/spikingjelly.activation_based.cuda_utils
    ./sub_module/spikingjelly.activation_based.encoding
    ./sub_module/spikingjelly.activation_based.functional
    ./sub_module/spikingjelly.activation_based.lava_exchange
@@ -14,12 +13,9 @@ spikingjelly.activation\_based package
    ./sub_module/spikingjelly.activation_based.learning
    ./sub_module/spikingjelly.activation_based.monitor
    ./sub_module/spikingjelly.activation_based.neuron
-   ./sub_module/spikingjelly.activation_based.neuron_kernel
    ./sub_module/spikingjelly.activation_based.quantize
    ./sub_module/spikingjelly.activation_based.rnn
-   ./sub_module/spikingjelly.activation_based.spike_op
    ./sub_module/spikingjelly.activation_based.surrogate
-   ./sub_module/spikingjelly.activation_based.tensor_cache
 
 
 
@@ -30,6 +26,7 @@ Subpackages
    :maxdepth: 4
 
    spikingjelly.activation_based.ann2snn
+   spikingjelly.activation_based.cuda_kernel
    spikingjelly.activation_based.examples
    spikingjelly.activation_based.model
 

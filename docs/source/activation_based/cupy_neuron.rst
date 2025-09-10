@@ -831,7 +831,8 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
 
 .. code-block:: python
         
-    from spikingjelly.activation_based import neuron, cuda_utils, functional
+    from spikingjelly.activation_based import neuron, functional
+    from spikingjelly.activation_based.cuda_kernel import cuda_utils
 
     def forward_backward(net: torch.nn.Module, x_seq: torch.Tensor):
         y_seq = net(x_seq)

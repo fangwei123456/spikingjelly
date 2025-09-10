@@ -401,7 +401,7 @@
     float32 size = 4096
     torch.bool size = 1024
 
-在 :class:`spikingjelly.activation_based.tensor_cache` 中提供了将float32/float16类型的脉冲tensor压缩到uint8类型脉冲tensor的函数，其中uint8的tensor，每个\
+在 :class:`spikingjelly.activation_based.cuda_kernel.tensor_cache` 中提供了将float32/float16类型的脉冲tensor压缩到uint8类型脉冲tensor的函数，其中uint8的tensor，每个\
 元素使用8比特，保存8个脉冲，相当于是“真正的bool”类型。示例如下：
 
 .. code-block:: python
@@ -417,7 +417,7 @@
     print('float32 size =', tensor_memory(spike))
     print('torch.bool size =', tensor_memory(spike.to(torch.bool)))
 
-    from spikingjelly.activation_based import tensor_cache
+    from spikingjelly.activation_based.cuda_kernel import tensor_cache
 
     spike_b, s_dtype, s_shape, s_padding = tensor_cache.float_spike_to_bool(spike)
 
@@ -458,7 +458,7 @@
 
     import torch
     import zlib
-    from spikingjelly.activation_based import tensor_cache
+    from spikingjelly.activation_based.cuda_kernel import tensor_cache
 
     def tensor_memory(x: torch.Tensor):
         return x.element_size() * x.numel()
@@ -488,7 +488,8 @@
     import torch.nn as nn
     import zlib
     import numpy as np
-    from spikingjelly.activation_based import monitor, neuron, functional, layer, tensor_cache
+    from spikingjelly.activation_based import monitor, neuron, functional, layer
+    from spikingjelly.activation_based.cuda_kernel import tensor_cache
 
     def compress(spike: torch.Tensor):
         spike_b, s_dtype, s_shape, s_padding = tensor_cache.float_spike_to_bool(spike)

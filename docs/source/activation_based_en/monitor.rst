@@ -378,7 +378,7 @@ The outputs are:
     torch.bool size = 1024
 
 
-:class:`spikingjelly.activation_based.tensor_cache` provides functions to compress a float32/float16 tensor to an uint8 tensor, whose each element saves 8 spikes. This uint8 tensor can be regarded as a "true bool" tensor. Here is an example:
+:class:`spikingjelly.activation_based.cuda_kernel.tensor_cache` provides functions to compress a float32/float16 tensor to an uint8 tensor, whose each element saves 8 spikes. This uint8 tensor can be regarded as a "true bool" tensor. Here is an example:
 
 .. code-block:: python
 
@@ -393,7 +393,7 @@ The outputs are:
     print('float32 size =', tensor_memory(spike))
     print('torch.bool size =', tensor_memory(spike.to(torch.bool)))
 
-    from spikingjelly.activation_based import tensor_cache
+    from spikingjelly.activation_based.cuda_kernel import tensor_cache
 
     spike_b, s_dtype, s_shape, s_padding = tensor_cache.float_spike_to_bool(spike)
 
@@ -434,7 +434,7 @@ For sparse spikes, we can also use ``zlib`` for advanced compression. Here is an
 
     import torch
     import zlib
-    from spikingjelly.activation_based import tensor_cache
+    from spikingjelly.activation_based.cuda_kernel import tensor_cache
 
     def tensor_memory(x: torch.Tensor):
         return x.element_size() * x.numel()
@@ -464,7 +464,8 @@ Here is a complete example:
     import torch.nn as nn
     import zlib
     import numpy as np
-    from spikingjelly.activation_based import monitor, neuron, functional, layer, tensor_cache
+    from spikingjelly.activation_based import monitor, neuron, functional, layer
+    from spikingjelly.activation_based.cuda_kernel import tensor_cache
 
     def compress(spike: torch.Tensor):
         spike_b, s_dtype, s_shape, s_padding = tensor_cache.float_spike_to_bool(spike)

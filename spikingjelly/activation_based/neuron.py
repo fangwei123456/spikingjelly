@@ -12,13 +12,12 @@ from .auto_cuda import neuron_kernel as ac_neuron_kernel
 from .auto_cuda import ss_neuron_kernel as ss_ac_neuron_kernel
 try:
     import cupy
-    from . import neuron_kernel, cuda_utils
+    from . import cuda_kernel
 
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.neuron: {e}')
     cupy = None
-    neuron_kernel = None
-    cuda_utils = None
+    cuda_kernel = None
 
 
 class SimpleBaseNode(base.MemoryModule):
@@ -1486,7 +1485,7 @@ class QIFNode(BaseNode):
         elif self.backend == 'cupy':
             self.v_float_to_tensor(x_seq[0])
 
-            spike_seq, v_seq = neuron_kernel.MultiStepQIFNodePTT.apply(
+            spike_seq, v_seq = cuda_kernel.MultiStepQIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest,
                 self.v_c, self.a0, self.detach_reset, self.surrogate_function.cuda_code)
 
@@ -1638,7 +1637,7 @@ class EIFNode(BaseNode):
         elif self.backend == 'cupy':
             self.v_float_to_tensor(x_seq[0])
 
-            spike_seq, v_seq = neuron_kernel.MultiStepEIFNodePTT.apply(
+            spike_seq, v_seq = cuda_kernel.MultiStepEIFNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.tau, self.v_threshold, self.v_reset, self.v_rest,
                 self.theta_rh, self.delta_T, self.detach_reset, self.surrogate_function.cuda_code)
 
@@ -1692,7 +1691,7 @@ class IzhikevichNode(AdaptBaseNode):
             self.v_float_to_tensor(x_seq[0])
             self.w_float_to_tensor(x_seq[0])
 
-            spike_seq, v_seq, w_seq = neuron_kernel.MultiStepIzhikevichNodePTT.apply(
+            spike_seq, v_seq, w_seq = cuda_kernel.MultiStepIzhikevichNodePTT.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.w.flatten(0), self.tau, self.v_threshold, self.v_reset,
                 self.v_rest, self.a, self.b, self.tau_w,
                 self.v_c, self.a0, self.detach_reset, self.surrogate_function.cuda_code)

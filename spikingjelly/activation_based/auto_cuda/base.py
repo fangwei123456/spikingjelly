@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 import sys
 import logging
-from .. import cuda_utils
+from ..cuda_kernel import cuda_utils
 from ... import configure
 
 

@@ -21,7 +21,7 @@ np_savez = np.savez_compressed if configure.save_datasets_compressed else np.sav
 
 try:
     import cupy
-    from ..activation_based import cuda_utils
+    from ..activation_based.cuda_kernel import cuda_utils
 
     padded_sequence_mask_kernel_code = r'''
     extern "C" __global__

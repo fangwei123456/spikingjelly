@@ -1,4 +1,4 @@
-# cuda_utils
+# CUDA Neuron Kernels
 
 This md file shows how we define cuda kernel for neuronal forward and backward.
 

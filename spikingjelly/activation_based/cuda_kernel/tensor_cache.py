@@ -2,7 +2,7 @@ from typing import Union
 import torch
 import torch.nn.functional as F
 import threading
-from .. import configure
+from ... import configure
 from . import cuda_utils
 import logging
 try:
@@ -10,6 +10,7 @@ try:
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.tensor_cache: {e}')
     cupy = None
+
 
 class DataTypeConvertCUDACode:
     float2bool = r'''
@@ -89,6 +90,8 @@ class DataTypeConvertCUDACode:
                 }
             }
     '''
+
+
 def float_spike_to_bool(spike: torch.Tensor):
     """
     :param spike: a spike tensor whose ``dtype=torch.float`` or ``dtype=torch.half`` and all elements are 0 or 1
@@ -148,6 +151,7 @@ def float_spike_to_bool(spike: torch.Tensor):
 
     return spike_b, s_dtype, s_shape, s_padding
 
+
 def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0):
     """
     :param spike_b: a compressed spike tensor with ``dtype=torch.uint8`` and each element stores 8 spikes
@@ -206,6 +210,7 @@ def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: to
 def tensor_key(x: torch.Tensor):
     x = x.flatten()
     return x.data_ptr(), x[-1].data_ptr(), x.numel()
+
 
 class BoolTensorCache:
     def __init__(self):

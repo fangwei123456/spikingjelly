@@ -10,7 +10,8 @@ CUDA加速的神经元
 
 .. code-block:: python
 
-    from spikingjelly.activation_based import neuron, surrogate, cuda_utils
+    from spikingjelly.activation_based import neuron, surrogate
+    from spiknigjelly.activation_based.cuda_kernel import cuda_utils
     import torch
 
 

@@ -1,6 +1,5 @@
 from typing import Optional
 import torch
-import torch.nn.functional as F
 import numpy as np
 import logging
 
@@ -11,8 +10,8 @@ except BaseException as e:
     cupy = None
     
 
-from .. import cuda_utils, surrogate
 from ... import configure
+from ..cuda_kernel import cuda_utils
 from typing import Callable, Iterable
 from . import base, cfunction
 import math

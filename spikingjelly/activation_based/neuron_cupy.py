@@ -10,25 +10,10 @@ from typing import Callable
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based import surrogate
+from . import surrogate
+from .cuda_kernel.cuda_utils import DeviceEnvironment
 
 __all__ = ["IFNode", "LIFNode", "ParametricLIFNode", "ILIFNode"]
-
-
-class DeviceEnvironment:
-    def __init__(self, device: int):
-        self.device = device
-        self.previous_device = None
-
-    def __enter__(self):
-        current_device = torch.cuda.current_device()
-        if current_device != self.device:
-            torch.cuda.set_device(self.device)
-            self.previous_device = current_device
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.previous_device is not None:
-            torch.cuda.set_device(self.previous_device)
 
 
 class IFNodeCuPy(torch.autograd.Function):

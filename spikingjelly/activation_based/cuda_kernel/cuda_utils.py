@@ -2,12 +2,12 @@ import logging
 import torch
 import time
 import numpy as np
-from .. import configure
+from ... import configure
 from typing import Callable, Union
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.cuda_utils: {e}')
+    logging.info(f'spikingjelly.activation_based.cuda_kernel.cuda_utils: {e}')
     cupy = None
 
 def cpu_timer(f: Callable, *args, **kwargs):

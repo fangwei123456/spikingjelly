@@ -1,8 +1,8 @@
-from typing import Optional
+from typing import Optional, Callable, Iterable
 import torch
-import torch.nn.functional as F
 import numpy as np
 import logging
+import math
 
 try:
     import cupy
@@ -11,11 +11,9 @@ except BaseException as e:
     cupy = None
     
 
-from .. import cuda_utils, surrogate
+from ..cuda_kernel import cuda_utils
 from ... import configure
-from typing import Callable, Iterable
 from . import base, cfunction
-import math
 
 def neuronal_hard_reset(v_next: str, h: str, spike: str, v_reset: str, dtype: str = 'float'):
     if dtype == 'float':

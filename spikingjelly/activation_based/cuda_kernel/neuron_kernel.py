@@ -3,13 +3,14 @@ import logging
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.neuron_kernel: {e}')
+    logging.info(f'spikingjelly.activation_based.cuda_kernel.neuron_kernel: {e}')
     cupy = None
 
 import torch
 import torch.nn.functional as F
-from . import cuda_utils, surrogate, tensor_cache
-from .. import configure
+from . import cuda_utils, tensor_cache
+from .. import surrogate
+from ... import configure
 import numpy as np
         
 
