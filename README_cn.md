@@ -22,6 +22,7 @@
 
 SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语编写。
 
+- [更新日志](#更新日志)
 - [安装](#安装)
 - [以前所未有的简单方式搭建SNN](#以前所未有的简单方式搭建snn)
 - [快速好用的ANN-SNN转换](#快速好用的ann-snn转换)
@@ -33,19 +34,40 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 - [贡献](#贡献)
 - [项目信息](#项目信息)
 
-## 安装
+## 更新日志
 
-注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
+我们正在积极维护和改进 SpikingJelly。以下是未来的计划以及各版本的亮点。
+
+**版本亮点**
+
+...
+
+**计划**
+
+我们即将发布版本 `0.0.0.1.0`。
+
+- [ ] 添加[Triton](https://github.com/triton-lang/triton)后端以在GPU上进一步加速。
+- [ ] 添加一个将PyTorch脉冲神经元转换为Triton后端的转译器，该转译器将比现有的[`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/auto_cuda)子包更灵活、易用。
+- [ ] 添加脉冲自注意力机制的实现。
+
+其他长期计划包括：
+
+- [ ] 添加对[NIR](https://github.com/neuromorphs/NIR)的支持。
+- [ ] 优化训练时的显存开销。
+- [ ] 支持华为 NPU 加速。
+
+如果想尝试前沿实验性功能，请查看我们的配套项目[flashsnn](https://github.com/AllenYolk/flash-snn)。今后，新功能将先在 flashsnn中原型化，待技术成熟后再合并到SpikingJelly。
+
 
 **版本说明**
 
-奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
+- 奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
 
-默认的文档与最新的开发版匹配，如果你使用的是稳定版，不要忘记切换到对应的文档版本。
+- 默认的文档与最新的开发版匹配，如果你使用的是稳定版，不要忘记切换到对应的文档版本。
 
-自`0.0.0.0.14`版本开始，包括`clock_driven`和 `event_driven`在内的模块被重命名了，请参考教程[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/migrate_from_legacy.html)。
+- 自`0.0.0.0.14`版本开始，包括`clock_driven`和 `event_driven`在内的模块被重命名了，请参考教程[从老版本迁移](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/migrate_from_legacy.html)。
 
-如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。推荐使用最新的稳定版或开发版。
+- 如果使用老版本的SpikingJelly，则有可能遇到一些致命的bugs。参见[Bugs History with Releases](./bugs.md) 。推荐使用最新的稳定版或开发版。
 
 **不同版本的文档：**
 
@@ -57,6 +79,10 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 - [0.0.0.0.12](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/)
 - [0.0.0.0.14](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/)
 - [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/)
+
+## 安装
+
+注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
 
 **从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本**：
 

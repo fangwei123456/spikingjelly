@@ -22,6 +22,7 @@ SpikingJelly is an open-source deep learning framework for Spiking Neural Networ
 
 The [documentation](https://spikingjelly.readthedocs.io) of SpikingJelly is written in both English and Chinese.
 
+- [Changelog](#changelog)
 - [Installation](#installation)
 - [Build SNN In An Unprecedented Simple Way](#build-snn-in-an-unprecedented-simple-way)
 - [Fast And Handy ANN-SNN Conversion](#fast-and-handy-ann-snn-conversion)
@@ -33,19 +34,39 @@ The [documentation](https://spikingjelly.readthedocs.io) of SpikingJelly is writ
 - [Contribution](#contribution)
 - [About](#about)
 
-## Installation
+## Changelog
 
-Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
+We are actively maintaining and improving SpikingJelly. Below are our future plans and highlights of each release.
+
+**Highlights**
+
+...
+
+**Planned**
+
+We are going to release version `0.0.0.1.0` soon.
+
+- [ ] Add [Triton](https://github.com/triton-lang/triton) backend for further acceleration on GPU.
+- [ ] Add a transpiler for converting PyTorch spiking neurons to Triton kernels, which will be more flexible than the existing [`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/auto_cuda) subpackage.
+- [ ] Add spiking self-attention implementations.
+
+Other long-term plans include:
+
+- [ ] Add [NIR](https://github.com/neuromorphs/NIR) support.
+- [ ] Optimize training memory cost.
+- [ ] Accelerate on Huawei NPU.
+
+For early-stage experimental features, see our companion project [flashsnn](https://github.com/AllenYolk/flash-snn). New ideas are prototyped in flashsnn before merging into SpikingJelly.
 
 **Version notes**
 
-The odd version number is the developing version, updated with the GitHub/OpenI repository. The even version number is the stable version and is available at PyPI.
+- The odd version number is the developing version, updated with the GitHub/OpenI repository. The even version number is the stable version and is available at PyPI.
 
-The default doc is for the latest developing version. If you are using the stable version, do not forget to switch to the doc in the corresponding version.
+- The default doc is for the latest developing version. If you are using the stable version, do not forget to switch to the doc in the corresponding version.
 
-From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. Please refer to the tutorial [Migrate From Old Versions](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html).
+- From the version `0.0.0.0.14`, modules including `clock_driven` and `event_driven` are renamed. Please refer to the tutorial [Migrate From Old Versions](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/migrate_from_legacy.html).
 
-If you use an old version of SpikingJelly, you may encounter some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
+- If you use an old version of SpikingJelly, you may encounter some fatal bugs. Refer to [Bugs History with Releases](./bugs.md) for more details.
 
 **Docs for different versions:**
 
@@ -57,6 +78,10 @@ If you use an old version of SpikingJelly, you may encounter some fatal bugs. Re
 - [0.0.0.0.12](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.12/#index-en)
 - [0.0.0.0.14](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/#index-en)
 - [latest](https://spikingjelly.readthedocs.io/zh_CN/latest/#index-en)
+
+## Installation
+
+Note that SpikingJelly is based on PyTorch. Please make sure that you have installed [PyTorch](https://pytorch.org) before you install SpikingJelly.
 
 **Install the last stable version from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
