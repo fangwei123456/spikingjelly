@@ -11,6 +11,12 @@ except BaseException as e:
     cupy = None
 
 try:
+    import triton
+except BaseException as e:
+    logging.info(f'spikingjelly.activation_based.base: {e}')
+    triton = None
+
+try:
     import lava.lib.dl.slayer as slayer
 except BaseException as e:
     slayer = None
@@ -40,16 +46,28 @@ def check_backend_library(backend: str):
         return
     elif backend == 'cupy':
         if cupy is None:
-            raise ImportError('CuPy is not installed! You can install it from "https://github.com/cupy/cupy".')
+            raise ImportError(
+                'CuPy is not installed! '
+                'You can install it from "https://github.com/cupy/cupy".'
+            )
+    elif backend == "triton":
+        if triton is None:
+            raise ImportError(
+                'Triton is not installed! '
+                'You can install it from "https://github.com/openai/triton".'
+            )
     elif backend == 'lava':
         if slayer is None:
-            raise ImportError('Lava-DL is not installed! You can install it from ' \
-                              '"https://github.com/lava-nc/lava-dl". ')
+            raise ImportError(
+                'Lava-DL is not installed! You can install it from '
+                '"https://github.com/lava-nc/lava-dl". '
+            )
     else:
         pass
 
 
 class StepModule:
+
     def supported_step_mode(self):
         """
         * :ref:`API in English <StepModule.supported_step_mode-en>`
@@ -113,8 +131,11 @@ class StepModule:
 
         """
         if value not in self.supported_step_mode():
-            raise ValueError(f'step_mode can only be {self.supported_step_mode()}, but got "{value}"!')
+            raise ValueError(
+                f'step_mode can only be {self.supported_step_mode()}, but got "{value}"!'
+            )
         self._step_mode = value
+
 
 class SingleModule(StepModule):
     """
@@ -130,8 +151,10 @@ class SingleModule(StepModule):
 
     The module that only supports for single-step (``step_mode == 's'``)
     """
+
     def supported_step_mode(self):
-        return ('s', )
+        return ('s',)
+
 
 class MultiStepModule(StepModule):
     """
@@ -147,10 +170,13 @@ class MultiStepModule(StepModule):
 
     The module that only supports for multi-step (``step_mode == 'm'``)
     """
+
     def supported_step_mode(self):
-        return ('m', )
+        return ('m',)
+
 
 class MemoryModule(nn.Module, StepModule):
+
     def __init__(self):
         """
         * :ref:`API in English <MemoryModule.__init__-en>`
@@ -203,7 +229,9 @@ class MemoryModule(nn.Module, StepModule):
     @backend.setter
     def backend(self, value: str):
         if value not in self.supported_backends:
-            raise NotImplementedError(f'{value} is not a supported backend of {self._get_name()}!')
+            raise NotImplementedError(
+                f'{value} is not a supported backend of {self._get_name()}!'
+            )
         check_backend_library(value)
         self._backend = value
 
@@ -302,7 +330,9 @@ class MemoryModule(nn.Module, StepModule):
         each calling of ``self.reset()``.
 
         """
-        assert not hasattr(self, name), f'{name} has been set as a member variable!'
+        assert not hasattr(
+            self, name
+        ), f'{name} has been set as a member variable!'
         self._memories[name] = value
         self.set_reset_value(name, value)
 
@@ -445,7 +475,3 @@ class MemoryModule(nn.Module, StepModule):
         replica = super()._replicate_for_data_parallel()
         replica._memories = self._memories.copy()
         return replica
-
-
-
-
