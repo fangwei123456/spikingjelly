@@ -12,7 +12,6 @@ from . import cuda_utils, tensor_cache
 from .. import surrogate
 from ... import configure
 import numpy as np
-        
 
 
 class MultiStepIFNodePTT(torch.autograd.Function):

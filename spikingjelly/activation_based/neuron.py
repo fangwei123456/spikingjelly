@@ -1067,7 +1067,7 @@ class LIFNode(BaseNode):
                     dtype = 'half2'
                 else:
                     raise NotImplementedError(x.dtype)
-                
+
                 if self.forward_kernel is None or not self.forward_kernel.check_attributes(
                     hard_reset=hard_reset, dtype=dtype, decay_input=self.decay_input
                 ):
@@ -1354,14 +1354,14 @@ class ParametricLIFNode(BaseNode):
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
         self.decay_input = decay_input
         init_w = - math.log(init_tau - 1.)
-        self.w = nn.Parameter(torch.as_tensor(init_w))
+        self.w = nn.Parameter(torch.as_tensor(init_w)) # as reciprocal_tau
 
     @property
     def supported_backends(self):
         if self.step_mode == 's':
             return ('torch',)
         elif self.step_mode == 'm':
-            return ('torch', 'cupy')
+            return ('torch', 'cupy', 'triton')
         else:
             raise ValueError(self.step_mode)
 
@@ -1393,36 +1393,45 @@ class ParametricLIFNode(BaseNode):
                 dtype = 'half2'
             else:
                 raise NotImplementedError(x_seq.dtype)
-
-            if self.forward_kernel is None or not self.forward_kernel.check_attributes(hard_reset=hard_reset,
-                                                                                       dtype=dtype,
-                                                                                       decay_input=self.decay_input):
-                self.forward_kernel = ac_neuron_kernel.ParametricLIFNodeFPTTKernel(decay_input=self.decay_input,
-                                                                                   hard_reset=hard_reset, dtype=dtype)
-
+            if self.forward_kernel is None or not self.forward_kernel.check_attributes(
+                hard_reset=hard_reset, dtype=dtype, decay_input=self.decay_input
+            ):
+                self.forward_kernel = ac_neuron_kernel.ParametricLIFNodeFPTTKernel(
+                    decay_input=self.decay_input, hard_reset=hard_reset, dtype=dtype
+                )
             if self.backward_kernel is None or not self.backward_kernel.check_attributes(
-                    surrogate_function=self.surrogate_function.cuda_codes, hard_reset=hard_reset,
-                    detach_reset=self.detach_reset, dtype=dtype, decay_input=self.decay_input):
-                self.backward_kernel = ac_neuron_kernel.ParametricLIFNodeBPTTKernel(decay_input=self.decay_input,
-                                                                                    surrogate_function=self.surrogate_function.cuda_codes,
-                                                                                    hard_reset=hard_reset,
-                                                                                    detach_reset=self.detach_reset,
-                                                                                    dtype=dtype)
-
+                    surrogate_function=self.surrogate_function.cuda_codes,
+                    hard_reset=hard_reset, detach_reset=self.detach_reset,
+                    dtype=dtype, decay_input=self.decay_input
+            ):
+                self.backward_kernel = ac_neuron_kernel.ParametricLIFNodeBPTTKernel(
+                    decay_input=self.decay_input,
+                    surrogate_function=self.surrogate_function.cuda_codes,
+                    hard_reset=hard_reset,
+                    detach_reset=self.detach_reset,
+                    dtype=dtype
+                )
             self.v_float_to_tensor(x_seq[0])
-
             spike_seq, v_seq = ac_neuron_kernel.ParametricLIFNodeATGF.apply(
                 x_seq.flatten(1), self.v.flatten(0), self.v_threshold, self.v_reset, self.w.sigmoid().to(x_seq),
                 self.forward_kernel, self.backward_kernel)
-
             spike_seq = spike_seq.reshape(x_seq.shape)
             v_seq = v_seq.reshape(x_seq.shape)
-
             if self.store_v_seq:
                 self.v_seq = v_seq
-
             self.v = v_seq[-1].clone()
-
+            return spike_seq
+        elif self.backend == 'triton':
+            self.v_float_to_tensor(x_seq[0])
+            spike_seq, v_seq = triton_kernel.MultiStepParametricLIFNodePTT.apply(
+                x_seq, self.v, self.w.sigmoid().to(x_seq),
+                self.decay_input, self.v_threshold,
+                self.v_reset, self.detach_reset,
+                triton_kernel.sg.get_triton_surrogate_kernel(self.surrogate_function)
+            )
+            if self.store_v_seq:
+                self.v_seq = v_seq
+            self.v = v_seq[-1].clone()
             return spike_seq
         else:
             raise ValueError(self.backend)

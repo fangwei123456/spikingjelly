@@ -19,13 +19,13 @@ from ..triton_utils import amp_custom_fwd, amp_custom_bwd
     restore_value=["s_seq_ptr", "h_seq_ptr", "v_seq_ptr"],
 )
 @triton.jit
-def _multistep_lif_forward_kernel(
+def _multistep_plif_forward_kernel(
     x_seq_ptr,  # [T, NCL]
     v_init_ptr,  # [1, NCL]
     s_seq_ptr,
     h_seq_ptr,
     v_seq_ptr,
-    tau,
+    r_tau,
     v_threshold,
     v_reset,
     T: tl.constexpr,
@@ -38,8 +38,6 @@ def _multistep_lif_forward_kernel(
 ):
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
-
-    r_tau = tl.full([1], 1. / tau, dtype=dtype)
 
     v_init_ptrs = tl.make_block_ptr(
         v_init_ptr,
@@ -112,13 +110,15 @@ def _multistep_lif_forward_kernel(
     restore_value=["grad_x_seq_ptr"],
 )
 @triton.jit
-def _multistep_lif_backward_kernel(
+def _multistep_plif_backward_kernel(
     grad_s_seq_ptr,
     grad_v_seq_ptr,
     h_seq_ptr,
+    v_init_v_seq_ptr,
     grad_x_seq_ptr,
     grad_v_init_ptr,
-    tau,
+    grad_r_tau_ptr,
+    r_tau,
     v_threshold,
     v_reset,
     T: tl.constexpr,
@@ -133,8 +133,8 @@ def _multistep_lif_backward_kernel(
     pid_ncl = tl.program_id(0)
     ncl_offset = pid_ncl * BLOCK_NCL
 
-    r_tau = tl.full([1], 1. / tau, dtype=dtype)
     grad_v_acc = tl.zeros([1, BLOCK_NCL], dtype=dtype)
+    grad_r_tau_acc = tl.zeros([1, BLOCK_NCL], dtype=dtype)
 
     for t in tl.static_range(T - 1, -1, -1):
         grad_s_ptrs = tl.make_block_ptr(
@@ -168,6 +168,17 @@ def _multistep_lif_backward_kernel(
             order=(1, 0)
         )
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero")
+        v_last_ptrs = tl.make_block_ptr(
+            v_init_v_seq_ptr,
+            shape=(T+1, NCL),
+            strides=(NCL, 1),
+            offsets=(t, ncl_offset),
+            block_shape=(1, BLOCK_NCL),
+            order=(1, 0)
+        )
+        v_last = tl.load(
+            v_last_ptrs, boundary_check=(0, 1), padding_option="zero"
+        )
 
         sg = sg_fn(h - v_threshold)
         grad_v_combined = grad_v + grad_v_acc
@@ -191,8 +202,10 @@ def _multistep_lif_backward_kernel(
         grad_v_acc = grad_h * (1.-r_tau)
         if decay_input:
             grad_x = grad_h * r_tau
+            grad_r_tau = grad_h * (h - v_last) / r_tau
         else:
             grad_x = grad_h
+            grad_r_tau = grad_h * (v_reset - v_last)
 
         grad_x_ptrs = tl.make_block_ptr(
             grad_x_seq_ptr,
@@ -203,6 +216,7 @@ def _multistep_lif_backward_kernel(
             order=(1, 0)
         )
         tl.store(grad_x_ptrs, grad_x.to(dtype), boundary_check=(1,))
+        grad_r_tau_acc = grad_r_tau_acc + grad_r_tau
 
     grad_v_init_ptrs = tl.make_block_ptr(
         grad_v_init_ptr,
@@ -213,13 +227,24 @@ def _multistep_lif_backward_kernel(
         order=(1, 0)
     )
     tl.store(grad_v_init_ptrs, grad_v_acc.to(dtype), boundary_check=(1,))
+    #! atomic add is not supported on some devices / triton versions
+    #! so we use a workaround here, summing the gradient outside the kernel
+    grad_r_tau_ptrs = tl.make_block_ptr(
+        grad_r_tau_ptr,
+        shape=(1, NCL),
+        strides=(NCL, 1),
+        offsets=(0, ncl_offset),
+        block_shape=(1, BLOCK_NCL),
+        order=(1, 0)
+    )
+    tl.store(grad_r_tau_ptrs, grad_r_tau_acc.to(dtype), boundary_check=(1,))
 
 
-def multistep_lif_inference(
+def multistep_plif_inference(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
+    r_tau: torch.Tensor,
     decay_input: bool,
-    tau: float,
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
@@ -230,13 +255,13 @@ def multistep_lif_inference(
     dtype = x_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta['BLOCK_NCL']),)
 
-    _multistep_lif_forward_kernel[grid](
+    _multistep_plif_forward_kernel[grid](
         x_seq,
         v_init,
         s_seq,
         None,
         v_seq,
-        tau,
+        r_tau.item(),
         v_threshold,
         v_reset,
         T=T,
@@ -249,11 +274,11 @@ def multistep_lif_inference(
     return s_seq, v_seq
 
 
-def multistep_lif_forward(
+def multistep_plif_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
+    r_tau: torch.Tensor,
     decay_input: bool,
-    tau: float,
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
@@ -265,13 +290,13 @@ def multistep_lif_forward(
     dtype = x_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta['BLOCK_NCL']),)
 
-    _multistep_lif_forward_kernel[grid](
+    _multistep_plif_forward_kernel[grid](
         x_seq,
         v_init,
         s_seq,
         h_seq,
         v_seq,
-        tau,
+        r_tau.item(),
         v_threshold,
         v_reset,
         T=T,
@@ -284,11 +309,12 @@ def multistep_lif_forward(
     return s_seq, v_seq, h_seq
 
 
-def multistep_lif_backward(
+def multistep_plif_backward(
     grad_s_seq: torch.Tensor,
     grad_v_seq: torch.Tensor,
     h_seq: torch.Tensor,
-    tau: float,
+    v_init_v_seq: torch.Tensor,
+    r_tau: torch.Tensor,
     v_threshold: float,
     v_reset: float,
     sg_fn: Callable,
@@ -300,16 +326,19 @@ def multistep_lif_backward(
     NCL = grad_s_seq[0].numel()
     grad_x_seq = torch.empty_like(grad_s_seq)
     grad_v_init = torch.empty_like(grad_v_seq[0])
+    grad_r_tau = torch.empty_like(grad_v_seq[0])
     dtype = grad_s_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta['BLOCK_NCL']),)
 
-    _multistep_lif_backward_kernel[grid](
+    _multistep_plif_backward_kernel[grid](
         grad_s_seq,
         grad_v_seq,
         h_seq,
+        v_init_v_seq,
         grad_x_seq,
         grad_v_init,
-        tau,
+        grad_r_tau,
+        r_tau.item(),
         v_threshold,
         v_reset,
         T=T,
@@ -320,37 +349,37 @@ def multistep_lif_backward(
         soft_reset=soft_reset,
         detach_reset=detach_reset,
     )
-    return grad_x_seq, grad_v_init
+    return grad_x_seq, grad_v_init, grad_r_tau.sum()
 
 
-class MultiStepLIFNodePTT(autograd.Function):
+class MultiStepParametricLIFNodePTT(autograd.Function):
 
     @staticmethod
     @contiguous_and_device_guard
     @amp_custom_fwd
     def forward(
-        ctx, x_seq: torch.Tensor, v_init: torch.Tensor, decay_input: bool,
-        tau: float, v_threshold: float, v_reset: float, detach_reset: bool,
-        sg_fn: Callable
+        ctx, x_seq: torch.Tensor, v_init: torch.Tensor, r_tau: torch.Tensor,
+        decay_input: bool, v_threshold: float, v_reset: float,
+        detach_reset: bool, sg_fn: Callable
     ):
         soft_reset = v_reset is None
         v_reset = v_reset if v_reset is not None else 0.
         if any(ctx.needs_input_grad):
-            s_seq, v_seq, h_seq = multistep_lif_forward(
-                x_seq, v_init, decay_input, tau, v_threshold, v_reset,
+            s_seq, v_seq, h_seq = multistep_plif_forward(
+                x_seq, v_init, r_tau, decay_input, v_threshold, v_reset,
                 soft_reset
             )
-            ctx.save_for_backward(h_seq)
+            v_init_v_seq = torch.cat([v_init.unsqueeze(0), v_seq], dim=0)
+            ctx.save_for_backward(h_seq, v_init_v_seq, r_tau)
             ctx.decay_input = decay_input
-            ctx.tau = tau
             ctx.v_threshold = v_threshold
             ctx.v_reset = v_reset
             ctx.soft_reset = soft_reset
             ctx.detach_reset = detach_reset
             ctx.sg_fn = sg_fn
         else:
-            s_seq, v_seq = multistep_lif_inference(
-                x_seq, v_init, decay_input, tau, v_threshold, v_reset,
+            s_seq, v_seq = multistep_plif_inference(
+                x_seq, v_init, r_tau, decay_input, v_threshold, v_reset,
                 soft_reset
             )
         return s_seq, v_seq
@@ -360,9 +389,13 @@ class MultiStepLIFNodePTT(autograd.Function):
     @amp_custom_bwd
     def backward(ctx, grad_s_seq: torch.Tensor, grad_v_seq: torch.Tensor):
         h_seq = ctx.saved_tensors[0]
-        grad_x_seq, grad_v_init = multistep_lif_backward(
-            grad_s_seq, grad_v_seq, h_seq, ctx.tau, ctx.v_threshold,
+        v_init_v_seq = ctx.saved_tensors[1]
+        r_tau = ctx.saved_tensors[2]
+        grad_x_seq, grad_v_init, grad_r_tau = multistep_plif_backward(
+            grad_s_seq, grad_v_seq, h_seq, v_init_v_seq, r_tau, ctx.v_threshold,
             ctx.v_reset, ctx.sg_fn, ctx.decay_input, ctx.soft_reset,
             ctx.detach_reset
         )
-        return grad_x_seq, grad_v_init, None, None, None, None, None, None
+        return (
+            grad_x_seq, grad_v_init, grad_r_tau, None, None, None, None, None
+        )
