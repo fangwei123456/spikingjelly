@@ -109,7 +109,7 @@ class SparseTTFS:
 
     # input shape = (1, 1, 3) (batch_size, channels_count, samples_count)
     x = torch.tensor([[[0.1, 0.5, 0.9]]])
-    num_neurons = 4https://youtu.be/fCqt07IXUPI?si=jVT-QlmEgrbQZkB2
+    num_neurons = 4
 
     Each neuron will compute the response to each input value.
 
