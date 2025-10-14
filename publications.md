@@ -362,5 +362,86 @@
 | [Chapter: Spike-Based Learning with Information Theory. In: Neuromorphic Intelligence](https://link.springer.com/chapter/10.1007/978-3-031-57873-1_3) | | Springer |
 | [DMR: Decomposed Multi-Modality Representations for Frames and Events Fusion in Visual Reinforcement Learning](https://openaccess.thecvf.com/content/CVPR2024/html/Xu_DMR_Decomposed_Multi-Modality_Representations_for_Frames_and_Events_Fusion_in_CVPR_2024_paper.html) | https://github.com/kyoran/DMR | CVPR 2024 |
 | [Ensemble of Simple Spiking Neural Networks as a Concept Drift Detector](https://ric.zp.edu.ua/article/view/316196) | | Radio Electronics, Computer Science, Control |
+| [A comprehensive multimodal benchmark of neuromorphic training frameworks for spiking neural networks](https://www.sciencedirect.com/science/article/abs/pii/S0952197625015453) | | Engineering Applications of Artificial Intelligence |
+| [The role of membrane time constant in the training of spiking neural networks](https://repository.tudelft.nl/file/File_983b1248-3dd0-4676-a76c-962594be5e76?preview=1) | https://github.com/Anananas42/tu-delft-bsc-thesis-computer-science | |
+| [DVS-PedX: Synthetic-and-Real Event-Based Pedestrian Dataset](https://arxiv.org/pdf/2509.04117?) | | |
+| [Slax: a composable JAX library for rapid and flexible prototyping of spiking neural networks](https://iopscience.iop.org/article/10.1088/2634-4386/ada9a8/pdf) | https://github.com/Intelligent-Microsystems-Lab/slax | Neuromorphic Computing and Engineering |
+| [From Convolution to Spikes for Mental Health: A CNN-to-SNN Approach Using the DAIC-WOZ Dataset](https://www.mdpi.com/2076-3417/15/16/9032) | https://github.com/gv1x2/ANN2SNN-SpikingJelly- | Applied Sciences |
+| [Spyx: A library for just-in-time compiled optimization of spiking neural networks](https://arxiv.org/pdf/2402.18994) | https://github.com/kmheckel/spyx | |
+| [STEP: A Unified Spiking Transformer Evaluation Platform for Fair and Reproducible Benchmarking](https://arxiv.org/pdf/2505.11151) | https://github.com/Fancyssc/STEP | |
+| [SU-YOLO: Spiking Neural Network for Efficient Underwater Object Detection](https://arxiv.org/pdf/2503.24389) | https://github.com/lwxfight/snn-underwater | Neurocomputing 2025 |
+| [Rsnn: Recurrent spiking neural networks for dynamic spatial-temporal information processing](https://openreview.net/pdf?id=FFIh7vYgyx) | | ACM Multimedia 2024 |
+| [Event-based depth prediction with deep spiking neural network](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10592043) | | IEEE Transactions on Cognitive and Developmental Systems, 2024 |
+| [Embedded event based object detection with spiking neural network](https://arxiv.org/pdf/2406.17617) | | 2024 International Joint Conference on Neural Networks (IJCNN) |
+| [NeuCODEX: Edge-Cloud Co-Inference with Spike-Driven Compression and Dynamic Early-Exit](https://arxiv.org/pdf/2509.19156) | | |
+| [Application of snns model based on multi-dimensional attention in drone radio frequency signal classification](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10446694) | | ICASSP 2024 |
+| [A Self-attention Spiking Neural Network for Human-to-Human Interaction Recognition Based on Wi-Fi Signals](https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10924957) | | 2024 IEEE Smart World Congress (SWC) |
+| [Balancing Energy Consumption and Detection Accuracy in Cardiovascular Disease Diagnosis: A Spiking Neural Network-Based Approach with ECG and PCG Signals](https://www.mdpi.com/1424-8220/25/17/5263) | | Sensors 2025 |
+| [Spiking point transformer for point cloud classification](https://ojs.aaai.org/index.php/AAAI/article/view/35459) | https://github.com/PeppaWu/SPT | AAAI 2025 |
+| [DSC-SNN: A Depthwise Separable Convolutional Spiking Neural Network for Efficient, Privacy-Preserving Action Recognition from Event-Based Data](https://ieeexplore.ieee.org/abstract/document/11133952/) | | MAPR 2025 |
+| [Neuronquant: Accurate and efficient post-training quantization for spiking neural networks](https://dl.acm.org/doi/abs/10.1145/3658617.3697716) | https://github.com/shieldforever/NeuronQuant | Proceedings of the 30th Asia and South Pacific Design Automation Conference 2025 |
+| [Sign gradient descent-based neuronal dynamics: ANN-to-SNN conversion beyond reLU network](https://arxiv.org/abs/2407.01645) | https://github.com/snuhcs/snn_signgd | ICML 2024 |
+| [Akkumula: Evidence accumulation driver models with Spiking Neural Networks](https://arxiv.org/abs/2505.05489) | | |
+| [Membership privacy evaluation in deep spiking neural networks](https://arxiv.org/abs/2409.19413) | | |
+| [DAFF-SNN: Dual attention-driven and feature fusion-based spiking neural network for epilepsy detection based on electroencephalogram](https://ieeexplore.ieee.org/abstract/document/11080273/) | | IEEE Journal of Biomedical and Health Informatics (2025) |
+| [Traffic Sign Recognition Model Based on Spiking Neural Network](https://ieeexplore.ieee.org/abstract/document/10498698/) | | NNICE 2024 |
+| [A Hybrid Stochastic-Binary Computing Batch Normalization Engine for Low-Power On-Chip Learning Spiking Neural Networks](https://ieeexplore.ieee.org/abstract/document/11148273/) | | VLSI 2025 |
+| [ST-BPTT: A Memory-efficient BPTT SNN Training Approach through Gradient-Contribution-Driven Time-Step Selection](https://ieeexplore.ieee.org/abstract/document/10798378/) | | BioCAS 2024 |
+| [Spiking St-Former: An Improved Spiking Transformer with Spatio-Temporal Self Attention](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5107273) | | |
+| [Spiking Meets Ann: A Hybrid Architecture For Energy-Efficient, Multimodal Language Modeling](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5080177) | | |
+| [TE-Spikformer: Temporal-enhanced spiking neural network with transformer](https://www.sciencedirect.com/science/article/pii/S0925231224010397) | | Neurocomputing, 2024 |
+| [Event-based structured light 3D reconstruction driven by spiking neural networks](https://www.sciencedirect.com/science/article/pii/S0030399225012733) | | Optics & Laser Technology, 2025 |
+| [Convolutional & Spiking Neural Networks for the Efficient Classification of Rotor Faults in Induction Motors via Stator Current and Stray Flux Signals](https://ieeexplore.ieee.org/abstract/document/11154324/) | | SDEMPED 2025 |
+| [Exploring vulnerabilities in spiking neural networks: Direct adversarial attacks on raw event data](https://link.springer.com/chapter/10.1007/978-3-031-73220-1_24) | https://github.com/JY-ura/GumbelSoftmaxAttack | ECCV 2024 |
+| [Efficient spiking convolutional neural networks accelerator with multi-structure compatibility](https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2025.1662886/abstract) | | Frontier |
+| [Spiking Neural Networks: A Comprehensive Survey of Training Methodologies, Hardware Implementations and Applications](https://ieeexplore.ieee.org/abstract/document/11201000/) | | Artificial Intelligence Science and Engineering |
+| [Advancing training efficiency of deep spiking neural networks through rate-based backpropagation](https://proceedings.neurips.cc/paper_files/paper/2024/hash/d1bdc488ec18f64177b2275a03984683-Abstract-Conference.html) | https://github.com/Tab-ct/rate-based-backpropagation | NeurIPS 2024 |
+| [Adaptive spiking neuron with population coding for a residual spiking neural network](https://link.springer.com/article/10.1007/s10489-024-06128-z) | | Applied Intelligence, 2025 - Springer |
+| [Signal-SGN: A spiking graph convolutional network for skeletal action recognition via learning temporal-frequency dynamics](https://arxiv.org/abs/2408.01701) | | |
+| [NeuroSORT: A Neuromorphic Accelerator for Spike-based Online and Real-time Tracking](https://ieeexplore.ieee.org/abstract/document/10595908/) | | AICAS 2024 |
+| [Spike-Driven Channel-Temporal Attention Network with Multi-Scale Convolution for Energy-Efficient Bearing Fault Detection](https://www.mdpi.com/2076-3417/15/13/7622) | | Applied Sciences, 2025 - mdpi.com |
+| [Sea Surface Small Target Detection Using Spiking Neural Network with Controllable False Alarm](https://ieeexplore.ieee.org/abstract/document/10843263/) | | IEEE Geoscience and Remote Sensing Letters (2025) |
+| [QSViT: A Methodology for Quantizing Spiking Vision Transformers](https://arxiv.org/abs/2504.00948) | | |
+| [Eye tracking based on event camera and spiking neural network](https://www.mdpi.com/2079-9292/13/14/2879) | | Electronics, 2024 - mdpi.com |
+| [A Self-Ensemble Inspired Approach for Effective Training of Binary-Weight Spiking Neural Networks](https://arxiv.org/abs/2508.12609) | https://github.com/qymeng94/SEI-BWSNN | |
+| [A unified evaluation framework for spiking neural network hardware accelerators based on emerging non-volatile memory devices](https://arxiv.org/abs/2402.19139) | | |
+| [Towards Label-Efficient Deep Learning-based Aging-related Bug Prediction with Spiking Convolutional Neural Networks](https://ieeexplore.ieee.org/abstract/document/10852596/) | | IEEE Transactions on Emerging Topics in Computing (2025) |
+| [Improvement of Spiking Neural Network with Bit Planes and Color Models](https://arxiv.org/abs/2410.08229) | https://github.com/luutn2002/bit-plane-snn | |
+| [Spikewhisper: Temporal spike backdoor attacks on federated neuromorphic learning over low-power devices](https://link.springer.com/chapter/10.1007/978-981-96-7005-5_17) | | International Conference on Neural Information Processing 2024 |
+| [RFI detection with spiking neural networks](https://www.cambridge.org/core/journals/publications-of-the-astronomical-society-of-australia/article/rfi-detection-with-spiking-neural-networks/994EA6FDFA18B7799D7F0552264111E6) | https://github.com/mesarcik/RFI-NLN | Publications of the Astronomical Society of Australia |
+| [Assessment of deep learning-based detection algorithms using event cameras for construction applications](https://construction-robots.github.io/papers/48.pdf) | | |
+| [MSR-SNN: Advancing Neuromorphic Vision Object Classification with Multi-Scale-Residual Spiking Neural Networks](https://ieeexplore.ieee.org/abstract/document/10832502/) | | IEEE Sensors Journal (2025) |
+| [AT-SNN: Adaptive Tokens for Vision Transformer on Spiking Neural Network](https://arxiv.org/abs/2408.12293) | | |
+| [Understanding SNN and Its Recent Advancements](https://engrxiv.org/preprint/view/3652) | | |
+| [SVFormer: A Direct Training Spiking](https://books.google.com/books?hl=zh-CN&lr=&id=Aw1YEQAAQBAJ&oi=fnd&pg=PA161&dq=spikingjelly&ots=g6rCaFTILh&sig=XceD7M0IQMnN03Caf_VXeCJ3zf0) | | Human Brain and Artificial Intelligence |
+| [RTFormer: Re-parameter TSBN Spiking Transformer](https://ieeexplore.ieee.org/abstract/document/10650654/) | | IJCNN 2024 |
+| [TRIP: Trainable Region-of-Interest Prediction for Hardware-Efficient Neuromorphic Processing on Event-based Vision](https://ieeexplore.ieee.org/abstract/document/10766546/) | https://github.com/ERNIS-LAB/TRIP | ICONS 2024 |
+| [Hybrid Layer-Wise ANN-SNN With Surrogate Spike Encoding-Decoding Structure](https://arxiv.org/abs/2509.24411) | https://github.com/luutn2002/has-8 | |
+| [SpikF: Spiking Fourier Network for Efficient Long-term Prediction](https://openreview.net/forum?id=5jlvLwoO1n) | https://github.com/WWJcreator/SpikF | ICML 2025 |
+| [Are neuromorphic architectures inherently privacy-preserving? an exploratory study](https://arxiv.org/abs/2411.06613) | | PoPETS 2024 |
+| [Spike-BRGNet: Efficient and accurate event-based semantic segmentation with boundary region-guided spiking neural networks](https://ieeexplore.ieee.org/abstract/document/10750266/) | | IEEE Transactions on Circuits and Systems for Video Technology |
+| [Research on SNN Learning Algorithms and Networks Based on Biological Plausibility](https://ieeexplore.ieee.org/abstract/document/10985795/) | | IEEE Access |
+| [SM-Former: Spiking Symmetric Mixing Branchformer for Brain Auditory Attention Detection](https://arxiv.org/abs/2508.05164) | | |
+| [Energy Efficient Models for Future Communication Networks](https://ieeexplore.ieee.org/abstract/document/11080548/) | | NetSoft 2025 |
+| [Hardware-Algorithm Co-Design Enabling Processing-In-Pixel-In-Memory (P2M) for Neuromorphic Vision Sensors](https://ieeexplore.ieee.org/abstract/document/10447753/) | | ICASSP 2024 |
+| [Spiking graph neural network on riemannian manifolds](https://proceedings.neurips.cc/paper_files/paper/2024/hash/3ba7560b4c3e66d760fbdd472cf4a5a9-Abstract-Conference.html) | https://github.com/ZhenhHuang/MSG | NeurIPS 2024 |
+| [THE-SEAN: A Heart Rate Variation-Inspired Temporally High-Order Event-Based Visual Odometry with Self-Supervised Spiking Event Accumulation Networks](https://arxiv.org/abs/2503.05112) | https://github.com/Franky-X/THE-SEAN | |
+| [Adaptive Time-step Training for Enhancing Spike-Based Neural Radiance Fields](https://arxiv.org/abs/2507.23033) | | |
+| [A bio-inspired spiking neural network with adaptive spatiotemporal filtering and direction-modulated synaptic plasticity for robust collision detection](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5445962) | | |
+| [Spiking Neural Networks for Temporal Processing: Status Quo and Future Prospects](https://arxiv.org/abs/2502.09449) | https://github.com/liyc5929/neuroseqbench | |
+| [Deep event-based object detection in autonomous driving: a survey](https://arxiv.org/abs/2405.03995) | | |
+| [EPOC: A 28-nm 5.3 pJ/SOP Event-driven Parallel Neuromorphic Hardware with Neuromodulation-based Online Learning](https://ieeexplore.ieee.org/abstract/document/10704604/) | | IEEE Transactions on Biomedical Circuits and Systems (2024) |
+| [Unsupervised Backdoor Detection and Mitigation for Spiking Neural Networks](https://arxiv.org/abs/2510.06629) | | |
+| [Spiking Depth: Depth Estimation from Sparse Events with Spiking Neural Networks](https://www.sciencedirect.com/science/article/pii/S0957417425035924) | | Expert Systems with Applications, 2025 |
+| [A neuromorphic hardware architecture based on TTFS coding with temporal quantization for spiking neural networks](https://www.sciencedirect.com/science/article/pii/S0167926025000604) | | Integration 2025 |
+| [Flexible and scalable deep dendritic spiking neural networks with multiple nonlinear branching](https://arxiv.org/abs/2412.06355) | https://github.com/AllenYolk/dbg-experiments | |
+| [Toward Efficient Spiking Transformers: Synapse Pruning Meets Synergistic Learning-Based Compensation](https://arxiv.org/abs/2508.01992) | https://github.com/GuoLab-UESTC/EfficientST | |
+| [Enhanced Self-Distillation Framework for Efficient Spiking Neural Network Training](https://arxiv.org/abs/2510.06254) | https://github.com/Intelli-Chip-Lab/enhanced-self-distillation-framework-for-snn | |
+| [SGLFormer: spiking global-local-fusion transformer with high performance](https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1371290/full) | https://github.com/ZhangHanN1/SGLFormer | Frontier 2024 |
+| [Neuromorphic Optical Tracking and Imaging of Randomly Moving Targets through Strongly Scattering Media](https://arxiv.org/abs/2501.03874) | | |
+| [Visual feature extraction through brain inspired algorithms: towards efficiency, accuracy and continual learning](https://stax.strath.ac.uk/concern/theses/hh63sw52p) | | |
+| [Learning-Efficient Spiking Neural Networks with Multi-Compartment Spatio-Temporal Backpropagation](https://www.cell.com/iscience/fulltext/S2589-0042(25)00752-7) | https://github.com/NeuroSyd/SSDP | iScience 2025 |
+| [BIMII-Net: Brain-Inspired Multi-Iterative Interactive Network for RGB-T Road Scene Semantic Segmentation](https://arxiv.org/abs/2503.19303) | | |
+| [Reproducing the Few-Shot Learning Capabilities of the Visual Ventral Pathway Using Vision Transformers and Neural Fields](https://www.mdpi.com/2076-3425/15/8/882) | | Brain Sciences |
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
