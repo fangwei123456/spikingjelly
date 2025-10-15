@@ -497,5 +497,10 @@
 | [DVS-Aware Visual Perception for Pose Estimation of Mobile Robots with Neuromorphic Implementation](https://ieeexplore.ieee.org/abstract/document/11128155)    |       |   ICRA 2025                     |
 | [Multiplication-Free Parallelizable Spiking Neurons with Efficient Spatio-Temporal Dynamics](https://arxiv.org/abs/2501.14490) | https://github.com/PengXue0812/Multiplication-Free-Parallelizable-Spiking-Neurons-with-Efficient-Spatio-Temporal-Dynamics | Neurips 2025 |
 | [脉冲深度学习梯度替代算法研究综述](http://cjc.ict.ac.cn/online/onlinepaper/fw-2025818171058.pdf) | https://github.com/fangwei123456/chinese_snn_surrogate_gradient_review | 计算机学报 2025 |
+| [基于突触可塑性延迟和时间注意力的脉冲神经网络及其语音识别应用](http://cjc.ict.ac.cn/online/onlinepaper/zmh-2025818172636.pdf) | | 计算机学报 2025 |
+| [脉冲神经网络基准测试及类脑训练框架性能评估](https://www.jas.shu.edu.cn/CN/10.3969/j.issn.0255-8297.2025.01.012) | | 应用科学学报 2025 |
+| [基于自适应时间步脉冲神经网络的高效图像分类](https://www.aas.net.cn/article/doi/10.16383/j.aas.c230656) | | 自动化学报 2024 | 
+| [电子传输层结构调控对钙钛矿忆阻器性能优化](https://d.wanfangdata.com.cn/thesis/CiBUaGVzaXNOZXdTMjAyNTA2MTMyMDI1MDYxMzE2MTkxNhIJRDAzNjQ5OTI4GghlZWZhazY4Mw%3D%3D) | |  | 
+| [一种基于多注意力脉冲神经网络的接地网智能故障诊断方法](https://d.wanfangdata.com.cn/patent/Ch1QYXRlbnROZXdTb2xyOVMyMDI1MTAxNDE2MTE0ORIpWkxfQ04yMDI0MTA5MjAzMzUuOV9DTjExODY3NDk5NkFfMjAyNDA5MjAaCGVlZmFrNjgz) | | | 
 
 If you use SpikingJelly in your paper, you can also add it to this table by pull request.
