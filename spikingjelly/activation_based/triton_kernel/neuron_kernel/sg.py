@@ -2,7 +2,7 @@ import torch.nn as nn
 import triton
 import triton.language as tl
 
-from ..triton_utils import compile_triton_code_str
+from ..torch2triton import compile_triton_code_str
 from ... import surrogate as sjsg
 
 

@@ -87,7 +87,7 @@ def cleanup_tmp_python_files():
         try:
             f.unlink(missing_ok=True)
         except BaseException as e:
-            print(f"Failed to delete {f}: {e}; skipping!")
+            pass # ignore the errors
 
 
 def ensure_cleanup_tmp_python_files(fn):
@@ -102,34 +102,3 @@ def ensure_cleanup_tmp_python_files(fn):
         return fn(*args, **kwargs)
 
     return wrapper
-
-
-@ensure_cleanup_tmp_python_files
-def compile_triton_code_str(
-    triton_code: str,
-    kernel_name: str,
-    verbose: bool = False,
-    name_space: dict = {},
-) -> triton.JITFunction:
-    # create a temporary file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(triton_code)
-        fpath = Path(f.name)
-        if verbose:
-            print(f"Triton code `{kernel_name}` written to {fpath}")
-
-    name_space.update({
-        "triton": triton,
-        "tl": tl,
-        "__name__": "spikingjelly.activation_based.triton_kernel.codegen",
-    })
-    with open(fpath, "r") as f:
-        code = compile(f.read(), fpath, "exec")
-        exec(code, name_space)
-
-    if kernel_name in name_space:
-        return name_space[kernel_name]
-    else:
-        raise ValueError(
-            f"Function {kernel_name} not found in compiled namespace"
-        )

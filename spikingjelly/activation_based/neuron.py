@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -2362,6 +2362,7 @@ class SlidingPSN(base.MemoryModule):
     def extra_repr(self):
         return super().extra_repr() + f', order={self.k}'
 
+
 class GatedLIFNode(base.MemoryModule):
     def __init__(self, T: int, inplane = None,
                  init_linear_decay = None, init_v_subreset = None, init_tau: float = 0.25, init_v_threshold: float = 0.5, init_conduct: float = 0.5,
@@ -4241,3 +4242,182 @@ class MPBNLIFNode(MPBNBaseNode):
     def neuronal_charge_no_decay_input(x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float):
         v = v - (v - v_reset) / tau + x
         return v
+
+
+###########################################################################################################
+# FlexSN: generate Triton multi-step neuron kernels from PyTorch single-step functions
+###########################################################################################################
+class FlexSN(base.MemoryModule):
+
+    def __init__(
+        self,
+        core: Callable,
+        example_inputs: Tuple[torch.Tensor],
+        num_inputs: int,
+        num_states: int,
+        num_outputs: int,
+        requires_grad: Optional[Tuple[bool]] = None,
+        step_mode: str = "m",
+        backend: str = "triton",
+        store_state_seqs: bool = False,
+    ):
+        """FlexSN: generate Triton multi-step spiking neuron kernels from
+        customized PyTorch single-step functions.
+
+        # TODO: add SG support for FlexSN
+
+        Args:
+            core (Callable): a function describing the single-step inference
+                dynamics of the spiking neuron. It should have the following
+                signature: [*inputs, *states] -> [*outputs, *states], and the
+                arguments and return values should all be tensors.
+            example_inputs (Tuple[torch.Tensor]): example inputs to `core`
+                with the form of [*inputs, *states].
+            num_inputs (int): number of inputs. It should strictly match the
+                number of "inputs" in `core`'s arguments and `example_inputs`.
+            num_states (int): number of states. It should strictly match the
+                number of "states" in `core`'s arguments, `core`'s return values,
+                and `example_inputs`.
+            num_outputs (int): number of outputs. It should strictly match the
+                number of "outputs" in `core`'s return values.
+            requires_grad (Optional[Tuple[bool]], optional): whether the core's 
+                arguments (i.e. [*inputs, *states]) requires gradients. This info
+                is used to generate the forward and backward graphs. Its length
+                should match the number of `core`'s arguments and the length of
+                `example_inputs`. If None, all argument tensors require grad. 
+                Defaults to None.
+            step_mode (str, optional): step mode. Triton kernel is available only
+                in "m" mode. Defaults to "m".
+            backend (str, optional): backend to use. Currently only "triton" is
+                supported. Defaults to "triton".
+            store_state_seqs (bool, optional): whether to store the state
+                sequences. Defaults to False.
+        """
+        super().__init__()
+        self.core = core
+        self.inf_graph = triton_kernel.torch2triton.generate_inference_graph(
+            core, example_inputs
+        )
+        self.fwd_graph, self.bwd_graph = triton_kernel.torch2triton.generate_forward_and_backward_graph(
+            core, example_inputs, requires_grad=requires_grad
+        )
+        self.info = triton_kernel.flexsn.extract_info(
+            self.fwd_graph, num_inputs, num_states, num_outputs
+        )
+        self.num_inputs = num_inputs
+        self.num_states = num_states
+        self.num_outputs = num_outputs
+
+        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
+            self.inf_graph, core.__name__ + "_inference"
+        )
+        self.f_inf = triton_kernel.flexsn.get_flexsn_inference_kernel(
+            core_str, core_name, info=self.info
+        )
+
+        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
+            self.fwd_graph, core.__name__ + "_forward"
+        )
+        self.f_fwd = triton_kernel.flexsn.get_flexsn_forward_kernel(
+            core_str, core_name, info=self.info
+        )
+
+        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
+            self.bwd_graph, core.__name__ + "_backward"
+        )
+        self.f_bwd = triton_kernel.flexsn.get_flexsn_backward_kernel(
+            core_str, core_name, info=self.info
+        )
+
+        # register states as memory buffers
+        self.register_memory("states", None)
+
+        self.step_mode = step_mode
+        self.backend = backend
+        self.store_state_seqs = store_state_seqs
+
+    @property
+    def supported_backends(self):
+        return ("triton", "torch")
+
+    @property
+    def store_state_seqs(self):
+        return self._store_state_seqs
+
+    @store_state_seqs.setter
+    def store_state_seqs(self, value: bool):
+        self._store_state_seqs = value
+        if value:
+            if not hasattr(self, "state_seqs"):
+                self.register_memory("state_seqs", None)
+
+    def init_states(self, *args):
+        """Modify this method to change the initialization rules of states.
+        """
+        if self.step_mode == "s":
+            self.states = [
+                torch.zeros_like(args[0]) for _ in range(self.num_states)
+            ]
+        elif self.step_mode == "m":
+            self.states = [
+                torch.zeros_like(args[0][0]) for _ in range(self.num_states)
+            ]
+        else:
+            raise ValueError(f"Unsupported step mode: {self.step_mode}")
+
+    def single_step_forward(self, *args):
+        # only torch backend is supported for single-step forward
+        results = self.core(*args, *self.states) # [*outputs, *states]
+        self.states = results[self.num_outputs:]
+        return results[:self.num_outputs]
+
+    def multi_step_forward(self, *args):
+        if self.backend == "torch":
+            T = args[0].shape[0]
+            output_seqs = [[] for _ in range(self.num_outputs)]
+            if self.store_state_seqs:
+                state_seqs = [[] for _ in range(self.num_states)]
+
+            for t in range(T):
+                outputs = self.single_step_forward(*[arg[t] for arg in args])
+                for i in range(self.num_outputs):
+                    output_seqs[i].append(outputs[i])
+                if self.store_state_seqs:
+                    for i in range(self.num_states):
+                        state_seqs[i].append(self.states[i])
+
+            if self.store_state_seqs:
+                self.state_seqs = [torch.stack(v, dim=0) for v in state_seqs]
+
+            return [torch.stack(y, dim=0) for y in output_seqs]
+
+        elif self.backend == "triton":
+            result_seqs = triton_kernel.flexsn.FlexSNFunction.apply(
+                self.f_inf,
+                self.f_fwd,
+                self.f_bwd,
+                self.info,
+                *args,
+                *self.states
+            )
+            output_seqs = result_seqs[: self.num_outputs]
+            state_seqs = result_seqs[self.num_outputs:]
+            self.states = [v[-1] for v in state_seqs]
+            if self.store_state_seqs:
+                self.state_seqs = state_seqs
+            return output_seqs
+
+
+    def forward(self, *args):
+        if self.states is None:
+            self.init_states(*args)
+        output = super().forward(*args)
+        return output[0] if len(output) == 1 else output
+
+    def extra_repr(self):
+        return (
+            f"core={self.core.__name__}, "
+            f"num_inputs={self.num_inputs}, "
+            f"num_states={self.num_states}, "
+            f"num_outputs={self.num_outputs}, "
+        )

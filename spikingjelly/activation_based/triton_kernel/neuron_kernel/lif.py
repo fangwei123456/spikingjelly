@@ -109,7 +109,7 @@ def _multistep_lif_forward_kernel(
         for w in [4, 8]
     ],
     key=["T", "NCL", "dtype", "soft_reset", "detach_reset"],
-    restore_value=["grad_x_seq_ptr"],
+    restore_value=["grad_x_seq_ptr", "grad_v_init_ptr"],
 )
 @triton.jit
 def _multistep_lif_backward_kernel(
@@ -170,23 +170,23 @@ def _multistep_lif_backward_kernel(
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero")
 
         sg = sg_fn(h - v_threshold)
-        grad_v_combined = grad_v + grad_v_acc
+        grad_v_acc = grad_v + grad_v_acc
         if soft_reset:
             if detach_reset:
-                grad_h = tl.fma(grad_s, sg, grad_v_combined)
+                grad_h = tl.fma(grad_s, sg, grad_v_acc)
             else:
                 grad_h = tl.fma(
-                    grad_s - v_threshold*grad_v_combined, sg, grad_v_combined
+                    grad_s - v_threshold*grad_v_acc, sg, grad_v_acc
                 )
         else:
             s = (h >= v_threshold).to(dtype)
             if detach_reset:
-                grad_h = tl.fma(grad_s, sg, grad_v_combined * (1.-s))
+                grad_h = tl.fma(grad_s, sg, grad_v_acc * (1.-s))
             else:
                 grad_h = tl.fma(
-                    tl.fma(grad_v_combined, v_reset - h, grad_s),
+                    tl.fma(grad_v_acc, v_reset - h, grad_s),
                     sg,
-                    grad_v_combined * (1.-s),
+                    grad_v_acc * (1.-s),
                 )
         grad_v_acc = grad_h * (1.-r_tau)
         if decay_input:
