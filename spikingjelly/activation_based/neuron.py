@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 import numpy as np
+import os
 import logging
 
 from . import surrogate, base
@@ -4264,8 +4265,6 @@ class FlexSN(base.MemoryModule):
         """FlexSN: generate Triton multi-step spiking neuron kernels from
         customized PyTorch single-step functions.
 
-        # TODO: add SG support for FlexSN
-
         Args:
             core (Callable): a function describing the single-step inference
                 dynamics of the spiking neuron. It should have the following
@@ -4294,6 +4293,14 @@ class FlexSN(base.MemoryModule):
                 sequences. Defaults to False.
         """
         super().__init__()
+        jit_disabled = os.environ.get("PYTORCH_JIT", "1") == "0"
+        if not jit_disabled:
+            raise RuntimeError(
+                "FlexSN requires torch.jit to be disabled. "
+                "Please set the env var PYTORCH_JIT=0 before running your script. "
+                "See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging ."
+            )
+
         self.core = core
         self.inf_graph = triton_kernel.torch2triton.generate_inference_graph(
             core, example_inputs
