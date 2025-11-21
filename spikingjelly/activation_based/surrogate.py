@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from .auto_cuda import cfunction
+from .triton_kernel.torch2triton import compile_triton_code_str
 
 tab4_str = '\t\t\t\t'  # used for aligning code
 curly_bracket_l = '{'
@@ -115,6 +116,38 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
         print('cupy   grad', x_grad_cp[idx])
 
 
+def plot_surrogate_function(surrogate_function):
+    import matplotlib.pyplot as plt
+    import scienceplots
+
+    plt.style.use(['science', 'muted', 'grid'])
+    fig = plt.figure(dpi=200)
+    x = torch.arange(-2.5, 2.5, 0.001)
+    plt.plot(x.data, heaviside(x), label='Heaviside', linestyle='-.')
+
+    surrogate_function.set_spiking_mode(False)
+    y = surrogate_function(x)
+    plt.plot(x.data, y.data, label='Primitive')
+
+    surrogate_function.set_spiking_mode(True)
+    x.requires_grad_(True)
+    y = surrogate_function(x)
+    z = y.sum()
+    z.backward()
+    plt.plot(x.data, x.grad, label='Gradient')
+
+    plt.xlim(-2, 2)
+    plt.legend()
+    plt.title(f'{surrogate_function.__class__.__name__} surrogate function')
+    plt.xlabel('Input')
+    plt.ylabel('Output')
+    plt.grid(linestyle='--')
+    plt.savefig(
+        f"./{surrogate_function.__class__.__name__}.pdf", bbox_inches='tight'
+    )
+    plt.show()
+
+
 class SurrogateFunctionBase(nn.Module):
     def __init__(self, alpha, spiking=True):
         super().__init__()
@@ -154,6 +187,9 @@ class SurrogateFunctionBase(nn.Module):
         # new version
         raise NotImplementedError
 
+    def triton_codes(self):
+        raise NotImplementedError
+
 
 class MultiArgsSurrogateFunctionBase(nn.Module):
     def __init__(self, spiking: bool, *args, **kwargs):
@@ -174,6 +210,9 @@ class MultiArgsSurrogateFunctionBase(nn.Module):
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         # new version
+        raise NotImplementedError
+
+    def triton_codes(self):
         raise NotImplementedError
 
 
@@ -283,28 +322,6 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return piecewise_quadratic_backward(grad_output, x, alpha)[0]
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.PiecewiseQuadratic(alpha=1.5, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=1.5$')
-
-    # surrogate_function = surrogate.PiecewiseQuadratic(alpha=1.5, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=1.5$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('Piecewise quadratic surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
-
 
 @torch.jit.script
 def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
@@ -398,33 +415,21 @@ class PiecewiseExp(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return piecewise_exp_backward(grad_output, x, alpha)[0]
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.PiecewiseExp(alpha=2, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=2$')
-
-    # surrogate_function = surrogate.PiecewiseExp(alpha=2, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=2$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('Piecewise exponential surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
-
 
 @torch.jit.script
 def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     sgax = (x * alpha).sigmoid_()
     return grad_output * (1. - sgax) * sgax * alpha, None
+
+
+sigmoid_backward_triton_template = """
+@triton.jit
+def sigmoid_surrogate_{alpha_str}(h):
+    # triton's exp() supports only fp32 and fp64, so we must convert it to fp32!
+    sg = tl.sigmoid(h.to(tl.float32) * {alpha})
+    sg = {alpha} * sg * (1. - sg)
+    return sg.to(h.dtype)
+"""
 
 
 class sigmoid(torch.autograd.Function):
@@ -531,27 +536,13 @@ class Sigmoid(SurrogateFunctionBase):
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.Sigmoid(alpha=5, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=5$')
-
-    # surrogate_function = surrogate.Sigmoid(alpha=5, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=5$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('Sigmoid surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
+    def triton_codes(self):
+        alpha_str = str(self.alpha).replace(".", "_")
+        code_str = sigmoid_backward_triton_template.format(
+            alpha=self.alpha, alpha_str=alpha_str
+        ).strip()
+        kernel_name = f"sigmoid_surrogate_{alpha_str}"
+        return compile_triton_code_str(code_str, kernel_name)
 
 
 @torch.jit.script
@@ -637,27 +628,6 @@ class SoftSign(SurrogateFunctionBase):
     def backward(grad_output, x, alpha):
         return soft_sign_backward(grad_output, x, alpha)[0]
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.SoftSign(alpha=3, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=3$')
-
-    # surrogate_function = surrogate.SoftSign(alpha=3, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=3$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('SoftSign surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
 
 @torch.jit.script
 def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
@@ -719,7 +689,18 @@ class SuperSpike(SurrogateFunctionBase):
 
 @torch.jit.script
 def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
-    return alpha / 2 / (1 + (math.pi / 2 * alpha * x).pow_(2)) * grad_output, None
+    a = alpha / 2
+    ax = math.pi * a * x
+    return a / (1 + ax*ax) * grad_output, None
+
+
+atan_backward_triton_template = """
+@triton.jit
+def atan_surrogate_{alpha_str}(h):
+    sg = 3.141592653589793 * h * {alpha} / 2.
+    sg = {alpha} / 2. / tl.fma(sg, sg, 1.)
+    return sg.to(h.dtype)
+"""
 
 
 class atan(torch.autograd.Function):
@@ -812,27 +793,15 @@ class ATan(SurrogateFunctionBase):
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.atan_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.ATan(alpha=3, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=3$')
+    def triton_codes(self):
+        alpha_str = str(self.alpha).replace(".", "_")
+        code_str = atan_backward_triton_template.format(
+            alpha=self.alpha,
+            alpha_str=alpha_str,
+        ).strip()
+        kernel_name = f"atan_surrogate_{alpha_str}"
+        return compile_triton_code_str(code_str, kernel_name)
 
-    # surrogate_function = surrogate.ATan(alpha=3, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=3$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('ATan surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
 
 
 @torch.jit.script
@@ -942,28 +911,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         mask_p = heaviside(x) * 2. - 1.
         return mask_p * (alpha * mask_p * x + 1).log()
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.NonzeroSignLogAbs(alpha=1, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=1$')
-
-    # surrogate_function = surrogate.NonzeroSignLogAbs(alpha=1, spiking=False)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=1$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('NonzeroSignLogAbs surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
-
 
 @torch.jit.script
 def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
@@ -1057,28 +1004,6 @@ class Erf(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return erf_backward(grad_output, x, alpha)[0]
-
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.Erf(alpha=2, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=2$')
-
-    # surrogate_function = surrogate.Erf(alpha=2, spiking=False)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=2$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('Gaussian error surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
 
 
 @torch.jit.script
@@ -1242,28 +1167,6 @@ class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.piecewise_leaky_relu_backward(y=y, x=x, w=self.w, c=self.c, dtype=dtype)
-
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200)
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $w=1, c=0.1$')
-
-    # surrogate_function = surrogate.PiecewiseLeakyReLU(w=1, c=0.1, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $w=1, c=0.1$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('PiecewiseLeakyReLU surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.show()
 
 
 class squarewave_fourier_series(torch.autograd.Function):
@@ -1512,30 +1415,6 @@ class S2NN(MultiArgsSurrogateFunctionBase):
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.s2nn_backward(y=y, x=x, alpha=self.alpha, beta=self.beta, dtype=dtype)
 
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200, figsize=(6, 4))
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.S2NN(alpha=4., beta=1., spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=4, \\beta=1$')
-    #
-    # surrogate_function = surrogate.S2NN(alpha=4, beta=1., spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=4, \\beta=1$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('S2NN surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # # plt.show()
-    # plt.savefig('./S2NN.svg')
-    # plt.savefig('./S2NN.pdf')
-
 
 class q_pseudo_spike(torch.autograd.Function):
     @staticmethod
@@ -1650,29 +1529,6 @@ class QPseudoSpike(SurrogateFunctionBase):
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.q_pseudo_spike_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
-
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200, figsize=(6, 4))
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.QPseudoSpike(alpha=2, spiking=False)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha=2$')
-
-    # surrogate_function = surrogate.QPseudoSpike(alpha=2, spiking=True)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha=2$')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('QPseudoSpike surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # # plt.savefig('QPseudoSpike.svg')
-    # # plt.savefig('QPseudoSpike.pdf')
 
 
 @torch.jit.script
@@ -1818,29 +1674,6 @@ class LeakyKReLU(MultiArgsSurrogateFunctionBase):
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.leaky_k_relu_backward(y=y, x=x, leak=self.leak, k=self.k, dtype=dtype)
-
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200, figsize=(6, 4))
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.LeakyKReLU(spiking=False, leak=0.1, k=0.5)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, leak=0.1, k=1')
-    #
-    # surrogate_function = surrogate.LeakyKReLU(spiking=True, leak=0.1, k=0.5)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, leak=0.1, k=1')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('LeakyKReLU surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.savefig('LeakyKReLU.svg')
-    # plt.savefig('LeakyKReLU.pdf')
 
 
 @torch.jit.script
@@ -2065,29 +1898,6 @@ class LogTailedReLU(SurrogateFunctionBase):
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.log_tailed_relu_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
-
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200, figsize=(6, 4))
-    # x = torch.arange(-5, 5, 0.01)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    # surrogate_function = surrogate.LogTailedReLU(spiking=False, alpha=0.01)
-    # y = surrogate_function(x)
-    # plt.plot(x.data, y.data, label='Primitive, $\\alpha$=0.1')
-    #
-    # surrogate_function = surrogate.LogTailedReLU(spiking=True, alpha=0.01)
-    # x.requires_grad_(True)
-    # y = surrogate_function(x)
-    # z = y.sum()
-    # z.backward()
-    # plt.plot(x.data, x.grad, label='Gradient, $\\alpha$=0.1')
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title('LeakyKReLU surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # plt.grid(linestyle='--')
-    # plt.savefig('LogTailedReLU.svg')
-    # plt.savefig('LogTailedReLU.pdf')
 
 
 @torch.jit.script

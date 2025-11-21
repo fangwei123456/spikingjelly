@@ -648,7 +648,7 @@ class IFNode(BaseNode):
                 self.v_float_to_tensor(x_seq[0])
                 spike_seq, v_seq = triton_kernel.MultiStepIFNodePTT.apply(
                     x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset,
-                    triton_kernel.sg.get_triton_surrogate_kernel(self.surrogate_function)
+                    self.surrogate_function.triton_codes(),
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -664,7 +664,7 @@ class IFNode(BaseNode):
                 self.v_float_to_tensor(x_seq[0])
                 spike_seq, v_seq = triton_kernel.MultiStepIFNodePTT.apply(
                     x_seq, self.v, self.v_threshold, self.v_reset, self.detach_reset,
-                    triton_kernel.sg.get_triton_surrogate_kernel(self.surrogate_function)
+                    self.surrogate_function.triton_codes(),
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -704,7 +704,7 @@ class IFNode(BaseNode):
                     dtype = 'half2'
                 else:
                     raise NotImplementedError(x.dtype)
-                
+
                 if self.forward_kernel is None or not self.forward_kernel.check_attributes(
                     hard_reset=hard_reset, dtype=dtype
                 ):
@@ -1168,8 +1168,8 @@ class LIFNode(BaseNode):
                 self.v_float_to_tensor(x_seq[0])
                 spike_seq, v_seq = triton_kernel.MultiStepLIFNodePTT.apply(
                     x_seq, self.v, self.decay_input, self.tau, self.v_threshold,
-                    self.v_reset, self.detach_reset, 
-                    triton_kernel.sg.get_triton_surrogate_kernel(self.surrogate_function)
+                    self.v_reset, self.detach_reset,
+                    self.surrogate_function.triton_codes(),
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -1184,8 +1184,8 @@ class LIFNode(BaseNode):
             if self.backend == 'triton':
                 spike_seq, v_seq = triton_kernel.MultiStepLIFNodePTT.apply(
                     x_seq, self.v, self.decay_input, self.tau, self.v_threshold,
-                    self.v_reset, self.detach_reset, 
-                    triton_kernel.sg.get_triton_surrogate_kernel(self.surrogate_function)
+                    self.v_reset, self.detach_reset,
+                    self.surrogate_function.triton_codes(),
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -1427,7 +1427,7 @@ class ParametricLIFNode(BaseNode):
                 x_seq, self.v, self.w.sigmoid().to(x_seq),
                 self.decay_input, self.v_threshold,
                 self.v_reset, self.detach_reset,
-                triton_kernel.sg.get_triton_surrogate_kernel(self.surrogate_function)
+                self.surrogate_function.triton_codes(),
             )
             if self.store_v_seq:
                 self.v_seq = v_seq
