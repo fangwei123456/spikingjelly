@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
-from .auto_cuda import cfunction
+from .cuda_kernel.auto_cuda import cfunction
 from .triton_kernel.torch2triton import compile_triton_code_str
 
 tab4_str = '\t\t\t\t'  # used for aligning code

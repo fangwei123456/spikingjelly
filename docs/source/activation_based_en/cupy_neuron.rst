@@ -8,7 +8,7 @@ This tutorial will introduce how to implement the cupy backend for spiking neuro
 
 #. Can implement custom backward with :class:`torch.autograd.Function`
 
-#. Has read all APIs doc in :class:`spikingjelly.activation_based.auto_cuda.base`, and can implement 2D CUDA kernel by :class:`spikingjelly.activation_based.auto_cuda.base` 
+#. Has read all APIs doc in :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.base`, and can implement 2D CUDA kernel by :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.base` 
 
 
 Implement Forward Propagation Through Time 
@@ -40,13 +40,13 @@ The output of the python FPTT function should include:
 
 If we implement the FPTT by CUDA, we will use some extra args, which will be introduced later.
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronFPTTKernel` is inherited from :class:`spikingjelly.activation_based.auto_cuda.base.CKernel2D`. \
+:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronFPTTKernel` is inherited from :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.base.CKernel2D`. \
 ``NeuronFPTTKernel`` is the base class for FPTT. Let us print its CUDA kernel declaration:
 
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronFPTTKernel(hard_reset=True, dtype='float')
     for key, value in base_kernel.cparams.items():
@@ -86,7 +86,7 @@ Firstly, let us check the full codes of ``NeuronFPTTKernel``:
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronFPTTKernel(hard_reset=True, dtype='float')
     print(base_kernel.full_codes)
@@ -161,7 +161,7 @@ And we can implement it as:
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel, cfunction
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel, cfunction
 
     class IFNodeFPTTKernel(neuron_kernel.NeuronFPTTKernel):
 
@@ -222,7 +222,7 @@ We do not write codes like:
         # note that v_v_seq[t] is v_seq[t - dt]
         return 'h_seq[t] = x_seq[t] + v_v_seq[t];'
 
-The reason is functions in :class:`spikingjelly.activation_based.auto_cuda.cfunction` provide both ``float`` \
+The reason is functions in :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.cfunction` provide both ``float`` \
 and ``half2`` implementation. Thus, it is more convenient than we write CUDA code with different data types manually.
 
 
@@ -230,7 +230,7 @@ If we set ``dtype='half2'``, we will get the kernel of ``half2``:
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel, cfunction
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel, cfunction
 
     class IFNodeFPTTKernel(neuron_kernel.NeuronFPTTKernel):
 
@@ -353,13 +353,13 @@ where :math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}, \frac{\mathrm{d} H[t]}{\
 neuron's charge function :math:`H[t] = f(V[t - 1], X[t])`. :math:`\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}` is determined \
 by the surrogate function. While other gradients compilation is general and can be used for all kinds of neurons.
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronBPTTKernel` has implemented the general compilation. Let us \
+:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronBPTTKernel` has implemented the general compilation. Let us \
 check its declaration:
 
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, hard_reset=True, detach_reset=False, dtype='float')
     for key, value in base_kernel.cparams.items():
@@ -424,7 +424,7 @@ Now let us check the full codes of ``NeuronBPTTKernel``:
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, hard_reset=True, detach_reset=False, dtype='float')
     print(base_kernel.full_codes)
@@ -544,7 +544,7 @@ Then we can print the full codes of the BPTT kernel of the IF neuron:
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel, cfunction
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel, cfunction
 
     class IFNodeBPTTKernel(neuron_kernel.NeuronBPTTKernel):
         def grad_h_next_to_v(self) -> str:
@@ -609,8 +609,8 @@ Python Wrap
 ----------------------------------------------------------
 Now we need to use :class:`torch.autograd.Function` to wrap the FPTT and BPTT CUDA kernel.
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase` provides some useful functions to help us wrap. We suppose that \
-the user has read the APIs docs of :class:`NeuronATGFBase <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase>`.
+:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase` provides some useful functions to help us wrap. We suppose that \
+the user has read the APIs docs of :class:`NeuronATGFBase <spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase>`.
 
 Firstly, we should determine the input. In SpikingJelly, the CUDA kernels will be used as input args, rather than created by the autograd Function (we did this before version 0.0.0.0.12).\
 The forward function is defined as:
@@ -622,7 +622,7 @@ The forward function is defined as:
         def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None,
                     forward_kernel: IFNodeFPTTKernel, backward_kernel: IFNodeBPTTKernel):
 
-Then, we will create ``py_dict`` and use :class:`NeuronATGFBase.pre_forward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_forward>` to preprocess it:
+Then, we will create ``py_dict`` and use :class:`NeuronATGFBase.pre_forward <spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase.pre_forward>` to preprocess it:
 
 .. code-block:: python
 
@@ -690,7 +690,7 @@ forward. Thus, the input args are:
         @staticmethod
         def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
 
-We use :class:`NeuronATGFBase.pre_backward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_backward>` to preprocess args to \
+We use :class:`NeuronATGFBase.pre_backward <spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase.pre_backward>` to preprocess args to \
 get the args for the CUDA kernel:
 
 .. code-block:: python
@@ -754,7 +754,7 @@ Here are the codes:
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda.neuron_kernel import IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF
 
     # put sources of ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF`` before the following codes
 

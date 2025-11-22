@@ -8,8 +8,8 @@
 
 #. 能够使用 :class:`torch.autograd.Function` 实现自定义反向传播
 
-#. 已经阅读了 :class:`spikingjelly.activation_based.auto_cuda.base` 的全部API文档，\
-   能够使用 :class:`spikingjelly.activation_based.auto_cuda.base` 编写2D CUDA内核
+#. 已经阅读了 :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.base` 的全部API文档，\
+   能够使用 :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.base` 编写2D CUDA内核
 
 实现IF神经元的CUDA多步前向传播
 ----------------------------------------------------------
@@ -36,15 +36,15 @@
 
 若将FPTT写成CUDA函数，则函数参数仍然包括上述参数，但还需要一些额外的参数。
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronFPTTKernel` 继承自\
-:class:`spikingjelly.activation_based.auto_cuda.base.CKernel2D`。``NeuronFPTTKernel`` \
+:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronFPTTKernel` 继承自\
+:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.base.CKernel2D`。``NeuronFPTTKernel`` \
 是神经元进行多步前向传播(FPTT)的CUDA内核基类。
 
 我们可以查看其默认的CUDA参数声明：
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronFPTTKernel(hard_reset=True, dtype='float')
     for key, value in base_kernel.cparams.items():
@@ -81,7 +81,7 @@
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronFPTTKernel(hard_reset=True, dtype='float')
     print(base_kernel.full_codes)
@@ -155,7 +155,7 @@
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel, cfunction
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel, cfunction
 
     class IFNodeFPTTKernel(neuron_kernel.NeuronFPTTKernel):
 
@@ -215,14 +215,14 @@
         # note that v_v_seq[t] is v_seq[t - dt]
         return 'h_seq[t] = x_seq[t] + v_v_seq[t];'
 
-原因在于 :class:`spikingjelly.activation_based.auto_cuda.cfunction` 提供的函数，通常包括 ``float``\
+原因在于 :class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.cfunction` 提供的函数，通常包括 ``float``\
 和 ``half2`` 两种数据类型的实现，比我们手动编写两种更便捷。
 
 若设置 ``dtype='half2'``，可以直接得到半精度的内核：
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel, cfunction
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel, cfunction
 
     class IFNodeFPTTKernel(neuron_kernel.NeuronFPTTKernel):
 
@@ -342,13 +342,13 @@ BPTT函数的输出为：
 :math:`H[t] = f(V[t - 1], X[t])` 决定，与特定的神经元相关；:math:`\frac{\mathrm{d} S[t]}{\mathrm{d} H[t]}` 由替代函数决定；\
 其余部分则是通用的。
 
-因而，:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronBPTTKernel` 也实现了通用的计算部分。我们首先查看其函数参数：
+因而，:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronBPTTKernel` 也实现了通用的计算部分。我们首先查看其函数参数：
 
 
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, hard_reset=True, detach_reset=False, dtype='float')
     for key, value in base_kernel.cparams.items():
@@ -412,7 +412,7 @@ BPTT函数的输出为：
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel
 
     base_kernel = neuron_kernel.NeuronBPTTKernel(surrogate_function=surrogate.Sigmoid().cuda_codes, hard_reset=True, detach_reset=False, dtype='float')
     print(base_kernel.full_codes)
@@ -535,7 +535,7 @@ BPTT函数的输出为：
 .. code-block:: python
 
     from spikingjelly.activation_based import surrogate
-    from spikingjelly.activation_based.auto_cuda import neuron_kernel, cfunction
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import neuron_kernel, cfunction
 
     class IFNodeBPTTKernel(neuron_kernel.NeuronBPTTKernel):
         def grad_h_next_to_v(self) -> str:
@@ -600,8 +600,8 @@ Python包装
 ----------------------------------------------------------
 接下来，使用 :class:`torch.autograd.Function` 对FPTT和BPTT进行包装。
 
-:class:`spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase` 提供了一些通用的函数用来包装。我们将在实现IF神经元的\
-autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase>` 的API文档，\
+:class:`spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase` 提供了一些通用的函数用来包装。我们将在实现IF神经元的\
+autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase>` 的API文档，\
 我们在下文中会默认读者已经了解其各个函数的使用。
 
 首先需要确定输入。在SpikingJelly中，CUDA内核会被作为前向传播的输入，是由神经元的类去生成，而不是autograd Function生成（在0.0.0.0.12及之前的老版本中是这样做的）。前向传播的定义如下：
@@ -613,7 +613,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
         def forward(ctx, x_seq: torch.Tensor, v_init: torch.Tensor, v_th: float, v_reset: float or None,
                     forward_kernel: IFNodeFPTTKernel, backward_kernel: IFNodeBPTTKernel):
 
-接下来根据输入，生成 ``py_dict``，并交给 :class:`NeuronATGFBase.pre_forward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_forward>` 处理：
+接下来根据输入，生成 ``py_dict``，并交给 :class:`NeuronATGFBase.pre_forward <spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase.pre_forward>` 处理：
 
 
 .. code-block:: python
@@ -679,7 +679,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
         @staticmethod
         def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
 
-借助 :class:`NeuronATGFBase.pre_backward <spikingjelly.activation_based.auto_cuda.neuron_kernel.NeuronATGFBase.pre_backward>`，进行预处理，\
+借助 :class:`NeuronATGFBase.pre_backward <spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel.NeuronATGFBase.pre_backward>`，进行预处理，\
 得到执行反向传播内核的参数：
 
 .. code-block:: python
@@ -741,7 +741,7 @@ autograd Function时进行使用。建议首先阅读 :class:`NeuronATGFBase <sp
 
 .. code-block:: python
 
-    from spikingjelly.activation_based.auto_cuda.neuron_kernel import IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF
 
     # put sources of ``IFNodeFPTTKernel, IFNodeBPTTKernel, IFNodeATGF`` before the following codes
 

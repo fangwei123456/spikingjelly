@@ -46,9 +46,10 @@ We are actively maintaining and improving SpikingJelly. Below are our future pla
 
 We are going to release version `0.0.0.1.0` soon.
 
-- [ ] Add [Triton](https://github.com/triton-lang/triton) backend for further acceleration on GPU.
-- [ ] Add a transpiler for converting PyTorch spiking neurons to Triton kernels, which will be more flexible than the existing [`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/auto_cuda) subpackage.
+- [x] Add [Triton](https://github.com/triton-lang/triton) backend for further acceleration on GPU.
+- [x] Add a transpiler for converting PyTorch spiking neurons to Triton kernels, which will be more flexible than the existing [`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/cuda_kernel/auto_cuda) subpackage.
 - [ ] Add spiking self-attention implementations.
+- [ ] Update docs and tutorials.
 
 Other long-term plans include:
 

@@ -7,12 +7,12 @@ import math
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.auto_cuda.neuronal_kernel: {e}')
+    logging.info(f'spikingjelly.activation_based.cuda_kernel.auto_cuda.neuronal_kernel: {e}')
     cupy = None
     
 
-from ..cuda_kernel import cuda_utils
-from ... import configure
+from .. import cuda_utils
+from .... import configure
 from . import base, cfunction
 
 def neuronal_hard_reset(v_next: str, h: str, spike: str, v_reset: str, dtype: str = 'float'):

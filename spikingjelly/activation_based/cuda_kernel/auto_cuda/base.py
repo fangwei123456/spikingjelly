@@ -3,15 +3,16 @@ import logging
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.auto_cuda.base: {e}')
+    logging.info(f'spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {e}')
     cupy = None
 
 import torch
 import torch.nn.functional as F
 import sys
 import logging
-from ..cuda_kernel import cuda_utils
-from ... import configure
+
+from .. import cuda_utils
+from .... import configure
 
 
 def wrap_with_comment(code: str, comment: str):
@@ -50,7 +51,7 @@ class CKernel:
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             example_ck = base.CKernel(kernel_name='example_ck')
             print(example_ck.full_codes)
@@ -76,7 +77,7 @@ class CKernel:
 
             import logging
             logging.basicConfig(level=logging.DEBUG)
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             example_ck = base.CKernel(kernel_name='example_ck')
             print(example_ck.full_codes)
@@ -109,7 +110,7 @@ class CKernel:
             }
             //------tail end--------
 
-        In most cases, ``CKernel`` is used as a base class. Refer to :class:`CKernel1D <spikingjelly.activation_based.auto_cuda.base.CKernel1D>` and :class:`CKernel2D <spikingjelly.activation_based.auto_cuda.base.CKernel2D>` for more details.
+        In most cases, ``CKernel`` is used as a base class. Refer to :class:`CKernel1D <spikingjelly.activation_based.cuda_kernel.auto_cuda.base.CKernel1D>` and :class:`CKernel2D <spikingjelly.activation_based.cuda_kernel.auto_cuda.base.CKernel2D>` for more details.
         """
         self.cparams = {}
         self.reserved_cnames = []
@@ -359,7 +360,7 @@ class CKernel:
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             example_ck = base.CKernel(kernel_name='example_ck')
             print('origin:')
@@ -448,7 +449,7 @@ class CKernel1D(CKernel):
         :param kernel_name: the name of kernel
         :type kernel_name: str
 
-        The 1D (element-wise) CUDA kernel, which is extended from :class:`CKernel <spikingjelly.activation_based.auto_cuda.base.CKernel>`.
+        The 1D (element-wise) CUDA kernel, which is extended from :class:`CKernel <spikingjelly.activation_based.cuda_kernel.auto_cuda.base.CKernel>`.
         All input/output tensors will be regarded as 1D tensors.
 
         Some critical attributes:
@@ -468,7 +469,7 @@ class CKernel1D(CKernel):
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
             temp_kernel = base.CKernel1D(kernel_name='temp_kernel')
             print(temp_kernel.full_codes)
 
@@ -496,7 +497,7 @@ class CKernel1D(CKernel):
 
             import logging
             logging.basicConfig(level=logging.DEBUG)
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
             temp_kernel = base.CKernel1D(kernel_name='temp_kernel')
             print(temp_kernel.full_codes)
 
@@ -545,7 +546,7 @@ class CKernel1D(CKernel):
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             c_heaviside = base.CKernel1D(kernel_name='heaviside')
             c_heaviside.add_param(ctype='const float *', cname='x')
@@ -659,7 +660,7 @@ class CKernel1D(CKernel):
         .. admonition:: Note
             :class: note
 
-            :class:`CKernel1D.__call__ <spikingjelly.activation_based.auto_cuda.CKernel1D.__call__>` will pad half
+            :class:`CKernel1D.__call__ <spikingjelly.activation_based.cuda_kernel.auto_cuda.CKernel1D.__call__>` will pad half
             tensor to even numel before executing the kernel. Thus, the user does not need to worry about padding.
 
 
@@ -774,9 +775,9 @@ class CKernel1D(CKernel):
         :type kwargs: dict
 
 
-        The simplified calling function, which is simplified from the standard calling function is :class:`CKernel1D.simple_call <spikingjelly.activation_based.auto_cuda.CKernel1D.__call__>`.
+        The simplified calling function, which is simplified from the standard calling function is :class:`CKernel1D.simple_call <spikingjelly.activation_based.cuda_kernel.auto_cuda.CKernel1D.__call__>`.
 
-        Compared with :class:`CKernel1D.simple_call <spikingjelly.activation_based.auto_cuda.CKernel1D.__call__>`,
+        Compared with :class:`CKernel1D.simple_call <spikingjelly.activation_based.cuda_kernel.auto_cuda.CKernel1D.__call__>`,
         the device, numel, numbers of CUDA threads and blocks are calculated automatically from tensors in ``kwargs``.
 
         Here is the example:
@@ -785,7 +786,7 @@ class CKernel1D(CKernel):
 
             import torch
             from spikingjelly.activation_based import cuda_utils
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             c_heaviside = base.CKernel1D(kernel_name='heaviside')
             c_heaviside.add_param(ctype='const float *', cname='x')
@@ -851,7 +852,7 @@ class CKernel2D(CKernel):
         :type reverse: bool
 
 
-        The 2D CUDA kernel, which is extended from :class:`CKernel <spikingjelly.activation_based.auto_cuda.base.CKernel>`.
+        The 2D CUDA kernel, which is extended from :class:`CKernel <spikingjelly.activation_based.cuda_kernel.auto_cuda.base.CKernel>`.
 
         All input/output tensors should have dimensions no more than 2. All 2D tensors will be regarded as ``shape = [T, N]``,
         where ``T`` is the sequence length and ``N`` is the elements number of  data at one time-step
@@ -882,7 +883,7 @@ class CKernel2D(CKernel):
 
         .. code-block:: python
 
-           from spikingjelly.activation_based.auto_cuda import base
+           from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             temp_kernel = base.CKernel2D(kernel_name='temp_kernel')
             print(temp_kernel.full_codes)
@@ -917,7 +918,7 @@ class CKernel2D(CKernel):
 
             import logging
             logging.basicConfig(level=logging.DEBUG)
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             temp_kernel = base.CKernel2D(kernel_name='temp_kernel')
             print(temp_kernel.full_codes)
@@ -983,7 +984,7 @@ class CKernel2D(CKernel):
 
             import torch
             import cupy
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
             from spikingjelly.activation_based import cuda_utils
 
             cumsum = base.CKernel2D(kernel_name='cumsum')
@@ -1130,7 +1131,7 @@ class CKernel2D(CKernel):
         .. admonition:: Note
             :class: note
 
-            :class:`CKernel2D.__call__ <spikingjelly.activation_based.auto_cuda.CKernel2D.__call__>` will pad half
+            :class:`CKernel2D.__call__ <spikingjelly.activation_based.cuda_kernel.auto_cuda.CKernel2D.__call__>` will pad half
             tensor to even numel before executing the kernel. Thus, the user does not need to worry about padding.
 
 
@@ -1329,9 +1330,9 @@ class CKernel2D(CKernel):
         :type kwargs: dict
 
 
-        The simplified calling function, which is simplified from the standard calling function is :class:`CKernel2D.simple_call <spikingjelly.activation_based.auto_cuda.CKernel2D.__call__>`.
+        The simplified calling function, which is simplified from the standard calling function is :class:`CKernel2D.simple_call <spikingjelly.activation_based.cuda_kernel.auto_cuda.CKernel2D.__call__>`.
 
-        Compared with :class:`CKernel2D.simple_call <spikingjelly.activation_based.auto_cuda.CKernel2D.__call__>`,
+        Compared with :class:`CKernel2D.simple_call <spikingjelly.activation_based.cuda_kernel.auto_cuda.CKernel2D.__call__>`,
         the device, N, numel, numbers of CUDA threads and blocks are calculated automatically from tensors in ``kwargs``.
 
         Here is the example:
@@ -1340,7 +1341,7 @@ class CKernel2D(CKernel):
 
             import torch
             import cupy
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
             from spikingjelly.activation_based import cuda_utils
 
             cumsum = base.CKernel2D(kernel_name='cumsum')
@@ -1426,7 +1427,7 @@ class CodeTyper:
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.auto_cuda import base, cfunction
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base, cfunction
 
             code0 = cfunction.if_else(z='z', x='x', y='y', mask='mask', dtype='float')
             code1 = cfunction.sigmoid_backward(y='y', x='x', alpha=2., dtype='float')
@@ -1498,7 +1499,7 @@ class CodeBlock:
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.auto_cuda import base
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
             ctyper = base.CodeTyper(4)
             with base.CodeBlock(ctyper):

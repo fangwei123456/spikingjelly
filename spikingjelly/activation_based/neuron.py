@@ -9,16 +9,18 @@ import os
 import logging
 
 from . import surrogate, base
-from .auto_cuda import neuron_kernel as ac_neuron_kernel
-from .auto_cuda import ss_neuron_kernel as ss_ac_neuron_kernel
 
 try:
     import cupy
     from . import cuda_kernel
+    from .cuda_kernel.auto_cuda import neuron_kernel as ac_neuron_kernel
+    from .cuda_kernel.auto_cuda import ss_neuron_kernel as ss_ac_neuron_kernel
 except BaseException as e:
     logging.info(f'spikingjelly.activation_based.neuron: {e}')
     cupy = None
     cuda_kernel = None
+    ac_neuron_kernel = None
+    ss_ac_neuron_kernel = None
 
 try:
     import triton
