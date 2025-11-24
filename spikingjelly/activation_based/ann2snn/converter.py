@@ -27,7 +27,7 @@ class Converter(nn.Module):
 
         ``Converter`` 用于将带有ReLU的ANN转换为SNN。
 
-        ANN2SNN教程见此处 `ANN转换SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based/ann2snn.html>`_ 。
+        ANN2SNN教程见此处 `ANN转换SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/cn/ann2snn.html>`_ 。
 
         目前支持三种转换模式，由参数mode进行设置。
 
@@ -58,7 +58,7 @@ class Converter(nn.Module):
 
         ``Converter`` is used to convert ANN with to SNN.
 
-        ANN2SNN tutorial is here `ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/activation_based_en/ann2snn.html>`_ .
+        ANN2SNN tutorial is here `ANN2SNN <https://spikingjelly.readthedocs.io/zh_CN/latest/tutorials/en/ann2snn.html>`_ .
 
         Three common methods are implemented here, which can be selected by the value of parameter mode.
 

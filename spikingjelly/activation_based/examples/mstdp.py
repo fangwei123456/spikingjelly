@@ -109,6 +109,6 @@ if __name__ == '__main__':
     plt.gcf().subplots_adjust(left=0.18)
 
     plt.show()
-    plt.savefig('./docs/source/_static/tutorials/activation_based/stdp/mstdp.png')
-    plt.savefig('./docs/source/_static/tutorials/activation_based/stdp/mstdp.svg')
-    plt.savefig('./docs/source/_static/tutorials/activation_based/stdp/mstdp.pdf')
+    plt.savefig('./docs/source/_static/tutorials/stdp/mstdp.png')
+    plt.savefig('./docs/source/_static/tutorials/stdp/mstdp.svg')
+    plt.savefig('./docs/source/_static/tutorials/stdp/mstdp.pdf')

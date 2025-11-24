@@ -172,7 +172,7 @@ SpikingJelly provides two backends for multi-step neurons. You can use the user-
 
 The following figure compares the execution time of two backends of Multi-Step LIF neurons (`float32`):
 
-<img src="./docs/source/_static/tutorials/activation_based/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
+<img src="./docs/source/_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
 `float16` is also provided by the `cupy` backend and can be used in [automatic mixed precision training](https://pytorch.org/docs/stable/notes/amp_examples.html).
 
@@ -285,16 +285,16 @@ SpikingJelly provides elaborate tutorials. Here are some tutorials:
 
 | Figure                                                       | Tutorial                                                     |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
-| ![basic_concept](./docs/source/_static/tutorials/activation_based/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/basic_concept.html) |
-| ![neuron](./docs/source/_static/tutorials/activation_based/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuron.html) |
-| ![lif_fc_mnist](./docs/source/_static/tutorials/activation_based/lif_fc_mnist/2d_heatmap.png) | [Single Fully Connected Layer SNN to Classify MNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/lif_fc_mnist.html) |
-| ![conv_fashion_mnist](./docs/source/_static/tutorials/activation_based/conv_fashion_mnist/visualization/2/s_0.png) | [Convolutional SNN to Classify FMNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/conv_fashion_mnist.html) |
-| ![ann2snn](./docs/source/_static/tutorials/activation_based/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/ann2snn.html) |
-| ![neuromorphic_datasets](./docs/source/_static/tutorials/activation_based/neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuromorphic_datasets.html) |
-| ![classify_dvsg](./docs/source/_static/tutorials/activation_based/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/classify_dvsg.html) |
-| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/activation_based/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
-| ![stdp_learning](./docs/source/_static/tutorials/activation_based/stdp/mstdp.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/stdp.html) |
-| ![reinforcement_learning](./docs/source/_static/tutorials/activation_based/snn_for_rl/snn_for_rl.png) | [Reinforcement Learning](https://spikingjelly.readthedocs.io/zh-cn/latest/activation_based/ilc_san.html) |
+| ![basic_concept](./docs/source/_static/tutorials/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/basic_concept.html) |
+| ![neuron](./docs/source/_static/tutorials/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuron.html) |
+| ![lif_fc_mnist](./docs/source/_static/tutorials/lif_fc_mnist/2d_heatmap.png) | [Single Fully Connected Layer SNN to Classify MNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/lif_fc_mnist.html) |
+| ![conv_fashion_mnist](./docs/source/_static/tutorials/conv_fashion_mnist/visualization/2/s_0.png) | [Convolutional SNN to Classify FMNIST](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/conv_fashion_mnist.html) |
+| ![ann2snn](./docs/source/_static/tutorials/5_ann2snn/2.png) | [ANN2SNN](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/ann2snn.html) |
+| ![neuromorphic_datasets](./docs/source/_static/tutorials/neuromorphic_datasets/dvsg.gif) | [Neuromorphic Datasets Processing](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuromorphic_datasets.html) |
+| ![classify_dvsg](./docs/source/_static/tutorials/classify_dvsg/network.png) | [Classify DVS Gesture](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/classify_dvsg.html) |
+| ![recurrent_connection_and_stateful_synapse](./docs/source/_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png) | [Recurrent Connection and Stateful Synapse](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/recurrent_connection_and_stateful_synapse.html) |
+| ![stdp_learning](./docs/source/_static/tutorials/stdp/mstdp.png) | [STDP Learning](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/stdp.html) |
+| ![reinforcement_learning](./docs/source/_static/tutorials/snn_for_rl/snn_for_rl.png) | [Reinforcement Learning](https://spikingjelly.readthedocs.io/zh-cn/latest/tutorials/cn/ilc_san.html) |
 
 Other tutorials that are not listed here are also available at the [document](https://spikingjelly.readthedocs.io).
 

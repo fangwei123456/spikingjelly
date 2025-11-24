@@ -10,7 +10,7 @@
 
 版本说明
 ----------------
-自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`../activation_based/migrate_from_legacy`。
+自 ``0.0.0.0.14`` 版本开始，包括 ``clock_driven`` 和 ``event_driven`` 在内的模块被重命名了，请参考教程 :doc:`./tutorials/cn/migrate_from_legacy`。
 
 不同版本文档的地址（其中 `latest` 是开发版）：
 
@@ -65,27 +65,27 @@
     :maxdepth: 1
     :caption: 上手教程
 
-    /activation_based/migrate_from_legacy
-    /activation_based/basic_concept
-    /activation_based/container
-    /activation_based/neuron
-    /activation_based/surrogate
-    /activation_based/monitor
-    /activation_based/lif_fc_mnist
-    /activation_based/conv_fashion_mnist
-    /activation_based/neuromorphic_datasets
-    /activation_based/classify_dvsg
-    /activation_based/recurrent_connection_and_stateful_synapse
-    /activation_based/train_large_scale_snn
-    /activation_based/stdp
-    /activation_based/ann2snn
-    /activation_based/dsqn
-    /activation_based/ilc_san
-    /legacy_tutorials
-    /activation_based/cupy_neuron
-    /activation_based/inference_on_lynxi
-    /activation_based/lava_exchange
-    /activation_based/spikformer
+    /tutorials/cn/migrate_from_legacy
+    /tutorials/cn/basic_concept
+    /tutorials/cn/container
+    /tutorials/cn/neuron
+    /tutorials/cn/surrogate
+    /tutorials/cn/monitor
+    /tutorials/cn/lif_fc_mnist
+    /tutorials/cn/conv_fashion_mnist
+    /tutorials/cn/neuromorphic_datasets
+    /tutorials/cn/classify_dvsg
+    /tutorials/cn/recurrent_connection_and_stateful_synapse
+    /tutorials/cn/train_large_scale_snn
+    /tutorials/cn/stdp
+    /tutorials/cn/ann2snn
+    /tutorials/cn/dsqn
+    /tutorials/cn/ilc_san
+    /legacy_tutorials/cn/legacy_tutorials
+    /tutorials/cn/cupy_neuron
+    /tutorials/cn/inference_on_lynxi
+    /tutorials/cn/lava_exchange
+    /tutorials/cn/spikformer
 
 模块文档
 -------------------------
@@ -152,7 +152,7 @@ Welcome to SpikingJelly's documentation
 Notification
 ----------------
 From the version ``0.0.0.0.14``, modules including ``clock_driven`` and ``event_driven`` are renamed. \
-Please refer to the tutorial :doc:`../activation_based_en/migrate_from_legacy`.
+Please refer to the tutorial :doc:`./tutorials/en/migrate_from_legacy`.
 
 Docs for different versions (`latest` is the developing version):
 
@@ -208,24 +208,24 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     :maxdepth: 1
     :caption: Tutorials
 
-    /activation_based_en/migrate_from_legacy
-    /activation_based_en/basic_concept
-    /activation_based_en/container
-    /activation_based_en/neuron
-    /activation_based_en/surrogate
-    /activation_based_en/monitor
-    /activation_based_en/lif_fc_mnist
-    /activation_based_en/conv_fashion_mnist
-    /activation_based_en/neuromorphic_datasets
-    /activation_based_en/classify_dvsg
-    /activation_based_en/recurrent_connection_and_stateful_synapse
-    /activation_based_en/train_large_scale_snn
-    /activation_based_en/stdp
-    /activation_based_en/ann2snn
-    /legacy_tutorials_en
-    /activation_based_en/cupy_neuron
-    /activation_based_en/lava_exchange
-    /activation_based_en/spikformer
+    /tutorials/en/migrate_from_legacy
+    /tutorials/en/basic_concept
+    /tutorials/en/container
+    /tutorials/en/neuron
+    /tutorials/en/surrogate
+    /tutorials/en/monitor
+    /tutorials/en/lif_fc_mnist
+    /tutorials/en/conv_fashion_mnist
+    /tutorials/en/neuromorphic_datasets
+    /tutorials/en/classify_dvsg
+    /tutorials/en/recurrent_connection_and_stateful_synapse
+    /tutorials/en/train_large_scale_snn
+    /tutorials/en/stdp
+    /tutorials/en/ann2snn
+    /legacy_tutorials/en/legacy_tutorials_en
+    /tutorials/en/cupy_neuron
+    /tutorials/en/lava_exchange
+    /tutorials/en/spikformer
 
 
 
@@ -282,7 +282,7 @@ The list of developers can be found at `contributors <https://github.com/fangwei
    :maxdepth: 4
    :caption: APIs
 
-   spikingjelly.activation_based
-   spikingjelly.datasets
-   spikingjelly.timing_based
-   spikingjelly.visualizing
+   ./APIs/spikingjelly.activation_based
+   ./APIs/spikingjelly.datasets
+   ./APIs/spikingjelly.timing_based
+   ./APIs/spikingjelly.visualizing
