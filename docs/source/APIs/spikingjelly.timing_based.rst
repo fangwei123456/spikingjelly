@@ -5,7 +5,7 @@ Subpackages
 ++++++++++++
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 1
 
    spikingjelly.timing_based.examples
 
@@ -28,10 +28,4 @@ spikingjelly.timing\_based.neuron module
    :undoc-members:
    :show-inheritance:
 
-Module contents
-++++++++++++++++
-
-.. automodule:: spikingjelly.timing_based
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. Module contents

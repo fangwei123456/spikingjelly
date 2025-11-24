@@ -5,8 +5,14 @@ import hashlib
 
 import torch
 import torch.fx as fx
-import triton
-import triton.language as tl
+try:
+    import triton
+    import triton.language as tl
+except BaseException as e:
+    import logging
+    logging.info(f'spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {e}')
+    triton = None
+    tl = None
 
 from ..triton_utils import type_str_dict
 from ..triton_utils import ensure_cleanup_tmp_python_files
@@ -161,7 +167,7 @@ def compile_triton_code_str(
     kernel_name: str,
     verbose: bool = False,
     name_space: dict = {},
-) -> triton.JITFunction:
+):
     """Compile a Triton code string into a runnable Triton JIT function.
 
     Writes the Triton code to a temporary file, compiles it, and extracts the

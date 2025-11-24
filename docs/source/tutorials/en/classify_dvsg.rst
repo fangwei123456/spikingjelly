@@ -10,7 +10,7 @@ Network Structure
 -------------------------------------------
 We will use the network defined in [#PLIF]_, which has the following structure:
 
-.. image:: ../_static/tutorials/classify_dvsg/network.png
+.. image:: ../../_static/tutorials/classify_dvsg/network.png
     :width: 100%
 
 All networks in [#PLIF]_ are defined in :class:`spikingjelly.activation_based.model.parametric_lif_net`. The network structure for DVS Gesture is:
@@ -254,7 +254,7 @@ Finally, ``max_test_acc = 0.9375`` is achieved. Higher accuracy can be achieved 
 The following figure shows the accuracy curves during the training process:
 
 
-.. image:: ../_static/tutorials/classify_dvsg/dvsg_logs.*
+.. image:: ../../_static/tutorials/classify_dvsg/dvsg_logs.*
     :width: 100%
 
 

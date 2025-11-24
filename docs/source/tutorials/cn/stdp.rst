@@ -17,7 +17,7 @@ STDP(Spike Timing Dependent Plasticity)最早是由 [#STDP]_ 提出，是在生�
 
 生理实验数据拟合的曲线如下图 [#STDP_figure]_ 所示：
 
-.. image:: ../_static/tutorials/stdp/stdp.*
+.. image:: ../../_static/tutorials/stdp/stdp.*
     :width: 100%
 
 
@@ -148,12 +148,12 @@ STDP优化器
 
 将 ``in_spike, out_spike, trace_pre, trace_post, weight`` 画出，得到下图：
 
-.. image:: ../_static/tutorials/stdp/stdp_trace.*
+.. image:: ../../_static/tutorials/stdp/stdp_trace.*
     :width: 100%
 
 这与 [#Trace]_ 中的Fig.3是一致的（注意下图中使用 `j` 表示pre神经元，`i` 表示后神经元，与我们相反）：
 
-.. image:: ../_static/tutorials/stdp/trace_paper_fig3.*
+.. image:: ../../_static/tutorials/stdp/trace_paper_fig3.*
     :width: 100%
 
 

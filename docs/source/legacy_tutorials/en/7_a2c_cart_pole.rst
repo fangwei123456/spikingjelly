@@ -134,11 +134,11 @@ Performance comparison between ANN and SNN
 ------------------------------------------------------
 Here is the reward curve during the training process of 1e5 episodes:
 
-.. image:: ../_static/tutorials/\7_a2c_cart_pole/Spiking-A2C-CartPole-v0.*
+.. image:: ../../_static/tutorials/\7_a2c_cart_pole/Spiking-A2C-CartPole-v0.*
     :width: 100%
 
 And here is the result of the ANN version with the same settings.
 The integrated code can be found here `activation_based/examples/A2C.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/A2C.py>`_.
 
-.. image:: ../_static/tutorials/\7_a2c_cart_pole/A2C-CartPole-v0.*
+.. image:: ../../_static/tutorials/\7_a2c_cart_pole/A2C-CartPole-v0.*
     :width: 100%

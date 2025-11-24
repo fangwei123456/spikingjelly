@@ -131,7 +131,7 @@ Block是为Loihi仿真而生，它并不是像 `nn.Sequential` 这样简单的�
 在 `spikingjelly.activation_based.lava_exchange.step_quantize <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.lava_exchange.html#spikingjelly.activation_based.lava_exchange.step_quantize>`_
 中提供了一个量化函数的示意图：
 
-.. image:: ../_static/API/activation_based/lava_exchange/step_quantize.*
+.. image:: ../../_static/API/activation_based/lava_exchange/step_quantize.*
         :width: 100%
 
 可以看出，`self.synapse.weight` 被进行 `step = 2 / self.neuron.w_scale` 的量化，然后再被限幅到 `[-256 / self.neuron.w_scale, 255 / self.neuron.w_scale]`。

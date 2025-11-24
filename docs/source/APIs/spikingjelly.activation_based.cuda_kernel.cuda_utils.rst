@@ -1,5 +1,5 @@
 spikingjelly.activation\_based.cuda\_kernel.cuda\_utils package
-======================================
+=================================================================
 
 Module contents
 ---------------

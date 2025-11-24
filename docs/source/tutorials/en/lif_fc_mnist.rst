@@ -1,5 +1,5 @@
 Single Fully Connected Layer SNN to Classify MNIST
-====================================
+========================================================
 Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
 
 Translator: `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
@@ -34,7 +34,7 @@ A SNN with similar structures can also be used for classification tasks. For thi
 The membrane potential constant :math:`\tau` is set by ``tau`` , and ``surrogate.ATan`` is used as the surrogate gradient function.
 
 Train the SNN
------------
+----------------
 
 Training parameters like learning rate and other configurations need to be set:
 
@@ -141,7 +141,7 @@ which will cause BPTT to decay or explode when calculating the gradient.
 In addition, since we use the poisson encoder, a large ``T`` is needed to ensure that the coding noise is not too large.
 
 Results of Training
---------
+------------------------
 
 We set ``tau=2.0,T=100,batch_size=64,lr=1e-3`` , the corresponding command is:
 
@@ -151,12 +151,12 @@ We set ``tau=2.0,T=100,batch_size=64,lr=1e-3`` , the corresponding command is:
 
 In order to speed up training, mixed precision training is used. After 100 Epoch training, two npy files and a training log are output. The highest accuracy on the test dataset is 92.9%. The accuracy curve visualized by matplotlib is as follows:
 
-.. image:: ../_static/tutorials/lif_fc_mnist/acc.*
+.. image:: ../../_static/tutorials/lif_fc_mnist/acc.*
     :width: 100%
 
 Select the first image in the test dataset:
 
-.. image:: ../_static/tutorials/lif_fc_mnist/input.png
+.. image:: ../../_static/tutorials/lif_fc_mnist/input.png
 
 The classification results are obtained by using the trained model:
 
@@ -166,10 +166,10 @@ The classification results are obtained by using the trained model:
 
 Voltages and spikes are as follows, which are gotten by the visualization function in the ``visualizing`` module.
 
-.. image:: ../_static/tutorials/lif_fc_mnist/1d_spikes.*
+.. image:: ../../_static/tutorials/lif_fc_mnist/1d_spikes.*
     :width: 100%
 
-.. image:: ../_static/tutorials/lif_fc_mnist/2d_heatmap.*
+.. image:: ../../_static/tutorials/lif_fc_mnist/2d_heatmap.*
     :width: 100%
 
 Obviously, except for the corresponding neuron in the correct category, no other neurons are firing. The complete training code is in `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ .

@@ -8,7 +8,7 @@
 -------------------------------------------
 我们将使用 [#PLIF]_ 一文中定义的网络，其结构如下：
 
-.. image:: ../_static/tutorials/classify_dvsg/network.png
+.. image:: ../../_static/tutorials/classify_dvsg/network.png
     :width: 100%
 
 [#PLIF]_ 一文中的所有网络都在 :class:`spikingjelly.activation_based.model.parametric_lif_net` 中进行了定义，其中用于DVS Gesture的网络结构为：
@@ -252,7 +252,7 @@ DVS Gesture有11类，因此在生成one hot的target时别忘了设置为11类�
 下图展示了训练过程中的正确率曲线：
 
 
-.. image:: ../_static/tutorials/classify_dvsg/dvsg_logs.*
+.. image:: ../../_static/tutorials/classify_dvsg/dvsg_logs.*
     :width: 100%
 
 

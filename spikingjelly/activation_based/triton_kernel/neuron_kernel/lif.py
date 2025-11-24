@@ -2,8 +2,15 @@ from typing import Callable
 
 import torch
 from torch import autograd
-import triton
-import triton.language as tl
+
+try:
+    import triton
+    import triton.language as tl
+except BaseException as e:
+    import logging
+    logging.info(f'spikingjelly.activation_based.triton_kernel.neuron_kernel.lif: {e}')
+    triton = None
+    tl = None
 
 from ..triton_utils import type_dict, contiguous_and_device_guard
 from ..triton_utils import amp_custom_fwd, amp_custom_bwd

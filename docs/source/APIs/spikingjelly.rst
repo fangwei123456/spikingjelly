@@ -1,8 +1,8 @@
 spikingjelly package
-====================
+=====================
 
 Subpackages
------------
+++++++++++++
 
 .. toctree::
    :maxdepth: 4
@@ -13,7 +13,7 @@ Subpackages
    spikingjelly.visualizing
 
 Submodules
-----------
+++++++++++++
 
 spikingjelly.configure module
 -----------------------------
@@ -24,7 +24,7 @@ spikingjelly.configure module
    :show-inheritance:
 
 Module contents
----------------
+++++++++++++++++
 
 .. automodule:: spikingjelly
    :members:

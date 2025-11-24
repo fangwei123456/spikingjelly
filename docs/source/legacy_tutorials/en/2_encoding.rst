@@ -78,10 +78,10 @@ steps are simulated to obtain 20 spike matrices.
 
 The original grayscale image of Lena and 20 resulted spike matrices are as follows:
 
-.. image:: ../_static/tutorials/2_encoding/3.*
+.. image:: ../../_static/tutorials/2_encoding/3.*
     :width: 100%
 
-.. image:: ../_static/tutorials/2_encoding/4.*
+.. image:: ../../_static/tutorials/2_encoding/4.*
     :width: 100%
 
 Comparing the original grayscale image to the spike matrix, it can be found that the spike matrix is
@@ -116,7 +116,7 @@ in each step, and obtain the result of the superposition of steps 1, 128, 256, 3
 
 The superimposed images are as follows:
 
-.. image:: ../_static/tutorials/2_encoding/5.*
+.. image:: ../../_static/tutorials/2_encoding/5.*
     :width: 100%
 
 It can be seen that when the simulation is sufficiently long, the original image can almost be reconstructed with the
@@ -159,7 +159,7 @@ we initialize a periodic encoder and output simulated spike data with 20 time st
                                plot_firing_rate=False)
     plt.show()
 
-.. image:: ../_static/tutorials/2_encoding/1.*
+.. image:: ../../_static/tutorials/2_encoding/1.*
     :width: 100%
 
 Latency encoder
@@ -225,7 +225,7 @@ latency to 20, then use ``LatencyEncoder`` to encode the above input data.
 When the randomly generated stimulus intensities are ``0.6650``, ``0.3704``, ``0.8485``, ``0.0247``, ``0.5589``, and ``0.1030``, the spike
 sequence obtained is as follows:
 
-.. image:: ../_static/tutorials/2_encoding/2.*
+.. image:: ../../_static/tutorials/2_encoding/2.*
     :width: 100%
 
 

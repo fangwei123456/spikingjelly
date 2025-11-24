@@ -78,10 +78,10 @@ CUDA加速的神经元
 
 将结果画成柱状图：
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/exe_time_f.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/exe_time_f.*
     :width: 100%
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.*
     :width: 100%
 
 可以发现，使用cupy后端速度明显快于原生pytorch后端。
@@ -201,10 +201,10 @@ CUDA加速的神经元
 
 最终的正确率是93.46%，与 :doc:`./4_conv_fashion_mnist` 中的93.3%相差无几，两者在训练过程中的测试集正确率曲线如下：
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/train.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/test.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/test.*
     :width: 100%
 
 两个网络使用了完全相同的随机种子，最终的性能略有差异，可能是CUDA和PyTorch的计算数值误差导致的。在日志中记录了训练和测试所需要的时间，我们可以

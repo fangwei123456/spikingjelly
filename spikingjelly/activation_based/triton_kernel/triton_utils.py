@@ -9,23 +9,28 @@ from packaging import version
 from pathlib import Path
 import threading
 import atexit
-import tempfile
-
 import torch
-import triton
-import triton.language as tl
 
-type_dict = {
-    torch.bool: tl.int1,
-    torch.float32: tl.float32,
-    torch.float16: tl.float16,
-}
+try:
+    import triton.language as tl
+    type_dict = {
+        torch.bool: tl.int1,
+        torch.float32: tl.float32,
+        torch.float16: tl.float16,
+    }
+    type_str_dict = {
+        torch.bool: "tl.int1",
+        torch.float32: "tl.float32",
+        torch.float16: "tl.float16",
+    }
+except BaseException as e:
+    import logging
+    logging.info(f'spikingjelly.activation_based.triton_kernel.triton_utils: {e}')
+    tl = None
+    type_dict = {}
+    type_str_dict = {}
 
-type_str_dict = {
-    torch.bool: "tl.int1",
-    torch.float32: "tl.float32",
-    torch.float16: "tl.float16",
-}
+
 
 
 def contiguous_and_device_guard(f: Callable) -> Callable:

@@ -45,7 +45,7 @@ in backward, where :math:`\sigma(x)` is the surrogate function. In most cases, :
 :class:`spikingjelly.activation_based.surrogate` provides many frequently-used surrogate functions. For example, the Sigmoid function :class:`spikingjelly.activation_based.surrogate.Sigmoid` is :math:`\sigma(x, \alpha) = \frac{1}{1 + \exp(-\alpha x)}`.\ 
 The following figure shows the primitive Heaviside function, the sigmoid function when ``alpha=5`` and its gradient:
 
-.. image:: ../_static/API/activation_based/surrogate/Sigmoid.*
+.. image:: ../../_static/API/activation_based/surrogate/Sigmoid.*
     :width: 100%
 
 We can use the surrogate function easily, just as we use other functions:

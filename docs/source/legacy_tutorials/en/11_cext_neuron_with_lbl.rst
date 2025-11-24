@@ -79,10 +79,10 @@ The code is running at a Ubuntu server with `Intel(R) Xeon(R) Gold 6148 CPU @ 2.
 
 We plot the results in a bar chart:
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/exe_time_f.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/exe_time_f.*
     :width: 100%
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.*
     :width: 100%
 
 It can be found that cupy backend is much faster than naive pytorch backend.
@@ -198,10 +198,10 @@ The fully codes are available at :class:`spikingjelly.activation_based.examples.
 
 We get 93.46% accuracy, which is very close to 93.3% in :doc:`./4_conv_fashion_mnist`. Here are training logs:
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/train.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/11_cext_neuron_with_lbl/test.*
+.. image:: ../../_static/tutorials/11_cext_neuron_with_lbl/test.*
     :width: 100%
 
 In fact, we set an identical seed in both examples, but get a different results, which maybe caused by the numerical errors between cupy and pytorch functions. It can be found that the training execution time with cupy backend is 69% of the naive PyTorch SNN.

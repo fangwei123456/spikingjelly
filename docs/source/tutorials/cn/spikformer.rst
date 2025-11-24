@@ -6,11 +6,11 @@
 和SEW ResNet相比，Spikformer的结构和堆叠方式较为简单，具体来说由三个主要组件，即脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP）组成。
 堆叠方式则为一个SPS加若干个SSA-MLP组合块。具体的SSA和Spikformer如图所示：
 
-.. image:: ../_static/tutorials/spikformer/spikformer-overview.png
+.. image:: ../../_static/tutorials/spikformer/spikformer-overview.png
     :width: 100%
 
 构建脉冲Transformer
-----------------
+-----------------------------------
 
 首先导入相关的模块：
 
@@ -78,6 +78,7 @@
             x = self.proj_lif(self.proj_bn(self.proj_linear(x).transpose(-1, -2)).transpose(-1, -2).reshape(T, B, N, C))
 
             return x
+
 基于SSA和MLP构建脉冲Transformer的Block，注意此处使用SEW形式残差，若使用MS形式残差则需在SSA和MLP中更改脉冲神经元的位置：
 
 .. code-block:: python
@@ -99,18 +100,18 @@
 最后加入前馈模块，组成Spikformer，读者还可以根据处理任务的分辨率和复杂性设计分层的Spikformer，参考QKformer。
 
 训练脉冲Transformer
-----------------
+------------------------------
 脉冲Transformer的训练与SEW ResNet不同，后者需要的轮次较少且收敛较快，而Spikformer通常需要更多的轮次才能收敛。
 以ImageNet为例，SEW ResNet只需150轮次，Spikformer需要训练200轮以上，性能随着训练轮次的增加而提升。
 此外，学习率更新方式和数据增强策略也对Spikformer性能影响较大。
 
 改进脉冲Transformer
-----------------
+-------------------------------
 脉冲自注意力机制的建模形式尚处于开放探索阶段，已有多种改进，改进点的具体位置有：改进QKV的形式和计算方式，增强QKV的时空关注能力，设计脉冲位置编码和SSA分块加速等。
 读者可根据实际任务需求和性能导向探索符合SNN的新型机制。此外，针对脉冲Transformer中的MLP和SPS前馈模块的改进也会显著影响其性能。
 一些Spikformer变体有：SpikingResformer [#spikingresformer]_ ,如下图
 
-.. image:: ../_static/tutorials/spikformer/spikingresformer.png
+.. image:: ../../_static/tutorials/spikformer/spikingresformer.png
     :width: 100%
 
 以及Spike-driven Transformer V1、V2和V3和QKformer等等，详见 `此处 <https://scholar.google.com.hk/scholar?oi=bibs&hl=zh-CN&cites=12209743464525142624&as_sdt=5>`_

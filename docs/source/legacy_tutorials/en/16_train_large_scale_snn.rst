@@ -4,7 +4,7 @@ Train Large-Scale SNN
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Use networks from :class:`spikingjelly.activation_based.model`
-----------------------------------------------
+------------------------------------------------------------------
 :class:`spikingjelly.activation_based.model` provides some classic networks. We use :class:`spikingjelly.activation_based.model.spiking_resnet` as the example to show how to use them.
 
 Most of networks in :class:`spikingjelly.activation_based.model` have two version: single-step and multi-step. We can create

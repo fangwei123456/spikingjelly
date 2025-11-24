@@ -152,12 +152,12 @@ Training result
 Take ``tau=2.0,T=100,batch_size=128,lr=1e-3``, after training 100 Epoch, four npy files will be output. The highest
 correct rate on the test set is 92.5%, and the correct rate curve obtained through matplotlib visualization is as follows
 
-.. image:: ../_static/tutorials/3_fc_mnist/acc.*
+.. image:: ../../_static/tutorials/3_fc_mnist/acc.*
     :width: 100%
 
 Select the first picture in the test set:
 
-.. image:: ../_static/tutorials/3_fc_mnist/input.png
+.. image:: ../../_static/tutorials/3_fc_mnist/input.png
 
 Use the trained model to classify and get the classification result.
 
@@ -167,10 +167,10 @@ Use the trained model to classify and get the classification result.
 
 The voltage and spike of the output layer can be visualized by the function in the ``visualizing`` module as shown in the figure below.
 
-.. image:: ../_static/tutorials/3_fc_mnist/1d_spikes.*
+.. image:: ../../_static/tutorials/3_fc_mnist/1d_spikes.*
     :width: 100%
 
-.. image:: ../_static/tutorials/3_fc_mnist/2d_heatmap.*
+.. image:: ../../_static/tutorials/3_fc_mnist/2d_heatmap.*
     :width: 100%
 
 It can be seen that none of the neurons emit any spikes except for the neurons corresponding to the correct category.

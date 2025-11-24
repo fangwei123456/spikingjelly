@@ -1,5 +1,5 @@
 Recurrent Connections and Stateful Synapses
-======================================
+================================================
 
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
@@ -8,7 +8,7 @@ Recurrent Connections
 The recurrent connections connect a module's outputs to its inputs. For example, [#Effective]_ uses a SRNN(recurrent
 networks of spiking neurons), which is shown in the following figure:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
 It is easy to use SpikingJelly to implement the recurrent module. Considering a simple case that we add a connection to make
@@ -86,17 +86,15 @@ There are many papers using stateful synapses, e.g., [#Unsupervised]_ [#Exploiti
 Ablation Study On Sequential FashionMNIST
 -----------------------------------------------
 Now we do a smple exmperiment on Sequential FashionMNIST to check whether recurrent connections and stateful synapses can
-promote the network's temporal information fitting ability. Sequential FashionMNIST is using FashionMNIST as input row-by-row
- or column-by-column, rather than the whole image. Consequentially, the network classify Sequential FashionMNIST correctly
-only when it can learn long-term dependencies. We will feed the image column-by-column, which is same with reading texts
+promote the network's temporal information fitting ability. Sequential FashionMNIST is using FashionMNIST as input row-by-row or column-by-column, rather than the whole image. Consequentially, the network classify Sequential FashionMNIST correctly only when it can learn long-term dependencies. We will feed the image column-by-column, which is same with reading texts
 from left to right. Here is the example:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/samples/a.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 The following gif shows the column being read:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/samples/b.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 First, let us import packages:
@@ -195,7 +193,7 @@ neurons layer's output to itself and get ``FeedBackNet``:
 
 The following figure shows the three networks:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
 The complete codes are available at `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_. We can run
@@ -252,17 +250,17 @@ Let us train the three networks:
 
 The train loss is:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/train_loss.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/train_loss.*
     :width: 100%
 
 The train accuracy is:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/train_acc.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/train_acc.*
     :width: 100%
 
 The test accuracy is:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/test_acc.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/test_acc.*
     :width: 100%
 
 We can find that both ``feedback`` and ``stateful-synapse`` have higher accuracy than ``plain``, indicating that recurrent

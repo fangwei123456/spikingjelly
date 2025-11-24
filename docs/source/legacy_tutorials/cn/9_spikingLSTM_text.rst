@@ -198,7 +198,7 @@
 值得注意的一点是，测试表明，在当前Spiking LSTM网络中是否在一次运行完成后重置网络 ``functional.reset_net(net)`` 对于结果没有显著的影响。
 我们猜测是因为当前网络输入是随时间变化的，而且网络自身需要运行一段时间后才会输出分类结果，因此网络初始状态影响不显著。
 
-.. image:: ../_static/tutorials/\9_spikingLSTM_text/TrainingProcess.*
+.. image:: ../../_static/tutorials/\9_spikingLSTM_text/TrainingProcess.*
     :width: 100%
 
 网络测试
@@ -307,5 +307,5 @@
 下图展示了Confusion matrix。对角线越亮，表示模型对某一类别预测最好，很少产生混淆，如Arabic和Greek。
 而有的语言则较容易产生混淆，如Korean和Chinese，Spanish和Portuguese，English和Scottish。
 
-.. image:: ../_static/tutorials/\9_spikingLSTM_text/ConfusionMatrix.*
+.. image:: ../../_static/tutorials/\9_spikingLSTM_text/ConfusionMatrix.*
     :width: 100%

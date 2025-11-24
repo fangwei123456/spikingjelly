@@ -2,7 +2,7 @@ spikingjelly.timing\_based.examples package
 ===========================================
 
 Submodules
-----------
+++++++++++++
 
 spikingjelly.timing\_based.examples.tempotron\_mnist module
 -----------------------------------------------------------
@@ -13,7 +13,7 @@ spikingjelly.timing\_based.examples.tempotron\_mnist module
    :show-inheritance:
 
 Module contents
----------------
++++++++++++++++++
 
 .. automodule:: spikingjelly.timing_based.examples
    :members:

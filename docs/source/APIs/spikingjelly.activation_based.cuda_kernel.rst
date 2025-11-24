@@ -1,8 +1,11 @@
 spikingjelly.activation\_based.cuda\_kernel package
-======================================
+=====================================================
+
+Subpackages
+++++++++++++
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 1
 
    spikingjelly.activation_based.cuda_kernel.auto_cuda
    spikingjelly.activation_based.cuda_kernel.cuda_utils
@@ -10,12 +13,6 @@ spikingjelly.activation\_based.cuda\_kernel package
    spikingjelly.activation_based.cuda_kernel.spike_op
    spikingjelly.activation_based.cuda_kernel.tensor_cache
 
+.. Submodules
 
-
-Module contents
----------------
-
-.. automodule:: spikingjelly.activation_based.cuda_kernel
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. Module contents

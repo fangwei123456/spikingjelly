@@ -145,7 +145,7 @@ Soft方式重置方程为：
 
 神经元的动态如下图所示（图片来自 `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_）：
 
-.. image:: ../_static/tutorials/neuron/neuron.*
+.. image:: ../../_static/tutorials/neuron/neuron.*
     :width: 100%
 
 
@@ -176,7 +176,7 @@ Soft方式重置方程为：
 
 我们给与的输入 ``shape=[1]``，因此这个IF神经元层只有1个神经元。它的膜电位和输出脉冲随着时间变化情况如下：
 
-.. image:: ../_static/tutorials/neuron/0.*
+.. image:: ../../_static/tutorials/neuron/0.*
     :width: 100%
 
 下面我们将神经元层重置，并给与 ``shape=[32]`` 的输入，查看这32个神经元的膜电位和输出脉冲：
@@ -209,10 +209,10 @@ Soft方式重置方程为：
 
 结果如下：
 
-.. image:: ../_static/tutorials/0_neuron/1.*
+.. image:: ../../_static/tutorials/0_neuron/1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/0_neuron/2.*
+.. image:: ../../_static/tutorials/0_neuron/2.*
     :width: 100%
 
 步进模式和后端

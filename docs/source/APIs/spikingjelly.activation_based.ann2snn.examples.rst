@@ -2,7 +2,7 @@ spikingjelly.activation\_based.ann2snn.examples package
 =======================================================
 
 Submodules
-----------
++++++++++++
 
 spikingjelly.activation\_based.ann2snn.examples.cnn\_mnist module
 -----------------------------------------------------------------
@@ -20,10 +20,4 @@ spikingjelly.activation\_based.ann2snn.examples.resnet18\_cifar10 module
    :undoc-members:
    :show-inheritance:
 
-Module contents
----------------
-
-.. automodule:: spikingjelly.activation_based.ann2snn.examples
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. Module contents

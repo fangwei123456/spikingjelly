@@ -1,8 +1,10 @@
 spikingjelly.activation\_based.model package
 ============================================
 
+.. Subpackages
+
 Submodules
-----------
++++++++++++
 
 spikingjelly.activation\_based.model.parametric\_lif\_net module
 ----------------------------------------------------------------
@@ -44,18 +46,12 @@ spikingjelly.activation\_based.model.train\_classify module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.model.train\_imagenet module
------------------------------------------------------------
+spikingjelly.activation\_based.model.train\_imagenet\_example module
+------------------------------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.model.train_imagenet
+.. automodule:: spikingjelly.activation_based.model.train_imagenet_example
    :members:
    :undoc-members:
    :show-inheritance:
 
-Module contents
----------------
-
-.. automodule:: spikingjelly.activation_based.model
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. Module contents

@@ -202,7 +202,7 @@ We get ``max_test_acc = 0.9308``. If we fine-tune the hyper-parameters, we will 
 
 The following figure shows the accuracy curves during training:
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/fmnist_logs.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/fmnist_logs.*
     :width: 100%
 
 Visualizing Encoding
@@ -272,32 +272,32 @@ Let us load the trained model, set ``batch_size=4``, which means we only save 4 
 
 Images and spikes will be saved in ``./logs/visualization``. Here are two images and spikes encoded from them:
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/input.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/input.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_0.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_1.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_2.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_2.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_3.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_3.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/input.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/input.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_0.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_1.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_2.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_2.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
     :width: 100%

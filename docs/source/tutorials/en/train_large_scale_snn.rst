@@ -184,7 +184,7 @@ pre-trained weights by setting ``pretrained=True``:
   s_resnet18 = spiking_resnet.spiking_resnet18(pretrained=True, spiking_neuron=neuron.IFNode, surrogate_function=surrogate.ATan(), detach_reset=True)
 
 Usage of ``activation_based.model.train_classify``
-----------------------------------------------
+--------------------------------------------------------
 :class:`spikingjelly.activation_based.model.train_classify` is modified by `torchvision 0.12 references <https://github.com/pytorch/vision/tree/release/0.12/references>`_. \
 We can use this module to train easily.
 

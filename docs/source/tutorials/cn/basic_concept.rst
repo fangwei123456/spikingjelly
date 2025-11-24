@@ -328,13 +328,13 @@ PyTorch的设计为RNN将状态也一并输出，可以参考 :class:`torch.nn.R
 下面的图片展示了逐步传播构建计算图的顺序：
 
 
-.. image:: ../_static/tutorials/basic_concept/step-by-step.png
+.. image:: ../../_static/tutorials/basic_concept/step-by-step.png
     :width: 100%
 
 
 下面的图片展示了逐层传播构建计算图的顺序：
 
-.. image:: ../_static/tutorials/basic_concept/layer-by-layer.png
+.. image:: ../../_static/tutorials/basic_concept/layer-by-layer.png
     :width: 100%
 
 

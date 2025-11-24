@@ -202,7 +202,7 @@
 
 下图展示了训练过程中正确率的变化：
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/fmnist_logs.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/fmnist_logs.*
     :width: 100%
 
 可视化编码器
@@ -273,32 +273,32 @@
 
 运行后图片会保存到 ``./logs/visualization`` 文件夹中。下面展示2个输入图片，和对应的编码后的脉冲：
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/input.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/input.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_0.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_1.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_2.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_2.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/0/s_3.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/s_3.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/input.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/input.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_0.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_1.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_2.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_2.*
     :width: 100%
 
-.. image:: ../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
+.. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/3/s_3.*
     :width: 100%

@@ -1,13 +1,19 @@
 import torch
 from torch import autograd
-import triton
+
+try:
+    import triton
+except BaseException as e:
+    import logging
+    logging.info(f'spikingjelly.activation_based.triton_kernel.flexsn.wrapper: {e}')
+    triton = None
 
 from ..triton_utils import type_dict, contiguous_and_device_guard
 from ..triton_utils import amp_custom_fwd, amp_custom_bwd
 from .info import FlexSNInfo
 
 
-def flexsn_inference(f: triton.JITFunction, info: FlexSNInfo, *args) -> tuple:
+def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
     NCL = x_example[0].numel()
@@ -28,7 +34,7 @@ def flexsn_inference(f: triton.JITFunction, info: FlexSNInfo, *args) -> tuple:
     return tuple(outputs)
 
 
-def flexsn_forward(f: triton.JITFunction, info: FlexSNInfo, *args) -> tuple:
+def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
     NCL = x_example[0].numel()
@@ -49,7 +55,7 @@ def flexsn_forward(f: triton.JITFunction, info: FlexSNInfo, *args) -> tuple:
     return tuple(returns)
 
 
-def flexsn_backward(f: triton.JITFunction, info: FlexSNInfo, *args) -> tuple:
+def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     grad_example = args[0]
     T = grad_example.shape[0]
     NCL = grad_example[0].numel()
@@ -78,11 +84,7 @@ class FlexSNFunction(autograd.Function):
     @contiguous_and_device_guard
     @amp_custom_fwd
     def forward(
-        ctx,
-        fn_inf: triton.JITFunction,
-        fn_fwd: triton.JITFunction,
-        fn_bwd: triton.JITFunction,
-        info: FlexSNInfo,
+        ctx, fn_inf, fn_fwd, fn_bwd, info: FlexSNInfo,
         *args,  # len = num_inputs; including initial states
     ):
         if any(ctx.needs_input_grad):

@@ -3,7 +3,7 @@
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-在上一个教程 :doc:`神经形态数据集处理 <./13_neuromorphic_datasets>` 中，我们预处理了DVS128 Gesture数据集。接下来，我们将搭建SNN
+在上一个教程 :doc:`神经形态数据集处理 <../en/13_neuromorphic_datasets>` 中，我们预处理了DVS128 Gesture数据集。接下来，我们将搭建SNN
 对DVS128 Gesture数据集进行分类，我们将使用 `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ [#PLIF]_ 一文中的网络，其中神经元使用LIF神经元，池化选用最大池化。
 
 原文 [#PLIF]_ 使用老版本的惊蜇框架，原始代码和训练日志可以在此处获取： `Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron <https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron>`_
@@ -14,7 +14,7 @@
 -----------------------
 原文 [#PLIF]_ 使用下图所示的通用结构表示用于各个数据集的网络。
 
-.. image:: ../_static/tutorials/14_classify_dvsg/network.png
+.. image:: ../../_static/tutorials/14_classify_dvsg/network.png
     :width: 100%
 
 
@@ -414,16 +414,16 @@
 
 训练一个epoch耗时为18.17s，比逐步传播的27.76s快了约10s。训练256个epoch，我们可以达到最高96.18%的正确率，得到的训练曲线如下：
 
-.. image:: ../_static/tutorials/14_classify_dvsg/train_loss.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/train_loss.*
     :width: 100%
 
-.. image:: ../_static/tutorials/14_classify_dvsg/train_acc.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/train_acc.*
     :width: 100%
 
-.. image:: ../_static/tutorials/14_classify_dvsg/test_loss.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/test_loss.*
     :width: 100%
 
-.. image:: ../_static/tutorials/14_classify_dvsg/test_acc.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/test_acc.*
     :width: 100%
 
 

@@ -6,7 +6,7 @@ Self-connected Modules
 -----------------------------
 Recurrent connection is the connection from outputs to inputs, e.g., the SRNN(recurrent networks of spiking neurons) in [#Effective]_, which are shown in the following figure:
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
 We can add recurrent connection to modules by SpikingJelly easily. Considering the most simple case that we add a recurrent connection to the spiking neruons layer to make its \
@@ -95,12 +95,12 @@ Now let us do some simple experiments on Sequential FashionMNIST to verify wheth
 ability on the memory task. The Sequential FashionMNIST dataset is a modified FashionMNIST dataset. Images will be sent to the network row by row or column by column, rather than \
 be sent entirely. To classify correctly, the network should have good memory ability. We will send images column by column, which is similar to how humans read the book from left to right:
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/a.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 The following figure shows the column that is being sent:
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/b.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 First, let us import some packages:
@@ -178,7 +178,7 @@ By adding a recurrent connection implemented by :class:`spikingjelly.activation_
 
 The following figure shows the network structure of three networks:
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
 The complete codes are saved in `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_. We can run by the following commands:
@@ -218,11 +218,11 @@ Train three networks:
 
 The following figures show the accuracy curves during training:
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
     :width: 100%
 
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_test_acc.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_test_acc.*
     :width: 100%
 
 

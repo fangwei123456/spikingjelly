@@ -16,7 +16,7 @@ Define The Network
 The paper [#PLIF]_ use a general structure to build SNNs for different datasets, which is shown in the following figure:
 
 
-.. image:: ../_static/tutorials/14_classify_dvsg/network.png
+.. image:: ../../_static/tutorials/14_classify_dvsg/network.png
     :width: 100%
 
 :math:`N_{conv}=1, N_{down}=5, N_{fc}=2` for the DVS128 Gesture dataset.
@@ -418,16 +418,16 @@ It takes 27.76s to finish an epoch. We stop it and train the faster network:
 It takes 18.17s to finish an epoch, which is much faster. After 256 epochs, we will get the maximum accuracy 96.18%. The
 logs curves during training are:
 
-.. image:: ../_static/tutorials/14_classify_dvsg/train_loss.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/train_loss.*
     :width: 100%
 
-.. image:: ../_static/tutorials/14_classify_dvsg/train_acc.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/train_acc.*
     :width: 100%
 
-.. image:: ../_static/tutorials/14_classify_dvsg/test_loss.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/test_loss.*
     :width: 100%
 
-.. image:: ../_static/tutorials/14_classify_dvsg/test_acc.*
+.. image:: ../../_static/tutorials/14_classify_dvsg/test_acc.*
     :width: 100%
 
 

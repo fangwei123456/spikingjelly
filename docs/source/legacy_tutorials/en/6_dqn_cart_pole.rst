@@ -203,26 +203,26 @@ The trained SNN controls the left or right movement of the CartPole, until the e
 During the simulation, the ``play`` function will draw the firing rate of the IF neuron,
 and the voltages of the NonSpikingLIF neurons in the output layer at the last moment, which directly determine the movement of the CartPole.
 
-.. image:: ../_static/tutorials/\6_dqn_cart_pole/512@66.*
+.. image:: ../../_static/tutorials/\6_dqn_cart_pole/512@66.*
     :width: 100%
 
 The performance after 16 episodes:
 
-.. image:: ../_static/tutorials/\6_dqn_cart_pole/16@66.*
+.. image:: ../../_static/tutorials/\6_dqn_cart_pole/16@66.*
     :width: 100%
 
 The performance after 32 episodes:
 
-.. image:: ../_static/tutorials/\6_dqn_cart_pole/32@66.*
+.. image:: ../../_static/tutorials/\6_dqn_cart_pole/32@66.*
     :width: 100%
 
 The reward increases with training:
 
-.. image:: ../_static/tutorials/\6_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
+.. image:: ../../_static/tutorials/\6_dqn_cart_pole/Spiking-DQN-state-CartPole-v0.*
     :width: 100%
 
 Here is the performance of the ANN version
 (The code can be found here `activation_based/examples/DQN_state.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/DQN_state.py>`_).
 
-.. image:: ../_static/tutorials/\6_dqn_cart_pole/DQN-state-CartPole-v0.*
+.. image:: ../../_static/tutorials/\6_dqn_cart_pole/DQN-state-CartPole-v0.*
     :width: 100%

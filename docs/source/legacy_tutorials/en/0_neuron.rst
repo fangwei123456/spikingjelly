@@ -204,7 +204,7 @@ Now let us give constant input to the LIF neurons layer and plot the membrane po
 
 The input is with ``shape=[1]``, and this LIF neurons layer has only 1 neuron. Its membrane potential and output spikes change with time-step as follows:
 
-.. image:: ../_static/tutorials/0_neuron/0.*
+.. image:: ../../_static/tutorials/0_neuron/0.*
     :width: 100%
 
 We reset the neurons layer and give an input with ``shape=[32]`` to see the membrane potential and output spikes of these 32 neurons:
@@ -231,8 +231,8 @@ We reset the neurons layer and give an input with ``shape=[32]`` to see the memb
 
 The results are as follows:
 
-.. image:: ../_static/tutorials/0_neuron/1.*
+.. image:: ../../_static/tutorials/0_neuron/1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/0_neuron/2.*
+.. image:: ../../_static/tutorials/0_neuron/2.*
     :width: 100%

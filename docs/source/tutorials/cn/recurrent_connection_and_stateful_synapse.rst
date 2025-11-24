@@ -7,14 +7,13 @@
 -----------------------
 自连接指的是从输出到输入的连接，例如 [#Effective]_ 一文中的SRNN(recurrent networks of spiking neurons)，如下图所示：
 
-.. image:: ../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
+.. image:: ../../_static/tutorials/15_recurrent_connection_and_stateful_synapse/SRNN_example.*
     :width: 100%
 
 使用SpikingJelly框架很容易构建出带有自连接的模块。考虑最简单的一种情况，我们给神经元增加一个回路，使得它在 :math:`t` 时刻的输出 :math:`s[t]`，\
 会与下一个时刻的外界输入 :math:`x[t+1]` 相加，共同作为输入。这可以由 :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer` \
 轻松实现。 :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.ElementWiseRecurrentContainer>` 是一个包装器，\
-给任意的 ``sub_module`` 增加一个额外的自连接。连接的形式可以使用用户自定义的逐元素函数操作 :math:`z=f(x, y)` 来实现。记 :math:`x[t]` 为\
- :math:`t` 时刻整个模块的输入，:math:`i[t]` 和 :math:`y[t]` 是 ``sub_module`` 的输入和输出（注意 :math:`y[t]` 同时也是整个模块的输出），则
+给任意的 ``sub_module`` 增加一个额外的自连接。连接的形式可以使用用户自定义的逐元素函数操作 :math:`z=f(x, y)` 来实现。记 :math:`x[t]` 为:math:`t` 时刻整个模块的输入，:math:`i[t]` 和 :math:`y[t]` 是 ``sub_module`` 的输入和输出（注意 :math:`y[t]` 同时也是整个模块的输出），则
 
 .. math::
 
@@ -97,12 +96,12 @@ Sequential FashionMNIST上的对比实验
 将原始的FashionMNIST图片一行一行或者一列一列，而不是整个图片，作为输入。在这种情况下，网络必须具有一定的记忆能力，才能做出正确的分类。我们将会把
 图片一列一列的输入，这样对网络而言，就像是从左到右“阅读”一样，如下图所示：
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/a.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/a.*
     :width: 50%
 
 下图中展示了被读入的列：
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/b.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/samples/b.*
     :width: 50%
 
 首先导入相关的包：
@@ -179,7 +178,7 @@ Sequential FashionMNIST上的对比实验
 
 下图展示了3种网络的结构：
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/ppt/nets.png
     :width: 100%
 
 完整的代码位于 `spikingjelly.activation_based.examples.rsnn_sequential_fmnist <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/rsnn_sequential_fmnist.py>`_。我们可以通过命令行直接运行。运行参数为：
@@ -219,11 +218,11 @@ Sequential FashionMNIST上的对比实验
 
 下图展示了3种网络的训练曲线：
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_train_acc.*
     :width: 100%
 
 
-.. image:: ../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_test_acc.*
+.. image:: ../../_static/tutorials/recurrent_connection_and_stateful_synapse/rsnn_test_acc.*
     :width: 100%
 
 

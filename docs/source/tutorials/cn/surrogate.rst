@@ -47,7 +47,7 @@
 为 :class:`spikingjelly.activation_based.surrogate.Sigmoid`，下图展示了原始的Heaviside阶跃函数 ``Heaviside``、 ``alpha=5`` 时的Sigmoid原函数 ``Primitive`` \
 以及其梯度 ``Gradient``：
 
-.. image:: ../_static/API/activation_based/surrogate/Sigmoid.*
+.. image:: ../../_static/API/activation_based/surrogate/Sigmoid.*
     :width: 100%
 
 

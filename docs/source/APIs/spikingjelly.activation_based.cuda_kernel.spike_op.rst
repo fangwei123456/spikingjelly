@@ -1,5 +1,5 @@
 spikingjelly.activation\_based.spike\_op package
-======================================
+===================================================
 
 Module contents
 ---------------

@@ -102,7 +102,7 @@ In the previous tutorials and examples, we run the SNNs `step-by-step`, e.g.,:
 
 The computation graph of forward propagation is built as followed:
 
-.. image:: ../_static/tutorials/10_propagation_pattern/step-by-step.png
+.. image:: ../../_static/tutorials/10_propagation_pattern/step-by-step.png
     :width: 100%
 
 The forward propagation of SNN and RNN is along both spatial domain and temporal domain. `step-by-step` calculates states of the whole network step by step. We can also use an another order, which is `layer-by-layer`. `layer-by-layer` calculates states layer-by-layer. The followed code is a `layer-by-layer` example (we suppose ``M0, M1, M2`` are multi-step modules):
@@ -115,7 +115,7 @@ The forward propagation of SNN and RNN is along both spatial domain and temporal
 
 The computation graph of forward propagation is built as followed:
 
-.. image:: ../_static/tutorials/10_propagation_pattern/layer-by-layer.png
+.. image:: ../../_static/tutorials/10_propagation_pattern/layer-by-layer.png
     :width: 100%
 
 The `layer-by-layer` method is widely used in RNN and SNN, e.g., `Low-activity supervised convolutional spiking neural networks applied to speech commands recognition <https://arxiv.org/abs/2011.06846>`_ calculates outputs of each layer to implement a temporal convolution. Their codes are availble at https://github.com/romainzimmer/s2net.

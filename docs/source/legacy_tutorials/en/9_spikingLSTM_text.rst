@@ -193,7 +193,7 @@ We will observe the following results when executing ``%run ./spiking_lstm_text.
 
 The following picture shows how average loss ``avg_losses`` , training accuracy ``accuracy_rec`` and testing accuracy ``test_accu_rec`` improve with training.
 
-.. image:: ../_static/tutorials/\9_spikingLSTM_text/TrainingProcess.*
+.. image:: ../../_static/tutorials/\9_spikingLSTM_text/TrainingProcess.*
     :width: 100%
 
 Testing the network
@@ -299,5 +299,5 @@ We will observe the following results when executing ``%run ./spiking_lstm_text.
 The following picture exhibits the confusion matrix, of which a brighter diagonal element indicates better prediction, and thus less confusion, such as Arabic and Greek.
 However, some languages are prone to confusion, such as Korean and Chinese, English and Scottish.
 
-.. image:: ../_static/tutorials/\9_spikingLSTM_text/ConfusionMatrix.*
+.. image:: ../../_static/tutorials/\9_spikingLSTM_text/ConfusionMatrix.*
     :width: 100%

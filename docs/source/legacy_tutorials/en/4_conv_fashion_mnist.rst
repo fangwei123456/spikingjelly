@@ -252,10 +252,10 @@ network uses `Intel(R) Xeon(R) Gold 6148 CPU @ 2.40GHz` CPU and `GeForce RTX 208
 
 After running 100 rounds of training, the correct rates on the training batch and test set are as follows:
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/train.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/test.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/test.*
     :width: 100%
 
 After training for 64 epochs, the highest test set accuracy rate can reach 93.3%, which is a very good accuracy for
@@ -347,22 +347,22 @@ Let us extract a image from the data set, send it to the encoder, and check the 
 
 The following figure shows two input iamges and the cumulative spikes :math:`\sum_{t} S_{t}` encoded by the encoder at ``t=0`` and ``t=7``:
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/x0.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/x0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y00.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y00.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y07.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y07.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/x1.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/x1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y10.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y10.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y17.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y17.*
     :width: 100%
 
 It can be found that the cumulative spikes :math:`\sum_{t} S_{t}` are very similar to the origin images, indicating that the encoder has strong coding ability.

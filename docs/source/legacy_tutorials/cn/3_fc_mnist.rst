@@ -131,12 +131,12 @@
 
 取\ ``tau=2.0,T=100,batch_size=128,lr=1e-3``\ ，训练100个Epoch后，将会输出四个npy文件。测试集上的最高正确率为92.5%，通过matplotlib可视化得到的正确率曲线如下
 
-.. image:: ../_static/tutorials/3_fc_mnist/acc.*
+.. image:: ../../_static/tutorials/3_fc_mnist/acc.*
     :width: 100%
 
 选取测试集中第一张图片：
 
-.. image:: ../_static/tutorials/3_fc_mnist/input.png
+.. image:: ../../_static/tutorials/3_fc_mnist/input.png
 
 用训好的模型进行分类，得到分类结果
 
@@ -146,10 +146,10 @@
 
 通过\ ``visualizing``\ 模块中的函数可视化得到输出层的电压以及脉冲如下图所示
 
-.. image:: ../_static/tutorials/3_fc_mnist/1d_spikes.*
+.. image:: ../../_static/tutorials/3_fc_mnist/1d_spikes.*
     :width: 100%
 
-.. image:: ../_static/tutorials/3_fc_mnist/2d_heatmap.*
+.. image:: ../../_static/tutorials/3_fc_mnist/2d_heatmap.*
     :width: 100%
 
 可以看到除了正确类别对应的神经元外，其它神经元均未发放任何脉冲。完整的训练代码可见 `activation_based/examples/lif_fc_mnist.py <https://github.com/fangwei123456/spikingjelly/blob/master/spikingjelly/activation_based/examples/lif_fc_mnist.py>`_ 。

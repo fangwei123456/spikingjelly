@@ -76,10 +76,10 @@
 
 lena原灰度图和编码后20个脉冲矩阵如下：
 
-.. image:: ../_static/tutorials/2_encoding/3.*
+.. image:: ../../_static/tutorials/2_encoding/3.*
     :width: 100%
 
-.. image:: ../_static/tutorials/2_encoding/4.*
+.. image:: ../../_static/tutorials/2_encoding/4.*
     :width: 100%
 
 对比原灰度图和编码后的脉冲矩阵，可发现脉冲矩阵很接近原灰度图的轮廓，可见泊松编码器性能的优越性。
@@ -111,7 +111,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 
 叠加后的图像如下：
 
-.. image:: ../_static/tutorials/2_encoding/5.*
+.. image:: ../../_static/tutorials/2_encoding/5.*
     :width: 100%
 
 可见当仿真足够的步长，泊松编码器得到的脉冲叠加后几乎可以重构出原始图像。
@@ -152,7 +152,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
                                plot_firing_rate=False)
     plt.show()
 
-.. image:: ../_static/tutorials/2_encoding/1.*
+.. image:: ../../_static/tutorials/2_encoding/1.*
     :width: 100%
 
 延迟编码器
@@ -214,7 +214,7 @@ lena原灰度图和编码后20个脉冲矩阵如下：
 
 当随机生成的6个刺激强度分别为 ``0.6650`` 、 ``0.3704`` 、 ``0.8485`` 、 ``0.0247`` 、 ``0.5589`` 和 ``0.1030`` 时，得到的脉冲序列如下：
 
-.. image:: ../_static/tutorials/2_encoding/2.*
+.. image:: ../../_static/tutorials/2_encoding/2.*
     :width: 100%
 
 带权相位编码器

@@ -1,5 +1,5 @@
 spikingjelly.activation_based.cuda_kernel.auto_cuda package
-======================================
+============================================================
 
 Module contents
 ---------------

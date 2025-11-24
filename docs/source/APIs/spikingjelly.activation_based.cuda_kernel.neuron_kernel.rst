@@ -1,5 +1,5 @@
 spikingjelly.activation\_based.cuda\_kernel.neuron\_kernel package
-======================================
+====================================================================
 
 Module contents
 ---------------

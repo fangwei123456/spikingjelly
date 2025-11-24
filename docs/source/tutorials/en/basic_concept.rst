@@ -329,13 +329,13 @@ The outputs of the above codes are:
 The following figure shows how the computation graph is built in the step-by-step propagation pattern:
 
 
-.. image:: ../_static/tutorials/basic_concept/step-by-step.png
+.. image:: ../../_static/tutorials/basic_concept/step-by-step.png
     :width: 100%
 
 
 The following figure shows how the computation graph is built in the layer-by-layer propagation pattern:
 
-.. image:: ../_static/tutorials/basic_concept/layer-by-layer.png
+.. image:: ../../_static/tutorials/basic_concept/layer-by-layer.png
     :width: 100%
 
 

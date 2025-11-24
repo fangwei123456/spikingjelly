@@ -2,15 +2,15 @@ spikingjelly.activation\_based.examples package
 ===============================================
 
 Subpackages
------------
++++++++++++++
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 3
 
    spikingjelly.activation_based.examples.common
 
 Submodules
-----------
+++++++++++++
 
 spikingjelly.activation\_based.examples.A2C module
 --------------------------------------------------
@@ -84,14 +84,6 @@ spikingjelly.activation\_based.examples.conv\_fashion\_mnist module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.examples.dqn\_cart\_pole module
---------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.dqn_cart_pole
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 spikingjelly.activation\_based.examples.lif\_fc\_mnist module
 -------------------------------------------------------------
 
@@ -132,10 +124,4 @@ spikingjelly.activation\_based.examples.spiking\_lstm\_text module
    :undoc-members:
    :show-inheritance:
 
-Module contents
----------------
-
-.. automodule:: spikingjelly.activation_based.examples
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. Module contents

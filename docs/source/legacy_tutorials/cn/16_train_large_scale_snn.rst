@@ -4,7 +4,7 @@
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
 使用 :class:`spikingjelly.activation_based.model`
-----------------------------------------------
+--------------------------------------------------------------
 在 :class:`spikingjelly.activation_based.model` 中定义了一些常用的网络，下面以 :class:`spikingjelly.activation_based.model.spiking_resnet`
 为例展示如何使用这些网络。
 

@@ -150,7 +150,7 @@ where :math:`X[t]` is the external input. To avoid confusion, we use :math:`H[t]
 
 The neuronal dynamics can be described by the following figure (the figure is cited from `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_):
 
-.. image:: ../_static/tutorials/neuron/neuron.*
+.. image:: ../../_static/tutorials/neuron/neuron.*
     :width: 100%
 
 
@@ -178,7 +178,7 @@ Now let us give inputs to the spiking neurons step-by-step, check the membrane p
  
 The input has ``shape=[1]``. So, there is only 1 neuron. Its membrane potential and output spikes are:
 
-.. image:: ../_static/tutorials/neuron/0.*
+.. image:: ../../_static/tutorials/neuron/0.*
     :width: 100%
 
 Reset the neurons layer, and give the input with ``shape=[32]``. Then we can check the membrane potential and output spikes of these 32 neurons:
@@ -211,10 +211,10 @@ Reset the neurons layer, and give the input with ``shape=[32]``. Then we can che
 
 The results are:
 
-.. image:: ../_static/tutorials/0_neuron/1.*
+.. image:: ../../_static/tutorials/0_neuron/1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/0_neuron/2.*
+.. image:: ../../_static/tutorials/0_neuron/2.*
     :width: 100%
 
 Step mode and backend

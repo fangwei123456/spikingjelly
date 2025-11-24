@@ -1,4 +1,9 @@
-import triton
+try:
+    import triton
+except BaseException as e:
+    import logging
+    logging.info(f'spikingjelly.activation_based.triton_kernel.flexsn.template: {e}')
+    triton = None
 
 from ..torch2triton import compile_triton_code_str
 from .info import FlexSNInfo
@@ -111,7 +116,7 @@ def get_flexsn_inference_kernel(
     core_name: str,
     info: FlexSNInfo,
     verbose: bool = False
-) -> triton.JITFunction:
+):
     hash = core_name[-8:]
     num_inputs = info.num_inputs
     num_states = info.num_states
@@ -197,7 +202,7 @@ def get_flexsn_forward_kernel(
     core_name: str,
     info: FlexSNInfo,
     verbose: bool = False,
-) -> triton.JITFunction:
+):
     hash = core_name[-8:]
     num_inputs = info.num_inputs
     num_states = info.num_states
@@ -268,7 +273,7 @@ def get_flexsn_backward_kernel(
     core_name: str,
     info: FlexSNInfo,
     verbose: bool = False,
-) -> triton.JITFunction:
+):
     hash = core_name[-8:]
     num_outputs = info.num_outputs
     num_inputs = info.num_inputs

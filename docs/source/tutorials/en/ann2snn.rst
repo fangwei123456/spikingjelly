@@ -43,7 +43,7 @@ We gave constant input to the IF neuron and observed its output spikes and spike
     plt.grid(linestyle='-.')
     plt.show()
 
-.. image:: ../_static/tutorials/5_ann2snn/0.*
+.. image:: ../../_static/tutorials/5_ann2snn/0.*
     :width: 100%
 
 Next, send the input to the IF neuron layer, and run the ``T=128`` step to observe the pulses and pulse firing frequency of each neuron:
@@ -58,7 +58,7 @@ Next, send the input to the IF neuron layer, and run the ``T=128`` step to obser
     visualizing.plot_1d_spikes(out_spikes, 'IF neurons\' spikes and firing rates', 't', 'Neuron index $i$')
     plt.show()
 
-.. image:: ../_static/tutorials/5_ann2snn/1.*
+.. image:: ../../_static/tutorials/5_ann2snn/1.*
     :width: 100%
 
 It can be found that the frequency of the pulse firing is within a certain range, which is proportional to the size of the input :math:`x_{i}`.
@@ -83,7 +83,7 @@ Next, let's plot the firing frequency of the IF neuron against the input :math:`
     plt.grid(linestyle='-.')
     plt.show()
 
-.. image:: ../_static/tutorials/5_ann2snn/2.*
+.. image:: ../../_static/tutorials/5_ann2snn/2.*
     :width: 100%
 
 It can be found that the two curves are almost the same. It should be noted that the pulse frequency cannot be higher than 1, so the IF neuron cannot fit the input of the ReLU in the ANN is larger than 1.
@@ -175,7 +175,7 @@ There is currently no very ideal solution for max pooling in ANNs. The best solu
 When simulating, according to the transformation theory, the SNN needs to input a constant analog input. Using a Poisson encoder will bring about a reduction in accuracy.
 
 Implementation and optional configuration
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The ann2snn framework was updated in April 2022. The two categories of parser and simulator have been cancelled,  and instead the converter class has been used. It is more concise and has more modes for transformation settings.
 
@@ -207,7 +207,7 @@ Classify MNIST
 --------------
 
 Build the ANN to be converted
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^6
 
 Now we use ``ann2snn`` to build a simple convolutional network to classify the MNIST dataset.
 
@@ -309,7 +309,7 @@ The output is as follows:
 
 
 Make the conversion with the converter
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Converting with Converter is very simple, you only need to set the mode you want to use in the parameters. For example, to use MaxNorm, you need to define an ``ann2snn.Converter`` first, and forward the model to this object:
 
@@ -404,7 +404,7 @@ Call the ``GraphModule.graph.print_tabular()`` method to view the graph of the i
     output       output          output          (network_15,)      {}
 
 Comparison of different converting modes
-^^^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , ``1.0/3`` , ``1.0/4`` , ``1.0/ 5`` case SNN transformation and separate inference T steps to get the accuracy.
 
@@ -505,7 +505,7 @@ Based on the time-varying accuracy of the model output, we can plot the accuracy
     plt.ylabel('Acc')
     plt.show()
 
-.. image:: ../_static/tutorials/5_ann2snn/accuracy_mode_new_added.png
+.. image:: ../../_static/tutorials/5_ann2snn/accuracy_mode_new_added.png
 
 Different settings can get different results, some inference speed is fast, but the final accuracy is low, and some inference is slow, but the accuracy is high. Users can choose model settings according to their needs.
 

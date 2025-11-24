@@ -17,7 +17,7 @@ If the pre neuron fires later while the post neuron fires early, then the weight
 
 The curve [#STDP_figure]_ that fits the experiments data is as follows:
 
-.. image:: ../_static/tutorials/stdp/stdp.*
+.. image:: ../../_static/tutorials/stdp/stdp.*
     :width: 100%
 
 We can use the following equation to describe STDP:
@@ -144,12 +144,12 @@ The complete codes are available at ``spikingjelly/activation_based/examples/std
 
 Let us plot ``in_spike, out_spike, trace_pre, trace_post, weight``:
 
-.. image:: ../_static/tutorials/stdp/stdp_trace.*
+.. image:: ../../_static/tutorials/stdp/stdp_trace.*
     :width: 100%
 
 This figure is similar to Fig.3 in [#Trace]_  (note that they use `j` as the pre neuron and `i` as the post neuron, while we use the opposite symbol):
 
-.. image:: ../_static/tutorials/stdp/trace_paper_fig3.*
+.. image:: ../../_static/tutorials/stdp/trace_paper_fig3.*
     :width: 100%
 
 

@@ -44,7 +44,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
                                     ylabel='Neuron Index', int_x_ticks=True, x_max=T, dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_heatmap.*
+    .. image:: ../_static/API/visualizing/plot_2d_heatmap.*
         :width: 100%
 
     '''
@@ -104,7 +104,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
                                       int_z_ticks=False, dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_bar_in_3d.png
+    .. image:: ../_static/API/visualizing/plot_2d_bar_in_3d.png
 
     也可以用来绘制一张表示多个神经元在不同时刻的电压的热力图，示例代码：
 
@@ -130,7 +130,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
                                       int_z_ticks=False, dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_bar_in_3d_1.png
+    .. image:: ../_static/API/visualizing/plot_2d_bar_in_3d_1.png
 
     '''
     if array.ndim != 2:
@@ -195,7 +195,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
                                    ylabel='Neuron Index', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_1d_spikes.*
+    .. image:: ../_static/API/visualizing/plot_1d_spikes.*
         :width: 100%
 
     '''
@@ -277,7 +277,7 @@ def plot_2d_feature_map(x3d: np.asarray, nrows, ncols, space, title: str, figsiz
         visualizing.plot_2d_feature_map(spikes=spikes, nrows=6, ncols=8, space=2, title='Spiking Feature Maps', dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_2d_feature_map.*
+    .. image:: ../_static/API/visualizing/plot_2d_feature_map.*
         :width: 100%
 
     '''
@@ -336,7 +336,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
                                         dpi=200)
         plt.show()
 
-    .. image:: ./_static/API/visualizing/plot_one_neuron_v_s.*
+    .. image:: ../_static/API/visualizing/plot_one_neuron_v_s.*
         :width: 100%
     '''
     fig = plt.figure(figsize=figsize, dpi=dpi)

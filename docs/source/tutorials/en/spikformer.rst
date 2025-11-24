@@ -6,12 +6,12 @@ This tutorial mainly introduces the construction of the Spiking Transformer (Spi
 Compared to SEW ResNet, the structure and stacking method of Spikformer are relatively simple, specifically consisting of three main components: Spiking Patch Splitting (SPS), Spiking Self Attention (SSA), and Multi-Layer Perceptron (MLP).
 The stacking method is one SPS followed by multiple SSA-MLP combination blocks. The specific SSA and Spikformer are shown in the figure:
 
-.. image:: ../_static/tutorials/spikformer/spikformer-overview.png
+.. image:: ../../_static/tutorials/spikformer/spikformer-overview.png
     :width: 100%
 
 
 Building a Spiking Transformer
------------------------------
+---------------------------------------
 
 First, import the relevant modules:
 
@@ -110,9 +110,9 @@ Improving Spiking Transformer
 -----------------------------
 The modeling form of Spiking Self Attention mechanism is still in open exploration, and there are multiple improvements, including: improving the form and calculation method of QKV, enhancing spatial-temporal attention capability of QKV, designing spike position encoding, and accelerating SSA block splitting.
 Readers can explore new mechanisms suitable for SNN based on actual task requirements and performance orientation. Furthermore, the improvement of MLP and SPS feedforward modules in Spiking Transformer will also significantly affect its performance.
-Some Spikformer variants include: SpikingResformer, as shown in:
+Some Spikformer variants include: SpikingResformer [#spikingresformer]_, as shown in:
 
-.. image:: ../_static/tutorials/spikformer/spikingresformer.png
+.. image:: ../../_static/tutorials/spikformer/spikingresformer.png
     :width: 100%
 
 

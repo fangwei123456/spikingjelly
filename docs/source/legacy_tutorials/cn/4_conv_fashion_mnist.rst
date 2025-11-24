@@ -247,10 +247,10 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 运行64轮训练后，训练集和测试集上的正确率如下：
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/train.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/train.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/test.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/test.*
     :width: 100%
 
 在训练64个epoch后，最高测试集正确率可以达到93.3%，对于SNN而言是非常不错的性能，仅仅略低于 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`__
@@ -344,22 +344,22 @@ ANN中常见的卷积神经网络，大多数是卷积+全连接层的形式，�
 
 下面展示2个输入图片，以及在最开始 ``t=0`` 和最后 ``t=7`` 时刻的编码器输出的累计脉冲 :math:`\sum_{t} S_{t}`：
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/x0.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/x0.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y00.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y00.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y07.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y07.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/x1.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/x1.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y10.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y10.*
     :width: 100%
 
-.. image:: ../_static/tutorials/4_conv_fashion_mnist/y17.*
+.. image:: ../../_static/tutorials/4_conv_fashion_mnist/y17.*
     :width: 100%
 
 观察可以发现，编码器的累计输出脉冲 :math:`\sum_{t} S_{t}` 非常接近原图像的轮廓，表明这种自学习的脉冲编码器，有很强的编码能力。

@@ -1,8 +1,10 @@
 spikingjelly.datasets package
 =============================
 
+.. Subpackages
+
 Submodules
-----------
+++++++++++++
 
 spikingjelly.datasets.asl\_dvs module
 -------------------------------------
@@ -12,10 +14,10 @@ spikingjelly.datasets.asl\_dvs module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.datasets.asl\_dvs module
--------------------------------------
+spikingjelly.datasets.bullying10k module
+--------------------------------------------
 
-.. automodule:: spikingjelly.datasets.asl_dvs
+.. automodule:: spikingjelly.datasets.bullying10k
    :members:
    :undoc-members:
    :show-inheritance:
@@ -36,10 +38,26 @@ spikingjelly.datasets.dvs128\_gesture module
    :undoc-members:
    :show-inheritance:
 
+spikingjelly.datasets.dvs\_lip module
+--------------------------------------------
+
+.. automodule:: spikingjelly.datasets.dvs_lip
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 spikingjelly.datasets.es\_imagenet module
 -----------------------------------------
 
 .. automodule:: spikingjelly.datasets.es_imagenet
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+spikingjelly.datasets.hardvs module
+-----------------------------------------
+
+.. automodule:: spikingjelly.datasets.hardvs
    :members:
    :undoc-members:
    :show-inheritance:
@@ -85,7 +103,7 @@ spikingjelly.datasets.speechcommands module
    :show-inheritance:
 
 Module contents
----------------
+++++++++++++++++
 
 .. automodule:: spikingjelly.datasets
    :members:
