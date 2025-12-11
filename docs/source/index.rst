@@ -19,7 +19,7 @@
 - `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/>`_
 
 - `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/>`_
-  
+
 - `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/>`_
 
 - `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/>`_
@@ -29,7 +29,7 @@
 - `0.0.0.0.14 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/>`_
 
 - `latest <https://spikingjelly.readthedocs.io/zh_CN/latest/>`_
-  
+
 安装
 ----------------
 

@@ -349,8 +349,8 @@ class Tempotron(nn.Module):
 
         wrong_mask: Identifies neurons that misclassified the input.
         A neuron is considered to have misclassified if:
-            - It fired (v_max >= threshold) when it shouldn't have (not the correct class).
-            - It didn't fire (v_max < threshold) when it should have (the correct class).
+        - It fired (v_max >= threshold) when it shouldn't have (not the correct class).
+        - It didn't fire (v_max < threshold) when it should have (the correct class).
 
         loss: Computes the mean squared error of the voltage difference
         for the misclassified neurons, averaged over the batch size.

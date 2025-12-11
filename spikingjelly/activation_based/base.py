@@ -28,7 +28,7 @@ def check_backend_library(backend: str):
 
     .. _check_backend_library-cn:
 
-    :param backend: ``'torch'``, ``'cupy'`` 或 ``'lava'``
+    :param backend: ``'torch'``, ``'cupy'``, ``'triton'``或 ``'lava'``
     :type backend: str
 
     检查某个后端的python库是否已经安装。若未安装则此函数会报错。
@@ -37,7 +37,7 @@ def check_backend_library(backend: str):
 
     .. _check_backend_library-en:
 
-    :param backend: ``'torch'``, ``'cupy'`` or ``'lava'``
+    :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` or ``'lava'``
     :type backend: str
 
     Check whether the python lib for backend is installed. If not, this function will raise an error.

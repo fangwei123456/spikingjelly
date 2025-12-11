@@ -166,17 +166,17 @@ This simple network with analog encoding can achieve 98.44% accuracy after conve
 >>> cnn_mnist.main()
 ```
 
-## CUDA-Enhanced Neuron
+## CUDA/Triton-Enhanced Neuron
 
-SpikingJelly provides two backends for multi-step neurons. You can use the user-friendly `torch` backend for easily coding and debugging and use `cupy` backend for faster training speed.
+SpikingJelly provides multiple backends for multi-step neurons. You can use the user-friendly `torch` backend for easily coding and debugging and use `cupy` or `triton` backend for faster training speed.
 
-The following figure compares the execution time of two backends of Multi-Step LIF neurons (`float32`):
+The following figure compares the execution time of `torch` and `cupy` backends of Multi-Step LIF neurons (`float32`). Generally, `triton` backend is even more efficient than `cupy` backend.
 
 <img src="./docs/source/_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
-`float16` is also provided by the `cupy` backend and can be used in [automatic mixed precision training](https://pytorch.org/docs/stable/notes/amp_examples.html).
+`float16` is also provided by the `cupy` and `triton` backend, and can be used in [automatic mixed precision training](https://pytorch.org/docs/stable/notes/amp_examples.html).
 
-To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable/install.html). Note that the `cupy` backend only supports GPU, while the `torch` backend supports both CPU and GPU.
+To use the `cupy` backend, please install [CuPy](https://docs.cupy.dev/en/stable/install.html). To use the `triton` backend, please install [Triton](https://triton-lang.org/main/index.html). Note that the `cupy` and `triton` backend only supports GPU, while the `torch` backend supports both CPU and GPU.
 
 ## Device Supports
 

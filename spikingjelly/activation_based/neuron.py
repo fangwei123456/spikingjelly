@@ -120,7 +120,7 @@ class BaseNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端速度更快。
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -152,7 +152,7 @@ class BaseNode(base.MemoryModule):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will be faster
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -472,7 +472,7 @@ class IFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -507,7 +507,7 @@ class IFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -785,7 +785,7 @@ class LIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -834,7 +834,7 @@ class LIFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1269,17 +1269,13 @@ class ParametricLIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
             通常设置成 ``False`` ，可以节省内存
         :type store_v_seq: bool
-
-        :param cupy_fp32_inference: 若为 `True`，在 `eval` 模式下，使用float32，却在GPU上运行，并且 `cupy` 已经安装，则会自动使用 `cupy` 进行加速。
-            这个选项的优先权高于 ``backend``
-        :type cupy_fp32_inference: bool
 
         `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_
         提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
@@ -1324,7 +1320,7 @@ class ParametricLIFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1332,10 +1328,6 @@ class ParametricLIFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        :param cupy_fp32_inference: If `True`, if this module is in `eval` mode, using float32, running on GPU, and `cupy` is installed, then this
-            module will use `cupy` to accelerate. This option has priority over ``backend``
-        :type cupy_fp32_inference: bool
 
         The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ and can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
@@ -1479,7 +1471,7 @@ class QIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -1524,7 +1516,7 @@ class QIFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1626,7 +1618,7 @@ class EIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -1671,7 +1663,7 @@ class EIFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1897,7 +1889,7 @@ class KLIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -1974,7 +1966,7 @@ class KLIFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -2023,9 +2015,6 @@ class KLIFNode(BaseNode):
 
         """
         assert isinstance(tau, float) and tau > 1.
-        if backend == 'cupy':
-            raise NotImplementedError("The CuPy backend for the KLIF neuron has not been implemented!")
-
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
 
         self.scale_reset = scale_reset
@@ -2033,6 +2022,10 @@ class KLIFNode(BaseNode):
         self.decay_input = decay_input
 
         self.k = nn.Parameter(torch.as_tensor(1.))
+
+    @property
+    def supported_backends(self):
+        return ('torch',)
 
     @staticmethod
     @torch.jit.script
@@ -2403,7 +2396,7 @@ class GatedLIFNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的。gated-LIF只支持torch
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的。gated-LIF只支持torch
         :type backend: str
 
 
@@ -2441,7 +2434,9 @@ class GatedLIFNode(base.MemoryModule):
         :param step_mode: step mode, only support `'m'` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron layer, which can be "gemm" or "conv". This option only works for the multi-step mode
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
 
@@ -2486,7 +2481,7 @@ class GatedLIFNode(base.MemoryModule):
 
     @property
     def supported_backends(self):
-        return 'torch'
+        return ('torch',)
 
     def extra_repr(self):
         with torch.no_grad():
@@ -2560,7 +2555,7 @@ class DSRIFNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的。DSR-IF只支持torch
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的。DSR-IF只支持torch
         :type backend: str
 
         模型出处：`Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
@@ -2592,7 +2587,9 @@ class DSRIFNode(base.MemoryModule):
         :param step_mode: step mode, only support `'m'` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron layer, which can be "gemm" or "conv". This option only works for the multi-step mode
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
 
@@ -2727,7 +2724,7 @@ class DSRLIFNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的。DSR-IF只支持torch
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的。DSR-IF只支持torch
         :type backend: str
 
         模型出处：`Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
@@ -2765,7 +2762,9 @@ class DSRLIFNode(base.MemoryModule):
         :param step_mode: step mode, only support `'m'` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neuron layer, which can be "gemm" or "conv". This option only works for the multi-step mode
+        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
+        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
 
@@ -2915,7 +2914,7 @@ class OTTTLIFNode(LIFNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -2956,7 +2955,7 @@ class OTTTLIFNode(LIFNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -3104,7 +3103,7 @@ class SLTTLIFNode(LIFNode):
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -3145,7 +3144,7 @@ class SLTTLIFNode(LIFNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` backend will have the fastest training speed
+        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
