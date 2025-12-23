@@ -235,12 +235,13 @@ Soft方式重置方程为：
     y_seq = if_layer(x_seq)
     if_layer.reset()
 
-此外，部分神经元在多步模式下支持 ``cupy`` 后端。在 ``cupy`` 模式下，前反向传播会使用CuPy进行加速：
+此外，部分神经元在多步模式下支持 ``cupy`` 后端； ``IFNode`` , ``LIFNode`` 和 ``ParametricLIFNode`` 等神经元在多步模式下支持 ``triton`` 后端。设置 ``backend`` 之后，前反向传播会使用对应后端进行加速。
 
 .. code-block:: python
 
     import torch
     from spikingjelly.activation_based import neuron
+
     if_layer = neuron.IFNode()
     print(f'if_layer.backend={if_layer.backend}')
     # if_layer.backend=torch
@@ -248,10 +249,9 @@ Soft方式重置方程为：
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
     # step_mode=s, supported_backends=('torch',)
 
-
     if_layer.step_mode = 'm'
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=m, supported_backends=('torch', 'cupy')
+    # step_mode=m, supported_backends=('torch', 'cupy', 'triton')
 
     device = 'cuda:0'
     if_layer.to(device)
@@ -260,6 +260,13 @@ Soft方式重置方程为：
     # if_layer.backend=cupy
 
     x_seq = torch.rand([8, 4], device=device)
+    y_seq = if_layer(x_seq)
+    if_layer.reset()
+
+    if_layer.backend = 'triton'  # switch to the triton backend
+    print(f'if_layer.backend={if_layer.backend}')
+    # if_layer.backend=triton
+
     y_seq = if_layer(x_seq)
     if_layer.reset()
 

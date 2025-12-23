@@ -238,12 +238,13 @@ By setting ``step_mode``, we can switch to multi-step easily:
     y_seq = if_layer(x_seq)
     if_layer.reset()
 
-In addition, some neurons support for ``cupy`` backend when using multi-step mode. ``cupy`` backend can accelerate forward and backward:
+Some neurons support for ``cupy`` backend when using multi-step mode. In addition, ``triton`` backend is also available for ``IFNode``, ``LIFNode``, ``ParametricLIFNode``, etc. ``cupy`` and ``triton`` backend can accelerate forward and backward.
 
 .. code-block:: python
 
     import torch
     from spikingjelly.activation_based import neuron
+
     if_layer = neuron.IFNode()
     print(f'if_layer.backend={if_layer.backend}')
     # if_layer.backend=torch
@@ -251,10 +252,9 @@ In addition, some neurons support for ``cupy`` backend when using multi-step mod
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
     # step_mode=s, supported_backends=('torch',)
 
-
     if_layer.step_mode = 'm'
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=m, supported_backends=('torch', 'cupy')
+    # step_mode=m, supported_backends=('torch', 'cupy', 'triton')
 
     device = 'cuda:0'
     if_layer.to(device)
@@ -263,6 +263,13 @@ In addition, some neurons support for ``cupy`` backend when using multi-step mod
     # if_layer.backend=cupy
 
     x_seq = torch.rand([8, 4], device=device)
+    y_seq = if_layer(x_seq)
+    if_layer.reset()
+
+    if_layer.backend = 'triton'  # switch to the triton backend
+    print(f'if_layer.backend={if_layer.backend}')
+    # if_layer.backend=triton
+
     y_seq = if_layer(x_seq)
     if_layer.reset()
 

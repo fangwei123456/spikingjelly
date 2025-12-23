@@ -168,17 +168,17 @@ class ANN(nn.Module):
 >>> cnn_mnist.main()
 ```
 
-## CUDA增强的神经元
+## CUDA或Triton增强的神经元
 
-SpikingJelly为部分神经元提供给了2种后端。可以使用对用户友好的`torch`后端进行快速开发，并使用`cupy`后端进行高效训练。
+SpikingJelly为部分神经元提供给了多种后端。可以使用对用户友好的`torch`后端进行快速开发，并使用`cupy`或`triton`后端进行高效训练。
 
-下图对比了2种后端的LIF神经元 (`float32`) 在多步模式下的运行时长：
+下图对比了`torch`和`cupy`后端的LIF神经元 (`float32`) 在多步模式下的运行时长。根据我们的经验，`triton`后端的速度持平、乃至高于`cupy`后端。
 
 <img src="./docs/source/_static/tutorials/11_cext_neuron_with_lbl/exe_time_fb.png" alt="exe_time_fb"  />
 
-`cupy`后端同样接支持`float16`，并且可以在[自动混合精度训练](https://pytorch.org/docs/stable/notes/amp_examples.html)中使用。
+`cupy`和`triton`后端同样接支持`float16`，并且可以在[自动混合精度训练](https://pytorch.org/docs/stable/notes/amp_examples.html)中使用。
 
-若想使用`cupy`后端，请安装 [CuPy](https://docs.cupy.dev/en/stable/install.html)。`cupy`后端仅支持GPU，而`torch`后端同时支持CPU和GPU。
+若想使用`cupy`后端，请安装 [CuPy](https://docs.cupy.dev/en/stable/install.html)。若想使用`triton`后端，请安装 [Triton](https://triton-lang.org/main/index.html)。`cupy`和`triton`后端仅支持GPU，而`torch`后端同时支持CPU和GPU。
 
 ## 设备支持
 

@@ -132,7 +132,7 @@ Tempotron的膜电位定义为：
 于 :math:`m` 个交点，这些交点在纵轴上的投影点，即为 :math:`m` 个神经元的脉冲发放时刻。但由于我们在仿真时，仿真步长通常是整\
 数，因此脉冲发放时刻也需要取整。
 
-.. image:: ./_static/tutorials/timing_based.png
+.. image:: ../../_static/tutorials/timing_based.png
 
 定义网络、损失函数、分类结果
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -216,11 +216,11 @@ Tempotron的膜电位定义为：
 
 在Tesla K80上训练100个epoch，大约需要32分钟。训练时每个batch的正确率、测试集正确率的变化情况如下：
 
-.. image:: ./_static/examples/timing_based/tempotron_mnist/train_batch_acc_scale.*
+.. image:: ../../_static/examples/timing_based/tempotron_mnist/train_batch_acc_scale.*
     :width: 100%
     
 
-.. image:: ./_static/examples/timing_based/tempotron_mnist/test_accuracy_scale.*
+.. image:: ../../_static/examples/timing_based/tempotron_mnist/test_accuracy_scale.*
     :width: 100%
 
 
