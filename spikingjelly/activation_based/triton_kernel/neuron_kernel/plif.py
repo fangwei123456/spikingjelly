@@ -13,7 +13,7 @@ except BaseException as e:
     tl = None
 
 from ..triton_utils import type_dict, contiguous_and_device_guard
-from ..triton_utils import amp_custom_fwd, amp_custom_bwd
+from ..triton_utils import amp_custom_fwd, amp_custom_bwd, convert_and_store
 
 
 @triton.autotune(
@@ -85,7 +85,7 @@ def _multistep_plif_forward_kernel(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0)
         )
-        tl.store(s_ptrs, s, boundary_check=(1,))
+        convert_and_store(s_ptrs, s, boundary_check=(1,))
         v_ptrs = tl.make_block_ptr(
             v_seq_ptr,
             shape=(T, NCL),
@@ -94,7 +94,7 @@ def _multistep_plif_forward_kernel(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0)
         )
-        tl.store(v_ptrs, v, boundary_check=(1,))
+        convert_and_store(v_ptrs, v, boundary_check=(1,))
         if save_intermediates:
             h_ptrs = tl.make_block_ptr(
                 h_seq_ptr,
@@ -104,7 +104,7 @@ def _multistep_plif_forward_kernel(
                 block_shape=(1, BLOCK_NCL),
                 order=(1, 0)
             )
-            tl.store(h_ptrs, h, boundary_check=(1,))
+            convert_and_store(h_ptrs, h, boundary_check=(1,))
 
 
 @triton.autotune(
@@ -222,7 +222,7 @@ def _multistep_plif_backward_kernel(
             block_shape=(1, BLOCK_NCL),
             order=(1, 0)
         )
-        tl.store(grad_x_ptrs, grad_x.to(dtype), boundary_check=(1,))
+        convert_and_store(grad_x_ptrs, grad_x, boundary_check=(1,))
         grad_r_tau_acc = grad_r_tau_acc + grad_r_tau
 
     grad_v_init_ptrs = tl.make_block_ptr(
@@ -233,7 +233,7 @@ def _multistep_plif_backward_kernel(
         block_shape=(1, BLOCK_NCL),
         order=(1, 0)
     )
-    tl.store(grad_v_init_ptrs, grad_v_acc.to(dtype), boundary_check=(1,))
+    convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
     #! atomic add is not supported on some devices / triton versions
     #! so we use a workaround here, summing the gradient outside the kernel
     grad_r_tau_ptrs = tl.make_block_ptr(
@@ -244,7 +244,7 @@ def _multistep_plif_backward_kernel(
         block_shape=(1, BLOCK_NCL),
         order=(1, 0)
     )
-    tl.store(grad_r_tau_ptrs, grad_r_tau_acc.to(dtype), boundary_check=(1,))
+    convert_and_store(grad_r_tau_ptrs, grad_r_tau_acc, boundary_check=(1,))
 
 
 def multistep_plif_inference(

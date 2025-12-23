@@ -12,6 +12,7 @@ import atexit
 import torch
 
 try:
+    import triton
     import triton.language as tl
     type_dict = {
         torch.bool: tl.int1,
@@ -26,12 +27,18 @@ try:
 except BaseException as e:
     import logging
     logging.info(f'spikingjelly.activation_based.triton_kernel.triton_utils: {e}')
+    triton = None
     tl = None
     type_dict = {}
     type_str_dict = {}
 
-
-
+@triton.jit
+def convert_and_store(pointer, value, boundary_check):
+    # For block pointers created by tl.make_block_pointer(),
+    # implicit type casting is not supported when calling tl.store().
+    # This function manually converts dtype and then stores the data.
+    value = value.to(pointer.dtype.element_ty.element_ty)
+    tl.store(pointer, value, boundary_check=boundary_check)
 
 def contiguous_and_device_guard(f: Callable) -> Callable:
     """Make sure all input tensors are contiguous and set to the same device.

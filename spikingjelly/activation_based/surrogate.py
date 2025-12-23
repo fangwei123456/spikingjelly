@@ -3,7 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from .cuda_kernel.auto_cuda import cfunction
-from .triton_kernel.torch2triton import compile_triton_code_str
+
+try:
+    from .triton_kernel.torch2triton import compile_triton_code_str
+except BaseException as e:
+    import logging
+    logging.info(f"spikingjelly.activation_based.surrogate: {e}")
+    compile_triton_code_str = None
 
 tab4_str = '\t\t\t\t'  # used for aligning code
 curly_bracket_l = '{'
