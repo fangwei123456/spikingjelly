@@ -26,17 +26,29 @@ try:
     import triton
     from . import triton_kernel
 except BaseException as e:
+    from .triton_kernel import dummy
     logging.info(f'spikingjelly.activation_based.neuron: {e}')
-    triton = None
+    triton = dummy.DummyTriton
     triton_kernel = None
 
 
 class SimpleBaseNode(base.MemoryModule):
+
     def __init__(self, v_threshold: float = 1., v_reset: Optional[float] = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
                  step_mode='s'):
         """
-        A simple version of ``BaseNode``. The user can modify this neuron easily.
+        * :ref:`API in English <SimpleBaseNode.__init__-en>`
+
+        .. _SimpleBaseNode.__init__-cn:
+
+        ``BaseNode`` 的简化版，便于用户修改或扩展神经元。
+
+        * :ref:`中文API <SimpleBaseNode.__init__-cn>`
+
+        .. _SimpleBaseNode.__init__-en:
+
+        A simple version of ``BaseNode``. Users can modify this neuron easily.
         """
         super().__init__()
         self.v_threshold = v_threshold
@@ -75,6 +87,31 @@ class SimpleBaseNode(base.MemoryModule):
 
 
 class SimpleIFNode(SimpleBaseNode):
+
+    def __init__(self, v_threshold: float = 1., v_reset: Optional[float] = 0.,
+                 surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
+                 step_mode='s'):
+        """
+        * :ref:`API in English <SimpleIFNode.__init__-en>`
+
+        .. _SimpleIFNode.__init__-cn:
+
+        ``IFNode`` 的简化版。
+
+        * :ref:`中文API <SimpleIFNode.__init__-cn>`
+
+        .. _SimpleIFNode.__init__-en:
+
+        A simple version of ``IFNode``.
+        """
+        super().__init__()
+        self.v_threshold = v_threshold
+        self.v_reset = v_reset
+        self.surrogate_function = surrogate_function
+        self.detach_reset = detach_reset
+        self.step_mode = step_mode
+        self.register_memory(name='v', value=0.)
+
     def neuronal_charge(self, x: torch.Tensor):
         self.v = self.v + x
 
@@ -151,8 +188,8 @@ class BaseNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will be faster
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will be faster
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -506,8 +543,8 @@ class IFNode(BaseNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -833,8 +870,8 @@ class LIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1319,8 +1356,8 @@ class ParametricLIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1515,8 +1552,8 @@ class QIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1662,8 +1699,8 @@ class EIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -1965,8 +2002,8 @@ class KLIFNode(BaseNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -2435,8 +2472,8 @@ class GatedLIFNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
 
@@ -2588,8 +2625,8 @@ class DSRIFNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
 
@@ -2763,8 +2800,8 @@ class DSRLIFNode(base.MemoryModule):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
 
@@ -2954,8 +2991,8 @@ class OTTTLIFNode(LIFNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -3143,8 +3180,8 @@ class SLTTLIFNode(LIFNode):
         :type step_mode: str
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-        print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-        using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
+            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -4280,11 +4317,11 @@ class FlexSN(base.MemoryModule):
                 and `example_inputs`.
             num_outputs (int): number of outputs. It should strictly match the
                 number of "outputs" in `core`'s return values.
-            requires_grad (Optional[Tuple[bool]], optional): whether the core's 
+            requires_grad (Optional[Tuple[bool]], optional): whether the core's
                 arguments (i.e. [*inputs, *states]) requires gradients. This info
                 is used to generate the forward and backward graphs. Its length
                 should match the number of `core`'s arguments and the length of
-                `example_inputs`. If None, all argument tensors require grad. 
+                `example_inputs`. If None, all argument tensors require grad.
                 Defaults to None.
             step_mode (str, optional): step mode. Triton kernel is available only
                 in "m" mode. Defaults to "m".

@@ -8,8 +8,9 @@ try:
     import triton.language as tl
 except BaseException as e:
     import logging
+    from .. import dummy
     logging.info(f'spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_file: {e}')
-    triton = None
+    triton = dummy.DummyTriton
     tl = None
 
 from ..triton_utils import type_dict, contiguous_and_device_guard

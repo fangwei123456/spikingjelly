@@ -26,8 +26,9 @@ try:
     }
 except BaseException as e:
     import logging
+    from . import dummy
     logging.info(f'spikingjelly.activation_based.triton_kernel.triton_utils: {e}')
-    triton = None
+    triton = dummy.DummyTriton
     tl = None
     type_dict = {}
     type_str_dict = {}

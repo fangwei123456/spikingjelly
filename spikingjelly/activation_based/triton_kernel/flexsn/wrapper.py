@@ -5,8 +5,9 @@ try:
     import triton
 except BaseException as e:
     import logging
+    from .. import dummy
     logging.info(f'spikingjelly.activation_based.triton_kernel.flexsn.wrapper: {e}')
-    triton = None
+    triton = dummy.DummyTriton
 
 from ..triton_utils import type_dict, contiguous_and_device_guard
 from ..triton_utils import amp_custom_fwd, amp_custom_bwd

@@ -2,8 +2,9 @@ try:
     import triton
 except BaseException as e:
     import logging
+    from .. import dummy
     logging.info(f'spikingjelly.activation_based.triton_kernel.flexsn.template: {e}')
-    triton = None
+    triton = dummy.DummyTriton
 
 from ..torch2triton import compile_triton_code_str
 from .info import FlexSNInfo
