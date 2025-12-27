@@ -38,15 +38,22 @@ class SimpleBaseNode(base.MemoryModule):
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
                  step_mode='s'):
         """
-        * :ref:`API in English <SimpleBaseNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <SimpleBaseNode.__init__-cn>` | :ref:`English <SimpleBaseNode.__init__-en>`
+
+        ----
 
         .. _SimpleBaseNode.__init__-cn:
 
+        * **中文 API**
+
         ``BaseNode`` 的简化版，便于用户修改或扩展神经元。
 
-        * :ref:`中文API <SimpleBaseNode.__init__-cn>`
+        ----
 
         .. _SimpleBaseNode.__init__-en:
+
+        * **English API**
 
         A simple version of ``BaseNode``. Users can modify this neuron easily.
         """
@@ -92,27 +99,35 @@ class SimpleIFNode(SimpleBaseNode):
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
                  step_mode='s'):
         """
-        * :ref:`API in English <SimpleIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <SimpleIFNode.__init__-cn>` | :ref:`English <SimpleIFNode.__init__-en>`
+
+        ----
 
         .. _SimpleIFNode.__init__-cn:
 
-        ``IFNode`` 的简化版。
+        * **中文 API**
 
-        * :ref:`中文API <SimpleIFNode.__init__-cn>`
+        ``IFNode`` 的简化版。参数含义详见 :ref:`IFNode文档 <IFNode.__init__-cn>`。
+
+        ----
 
         .. _SimpleIFNode.__init__-en:
 
-        A simple version of ``IFNode``.
+        * **English API**
+
+        A simple version of ``IFNode``. See :ref:`IFNode docs <IFNode.__init__-en>`
+        for more details.
         """
-        super().__init__()
-        self.v_threshold = v_threshold
-        self.v_reset = v_reset
-        self.surrogate_function = surrogate_function
-        self.detach_reset = detach_reset
-        self.step_mode = step_mode
-        self.register_memory(name='v', value=0.)
+        super().__init__(
+            v_threshold, v_reset, surrogate_function, detach_reset, step_mode
+        )
 
     def neuronal_charge(self, x: torch.Tensor):
+        """
+        .. math::
+            H[t] = V[t-1] + X[t]
+        """
         self.v = self.v + x
 
 
@@ -120,11 +135,43 @@ class SimpleLIFNode(SimpleBaseNode):
     def __init__(self, tau:float, decay_input: bool, v_threshold: float = 1., v_reset: float = 0.,
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
                  step_mode='s'):
+        """
+        **API Language:**
+        :ref:`中文 <SimpleLIFNode.__init__-cn>` | :ref:`English <SimpleLIFNode.__init__-en>`
+
+        ----
+
+        .. _SimpleLIFNode.__init__-cn:
+
+        * **中文 API**
+
+        ``LIFNode`` 的简化版。参数含义详见 :ref:`LIFNode文档 <LIFNode.__init__-cn>`。
+
+        ----
+
+        .. _SimpleLIFNode.__init__-en:
+
+        * **English API**
+
+        A simple version of ``LIFNode``. See :ref:`LIFNode docs <LIFNode.__init__-en>`
+        for more details.
+        """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode)
         self.tau = tau
         self.decay_input = decay_input
 
     def neuronal_charge(self, x: torch.Tensor):
+        """
+        If ``decay_input == True``:
+
+            .. math::
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        If ``decay_input == False``:
+
+            .. math::
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+        """
         if self.decay_input:
             self.v = self.v + (self.v_reset - self.v + x) / self.tau
         else:
@@ -136,9 +183,16 @@ class BaseNode(base.MemoryModule):
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False,
                  step_mode='s', backend='torch', store_v_seq: bool = False):
         """
-        * :ref:`API in English <BaseNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <BaseNode.__init__-cn>` | :ref:`English <BaseNode.__init__-en>`
+
+        ----
 
         .. _BaseNode.__init__-cn:
+
+        * **中文 API**
+
+        可微分SNN神经元的基类神经元。
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -165,11 +219,13 @@ class BaseNode(base.MemoryModule):
             通常设置成 ``False`` ，可以节省内存
         :type store_v_seq: bool
 
-        可微分SNN神经元的基类神经元。
-
-        * :ref:`中文API <BaseNode.__init__-cn>`
+        ----
 
         .. _BaseNode.__init__-en:
+
+        * **English API**
+
+        This class is the base class of differentiable spiking neurons.
 
         :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
@@ -197,8 +253,6 @@ class BaseNode(base.MemoryModule):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        This class is the base class of differentiable spiking neurons.
         """
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -254,16 +308,22 @@ class BaseNode(base.MemoryModule):
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
         """
-         * :ref:`API in English <BaseNode.neuronal_charge-en>`
+        **API Language:**
+        :ref:`中文 <BaseNode.neuronal_charge-cn>` | :ref:`English <BaseNode.neuronal_charge-en>`
+
+        ----
 
         .. _BaseNode.neuronal_charge-cn:
 
+        * **中文 API**
+
         定义神经元的充电差分方程。子类必须实现这个函数。
 
-        * :ref:`中文API <BaseNode.neuronal_charge-cn>`
+        ----
 
         .. _BaseNode.neuronal_charge-en:
 
+        * **English API**
 
         Define the charge difference equation. The sub-class must implement this function.
         """
@@ -271,34 +331,45 @@ class BaseNode(base.MemoryModule):
 
     def neuronal_fire(self):
         """
-        * :ref:`API in English <BaseNode.neuronal_fire-en>`
+        **API Language:**
+        :ref:`中文 <BaseNode.neuronal_fire-cn>` | :ref:`English <BaseNode.neuronal_fire-en>`
+
+        ----
 
         .. _BaseNode.neuronal_fire-cn:
 
+        * **中文 API**
+
         根据当前神经元的电压、阈值，计算输出脉冲。
 
-        * :ref:`中文API <BaseNode.neuronal_fire-cn>`
+        ----
 
         .. _BaseNode.neuronal_fire-en:
 
+        * **English API**
 
         Calculate out spikes of neurons by their current membrane potential and threshold voltage.
         """
-
         return self.surrogate_function(self.v - self.v_threshold)
 
     def neuronal_reset(self, spike):
         """
-        * :ref:`API in English <BaseNode.neuronal_reset-en>`
+        **API Language:**
+        :ref:`中文 <BaseNode.neuronal_reset-cn>` | :ref:`English <BaseNode.neuronal_reset-en>`
+
+        ----
 
         .. _BaseNode.neuronal_reset-cn:
 
+        * **中文 API**
+
         根据当前神经元释放的脉冲，对膜电位进行重置。
 
-        * :ref:`中文API <BaseNode.neuronal_reset-cn>`
+        ----
 
         .. _BaseNode.neuronal_reset-en:
 
+        * **English API**
 
         Reset the membrane potential according to neurons' output spikes.
         """
@@ -320,10 +391,16 @@ class BaseNode(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor):
         """
+        **API Language:**
+        :ref:`中文 <BaseNode.single_step_forward-cn>` | :ref:`English <BaseNode.single_step_forward-en>`
 
-        * :ref:`API in English <BaseNode.single_step_forward-en>`
+        ----
 
         .. _BaseNode.single_step_forward-cn:
+
+        * **中文 API**
+
+        按照充电、放电、重置的顺序进行前向传播。
 
         :param x: 输入到神经元的电压增量
         :type x: torch.Tensor
@@ -331,20 +408,19 @@ class BaseNode(base.MemoryModule):
         :return: 神经元的输出脉冲
         :rtype: torch.Tensor
 
-        按照充电、放电、重置的顺序进行前向传播。
-
-        * :ref:`中文API <BaseNode.single_step_forward-cn>`
+        ----
 
         .. _BaseNode.single_step_forward-en:
+
+        * **English API**
+
+        Forward by the order of ``neuronal_charge``, ``neuronal_fire``, and ``neuronal_reset``.
 
         :param x: increment of voltage inputted to neurons
         :type x: torch.Tensor
 
         :return: out spikes of neurons
         :rtype: torch.Tensor
-
-        Forward by the order of `neuronal_charge`, `neuronal_fire`, and `neuronal_reset`.
-
         """
         self.v_float_to_tensor(x)
         self.neuronal_charge(x)
@@ -404,15 +480,22 @@ class AdaptBaseNode(BaseNode):
 
     def neuronal_adaptation(self):
         """
-        * :ref:`API in English <AdaptBaseNode.neuronal_adaptation-en>`
+        **API Language:**
+        :ref:`中文 <AdaptBaseNode.neuronal_adaptation-cn>` | :ref:`English <AdaptBaseNode.neuronal_adaptation-en>`
+
+        ----
 
         .. _AdaptBaseNode.neuronal_adaptation-cn:
 
+        * **中文 API**
+
         脉冲触发的适应性电流的更新
 
-        * :ref:`中文API <AdaptBaseNode.neuronal_adaptation-cn>`
+        ----
 
         .. _AdaptBaseNode.neuronal_adaptation-en:
+
+        * **English API**
 
         Spike-triggered update of adaptation current.
         """
@@ -436,16 +519,22 @@ class AdaptBaseNode(BaseNode):
 
     def neuronal_reset(self, spike):
         """
-        * :ref:`API in English <AdaptBaseNode.neuronal_reset-en>`
+        **API Language:**
+        :ref:`中文 <AdaptBaseNode.neuronal_reset-cn>` | :ref:`English <AdaptBaseNode.neuronal_reset-en>`
+
+        ----
 
         .. _AdaptBaseNode.neuronal_reset-cn:
 
+        * **中文 API**
+
         根据当前神经元释放的脉冲，对膜电位进行重置。
 
-        * :ref:`中文API <AdaptBaseNode.neuronal_reset-cn>`
+        ----
 
         .. _AdaptBaseNode.neuronal_reset-en:
 
+        * **English API**
 
         Reset the membrane potential according to neurons' output spikes.
         """
@@ -466,6 +555,38 @@ class AdaptBaseNode(BaseNode):
         return super().extra_repr() + f', v_rest={self.v_rest}, w_rest={self.w_rest}, tau_w={self.tau_w}, a={self.a}, b={self.b}'
 
     def single_step_forward(self, x: torch.Tensor):
+        """
+        **API Language:**
+        :ref:`中文 <AdaptBaseNode.single_step_forward-cn>` | :ref:`English <AdaptBaseNode.single_step_forward-en>`
+
+        ----
+
+        .. _AdaptBaseNode.single_step_forward-cn:
+
+        * **中文 API**
+
+        按照充电、适应、放电、重置的顺序进行前向传播。
+
+        :param x: 输入到神经元的电压增量
+        :type x: torch.Tensor
+
+        :return: 神经元的输出脉冲
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _AdaptBaseNode.single_step_forward-en:
+
+        * **English API**
+
+        Forward by the order of ``neuronal_charge``, ``neuronal_adaptation``, ``neuronal_fire``, and ``neuronal_reset``.
+
+        :param x: increment of voltage inputted to neurons
+        :type x: torch.Tensor
+
+        :return: out spikes of neurons
+        :rtype: torch.Tensor
+        """
         self.v_float_to_tensor(x)
         self.w_float_to_tensor(x)
         self.neuronal_charge(x)
@@ -488,9 +609,19 @@ class IFNode(BaseNode):
         backend='torch', store_v_seq: bool = False
     ):
         """
-        * :ref:`API in English <IFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
+
+        ----
 
         .. _IFNode.__init__-cn:
+
+        * **中文 API**
+
+        Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像 LIF 神经元那样衰减。其阈下神经动力学方程为：
+
+        .. math::
+            H[t] = V[t-1] + X[t]
 
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
@@ -502,14 +633,14 @@ class IFNode(BaseNode):
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离
+        :param detach_reset: 是否将 reset 过程的计算图分离
         :type detach_reset: bool
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端速度更快。
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -517,14 +648,17 @@ class IFNode(BaseNode):
             通常设置成 ``False`` ，可以节省内存
         :type store_v_seq: bool
 
-        Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像LIF神经元那样衰减。其阈下神经动力学方程为：
+        ----
+
+        .. _IFNode.__init__-en:
+
+        * **English API**
+
+        The Integrate-and-Fire neuron, which can be seen as an ideal integrator. The voltage of the IF neuron will not decay
+        as that of the LIF neuron. The sub-threshold neural dynamics of it is as followed:
 
         .. math::
             H[t] = V[t-1] + X[t]
-
-        * :ref:`中文API <IFNode.__init__-cn>`
-
-        .. _IFNode.__init__-en:
 
         :param v_threshold: threshold of this neurons layer
         :type v_threshold: float
@@ -544,7 +678,7 @@ class IFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
             print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            using ``'cupy'`` or ``'triton'`` backend will be faster
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -552,13 +686,6 @@ class IFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        The Integrate-and-Fire neuron, which can be seen as a ideal integrator. The voltage of the IF neuron will not decay
-        as that of the LIF neuron. The sub-threshold neural dynamics of it is as followed:
-
-        .. math::
-            H[t] = V[t-1] + X[t]
-
         """
         super().__init__(
             v_threshold, v_reset, surrogate_function, detach_reset, step_mode, 
@@ -795,9 +922,26 @@ class LIFNode(BaseNode):
         detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False
     ):
         """
-        * :ref:`API in English <LIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+
+        ----
 
         .. _LIFNode.__init__-cn:
+
+        * **中文 API**
+
+        Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
+
+        若 ``decay_input == True``:
+
+            .. math::
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
         :param tau: 膜电位时间常数
         :type tau: float
@@ -815,14 +959,14 @@ class LIFNode(BaseNode):
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离
+        :param detach_reset: 是否将 reset 过程的计算图分离
         :type detach_reset: bool
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端速度更快。
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -830,22 +974,24 @@ class LIFNode(BaseNode):
             通常设置成 ``False`` ，可以节省内存
         :type store_v_seq: bool
 
-        Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
+        ----
 
-        若 ``decay_input == True``:
+        .. _LIFNode.__init__-en:
+
+        * **English API**
+
+        The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
+        The subthreshold neural dynamics of it is as followed:
+
+        If ``decay_input == True``:
 
             .. math::
                 H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
 
-        若 ``decay_input == False``:
+        If ``decay_input == False``:
 
             .. math::
                 H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
-
-
-        * :ref:`中文API <LIFNode.__init__-cn>`
-
-        .. _LIFNode.__init__-en:
 
         :param tau: membrane time constant
         :type tau: float
@@ -871,7 +1017,7 @@ class LIFNode(BaseNode):
 
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
             print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+            using ``'cupy'`` or ``'triton'`` backend will be faster
         :type backend: str
 
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
@@ -879,20 +1025,6 @@ class LIFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
-        The subthreshold neural dynamics of it is as followed:
-
-        IF ``decay_input == True``:
-
-            .. math::
-                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
-
-        IF ``decay_input == False``:
-
-            .. math::
-                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
-
         """
         assert isinstance(tau, float) and tau > 1.
 
@@ -1279,9 +1411,28 @@ class ParametricLIFNode(BaseNode):
                  v_reset: Optional[float] = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
-        * :ref:`API in English <ParametricLIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
+
+        ----
 
         .. _ParametricLIFNode.__init__-cn:
+
+        * **中文 API**
+
+        Parametric Leaky Integrate-and-Fire (PLIF) 神经元模型，提出自 `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_。可以看作是带漏电的积分器。其阈下神经动力学方程为：
+
+        若 ``decay_input == True``:
+
+            .. math::
+                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``:
+
+            .. math::
+                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
+        其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
 
         :param init_tau: 膜电位时间常数的初始值
         :type init_tau: float
@@ -1299,14 +1450,14 @@ class ParametricLIFNode(BaseNode):
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离
+        :param detach_reset: 是否将 reset 过程的计算图分离
         :type detach_reset: bool
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端速度更快。
         :type backend: str
 
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
@@ -1314,24 +1465,25 @@ class ParametricLIFNode(BaseNode):
             通常设置成 ``False`` ，可以节省内存
         :type store_v_seq: bool
 
-        `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_
-        提出的 Parametric Leaky Integrate-and-Fire (PLIF)神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
+        ----
 
-        若 ``decay_input == True``:
+        .. _ParametricLIFNode.__init__-en:
+
+        * **English API**
+
+        The Parametric Leaky Integrate-and-Fire (PLIF) neuron, proposed in `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_, can be seen as a leaky integrator. The subthreshold neural dynamics of it is as followed:
+
+        IF ``decay_input == True``:
 
             .. math::
                 H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
 
-        若 ``decay_input == False``:
+        IF ``decay_input == False``:
 
             .. math::
                 H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
 
-        其中 :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`，:math:`w` 是可学习的参数。
-
-        * :ref:`中文API <ParametricLIFNode.__init__-cn>`
-
-        .. _ParametricLIFNode.__init__-en:
+        where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
 
         :param init_tau: the initial value of membrane time constant
         :type init_tau: float
@@ -1355,7 +1507,7 @@ class ParametricLIFNode(BaseNode):
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
+        :param backend: backend for this neurons layer. Different ``step_mode`` may support for different backends. The user can
             print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
             using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
         :type backend: str
@@ -1365,23 +1517,7 @@ class ParametricLIFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
-
-        The Parametric Leaky Integrate-and-Fire (PLIF) neuron, which is proposed by `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_ and can be seen as a leaky integrator.
-        The subthreshold neural dynamics of it is as followed:
-
-        IF ``decay_input == True``:
-
-            .. math::
-                H = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
-
-        IF ``decay_input == False``:
-
-            .. math::
-                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
-
-        where :math:`\\frac{1}{\\tau} = {\\rm Sigmoid}(w)`, :math:`w` is a learnable parameter.
         """
-
         assert isinstance(init_tau, float) and init_tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
         self.decay_input = decay_input
@@ -1475,56 +1611,74 @@ class QIFNode(BaseNode):
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
         """
-        * :ref:`API in English <QIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <QIFNode.__init__-cn>` | :ref:`English <QIFNode.__init__-en>`
+
+        ----
 
         .. _QIFNode.__init__-cn:
+
+        **中文 API**
+
+        QIF（Quadratic Integrate-and-Fire）神经元的构造函数。
+
+        QIF 神经元是一种非线性积分发放神经元模型，也是指数积分发放神经元（EIF）的近似版本。
+
+        **阈下动力学方程**
+
+        .. math::
+            H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c)\\right)
 
         :param tau: 膜电位时间常数
         :type tau: float
 
-        :param v_c: 关键电压
+        :param v_c: 临界电压
         :type v_c: float
 
-        :param a0:
+        :param a0: 二次系数
         :type a0: float
 
-        :param v_threshold: 神经元的阈值电压
+        :param v_threshold: 神经元的放电阈值
         :type v_threshold: float
 
         :param v_rest: 静息电位
         :type v_rest: float
 
-        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
+        :param v_reset: 神经元的重置电压。若不为 ``None``，放电后膜电位将被重置为 ``v_reset``；
+            若为 ``None``，则放电后膜电位减去 ``v_threshold``
         :type v_reset: Optional[float]
 
-        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :param surrogate_function: 反向传播中用于近似阶跃函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离
+        :param detach_reset: 是否在反向传播时将 reset 过程从计算图中分离
         :type detach_reset: bool
 
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+        :param backend: 计算后端。不同 ``step_mode`` 支持的后端可能不同，可通过 ``self.supported_backends`` 查看。
+            在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常具有最高的执行效率
         :type backend: str
 
-        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
-            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+        :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
+            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销
         :type store_v_seq: bool
 
-
-        Quadratic Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，也是指数积分发放神经元(Exponential Integrate-and-Fire)的近似版本。其阈下神经动力学方程为：
-
-        .. math::
-            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
-
-        * :ref:`中文API <QIFNode.__init__-cn>`
+        ----
 
         .. _QIFNode.__init__-en:
+
+        **English API**
+
+        Constructor of the Quadratic Integrate-and-Fire (QIF) neuron.
+
+        The QIF neuron is a nonlinear integrate-and-fire model and an approximation of the Exponential Integrate-and-Fire (EIF) neuron.
+
+        **Sub-threshold neuronal dynamics**
+
+        .. math::
+            H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c)\\right)
 
         :param tau: membrane time constant
         :type tau: float
@@ -1532,43 +1686,39 @@ class QIFNode(BaseNode):
         :param v_c: critical voltage
         :type v_c: float
 
-        :param a0:
+        :param a0: quadratic coefficient
         :type a0: float
 
-        :param v_threshold: threshold voltage of neurons
+        :param v_threshold: firing threshold of the neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
-            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
+        :param v_rest: resting potential
+        :type v_rest: float
+
+        :param v_reset: reset voltage of the neuron. If not ``None``, the membrane potential
+            will be reset to ``v_reset`` after firing; otherwise, ``v_threshold`` will be subtracted
         :type v_reset: Optional[float]
 
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :param surrogate_function: surrogate function used to approximate the gradient
+            of the Heaviside step function during backpropagation
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset in backward
+        :param detach_reset: whether to detach the reset operation from the computation graph
         :type detach_reset: bool
 
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend for this neuron. Different ``step_mode`` may support different backends.
+            Supported backends can be queried via ``self.supported_backends``.
+            If available, ``'cupy'`` or ``'triton'`` usually provides the fastest execution
         :type backend: str
 
-        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
-            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
-            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
-            memory consumption
+        :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
+            whether to store the membrane potential at all time steps in ``self.v_seq``.
+            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-
-        The Quadratic Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an approximation of the Exponential Integrate-and-Fire model.
-        The subthreshold neural dynamics of it is as followed:
-
-        .. math::
-            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] + a_0 (V[t-1] - V_{rest})(V[t-1] - V_c))
         """
-
         assert isinstance(tau, float) and tau > 1.
         if v_reset is not None:
             assert v_threshold > v_reset
@@ -1625,9 +1775,24 @@ class EIFNode(BaseNode):
                  surrogate_function: Callable = surrogate.Sigmoid(), detach_reset: bool = False, step_mode='s',
                  backend='torch', store_v_seq: bool = False):
         """
-        * :ref:`API in English <EIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <EIFNode.__init__-cn>` | :ref:`English <EIFNode.__init__-en>`
+
+        ----
 
         .. _EIFNode.__init__-cn:
+
+        **中文 API**
+
+        EIF（Exponential Integrate-and-Fire）神经元的构造函数。
+
+        EIF 神经元是一种非线性积分发放神经元模型，由 Hodgkin-Huxley 模型简化得到的一维模型。  
+        当 :math:`\\Delta_T \\to 0` 时，退化为普通的 LIF 神经元。
+
+        **阈下动力学方程**
+
+        .. math::
+            H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
 
         :param tau: 膜电位时间常数
         :type tau: float
@@ -1638,40 +1803,48 @@ class EIFNode(BaseNode):
         :param theta_rh: 基强度电压阈值
         :type theta_rh: float
 
-        :param v_threshold: 神经元的阈值电压
+        :param v_threshold: 神经元的放电阈值
         :type v_threshold: float
 
-        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
+        :param v_reset: 神经元的重置电压。若不为 ``None``，放电后膜电位将被重置为 ``v_reset``；
+            若为 ``None``，则放电后膜电位减去 ``v_threshold``
         :type v_reset: Optional[float]
 
-        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :param v_rest: 静息电位
+        :type v_rest: float
+
+        :param surrogate_function: 反向传播中用于近似阶跃函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离
+        :param detach_reset: 是否在反向传播时将 reset 过程从计算图中分离
         :type detach_reset: bool
 
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+        :param backend: 计算后端。不同 ``step_mode`` 支持的后端可能不同，可通过 ``self.supported_backends`` 查看。
+            在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常具有最高的执行效率
         :type backend: str
 
-        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
-            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+        :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
+            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），以降低内存开销
         :type store_v_seq: bool
 
+        ----
 
-        Exponential Integrate-and-Fire 神经元模型，一种非线性积分发放神经元模型，是由HH神经元模型(Hodgkin-Huxley model)简化后推导出的一维模型。在 :math:`\\Delta_T\\to 0` 时退化为LIF模型。其阈下神经动力学方程为：
+        .. _EIFNode.__init__-en:
+
+        **English API**
+
+        Constructor of the Exponential Integrate-and-Fire (EIF) neuron.
+
+        The EIF neuron is a nonlinear integrate-and-fire model derived from the Hodgkin-Huxley model.  
+        It degenerates to the LIF model when :math:`\\Delta_T \\to 0`.
+
+        **Sub-threshold neuronal dynamics**
 
         .. math::
             H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
-
-        * :ref:`中文API <EIFNode.__init__-cn>`
-
-        .. _EIFNode.__init__-en:
 
         :param tau: membrane time constant
         :type tau: float
@@ -1682,40 +1855,36 @@ class EIFNode(BaseNode):
         :param theta_rh: rheobase threshold
         :type theta_rh: float
 
-        :param v_threshold: threshold of this neurons layer
+        :param v_threshold: firing threshold of the neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
-            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
+        :param v_reset: reset voltage of the neuron. If not ``None``, the membrane potential
+            will be reset to ``v_reset`` after firing; otherwise, ``v_threshold`` will be subtracted
         :type v_reset: Optional[float]
 
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :param v_rest: resting potential
+        :type v_rest: float
+
+        :param surrogate_function: surrogate function used to approximate the gradient
+            of the Heaviside step function during backpropagation
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset in backward
+        :param detach_reset: whether to detach the reset operation from the computation graph
         :type detach_reset: bool
 
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend for this neuron. Different ``step_mode`` may support different backends.
+            Supported backends can be queried via ``self.supported_backends``.
+            If available, ``'cupy'`` or ``'triton'`` usually provides the fastest execution
         :type backend: str
 
-        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
-            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
-            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
-            memory consumption
+        :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
+            whether to store the membrane potential at all time steps in ``self.v_seq``.
+            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-
-        The Exponential Integrate-and-Fire neuron is a kind of nonlinear integrate-and-fire models and also an one-dimensional model derived from the Hodgkin-Huxley model. It degenerates to the LIF model when :math:`\\Delta_T\\to 0`.
-        The subthreshold neural dynamics of it is as followed:
-
-        .. math::
-            H[t] = V[t-1] + \\frac{1}{\\tau}\\left(X[t] - (V[t-1] - V_{rest}) + \\Delta_T\\exp\\left(\\frac{V[t-1] - \\theta_{rh}}{\\Delta_T}\\right)\\right)
         """
-
         assert isinstance(tau, float) and tau > 1.
         if v_reset is not None:
             assert v_threshold > v_reset
@@ -1831,43 +2000,60 @@ class IzhikevichNode(AdaptBaseNode):
 class LIAFNode(LIFNode):
     def __init__(self, act: Callable, threshold_related: bool, *args, **kwargs):
         """
-        * :ref:`API in English <LIAFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <LIAFNode.__init__-cn>` | :ref:`English <LIAFNode.__init__-en>`
+
+        ----
 
         .. _LIAFNode.__init__-cn:
 
+        **中文 API**
+
+        LIAF（Leaky Integrate and Analog Fire）神经元的构造函数。
+
+        LIAF 神经元由  
+        `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_  
+        提出，其行为与 LIF 神经元相同，但输出经过连续激活函数而非二值脉冲。
+
+        .. admonition:: 警告
+            :class: warning
+
+            该神经元层的输出不是二值脉冲，而是连续值。
+
         :param act: 激活函数
         :type act: Callable
-        :param threshold_related: 是否使用阈值依赖模式 (TR mode). 若为 ``True`` 则 ``y = act(h - v_th)``，
-            否则 ``y = act(h)``
+
+        :param threshold_related: 是否使用阈值依赖模式（TR mode）。若为 ``True``，输出为 ``y = act(h - v_th)``，
+            否则为 ``y = act(h)``
         :type threshold_related: bool
 
-        `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_ 提出的LIAF神经元。LIAFNode和LIFNode的行为相同，但输出是 ``self.act(...)`` 而非脉冲。
+        其他参数请参考 :class:`LIFNode`。
 
-        .. Warning::
-
-            The outputs of this neurons layer are not binary spikes.
-
-
-        * :ref:`中文API <LIAFNode.__init__-cn>`
+        ----
 
         .. _LIAFNode.__init__-en:
 
-        :param act: the activation function
-        :type act: Callable
-        :param threshold_related: whether the neuron uses threshold related (TR mode). If ``True``, ``y = act(h - v_th)``,
-            otherwise ``y = act(h)``
-        :type threshold_related: bool
+        **English API**
 
-        Other parameters in `*args, **kwargs` are same with :class:`LIFNode`.
+        Constructor of the LIAF (Leaky Integrate and Analog Fire) neuron.
 
-        The LIAF neuron proposed in `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_. LIAFNode has the same behavior as LIFNode, but outputs ``self.act(...)``
-        rather than spikes.
+        The LIAF neuron is proposed in  
+        `LIAF-Net: Leaky Integrate and Analog Fire Network for Lightweight and Efficient Spatiotemporal Information Processing <https://arxiv.org/abs/2011.06176>`_.  
+        It behaves like a LIF neuron, but the output passes through a continuous activation function instead of generating binary spikes.
 
         .. admonition:: Warning
             :class: warning
 
-            The outputs of this neurons layer are not binary spikes.
+            The outputs of this neuron layer are not binary spikes.
 
+        :param act: the activation function
+        :type act: Callable
+
+        :param threshold_related: whether the neuron uses threshold-related (TR) mode. If ``True``, the output is ``y = act(h - v_th)``,
+            otherwise ``y = act(h)``
+        :type threshold_related: bool
+
+        Other parameters in `*args, **kwargs` are the same as :class:`LIFNode`.
         """
         super().__init__(*args, **kwargs)
         self.act = act
@@ -1896,160 +2082,180 @@ class KLIFNode(BaseNode):
                  v_reset: Optional[float] = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = False, step_mode='s', backend='torch', store_v_seq: bool = False):
         """
-        * :ref:`API in English <KLIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <KLIFNode.__init__-cn>` | :ref:`English <KLIFNode.__init__-en>`
+
+        ----
 
         .. _KLIFNode.__init__-cn:
 
-        :param scale_reset: 是否在 ``neuronal_reset`` 时将 ``v`` 进行缩放
+        **中文 API**
+
+        K-based Leaky Integrate-and-Fire（KLIF）神经元的构造函数。
+
+        KLIF 神经元模型源自  
+        `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_，  
+        可视为一种带漏电项的积分器，其在阈下阶段与放电 / 重置阶段均具有不同于传统 LIF 的动力学形式。
+
+        **阈下动力学方程**
+
+        若 ``decay_input == True``：
+
+        .. math::
+            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        若 ``decay_input == False``：
+
+        .. math::
+            H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
+        **放电与重置机制**
+
+        KLIF 神经元的放电与重置形式如下：
+
+        .. math::
+            F[t] &= \\mathrm{ReLU}(kH[t]) \\\\
+            S[t] &= \\Theta(F[t] - V_{th})
+
+        若 ``scale_reset == False``：
+
+        .. math::
+            V[t] =
+            \\begin{cases}
+                F[t](1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
+                F[t] - S[t]V_{th}, & \\text{soft reset}
+            \\end{cases}
+
+        若 ``scale_reset == True``：
+
+        .. math::
+            V[t] =
+            \\begin{cases}
+                \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
+                \\frac{1}{k}(F[t] - S[t]V_{th}), & \\text{soft reset}
+            \\end{cases}
+
+        :param scale_reset: 是否在 ``neuronal_reset`` 阶段对膜电位 ``v`` 进行缩放
         :type scale_reset: bool
 
-        :param tau: 膜电位时间常数
+        :param tau: 膜电位的时间常数
         :type tau: float
 
-        :param decay_input: 输入是否也会参与衰减
+        :param decay_input: 输入项是否参与膜电位衰减
         :type decay_input: bool
 
-        :param v_threshold: 神经元的阈值电压
+        :param v_threshold: 神经元的放电阈值
         :type v_threshold: float
 
-        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
+        :param v_reset: 神经元的重置电压。若不为 ``None``，放电后膜电位将被重置为 ``v_reset``；
+            若为 ``None``，则放电后膜电位减去 ``v_threshold``
         :type v_reset: Optional[float]
 
-        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :param surrogate_function: 反向传播中用于近似阶跃函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离
+        :param detach_reset: 是否在反向传播时将 reset 过程从计算图中分离
         :type detach_reset: bool
 
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :param step_mode: 步进模式，可选 ``'s'`` （单步）或 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+        :param backend: 计算后端。不同 ``step_mode`` 支持的后端可能不同，
+            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
+            在支持的情况下，``'cupy'`` 或 ``'triton'`` 后端通常具有最高的执行效率
         :type backend: str
 
-        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
-            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+        :param store_v_seq: 当 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，
+            是否保存所有时间步的膜电位序列 ``self.v_seq``（形状为 ``[T, N, *]``）。
+            若为 ``False``，仅保留最后一个时间步的膜电位 ``self.v``（形状为 ``[N, *]``），
+            以降低内存开销
         :type store_v_seq: bool
 
-        `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_ 提出的K-based Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
-
-        若 ``decay_input == True``:
-
-            .. math::
-                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
-
-        若 ``decay_input == False``:
-
-            .. math::
-                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
-
-        注意，KLIF神经元的放电和重置与普通的神经元不同，为：
-
-            .. math::
-
-                F[t] &= \\mathrm{ReLU}(kH[t])
-
-                S[t] &= \\Theta(F[t] - V_{th})
-
-        如果 ``scale_reset == False``，则
-
-            .. math::
-                V[t] = \\begin{cases}
-                    F[t](1-S[t]) + V_{reset}S[t], hard~~reset \\\\
-                    F[t] - S[t]V_{th}, soft~~reset
-                \\end{cases}
-
-        如果 ``scale_reset == True``，则
-
-            .. math::
-                V[t] = \\begin{cases}
-                    \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], hard~~reset \\\\
-                    \\frac{1}{k}(F[t] - S[t]V_{th}), soft~~reset
-                \\end{cases}
-
-
-
-        * :ref:`中文API <KLIFNode.__init__-cn>`
+        ----
 
         .. _KLIFNode.__init__-en:
 
-        :param scale_reset: whether scale ``v`` in ``neuronal_reset``
+        **English API**
+
+        Constructor of the K-based Leaky Integrate-and-Fire (KLIF) neuron.
+
+        The KLIF neuron is proposed in  
+        `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_.
+        It can be regarded as a leaky integrator with a modified firing and reset mechanism compared to conventional LIF neurons.
+
+        **Sub-threshold neuronal dynamics**
+
+        If ``decay_input == True``:
+
+        .. math::
+            H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
+
+        If ``decay_input == False``:
+
+        .. math::
+            H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
+
+        **Firing and reset mechanism**
+
+        The firing and reset equations of KLIF are as follows:
+
+        .. math::
+            F[t] &= \\mathrm{ReLU}(kH[t]) \\\\
+            S[t] &= \\Theta(F[t] - V_{th})
+
+        If ``scale_reset == False``:
+
+        .. math::
+            V[t] =
+            \\begin{cases}
+                F[t](1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
+                F[t] - S[t]V_{th}, & \\text{soft reset}
+            \\end{cases}
+
+        If ``scale_reset == True``:
+
+        .. math::
+            V[t] =
+            \\begin{cases}
+                \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], & \\text{hard reset} \\\\
+                \\frac{1}{k}(F[t] - S[t]V_{th}), & \\text{soft reset}
+            \\end{cases}
+
+        :param scale_reset: whether to scale the membrane potential ``v`` during ``neuronal_reset``
         :type scale_reset: bool
 
         :param tau: membrane time constant
         :type tau: float
 
-        :param decay_input: whether the input will decay
+        :param decay_input: whether the input term participates in decay
         :type decay_input: bool
 
-        :param v_threshold: threshold of this neurons layer
+        :param v_threshold: firing threshold of the neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
-            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
+        :param v_reset: reset voltage of the neuron. If not ``None``, the membrane potential
+            will be reset to ``v_reset`` after firing; otherwise, ``v_threshold`` will be subtracted
         :type v_reset: Optional[float]
 
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :param surrogate_function: surrogate function used to approximate the gradient
+            of the Heaviside step function during backpropagation
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset in backward
+        :param detach_reset: whether to detach the reset operation from the computation graph
         :type detach_reset: bool
 
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :param step_mode: step mode, either ``'s'`` (single-step) or ``'m'`` (multi-step)
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend for this neuron. Different ``step_mode`` may support different backends.
+            Supported backends can be queried via ``self.supported_backends``.
+            If available, ``'cupy'`` or ``'triton'`` usually provides the fastest execution
         :type backend: str
 
-        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
-            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
-            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
-            memory consumption
+        :param store_v_seq: when ``step_mode = 'm'`` and input shape is ``[T, N, *]``,
+            whether to store the membrane potential at all time steps in ``self.v_seq``.
+            If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-
-        The K-based Leaky Integrate-and-Fire neuron proposed by `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_, which can be seen as a leaky integrator.
-        The subthreshold neural dynamics of it is as followed:
-
-        IF ``decay_input == True``:
-
-            .. math::
-                H[t] = V[t-1] + \\frac{1}{\\tau}(X[t] - (V[t-1] - V_{reset}))
-
-        IF ``decay_input == False``:
-
-            .. math::
-                H[t] = V[t-1] - \\frac{1}{\\tau}(V[t-1] - V_{reset}) + X[t]
-
-        Note that the neuronal fire and reset of the KLIF neuron is different from native neurons:
-
-            .. math::
-
-                F[t] &= \\mathrm{ReLU}(kH[t])
-
-                S[t] &= \\Theta(F[t] - V_{th})
-
-        If ``scale_reset == False``, then
-
-            .. math::
-                V[t] = \\begin{cases}
-                    F[t](1-S[t]) + V_{reset}S[t], hard~~reset \\\\
-                    F[t] - S[t]V_{th}, soft~~reset
-                \\end{cases}
-
-        Elif ``scale_reset == True``, then
-
-            .. math::
-                V[t] = \\begin{cases}
-                    \\frac{F[t]}{k}(1-S[t]) + V_{reset}S[t], hard~~reset \\\\
-                    \\frac{1}{k}(F[t] - S[t]V_{th}), soft~~reset
-                \\end{cases}
-
-
         """
         assert isinstance(tau, float) and tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
@@ -2118,16 +2324,44 @@ class KLIFNode(BaseNode):
 class PSN(nn.Module, base.MultiStepModule):
     def __init__(self, T: int, surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan()):
         """
-        :param T: the number of time-steps
-        :type T: int
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
+        **API Language:**
+        :ref:`中文 <PSN.__init__-cn>` | :ref:`English <PSN.__init__-en>`
 
-        The Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as
+        ----
+
+        .. _PSN.__init__-cn:
+
+        * **中文 API**
+
+        并行脉冲神经元（Parallel Spiking Neuron，PSN），由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
         .. math::
+            H &= WX, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N}\\\\
+            S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
 
-            H &= WX, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\label{eq psn neuronal charge}\\\\
+        其中 :math:`W` 是可学习的权重矩阵，:math:`B` 是可学习的阈值。
+
+        .. admonition:: 注意
+            :class: note
+
+            PSN 仅支持多步模式。
+
+        :param T: 时间步数
+        :type T: int
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        ----
+
+        .. _PSN.__init__-en:
+
+        * **English API**
+
+        The Parallel Spiking Neuron (PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
+
+        .. math::
+            H &= WX, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N}\\\\
             S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
 
         where :math:`W` is the learnable weight matrix, and :math:`B` is the learnable threshold.
@@ -2136,6 +2370,12 @@ class PSN(nn.Module, base.MultiStepModule):
             :class: note
 
             The PSN only supports the multi-step mode.
+
+        :param T: the number of time-steps
+        :type T: int
+
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :type surrogate_function: Callable
         """
         super().__init__()
         self.T = T
@@ -2174,48 +2414,102 @@ class MaskedPSN(base.MemoryModule):
     def __init__(self, k: int, T: int, lambda_init: float = 0.,
                  surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(), step_mode: str = 's'):
         """
-        :param k: the order of the Masked PSN
-        :type k: int
-        :param T: the number of time-steps
-        :type T: int
-        :param lambda_init: the initial value of :math:`\\lambda` to adjust the progressive masking process
-        :type lambda_init: float
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
-        :type step_mode: str
+        **API Language:**
+        :ref:`中文 <MaskedPSN.__init__-cn>` | :ref:`English <MaskedPSN.__init__-en>`
 
-        The Masked Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as
+        ----
+
+        .. _MaskedPSN.__init__-cn:
+
+        * **中文 API**
+
+        Masked Parallel Spiking Neuron，由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
         .. math::
-
             H &= (W \\cdot {M}_{k})X, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, {M}_{k} \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\\\
             S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
 
-        where :math:`W` is the learnable weight matrix, :math:`B` is the learnable threshold, and :math:`{M}_{k}` is defined as
+        其中 :math:`W` 是可学习权重矩阵，:math:`B` 是可学习阈值，:math:`{M}_{k}` 定义为：
 
         .. math::
-
             {M}_{k}[i][j] = \\begin{cases}
                 1, ~~ j \\leq i \\leq j + k - 1 \\\\
                 0, \\mathrm{otherwise}
             \\end{cases}.
 
-        :math:`\\lambda` is used to adjust the progressive masking process, which is
+        :math:`\\lambda` 用于调节逐步掩码过程：
 
         .. math::
-
             M_{k}(\\lambda) = \\lambda \\cdot M_{k} + (1 - \\lambda) \\cdot J,
 
-        where :math:`J` is an all-one matrix.
+        其中 :math:`J` 为全 1 矩阵。用户可以在训练中通过 ``self.lambda_ = ...`` 设置 :math:`\\lambda`。
 
-        The user can set :math:`\\lambda` during training by calling ``self.lambda_ = ...``.
+        .. admonition:: 注意
+            :class: note
+
+            Masked PSN 支持单步模式和多步模式，但多步模式比单步模式快得多。
+
+        :param k: Masked PSN 的阶数
+        :type k: int
+
+        :param T: 时间步数
+        :type T: int
+
+        :param lambda_init: :math:`\\lambda` 的初始值，用于调节逐步掩码过程
+        :type lambda_init: float
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        ----
+
+        .. _MaskedPSN.__init__-en:
+
+        * **English API**
+
+        Masked Parallel Spiking Neuron (Masked PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
+
+        .. math::
+            H &= (W \\cdot {M}_{k})X, ~~~~~~~~~~~~~~~W \\in \\mathbb{R}^{T \\times T}, {M}_{k} \\in \\mathbb{R}^{T \\times T}, X \\in \\mathbb{R}^{T \\times N} \\\\
+            S &= \\Theta(H - B), ~~~~~B \\in \\mathbb{R}^{T}, S\\in \\{0, 1\\}^{T \\times N}
+
+        where :math:`W` is the learnable weight matrix, :math:`B` is the learnable threshold, and :math:`{M}_{k}` is defined as:
+
+        .. math::
+            {M}_{k}[i][j] = \\begin{cases}
+                1, ~~ j \\leq i \\leq j + k - 1 \\\\
+                0, \\mathrm{otherwise}
+            \\end{cases}.
+
+        :math:`\\lambda` is used to adjust the progressive masking process:
+
+        .. math::
+            M_{k}(\\lambda) = \\lambda \\cdot M_{k} + (1 - \\lambda) \\cdot J,
+
+        where :math:`J` is an all-one matrix. Users can set :math:`\\lambda` during training by calling ``self.lambda_ = ...``.
 
         .. admonition:: Note
             :class: note
 
-            The masked PSN supports both single-step and multi-step mode. But using the multi-step mode is much faster than the single-step mode.
+            The masked PSN supports both single-step and multi-step mode. Multi-step mode is much faster than single-step mode.
 
+        :param k: the order of the Masked PSN
+        :type k: int
+
+        :param T: the number of time-steps
+        :type T: int
+
+        :param lambda_init: the initial value of :math:`\\lambda` to adjust the progressive masking process
+        :type lambda_init: float
+
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :type surrogate_function: Callable
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
         """
         super().__init__()
         self.register_memory('time_step', 0)
@@ -2306,34 +2600,76 @@ class SlidingPSN(base.MemoryModule):
                  surrogate_function: surrogate.SurrogateFunctionBase = surrogate.ATan(), step_mode: str = 's',
                  backend: str = 'gemm'):
         """
-        :param k: the order of the Sliding PSN
-        :type k: int
-        :param exp_init: if ``True``, the weight will be initialized as ``(..., 1/4, 1/2, 1)``. If ``False``, the weight    will be initialized by the kaiming uniform
-        :type exp_init: bool
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
-        :type step_mode: str
-        :param backend: backend fot this neuron layer, which can be "gemm" or "conv". This option only works for the multi-step mode
-        :type backend: str
+        **API Language:**
+        :ref:`中文 <SlidingPSN.__init__-cn>` | :ref:`English <SlidingPSN.__init__-en>`
 
-        The Sliding Parallel Spiking Neuron proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as
+        ----
+
+        .. _SlidingPSN.__init__-cn:
+
+        * **中文 API**
+
+        Sliding Parallel Spiking Neuron，由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
         .. math::
+            H[t] &= \\sum_{i=0}^{k-1} W_i \\cdot X[t - k + 1 + i], \\\\
+            S[t] &= \\Theta(H[t] - B),
 
-            H[t] &= \\sum_{i=0}^{k-1}W_{i}\\cdot X[t - k + 1 + i], \\\\
-	        S[t] &= \\Theta(H[t] - B),
+        其中 :math:`W = [W_0, W_1, ..., W_{k-1}] \\in \\mathbb{R}^{T}` 是可学习权重，:math:`B` 是可学习阈值。
 
+        .. admonition:: 注意
+            :class: note
 
-        where :math:`W = [W_{0}, W_{1}, ..., W_{k-1}] \\in \\mathbb{R}^{T}` is the learnable weight, and :math:`B` is the learnable threshold.
+            Sliding PSN 支持单步模式和多步模式，但多步模式比单步模式快得多。
 
+        :param k: Sliding PSN 的阶数
+        :type k: int
+
+        :param exp_init: 如果为 ``True``，权重初始化为 ``(..., 1/4, 1/2, 1)``；如果为 ``False``，权重使用 Kaiming uniform 初始化
+        :type exp_init: bool
+
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: Callable
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        :param backend: 神经元层使用的后端，可以为 "gemm" 或 "conv"。此选项仅在多步模式下生效
+        :type backend: str
+
+        ----
+
+        .. _SlidingPSN.__init__-en:
+
+        * **English API**
+
+        Sliding Parallel Spiking Neuron (Sliding PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
+
+        .. math::
+            H[t] &= \\sum_{i=0}^{k-1} W_i \\cdot X[t - k + 1 + i], \\\\
+            S[t] &= \\Theta(H[t] - B),
+
+        where :math:`W = [W_0, W_1, ..., W_{k-1}] \\in \\mathbb{R}^{T}` is the learnable weight, and :math:`B` is the learnable threshold.
 
         .. admonition:: Note
             :class: note
 
-            The Sliding PSN supports both single-step and multi-step mode. But using the multi-step mode is much faster than the single-step mode.
+            Sliding PSN supports both single-step and multi-step mode. Multi-step mode is much faster than single-step mode.
 
+        :param k: the order of the Sliding PSN
+        :type k: int
 
+        :param exp_init: if ``True``, the weight will be initialized as ``(..., 1/4, 1/2, 1)``; if ``False``, the weight will be initialized by Kaiming uniform
+        :type exp_init: bool
+
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :type surrogate_function: Callable
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        :param backend: backend for this neuron layer, which can be "gemm" or "conv". This option only works for multi-step mode
+        :type backend: str
         """
 
         super().__init__()
@@ -2401,86 +2737,100 @@ class GatedLIFNode(base.MemoryModule):
                  init_linear_decay = None, init_v_subreset = None, init_tau: float = 0.25, init_v_threshold: float = 0.5, init_conduct: float = 0.5,
                  surrogate_function: Callable = surrogate.Sigmoid(), step_mode='m', backend='torch'):
         """
-        * :ref:`中文API <GatedLIFNode.__init__-cn>`
+        **API Language:**
+        :ref:`中文 <GatedLIFNode.__init__-cn>` | :ref:`English <GatedLIFNode.__init__-en>`
+
+        ----
 
         .. _GatedLIFNode.__init__-cn:
 
-        :param T: 时间步长
+        * **中文 API**
+
+        Gated LIF 神经元（GLIF），由
+        `GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
+        <https://openreview.net/forum?id=UmFSx2c4ubT>`_ 提出。
+        该模型对 LIF 神经元进行统一门控建模，膜电位相关参数（包括门控系数）均为可学习参数。
+
+        :param T: 时间步数
         :type T: int
 
-        :param inplane: 输入tensor的通道数。不设置inplane，则默认使用layer-wise GLIF
+        :param inplane: 输入张量的通道数。
+            若为 ``None``，则使用 layer-wise GLIF；否则使用 channel-wise GLIF
         :type inplane: int
 
-        :param init_linear_decay: 膜电位线性衰减常数初始值，不设置就默认为init_v_threshold/(T * 2)
+        :param init_linear_decay: 膜电位线性衰减系数的初始值。
+            若不设置，默认值为 ``init_v_threshold / (T * 2)``
         :type init_linear_decay: float
 
-        :param init_v_subreset: 膜电位复位电压初始值
+        :param init_v_subreset: 膜电位软复位电压的初始值
         :type init_v_subreset: float
 
-        :param init_tau: 膜电位时间常数的初始值
+        :param init_tau: 膜电位指数衰减时间常数的初始值
         :type init_tau: float
 
-        :param init_v_threshold: 神经元的阈值电压初始值
+        :param init_v_threshold: 神经元阈值电压的初始值
         :type init_v_threshold: float
 
-        :param init_conduct: 膜电位电导率初始值
+        :param init_conduct: 膜电位电导率的初始值
         :type init_conduct: float
 
-        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :param surrogate_function: 反向传播中用于计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param step_mode: 步进模式，只支持 `'m'` (多步)
+        :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的。gated-LIF只支持torch
+        :param backend: 使用的后端。不同 ``step_mode`` 支持的后端可能不同。
+            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
+            Gated LIF 仅支持 ``'torch'`` 后端
         :type backend: str
 
-
-        模型出处：`GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks <https://openreview.net/forum?id=UmFSx2c4ubT>`
-        GLIF中所有的膜电位参数都是可学的，包括新引入的门控系数。
-
-        * :ref:`API in English <GatedLIFNode.__init__-en>`
+        ----
 
         .. _GatedLIFNode.__init__-en:
 
-        :param T: time-step
+        * **English API**
+
+        Gated LIF neuron (GLIF), proposed in
+        `GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
+        <https://openreview.net/forum?id=UmFSx2c4ubT>`_.
+        This model introduces unified gating mechanisms into LIF neurons.
+        All membrane-related parameters, including gating coefficients, are learnable.
+
+        :param T: number of time-steps
         :type T: int
 
-        :param inplane: input tensor channel number, default: None(layer-wise GLIF). If set, otherwise(channel-wise GLIF)
+        :param inplane: number of channels of the input tensor.
+            If ``None``, layer-wise GLIF is used; otherwise, channel-wise GLIF is applied
         :type inplane: int
 
-        :param init_linear_decay: initial linear-decay constant，default: init_v_threshold/(T * 2)
+        :param init_linear_decay: initial value of the linear decay coefficient.
+            Defaults to ``init_v_threshold / (T * 2)`` if not specified
         :type init_linear_decay: float
 
-        :param init_v_subreset: initial soft-reset constant
+        :param init_v_subreset: initial soft-reset voltage of the membrane potential
         :type init_v_subreset: float
 
-        :param init_tau: initial exponential-decay constant
+        :param init_tau: initial exponential decay time constant of the membrane potential
         :type init_tau: float
 
-        :param init_v_threshold: initial menbrane potential threshold
+        :param init_v_threshold: initial membrane potential threshold
         :type init_v_threshold: float
 
-        :param init_conduct: initial conduct
+        :param init_conduct: initial membrane conductance
         :type init_conduct: float
 
-        :param surrogate_function: surrogate gradient
+        :param surrogate_function: surrogate function used to compute spike gradients during backpropagation
         :type surrogate_function: Callable
 
-        :param step_mode: step mode, only support `'m'` (multi-step)
+        :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend of this neuron layer. Supported backends depend on ``step_mode``.
+            Users can print ``self.supported_backends`` to check availability.
+            Gated LIF only supports the ``'torch'`` backend
         :type backend: str
-
-
-        Gated LIF neuron refers to `GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks <https://openreview.net/forum?id=UmFSx2c4ubT>`
-        All membrane-related parameters are learnable, including the gates.
         """
-
         assert isinstance(init_tau, float) and init_tau < 1.
         assert isinstance(T, int) and T is not None
         assert isinstance(inplane, int) or inplane is None
@@ -2564,76 +2914,84 @@ class DSRIFNode(base.MemoryModule):
     def __init__(self, T: int = 20, v_threshold: float = 6., alpha: float = 0.5, v_threshold_training: bool = True,
                  v_threshold_grad_scaling: float = 1.0, v_threshold_lower_bound: float = 0.01, step_mode='m',
                  backend='torch', **kwargs):
-
         """
-        * :ref:`中文API <DSRIFNode.__init__-cn>`
+        **API Language:**
+        :ref:`中文 <DSRIFNode.__init__-cn>` | :ref:`English <DSRIFNode.__init__-en>`
+
+        ----
 
         .. _DSRIFNode.__init__-cn:
 
-        :param T: 时间步长
+        * **中文 API**
+
+        DSR IF 神经元，由
+        `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
+        <https://arxiv.org/pdf/2205.00459.pdf>`_ 提出。
+        该模型基于对脉冲表示的可微建模，用于低时延、高性能脉冲神经网络训练。
+
+        :param T: 时间步数
         :type T: int
 
-        :param v_threshold: 神经元的阈值电压初始值
+        :param v_threshold: 神经元阈值电压的初始值
         :type v_threshold: float
 
-        :param alpha: 放电阈值的缩放因子
+        :param alpha: 阈值电压的缩放因子
         :type alpha: float
 
-        :param v_threshold_training: 是否将阈值电压设置为可学习参数，默认为`'True'`
+        :param v_threshold_training: 是否将阈值电压设为可学习参数，默认为 ``True``
         :type v_threshold_training: bool
 
-        :param v_threshold_grad_scaling: 对放电阈值的梯度进行缩放的缩放因子
+        :param v_threshold_grad_scaling: 对阈值电压梯度进行缩放的系数
         :type v_threshold_grad_scaling: float
 
-        :param v_threshold_lower_bound: 训练过程中，阈值电压能取到的最小值
+        :param v_threshold_lower_bound: 训练过程中阈值电压允许的最小值
         :type v_threshold_lower_bound: float
 
-        :param step_mode: 步进模式，只支持 `'m'` (多步)
+        :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的。DSR-IF只支持torch
+        :param backend: 使用的后端。不同 ``step_mode`` 支持的后端可能不同。
+            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
+            DSR-IF 仅支持 ``'torch'`` 后端
         :type backend: str
 
-        模型出处：`Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
-         <https://arxiv.org/pdf/2205.00459.pdf>`.
-
-
-        * :ref:`API in English <DSRIFNode.__init__-en>`
+        ----
 
         .. _DSRIFNode.__init__-en:
 
-        :param T: time-step
+        * **English API**
+
+        DSR IF neuron, proposed in
+        `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
+        <https://arxiv.org/pdf/2205.00459.pdf>`_.
+        This model enables low-latency and high-performance SNN training via differentiable spike representations.
+
+        :param T: number of time-steps
         :type T: int
 
-        :param v_threshold: initial menbrane potential threshold
+        :param v_threshold: initial membrane potential threshold
         :type v_threshold: float
 
-        :param alpha: the scaling factor for the menbrane potential threshold
+        :param alpha: scaling factor of the membrane potential threshold
         :type alpha: float
 
-        :param v_threshold_training: whether the menbrane potential threshold is trained, default: `'True'`
+        :param v_threshold_training: whether the membrane potential threshold is learnable, default: ``True``
         :type v_threshold_training: bool
 
-        :param v_threshold_grad_scaling: the scaling factor for the gradient of the menbrane potential threshold
+        :param v_threshold_grad_scaling: scaling factor applied to the gradient of the membrane potential threshold
         :type v_threshold_grad_scaling: float
 
-        :param v_threshold_lower_bound: the minimum of the menbrane potential threshold during training
+        :param v_threshold_lower_bound: minimum allowable membrane potential threshold during training
         :type v_threshold_lower_bound: float
 
-        :param step_mode: step mode, only support `'m'` (multi-step)
+        :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend of this neuron layer. Supported backends depend on ``step_mode``.
+            Users can print ``self.supported_backends`` to check availability.
+            DSR-IF only supports the ``'torch'`` backend
         :type backend: str
-
-
-        DSR IF neuron refers to `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
-         <https://arxiv.org/pdf/2205.00459.pdf>`.
         """
-
         assert isinstance(T, int) and T is not None
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
         assert isinstance(alpha, float) and alpha > 0.0 and alpha <= 1.0
@@ -2727,88 +3085,95 @@ class DSRLIFNode(base.MemoryModule):
                  alpha: float = 0.3, v_threshold_training: bool = True,
                  v_threshold_grad_scaling: float = 1.0, v_threshold_lower_bound: float = 0.1, step_mode='m',
                  backend='torch', **kwargs):
-
         """
-        * :ref:`中文API <DSRLIFNode.__init__-cn>`
+        **API Language:**
+        :ref:`中文 <DSRLIFNode.__init__-cn>` | :ref:`English <DSRLIFNode.__init__-en>`
+
+        ----
 
         .. _DSRLIFNode.__init__-cn:
 
-        :param T: 时间步长
+        * **中文 API**
+
+        DSR LIF 神经元，由
+        `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
+        <https://arxiv.org/pdf/2205.00459.pdf>`_ 提出。该模型通过对脉冲表示进行可微建模，实现低时延、高性能的脉冲神经网络训练。
+
+        :param T: 时间步数
         :type T: int
 
-        :param v_threshold: 神经元的阈值电压初始值
+        :param v_threshold: 神经元阈值电压的初始值
         :type v_threshold: float
 
         :param tau: 膜电位时间常数
         :type tau: float
 
-        :param delta_t: 对微分方程形式的LIF模型进行离散化的步长
+        :param delta_t: 对连续时间 LIF 微分方程进行离散化的时间步长
         :type delta_t: float
 
-        :param alpha: 放电阈值的缩放因子
+        :param alpha: 阈值电压的缩放因子
         :type alpha: float
 
-        :param v_threshold_training: 是否将阈值电压设置为可学习参数，默认为`'True'`
+        :param v_threshold_training: 是否将阈值电压设为可学习参数，默认为 ``True``
         :type v_threshold_training: bool
 
-        :param v_threshold_grad_scaling: 对放电阈值的梯度进行缩放的缩放因子
+        :param v_threshold_grad_scaling: 对阈值电压梯度进行缩放的系数
         :type v_threshold_grad_scaling: float
 
-        :param v_threshold_lower_bound: 训练过程中，阈值电压能取到的最小值
+        :param v_threshold_lower_bound: 训练过程中阈值电压允许的最小值
         :type v_threshold_lower_bound: float
 
-        :param step_mode: 步进模式，只支持 `'m'` (多步)
+        :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的。DSR-IF只支持torch
+        :param backend: 使用的后端。不同 ``step_mode`` 支持的后端可能不同。
+            可通过 ``self.supported_backends`` 查看当前步进模式支持的后端。
+            DSR-LIF 仅支持 ``'torch'`` 后端
         :type backend: str
 
-        模型出处：`Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
-         <https://arxiv.org/pdf/2205.00459.pdf>`.
-
-
-        * :ref:`API in English <DSRLIFNode.__init__-en>`
+        ----
 
         .. _DSRLIFNode.__init__-en:
 
-        :param T: time-step
+        * **English API**
+
+        DSR LIF neuron, proposed in
+        `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
+        <https://arxiv.org/pdf/2205.00459.pdf>`_.
+        This model enables low-latency and high-performance SNN training by differentiating spike representations.
+
+        :param T: number of time-steps
         :type T: int
 
-        :param v_threshold: initial menbrane potential threshold
+        :param v_threshold: initial membrane potential threshold
         :type v_threshold: float
 
         :param tau: membrane time constant
         :type tau: float
 
-        :param delta_t: discretization step for discretizing the ODE version of the LIF model
+        :param delta_t: discretization step for the continuous-time LIF differential equation
         :type delta_t: float
 
-        :param alpha: the scaling factor for the menbrane potential threshold
+        :param alpha: scaling factor of the membrane potential threshold
         :type alpha: float
 
-        :param v_threshold_training: whether the menbrane potential threshold is trained, default: `'True'`
+        :param v_threshold_training: whether the membrane potential threshold is learnable, default: ``True``
         :type v_threshold_training: bool
 
-        :param v_threshold_grad_scaling: the scaling factor for the gradient of the menbrane potential threshold
+        :param v_threshold_grad_scaling: scaling factor applied to the gradient of the membrane potential threshold
         :type v_threshold_grad_scaling: float
 
-        :param v_threshold_lower_bound: the minimum of the menbrane potential threshold during training
+        :param v_threshold_lower_bound: minimum allowable membrane potential threshold during training
         :type v_threshold_lower_bound: float
 
-        :param step_mode: step mode, only support `'m'` (multi-step)
+        :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend of this neuron layer. Supported backends depend on ``step_mode``.
+            Users can print ``self.supported_backends`` to check availability.
+            DSR-LIF only supports the ``'torch'`` backend
         :type backend: str
-
-
-        DSR LIF neuron refers to `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
-         <https://arxiv.org/pdf/2205.00459.pdf>`.
         """
-
         assert isinstance(T, int) and T is not None
         assert isinstance(v_threshold, float) and v_threshold >= v_threshold_lower_bound
         assert isinstance(alpha, float) and alpha > 0.0 and alpha <= 1.0
@@ -2923,10 +3288,20 @@ class OTTTLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = False, v_threshold: float = 1.,
                  v_reset: Optional[float] = None, surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = True, step_mode='s', backend='torch', store_v_seq: bool = False):
-        """
-        * :ref:`API in English <OTTTLIFNode.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <OTTTLIFNode.__init__-cn>` | :ref:`English <OTTTLIFNode.__init__-en>`
+
+        ----
 
         .. _OTTTLIFNode.__init__-cn:
+
+        * **中文 API**
+
+        OTTT LIF 神经元模型，来源于
+        `Online Training Through Time for Spiking Neural Networks
+        <https://arxiv.org/pdf/2210.04195.pdf>`_。
+        其正向传播过程与 Leaky Integrate-and-Fire（LIF）神经元相同。
 
         :param tau: 膜电位时间常数
         :type tau: float
@@ -2937,35 +3312,44 @@ class OTTTLIFNode(LIFNode):
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
-        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
+        :param v_reset: 神经元的重置电压。如果不为 ``None`` ，当神经元释放脉冲后，
+            电压会被重置为 ``v_reset`` ；如果设置为 ``None`` ，当神经元释放脉冲后，
+            电压会被减去 ``v_threshold``
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离。该参数在本模块中不起作用，仅为保持代码统一而保留
+        :param detach_reset: 是否将 reset 过程的计算图分离。
+            该参数在本模块中不起作用，仅为保持代码接口统一而保留
         :type detach_reset: bool
 
-        :param step_mode: 步进模式，为了保证神经元的显存占用小，仅可以为 `'s'` (单步)
+        :param step_mode: 步进模式。为了保证神经元的显存占用较小，仅支持 ``'s'`` （单步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+        :param backend: 使用的后端。不同 ``step_mode`` 可能支持不同的后端。
+            可以通过打印 ``self.supported_backends`` 查看当前步进模式支持的后端。
+            在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端可获得更高的运行速度
         :type backend: str
 
-        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
-            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，
+            是否保存中间各时间步的膜电位 ``self.v_seq``，其形状为 ``[T, N, *]``。
+            若设置为 ``False``，则计算完成后仅保留最后一个时间步的膜电位
+            ``self.v``，其形状为 ``[N, *]``。通常设置为 ``False`` 以节省内存
         :type store_v_seq: bool
 
-        神经元模型出处：`Online Training Through Time for Spiking Neural Networks <https://arxiv.org/pdf/2210.04195.pdf>`
-        模型正向传播和Leaky Integrate-and-Fire神经元相同；用于随时间在线训练
-
-
-        * :ref:`中文API <OTTTLIFNode.__init__-cn>`
+        ----
 
         .. _OTTTLIFNode.__init__-en:
+
+        * **English API**
+
+        OTTT LIF neuron, proposed in
+        `Online Training Through Time for Spiking Neural Networks
+        <https://arxiv.org/pdf/2210.04195.pdf>`_.
+        This neuron is designed for OTTT.
+        Its forward propagation is identical to that of the
+        Leaky Integrate-and-Fire (LIF) neuron.
 
         :param tau: membrane time constant
         :type tau: float
@@ -2973,37 +3357,41 @@ class OTTTLIFNode(LIFNode):
         :param decay_input: whether the input will decay
         :type decay_input: bool
 
-        :param v_threshold: threshold of this neurons layer
+        :param v_threshold: threshold voltage of the neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
-            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
+        :param v_reset: reset voltage of the neuron. If not ``None``, the membrane
+            potential will be reset to ``v_reset`` after firing a spike.
+            If ``None``, the membrane potential will subtract ``v_threshold``
+            after firing a spike
         :type v_reset: Optional[float]
 
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :param surrogate_function: the function used to compute surrogate gradients
+            of the Heaviside step function in backward propagation
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset in backward. this parameter does not take any effect in
-            the module, and is retained solely for code consistency
+        :param detach_reset: whether to detach the computation graph of the reset
+            operation in backward propagation. This parameter has no effect in
+            this module and is retained solely for interface consistency
         :type detach_reset: bool
 
-        :param step_mode: the step mode, which can solely be `s` (single-step) to guarantee the memory-efficient computation
+        :param step_mode: step mode. To guarantee memory-efficient computation,
+            only ``'s'`` (single-step) mode is supported
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend for this neuron layer. Different ``step_mode`` may
+            support different backends. Users can print ``self.supported_backends``
+            to check the supported backends of the current step mode. When supported,
+            using ``'cupy'`` or ``'triton'`` backend provides faster execution
         :type backend: str
 
-        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
-            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
-            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+        :param store_v_seq: when using ``step_mode = 'm'`` with input of shape
+            ``[T, N, *]``, this option controls whether storing the membrane
+            potential at each time step into ``self.v_seq`` with shape ``[T, N, *]``.
+            If set to ``False``, only the membrane potential at the last time step
+            will be stored in ``self.v`` with shape ``[N, *]``, which can reduce
             memory consumption
         :type store_v_seq: bool
-
-        OTTT LIF neuron refers to `Online Training Through Time for Spiking Neural Networks <https://arxiv.org/pdf/2210.04195.pdf>`
-        The forward propagation is the same as the Leaky Integrate-and-Fire neuron; used for online training through time
-
         """
 
         super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
@@ -3055,11 +3443,28 @@ class OTTTLIFNode(LIFNode):
 
     def single_step_forward(self, x: torch.Tensor):
         """
-        训练时，输出脉冲和迹；推理时，输出脉冲
-        训练时需要将后续参数模块用layer.py中定义的GradwithTrace进行包装，根据迹计算梯度
-        
-        output spike and trace during training; output spike during inference
-        during training, successive parametric modules shoule be wrapped by GradwithTrace defined in layer.py, to calculate gradients with traces
+        **API Language:**
+        :ref:`中文 <OTTTLIFNode.single_step_forward-cn>` | :ref:`English <OTTTLIFNode.single_step_forward-en>`
+
+        ----
+
+        .. _OTTTLIFNode.single_step_forward-cn:
+
+        * **中文 API**
+
+        训练时，输出脉冲和迹；推理时，输出脉冲。
+
+        训练时需要将后续参数模块用layer.py中定义的GradwithTrace进行包装，根据迹计算梯度。
+
+        ----
+
+        .. _OTTTLIFNode.single_step_forward-en:
+
+        * **English API**
+
+        Output spike and trace during training; output spike during inference.
+
+        During training, successive parametric modules shoule be wrapped by GradwithTrace defined in layer.py, to calculate gradients with traces.
         """
 
         if not hasattr(self, 'v'):
@@ -3112,10 +3517,21 @@ class SLTTLIFNode(LIFNode):
     def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
                  v_reset: Optional[float] = 0., surrogate_function: Callable = surrogate.Sigmoid(),
                  detach_reset: bool = True, step_mode='s', backend='torch', store_v_seq: bool = False):
-        """
-        * :ref:`API in English <SLTTLIFNode.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <SLTTLIFNode.__init__-cn>` | :ref:`English <SLTTLIFNode.__init__-en>`
+
+        ----
 
         .. _SLTTLIFNode.__init__-cn:
+
+        * **中文 API**
+
+        SLTT LIF 神经元模型，来源于
+        `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
+        <https://arxiv.org/pdf/2302.14311.pdf>`_。
+        该模型在正向传播过程中与 Leaky Integrate-and-Fire（LIF）神经元相同，
+        通过截断时间梯度实现更高的时间与显存效率。
 
         :param tau: 膜电位时间常数
         :type tau: float
@@ -3126,35 +3542,44 @@ class SLTTLIFNode(LIFNode):
         :param v_threshold: 神经元的阈值电压
         :type v_threshold: float
 
-        :param v_reset: 神经元的重置电压。如果不为 ``None``，当神经元释放脉冲后，电压会被重置为 ``v_reset``；
-            如果设置为 ``None``，当神经元释放脉冲后，电压会被减去 ``v_threshold``
+        :param v_reset: 神经元的重置电压。如果不为 ``None`` ，当神经元释放脉冲后，
+            电压会被重置为 ``v_reset`` ；如果设置为 ``None`` ，当神经元释放脉冲后，
+            电压会被减去 ``v_threshold``
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
         :type surrogate_function: Callable
 
-        :param detach_reset: 是否将reset过程的计算图分离。该参数在本模块中不起作用，仅为保持代码统一而保留
+        :param detach_reset: 是否将 reset 过程的计算图分离。
+            该参数在本模块中不起作用，仅为保持代码接口统一而保留
         :type detach_reset: bool
 
-        :param step_mode: 步进模式，为了保证神经元的显存占用小，仅可以为 `'s'` (单步)
+        :param step_mode: 步进模式。为了保证神经元的显存占用较小，仅支持 ``'s'`` （单步）
         :type step_mode: str
 
-        :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
-            使用的步进模式支持的后端。在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端是速度最快的
+        :param backend: 使用的后端。不同 ``step_mode`` 可能支持不同的后端。
+            可以通过打印 ``self.supported_backends`` 查看当前步进模式支持的后端。
+            在支持的情况下，使用 ``'cupy'`` 或 ``'triton'`` 后端可获得更高的运行速度
         :type backend: str
 
-        :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
-            的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.v`` 。
-            通常设置成 ``False`` ，可以节省内存
+        :param store_v_seq: 在使用 ``step_mode = 'm'`` 且输入形状为 ``[T, N, *]`` 时，
+            是否保存中间各时间步的膜电位 ``self.v_seq``，其形状为 ``[T, N, *]``。
+            若设置为 ``False``，则计算完成后仅保留最后一个时间步的膜电位
+            ``self.v``，其形状为 ``[N, *]``。通常设置为 ``False`` 以节省内存
         :type store_v_seq: bool
 
-        神经元模型出处：`Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
-        <https://arxiv.org/pdf/2302.14311.pdf>`.模型正向传播和Leaky Integrate-and-Fire神经元相同.
-
-
-        * :ref:`中文API <SLTTLIFNode.__init__-cn>`
+        ----
 
         .. _SLTTLIFNode.__init__-en:
+
+        * **English API**
+
+        SLTT LIF neuron, proposed in
+        `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
+        <https://arxiv.org/pdf/2302.14311.pdf>`_.
+        The forward propagation of this neuron is identical to that of the
+        Leaky Integrate-and-Fire (LIF) neuron, while it truncates temporal gradients to enable more
+        memory- and time-efficient training.
 
         :param tau: membrane time constant
         :type tau: float
@@ -3162,39 +3587,42 @@ class SLTTLIFNode(LIFNode):
         :param decay_input: whether the input will decay
         :type decay_input: bool
 
-        :param v_threshold: threshold of this neurons layer
+        :param v_threshold: threshold voltage of the neuron
         :type v_threshold: float
 
-        :param v_reset: reset voltage of this neurons layer. If not ``None``, the neuron's voltage will be set to ``v_reset``
-            after firing a spike. If ``None``, the neuron's voltage will subtract ``v_threshold`` after firing a spike
+        :param v_reset: reset voltage of the neuron. If not ``None``, the membrane
+            potential will be reset to ``v_reset`` after firing a spike.
+            If ``None``, the membrane potential will subtract ``v_threshold``
+            after firing a spike
         :type v_reset: Optional[float]
 
-        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :param surrogate_function: the function used to compute surrogate gradients
+            of the Heaviside step function in backward propagation
         :type surrogate_function: Callable
 
-        :param detach_reset: whether detach the computation graph of reset in backward. this parameter does not take any effect in
-            the module, and is retained solely for code consistency
+        :param detach_reset: whether to detach the computation graph of the reset
+            operation in backward propagation. This parameter has no effect in
+            this module and is retained solely for interface consistency
         :type detach_reset: bool
 
-        :param step_mode: the step mode, which can solely be `s` (single-step) to guarantee the memory-efficient computation
+        :param step_mode: step mode. To guarantee memory-efficient computation,
+            only ``'s'`` (single-step) mode is supported
         :type step_mode: str
 
-        :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
-            print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. If supported,
-            using ``'cupy'`` or ``'triton'`` backend will have the fastest training speed
+        :param backend: backend for this neuron layer. Different ``step_mode`` may
+            support different backends. Users can print ``self.supported_backends``
+            to check the supported backends of the current step mode. When supported,
+            using ``'cupy'`` or ``'triton'`` backend provides faster execution
         :type backend: str
 
-        :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
-            whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
-            only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
+        :param store_v_seq: when using ``step_mode = 'm'`` with input of shape
+            ``[T, N, *]``, this option controls whether storing the membrane
+            potential at each time step into ``self.v_seq`` with shape ``[T, N, *]``.
+            If set to ``False``, only the membrane potential at the last time step
+            will be stored in ``self.v`` with shape ``[N, *]``, which can reduce
             memory consumption
         :type store_v_seq: bool
-
-        SLTT LIF neuron refers to `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
-        <https://arxiv.org/pdf/2302.14311.pdf>`. The forward propagation is the same as the Leaky Integrate-and-Fire neuron's.
-
         """
-
         super().__init__(tau, decay_input, v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
         assert step_mode == 's', "Please use single-step mode to enable memory-efficient training."
         self._memories.pop('v')
@@ -3326,66 +3754,116 @@ def powerlaw_psd_gaussian(
         fmin: float = 0.0, 
         random_state: Optional[Union[int, Generator, RandomState]] = None
     ):
-    """Gaussian (1/f)**beta noise.
+    r"""
+    **API Language:**
+    :ref:`中文 <powerlaw_psd_gaussian-cn>` | :ref:`English <powerlaw_psd_gaussian-en>`
 
-    Based on the algorithm in:
+    ----
+
+    .. _powerlaw_psd_gaussian-cn:
+
+    * **中文 API**
+
+    生成具有 :math:`(1/f)^\beta` 功率谱的高斯噪声。生成的噪声满足
+
+    .. math::
+        S(f) = (1 / f)^\beta
+
+    Flicker / pink noise:
+
+    .. math::
+        \beta = 1
+
+    Brown noise:
+
+    .. math::
+        \beta = 2
+
+    自相关衰减比例为 :math:`\text{lag}^{-\gamma}`，其中 :math:`\gamma = 1 - \beta (0 < \beta < 1)`。
+    对于接近 1 的 :math:`\beta` 值可能存在有限大小效应。该算法基于文章
     Timmer, J. and Koenig, M.:
     On generating power law noise.
-    Astron. Astrophys. 300, 707-710 (1995)
+    Astron. Astrophys. 300, 707-710 (1995).
 
-    Normalised to unit variance
+    :param exponent: 噪声的功率谱指数 :math:`\beta`
+    :type exponent: float
 
-    Parameters:
-    -----------
+    :param size: 输出样本的形状，最后一个维度作为时间轴，其余维度独立。
+    :type size: Union[int, Iterable[int]]
 
-    exponent : float
-        The power-spectrum of the generated noise is proportional to
+    :param fmin: 低频截止，默认为 0，对应原始论文。低于 fmin 的频率功率谱平坦。fmin 定义为
+        相对于单位采样率。内部会映射为 max(fmin, 1/samples)。最大值为 fmin = 0.5，
+        即 Nyquist 频率，此时输出为白噪声。
+    :type fmin: float, optional
 
-        S(f) = (1 / f)**beta
-        flicker / pink noise:   exponent beta = 1
-        brown noise:            exponent beta = 2
+    :param random_state: 可选，设置 NumPy 随机数生成器状态。支持整数、None、
+        np.random.Generator 或 np.random.RandomState。
+    :type random_state: int, numpy.integer, numpy.random.Generator, 
+        numpy.random.RandomState, optional
 
-        Furthermore, the autocorrelation decays proportional to lag**-gamma
-        with gamma = 1 - beta for 0 < beta < 1.
-        There may be finite-size issues for beta close to one.
+    :return: 生成的噪声样本
+    :rtype: array
 
-    size : Union[int, Iterable[int]]
-        The output has the given shape, and the desired power spectrum in
-        the last coordinate. That is, the last dimension is taken as time,
-        and all other components are independent.
+    ----
 
-    fmin : float, optional
-        Low-frequency cutoff.
-        Default: 0 corresponds to original paper. 
-        
-        The power-spectrum below fmin is flat. fmin is defined relative
-        to a unit sampling rate (see numpy's rfftfreq). For convenience,
-        the passed value is mapped to max(fmin, 1/samples) internally
-        since 1/samples is the lowest possible finite frequency in the
-        sample. The largest possible value is fmin = 0.5, the Nyquist
-        frequency. The output for this value is white noise.
+    .. _powerlaw_psd_gaussian-en:
 
-    random_state :  int, numpy.integer, numpy.random.Generator, numpy.random.RandomState, 
-                    optional
-        Optionally sets the state of NumPy's underlying random number generator.
-        Integer-compatible values or None are passed to np.random.default_rng.
-        np.random.RandomState or np.random.Generator are used directly.
-        Default: None.
+    * **English API**
 
-    Returns
-    -------
-    out : array
-        The samples.
+    Generate Gaussian noise with a power spectrum proportional to $(1/f)^\beta$.
+    The generated noise satisfies
 
+    .. math::
+        S(f) = (1 / f)^\beta
 
-    Examples:
-    ---------
+    Flicker / pink noise:
 
-    # generate 1/f noise == pink noise == flicker noise
-    >>> import colorednoise as cn
-    >>> y = cn.powerlaw_psd_gaussian(1, 5)
+    .. math::
+        \beta = 1
+
+    Brown noise:
+
+    .. math::
+        \beta = 2
+
+    The autocorrelation decays proportional to lag$^{-\gamma}$, where :math:`\gamma = 1 - \beta`
+    for :math:`0 < \beta < 1`. Finite-size effects may occur when :math:`\beta`
+    is close to 1. The algorithm is based on:
+    Timmer, J. and Koenig, M.:
+    On generating power law noise.
+    Astron. Astrophys. 300, 707-710 (1995).
+
+    :param exponent: the power spectrum exponent $\beta$.
+    :type exponent: float
+
+    :param size: shape of the output samples. The last axis is taken as time,
+        and all other axes are independent.
+    :type size: Union[int, Iterable[int]]
+
+    :param fmin: low-frequency cutoff. Default 0 corresponds to the original paper.
+        Frequencies below fmin are flat. fmin is defined relative to unit sampling rate.
+        Internally mapped to max(fmin, 1/samples). The maximum allowed value
+        is 0.5 (Nyquist frequency), producing white noise.
+    :type fmin: float, optional
+
+    :param random_state: optional, sets the state of NumPy's underlying random number generator.
+        Supports int, None, np.random.Generator, or np.random.RandomState.
+    :type random_state: int, numpy.integer, numpy.random.Generator,
+        numpy.random.RandomState, optional
+
+    :return: generated Gaussian noise samples
+    :rtype: array
+
+    ----
+
+    **Examples:**
+
+    .. code-block:: python
+
+        # generate 1/f noise == pink noise == flicker noise
+        >>> import colorednoise as cn
+        >>> y = cn.powerlaw_psd_gaussian(1, 5)
     """
-    
     # Make sure size is a list so we can iterate it and assign to it.
     if isinstance(size, (integer, int)):
         size = [size]
@@ -3399,7 +3877,7 @@ def powerlaw_psd_gaussian(
     
     # Calculate Frequencies (we asume a sample rate of one)
     # Use fft functions for real output (-> hermitian spectrum)
-    f = rfftfreq(samples) # type: ignore # mypy 1.5.1 has problems here 
+    f = rfftfreq(samples) # type: ignore # mypy 1.5.1 has problems here
     
     # Validate / normalise fmin
     if 0 <= fmin <= 0.5:
@@ -3408,7 +3886,7 @@ def powerlaw_psd_gaussian(
         raise ValueError("fmin must be chosen between 0 and 0.5.")
     
     # Build scaling factors for all frequencies
-    s_scale = f    
+    s_scale = f
     ix   = npsum(s_scale < fmin)   # Index of the cutoff
     if ix and ix < len(s_scale):
         s_scale[:ix] = s_scale[ix]
@@ -3466,6 +3944,7 @@ def _get_normal_distribution(random_state: Optional[Union[int, Generator, Random
             "numpy.random.Randomstate"
         )
     return normal_dist
+
 
 class NoisyBaseNode(nn.Module, base.MultiStepModule):
     def __init__(self, num_node, is_training: bool = True, T: int = 5, sigma_init: float = 0.5, 
@@ -3962,15 +4441,27 @@ class MPBNBaseNode(BaseNode):
         r"""
         * :ref:`API in English <MPBNBaseNode.__init__-en>`
 
+        ----
+
         .. _MPBNBaseNode.__init__-cn:
 
-        :param mpbn: 是否启用MPBN
+        * **中文 API**
+
+        该基类神经元实现了 `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_ 中提出的膜电压批量归一化方法，并在 `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ 的基础上引入阈值调制模块，用于测试时适应任务并降低能耗。
+
+        神经动力学方程如下：
+
+        .. math::
+            H'[t] &= \mathbf{BN}(H[t]), & \text{（训练时）} \\
+            (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{（测试时适应）}
+
+        :param mpbn: 是否启用 MPBN
         :type mpbn: bool
 
         :param out_features: 特征维度，用于线性层后
         :type out_features: int
 
-        :param out_channels: 特征通道数，用于2D卷积层后
+        :param out_channels: 特征通道数，用于 2D 卷积层后
         :type out_channels: int
 
         :param learnable_vth: 阈值是否可训练
@@ -3984,21 +4475,23 @@ class MPBNBaseNode(BaseNode):
 
         :param bn_min_momentum: 阈值重参数化后，更新统计量时使用的最小动量
         :type bn_min_momentum: float
+
         其余参数与 :class:`BaseNode` 相同。
 
-        `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>` 提出的对膜电压进行批量归一化的神经元模型基类。
-        `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>` 在此基础上引入阈值调制模块来进行测试时适应任务并降低能耗。
-
-        .. math::
-            :nowrap:
-            \begin{aligned}
-                H'[t] &= \mathbf{BN}(H[t]) && \text{（训练时）} \\
-                (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i} && \text{（测试时适应）}
-            \end{aligned}
-        
-        * :ref:`中文API <MPBNBaseNode.__init__-cn>`
+        ----
 
         .. _MPBNBaseNode.__init__-en:
+
+        * **English API**
+
+        Base class of neuron with membrane potential batch normalization proposed in `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_.
+        `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ further introduces a Threshold Modulation module after threshold re-parameterization to enable test-time adaptation and reduce energy consumption.
+
+        The neuronal dynamics are described as:
+
+        .. math::
+            H'[t] &= \mathbf{BN}(H[t]), & \text{(training)} \\
+            (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{(test-time adaptation)}
 
         :param mpbn: whether to enable MPBN
         :type mpbn: bool
@@ -4006,7 +4499,7 @@ class MPBNBaseNode(BaseNode):
         :param out_features: feature dimension, when used after `Linear`
         :type out_features: int
 
-        :param out_channels: number of channels, when used after `Conv2d` 
+        :param out_channels: number of channels, when used after `Conv2d`
         :type out_channels: int
 
         :param learnable_vth: whether to train a (positive) threshold
@@ -4020,19 +4513,8 @@ class MPBNBaseNode(BaseNode):
 
         :param bn_min_momentum: the minimum momentum used in statistics update after threshold re-parameterization
         :type bn_min_momentum: float
+
         Other parameters are the same as :class:`BaseNode`.
-
-        Base class of neuron with membrane potential batch normalization proposed in `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`.
-        `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>` further introduces a Threshold Modulation module after threshold re-parameterization 
-        to enable test-time adaptation and reduce energy consumption.
-
-        .. math::
-            :nowrap:
-            \begin{aligned}
-                H'[t] &= \mathbf{BN}(H[t]) && \text{(training)} \\
-                (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i} && \text{(test-time adaptation)}
-            \end{aligned}
-
         """
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq)
         assert out_features is None and out_channels is not None or out_features is not None and out_channels is None, \
@@ -4194,46 +4676,50 @@ class MPBNLIFNode(MPBNBaseNode):
         r"""
         * :ref:`API in English <MPBNLIFNode.__init__-en>`
 
+        ----
+
         .. _MPBNLIFNode.__init__-cn:
+
+        * **中文 API**
+
+        该神经元模型在 `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_ 中对膜电压进行了批量归一化，并在 `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ 的基础上引入阈值调制模块，用于测试时适应任务并降低能耗。
+
+        神经动力学方程如下：
+
+        .. math::
+            H'[t] &= \mathbf{BN}(H[t]), & \text{（训练时）} \\
+            (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{（测试时适应）}
 
         :param tau: LIF中的时间常数
         :type tau: float
 
         :param decay_input: 输入是否参与衰减
         :type decay_input: bool
+
         其余参数与 :class:`MPBNBaseNode` 相同。
 
-        `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>` 中使用的对膜电压进行批量归一化的LIF神经元模型。
-        `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>` 在此基础上引入阈值调制模块来进行测试时适应任务并降低能耗。
-
-        .. math::
-            :nowrap:
-            \begin{aligned}
-                H'[t] &= \mathbf{BN}(H[t]) && \text{（训练时）} \\
-                (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i} && \text{（测试时适应）}
-            \end{aligned}
-        
-        * :ref:`中文API <MPBNLIFNode.__init__-cn>`
+        ----
 
         .. _MPBNLIFNode.__init__-en:
+
+        * **English API**
+
+        This neuron model applies membrane potential batch normalization as in `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_.
+        `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ further introduces a Threshold Modulation module for test-time adaptation and energy efficiency.
+
+        The neuronal dynamics are described as:
+
+        .. math::
+            H'[t] &= \mathbf{BN}(H[t]), & \text{(training)} \\
+            (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i}, & \text{(test-time adaptation)}
 
         :param tau: time constant in LIF
         :type tau: float
 
         :param decay_input: whether the input current is decayed
         :type decay_input: bool
+
         Other parameters are the same as :class:`MPBNBaseNode`.
-
-        LIF neuron with membrane potential batch normalization used in `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`.
-        `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>` further introduces a Threshold Modulation module after threshold re-parameterization.
-
-        .. math::
-            :nowrap:
-            \begin{aligned}
-                H'[t] &= \mathbf{BN}(H[t]) && \text{(training)} \\
-                (\tilde{V}_{th})_{i} &= \frac{(V_{th}-\beta_{i})\sqrt{\sigma_{i}^{2}}}{\gamma_{i}}+\mu_{i} && \text{(test-time adaptation)}
-            \end{aligned}
-
         """
         assert isinstance(tau, float) and tau > 1.
         super().__init__(v_threshold, v_reset, surrogate_function, detach_reset, step_mode, backend, store_v_seq,
@@ -4241,7 +4727,7 @@ class MPBNLIFNode(MPBNBaseNode):
 
         self.tau = tau
         self.decay_input = decay_input
-    
+
     @property
     def supported_backends(self):
         return ('torch')
@@ -4300,35 +4786,117 @@ class FlexSN(base.MemoryModule):
         backend: str = "triton",
         store_state_seqs: bool = False,
     ):
-        """FlexSN: generate Triton multi-step spiking neuron kernels from
+        """
+        **API Language:**
+        :ref:`中文 <FlexSN.__init__-cn>` | :ref:`English <FlexSN.__init__-en>`
+
+        ----
+
+        .. _FlexSN.__init__-cn:
+
+        * **中文 API**
+
+        ``FlexSN`` 可以根据自定义的 PyTorch 单步函数生成 Triton 多步脉冲神经元核。
+
+        .. admonition:: 警告
+            :class: warning
+
+            使用 FlexSN 需要禁用 ``torch.jit``。请在运行脚本前设置环境变量 ``PYTORCH_JIT=0``。
+            参见: https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging 。
+
+        :param core: 描述单步前向推理的函数，签名应为 ``[*inputs, *states] -> [*outputs, *updated_states]``，
+            其中输入与输出均为张量。“inputs”和“outputs”的数量任意，需用 ``num_inputs`` 和 ``num_outputs`` 指明。
+            “states”的数量任意，与“updated_states”数量一致，且需用 ``num_states`` 指明。
+        :type core: Callable
+
+        :param example_inputs: 提供给 ``core`` 的示例输入，形式为 ``[*inputs, *states]``。
+        :type example_inputs: Tuple[torch.Tensor]
+
+        :param num_inputs: 输入的数量，应严格对应 ``core`` 参数及 ``example_inputs`` 中“inputs”的数量。
+        :type num_inputs: int
+
+        :param num_states: 状态的数量，应严格对应 ``core`` 的参数、返回值及 ``example_inputs`` 中的“states”的数量。
+        :type num_states: int
+
+        :param num_outputs: 输出的数量，应严格对应 ``core`` 返回值中“outputs”的数量。
+        :type num_outputs: int
+
+        :param requires_grad: 指示 ``core`` 的参数 (即 ``[*inputs, *states]``) 是否需要梯度。
+            用于生成前向和反向计算图。长度应与 ``core`` 的参数及 ``example_inputs`` 对应。
+            若为 ``None``，则所有参数均需梯度。默认 ``None``。
+        :type requires_grad: Optional[Tuple[bool]]
+
+        :param step_mode: 步进模式。Triton 内核仅在 ``"m"`` 模式下可用。默认 ``"m"``。
+        :type step_mode: str
+
+        :param backend: 使用的后端。``"triton"`` 仅在 ``step_mode="m"`` 时可用；``"torch"`` 始终可用。
+            默认 ``"triton"``。
+        :type backend: str
+
+        :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
+            ``state_seqs`` 是个列表，每个元素是形状为 ``[T, ...]`` 的张量。默认 ``False``。
+        :type store_state_seqs: bool
+
+        ----
+
+        .. _FlexSN.__init__-en:
+
+        * **English API**
+
+        ``FlexSN`` can generate Triton multi-step spiking neuron kernels from
         customized PyTorch single-step functions.
 
-        Args:
-            core (Callable): a function describing the single-step inference
-                dynamics of the spiking neuron. It should have the following
-                signature: [*inputs, *states] -> [*outputs, *states], and the
-                arguments and return values should all be tensors.
-            example_inputs (Tuple[torch.Tensor]): example inputs to `core`
-                with the form of [*inputs, *states].
-            num_inputs (int): number of inputs. It should strictly match the
-                number of "inputs" in `core`'s arguments and `example_inputs`.
-            num_states (int): number of states. It should strictly match the
-                number of "states" in `core`'s arguments, `core`'s return values,
-                and `example_inputs`.
-            num_outputs (int): number of outputs. It should strictly match the
-                number of "outputs" in `core`'s return values.
-            requires_grad (Optional[Tuple[bool]], optional): whether the core's
-                arguments (i.e. [*inputs, *states]) requires gradients. This info
-                is used to generate the forward and backward graphs. Its length
-                should match the number of `core`'s arguments and the length of
-                `example_inputs`. If None, all argument tensors require grad.
-                Defaults to None.
-            step_mode (str, optional): step mode. Triton kernel is available only
-                in "m" mode. Defaults to "m".
-            backend (str, optional): backend to use. Currently only "triton" is
-                supported. Defaults to "triton".
-            store_state_seqs (bool, optional): whether to store the state
-                sequences. Defaults to False.
+        .. admonition:: Warning
+            :class: warning
+
+            FlexSN requires ``torch.jit`` to be disabled. Please set the env var
+            ``PYTORCH_JIT=0``. See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging .
+
+        :param core: a function describing the single-step inference dynamics of
+            the spiking neuron. Its signature should be ``[*inputs, *states] -> [*outputs, *updated_states]``,
+            and the arguments and return values should all be tensors. There can
+            be arbitrary number of inputs and outputs (specified by ``num_inputs`` and ``num_outputs``).
+            There can be arbitrary number of states (specified by ``num_states``),
+            and the number of updated states should match the number of states.
+        :type core: Callable
+
+        :param example_inputs: example inputs to ``core`` with the form of
+            ``[*inputs, *states]``.
+        :type example_inputs: Tuple[torch.Tensor]
+
+        :param num_inputs: number of inputs. It should strictly match the
+            number of inputs" in ``core``'s arguments and ``example_inputs``.
+        :type num_inputs: int
+
+        :param num_states: number of states. It should strictly match the
+            number of "states" in ``core``'s arguments, ``core``'s return values,
+            and ``example_inputs``.
+        :type num_states: int
+
+        :param num_outputs: number of outputs. It should strictly match the
+            number of "outputs" in ``core``'s return values.
+        :type num_outputs: int
+
+        :param requires_grad: whether the core's arguments (i.e.
+            ``[*inputs, *states]``) requires gradients. This info is used to
+            generate the forward and backward graphs. Its length should match
+            the number of ``core``'s arguments and the length of ``example_inputs``.
+            If None, all argument tensors require grad. Defaults to ``None``.
+        :type requires_grad: Optional[Tuple[bool]]
+
+        :param step_mode: step mode. Triton kernel is available only in "m"
+            mode. Defaults to ``"m"``.
+        :type step_mode: str
+
+        :param backend: backend to use. ``"triton"`` is available only when
+            ``step_mode="m"``. ``"torch"`` is always available. Defaults to ``"triton"``.
+        :type backend: str
+
+        :param store_state_seqs: whether to store the state sequences. If ``True``,
+            users can access the state sequences via ``state_seqs`` property.
+            ``state_seqs`` is a list of tensors with shape ``[T, ...]``. Defaults
+            to ``False``.
+        :type store_state_seqs: bool
         """
         super().__init__()
         jit_disabled = os.environ.get("PYTORCH_JIT", "1") == "0"
@@ -4397,8 +4965,44 @@ class FlexSN(base.MemoryModule):
                 self.register_memory("state_seqs", None)
 
     def init_states(self, *args):
-        """Modify this method to change the initialization rules of states.
         """
+        **API Language:**
+        :ref:`中文 <FlexSN.init_states-cn>` | :ref:`English <FlexSN.init_states-en>`
+
+        ----
+
+        .. _FlexSN.init_states-cn:
+
+        * **中文 API**
+
+        初始化神经元的状态张量。用户可以通过重写此方法来自定义状态初始化规则。默认情况下，所有
+        状态均被初始化为零张量。
+
+        神经元的状态张量被存储在 ``states`` 属性中。这是一个列表，其每个元素是一个张量，顺序
+        对应了 ``core`` 参数的“states”部分。
+
+        :param args: ``forward`` 的输入，即 ``[*inputs]``。用户应根据 ``args``
+            和 ``FlexSN`` 的 ``step_mode`` 等信息来决定状态张量的初始化方式。
+        :type args: Sequence[Tensor]
+
+        ----
+
+        .. _FlexSN.init_states-en:
+
+        * **English API**
+
+        Initialize the neuron state tensors. Users can override this method to 
+        customize the state initialization rules. By default, all state tensors
+        are initialized to zero.
+
+        The state tensors are stored in the ``states`` attribute, which is a list
+        of tensors, whose order corresponds to the "states" part of ``core``.
+
+        :param args: the input of ``forward``, i.e., ``[*inputs]``. 
+            Users should initialize state tensors based on ``args`` and ``step_mode``.
+        :type args: Sequence[Tensor]
+        """
+
         if self.step_mode == "s":
             self.states = [
                 torch.zeros_like(args[0]) for _ in range(self.num_states)
