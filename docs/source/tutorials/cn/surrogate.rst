@@ -33,7 +33,6 @@
         # ...
         self.surrogate_function = surrogate_function
         # ...
-        
 
         def neuronal_fire(self):
             return self.surrogate_function(self.v - self.v_threshold)

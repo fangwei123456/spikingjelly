@@ -227,7 +227,7 @@ def multistep_if_inference(
         x_seq,
         v_init,
         s_seq,
-        None,
+        v_seq, # dummy
         v_seq,
         v_threshold,
         v_reset,

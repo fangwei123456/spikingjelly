@@ -267,7 +267,7 @@ def multistep_plif_inference(
         x_seq,
         v_init,
         s_seq,
-        None,
+        v_seq,
         v_seq,
         r_tau.item(),
         v_threshold,

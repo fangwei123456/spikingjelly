@@ -83,6 +83,7 @@
     /tutorials/cn/ilc_san
     /legacy_tutorials/cn/legacy_tutorials
     /tutorials/cn/cupy_neuron
+    /tutorials/cn/triton_flexsn
     /tutorials/cn/inference_on_lynxi
     /tutorials/cn/lava_exchange
     /tutorials/cn/spikformer
@@ -224,6 +225,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     /tutorials/en/ann2snn
     /legacy_tutorials/en/legacy_tutorials_en
     /tutorials/en/cupy_neuron
+    /tutorials/en/triton_flexsn
     /tutorials/en/lava_exchange
     /tutorials/en/spikformer
 

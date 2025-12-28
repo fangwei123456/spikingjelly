@@ -242,7 +242,7 @@ def multistep_lif_inference(
         x_seq,
         v_init,
         s_seq,
-        None,
+        v_seq, # dummy
         v_seq,
         tau,
         v_threshold,
