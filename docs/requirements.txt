@@ -7,4 +7,4 @@ matplotlib
 tqdm
 pydantic
 pydata-sphinx-theme>=0.16.1
-sphinx>=3.2.1
+sphinx>=8.2.3
