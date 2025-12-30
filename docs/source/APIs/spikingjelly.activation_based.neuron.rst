@@ -1,12 +1,5 @@
-spikingjelly.activation_based.neuron package
+spikingjelly.activation_based.neuron module
 ===============================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.neuron
    :members:

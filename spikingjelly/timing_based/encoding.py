@@ -1,31 +1,3 @@
-"""
-Gaussian Receptive Field Population Coding
-==========================================
-
-| All neurons are arranged in a grid where each row corresponds to an input dimension
-| and each column corresponds to a neuron in that dimension.
-| When an input value is given, each neuron computes its response based on its Gaussian
-| tuning curve.
-| The response is then mapped to a spike time, where a higher response results in an
-| earlier spike time, and a lower response results in a later spike time.
-| If the spike time exceeds a predefined maximum spike time, the neuron becomes inactive
-| (no spike, represented by -1).
-
-Reference:
-   | Sander M. Bohte, Joost N. Kok, Han La Poutré,
-   | Error-backpropagation in temporally encoded networks of spiking neurons,
-   | Neurocomputing,
-   | Volume 48, Issues 1–4,
-   | 2002,
-   | Pages 17-37,
-   | ISSN 0925-2312,
-   | https://doi.org/10.1016/S0925-2312(01)00658-0.
-   | (https://www.sciencedirect.com/science/article/pii/S0925231201006580)
-
-Neuron Spatial Receptive Field (Lecture):
-   | https://youtu.be/fCqt07IXUPI?si=jVT-QlmEgrbQZkB2
-"""
-
 from typing import Annotated
 
 import einops
@@ -240,6 +212,31 @@ class GaussianTuning:
         x_max: torch.Tensor,
     ) -> None:
         """
+        **Gaussian Receptive Field Population Coding**
+
+        All neurons are arranged in a grid where each row corresponds to an input dimension
+        and each column corresponds to a neuron in that dimension.
+        When an input value is given, each neuron computes its response based on its Gaussian
+        tuning curve.
+        The response is then mapped to a spike time, where a higher response results in an
+        earlier spike time, and a lower response results in a later spike time.
+        If the spike time exceeds a predefined maximum spike time, the neuron becomes inactive
+        (no spike, represented by -1).
+
+        Reference:
+        | Sander M. Bohte, Joost N. Kok, Han La Poutré,
+        | Error-backpropagation in temporally encoded networks of spiking neurons,
+        | Neurocomputing,
+        | Volume 48, Issues 1–4,
+        | 2002,
+        | Pages 17-37,
+        | ISSN 0925-2312,
+        | https://doi.org/10.1016/S0925-2312(01)00658-0.
+        | (https://www.sciencedirect.com/science/article/pii/S0925231201006580)
+
+        Neuron Spatial Receptive Field (Lecture):
+        | https://youtu.be/fCqt07IXUPI?si=jVT-QlmEgrbQZkB2
+
         Parameters
         ----------
         n : int

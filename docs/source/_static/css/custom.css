@@ -1,0 +1,78 @@
+dl.py.class {
+    margin-top: 3rem;
+    margin-bottom: 3rem;
+}
+
+/* API Cards */
+
+dl.py > dt.sig.sig-object.py {
+    background-color: var(--pst-color-surface);
+    padding: 0.4rem 1rem;
+    margin: 0 0 1rem 0;
+    border-radius: 0.375rem;
+
+    display: block;
+    white-space: normal;
+}
+
+dl.py.class > dt.sig.sig-object.py {
+    border-left: 4px solid var(--pst-color-primary);
+}
+
+dl.py.function > dt.sig.sig-object.py {
+    border-left: 4px solid var(--pst-color-primary);
+}
+
+dl.py.method > dt.sig.sig-object.py {
+    border-left: 4px solid var(--pst-color-secondary);
+    padding: 0.2rem 1rem;
+}
+
+dl.py.property > dt.sig.sig-object.py {
+    border-left: 4px solid var(--pst-color-secondary);
+    padding: 0.2rem 1rem;
+}
+
+dl.py > dt.sig .sig-prename {
+    font-size: 0.85em;
+}
+
+dl.py > dt.sig .sig-name {
+    font-weight: 800;
+}
+
+dl.py > dt.sig .sig-paren,
+dl.py > dt.sig .sig-param {
+    white-space: normal;
+}
+
+dl.py > dt.sig .sig-param {
+    display: inline-block;
+}
+
+dl.py > dt.sig .sig-param a.reference.external {
+    color: var(--pst-color-text-muted);
+    opacity: 0.75;
+    font-weight: normal;
+}
+
+dl.py > dt.sig .default_value {
+    color: var(--pst-color-text-muted);
+    opacity: 0.75;
+    font-weight: normal;
+}
+
+
+/* API Description */
+
+dl.py.class > dd {
+    margin-left: 1.0rem;
+    padding-left: 1.0rem;
+    border-left: 1px solid var(--pst-color-border);
+}
+
+dl.py.function > dd {
+    margin-left: 1.0rem;
+    padding-left: 1.0rem;
+    border-left: 1px solid var(--pst-color-border);
+}

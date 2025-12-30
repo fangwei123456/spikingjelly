@@ -1,12 +1,5 @@
-spikingjelly.activation_based.lava_exchange package
+spikingjelly.activation_based.lava_exchange module
 =====================================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-+++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.lava_exchange
    :members:

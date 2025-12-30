@@ -1,109 +1,27 @@
 spikingjelly.datasets package
-=============================
+==================================
 
-.. Subpackages
+Datasets
+-------------
 
-Submodules
-++++++++++++
+.. toctree::
+   :maxdepth: 2
 
-spikingjelly.datasets.asl\_dvs module
--------------------------------------
+   spikingjelly.datasets.asl_dvs
+   spikingjelly.datasets.bullying10k
+   spikingjelly.datasets.cifar10_dvs
+   spikingjelly.datasets.dvs128_gesture
+   spikingjelly.datasets.dvs_lip
+   spikingjelly.datasets.es_imagenet
+   spikingjelly.datasets.hardvs
+   spikingjelly.datasets.n_caltech101
+   spikingjelly.datasets.n_mnist
+   spikingjelly.datasets.nav_gesture
+   spikingjelly.datasets.shd
+   spikingjelly.datasets.speechcommands
 
-.. automodule:: spikingjelly.datasets.asl_dvs
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.bullying10k module
---------------------------------------------
-
-.. automodule:: spikingjelly.datasets.bullying10k
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.cifar10\_dvs module
------------------------------------------
-
-.. automodule:: spikingjelly.datasets.cifar10_dvs
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.dvs128\_gesture module
---------------------------------------------
-
-.. automodule:: spikingjelly.datasets.dvs128_gesture
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.dvs\_lip module
---------------------------------------------
-
-.. automodule:: spikingjelly.datasets.dvs_lip
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.es\_imagenet module
------------------------------------------
-
-.. automodule:: spikingjelly.datasets.es_imagenet
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.hardvs module
------------------------------------------
-
-.. automodule:: spikingjelly.datasets.hardvs
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.n\_caltech101 module
-------------------------------------------
-
-.. automodule:: spikingjelly.datasets.n_caltech101
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.n\_mnist module
--------------------------------------
-
-.. automodule:: spikingjelly.datasets.n_mnist
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.nav\_gesture module
------------------------------------------
-
-.. automodule:: spikingjelly.datasets.nav_gesture
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.shd module
------------------------------------------
-
-.. automodule:: spikingjelly.datasets.shd
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.datasets.speechcommands module
--------------------------------------------
-
-.. automodule:: spikingjelly.datasets.speechcommands
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-Module contents
-++++++++++++++++
+Dataset Utilities
+-----------------------
 
 .. automodule:: spikingjelly.datasets
    :members:

@@ -1,21 +1,3 @@
-"""
-Tempotron Neuron Model
-======================
-
-| Tempotron is a Leaky Integrate-and-Fire (LIF) Neuron Model,
-| that accepts spikes from sensory neurons spikes
-| and learns to classify spatiotemporal patterns of those spikes.
-
-Reference:
-    | Gütig R, Sompolinsky H.
-    | The tempotron: a neuron that learns spike timing-based decisions.
-    | Nat Neurosci.
-    | 2006 Mar;9(3):420-8.
-    | DOI: 10.1038/nn1643.
-    | Epub 2006 Feb 12.
-    | PMID: 16474393.
-"""
-
 from typing import Annotated
 
 import torch
@@ -260,6 +242,19 @@ class _Tempotron(nn.Module):
 # NOTE: Facade class for backward compatibility
 class Tempotron(nn.Module):
     """
+    Tempotron is a Leaky Integrate-and-Fire (LIF) Neuron Model that accepts 
+    spikes from sensory neurons spikes and learns to classify spatiotemporal 
+    patterns of those spikes.
+
+    Reference:
+        | Gütig R, Sompolinsky H.
+        | The tempotron: a neuron that learns spike timing-based decisions.
+        | Nat Neurosci.
+        | 2006 Mar;9(3):420-8.
+        | DOI: 10.1038/nn1643.
+        | Epub 2006 Feb 12.
+        | PMID: 16474393.
+
     Neuronal Simulation::
 
                          ┌─────────────────────┐

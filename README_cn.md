@@ -49,7 +49,7 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 - [x] 添加[Triton](https://github.com/triton-lang/triton)后端以在GPU上进一步加速。
 - [x] 添加一个将PyTorch脉冲神经元转换为Triton后端的转译器，该转译器将比现有的[`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/cuda_kernel/auto_cuda)子包更灵活、易用。
 - [ ] 添加脉冲自注意力机制的实现。
-- [ ] 更新文档和教程。
+- [x] 更新文档和教程。
 
 其他长期计划包括：
 

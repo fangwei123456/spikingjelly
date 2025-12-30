@@ -1,12 +1,5 @@
-spikingjelly.activation_based.monitor package
+spikingjelly.activation_based.monitor module
 ================================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
----------------
 
 .. automodule:: spikingjelly.activation_based.monitor
    :members:

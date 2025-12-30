@@ -1,12 +1,5 @@
-spikingjelly.activation_based.rnn package
+spikingjelly.activation_based.rnn module
 ============================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-+++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.rnn
    :members:

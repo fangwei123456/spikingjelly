@@ -1,20 +1,31 @@
 spikingjelly.activation\_based.triton\_kernel package
 =====================================================
 
-Subpackages
-++++++++++++
+Predefined Neuron Kernels
+----------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   spikingjelly.activation_based.triton_kernel.neuron_kernel
+
+FlexSN Implementation
+---------------------------------------------------------------------
 
 .. toctree::
    :maxdepth: 1
 
    spikingjelly.activation_based.triton_kernel.flexsn
-   spikingjelly.activation_based.triton_kernel.neuron_kernel
+
+Torch-to-Triton Transpiler
+-----------------------------------------------------------------------------
+
+.. toctree::
+   :maxdepth: 1
+
    spikingjelly.activation_based.triton_kernel.torch2triton
 
-Submodules
-++++++++++++
-
-spikingjelly.activation\_based.triton\_kernel.triton\_utils module
+Utilities
 ---------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.triton_kernel.triton_utils
@@ -22,4 +33,7 @@ spikingjelly.activation\_based.triton\_kernel.triton\_utils module
    :undoc-members:
    :show-inheritance:
 
-.. Module contents
+.. automodule:: spikingjelly.activation_based.triton_kernel.dummy
+   :members:
+   :undoc-members:
+   :show-inheritance:

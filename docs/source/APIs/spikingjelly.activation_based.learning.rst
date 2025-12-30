@@ -1,12 +1,5 @@
-spikingjelly.activation_based.learning package
+spikingjelly.activation_based.learning module
 ==================================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-+++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.learning
    :members:

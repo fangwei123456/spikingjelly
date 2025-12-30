@@ -25,7 +25,8 @@ copyright = '2020, PKU MLG, PCL'
 author = 'PKU MLG, PCL'
 
 # The full version, including alpha/beta/rc tags
-release = 'alpha'
+version = ''
+release = ''
 
 # -- General configuration ---------------------------------------------------
 
@@ -34,10 +35,11 @@ release = 'alpha'
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinx_rtd_theme',
+    'sphinx.ext.autosummary',
     'sphinx.ext.viewcode',
     'sphinx.ext.intersphinx',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinx.ext.mathjax',
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -59,11 +61,29 @@ exclude_patterns = []
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-#
-html_theme = 'sphinx_rtd_theme'
+html_theme = "pydata_sphinx_theme"
 html_theme_options = {
-    'navigation_depth': 5,
+    "navigation_depth": 4,
+    "collapse_navigation": False,
+    "show_nav_level": 1,
+    "navbar_align": "left",
+    "header_links_before_dropdown": 4,
+    "navbar_center": ["navbar-nav"],
+    "secondary_sidebar_items": ["page-toc", "sourcelink"],
+    "icon_links": [
+        {
+            "name": "GitHub",
+            "url": "https://github.com/fangwei123456/spikingjelly",
+            "icon": "fa-brands fa-github",
+        },
+    ],
+    "logo": {
+        "text": "SpikingJelly",
+        "image_light": "_static/logo/sj-logo.png",
+        "image_dark": "_static/logo/sj-logo.png",
+    }
 }
+
 
 # Example configuration for intersphinx: refer to the Python standard library.
 intersphinx_mapping = {
@@ -80,8 +100,11 @@ napoleon_use_ivar = True
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
+html_css_files = ["css/custom.css"]
 
-autodoc_mock_imports = ['loris', 'readline', '_C_gemm', '_C_neuron', 'torchaudio', 'onnx', 'onnxruntime', 'gym', 'cloudpickle', 'rarfile', 'lava', 'lyngor', 'lynpy', 'sklearn', 'h5py']
+html_favicon = "_static/logo/sj-logo.png"
+
+autodoc_mock_imports = ['loris', 'readline', '_C_gemm', '_C_neuron', 'torchaudio', 'onnx', 'onnxruntime', 'gym', 'cloudpickle', 'rarfile', 'lava', 'lyngor', 'lynpy', 'sklearn', 'h5py', 'triton', 'cupy']
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False

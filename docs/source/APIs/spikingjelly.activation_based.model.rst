@@ -1,12 +1,8 @@
 spikingjelly.activation\_based.model package
 ============================================
 
-.. Subpackages
 
-Submodules
-+++++++++++
-
-spikingjelly.activation\_based.model.parametric\_lif\_net module
+PLIF-Net
 ----------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.model.parametric_lif_net
@@ -14,7 +10,7 @@ spikingjelly.activation\_based.model.parametric\_lif\_net module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.model.sew\_resnet module
+SEW ResNet
 -------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.model.sew_resnet
@@ -22,7 +18,7 @@ spikingjelly.activation\_based.model.sew\_resnet module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.model.spiking\_resnet module
+Spiking ResNet
 -----------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.model.spiking_resnet
@@ -30,7 +26,7 @@ spikingjelly.activation\_based.model.spiking\_resnet module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.model.spiking\_vgg module
+Spiking VGG
 --------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.model.spiking_vgg
@@ -38,7 +34,7 @@ spikingjelly.activation\_based.model.spiking\_vgg module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.model.train\_classify module
+Trainers
 -----------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.model.train_classify
@@ -46,12 +42,7 @@ spikingjelly.activation\_based.model.train\_classify module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.model.train\_imagenet\_example module
-------------------------------------------------------------------------
-
 .. automodule:: spikingjelly.activation_based.model.train_imagenet_example
    :members:
    :undoc-members:
    :show-inheritance:
-
-.. Module contents

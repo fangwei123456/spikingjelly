@@ -1,12 +1,7 @@
 spikingjelly.activation\_based.triton\_kernel.flexsn package
 ==============================================================
 
-.. Subpackages
-
-Submodules
-++++++++++++
-
-spikingjelly.activation\_based.triton\_kernel.flexsn.info module
+Function Info
 -------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.triton_kernel.flexsn.info
@@ -14,7 +9,7 @@ spikingjelly.activation\_based.triton\_kernel.flexsn.info module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.triton\_kernel.flexsn.template module
+Template
 ---------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.triton_kernel.flexsn.template
@@ -22,12 +17,10 @@ spikingjelly.activation\_based.triton\_kernel.flexsn.template module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.triton\_kernel.flexsn.wrapper module
+Wrapper
 ---------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.triton_kernel.flexsn.wrapper
    :members:
    :undoc-members:
    :show-inheritance:
-
-.. Module contents

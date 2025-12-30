@@ -1,20 +1,12 @@
-spikingjelly.activation_based.surrogate package
+spikingjelly.activation_based.surrogate module
 =================================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-++++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.surrogate
    :members:
    :undoc-members:
    :show-inheritance:
 
-References
-+++++++++++
+**References**
 
 .. [#esser2015backpropagation]	Esser S K, Appuswamy R, Merolla P, et al. Backpropagation for energy-efficient neuromorphic computing[J]. Advances in neural information processing systems, 2015, 28: 1117-1125.
 .. [#esser2016convolutional]	Esser S K, Merolla P A, Arthur J V, et al. Convolutional networks for fast, energy-efficient neuromorphic computing[J]. Proceedings of the national academy of sciences, 2016, 113(41): 11441-11446.

@@ -1,12 +1,5 @@
-spikingjelly.activation_based.encoding package
+spikingjelly.activation_based.encoding module
 =================================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-+++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.encoding
    :members:

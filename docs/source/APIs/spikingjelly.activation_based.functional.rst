@@ -1,12 +1,5 @@
-spikingjelly.activation_based.functional package
+spikingjelly.activation_based.functional module
 ==================================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.functional
    :members:

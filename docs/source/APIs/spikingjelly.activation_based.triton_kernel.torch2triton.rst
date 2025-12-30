@@ -1,12 +1,7 @@
 spikingjelly.activation\_based.triton\_kernel.torch2triton package
 =======================================================================
 
-.. Subpackages
-
-Submodules
-++++++++++++
-
-spikingjelly.activation\_based.triton\_kernel.torch2triton.torch2graph module
+PyTorch to Graph
 ------------------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.triton_kernel.torch2triton.torch2graph
@@ -14,12 +9,10 @@ spikingjelly.activation\_based.triton\_kernel.torch2triton.torch2graph module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.triton\_kernel.torch2triton.graph2triton module
+Graph to Triton
 -------------------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton
    :members:
    :undoc-members:
    :show-inheritance:
-
-.. Module contents

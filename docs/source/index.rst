@@ -1,12 +1,12 @@
+**Language:**
+:ref:`中文 <index>` | :ref:`English <index_en>`
+
 .. _index:
 
 欢迎来到惊蜇(SpikingJelly)的文档
 ###################################
 
-`SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经\
-网络(Spiking Neural Network, SNN)进行深度学习的框架。
-
-* :ref:`Homepage in English <index_en>`
+`SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ 是一个基于 `PyTorch <https://pytorch.org/>`_ ，使用脉冲神经网络(Spiking Neural Network, SNN)进行深度学习的框架。
 
 版本说明
 ----------------
@@ -61,45 +61,13 @@
     cd spikingjelly
     python setup.py install
 
+上手教程
+----------------------
+
 .. toctree::
-    :maxdepth: 1
-    :caption: 上手教程
+    :maxdepth: 2
 
-    /tutorials/cn/migrate_from_legacy
-    /tutorials/cn/basic_concept
-    /tutorials/cn/container
-    /tutorials/cn/neuron
-    /tutorials/cn/surrogate
-    /tutorials/cn/monitor
-    /tutorials/cn/lif_fc_mnist
-    /tutorials/cn/conv_fashion_mnist
-    /tutorials/cn/neuromorphic_datasets
-    /tutorials/cn/classify_dvsg
-    /tutorials/cn/recurrent_connection_and_stateful_synapse
-    /tutorials/cn/train_large_scale_snn
-    /tutorials/cn/stdp
-    /tutorials/cn/ann2snn
-    /tutorials/cn/dsqn
-    /tutorials/cn/ilc_san
-    /legacy_tutorials/cn/legacy_tutorials
-    /tutorials/cn/cupy_neuron
-    /tutorials/cn/triton_flexsn
-    /tutorials/cn/inference_on_lynxi
-    /tutorials/cn/lava_exchange
-    /tutorials/cn/spikformer
-
-模块文档
--------------------------
-
-* :ref:`APIs`
-
-文档索引
--------------------------
-
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
-
+    /tutorials/cn/index
 
 引用和出版物
 -------------------------
@@ -147,8 +115,6 @@ Welcome to SpikingJelly's documentation
 ############################################
 
 `SpikingJelly <https://github.com/fangwei123456/spikingjelly>`_ is an open-source deep learning framework for Spiking Neural Network (SNN) based on `PyTorch <https://pytorch.org/>`_.
-
-* :ref:`中文首页 <index>`
 
 Notification
 ----------------
@@ -204,44 +170,13 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     cd spikingjelly
     python setup.py install
 
+Tutorials
+------------------------
 
 .. toctree::
-    :maxdepth: 1
-    :caption: Tutorials
+    :maxdepth: 2
 
-    /tutorials/en/migrate_from_legacy
-    /tutorials/en/basic_concept
-    /tutorials/en/container
-    /tutorials/en/neuron
-    /tutorials/en/surrogate
-    /tutorials/en/monitor
-    /tutorials/en/lif_fc_mnist
-    /tutorials/en/conv_fashion_mnist
-    /tutorials/en/neuromorphic_datasets
-    /tutorials/en/classify_dvsg
-    /tutorials/en/recurrent_connection_and_stateful_synapse
-    /tutorials/en/train_large_scale_snn
-    /tutorials/en/stdp
-    /tutorials/en/ann2snn
-    /legacy_tutorials/en/legacy_tutorials_en
-    /tutorials/en/cupy_neuron
-    /tutorials/en/triton_flexsn
-    /tutorials/en/lava_exchange
-    /tutorials/en/spikformer
-
-
-
-Modules Docs
--------------------------
-
-* :ref:`APIs`
-
-Indices and tables
--------------------------
-
-* :ref:`Index <genindex>`
-* :ref:`Module Index <modindex>`
-* :ref:`Search Page <search>`
+    /tutorials/en/index
 
 Citation
 -------------------------
@@ -279,12 +214,15 @@ About
 
 The list of developers can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
 
-.. _APIs:
-.. toctree::
-   :maxdepth: 4
-   :caption: APIs
+API 文档 | API Docs
+##########################
 
-   ./APIs/spikingjelly.activation_based
-   ./APIs/spikingjelly.datasets
-   ./APIs/spikingjelly.timing_based
-   ./APIs/spikingjelly.visualizing
+.. toctree::
+   :maxdepth: 2
+
+   /APIs/spikingjelly
+
+.. toctree::
+    :hidden:
+
+    出版物 | Publications <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>

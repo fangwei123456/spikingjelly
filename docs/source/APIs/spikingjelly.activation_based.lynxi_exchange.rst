@@ -1,8 +1,5 @@
-spikingjelly.activation_based.lynxi_exchange package
+spikingjelly.activation_based.lynxi_exchange module
 =========================================================
-
-Module contents
----------------
 
 .. automodule:: spikingjelly.activation_based.lynxi_exchange
    :members:

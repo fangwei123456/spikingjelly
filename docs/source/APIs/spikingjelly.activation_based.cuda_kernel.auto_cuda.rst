@@ -1,9 +1,6 @@
 spikingjelly.activation_based.cuda_kernel.auto_cuda package
 ============================================================
 
-Module contents
----------------
-
 .. automodule:: spikingjelly.activation_based.cuda_kernel.auto_cuda.base
    :members:
    :undoc-members:

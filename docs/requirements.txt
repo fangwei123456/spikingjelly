@@ -6,5 +6,5 @@ tensorboard
 matplotlib
 tqdm
 pydantic
-sphinx_rtd_theme>=0.5.0
+pydata-sphinx-theme>=0.16.1
 sphinx>=3.2.1

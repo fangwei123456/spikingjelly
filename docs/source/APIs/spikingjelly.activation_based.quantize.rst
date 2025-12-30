@@ -1,12 +1,5 @@
-spikingjelly.activation_based.quantize package
+spikingjelly.activation_based.quantize module
 ===============================================
-
-.. Subpackages
-
-.. Submodules
-
-Module contents
-+++++++++++++++++
 
 .. automodule:: spikingjelly.activation_based.quantize
    :members:

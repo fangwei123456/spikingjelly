@@ -1,7 +1,7 @@
-spikingjelly.activation_based.layer module
+spikingjelly.datasets.dvs128\_gesture module
 ==============================================
 
-.. automodule:: spikingjelly.activation_based.layer
+.. automodule:: spikingjelly.datasets.dvs128_gesture
    :members:
    :undoc-members:
    :show-inheritance:

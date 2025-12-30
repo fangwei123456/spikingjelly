@@ -1,90 +1,7 @@
 spikingjelly.activation\_based.examples package
 ===============================================
 
-Subpackages
-+++++++++++++
-
-.. toctree::
-   :maxdepth: 3
-
-   spikingjelly.activation_based.examples.common
-
-Submodules
-++++++++++++
-
-spikingjelly.activation\_based.examples.A2C module
---------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.A2C
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.DQN\_state module
----------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.DQN_state
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.PPO module
---------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.PPO
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.Spiking\_A2C module
------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.Spiking_A2C
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.Spiking\_DQN\_state module
-------------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.Spiking_DQN_state
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.Spiking\_PPO module
------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.Spiking_PPO
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.cifar10\_r11\_enabling\_spikebased\_backpropagation module
---------------------------------------------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.cifar10_r11_enabling_spikebased_backpropagation
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.classify\_dvsg module
--------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.classify_dvsg
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.conv\_fashion\_mnist module
--------------------------------------------------------------------
-
-.. automodule:: spikingjelly.activation_based.examples.conv_fashion_mnist
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-spikingjelly.activation\_based.examples.lif\_fc\_mnist module
+Spiking FCNet for MNIST
 -------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.examples.lif_fc_mnist
@@ -92,15 +9,31 @@ spikingjelly.activation\_based.examples.lif\_fc\_mnist module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.examples.rsnn\_sequential\_fmnist module
------------------------------------------------------------------------
+Spiking CNN for Fashion MNIST
+-------------------------------------------------------------------
 
-.. automodule:: spikingjelly.activation_based.examples.rsnn_sequential_fmnist
+.. automodule:: spikingjelly.activation_based.examples.conv_fashion_mnist
    :members:
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.examples.speechcommands module
+Spike-based BP for CIFAR-10
+-------------------------------
+
+.. automodule:: spikingjelly.activation_based.examples.cifar10_r11_enabling_spikebased_backpropagation
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+DVS Gesture Classification
+-------------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.examples.classify_dvsg
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Speech Commands
 -------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.examples.speechcommands
@@ -108,7 +41,15 @@ spikingjelly.activation\_based.examples.speechcommands module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.examples.spiking\_lstm\_sequential\_mnist module
+RSNN for Sequential Fashion MNIST
+-----------------------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.examples.rsnn_sequential_fmnist
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Spiking LSTM for Sequential MNIST
 -------------------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.examples.spiking_lstm_sequential_mnist
@@ -116,7 +57,7 @@ spikingjelly.activation\_based.examples.spiking\_lstm\_sequential\_mnist module
    :undoc-members:
    :show-inheritance:
 
-spikingjelly.activation\_based.examples.spiking\_lstm\_text module
+Spiking LSTM for Text Classification
 ------------------------------------------------------------------
 
 .. automodule:: spikingjelly.activation_based.examples.spiking_lstm_text
@@ -124,4 +65,49 @@ spikingjelly.activation\_based.examples.spiking\_lstm\_text module
    :undoc-members:
    :show-inheritance:
 
-.. Module contents
+A2C
+--------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.examples.A2C
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.examples.Spiking_A2C
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+DQN\_state
+---------------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.examples.DQN_state
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.examples.Spiking_DQN_state
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+PPO
+--------------------------------------------------
+
+.. automodule:: spikingjelly.activation_based.examples.PPO
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.examples.Spiking_PPO
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+Common Utilities
+-------------------------------------------------------------------
+
+.. toctree::
+   :maxdepth: 2
+
+   spikingjelly.activation_based.examples.common
