@@ -1,10 +1,12 @@
 --find-links https://download.pytorch.org/whl/torch_stable.html
-torch==1.13.1
+torch>=2.7.0,<2.8.0
 torchvision
 scipy
+einops
 tensorboard
+tensorboardX
 matplotlib
 tqdm
 pydantic
 pydata-sphinx-theme>=0.16.1
-sphinx>=8.2.3
+sphinx>=8.0.0
