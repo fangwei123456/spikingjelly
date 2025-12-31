@@ -1,6 +1,9 @@
 Migrate From Old Versions
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/migrate_from_legacy`
 
 There is some difference between the old and new versions of SpikingJelly. We recommend the users read this \
 tutorial if they are familiar with the old version and want to try the new version. SpikingJelly has nice compatibility \

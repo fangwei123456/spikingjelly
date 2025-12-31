@@ -2,6 +2,8 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/cupy_neuron`
+
 本教程介绍如何编写CUPY后端的神经元。本教程需要如下的前置知识：
 
 #. 了解CUDA，能够实现简单的逐元素CUDA内核

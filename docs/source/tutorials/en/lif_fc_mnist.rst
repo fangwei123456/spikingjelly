@@ -1,6 +1,9 @@
 Single Fully Connected Layer SNN to Classify MNIST
 ========================================================
+
 Author: `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
+
+中文版： :doc:`../cn/lif_fc_mnist`
 
 Translator: `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
 

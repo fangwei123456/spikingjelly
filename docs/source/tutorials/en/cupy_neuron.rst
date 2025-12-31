@@ -2,6 +2,8 @@ Implement CUPY Neuron
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
+中文版： :doc:`../cn/cupy_neuron`
+
 This tutorial will introduce how to implement the cupy backend for spiking neurons. We suppose the reader:
 
 #. Can implement simple element-wise CUDA kernels

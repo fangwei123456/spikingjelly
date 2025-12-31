@@ -1,6 +1,9 @@
 神经元
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+
+English version: :doc:`../en/neuron`
 
 本节教程主要关注 :class:`spikingjelly.activation_based.neuron`，介绍脉冲神经元。
 

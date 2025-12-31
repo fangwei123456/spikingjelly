@@ -2,6 +2,8 @@ Convert to Lava for Loihi Deployment
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
+中文版： :doc:`../cn/lava_exchange`
+
 Thanks to `AllenYolk <https://github.com/AllenYolk>`_ and `banzhuangonglxh <https://github.com/banzhuangonglxh>`_ for their contributions to `lava_exchange` 
 
 

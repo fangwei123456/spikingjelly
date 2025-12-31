@@ -441,7 +441,7 @@ class MemoryModule(nn.Module, StepModule):
 
         .. tip::
 
-            可以使用这个函数实现TBPTT(Truncated Back Propagation Through Time)。
+            可以使用这个函数实现TBPTT (Truncated Back Propagation Through Time)。
 
 
         * :ref:`中文API <MemoryModule.detach-cn>`
@@ -453,7 +453,7 @@ class MemoryModule(nn.Module, StepModule):
         .. admonition:: Tip
             :class: tip
 
-            We can use this function to implement TBPTT(Truncated Back Propagation Through Time).
+            We can use this function to implement TBPTT (Truncated Back Propagation Through Time).
 
         """
 

@@ -1,6 +1,9 @@
 Recurrent Connection and Stateful Synapse
 ============================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/recurrent_connection_and_stateful_synapse`
 
 Self-connected Modules
 -----------------------------

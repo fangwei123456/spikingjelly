@@ -2,6 +2,8 @@ ANN转换SNN
 =======================================
 本教程作者： `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_, `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
 
+English version: :doc:`../en/ann2snn`
+
 本节教程主要关注 ``spikingjelly.activation_based.ann2snn``，介绍如何将训练好的ANN转换SNN，并且在SpikingJelly框架上进行仿真。
 
 相关API见此处 `API参考 <https://spikingjelly.readthedocs.io/zh_CN/latest/spikingjelly.activation_based.ann2snn.html>`_ 。

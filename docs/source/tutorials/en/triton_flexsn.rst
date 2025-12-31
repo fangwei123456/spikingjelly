@@ -1,7 +1,9 @@
 Triton backend and FlexSN
 ===========================
 
-Author: `AllenYolk <https://github.com/AllenYolk>`_
+Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
+
+中文版： :doc:`../cn/triton_flexsn`
 
 SpikingJelly version ``0.0.0.1.0`` introduces the `Triton <https://github.com/triton-lang/triton>`_ backend as an alternative to PyTorch and CuPy. Compared with the CuPy backend, the Triton backend offers better readability, extensibility, and maintainability, makes it easier to achieve higher GPU utilization, and has the potential to be applied to `other hardware platforms <https://gitcode.com/Ascend/triton-ascend>`_.
 
@@ -240,7 +242,7 @@ This model has two inputs ``x, y``, two outputs ``s1, s2``, and two state variab
 .. image:: ../../_static/tutorials/triton_flexsn/neuron.png
     :width: 100%
 
-To generate a multi-step Triton kernel, use :class:`spikingjelly.activation_based.neuron.FlexSN` :
+To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` :
 
 .. code:: python
 
@@ -385,7 +387,7 @@ general.
                 else:
                     raise ValueError(f"Unsupported step mode: {self.step_mode}")
 
-    See :class:`spikingjelly.activation_based.neuron.FlexSN` for details.
+    See :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` for details.
 
 
 .. admonition:: Warning

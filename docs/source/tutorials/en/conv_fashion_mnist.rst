@@ -2,6 +2,8 @@ Convolutional SNN to Classify FMNIST
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
+中文版： :doc:`../cn/conv_fashion_mnist`
+
 In this tutorial, we will build a convolutional SNN to classify the `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ dataset. Images in the Fashion-MNIST dataset \
 have the same shape as these in the MNIST dataset, which is ``1 * 28 * 28``.
 

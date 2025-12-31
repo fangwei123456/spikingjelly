@@ -4335,6 +4335,9 @@ class NonSpikingIFNode(NonSpikingBaseNode):
 
 class NonSpikingLIFNode(NonSpikingBaseNode):
     def __init__(self, tau: float = 2., decode='last-mem'):
+        """
+        See also: :class:`spikingjelly.activation_based.layer.misc.SynapseFilter`.
+        """
         super().__init__(decode)
 
         self.tau = tau

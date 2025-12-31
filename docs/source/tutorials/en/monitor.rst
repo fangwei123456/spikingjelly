@@ -1,6 +1,9 @@
 Monitor
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/monitor`
 
 :class:`spikingjelly.activation_based.monitor` has defined some commonly used monitors, with which the users can record \
 the data that they are interested in. Now let us try these monitors.

@@ -1,6 +1,9 @@
 STDP Learning
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/stdp`
 
 Researchers of SNNs are always interested in biological learning rules. In SpkingJelly, STDP(Spike Timing Dependent Plasticity) \
 is also provided and can be applied to convolutional or linear layers.

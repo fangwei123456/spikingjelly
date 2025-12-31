@@ -1,15 +1,20 @@
 使用深度脉冲Q网络玩Atari游戏
 ====================================
-本教程作者：\ `Ding Chen <https://github.com/lucifer2859>`__
+
+本教程作者： `Ding Chen <https://github.com/lucifer2859>`_
+
+.. warning::
+
+    We are looking for contributors to translate this tutorial to English!
 
 本节教程将介绍如何使用替代梯度方法训练一个深度脉冲Q网络。
 
 从头搭建一个简单的深度脉冲Q网络
 -------------------------------
 
-在PyTorch中搭建神经网络时，我们可以简单地使用\ ``nn.Sequential``\ 将多个网络层堆叠得到一个前馈网络，输入数据将依序流经各个网络层得到输出。
+在PyTorch中搭建神经网络时，我们可以简单地使用 ``nn.Sequential`` 将多个网络层堆叠得到一个前馈网络，输入数据将依序流经各个网络层得到输出。
 
-Atari游戏的观察经过预处理成为尺寸为\ :math:`84\times 84`\ 的灰度帧，然后利用帧堆叠减轻部分可观察性，并由动作空间决定离散动作的数目。一个简单的单层ANN网络如下：
+Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度帧，然后利用帧堆叠减轻部分可观察性，并由动作空间决定离散动作的数目。一个简单的单层ANN网络如下：
 
 .. code-block:: python
 
@@ -30,7 +35,7 @@ Atari游戏的观察经过预处理成为尺寸为\ :math:`84\times 84`\ 的灰�
             nn.Linear(512, n_actions)
         )
 
-我们也可以用完全类似结构的SNN来进行强化学习任务。就这个网络而言，只需要先去掉所有的激活函数，再将神经元添加到原来激活函数的位置，这里我们选择的是LIF神经元。神经元之间的连接层需要用\ ``spikingjelly.activation_based.layer``\ 包装：
+我们也可以用完全类似结构的SNN来进行强化学习任务。就这个网络而言，只需要先去掉所有的激活函数，再将神经元添加到原来激活函数的位置，这里我们选择的是LIF神经元。神经元之间的连接层需要用 ``spikingjelly.activation_based.layer`` 包装：
 
 .. code-block:: python
 

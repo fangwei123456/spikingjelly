@@ -1,6 +1,9 @@
 Train large-scale SNNs
 ======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/train_large_scale_snn`
 
 Usage of ``activation_based.model``
 ----------------------------------------------

@@ -2,6 +2,8 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/conv_fashion_mnist`
+
 在本节教程中，我们将搭建一个卷积脉冲神经网络，对 `Fashion-MNIST <https://github.com/zalandoresearch/fashion-mnist>`_ 数据集进行
 分类。Fashion-MNIST数据集，与MNIST数据集的格式相同，均为 ``1 * 28 * 28`` 的灰度图片。
 

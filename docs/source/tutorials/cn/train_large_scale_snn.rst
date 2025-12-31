@@ -3,6 +3,8 @@
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/train_large_scale_snn`
+
 使用 ``activation_based.model``
 ----------------------------------------------
 在 :class:`spikingjelly.activation_based.model` 中定义了一些经典网络模型，可以直接拿来使用，使用方法与 \

@@ -1,7 +1,9 @@
 Triton 后端与 FlexSN
 ===========================
 
-本教程作者： `AllenYolk <https://github.com/AllenYolk>`_
+本教程作者： `黄一凡 (AllenYolk) <https://github.com/AllenYolk>`_
+
+English version: :doc:`../en/triton_flexsn`
 
 SpikingJelly ``0.0.0.1.0`` 版本引入了 `Triton <https://github.com/triton-lang/triton>`_ 后端，作为本框架继 PyTorch 和 CuPy 之后的第三种后端。相比使用 CUDA 撰写的 CuPy 后端，Triton 后端具有更好的可读性、扩展性和可维护性，更容易达到较高的 GPU 利用率，且有扩展到 `其他硬件平台 <https://gitcode.com/Ascend/triton-ascend>`_ 的潜力。
 
@@ -237,7 +239,7 @@ FlexSN 使用流程
 .. image:: ../../_static/tutorials/triton_flexsn/neuron.png
     :width: 100%
 
-为了生成多步 Triton 内核，使用 :class:`spikingjelly.activation_based.neuron.FlexSN` 模块进行包装：
+为了生成多步 Triton 内核，使用 :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` 模块进行包装：
 
 .. code:: python
 
@@ -376,7 +378,7 @@ FlexSN 使用流程
                 else:
                     raise ValueError(f"Unsupported step mode: {self.step_mode}")
 
-    详见 :class:`spikingjelly.activation_based.neuron.FlexSN`。
+    详见 :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>`。
 
 
 .. admonition:: 警告

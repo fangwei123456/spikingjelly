@@ -2,6 +2,8 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/classify_dvsg`
+
 在 :doc:`./neuromorphic_datasets` 中我们已经学习了如何使用神经形态数据集，下面让我们搭建SNN对其进行分类。
 
 网络结构

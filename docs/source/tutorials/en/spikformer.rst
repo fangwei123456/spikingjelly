@@ -1,6 +1,9 @@
 Spiking Transformer Construction, Training, and Improvements
 ===============================================================
+
 Tutorial author: `Zhou Zhaokun <https://github.com/ZK-Zhou>`_
+
+中文版： :doc:`../cn/spikformer`
 
 This tutorial mainly introduces the construction of the Spiking Transformer (Spiking Transformer, Spikformer [#spikformer]_ ) model based on Spikingjelly, the details of training the Spiking Transformer, and the key points of improving the Spiking Transformer architecture.
 Compared to SEW ResNet, the structure and stacking method of Spikformer are relatively simple, specifically consisting of three main components: Spiking Patch Splitting (SPS), Spiking Self Attention (SSA), and Multi-Layer Perceptron (MLP).

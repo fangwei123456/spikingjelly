@@ -2,6 +2,8 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/container`
+
 SpikingJelly中主要提供了如下几种包装器：
 
 * 函数风格的 :class:`multi_step_forward <spikingjelly.activation_based.functional.multi_step_forward>` 和模块风格的 :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepContainer>`

@@ -1,0 +1,446 @@
+"""This module contains attention layers for deep SNNs.
+
+* Attention for convolutional SNNs
+    * :class:`TemporalWiseAttention`
+    * :class:`MultiDimensionalAttention`
+
+* Attention for Spiking Transformers
+    * :class:`SpikingSelfAttention`
+
+For more information about Spiking Transformers, see :doc:`../tutorials/en/spikformer` .
+"""
+
+import torch
+import torch.nn as nn
+
+from .. import base, neuron
+from .container import SeqToANNContainer
+
+
+class TemporalWiseAttention(nn.Module, base.MultiStepModule):
+    def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
+        """
+        **API Language:**
+        :ref:`中文 <MultiStepTemporalWiseAttention.__init__-cn>` | :ref:`English <MultiStepTemporalWiseAttention.__init__-en>`
+
+        ----
+
+        .. _MultiStepTemporalWiseAttention.__init__-cn:
+
+        * **中文 API**
+
+        `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_ 中提出
+        的MultiStepTemporalWiseAttention层。MultiStepTemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
+
+        ``Conv2d -> MultiStepTemporalWiseAttention -> LIF``
+
+        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过MultiStepTemporalWiseAttention层，输出为 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
+
+        ``reduction`` 是压缩比，相当于论文中的 :math:`r`。
+
+        :param T: 输入数据的时间步长
+        :type T: int
+
+        :param reduction: 压缩比
+        :type reduction: int
+
+        :param dimension: 输入数据的维度。当输入数据为[T, N, C, H, W]时， dimension = 4；输入数据维度为[T, N, L]时，dimension = 2。
+        :type dimension: int
+
+        ----
+
+        .. _MultiStepTemporalWiseAttention.__init__-en:
+
+        * **English API**
+
+        The MultiStepTemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
+
+        It should be placed after the convolution layer and before the spiking neurons, e.g.,
+
+        ``Conv2d -> MultiStepTemporalWiseAttention -> LIF``
+
+        The dimension of the input is ``[T, N, C, H, W]`` or  ``[T, N, L]`` , after the MultiStepTemporalWiseAttention layer, the output dimension is ``[T, N, C, H, W]`` or  ``[T, N, L]`` .
+
+        ``reduction`` is the reduction ratio，which is :math:`r` in the paper.
+
+        :param T: timewindows of input
+        :type T: int
+
+        :param reduction: reduction ratio
+        :type reduction: int
+
+        :param dimension: Dimensions of input. If the input dimension is [T, N, C, H, W], dimension = 4; when the input dimension is [T, N, L], dimension = 2.
+        :type dimension: int
+        """
+        super().__init__()
+        self.step_mode = 'm'
+        assert dimension == 4 or dimension == 2, 'dimension must be 4 or 2'
+
+        self.dimension = dimension
+
+        # Sequence
+        if self.dimension == 2:
+            self.avg_pool = nn.AdaptiveAvgPool1d(1)
+            self.max_pool = nn.AdaptiveMaxPool1d(1)
+        elif self.dimension == 4:
+            self.avg_pool = nn.AdaptiveAvgPool3d(1)
+            self.max_pool = nn.AdaptiveMaxPool3d(1)
+
+        assert T >= reduction, 'reduction cannot be greater than T'
+
+        # Excitation
+        self.sharedMLP = nn.Sequential(
+            nn.Linear(T, T // reduction, bias=False),
+            nn.ReLU(),
+            nn.Linear(T // reduction, T, bias=False)
+        )
+
+        self.sigmoid = nn.Sigmoid()
+
+    def forward(self, x_seq: torch.Tensor):
+        assert x_seq.dim() == 3 or x_seq.dim() == 5, ValueError(
+            f'expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}')
+        x_seq = x_seq.transpose(0, 1)
+        avgout = self.sharedMLP(self.avg_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
+        maxout = self.sharedMLP(self.max_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
+        scores = self.sigmoid(avgout + maxout)
+        if self.dimension == 2:
+            y_seq = x_seq * scores[:, :, None]
+        elif self.dimension == 4:
+            y_seq = x_seq * scores[:, :, None, None, None]
+        y_seq = y_seq.transpose(0, 1)
+        return y_seq
+
+
+class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
+    def __init__(self, T: int, C: int, reduction_t: int = 16, reduction_c: int = 16, kernel_size=3):
+        """
+        **API Language:**
+        :ref:`中文 <MultiStepMultiDimensionalAttention.__init__-cn>` | :ref:`English <MultiStepMultiDimensionalAttention.__init__-en>`
+
+        ----
+
+        .. _MultiStepMultiDimensionalAttention.__init__-cn:
+
+        * **中文 API**
+
+        `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_ 中提出
+        的MA-SNN模型以及MultiStepMultiDimensionalAttention层。
+
+        您可以从以下链接中找到MA-SNN的示例项目:
+        - https://github.com/MA-SNN/MA-SNN
+        - https://github.com/ridgerchu/SNN_Attention_VGG
+
+        输入的尺寸是 ``[T, N, C, H, W]`` ，经过MultiStepMultiDimensionalAttention层，输出为 ``[T, N, C, H, W]`` 。
+
+        :param T: 输入数据的时间步长
+
+        :param C: 输入数据的通道数
+        :type C: int
+
+        :param reduction_t: 时间压缩比
+        :type reduction_t: int
+
+        :param reduction_c: 通道压缩比
+        :type reduction_c: int
+
+        :param kernel_size: 空间注意力机制的卷积核大小
+        :type kernel_size: int
+
+        ----
+
+        .. _MultiStepMultiDimensionalAttention.__init__-en:
+
+        * **English API**
+
+        The MA-SNN model and MultiStepMultiDimensionalAttention layer are proposed in ``Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_.
+
+        You can find the example projects of MA-SNN in the following links:
+        - https://github.com/MA-SNN/MA-SNN
+        - https://github.com/ridgerchu/SNN_Attention_VGG
+
+        The dimension of the input is ``[T, N, C, H, W]`` , after the MultiStepMultiDimensionalAttention layer, the output dimension is ``[T, N, C, H, W]`` .
+
+        :param T: timewindows of input
+        :type T: int
+
+        :param C: channel number of input
+        :type C: int
+
+        :param reduction_t: temporal reduction ratio
+        :type reduction_t: int
+
+        :param reduction_c: channel reduction ratio
+        :type reduction_c: int
+
+        :param kernel_size: convolution kernel size of SpatialAttention
+        :type kernel_size: int
+        """
+        super().__init__()
+
+        assert T >= reduction_t, 'reduction_t cannot be greater than T'
+        assert C >= reduction_c, 'reduction_c cannot be greater than C'
+
+        from einops import rearrange
+
+        # Attention
+        class TimeAttention(nn.Module):
+            def __init__(self, in_planes, ratio=16):
+                super(TimeAttention, self).__init__()
+                self.avg_pool = nn.AdaptiveAvgPool3d(1)
+                self.max_pool = nn.AdaptiveMaxPool3d(1)
+                self.sharedMLP = nn.Sequential(
+                    nn.Conv3d(in_planes, in_planes // ratio, 1, bias=False),
+                    nn.ReLU(),
+                    nn.Conv3d(in_planes // ratio, in_planes, 1, bias=False),
+                )
+                self.sigmoid = nn.Sigmoid()
+
+            def forward(self, x):
+                avgout = self.sharedMLP(self.avg_pool(x))
+                maxout = self.sharedMLP(self.max_pool(x))
+                return self.sigmoid(avgout + maxout)
+
+
+        class ChannelAttention(nn.Module):
+            def __init__(self, in_planes, ratio=16):
+                super(ChannelAttention, self).__init__()
+                self.avg_pool = nn.AdaptiveAvgPool3d(1)
+                self.max_pool = nn.AdaptiveMaxPool3d(1)
+                self.sharedMLP = nn.Sequential(
+                    nn.Conv3d(in_planes, in_planes // ratio, 1, bias=False),
+                    nn.ReLU(),
+                    nn.Conv3d(in_planes // ratio, in_planes, 1, bias=False),
+                )
+                self.sigmoid = nn.Sigmoid()
+
+            def forward(self, x):
+                x = rearrange(x, "b f c h w -> b c f h w")
+                avgout = self.sharedMLP(self.avg_pool(x))
+                maxout = self.sharedMLP(self.max_pool(x))
+                out = self.sigmoid(avgout + maxout)
+                out = rearrange(out, "b c f h w -> b f c h w")
+                return out
+
+
+        class SpatialAttention(nn.Module):
+            def __init__(self, kernel_size=3):
+                super(SpatialAttention, self).__init__()
+                assert kernel_size in (3, 7), "kernel size must be 3 or 7"
+                padding = 3 if kernel_size == 7 else 1
+                self.conv = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
+                self.sigmoid = nn.Sigmoid()
+
+            def forward(self, x):
+                x = rearrange(x, "b f c h w -> b (f c) h w")
+                avgout = torch.mean(x, dim=1, keepdim=True)
+                maxout, _ = torch.max(x, dim=1, keepdim=True)
+                x = torch.cat([avgout, maxout], dim=1)
+                x = self.conv(x)
+                x = x.unsqueeze(1)
+                return self.sigmoid(x)
+
+        self.ta = TimeAttention(T, reduction_t)
+        self.ca = ChannelAttention(C, reduction_c)
+        self.sa = SpatialAttention(kernel_size)
+        self.sigmoid = nn.Sigmoid()
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor):
+        assert x.dim() == 5, ValueError(
+            f'expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}')
+        x = x.transpose(0, 1)
+        out = self.ta(x) * x
+        out = self.ca(out) * out
+        out = self.sa(out) * out
+        out = self.relu(out)
+        out = out.transpose(0, 1)
+        return out
+
+
+class SpikingSelfAttention(nn.Module):
+
+    def __init__(self, dim, num_heads=8, backend: str = "torch"):
+        super().__init__()
+        if dim % num_heads != 0:
+            raise ValueError(
+                f"dim {dim} should be divided by num_heads {num_heads}."
+            )
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self.scale = 0.125
+        self._backend = backend
+
+        self.qkv_conv_bn = SeqToANNContainer(
+            nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm1d(dim*3),
+        )
+        self.qkv_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+
+        self.attn_lif = neuron.LIFNode(
+            tau=2.0, v_threshold=0.5, detach_reset=True, step_mode="m",
+            backend=backend
+        )
+
+        self.proj_conv_bn = SeqToANNContainer(
+            nn.Conv1d(dim, dim, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm1d(dim),
+        )
+        self.proj_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @backend.setter
+    def backend(self, value: str):
+        self._backend = value
+        self.qkv_lif.backend = value
+        self.attn_lif.backend = value
+        self.proj_lif.backend = value
+
+    @staticmethod
+    def _ssa_kernel_torch(qkv, scale): # TODO: add triton implementation
+        # qkv.shape = [T, N, 3, NUM_HEADS, Cph, L]
+        # qt, kt, vt.shape = [T, N, NUM_HEADS, Cph, L]
+        qt, kt, vt = qkv.flatten(2, 3).chunk(3, dim=2)
+        x_seq = vt @ kt.transpose(-2, -1)
+        x_seq = (x_seq@qt) * scale
+        return x_seq # [T, N, NUM_HEADS, Cph, L]
+
+    def forward(self, x_seq):
+        if x_seq.dim != 4:
+            raise ValueError(
+                f'expected 4D input with shape [T, N, C, L], '
+                f'but got input with shape {x_seq.shape}'
+            )
+        T, N, C, L = x_seq.shape
+
+        qkv = self.qkv_conv_bn(x_seq)
+        qkv = self.qkv_lif(qkv) # [T, N, 3*C, L]
+        qkv = qkv.reshape(T, N, 3, self.num_heads, C // self.num_heads, L)
+
+        x_seq = self._ssa_kernel_torch(qkv, self.scale)
+        x_seq = self.attn_lif(x_seq).reshape(T, N, C, L)
+
+        x_seq = self.proj_conv_bn(x_seq)
+        x_seq = self.proj_lif(x_seq) # [T, N, C, L]
+        return x_seq
+
+    def extra_repr(self):
+        return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
+
+
+class QKAttention(nn.Module):
+
+    def __init__(
+        self, dim: int, num_heads: int = 8,
+        qka_type: str = "token", backend: str ="torch"
+    ):
+        super().__init__()
+        if dim % num_heads != 0:
+            raise ValueError(
+                f"dim {dim} should be divided by num_heads {num_heads}."
+            )
+        if qka_type not in ["token", "channel"]:
+            raise ValueError(
+                f"qka_type should be either 'token' or 'channel', "
+                f"but got {qka_type}."
+            )
+        self.dim = dim
+        self.num_heads = num_heads
+        self.head_dim = dim // num_heads
+        self._qka_type = qka_type
+        self._backend = backend
+
+        self.qk_conv_bn = SeqToANNContainer(
+            nn.Conv1d(
+                dim, dim * 2, kernel_size=1, stride=1, bias=False
+            ),
+            nn.BatchNorm1d(dim * 2),
+        )
+        self.qk_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+
+        self.sum_dim = 3 if qka_type == "token" else 4
+        self.attn_lif = neuron.LIFNode(
+            tau=2.0, v_threshold=0.5, detach_reset=True, step_mode="m",
+            backend=backend
+        )
+
+        self.proj_conv_bn = SeqToANNContainer(
+            nn.Conv1d(dim, dim, kernel_size=1, stride=1, bias=False),
+            nn.BatchNorm1d(dim),
+        )
+        self.proj_lif = neuron.LIFNode(
+            tau=2.0, detach_reset=True, step_mode="m", backend=backend
+        )
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @backend.setter
+    def backend(self, value: str):
+        self._backend = value
+        self.qk_lif.backend = value
+        self.attn_lif.backend = value
+        self.proj_lif.backend = value
+
+    @property
+    def qka_type(self): # read-only
+        return self._qka_type
+
+    def _qka_forward_torch(self, qk):
+        # qk.shape = [T, N, 2, NUM_HEADS, Cph, L]
+        # q, k = [T, N, NUM_HEADS, Cph, L]
+        q, k = qk.flatten(2, 3).chunk(2, dim=2)
+        q = torch.sum(q, dim=self.sum_dim, keepdim=True)
+        # [T, N, NUM_HEADS, 1, L] if qka_type == "token"
+        # [T, N, NUM_HEADS, Cph, 1] if qka_type == "channel"
+        attn = self.attn_lif(q)
+        x_seq = attn * k
+        return x_seq  # [T, N, NUM_HEADS, Cph, L]
+
+    def forward(self, x_seq):
+        if x_seq.dim != 4:
+            raise ValueError(
+                f'expected 4D input with shape [T, N, C, L], '
+                f'but got input with shape {x_seq.shape}'
+            )
+        T, N, C, L = x_seq.shape
+
+        qk = self.qk_conv_bn(x_seq)
+        qk = self.qk_lif(qk) # [T, N, 2*C, L]
+        qk = qk.reshape(T, N, 2, self.num_heads, C // self.num_heads, L)
+
+        x_seq = self._qka_forward_torch(qk)
+        x_seq = x_seq.flatten(2, 3)  # [T, N, C, L]
+
+        x_seq = self.proj_conv_bn(x_seq)
+        x_seq = self.proj_lif(x_seq)
+        return x_seq
+
+    def extra_repr(self):
+        return (
+            f"dim={self.dim}, num_heads={self.num_heads}, "
+            f"qka_type={self.qka_type}, backend={self.backend}"
+        )
+
+
+class TokenQKAttention(QKAttention):
+
+    def __init__(self, dim: int, num_heads: int =8, backend: str = "torch"):
+        super().__init__(dim, num_heads, qka_type="token", backend=backend)
+
+
+class ChannelQKAttention(QKAttention):
+
+    def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch"):
+        super().__init__(dim, num_heads, qka_type="channel", backend=backend)

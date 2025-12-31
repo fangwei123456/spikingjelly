@@ -3,6 +3,8 @@
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/neuromorphic_datasets`
+
 ``spikingjelly.datasets`` 中集成了常用的神经形态数据集，包括 N-MNIST [#NMNIST]_, CIFAR10-DVS [#CIFAR10DVS]_, DVS128 Gesture [#DVS128Gesture]_, N-Caltech101 [#NMNIST]_, ASLDVS [#ASLDVS]_ 等。所有数据集的处理都遵循类似的步骤，开发人员也可以很轻松的添加新数据集代码。在本节教程中，我
 们将以 DVS128 Gesture 为例，展示如何使用惊蜇框架处理神经形态数据集。
 

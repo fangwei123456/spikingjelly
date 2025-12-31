@@ -2,6 +2,8 @@ Container
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
+中文版： :doc:`../cn/container`
+
 Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
 The major containers in SpikingJelly are: 

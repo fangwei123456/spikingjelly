@@ -1,9 +1,11 @@
 从老版本迁移
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
-新版的SpikingJelly改动较大，使用老版本SpikingJelly的用户若想迁移到新版本，则需要阅读此教程。\
-SpikingJelly的版本升级尽可能前向兼容，因此用户无需做出太多代码上的修改，即可轻松迁移到新版本。
+English version: :doc:`../en/migrate_from_legacy`
+
+新版的SpikingJelly改动较大，使用老版本SpikingJelly的用户若想迁移到新版本，则需要阅读此教程。SpikingJelly的版本升级尽可能前向兼容，因此用户无需做出太多代码上的修改，即可轻松迁移到新版本。
 
 推荐老版本用户也阅读新版本的教程 :doc:`./basic_concept`。
 

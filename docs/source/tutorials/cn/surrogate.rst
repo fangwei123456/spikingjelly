@@ -1,6 +1,9 @@
 梯度替代
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+
+English version: :doc:`../en/surrogate`
 
 在 :doc:`./neuron` 中我们已经提到过，描述神经元放电过程的 :math:`S[t] = \Theta(H[t] - V_{threshold})`，使用了一个Heaviside阶跃函数：
 

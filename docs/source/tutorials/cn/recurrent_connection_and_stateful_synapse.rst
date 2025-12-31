@@ -3,6 +3,8 @@
 
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/recurrent_connection_and_stateful_synapse`
+
 自连接模块
 -----------------------
 自连接指的是从输出到输入的连接，例如 [#Effective]_ 一文中的SRNN(recurrent networks of spiking neurons)，如下图所示：

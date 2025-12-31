@@ -226,9 +226,5 @@ Tempotron的膜电位定义为：
 
 训练100个Epoch，测试集的正确率为84.19%，可以看出Tempotron实现了感知器的功能，具有一定的分类能力。
 
-
-
-
-
 .. [#f1] Gutig R, Sompolinsky H. The tempotron: a neuron that learns spike timing–based decisions[J]. Nature Neuroscience, 2006, 9(3): 420-428.
 .. [#f2] Bohte S M, Kok J N, La Poutre J A, et al. Error-backpropagation in temporally encoded networks of spiking neurons[J]. Neurocomputing, 2002, 48(1): 17-37.

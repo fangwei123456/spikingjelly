@@ -2,6 +2,8 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/basic_concept`
+
 本教程介绍了 ``spikingjelly.activation_based`` 的一些基本概念，推荐所有用户在使用SpikingJelly框架前进行阅读。
 
 SpikingJelly框架是基于PyTorch的SNN深度学习框架，使用SpikingJelly框架的用户应该首先熟悉PyTorch的使用。\

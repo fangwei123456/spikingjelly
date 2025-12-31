@@ -2,6 +2,8 @@ Classify DVS Gesture
 =======================================
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
 
+中文版： :doc:`../cn/classify_dvsg`
+
 Translator: `Qiu Haonan <https://github.com/Maybe2022>`_, `fangwei123456 <https://github.com/fangwei123456>`_
 
 In :doc:`./neuromorphic_datasets`, we have learned how to use neuromorphic datasets. Let's build a SNN to classify them.

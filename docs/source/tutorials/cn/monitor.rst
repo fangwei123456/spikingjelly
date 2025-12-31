@@ -1,6 +1,9 @@
 监视器
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+
+English version: :doc:`../en/monitor`
 
 在 :class:`spikingjelly.activation_based.monitor` 中定义了几个通用的监视器类，用户可以使用这些监视器实现复杂的数据\
 记录功能。下面以一个简单的网络为例进行介绍。

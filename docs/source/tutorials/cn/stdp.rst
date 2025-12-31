@@ -1,6 +1,9 @@
 STDP学习
 =======================================
+
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
+
+English version: :doc:`../en/stdp`
 
 生物可解释性的学习规则一直备受SNN研究者的关注。在SpikingJelly中提供了STDP(Spike Timing Dependent Plasticity) \
 学习器，可以用于卷积或全连接层的权重学习。

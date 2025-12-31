@@ -1,6 +1,9 @@
 Surrogate Gradient Method
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/surrogate`
 
 As mentioned in :doc:`./neuron`, the Heaviside function :math:`S[t] = \Theta(H[t] - V_{threshold})` is used to describe the neuronal firing.\
 The Heaviside function is:

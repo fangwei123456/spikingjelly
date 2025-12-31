@@ -1,6 +1,9 @@
 ANN2SNN
 =======================================
+
 Author: `DingJianhao <https://github.com/DingJianhao>`_, `fangwei123456 <https://github.com/fangwei123456>`_, `Lv Liuzhenghao <https://github.com/Lyu6PosHao>`_
+
+中文版：:doc:`../cn/ann2snn`
 
 This tutorial focuses on ``spikingjelly.activation_based.ann2snn``, introduce how to convert the trained feedforward ANN to SNN and simulate it on the SpikingJelly framework.
 

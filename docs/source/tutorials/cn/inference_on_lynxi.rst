@@ -2,6 +2,10 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+.. warning::
+
+    We are looking for contributors to translate this tutorial to English!
+
 在GPU上训练float16模型
 -------------------------------------------
 

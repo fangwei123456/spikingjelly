@@ -1,6 +1,9 @@
 Neuron
 =======================================
+
 Author: `fangwei123456 <https://github.com/fangwei123456>`_
+
+中文版： :doc:`../cn/neuron`
 
 This tutorial is about :class:`spikingjelly.activation_based.neuron` and introduces the spiking neurons.
 

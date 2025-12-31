@@ -2,6 +2,8 @@
 =======================================
 本教程作者： `fangwei123456 <https://github.com/fangwei123456>`_
 
+English version: :doc:`../en/lava_exchange`
+
 感谢 `AllenYolk <https://github.com/AllenYolk>`_ 和 `banzhuangonglxh <https://github.com/banzhuangonglxh>`_ 对 `lava_exchange` 模块的贡献
 
 

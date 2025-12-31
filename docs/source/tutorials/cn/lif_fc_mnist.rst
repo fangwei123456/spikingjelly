@@ -1,6 +1,9 @@
 使用单层全连接SNN识别MNIST
 ====================================
+
 本教程作者：\ `Yanqi-Chen <https://github.com/Yanqi-Chen>`__
+
+English version: :doc:`../en/lif_fc_mnist`
 
 本节教程将介绍如何使用编码器与替代梯度方法训练一个最简单的MNIST分类网络。
 

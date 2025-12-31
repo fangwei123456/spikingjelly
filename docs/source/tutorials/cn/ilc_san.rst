@@ -1,6 +1,11 @@
 使用层内连接增强的脉冲行动器网络进行连续动作空间下的强化学习
 =================================================================
-本教程作者：\ `Ding Chen <https://github.com/lucifer2859>`__
+
+本教程作者： `Ding Chen <https://github.com/lucifer2859>`_
+
+.. warning::
+
+    We are looking for contributors to translate this tutorial to English!
 
 本节教程将介绍如何使用替代梯度方法训练一个层内连接增强的脉冲行动器网络。
 

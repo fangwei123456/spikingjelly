@@ -1,6 +1,9 @@
 脉冲Transformer构建、训练和改进
 =======================================
+
 本教程作者： `周昭坤 <https://github.com/ZK-Zhou>`_
+
+English version: :doc:`../en/spikformer`
 
 本节教程主要介绍基于Spikingjelly构建脉冲Transformer （Spiking Transformer，Spikformer [#spikformer]_ ）模型，训练脉冲Transformer的细节以及改进脉冲Transformer架构的关键点。
 和SEW ResNet相比，Spikformer的结构和堆叠方式较为简单，具体来说由三个主要组件，即脉冲块分割前馈模块（Spiking Patch Splitting，SPS）、脉冲自注意力机制（Spiking Self Attention，SSA）和多层感知模块（Multi-Layer Perceptron，MLP）组成。

@@ -10,27 +10,39 @@ from . import neuron, base
 
 from torch import Tensor
 
+
 def reset_net(net: nn.Module):
     """
-    * :ref:`API in English <reset_net-en>`
+    **API Language:**
+    :ref:`中文 <reset_net-cn>` | :ref:`English <reset_net-en>`
+
+    ----
 
     .. _reset_net-cn:
 
+    * **中文 API**
+
+    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若 ``m `` 为
+    ``base.MemoryModule`` 函数或者是拥有 ``reset()`` 方法，则调用 ``m.reset()``。
+
     :param net: 任何属于 ``nn.Module`` 子类的网络
+    :type net: torch.nn.Module
 
     :return: None
 
-    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若 ``m `` 为 ``base.MemoryModule`` 函数或者是拥有 ``reset()`` 方法，则调用 ``m.reset()``。
-
-    * :ref:`中文API <reset_net-cn>`
+    ----
 
     .. _reset_net-en:
 
+    * **English API**
+
+    Reset the whole network.  Walk through every ``Module`` as ``m``, and call
+    ``m.reset()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``reset()``.
+
     :param net: Any network inherits from ``nn.Module``
+    :type net: torch.nn.Module
 
     :return: None
-
-    Reset the whole network.  Walk through every ``Module`` as ``m``, and call ``m.reset()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``reset()``.
     """
     for m in net.modules():
         if hasattr(m, 'reset'):
@@ -39,43 +51,59 @@ def reset_net(net: nn.Module):
                                 f'.MemoryModule')
             m.reset()
 
+
 def set_step_mode(net: nn.Module, step_mode: str):
     """
-    * :ref:`API in English <set_step_mode-en>`
+    **API Language:**
+    :ref:`中文 <set_step_mode-cn>` | :ref:`English <set_step_mode-en>`
+
+    ----
 
     .. _set_step_mode-cn:
 
-    :param net: 一个神经网络
-    :type net: nn.Module
-    :param step_mode: 's' (单步模式) 或 'm' (多步模式)
-    :type step_mode: str
-    :return: None
+    * **中文 API**
 
     将 ``net`` 中所有模块的步进模式设置为 ``step_mode`` 。
 
     .. note::
 
-        :class:`spikingjelly.activation_based.layer.StepModeContainer`, :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer`,
-        :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` 的子模块（不包含包装器本身）的 ``step_mode`` 不会被改变。
+        :class:`StepModeContainer <spikingjelly.activation_based.layer.container.StepModeContainer>`,
+        :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>`,
+        :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`
+        的子模块（不包含包装器本身）的 ``step_mode`` 不会被改变。
 
+    :param net: 一个神经网络
+    :type net: torch.nn.Module
 
-    * :ref:`中文 API <set_step_mode-cn>`
+    :param step_mode: 's' (单步模式) 或 'm' (多步模式)
+    :type step_mode: str
+
+    :return: None
+
+    ----
 
     .. _set_step_mode-en:
 
-    :param net: a network
-    :type net: nn.Module
-    :param step_mode: 's' (single-step) or 'm' (multi-step)
-    :type step_mode: str
-    :return: None
+    * **English API**
 
     Set ``step_mode`` for all modules in ``net``.
 
     .. admonition:: Note
         :class: note
 
-        The submodule (not including the container itself) of :class:`spikingjelly.activation_based.layer.StepModeContainer`, :class:`spikingjelly.activation_based.layer.ElementWiseRecurrentContainer`,
-        :class:`spikingjelly.activation_based.layer.LinearRecurrentContainer` will not be changed.
+        The submodule (not including the container itself) of
+        :class:`StepModeContainer <spikingjelly.activation_based.layer.container.StepModeContainer>`,
+        :class:`ElementWiseRecurrentContainer <spikingjelly.activation_based.layer.container.ElementWiseRecurrentContainer>`,
+        :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`
+        will not be changed.base.MemoryModule`` or ``m`` has ``reset()``.
+
+    :param net: a network
+    :type net: nn.Module
+
+    :param step_mode: 's' (single-step) or 'm' (multi-step)
+    :type step_mode: str
+
+    :return: None
     """
     from .layer import StepModeContainer, ElementWiseRecurrentContainer, LinearRecurrentContainer
 
@@ -108,33 +136,46 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
 def set_backend(net: nn.Module, backend: str, instance: Union[nn.Module, tuple[nn.Module, ...]] = (nn.Module, )):
     """
-    * :ref:`API in English <set_backend-en>`
+    **API Language:**
+    :ref:`中文 <set_backend-cn>` | :ref:`English <set_backend-en>`
+
+    ----
 
     .. _set_backend-cn:
 
+    * **中文 API**
+
+    将 ``net`` 中 所有类型为 ``instance`` 的模块后端更改为 ``backend`` 。
+
     :param net: 一个神经网络
-    :type net: nn.Module
+    :type net: torch.nn.Module
+
     :param backend: 使用哪个后端
     :type backend: str
+
     :param instance: 类型为 ``instance`` 的模块后端会被改变
     :type instance: Union[nn.Module, tuple[nn.Module, ...]]
+
     :return: None
 
-    将 ``net`` 中 所有类型为 ``instance`` 的模块后端更改为 ``backend``
-
-    * :ref:`中文 API <set_backend-cn>`
+    ----
 
     .. _set_backend-en:
 
+    * **English API**
+
+    Sets backends of all modules whose instance is ``instance`` in ``net`` to ``backend``.
+
     :param net: a network
-    :type net: nn.Module
+    :type net: torch.nn.Module
+
     :param backend: the backend to be set
     :type backend: str
+
     :param instance: the backend of which instance will be changed
     :type instance: Union[nn.Module, tuple[nn.Module, ...]]
-    :return: None
 
-    Sets backends of all modules whose instance is ``instance`` in ``net`` to ``backend``
+    :return: None
     """
     for m in net.modules():
         if isinstance(m, instance):
@@ -150,25 +191,38 @@ def set_backend(net: nn.Module, backend: str, instance: Union[nn.Module, tuple[n
 
 def detach_net(net: nn.Module):
     """
-    * :ref:`API in English <detach_net-en>`
+    **API Language:**
+    :ref:`中文 <detach_net-cn>` | :ref:`English <detach_net-en>`
+
+    ----
 
     .. _detach_net-cn:
 
+    * **中文 API**
+
+    将网络与之前的时间步的计算图断开。做法是遍历网络中的所有 ``Module``，若 ``m `` 为
+    ``base.MemoryModule`` 函数或者是拥有 ``detach()`` 方法，则调用 ``m.detach()``。
+
     :param net: 任何属于 ``nn.Module`` 子类的网络
+    :type net: torch.nn.Module
 
     :return: None
 
-    将网络与之前的时间步的计算图断开。做法是遍历网络中的所有 ``Module``，若 ``m `` 为 ``base.MemoryModule`` 函数或者是拥有 ``detach()`` 方法，则调用 ``m.detach()``。
-
-    * :ref:`中文API <detach_net-cn>`
+    ----
 
     .. _detach_net-en:
 
+    * **English API**
+
+    Detach the computation graph of the whole network from previous time-steps.
+    Walk through every ``Module`` as ``m``, and call ``m.detach()`` if this
+    ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.is ``instance`` in
+    ``net`` to ``backend``.
+
     :param net: Any network inherits from ``nn.Module``
+    :type net: torch.nn.Module
 
     :return: None
-
-    Detach the computation graph of the whole network from previous time-steps.  Walk through every ``Module`` as ``m``, and call ``m.detach()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.
     """
     for m in net.modules():
         if hasattr(m, 'detach'):
@@ -176,6 +230,7 @@ def detach_net(net: nn.Module):
                 logging.warning(f'Trying to call `detach()` of {m}, which is not spikingjelly.activation_based.base'
                                 f'.MemoryModule')
             m.detach()
+
 
 def spike_similar_loss(spikes: Tensor, labels: Tensor, kernel_type='linear', loss_type='mse', *args):
     """
@@ -522,34 +577,48 @@ def first_spike_index(spikes: Tensor):
         return spikes.cumsum(dim=-1).cumsum(dim=-1) == 1
 
 
-def multi_step_forward(x_seq: Tensor, single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]):
+def multi_step_forward(
+    x_seq: Tensor, single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
+):
     """
-    * :ref:`API in English <multi_step_forward-en>`
+    **API Language:**
+    :ref:`中文 <multi_step_forward-cn>` | :ref:`English <multi_step_forward-en>`
+
+    ----
 
     .. _multi_step_forward-cn:
 
+    * **中文 API**
+
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
-    :type x_seq: Tensor
+    :type x_seq: torch.Tensor
+
     :param single_step_module: 一个或多个单步模块
     :type single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
+
     :return: ``shape=[T, batch_size, ...]`` 的输出tensor
     :rtype: torch.Tensor
 
-    在单步模块 ``single_step_module`` 上使用多步前向传播。
+    在有状态的单步模块 ``single_step_module`` 上使用多步前向传播。函数内部将执行一个for循环，
+    执行 ``T`` 次单步前向传播。
 
-    * :ref:`中文 API <multi_step_forward-cn>`
+    ----
 
     .. _multi_step_forward-en:
 
+    * **English API**
+
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
     :type x_seq: torch.Tensor
+
     :param single_step_module: one or many single-step modules
     :type single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
+
     :return: the output tensor with ``shape=[T, batch_size, ...]``
-    :rtype: torch.torch.Tensor
+    :rtype: torch.Tensor
 
-    Applies multi-step forward on ``single_step_module``.
-
+    Applies multi-step forward on stateful ``single_step_module``. The function
+    runs a for loop to execute single-step forward for ``T`` times.
     """
     y_seq = []
     if isinstance(single_step_module, (list, tuple, nn.Sequential)):
@@ -694,24 +763,37 @@ def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: 
         y_seq.append(multi_step_module(x))
     return torch.cat(y_seq, 0)
 
-def seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]):
+
+def seq_to_ann_forward(
+    x_seq: Tensor, stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
+):
     """
-    * :ref:`API in English <seq_to_ann_forward-en>`
+    **API Language:**
+    :ref:`中文 <seq_to_ann_forward-cn>` | :ref:`English <seq_to_ann_forward-en>`
+
+    ----
 
     .. _seq_to_ann_forward-cn:
 
+    * **中文 API**
+
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
     :type x_seq: Tensor
+
     :param stateless_module: 单个或多个无状态网络层
     :type stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
+
     :return: the output tensor with ``shape=[T, batch_size, ...]``
-    :rtype: Tensor
+    :rtype: torch.Tensor
 
-    使用无状态层进行多步前向传播。
+    使用无状态层进行多步前向传播。输入 ``x_seq`` 的时间和批量维度将被展平，得到 ``[T*batch_size, ...]``
+    形状的张量；随后，输入到无状态层中；最后，将输出张量恢复到序列形式 ``[T, batch_size, ...]`` 。
 
-    * :ref:`中文 API <seq_to_ann_forward-cn>`
+    ----
 
     .. _seq_to_ann_forward-en:
+
+    * **English API**
 
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
     :type x_seq: Tensor
@@ -720,8 +802,10 @@ def seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, list, t
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: Tensor
 
-    Applied forward on stateless modules.
-
+    Applied forward on stateless modules. Flatten the time and batch dimensions
+    of ``x_seq`` so that ``shape=[T*batch_size, ...]``, feed the reshaped tensor
+    to the stateless module(s), and reshape the output back to the sequence form
+    ``shape=[T, batch_size, ...]``.
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
     y = x_seq.flatten(0, 1)
@@ -785,8 +869,6 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, 
         return vmap_f(x_seq)
     else:
         return t_last_multi_step_forward(x_seq, stateless_module)
-            
-
 
 
 def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
@@ -1025,6 +1107,7 @@ def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     fused_conv.bias.data = fused_conv2d_bias_of_convbn2d(conv2d, bn2d)
     return fused_conv
 
+
 @torch.jit.script
 def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: torch.Tensor):
     """
@@ -1147,6 +1230,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
         if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
 
+
 @torch.jit.script
 def delay(x_seq: torch.Tensor, delay_steps: int):
     """
@@ -1260,6 +1344,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     y = torch.zeros_like(x_seq[0: delay_steps].data)
     return torch.cat((y, x_seq[0: x_seq.shape[0] - delay_steps]), 0)
 
+
 def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     w_ra = []
     for item in optimizer.param_groups:
@@ -1267,6 +1352,7 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
             w_ra.append(w.data)
 
     return w_ra
+
 
 def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, alpha: float, w_ra: list) -> None:
     """
@@ -1375,7 +1461,6 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
             if isinstance(m, base.MemoryModule):
                 m._memories = states[i]
                 i += 1
-
 
 
 def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, online: bool) -> None:
