@@ -48,6 +48,7 @@ Attention Layers
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: extra_repr
 
 Batch Normalization Variants
 -------------------------------------

@@ -1,7 +1,7 @@
 Spiking Transformer Construction, Training, and Improvements
 ===============================================================
 
-Tutorial author: `Zhou Zhaokun <https://github.com/ZK-Zhou>`_
+Tutorial author: `Zhou Zhaokun <https://github.com/ZK-Zhou>`_ , `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 
 中文版： :doc:`../cn/spikformer`
 
@@ -31,28 +31,30 @@ In the Spiking Self Attention mechanism, Query, Key, and Value are all spike seq
 .. code-block:: python
 
     class SSA(nn.Module):
-        def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
+        def __init__(self, dim, num_heads=8):
             super().__init__()
             assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
             self.dim = dim
             self.num_heads = num_heads
             self.scale = 0.125
+
             self.q_linear = nn.Linear(dim, dim)
             self.q_bn = nn.BatchNorm1d(dim)
-            self.q_lif = neuron.LIFNode()
+            self.q_lif = neuron.LIFNode(step_mode="m")
+
             self.k_linear = nn.Linear(dim, dim)
             self.k_bn = nn.BatchNorm1d(dim)
-            self.k_lif = neuron.LIFNode()
+            self.k_lif = neuron.LIFNode(step_mode="m")
 
             self.v_linear = nn.Linear(dim, dim)
             self.v_bn = nn.BatchNorm1d(dim)
-            self.v_lif = neuron.LIFNode()
+            self.v_lif = neuron.LIFNode(step_mode="m")
 
-            self.attn_lif = neuron.LIFNode()
+            self.attn_lif = neuron.LIFNode(step_mode="m")
 
             self.proj_linear = nn.Linear(dim, dim)
             self.proj_bn = nn.BatchNorm1d(dim)
-            self.proj_lif = neuron.LIFNode()
+            self.proj_lif = neuron.LIFNode(step_mode="m")
 
         def forward(self, x):
             T,B,N,C = x.shape
@@ -88,13 +90,11 @@ Based on SSA and MLP, construct the Spiking Transformer Block. Note that SEW-sty
 .. code-block:: python
 
     class Block(nn.Module):
-        def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                    drop_path=0., norm_layer=nn.LayerNorm, sr_ratio=1):
+        def __init__(self, dim, num_heads, mlp_ratio=4.):
             super().__init__()
-            self.attn = SSA(dim, num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-                                attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio)
+            self.attn = SSA(dim, num_heads=num_heads)
             mlp_hidden_dim = int(dim * mlp_ratio)
-            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop)
+            self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim)
 
         def forward(self, x):
             x = x + self.attn(x)
@@ -102,6 +102,87 @@ Based on SSA and MLP, construct the Spiking Transformer Block. Note that SEW-sty
             return x
 
 Finally, add the feedforward module to form Spikformer. The reader can also design hierarchical Spikformer based on resolution and complexity of the task. Refer to QKformer.
+
+Improved SSA Implementation
+--------------------------------
+
+SpikingJelly ``0.0.0.1.0`` provides an efficient implementation of SSA in :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>`.
+Compared with the ``SSA`` introduced in the previous section, :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` introduces the following improvements.
+
+#. Assume that both the input and output have shape ``[T, B, C, N]`` instead of ``[T, B, N, C]`` (**token-last** rather than channel-last). ``Conv1d`` is used instead of ``Linear`` layers. As a result, no tensor transposition is required before or after ``BatchNorm1d``.
+#. The three Conv-BN-LIF blocks for Q, K, and V are merged into a single block whose channel dimension is three times larger. This allows ``q``, ``k``, and ``v`` to be generated in a single forward pass.
+#. The order of tensor multiplications is modified. In the original implementation, ``q``, ``k``, and ``v`` have shape ``[T, B, N, C]``, and the tensor multiplication is performed as ``q @ k.transpose(-2, -1) @ v``. In the improved implementation, ``q``, ``k``, and ``v`` have shape ``[T, B, C, N]``, and the tensor multiplication becomes ``v @ k.transpose(-2, -1) @ q``.
+
+.. note::
+
+    Denote the original ``q``, ``k``, and ``v`` tensors of shape ``[T, B, N, C]``  as :math:`Q`, :math:`K`, and :math:`V`. The tensor multiplication (i.e., batched matrix multiplication) in SSA can then be written as
+
+    .. math::
+
+        X = Q K^T V,
+
+    where :math:`K^T` denotes transposing the last two dimensions of :math:`K`. In the improved implementation, the new ``q``, ``k``, and ``v`` tensors, as well as the resulting tensor ``x``, have shape ``[T, B, C, N]``, which corresponds to :math:`Q^T`, :math:`K^T`, :math:`V^T`, and :math:`X^T`. Denoting these token-last tensors as :math:`Q'`, :math:`K'`, :math:`V'`, and :math:`X'`, we have
+
+    .. math::
+
+        X' &= X^T \\
+           &= (Q K^T V)^T \\
+           &= V^T K Q^T \\
+           &= V' K'^T Q'
+
+    Therefore, for the token-last tensors, the correct order of tensor multiplication is ``v @ k.transpose(-2, -1) @ q``.
+
+The resulting ``SpikingSelfAttention`` module is shown below (for illustration purposes only). For more implementation details, please refer to the documentation and source code of :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>`.
+
+.. code:: python
+
+    from spikingjelly.activation_based.layer import SeqToANNContainer
+
+    class SpikingSelfAttention(nn.Module):
+        def __init__(self, dim, num_heads=8):
+            super().__init__()
+            assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
+            self.dim = dim
+            self.num_heads = num_heads
+            self.head_dim = dim // num_heads
+            self.scale = 0.125
+
+            self.qkv_conv_bn = SeqToANNContainer(
+                nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm1d(dim*3),
+            )
+            self.qkv_lif = neuron.LIFNode(step_mode="m")
+
+            self.attn_lif = neuron.LIFNode(step_mode="m")
+
+            self.proj_conv_bn = SeqToANNContainer(
+                nn.Conv1d(dim, dim, kernel_size=1, stride=1, bias=False),
+                nn.BatchNorm1d(dim),
+            )
+            self.proj_lif = neuron.LIFNode(step_mode="m")
+
+        def forward(self, x_seq: torch.Tensor):
+            T, B, C, N = x_seq.shape
+
+            qkv = self.qkv_conv_bn(x_seq)
+            qkv = self.qkv_lif(qkv) # [T, B, 3*C, N]
+            qkv = qkv.reshape(T, B, 3*self.num_heads, C // self.num_heads, N)
+
+            qt, kt, vt = qkv.chunk(3, dim=2)
+            # qt, kt, vt.shape = [T, B, NUM_HEADS, Cph, N]
+            x_seq = vt @ kt.transpose(-2, -1)
+            x_seq = (x_seq@qt) * self.scale # [T, B, NUM_HEADS, Cph, N]
+
+            x_seq = self.attn_lif(x_seq).reshape(T, B, C, N)
+
+            x_seq = self.proj_conv_bn(x_seq)
+            x_seq = self.proj_lif(x_seq) # [T, B, C, N]
+            return x_seq
+
+.. note::
+
+    If token-last format is adopted, the implementation of ``MLP`` should also be changed from ``Linear`` to ``Conv1d`` in order to avoid unnecessary ``reshape`` operations that involve data copying.
+
 
 Training Spiking Transformer
 -----------------------------

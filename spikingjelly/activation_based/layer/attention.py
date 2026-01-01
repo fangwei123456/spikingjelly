@@ -6,6 +6,7 @@
 
 * Attention for Spiking Transformers
     * :class:`SpikingSelfAttention`
+    * :class:`QKAttention`, :class:`TokenQKAttention`, :class:`ChannelQKAttention`
 
 For more information about Spiking Transformers, see :doc:`../tutorials/en/spikformer` .
 """
@@ -21,20 +22,20 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
     def __init__(self, T: int, reduction: int = 16, dimension: int = 4):
         """
         **API Language:**
-        :ref:`中文 <MultiStepTemporalWiseAttention.__init__-cn>` | :ref:`English <MultiStepTemporalWiseAttention.__init__-en>`
+        :ref:`中文 <TemporalWiseAttention.__init__-cn>` | :ref:`English <TemporalWiseAttention.__init__-en>`
 
         ----
 
-        .. _MultiStepTemporalWiseAttention.__init__-cn:
+        .. _TemporalWiseAttention.__init__-cn:
 
         * **中文 API**
 
         `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_ 中提出
-        的MultiStepTemporalWiseAttention层。MultiStepTemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
+        的TemporalWiseAttention层。TemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
 
-        ``Conv2d -> MultiStepTemporalWiseAttention -> LIF``
+        ``Conv2d -> TemporalWiseAttention -> LIF``
 
-        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过MultiStepTemporalWiseAttention层，输出为 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
+        输入的尺寸是 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` ，经过TemporalWiseAttention层，输出为 ``[T, N, C, H, W]`` 或者 ``[T, N, L]`` 。
 
         ``reduction`` 是压缩比，相当于论文中的 :math:`r`。
 
@@ -49,17 +50,17 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
         ----
 
-        .. _MultiStepTemporalWiseAttention.__init__-en:
+        .. _TemporalWiseAttention.__init__-en:
 
         * **English API**
 
-        The MultiStepTemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
+        The TemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
 
         It should be placed after the convolution layer and before the spiking neurons, e.g.,
 
-        ``Conv2d -> MultiStepTemporalWiseAttention -> LIF``
+        ``Conv2d -> TemporalWiseAttention -> LIF``
 
-        The dimension of the input is ``[T, N, C, H, W]`` or  ``[T, N, L]`` , after the MultiStepTemporalWiseAttention layer, the output dimension is ``[T, N, C, H, W]`` or  ``[T, N, L]`` .
+        The dimension of the input is ``[T, N, C, H, W]`` or  ``[T, N, L]`` , after the TemporalWiseAttention layer, the output dimension is ``[T, N, C, H, W]`` or  ``[T, N, L]`` .
 
         ``reduction`` is the reduction ratio，which is :math:`r` in the paper.
 
@@ -153,7 +154,8 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         * **English API**
 
-        The MA-SNN model and MultiStepMultiDimensionalAttention layer are proposed in ``Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_.
+        The MA-SNN model and MultiStepMultiDimensionalAttention layer are proposed in 
+        `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_.
 
         You can find the example projects of MA-SNN in the following links:
         - https://github.com/MA-SNN/MA-SNN
@@ -258,9 +260,66 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         return out
 
 
-class SpikingSelfAttention(nn.Module):
+class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
     def __init__(self, dim, num_heads=8, backend: str = "torch"):
+        """
+        **API Language:**
+        :ref:`中文 <SpikingSelfAttention.__init__-cn>` | :ref:`English <SpikingSelfAttention.__init__-en>`
+
+        ----
+
+        .. _SpikingSelfAttention.__init__-cn:
+
+        * **中文 API**
+
+        `Spikformer: When Spiking Neural Network Meets Transformer <https://openreview.net/forum?id=frE4fUwz_h>`_
+        中提出的 Spiking Self Attention 层。本模块在 `Spikformer源代码 <https://github.com/ZK-Zhou/spikformer/blob/main/imagenet/model.py>`_
+        的基础上做了改进，显著提高了运行效率。关于 Spikformer 和本模块实现方式的更多信息，
+        参见教程 :doc:`../tutorials/cn/spikformer` 。
+
+        本模块的输入是尺寸为 ``[T, N, C, L]`` 的脉冲张量，其中 ``T`` 是时间步数， 
+        ``N`` 是 batch size ，``C`` 是 channel 数量，``L`` 是 token 数量 （对于视觉任务， ``L=H*W`` ）。
+        输出是尺寸为 ``[T, N, C, L]`` 的脉冲张量。
+
+        :param dim: channel 数量
+        :type dim: int
+
+        :param num_heads: 多头自注意力的头数量，默认为 ``8``
+        :type num_heads: int
+
+        :param backend: 本模块内部神经元使用的后端，默认为 ``torch``
+        :type backend: str
+
+        ----
+
+        .. _SpikingSelfAttention.__init__-en:
+
+        * **English API**
+
+        Spiking Self-Attention layer proposed in
+        `Spikformer: When Spiking Neural Network Meets Transformer <https://openreview.net/forum?id=frE4fUwz_h>`_.
+        This module is implemented based on
+        `Spikformer source code <https://github.com/ZK-Zhou/spikformer/blob/main/imagenet/model.py>`_
+        with several improvements that significantly enhance efficiency.
+        For more details about Spikformer and the implementation of this module,
+        please refer to the tutorial :doc:`../tutorials/en/spikformer`.
+
+        The input to this module is a spike tensor of shape ``[T, N, C, L]``,
+        where ``T`` denotes the number of time steps, ``N`` is the batch size,
+        ``C`` is the number of channels, and ``L`` is the number of tokens 
+        (for vision tasks, ``L = H * W``). The output is a spiking tensor with 
+        the same shape ``[T, N, C, L]``.
+
+        :param dim: number of channels
+        :type dim: int
+
+        :param num_heads: number of heads in multi-head self-attention. Default: ``8``
+        :type num_heads: int
+
+        :param backend: backend used by the internal neurons of this module. Default: ``torch``
+        :type backend: str
+        """
         super().__init__()
         if dim % num_heads != 0:
             raise ValueError(
@@ -295,6 +354,11 @@ class SpikingSelfAttention(nn.Module):
 
     @property
     def backend(self):
+        """
+        一旦设置，本模块中所有神经元的后端都会被同样地设置。
+
+        Once set, the backend of all the neurons in this module will also be changed.
+        """
         return self._backend
 
     @backend.setter
@@ -313,8 +377,15 @@ class SpikingSelfAttention(nn.Module):
         x_seq = (x_seq@qt) * scale
         return x_seq # [T, N, NUM_HEADS, Cph, L]
 
-    def forward(self, x_seq):
-        if x_seq.dim != 4:
+    def forward(self, x_seq: torch.Tensor):
+        """
+        :param x_seq: ``shape=[T, N, C, L]``
+        :type x_seq: torch.Tensor
+
+        :return: ``shape=[T, N, C, L]``
+        :rtype: torch.Tensor
+        """
+        if x_seq.ndim != 4:
             raise ValueError(
                 f'expected 4D input with shape [T, N, C, L], '
                 f'but got input with shape {x_seq.shape}'
@@ -336,12 +407,75 @@ class SpikingSelfAttention(nn.Module):
         return f"dim={self.dim}, num_heads={self.num_heads}, backend={self.backend}"
 
 
-class QKAttention(nn.Module):
+class QKAttention(nn.Module, base.MultiStepModule):
 
     def __init__(
         self, dim: int, num_heads: int = 8,
         qka_type: str = "token", backend: str ="torch"
     ):
+        """
+        **API Language:**
+        :ref:`中文 <QKAttention.__init__-cn>` | :ref:`English <QKAttention.__init__-en>`
+
+        ----
+
+        .. _QKAttention.__init__-cn:
+
+        * **中文 API**
+
+        `QKFormer: Hierarchical Spiking Transformer using Q-K Attention <https://openreview.net/forum?id=AVd7DpiooC>`_
+        中提出的 Q-K Attention 层。本模块在 `QKFormer源代码 <https://github.com/zhouchenlin2096/QKFormer/blob/master/imagenet/qkformer.py>`_
+        的基础上做了改进，显著提高了运行效率；改进思路与 Spikformer 类似，见教程 :doc:`../tutorials/cn/spikformer` 。
+
+        本模块的输入是尺寸为 ``[T, N, C, L]`` 的脉冲张量，其中 ``T`` 是时间步数， 
+        ``N`` 是 batch size ，``C`` 是 channel 数量，``L`` 是 token 数量 （对于视觉任务， ``L=H*W`` ）。
+        输出是尺寸为 ``[T, N, C, L]`` 的脉冲张量。
+
+        :param dim: channel 数量
+        :type dim: int
+
+        :param num_heads: 多头自注意力的头数量，默认为 ``8``
+        :type num_heads: int
+
+        :param qka_type: QKAttention的类型，可选值为 ``token`` 和 ``channel``。默认为 ``token``，生成逐token的掩码
+        :type qka_type: str
+
+        :param backend: 本模块内部神经元使用的后端，默认为 ``torch``
+        :type backend: str
+
+        ----
+
+        .. _QKAttention.__init__-en:
+
+        * **English API**
+
+        Q-K Attention layer proposed in
+        `QKFormer: Hierarchical Spiking Transformer using Q-K Attention <https://openreview.net/forum?id=AVd7DpiooC>`_.
+        This module is implemented based on the
+        `QKFormer source code <https://github.com/zhouchenlin2096/QKFormer/blob/master/imagenet/qkformer.py>`_,
+        with several improvements that significantly enhance efficiency.
+        The improvement strategy is similar to that used in Spikformer; see the
+        tutorial :doc:`../tutorials/en/spikformer` for details.
+
+        The input to this module is a spike tensor of shape ``[T, N, C, L]``,
+        where ``T`` denotes the number of time steps, ``N`` is the batch size,
+        ``C`` is the number of channels, and ``L`` is the number of tokens (for
+        vision tasks, ``L = H * W``). The output is a spiking tensor with the
+        same shape ``[T, N, C, L]``.
+
+        :param dim: number of channels.
+        :type dim: int
+
+        :param num_heads: number of heads in multi-head self-attention. Default: ``8``.
+        :type num_heads: int
+
+        :param qka_type: type of QKAttention. Available options are ``token`` and ``channel``.
+                          The default is ``token``, which generates a token-wise mask.
+        :type qka_type: str
+
+        :param backend: backend used by the internal neurons of this module. Default: ``torch``.
+        :type backend: str
+        """
         super().__init__()
         if dim % num_heads != 0:
             raise ValueError(
@@ -384,6 +518,11 @@ class QKAttention(nn.Module):
 
     @property
     def backend(self):
+        """
+        一旦设置，本模块中所有神经元的后端都会被同样地设置。
+
+        Once set, the backend of all the neurons in this module will also be changed.
+        """
         return self._backend
 
     @backend.setter
@@ -394,7 +533,12 @@ class QKAttention(nn.Module):
         self.proj_lif.backend = value
 
     @property
-    def qka_type(self): # read-only
+    def qka_type(self):
+        """
+        只读。构造时设置，随后不可修改。
+
+        Read-only. Set when constructing, and cannot be modified afterwards.
+        """
         return self._qka_type
 
     def _qka_forward_torch(self, qk):
@@ -409,7 +553,14 @@ class QKAttention(nn.Module):
         return x_seq  # [T, N, NUM_HEADS, Cph, L]
 
     def forward(self, x_seq):
-        if x_seq.dim != 4:
+        """
+        :param x_seq: ``shape=[T, N, C, L]``
+        :type x_seq: torch.Tensor
+
+        :return: ``shape=[T, N, C, L]``
+        :rtype: torch.Tensor
+        """
+        if x_seq.ndim != 4:
             raise ValueError(
                 f'expected 4D input with shape [T, N, C, L], '
                 f'but got input with shape {x_seq.shape}'
@@ -437,10 +588,16 @@ class QKAttention(nn.Module):
 class TokenQKAttention(QKAttention):
 
     def __init__(self, dim: int, num_heads: int =8, backend: str = "torch"):
+        """
+        ``QKAttention(..., qka_type="token")`` . See :class:`QKAttention` .
+        """
         super().__init__(dim, num_heads, qka_type="token", backend=backend)
 
 
 class ChannelQKAttention(QKAttention):
 
     def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch"):
+        """
+        ``QKAttention(..., qka_type="channel")`` . See :class:`QKAttention` .
+        """
         super().__init__(dim, num_heads, qka_type="channel", backend=backend)
