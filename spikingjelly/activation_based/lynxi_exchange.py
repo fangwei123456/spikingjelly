@@ -3,10 +3,8 @@ import os
 from typing import Dict, Union
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import logging
-import numpy as np
-from . import neuron, functional, layer
+from . import neuron, layer
 
 '''
 TracerWarning: Converting a tensor to a Python index might cause the trace to be incorrect. We can't record the data flow of Python values, so this value will be treated as a constant in the future. This means that the trace might not generalize to other inputs!

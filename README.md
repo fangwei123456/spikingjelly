@@ -48,12 +48,12 @@ We are going to release version `0.0.0.1.0` soon.
 
 - [x] Add [Triton](https://github.com/triton-lang/triton) backend for further acceleration on GPU.
 - [x] Add a transpiler for converting PyTorch spiking neurons to Triton kernels, which will be more flexible than the existing [`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/cuda_kernel/auto_cuda) subpackage.
-- [ ] Add spiking self-attention implementations.
+- [x] Add spiking self-attention implementations.
 - [x] Update docs and tutorials.
 
 Other long-term plans include:
 
-- [ ] Add [NIR](https://github.com/neuromorphs/NIR) support.
+- [x] Add [NIR](https://github.com/neuromorphs/NIR) support.
 - [ ] Optimize training memory cost.
 - [ ] Accelerate on Huawei NPU.
 

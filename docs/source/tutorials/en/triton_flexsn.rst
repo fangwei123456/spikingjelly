@@ -1,5 +1,5 @@
 Triton backend and FlexSN
-===========================
+==============================
 
 Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_
 

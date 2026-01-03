@@ -45,5 +45,6 @@ spikingjelly.activation\_based package
    :maxdepth: 1
    :caption: Framework Exchange and Hardware Deployment
 
+   spikingjelly.activation_based.nir_exchange
    spikingjelly.activation_based.lava_exchange
    spikingjelly.activation_based.lynxi_exchange
