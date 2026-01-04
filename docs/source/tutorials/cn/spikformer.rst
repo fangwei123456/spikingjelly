@@ -105,7 +105,7 @@ English version: :doc:`../en/spikformer`
 SSA实现方式改进
 -----------------------
 
-SpikingJelly `0.0.0.1.0` 提供了 SSA 的高效实现 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 。
+SpikingJelly ``0.0.0.1.0`` 提供了 SSA 的高效实现 :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 。
 相比上一节中的 ``SSA``， :class:`SpikingSelfAttention <spikingjelly.activation_based.layer.attention.SpikingSelfAttention>` 从以下方向做出改进。
 
 #. 假设输入和输出的形状是 ``[T, B, C, N]`` ，而非 ``[T, B, N, C]`` （ **token-last** ， 而非 channel-last ）。使用 ``Conv1d``，而非 ``Linear`` 。如此一来， ``BatchNorm1d`` 的前后无需转置。

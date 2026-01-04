@@ -3,5 +3,5 @@ from .bn import *
 from .container import *
 from .dropout import *
 from .misc import *
-from .ottt import *
+from .online_learning import *
 from .stateless_wrapper import *

@@ -7,7 +7,7 @@ spikingjelly.activation_based.layer package
 
    SpikingJelly `0.0.0.1.0` 对 ``layer`` 模块的内部实现进行了重构：原来的 ``layer.py`` 文件已被拆分并重组为 ``layer/`` 包，以提升代码的模块化程度和可维护性。
 
-   **该改动不会影响对外公开的 API。** 我们强烈建议用户仍然通过 ``layer`` 这一顶层命名空间来访问相关功能，而不是从具体的内部子模块中进行导入。``layer`` 层级下的导入路径被视为稳定的公共接口；更深层的子模块仅作为内部实现细节，未来可能发生变化。
+   **该改动不会影响对外公开的 API。** 我们强烈建议用户仍然通过 ``layer`` 这一顶层命名空间来访问相关功能，而不是从具体的内部子模块中进行导入。 ``layer`` 层级下的导入路径被视为稳定的公共接口；更深层的子模块仅作为内部实现细节，未来可能发生变化。
 
    .. code:: python
 
@@ -66,10 +66,10 @@ Dropout Variants
    :undoc-members:
    :show-inheritance:
 
-OTTT Modules
+Online Learning Modules
 -------------------------
 
-.. automodule:: spikingjelly.activation_based.layer.ottt
+.. automodule:: spikingjelly.activation_based.layer.online_learning
    :members:
    :undoc-members:
    :show-inheritance:
