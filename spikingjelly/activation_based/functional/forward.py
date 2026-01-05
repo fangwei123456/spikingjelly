@@ -16,7 +16,7 @@ def multi_step_forward(
 
     .. _multi_step_forward-cn:
 
-    * **中文 API**
+    * **中文**
 
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
     :type x_seq: torch.Tensor
@@ -34,7 +34,7 @@ def multi_step_forward(
 
     .. _multi_step_forward-en:
 
-    * **English API**
+    * **English**
 
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
     :type x_seq: torch.Tensor
@@ -73,7 +73,7 @@ def t_last_multi_step_forward(
 
     .. _t_last_multi_step_forward-cn:
 
-    * **中文 API**
+    * **中文**
 
     在单步模块 ``single_step_module`` 上使用多步前向传播。
 
@@ -90,7 +90,7 @@ def t_last_multi_step_forward(
 
     .. _t_last_multi_step_forward-en:
 
-    * **English API**
+    * **English**
 
     Applies multi-step forward on ``single_step_module``.
 
@@ -126,7 +126,7 @@ def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: 
 
     .. _chunk_multi_step_forward-cn:
 
-    * **中文 API**
+    * **中文**
 
     将 ``shape = [T, *]`` 的输入 ``x_seq`` 拆分成多个 ``shape = [split_size, *]`` 的小tensor(若 ``T % split_size != 0``，最后一个tensor的 ``shape[0]`` 会小于 ``split_size``)，然后逐个输入到 ``multi_step_module`` 中，再将输出重新拼接为 ``shape = [split_size, *]``。
 
@@ -148,7 +148,7 @@ def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: 
 
     .. _chunk_multi_step_forward-en:
 
-    * **English API**
+    * **English**
 
     Splits the input ``x_seq`` with ``shape = [T, *]`` to many tensor chunks with ``shape = [split_size, *]`` (if ``T % split_size != 0``,
     ``shape[0]`` of the last tensor chunk will be smaller than ``split_size``), and sends chunks to ``multi_step_module``,
@@ -208,7 +208,7 @@ def seq_to_ann_forward(
 
     .. _seq_to_ann_forward-cn:
 
-    * **中文 API**
+    * **中文**
 
     使用无状态层进行多步前向传播。输入 ``x_seq`` 的时间和批量维度将被展平，得到 ``[T*batch_size, ...]``
     形状的张量；随后，输入到无状态层中；最后，将输出张量恢复到序列形式 ``[T, batch_size, ...]`` 。
@@ -226,7 +226,7 @@ def seq_to_ann_forward(
 
     .. _seq_to_ann_forward-en:
 
-    * **English API**
+    * **English**
 
     Applied forward on stateless modules. Flatten the time and batch dimensions
     of ``x_seq`` so that ``shape=[T*batch_size, ...]``, feed the reshaped tensor
@@ -262,7 +262,7 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, 
 
     .. _t_last_seq_to_ann_forward-cn:
 
-    * **中文 API**
+    * **中文**
 
     使用无状态层进行多步前向传播。
 
@@ -288,7 +288,7 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, 
 
     .. _t_last_seq_to_ann_forward-en:
 
-    * **English API**
+    * **English**
 
     Applied forward on stateless modules.
 

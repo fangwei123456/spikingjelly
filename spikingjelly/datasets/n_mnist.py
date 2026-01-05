@@ -1,14 +1,15 @@
 from typing import Callable, Dict, Optional, Tuple
-from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from .. import configure
-from ..datasets import np_savez
+from .utils import load_ATIS_bin
+from .utils import np_savez
+from .base import NeuromorphicDatasetFolder
 
-class NMNIST(sjds.NeuromorphicDatasetFolder):
+class NMNIST(NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,
@@ -25,7 +26,7 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
         """
         The N-MNIST dataset, which is proposed by `Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades <https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
         assert train is not None
         super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
@@ -84,7 +85,7 @@ class NMNIST(sjds.NeuromorphicDatasetFolder):
         This function defines how to read the origin binary data.
         '''
 
-        return sjds.load_ATIS_bin(file_name)
+        return load_ATIS_bin(file_name)
 
     @staticmethod
     def get_H_W() -> Tuple:

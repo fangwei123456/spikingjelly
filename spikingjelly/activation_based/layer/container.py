@@ -22,7 +22,7 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 
         .. _MultiStepContainer-cn:
 
-        * **中文 API**
+        * **中文**
 
         :func:`spikingjelly.activation_based.functional.multi_step_forward`
         的容器。构造方式与 `torch.nn.Sequential` 一致。
@@ -31,7 +31,7 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 
         .. _MultiStepContainer-en:
 
-        * **English API**
+        * **English**
 
         Container of :func:`spikingjelly.activation_based.functional.multi_step_forward`.
         Its constructor signature is the same as `torch.nn.Sequential`.
@@ -65,7 +65,7 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
 
         .. _SeqToANNContainer-cn:
 
-        * **中文 API**
+        * **中文**
 
         :func:`spikingjelly.activation_based.functional.seq_to_ann_forward`
         的容器。构造方式与 `torch.nn.Sequential` 一致。
@@ -74,7 +74,7 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
 
         .. _SeqToANNContainer-en:
 
-        * **English API**
+        * **English**
 
         Container of :func:`spikingjelly.activation_based.functional.seq_to_ann_forward`.
         Its constructor signature is the same as `torch.nn.Sequential`.

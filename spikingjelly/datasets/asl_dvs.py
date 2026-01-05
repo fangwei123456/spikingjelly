@@ -1,5 +1,4 @@
 from typing import Callable, Dict,  Optional, Tuple
-import spikingjelly.datasets as sjds
 import scipy.io
 from torchvision.datasets.utils import extract_archive
 import os
@@ -7,10 +6,12 @@ import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 import shutil
-from .. import configure
-from ..datasets import np_savez
 
-class ASLDVS(sjds.NeuromorphicDatasetFolder):
+from .. import configure
+from .base import NeuromorphicDatasetFolder
+from .utils import np_savez
+
+class ASLDVS(NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,
@@ -26,7 +27,8 @@ class ASLDVS(sjds.NeuromorphicDatasetFolder):
         """
         The ASL-DVS dataset, which is proposed by `Graph-based Object Classification for Neuromorphic Vision Sensing <https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+        for more details about params information.
         """
         super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform,
                          target_transform)

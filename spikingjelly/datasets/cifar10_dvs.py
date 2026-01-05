@@ -1,13 +1,13 @@
 from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 from .. import configure
-from ..datasets import np_savez
+from .utils import np_savez
+from .base import NeuromorphicDatasetFolder
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
 
@@ -106,7 +106,7 @@ def load_events(
     x, y, polarity = parse_raw_address(addr, **kwargs)
     return timestamp, x, y, polarity
 
-class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
+class CIFAR10DVS(NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,
@@ -123,7 +123,7 @@ class CIFAR10DVS(sjds.NeuromorphicDatasetFolder):
         The CIFAR10-DVS dataset, which is proposed by `CIFAR10-DVS: An Event-Stream Dataset for Object Classification
  <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
         super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform,
                          target_transform)

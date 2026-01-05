@@ -28,7 +28,7 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
         .. _TemporalWiseAttention.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_ 中提出
         的TemporalWiseAttention层。TemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
@@ -52,7 +52,7 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
         .. _TemporalWiseAttention.__init__-en:
 
-        * **English API**
+        * **English**
 
         The TemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
 
@@ -123,7 +123,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         .. _MultiStepMultiDimensionalAttention.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_ 中提出
         的MA-SNN模型以及MultiStepMultiDimensionalAttention层。
@@ -152,7 +152,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         .. _MultiStepMultiDimensionalAttention.__init__-en:
 
-        * **English API**
+        * **English**
 
         The MA-SNN model and MultiStepMultiDimensionalAttention layer are proposed in 
         `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_.
@@ -271,7 +271,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         .. _SpikingSelfAttention.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         `Spikformer: When Spiking Neural Network Meets Transformer <https://openreview.net/forum?id=frE4fUwz_h>`_
         中提出的 Spiking Self Attention 层。本模块在 `Spikformer源代码 <https://github.com/ZK-Zhou/spikformer/blob/main/imagenet/model.py>`_
@@ -295,7 +295,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         .. _SpikingSelfAttention.__init__-en:
 
-        * **English API**
+        * **English**
 
         Spiking Self-Attention layer proposed in
         `Spikformer: When Spiking Neural Network Meets Transformer <https://openreview.net/forum?id=frE4fUwz_h>`_.
@@ -421,7 +421,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
         .. _QKAttention.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         `QKFormer: Hierarchical Spiking Transformer using Q-K Attention <https://openreview.net/forum?id=AVd7DpiooC>`_
         中提出的 Q-K Attention 层。本模块在 `QKFormer源代码 <https://github.com/zhouchenlin2096/QKFormer/blob/master/imagenet/qkformer.py>`_
@@ -447,7 +447,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
         .. _QKAttention.__init__-en:
 
-        * **English API**
+        * **English**
 
         Q-K Attention layer proposed in
         `QKFormer: Hierarchical Spiking Transformer using Q-K Attention <https://openreview.net/forum?id=AVd7DpiooC>`_.

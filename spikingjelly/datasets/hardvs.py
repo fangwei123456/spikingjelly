@@ -1,6 +1,5 @@
 from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
@@ -8,9 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import shutil
 from .. import configure
-from ..datasets import np_savez
+from .utils import np_savez
+from .base import NeuromorphicDatasetFolder
 
-class HARDVS(sjds.NeuromorphicDatasetFolder):
+
+class HARDVS(NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,

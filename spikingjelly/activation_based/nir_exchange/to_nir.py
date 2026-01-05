@@ -230,7 +230,7 @@ def export_to_nir(
 
     .. _export_to_nir-cn:
 
-    * **中文 API**
+    * **中文**
 
     将 SpikingJelly 的模型转换为 `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_ 图，
     以供后续转换到其它框架或部署到神经形态芯片上。本函数会自动通过示例输入 ``example_input``
@@ -257,7 +257,7 @@ def export_to_nir(
 
     .. _export_to_nir-en:
 
-    * **English API**
+    * **English**
 
     Convert a SpikingJelly model to a `NIR (Neuromorphic Intermediate Representation) <https://neuroir.org/docs/index.html>`_ graph
     for conversion to other frameworks or deployment on neuromorphic hardware.

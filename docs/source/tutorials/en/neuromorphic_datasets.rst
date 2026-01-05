@@ -202,7 +202,7 @@ Let us visualize a sample:
 
 .. code:: python
 
-    from spikingjelly.datasets import play_frame
+    from spikingjelly.datasets.utils import play_frame
     frame, label = train_set[500]
     play_frame(frame)
 
@@ -216,8 +216,8 @@ Fixed Duration Integrating
 Integrating by fixed duration is more compatible with the practical application. For example, if we set duration as ``10 ms``,
 then a sample with length ``L ms`` can be integrated to frames with frame number ``math.floor(L / 10)``. However, the lengths
 of samples in neuromorphic datasets are not identical, and we will get frames with different frame numbers when integrating
-with a fixed duration. Fortunately, we can use :class:`spikingjelly.datasets.pad_sequence_collate` and
-:class:`spikingjelly.datasets.padded_sequence_mask` to pad/unpad frames.
+with a fixed duration. Fortunately, we can use :class:`spikingjelly.datasets.utils.pad_sequence_collate` and
+:class:`spikingjelly.datasets.utils.padded_sequence_mask` to pad/unpad frames.
 
 Example codes:
 
@@ -225,7 +225,9 @@ Example codes:
 
     import torch
     from torch.utils.data import DataLoader
-    from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask, dvs128_gesture
+    from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
+    from spikingjelly.datasets import dvs128_gesture
+
     root='D:/datasets/DVS128Gesture'
     train_set = dvs128_gesture.DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
     for i in range(5):
@@ -280,8 +282,8 @@ a function:
         index_split = np.random.randint(low=0, high=events['t'].__len__())
         frames = np.zeros([2, 2, H, W])
         t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
-        frames[0] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
-        frames[1] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
+        frames[0] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+        frames[1] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
         return frames
 
 Now let us use this function to create a frames dataset:
@@ -298,7 +300,7 @@ Now let us visualize the frames:
 
 .. code:: python
 
-    from spikingjelly.datasets import play_frame
+    from spikingjelly.datasets.utils import play_frame
     frame, label = train_set[500]
     play_frame(frame)
 

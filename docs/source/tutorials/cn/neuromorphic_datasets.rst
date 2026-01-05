@@ -198,7 +198,7 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. code:: python
 
-    from spikingjelly.datasets import play_frame
+    from spikingjelly.datasets.utils import play_frame
     frame, label = train_set[500]
     play_frame(frame)
 
@@ -210,8 +210,8 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 固定时间间隔积分
 ----------------------------
 使用固定时间间隔积分，更符合实际物理系统。例如每 ``10 ms`` 积分一次，则长度为 ``L ms`` 的数据，可以得到  ``math.floor(L / 10)`` 帧。但
-神经形态数据集中每个样本的长度往往不相同，因此会得到不同长度的帧数据。使用惊蜇框架提供的 :class:`spikingjelly.datasets.pad_sequence_collate`
-和 :class:`spikingjelly.datasets.padded_sequence_mask` 可以很方便的对不等长数据进行对齐和还原。
+神经形态数据集中每个样本的长度往往不相同，因此会得到不同长度的帧数据。使用惊蜇框架提供的 :class:`spikingjelly.datasets.utils.pad_sequence_collate`
+和 :class:`spikingjelly.datasets.utils.padded_sequence_mask` 可以很方便的对不等长数据进行对齐和还原。
 
 示例代码：
 
@@ -219,7 +219,9 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
     import torch
     from torch.utils.data import DataLoader
-    from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask, dvs128_gesture
+    from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
+    from spikingjelly.datasets import dvs128_gesture
+
     root='D:/datasets/DVS128Gesture'
     train_set = dvs128_gesture.DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
     for i in range(5):
@@ -272,8 +274,8 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
         index_split = np.random.randint(low=0, high=events['t'].__len__())
         frames = np.zeros([2, 2, H, W])
         t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
-        frames[0] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
-        frames[1] = sjds.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
+        frames[0] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+        frames[1] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
         return frames
 
 接下来创建数据集：
@@ -288,7 +290,7 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. code:: python
 
-    from spikingjelly.datasets import play_frame
+    from spikingjelly.datasets.utils import play_frame
     frame, label = train_set[500]
     play_frame(frame)
 

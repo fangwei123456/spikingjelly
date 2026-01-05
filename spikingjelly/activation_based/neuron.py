@@ -45,7 +45,7 @@ class SimpleBaseNode(base.MemoryModule):
 
         .. _SimpleBaseNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         ``BaseNode`` 的简化版，便于用户修改或扩展神经元。
 
@@ -53,7 +53,7 @@ class SimpleBaseNode(base.MemoryModule):
 
         .. _SimpleBaseNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         A simple version of ``BaseNode``. Users can modify this neuron easily.
         """
@@ -106,7 +106,7 @@ class SimpleIFNode(SimpleBaseNode):
 
         .. _SimpleIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         ``IFNode`` 的简化版。参数含义详见 :ref:`IFNode文档 <IFNode.__init__-cn>`。
 
@@ -114,7 +114,7 @@ class SimpleIFNode(SimpleBaseNode):
 
         .. _SimpleIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         A simple version of ``IFNode``. See :ref:`IFNode docs <IFNode.__init__-en>`
         for more details.
@@ -143,7 +143,7 @@ class SimpleLIFNode(SimpleBaseNode):
 
         .. _SimpleLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         ``LIFNode`` 的简化版。参数含义详见 :ref:`LIFNode文档 <LIFNode.__init__-cn>`。
 
@@ -151,7 +151,7 @@ class SimpleLIFNode(SimpleBaseNode):
 
         .. _SimpleLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         A simple version of ``LIFNode``. See :ref:`LIFNode docs <LIFNode.__init__-en>`
         for more details.
@@ -190,7 +190,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         可微分SNN神经元的基类神经元。
 
@@ -223,7 +223,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         This class is the base class of differentiable spiking neurons.
 
@@ -315,7 +315,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.neuronal_charge-cn:
 
-        * **中文 API**
+        * **中文**
 
         定义神经元的充电差分方程。子类必须实现这个函数。
 
@@ -323,7 +323,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.neuronal_charge-en:
 
-        * **English API**
+        * **English**
 
         Define the charge difference equation. The sub-class must implement this function.
         """
@@ -338,7 +338,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.neuronal_fire-cn:
 
-        * **中文 API**
+        * **中文**
 
         根据当前神经元的电压、阈值，计算输出脉冲。
 
@@ -346,7 +346,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.neuronal_fire-en:
 
-        * **English API**
+        * **English**
 
         Calculate out spikes of neurons by their current membrane potential and threshold voltage.
         """
@@ -361,7 +361,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.neuronal_reset-cn:
 
-        * **中文 API**
+        * **中文**
 
         根据当前神经元释放的脉冲，对膜电位进行重置。
 
@@ -369,7 +369,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.neuronal_reset-en:
 
-        * **English API**
+        * **English**
 
         Reset the membrane potential according to neurons' output spikes.
         """
@@ -398,7 +398,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.single_step_forward-cn:
 
-        * **中文 API**
+        * **中文**
 
         按照充电、放电、重置的顺序进行前向传播。
 
@@ -412,7 +412,7 @@ class BaseNode(base.MemoryModule):
 
         .. _BaseNode.single_step_forward-en:
 
-        * **English API**
+        * **English**
 
         Forward by the order of ``neuronal_charge``, ``neuronal_fire``, and ``neuronal_reset``.
 
@@ -487,7 +487,7 @@ class AdaptBaseNode(BaseNode):
 
         .. _AdaptBaseNode.neuronal_adaptation-cn:
 
-        * **中文 API**
+        * **中文**
 
         脉冲触发的适应性电流的更新
 
@@ -495,7 +495,7 @@ class AdaptBaseNode(BaseNode):
 
         .. _AdaptBaseNode.neuronal_adaptation-en:
 
-        * **English API**
+        * **English**
 
         Spike-triggered update of adaptation current.
         """
@@ -526,7 +526,7 @@ class AdaptBaseNode(BaseNode):
 
         .. _AdaptBaseNode.neuronal_reset-cn:
 
-        * **中文 API**
+        * **中文**
 
         根据当前神经元释放的脉冲，对膜电位进行重置。
 
@@ -534,7 +534,7 @@ class AdaptBaseNode(BaseNode):
 
         .. _AdaptBaseNode.neuronal_reset-en:
 
-        * **English API**
+        * **English**
 
         Reset the membrane potential according to neurons' output spikes.
         """
@@ -563,7 +563,7 @@ class AdaptBaseNode(BaseNode):
 
         .. _AdaptBaseNode.single_step_forward-cn:
 
-        * **中文 API**
+        * **中文**
 
         按照充电、适应、放电、重置的顺序进行前向传播。
 
@@ -577,7 +577,7 @@ class AdaptBaseNode(BaseNode):
 
         .. _AdaptBaseNode.single_step_forward-en:
 
-        * **English API**
+        * **English**
 
         Forward by the order of ``neuronal_charge``, ``neuronal_adaptation``, ``neuronal_fire``, and ``neuronal_reset``.
 
@@ -616,7 +616,7 @@ class IFNode(BaseNode):
 
         .. _IFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         Integrate-and-Fire 神经元模型，可以看作理想积分器，无输入时电压保持恒定，不会像 LIF 神经元那样衰减。其阈下神经动力学方程为：
 
@@ -652,7 +652,7 @@ class IFNode(BaseNode):
 
         .. _IFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         The Integrate-and-Fire neuron, which can be seen as an ideal integrator. The voltage of the IF neuron will not decay
         as that of the LIF neuron. The sub-threshold neural dynamics of it is as followed:
@@ -929,7 +929,7 @@ class LIFNode(BaseNode):
 
         .. _LIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         Leaky Integrate-and-Fire 神经元模型，可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
@@ -978,7 +978,7 @@ class LIFNode(BaseNode):
 
         .. _LIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         The Leaky Integrate-and-Fire neuron, which can be seen as a leaky integrator.
         The subthreshold neural dynamics of it is as followed:
@@ -1418,7 +1418,7 @@ class ParametricLIFNode(BaseNode):
 
         .. _ParametricLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         Parametric Leaky Integrate-and-Fire (PLIF) 神经元模型，提出自 `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_。可以看作是带漏电的积分器。其阈下神经动力学方程为：
 
@@ -1469,7 +1469,7 @@ class ParametricLIFNode(BaseNode):
 
         .. _ParametricLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         The Parametric Leaky Integrate-and-Fire (PLIF) neuron, proposed in `Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks <https://arxiv.org/abs/2007.05785>`_, can be seen as a leaky integrator. The subthreshold neural dynamics of it is as followed:
 
@@ -2331,7 +2331,7 @@ class PSN(nn.Module, base.MultiStepModule):
 
         .. _PSN.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         并行脉冲神经元（Parallel Spiking Neuron，PSN），由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
@@ -2356,7 +2356,7 @@ class PSN(nn.Module, base.MultiStepModule):
 
         .. _PSN.__init__-en:
 
-        * **English API**
+        * **English**
 
         The Parallel Spiking Neuron (PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
 
@@ -2421,7 +2421,7 @@ class MaskedPSN(base.MemoryModule):
 
         .. _MaskedPSN.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         Masked Parallel Spiking Neuron，由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
@@ -2468,7 +2468,7 @@ class MaskedPSN(base.MemoryModule):
 
         .. _MaskedPSN.__init__-en:
 
-        * **English API**
+        * **English**
 
         Masked Parallel Spiking Neuron (Masked PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
 
@@ -2607,7 +2607,7 @@ class SlidingPSN(base.MemoryModule):
 
         .. _SlidingPSN.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         Sliding Parallel Spiking Neuron，由 `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_ 提出。神经元动力学定义如下：
 
@@ -2641,7 +2641,7 @@ class SlidingPSN(base.MemoryModule):
 
         .. _SlidingPSN.__init__-en:
 
-        * **English API**
+        * **English**
 
         Sliding Parallel Spiking Neuron (Sliding PSN), proposed in `Parallel Spiking Neurons with High Efficiency and Long-term Dependencies Learning Ability <https://arxiv.org/abs/2304.12760>`_. The neuronal dynamics are defined as:
 
@@ -2744,7 +2744,7 @@ class GatedLIFNode(base.MemoryModule):
 
         .. _GatedLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         Gated LIF 神经元（GLIF），由
         `GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
@@ -2789,7 +2789,7 @@ class GatedLIFNode(base.MemoryModule):
 
         .. _GatedLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         Gated LIF neuron (GLIF), proposed in
         `GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks
@@ -2922,7 +2922,7 @@ class DSRIFNode(base.MemoryModule):
 
         .. _DSRIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         DSR IF 神经元，由
         `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
@@ -2959,7 +2959,7 @@ class DSRIFNode(base.MemoryModule):
 
         .. _DSRIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         DSR IF neuron, proposed in
         `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
@@ -3093,7 +3093,7 @@ class DSRLIFNode(base.MemoryModule):
 
         .. _DSRLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         DSR LIF 神经元，由
         `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
@@ -3135,7 +3135,7 @@ class DSRLIFNode(base.MemoryModule):
 
         .. _DSRLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         DSR LIF neuron, proposed in
         `Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation
@@ -3296,7 +3296,7 @@ class OTTTLIFNode(LIFNode):
 
         .. _OTTTLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         OTTT LIF 神经元模型，来源于
         `Online Training Through Time for Spiking Neural Networks
@@ -3342,7 +3342,7 @@ class OTTTLIFNode(LIFNode):
 
         .. _OTTTLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         OTTT LIF neuron, proposed in
         `Online Training Through Time for Spiking Neural Networks
@@ -3450,7 +3450,7 @@ class OTTTLIFNode(LIFNode):
 
         .. _OTTTLIFNode.single_step_forward-cn:
 
-        * **中文 API**
+        * **中文**
 
         训练时，输出脉冲和迹；推理时，输出脉冲。
 
@@ -3460,7 +3460,7 @@ class OTTTLIFNode(LIFNode):
 
         .. _OTTTLIFNode.single_step_forward-en:
 
-        * **English API**
+        * **English**
 
         Output spike and trace during training; output spike during inference.
 
@@ -3525,7 +3525,7 @@ class SLTTLIFNode(LIFNode):
 
         .. _SLTTLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         SLTT LIF 神经元模型，来源于
         `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
@@ -3572,7 +3572,7 @@ class SLTTLIFNode(LIFNode):
 
         .. _SLTTLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         SLTT LIF neuron, proposed in
         `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks
@@ -3762,7 +3762,7 @@ def powerlaw_psd_gaussian(
 
     .. _powerlaw_psd_gaussian-cn:
 
-    * **中文 API**
+    * **中文**
 
     生成具有 :math:`(1/f)^\beta` 功率谱的高斯噪声。生成的噪声满足
 
@@ -3808,7 +3808,7 @@ def powerlaw_psd_gaussian(
 
     .. _powerlaw_psd_gaussian-en:
 
-    * **English API**
+    * **English**
 
     Generate Gaussian noise with a power spectrum proportional to $(1/f)^\beta$.
     The generated noise satisfies
@@ -4448,7 +4448,7 @@ class MPBNBaseNode(BaseNode):
 
         .. _MPBNBaseNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         该基类神经元实现了 `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_ 中提出的膜电压批量归一化方法，并在 `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ 的基础上引入阈值调制模块，用于测试时适应任务并降低能耗。
 
@@ -4485,7 +4485,7 @@ class MPBNBaseNode(BaseNode):
 
         .. _MPBNBaseNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         Base class of neuron with membrane potential batch normalization proposed in `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_.
         `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ further introduces a Threshold Modulation module after threshold re-parameterization to enable test-time adaptation and reduce energy consumption.
@@ -4683,7 +4683,7 @@ class MPBNLIFNode(MPBNBaseNode):
 
         .. _MPBNLIFNode.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         该神经元模型在 `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_ 中对膜电压进行了批量归一化，并在 `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ 的基础上引入阈值调制模块，用于测试时适应任务并降低能耗。
 
@@ -4705,7 +4705,7 @@ class MPBNLIFNode(MPBNBaseNode):
 
         .. _MPBNLIFNode.__init__-en:
 
-        * **English API**
+        * **English**
 
         This neuron model applies membrane potential batch normalization as in `Membrane Potential Batch Normalization for Spiking Neural Networks <https://arxiv.org/abs/2308.08359>`_.
         `Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks <https://arxiv.org/abs/2505.05375>`_ further introduces a Threshold Modulation module for test-time adaptation and energy efficiency.
@@ -4797,7 +4797,7 @@ class FlexSN(base.MemoryModule):
 
         .. _FlexSN.__init__-cn:
 
-        * **中文 API**
+        * **中文**
 
         ``FlexSN`` 可以根据自定义的 PyTorch 单步函数生成 Triton 多步脉冲神经元核。
 
@@ -4844,7 +4844,7 @@ class FlexSN(base.MemoryModule):
 
         .. _FlexSN.__init__-en:
 
-        * **English API**
+        * **English**
 
         ``FlexSN`` can generate Triton multi-step spiking neuron kernels from
         customized PyTorch single-step functions.
@@ -4976,7 +4976,7 @@ class FlexSN(base.MemoryModule):
 
         .. _FlexSN.init_states-cn:
 
-        * **中文 API**
+        * **中文**
 
         初始化神经元的状态张量。用户可以通过重写此方法来自定义状态初始化规则。默认情况下，所有
         状态均被初始化为零张量。
@@ -4992,7 +4992,7 @@ class FlexSN(base.MemoryModule):
 
         .. _FlexSN.init_states-en:
 
-        * **English API**
+        * **English**
 
         Initialize the neuron state tensors. Users can override this method to 
         customize the state initialization rules. By default, all state tensors

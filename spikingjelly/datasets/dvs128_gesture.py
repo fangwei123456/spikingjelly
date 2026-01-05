@@ -1,32 +1,34 @@
 from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
-from .. import configure
-from ..datasets import np_savez
 
-class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
+from .. import configure
+from .utils import np_savez, load_aedat_v3
+from .base import NeuromorphicDatasetFolder
+
+
+class DVS128Gesture(NeuromorphicDatasetFolder):
     def __init__(
-            self,
-            root: str,
-            train: bool = None,
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
+        self,
+        root: str,
+        train: bool = None,
+        data_type: str = 'event',
+        frames_number: int = None,
+        split_by: str = None,
+        duration: int = None,
+        custom_integrate_function: Callable = None,
+        custom_integrated_frames_dir_name: str = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
     ) -> None:
         """
         The DVS128 Gesture dataset, which is proposed by `A Low Power, Fully Event-Based Gesture Recognition System <https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
 
 
         .. admonition:: Note
@@ -125,17 +127,9 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
                     10	172843790	179442817
                     11	180675853	187389051
 
-
-
-
             Then SpikingJelly will split the aedat to samples by the time range and class in the csv file. In this sample, \
             the first sample ``user01_fluorescent_0.npz`` is sliced from the origin events ``user01_fluorescent.aedat`` with \
             ``80048239 <= t < 85092709`` and ``label=0``. ``user01_fluorescent_0.npz`` will be saved in ``root/events_np/train/0``.
-
-
-
-
-
         """
         assert train is not None
         super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
@@ -187,7 +181,7 @@ class DVS128Gesture(sjds.NeuromorphicDatasetFolder):
 
         This function defines how to read the origin binary data.
         '''
-        return sjds.load_aedat_v3(file_name)
+        return load_aedat_v3(file_name)
 
     @staticmethod
     def split_aedat_files_to_np(fname: str, aedat_file: str, csv_file: str, output_dir: str):

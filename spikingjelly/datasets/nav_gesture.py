@@ -165,7 +165,6 @@ def readATIS_tddat(file_name, orig_at_zero = True, drop_negative_dt = True, verb
 # ---------------------------------------------------------------------------------------------
 
 from typing import Callable, Dict, Optional, Tuple
-from .. import datasets as sjds
 from torchvision.datasets.utils import extract_archive
 import os
 import multiprocessing
@@ -173,11 +172,12 @@ from concurrent.futures import ThreadPoolExecutor
 import shutil
 import time
 from .. import configure
-from ..datasets import np_savez
+from .utils import np_savez
+from .base import NeuromorphicDatasetFolder
 
 
 
-class NAVGestureWalk(sjds.NeuromorphicDatasetFolder):
+class NAVGestureWalk(NeuromorphicDatasetFolder):
     # 6 gestures: left, right, up, down, home, select.
     # 10 subjects, holding the phone in one hand (selfie mode) while walking indoor and outdoor
     def __init__(
@@ -195,7 +195,7 @@ class NAVGestureWalk(sjds.NeuromorphicDatasetFolder):
         """
         The Nav Gesture dataset, which is proposed by `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
         super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
 

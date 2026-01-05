@@ -15,7 +15,7 @@ def reset_net(net: nn.Module):
 
     .. _reset_net-cn:
 
-    * **中文 API**
+    * **中文**
 
     将网络的状态重置。做法是遍历网络中的所有 ``Module``，若 ``m `` 为
     ``base.MemoryModule`` 函数或者是拥有 ``reset()`` 方法，则调用 ``m.reset()``。
@@ -29,7 +29,7 @@ def reset_net(net: nn.Module):
 
     .. _reset_net-en:
 
-    * **English API**
+    * **English**
 
     Reset the whole network.  Walk through every ``Module`` as ``m``, and call
     ``m.reset()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``reset()``.
@@ -56,7 +56,7 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     .. _set_step_mode-cn:
 
-    * **中文 API**
+    * **中文**
 
     将 ``net`` 中所有模块的步进模式设置为 ``step_mode`` 。
 
@@ -79,7 +79,7 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     .. _set_step_mode-en:
 
-    * **English API**
+    * **English**
 
     Set ``step_mode`` for all modules in ``net``.
 
@@ -140,7 +140,7 @@ def set_backend(
 
     .. _set_backend-cn:
 
-    * **中文 API**
+    * **中文**
 
     将 ``net`` 中 所有类型为 ``instance`` 的模块后端更改为 ``backend`` 。
 
@@ -160,7 +160,7 @@ def set_backend(
 
     .. _set_backend-en:
 
-    * **English API**
+    * **English**
 
     Sets backends of all modules whose instance is ``instance`` in ``net`` to ``backend``.
 
@@ -198,9 +198,9 @@ def detach_net(net: nn.Module):
 
     .. _detach_net-cn:
 
-    * **中文 API**
+    * **中文**
 
-    将网络与之前的时间步的计算图断开。做法是遍历网络中的所有 ``Module``，若 ``m `` 为
+    将网络与之前的时间步的计算图断开。做法是遍历网络中的所有 ``Module``，若 ``m`` 为
     ``base.MemoryModule`` 函数或者是拥有 ``detach()`` 方法，则调用 ``m.detach()``。
 
     :param net: 任何属于 ``nn.Module`` 子类的网络
@@ -212,12 +212,11 @@ def detach_net(net: nn.Module):
 
     .. _detach_net-en:
 
-    * **English API**
+    * **English**
 
     Detach the computation graph of the whole network from previous time-steps.
     Walk through every ``Module`` as ``m``, and call ``m.detach()`` if this
-    ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.is ``instance`` in
-    ``net`` to ``backend``.
+    ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.
 
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module

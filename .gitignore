@@ -141,3 +141,4 @@ dmypy.json
 *.dat
 *.pt
 /test*.py
+.DS_Store

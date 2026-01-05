@@ -215,7 +215,7 @@ SpikingJelly 已经将下列数据集纳入：
 ```python
 import torch
 from torch.utils.data import DataLoader
-from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask
+from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
 root_dir = 'D:/datasets/DVS128Gesture'
 event_set = DVS128Gesture(root_dir, train=True, data_type='event')

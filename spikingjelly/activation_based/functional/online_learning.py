@@ -12,7 +12,7 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     """
     .. _fptt_online_training_init_w_ra-en:
 
-    * **English API**
+    * **English**
 
     Used to initialize ``w_ra`` for :func:`fptt_online_training` .
 
@@ -34,7 +34,7 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
     """
     .. _fptt_online_training-en:
 
-    * **English API**
+    * **English**
 
     The FPTT online learning method proposed by `Training Recurrent Neural Networks via Forward Propagation Through Time <https://proceedings.mlr.press/v139/kag21a.html>`_ and used for SNN in `Accurate online training of dynamical spiking neural networks through Forward Propagation Through Time <https://arxiv.org/abs/2112.11231>`_ .
 
@@ -151,7 +151,7 @@ def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
     """
     .. _ottt_online_training-en:
 
-    * **English API**
+    * **English**
 
     The OTTT online training method is proposed by `Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>`_.
     This function can also be used for SLTT training method proposed by `Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks <https://openaccess.thecvf.com/content/ICCV2023/html/Meng_Towards_Memory-_and_Time-Efficient_Backpropagation_for_Training_Spiking_Neural_Networks_ICCV_2023_paper.html>`_ .

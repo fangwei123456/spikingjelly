@@ -19,7 +19,7 @@ def set_threshold_margin(
 
     .. _set_threshold_margin-cn:
 
-    * **中文 API**
+    * **中文**
 
     对于用来分类的网络，为输出层神经元的电压阈值设置一定的裕量，以获得更好的分类性能。
 
@@ -48,7 +48,7 @@ def set_threshold_margin(
 
     .. _set_threshold_margin-en:
 
-    * **English API**
+    * **English**
 
     Set voltage threshold margin for neurons in the output layer to reach better performance in classification task.
 
@@ -93,7 +93,7 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
 
     .. _redundant_one_hot-cn:
 
-    * **中文 API**
+    * **中文**
 
     对数据进行冗余的one-hot编码，每一类用 ``n`` 个1和 ``(num_classes - 1) * n`` 个0来编码。
 
@@ -113,7 +113,7 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
 
     .. _redundant_one_hot-en:
 
-    * **English API**
+    * **English**
 
     Redundant one-hot encoding for data. Each class is encoded to ``n`` 1's and  ``(num_classes - 1) * n`` 0's
 
@@ -163,7 +163,7 @@ def first_spike_index(spikes: Tensor):
 
     .. _first_spike_index-cn:
 
-    * **中文 API**
+    * **中文**
 
     输入若干个神经元的输出脉冲，返回一个与输入相同shape的 ``bool`` 类型的index。
     index为 ``True`` 的位置，表示该神经元首次释放脉冲的时刻。
@@ -178,7 +178,7 @@ def first_spike_index(spikes: Tensor):
 
     .. _first_spike_index-en:
 
-    * **English API**
+    * **English**
 
     Return an ``index`` tensor of the same shape of input tensor, which is the output spike of some neurons. The location of ``True`` represents the moment of first spike.
 
@@ -226,7 +226,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
 
     .. _kaiming_normal_conv_linear_weight-cn:
 
-    * **中文 API**
+    * **中文**
 
     使用kaiming normal初始化 ``net` `中的所有 :class:`torch.nn._ConvNd` 和 :class:`torch.nn.Linear` 的权重（不包括偏置项）。
     参见 :class:`torch.nn.init.kaiming_normal_`。
@@ -240,7 +240,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
 
     .. _kaiming_normal_conv_linear_weight-en:
 
-    * **English API**
+    * **English**
 
     Initialize all weights (not including bias) of :class:`torch.nn._ConvNd` and :class:`torch.nn.Linear` in ``net`` by the kaiming normal.
     See :class:`torch.nn.init.kaiming_normal_`
@@ -266,7 +266,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
 
     .. _delay-cn:
 
-    * **中文 API**
+    * **中文**
 
     延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
 
@@ -283,7 +283,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
 
     .. _delay-en:
 
-    * **English API**
+    * **English**
 
     A delay function that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
 

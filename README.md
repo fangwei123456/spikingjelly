@@ -213,7 +213,7 @@ Users can use both the origin event data and frame data integrated by SpikingJel
 ```python
 import torch
 from torch.utils.data import DataLoader
-from spikingjelly.datasets import pad_sequence_collate, padded_sequence_mask
+from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
 
 # Set the root directory for the dataset

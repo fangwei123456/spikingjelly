@@ -1,5 +1,4 @@
 from typing import Callable, Dict,  Optional, Tuple
-import spikingjelly.datasets as sjds
 import scipy.io
 from torchvision.datasets.utils import extract_archive
 import os
@@ -8,9 +7,11 @@ from concurrent.futures import ThreadPoolExecutor
 import time
 import shutil
 from .. import configure
-from ..datasets import np_savez
+from .utils import np_savez
+from .base import NeuromorphicDatasetFolder
 
-class DVSLip(sjds.NeuromorphicDatasetFolder):
+
+class DVSLip(NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,
@@ -27,7 +28,7 @@ class DVSLip(sjds.NeuromorphicDatasetFolder):
         """
         The DVS-Lip dataset, which is proposed by `Multi-Grained Spatio-Temporal Features Perceived Network for Event-Based Lip-Reading <https://openaccess.thecvf.com/content/CVPR2022/html/Tan_Multi-Grained_Spatio-Temporal_Features_Perceived_Network_for_Event-Based_Lip-Reading_CVPR_2022_paper.html>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
         super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
 

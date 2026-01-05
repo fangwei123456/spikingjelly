@@ -12,7 +12,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
 
     .. _kernel_dot_product-cn:
 
-    * **中文 API**
+    * **中文**
 
     计算批量数据 ``x`` 和 ``y`` 在核空间的内积。记2个M维tensor分别为 :math:`\boldsymbol{x_{i}}` 和 :math:`\boldsymbol{y_{j}}` ， ``kernel`` 定义了不同形式的内积：
 
@@ -42,7 +42,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
 
     .. _kernel_dot_product-en:
 
-    * **English API**
+    * **English**
 
     Calculate inner product of ``x`` and ``y`` in kernel space. These 2 M-dim tensors are denoted by :math:`\boldsymbol{x_{i}}` and :math:`\boldsymbol{y_{j}}`. ``kernel`` determine the kind of inner product: 
 
@@ -101,7 +101,7 @@ def spike_similar_loss(
 
     .. _spike_similar_loss-cn:
 
-    * **中文 API**
+    * **中文**
 
     将N个数据输入到输出层有M个神经元的SNN，运行T步，得到shape=[N, M, T]的脉冲。这N个数据的标签为shape=[N, C]的 ``labels``。
 
@@ -156,7 +156,7 @@ def spike_similar_loss(
 
     .. _spike_similar_loss-en:
 
-    * **English API**
+    * **English**
 
     A SNN consisting M neurons will receive a batch of N input data in each timestep (from 0 to T-1) and output a spike tensor of shape=[N, M, T]. The label is a tensor of shape=[N, C].
 
@@ -239,7 +239,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
 
     .. _temporal_efficient_training_cross_entropy-cn:
 
-    * **中文 API**
+    * **中文**
 
     Temporal efficient training (TET) 交叉熵损失, 是每个时间步的交叉熵损失的平均。
 
@@ -260,7 +260,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
 
     .. _temporal_efficient_training_cross_entropy-en:
 
-    * **English API**
+    * **English**
 
     The temporal efficient training (TET) cross entropy, which is the mean of cross entropy of each time-step.
 

@@ -9,8 +9,8 @@ import numpy as np
 from torchvision.datasets import utils
 
 from .. import configure
-from .. import datasets as sjds
-from ..datasets import np_savez
+from .base import NeuromorphicDatasetFolder
+from .utils import np_savez
 
 CATEGORY_LABEL = {
     "handshake": 0,
@@ -25,11 +25,11 @@ CATEGORY_LABEL = {
     "kicking": 9,
 }
 
-class Bullying10kClassification(sjds.NeuromorphicDatasetFolder):
+class Bullying10kClassification(NeuromorphicDatasetFolder):
 
     def __init__(
-        self, 
-        root: str, 
+        self,
+        root: str,
         train: Optional[bool] = None,
         data_type: str = 'event',
         frames_number: Optional[int] = None,
@@ -45,7 +45,8 @@ class Bullying10kClassification(sjds.NeuromorphicDatasetFolder):
         is proposed by `Bullying10K: A Neuromorphic Dataset towards 
         Privacy-Preserving Bullying Recognition <https://arxiv.org/abs/2306.11546>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.NeuromorphicDatasetFolder>`
+        for more details about params information.
         """
         if train is None:
             raise ValueError(
@@ -56,7 +57,6 @@ class Bullying10kClassification(sjds.NeuromorphicDatasetFolder):
             custom_integrate_function, custom_integrated_frames_dir_name, 
             transform, target_transform
         )
-        
 
     @staticmethod
     def resource_url_md5() -> List[Tuple[str, str, str]]:
@@ -128,7 +128,7 @@ class Bullying10kClassification(sjds.NeuromorphicDatasetFolder):
         :param label: the label of the sample, ranging from 0 to 9
         :type label: int
         :return: None
-        
+
         This function defines how to convert a single npy file to npz format and save converted file in ``dst_dir``.
         """
         original_data = np.load(src_path, allow_pickle=True)

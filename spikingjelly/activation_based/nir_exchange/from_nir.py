@@ -181,7 +181,7 @@ def import_from_nir(
 
     .. _import_from_nir-cn:
 
-    * **中文 API**
+    * **中文**
 
     将 `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_ 图
     转换为 SpikingJelly 神经网络模型。函数会根据 NIR 节点类型自动映射为对应的 
@@ -211,7 +211,7 @@ def import_from_nir(
 
     .. _import_from_nir-en:
 
-    * **English API**
+    * **English**
 
     Convert a `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_
     graph to a SpikingJelly model. The function automatically maps NIR nodes to

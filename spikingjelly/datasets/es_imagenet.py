@@ -1,9 +1,9 @@
 from typing import Callable, Dict, Optional, Tuple
 import numpy as np
-from .. import datasets as sjds
 import os
-import rarfile
 import time
+from .utils import create_same_directory_structure
+from .base import NeuromorphicDatasetFolder
 
 
 def load_events(fname: str):
@@ -23,7 +23,7 @@ def load_events(fname: str):
     }
 
 
-class ESImageNet(sjds.NeuromorphicDatasetFolder):
+class ESImageNet(NeuromorphicDatasetFolder):
     def __init__(
             self,
             root: str,
@@ -40,7 +40,7 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
         """
         The ES-ImageNet dataset, which is proposed by `ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks <https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full>`_.
 
-        Refer to :class:`spikingjelly.datasets.NeuromorphicDatasetFolder` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
         assert train is not None
         super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
@@ -158,6 +158,7 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
 
         This function defines how to extract download files.
         '''
+        import rarfile
         rar_file = os.path.join(download_root, 'ES-imagenet-0.18.part01.rar')
         print(f'Extract [{rar_file}] to [{extract_root}].')
         rar_file = rarfile.RarFile(rar_file)
@@ -181,7 +182,7 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
         train_dir = os.path.join(events_np_root, 'train')
         os.mkdir(train_dir)
         print(f'Mkdir [{train_dir}].')
-        sjds.create_same_directory_structure(os.path.join(extract_root, 'ES-imagenet-0.18/train'), train_dir)
+        create_same_directory_structure(os.path.join(extract_root, 'ES-imagenet-0.18/train'), train_dir)
         for class_dir in os.listdir(os.path.join(extract_root, 'ES-imagenet-0.18/train')):
             source_dir = os.path.join(extract_root, 'ES-imagenet-0.18/train', class_dir)
             target_dir = os.path.join(train_dir, class_dir)
@@ -199,7 +200,7 @@ class ESImageNet(sjds.NeuromorphicDatasetFolder):
         target_dir = os.path.join(events_np_root, 'test')
         os.mkdir(target_dir)
         print(f'Mkdir [{target_dir}].')
-        sjds.create_same_directory_structure(train_dir, target_dir)
+        create_same_directory_structure(train_dir, target_dir)
 
         for i in range(val_fname.__len__()):
             os.symlink(os.path.join(source_dir, val_fname[i]), os.path.join(target_dir, f'class{val_label[i]}/{val_fname[i]}'))

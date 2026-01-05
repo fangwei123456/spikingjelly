@@ -42,7 +42,7 @@ def load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str,
     return waveform, sample_rate, label, speaker_id, utterance_number
 
 
-class SPEECHCOMMANDS(Dataset):
+class SpeechCommands(Dataset):
     def __init__(self,
                  label_dict: Dict,
                  root: str,
@@ -203,3 +203,6 @@ class SPEECHCOMMANDS(Dataset):
 
     def __len__(self) -> int:
         return len(self._walker) + self.silence_cnt
+
+
+SPEECHCOMMANDS = SpeechCommands # for backward compatibility
