@@ -2,6 +2,9 @@ from collections import namedtuple
 import torch.fx as fx
 
 
+__all__ = ["FlexSNInfo", "extract_info"]
+
+
 FlexSNInfo = namedtuple(
     typename="FlexSNInfo",
     field_names=[

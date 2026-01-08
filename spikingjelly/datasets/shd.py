@@ -1,19 +1,33 @@
-from typing import Callable, Dict, Optional
-
-import h5py
-import numpy as np
-from torch.utils.data import Dataset
-from torchvision.datasets import utils
-from torchvision.datasets.utils import extract_archive
+from typing import Callable, Optional, Tuple
 import os
+from pathlib import Path
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 import math
-from .. import configure
-from .utils import np_savez
 
-def cal_fixed_frames_number_segment_index_shd(events_t: np.ndarray, split_by: str, frames_num: int) -> tuple:
+import h5py
+import numpy as np
+from torchvision.datasets.utils import extract_archive
+
+from .. import configure
+from . import utils
+from .base import NeuromorphicDatasetFolder
+from .base import NeuromorphicDatasetBuilder
+from .base import NeuromorphicDatasetConfig
+
+
+__all__ = [
+    "SHD_N_CLASSES", "SpikingHeidelbergDigits",
+    "SSC_N_CLASSES", "SpikingSpeechCommands",
+]
+
+SHD_N_CLASSES = 20
+SSC_N_CLASSES = 35
+
+def _cal_fixed_frames_number_segment_index(
+    events_t: np.ndarray, split_by: str, frames_num: int
+) -> tuple:
     j_l = np.zeros(shape=[frames_num], dtype=int)
     j_r = np.zeros(shape=[frames_num], dtype=int)
     N = events_t.size
@@ -26,7 +40,7 @@ def cal_fixed_frames_number_segment_index_shd(events_t: np.ndarray, split_by: st
         j_r[-1] = N
 
     elif split_by == 'time':
-        dt = (events_t[-1] - events_t[0]) / frames_num
+        dt = (events_t[-1] - events_t[0]) / frames_num # different from utils.cal_fixed_frames_number_segment_index
         idx = np.arange(N)
         for i in range(frames_num):
             t_l = dt * i + events_t[0]
@@ -43,9 +57,9 @@ def cal_fixed_frames_number_segment_index_shd(events_t: np.ndarray, split_by: st
     return j_l, j_r
 
 
-
-def integrate_events_segment_to_frame_shd(x: np.ndarray, W: int, j_l: int = 0, j_r: int = -1) -> np.ndarray:
-
+def _integrate_events_segment_to_frame(
+    x: np.ndarray, W: int, j_l: int = 0, j_r: int = -1
+) -> np.ndarray:
     frame = np.zeros(shape=[W])
     x = x[j_l: j_r].astype(int)  # avoid overflow
 
@@ -54,28 +68,36 @@ def integrate_events_segment_to_frame_shd(x: np.ndarray, W: int, j_l: int = 0, j
     frame[np.arange(events_number_per_pos.size)] += events_number_per_pos
     return frame
 
-def integrate_events_by_fixed_frames_number_shd(events: Dict, split_by: str, frames_num: int, W: int) -> np.ndarray:
+
+def _integrate_events_by_fixed_frames_number(
+    events: dict, split_by: str, frames_num: int, W: int
+) -> np.ndarray:
     t, x = (events[key] for key in ('t', 'x'))
-    j_l, j_r = cal_fixed_frames_number_segment_index_shd(t, split_by, frames_num)
+    j_l, j_r = _cal_fixed_frames_number_segment_index(t, split_by, frames_num)
     frames = np.zeros([frames_num, W])
     for i in range(frames_num):
-        frames[i] = integrate_events_segment_to_frame_shd(x, W, j_l[i], j_r[i])
+        frames[i] = _integrate_events_segment_to_frame(x, W, j_l[i], j_r[i])
     return frames
 
-def integrate_events_file_to_frames_file_by_fixed_frames_number_shd(h5_file: h5py.File, i: int, output_dir: str, split_by: str, frames_num: int, W: int, print_save: bool = False) -> None:
+
+def _integrate_events_file_to_frames_file_by_fixed_frames_number(
+    h5_file: h5py.File, i: int, output_dir: str, split_by: str, frames_num: int,
+    W: int, print_save: bool = False
+) -> None:
     events = {'t': h5_file['spikes']['times'][i], 'x': h5_file['spikes']['units'][i]}
     label = h5_file['labels'][i]
     fname = os.path.join(output_dir, str(label), str(i))
-    np_savez(fname, frames=integrate_events_by_fixed_frames_number_shd(events, split_by, frames_num, W))
+    utils.np_savez(fname, frames=_integrate_events_by_fixed_frames_number(events, split_by, frames_num, W))
     if print_save:
         print(f'Frames [{fname}] saved.')
 
-def integrate_events_by_fixed_duration_shd(events: Dict, duration: int, W: int) -> np.ndarray:
 
+def _integrate_events_by_fixed_duration(
+    events: dict, duration: int, W: int
+) -> np.ndarray:
     x = events['x']
     t = 1000*events['t']
     t = t - t[0]
-    
     N = t.size
 
     frames_num = int(math.ceil(t[-1] / duration))
@@ -85,823 +107,527 @@ def integrate_events_by_fixed_duration_shd(events: Dict, duration: int, W: int) 
 
     for i in range(frames_num - 1):
         right = np.searchsorted(frame_index, i + 1, side='left')
-        frames[i] = integrate_events_segment_to_frame_shd(x, W, left, right)
+        frames[i] = _integrate_events_segment_to_frame(x, W, left, right)
         left = right
 
-    frames[-1] = integrate_events_segment_to_frame_shd(x, W, left, N)
+    frames[-1] = _integrate_events_segment_to_frame(x, W, left, N)
     return frames
 
-def integrate_events_file_to_frames_file_by_fixed_duration_shd(h5_file: h5py.File, i: int, output_dir: str, duration: int, W: int, print_save: bool = False) -> None:
+
+def _integrate_events_file_to_frames_file_by_fixed_duration(
+    h5_file: h5py.File, i: int, output_dir: str, duration: int, W: int, 
+    print_save: bool = False
+) -> None:
     events = {'t': h5_file['spikes']['times'][i], 'x': h5_file['spikes']['units'][i]}
     label = h5_file['labels'][i]
     fname = os.path.join(output_dir, str(label), str(i))
 
-    frames = integrate_events_by_fixed_duration_shd(events, duration, W)
+    frames = _integrate_events_by_fixed_duration(events, duration, W)
 
-    np_savez(fname, frames=frames)
+    utils.np_savez(fname, frames=frames)
     if print_save:
         print(f'Frames [{fname}] saved.')
     return frames.shape[0]
 
-def custom_integrate_function_example(h5_file: h5py.File, i: int, output_dir: str, W: int):
-    events = {'t': h5_file['spikes']['times'][i], 'x': h5_file['spikes']['units'][i]}
-    label = h5_file['labels'][i]
-    frames = np.zeros([2, W])
-    index_split = np.random.randint(low=0, high=events['t'].__len__())
-    frames[0] = integrate_events_segment_to_frame_shd(events['x'], W, 0, index_split)
-    frames[1] = integrate_events_segment_to_frame_shd(events['x'], W, index_split, events['t'].__len__())
-    fname = os.path.join(output_dir, str(label), str(i))
-    np_savez(fname, frames=frames)
+
+class NullBuilder(NeuromorphicDatasetBuilder):
+
+    def build_impl(self) -> None:
+        pass
+
+    def build(self) -> Tuple[Path, Callable]:
+        return self.processed_root, self.get_loader()
+
+    @property
+    def processed_root(self) -> Path:
+        return self.raw_root
+
+    def get_loader(self) -> Callable:
+        return lambda x: x
 
 
+class SHDFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
 
-
-class SpikingHeidelbergDigits(Dataset):
     def __init__(
-            self,
-            root: str,
-            train: bool = None,
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-    ) -> None:
+        self, cfg: NeuromorphicDatasetConfig, raw_root: Path, W: int,
+        dataset_name: str = "shd", splits: Tuple[str] = ('train', 'test'),
+        n_classes: int = SHD_N_CLASSES
+    ):
+        super().__init__(cfg, raw_root)
+        self.W = W
+        self.dataset_name = dataset_name
+        self.splits = splits
+        self.n_classes = n_classes
+
+    def build_impl(self):
+        for split in self.splits:
+            processed_root = self.processed_root / split
+            processed_root.mkdir()
+            print(f'Mkdir [{processed_root}]')
+            for i in range(self.n_classes):
+                processed_class_root = processed_root / str(i)
+                processed_class_root.mkdir()
+                print(f'Mkdir [{processed_class_root}]')
+
+            t_ckp = time.time()
+            with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                futures = []
+                print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+
+                h5_file = h5py.File(self.raw_root / f'{self.dataset_name}_{split}.h5')
+                for i in range(len(h5_file['labels'])):
+                    print(
+                        f'Start to integrate [{i}]-th {split} sample to frames and '
+                        f'save to [{processed_root}].'
+                    )
+                    futures.append(tpe.submit(
+                        _integrate_events_file_to_frames_file_by_fixed_frames_number,
+                        h5_file, i, processed_root, self.cfg.split_by,
+                        self.cfg.frames_number, self.W, True
+                    ))
+
+                for future in futures:
+                    future.result()
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+    @property
+    def processed_root(self) -> Path:
+        return self.cfg.root / f'frames_number_{self.cfg.frames_number}_split_by_{self.cfg.split_by}'
+
+    def get_loader(self):
+        return utils.load_npz_frames
+
+
+class SHDFrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
+
+    def __init__(
+        self, cfg: NeuromorphicDatasetConfig, raw_root: Path, W: int,
+        dataset_name: str = "shd", splits: Tuple[str] = ('train', 'test'),
+        n_classes: int = SHD_N_CLASSES
+    ):
+        super().__init__(cfg, raw_root)
+        self.W = W
+        self.dataset_name = dataset_name
+        self.splits = splits
+        self.n_classes = n_classes
+
+    def build_impl(self):
+        for split in self.splits:
+            processed_root = self.processed_root / split
+            processed_root.mkdir()
+            print(f'Mkdir [{processed_root}]')
+            for i in range(self.n_classes):
+                processed_class_root = processed_root / str(i)
+                processed_class_root.mkdir()
+                print(f'Mkdir [{processed_class_root}]')
+
+            t_ckp = time.time()
+            with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                futures = []
+                print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+
+                h5_file = h5py.File(self.raw_root / f'{self.dataset_name}_{split}.h5')
+                for i in range(len(h5_file['labels'])):
+                    print(
+                        f'Start to integrate [{i}]-th {split} sample to frames and '
+                        f'save to [{processed_root}].'
+                    )
+                    futures.append(tpe.submit(
+                        _integrate_events_file_to_frames_file_by_fixed_duration,
+                        h5_file, i, processed_root, self.cfg.duration,
+                        self.W, True
+                    ))
+
+                for future in futures:
+                    future.result()
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+    @property
+    def processed_root(self) -> Path:
+        return self.cfg.root / f'duration_{self.cfg.duration}'
+
+    def get_loader(self):
+        return utils.load_npz_frames
+
+
+class SHDFrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
+
+    def __init__(
+        self, cfg: NeuromorphicDatasetConfig, raw_root: Path, W: int,
+        dataset_name: str = "shd", splits: Tuple[str] = ('train', 'test'),
+        n_classes: int = SHD_N_CLASSES
+    ):
+        super().__init__(cfg, raw_root)
+        self.W = W
+        self.dataset_name = dataset_name
+        self.splits = splits
+        self.n_classes = n_classes
+
+    def build_impl(self):
+        for split in self.splits:
+            processed_root = self.processed_root / split
+            processed_root.mkdir()
+            print(f'Mkdir [{processed_root}]')
+            for i in range(self.n_classes):
+                processed_class_root = processed_root / str(i)
+                processed_class_root.mkdir()
+                print(f'Mkdir [{processed_class_root}]')
+
+            t_ckp = time.time()
+            with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+                futures = []
+                print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+
+                h5_file = h5py.File(self.raw_root / f'{self.dataset_name}_{split}.h5')
+                for i in range(len(h5_file['labels'])):
+                    print(
+                        f'Start to integrate [{i}]-th {split} sample to frames and '
+                        f'save to [{processed_root}].'
+                    )
+                    futures.append(tpe.submit(
+                        self.cfg.custom_integrate_function, h5_file, i,
+                        processed_root, self.W
+                    ))
+
+                for future in futures:
+                    future.result()
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+    @property
+    def processed_root(self) -> Path:
+        name = self.cfg.custom_integrated_frames_dir_name
+        if name is None:
+            name = self.cfg.custom_integrate_function.__name__
+        return self.cfg.root / name
+
+    def get_loader(self):
+        return utils.load_npz_frames
+
+
+class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
+
+    def __init__(
+        self,
+        root: str,
+        train: bool = True,
+        data_type: str = 'event',
+        frames_number: Optional[int] = None,
+        split_by: Optional[str] = None,
+        duration: Optional[int] = None,
+        custom_integrate_function: Optional[Callable] = None,
+        custom_integrated_frames_dir_name: Optional[str] = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
         """
-        The Spiking Heidelberg Digits (SHD) dataset, which is proposed by `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_.
+        * **English**
+
+        The Spiking Heidelberg Digits (SHD) dataset, which is proposed by
+        `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
 
-        .. admonition:: Note
-            :class: note
+        .. note::
 
-            Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``. Thus, this dataset is not inherited from :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` directly. But their procedures are similar.
+            Unlike other datasets in SpikingJelly, SHD is a neuromorphic audio dataset.
 
-        :class:`spikingjelly.datasets.shd.custom_integrate_function_example` is an example of ``custom_integrate_function``, which is similar to the cunstom function for DVS Gesture in the ``Neuromorphic Datasets Processing`` tutorial.
+            #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
+            #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of two ``.h5`` files instead of a series of ``.npz`` files.
+            #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
         """
-        super().__init__()
-        self.root = root
-        self.train = train
-        self.data_type = data_type
-        self.frames_number = frames_number
-        self.split_by = split_by
-        self.duration = duration
-        self.custom_integrate_function = custom_integrate_function
-        self.custom_integrated_frames_dir_name = custom_integrated_frames_dir_name
-        self.transform = transform
-        self.target_transform = target_transform
+        if train is None:
+            raise ValueError("`train` must be `True` or `False`")
 
-        download_root = os.path.join(root, 'download')
-        extract_root = os.path.join(root, 'extract')
+        self.cfg = NeuromorphicDatasetConfig(
+            root=Path(root),
+            train=train,
+            data_type=data_type,
+            frames_number=frames_number,
+            split_by=split_by,
+            duration=duration,
+            custom_integrate_function=custom_integrate_function,
+            custom_integrated_frames_dir_name=custom_integrated_frames_dir_name,
+            transform=transform,
+            target_transform=target_transform
+        )
 
-        if not os.path.exists(extract_root):
+        self.prepare_raw_dataset()
+        builder = self.get_dataset_builder()
+        self.processed_root, loader = builder.build()
 
-            if os.path.exists(download_root):
-                print(f'The [{download_root}] directory for saving downloaded files already exists, check files...')
-                # check files
-                resource_list = self.resource_url_md5()
-                for i in range(resource_list.__len__()):
-                    file_name, url, md5 = resource_list[i]
-                    fpath = os.path.join(download_root, file_name)
-                    if not utils.check_integrity(fpath=fpath, md5=md5):
-                        print(f'The file [{fpath}] does not exist or is corrupted.')
+        split_root = self.processed_root / ('train' if self.cfg.train else 'test')
 
-                        if os.path.exists(fpath):
-                            # If file is corrupted, we will remove it.
-                            os.remove(fpath)
-                            print(f'Remove [{fpath}]')
+        if data_type == 'event': # init as Dataset
+            self.transform = transform
+            self.target_transform = target_transform
+        else: # init as DatasetFolder
+            super(NeuromorphicDatasetFolder, self).__init__(
+                root=split_root,
+                loader=loader,
+                extensions=self.get_extensions(),
+                transform=self.cfg.transform,
+                target_transform=self.cfg.target_transform
+            )
 
-                        if self.downloadable():
-                            # If file does not exist, we will download it.
-                            print(f'Download [{file_name}] from [{url}] to [{download_root}]')
-                            utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
-                        else:
-                            raise NotImplementedError(
-                                f'This dataset can not be downloaded by SpikingJelly, please download [{file_name}] from [{url}] manually and put files at {download_root}.')
+    @property
+    def raw_root(self) -> Path:
+        """
+        ``root / "events_h5"``
+        """
+        return self.cfg.root / "events_h5"
 
-            else:
-                os.mkdir(download_root)
-                print(f'Mkdir [{download_root}] to save downloaded files.')
-                resource_list = self.resource_url_md5()
-                if self.downloadable():
-                    # download and extract file
-                    for i in range(resource_list.__len__()):
-                        file_name, url, md5 = resource_list[i]
-                        print(f'Download [{file_name}] from [{url}] to [{download_root}]')
-                        utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
-                else:
-                    raise NotImplementedError(f'This dataset can not be downloaded by SpikingJelly, '
-                                              f'please download files manually and put files at [{download_root}]. '
-                                              f'The resources file_name, url, and md5 are: \n{resource_list}')
+    def get_dataset_builder(self):
+        if self.cfg.data_type == 'event':
+            # prepare for manual __getitem__
+            h5_file = self.raw_root / (
+                "shd_train.h5" if self.cfg.train else "shd_test.h5"
+            )
+            self.h5_file = h5py.File(h5_file)
+            self.length = len(self.h5_file['labels'])
+            return NullBuilder(self.cfg, self.raw_root)
 
-            os.mkdir(extract_root)
-            print(f'Mkdir [{extract_root}].')
-            self.extract_downloaded_files(download_root, extract_root)
-
+        _, W = self.get_H_W()
+        if self.cfg.frames_number is not None:
+            return SHDFrameFixedNumberBuilder(self.cfg, self.raw_root, W)
+        elif self.cfg.duration is not None:
+            return SHDFrameFixedDurationBuilder(self.cfg, self.raw_root, W)
+        elif self.cfg.custom_integrate_function is not None:
+            return SHDFrameCustomIntegrateBuilder(self.cfg, self.raw_root, W)
         else:
-            print(f'The directory [{extract_root}] for saving extracted files already exists.\n'
-                  f'SpikingJelly will not check the data integrity of extracted files.\n'
-                  f'If extracted files are not integrated, please delete [{extract_root}] manually, '
-                  f'then SpikingJelly will re-extract files from [{download_root}].')
-            # shutil.rmtree(extract_root)
-            # print(f'Delete [{extract_root}].')
+            # not reachable
+            raise NotImplementedError(
+                f'Please specify the frames number or duration or '
+                f'custom integrate function.'
+            )
 
-        if self.data_type == 'event':
-            if self.train:
-                self.h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
-            else:
-                self.h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
-            self.length = self.h5_file['labels'].__len__()
+    @classmethod
+    def get_H_W(cls) -> Tuple:
+        """
+        :return: ``(None, 700)`` (i.e., 700 channels)
+        """
+        return None, 700
 
-            return
-
-        elif self.data_type == 'frame':
-
-            if frames_number is not None:
-                assert frames_number > 0 and isinstance(frames_number, int)
-                assert split_by == 'time' or split_by == 'number'
-                frames_np_root = os.path.join(root, f'frames_number_{frames_number}_split_by_{split_by}')
-                if os.path.exists(frames_np_root):
-                    print(f'The directory [{frames_np_root}] already exists.')
-                else:
-                    os.mkdir(frames_np_root)
-                    print(f'Mkdir [{frames_np_root}].')
-
-                    frames_np_train_root = os.path.join(frames_np_root, 'train')
-                    os.mkdir(frames_np_train_root)
-                    print(f'Mkdir [{frames_np_train_root}].')
-
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_train_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_train_root, str(i))}].')
-
-                    frames_np_test_root = os.path.join(frames_np_root, 'test')
-                    os.mkdir(frames_np_test_root)
-                    print(f'Mkdir [{frames_np_test_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_test_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_test_root, str(i))}].')
-
-
-
-
-
-
-                    # use multi-thread to accelerate
-                    t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
-                        sub_threads = []
-
-                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-                        h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_train_root, self.split_by, frames_number, self.get_W(), True))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True))
-
-
-
-                        for sub_thread in sub_threads:
-                            if sub_thread.exception():
-                                print(sub_thread.exception())
-                                exit(-1)
-
-
-
-                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-
-                self.frames_np_root = frames_np_root
-            elif duration is not None:
-                assert duration > 0 and isinstance(duration, int)
-                frames_np_root = os.path.join(root, f'duration_{duration}')
-                if os.path.exists(frames_np_root):
-                    print(f'The directory [{frames_np_root}] already exists.')
-                else:
-                    os.mkdir(frames_np_root)
-                    print(f'Mkdir [{frames_np_root}].')
-
-                    frames_np_train_root = os.path.join(frames_np_root, 'train')
-                    os.mkdir(frames_np_train_root)
-                    print(f'Mkdir [{frames_np_train_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_train_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_train_root, str(i))}].')
-
-                    frames_np_test_root = os.path.join(frames_np_root, 'test')
-                    os.mkdir(frames_np_test_root)
-                    print(f'Mkdir [{frames_np_test_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_test_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_test_root, str(i))}].')
-
-
-                    # use multi-thread to accelerate
-                    t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
-                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-                        sub_threads = []
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_train_root, self.duration, self.get_W(), True))
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_test_root, self.duration, self.get_W(), True))
-
-                        for sub_thread in sub_threads:
-                            if sub_thread.exception():
-                                print(sub_thread.exception())
-                                exit(-1)
-
-                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-                self.frames_np_root = frames_np_root
-            elif custom_integrate_function is not None:
-                if custom_integrated_frames_dir_name is None:
-                    custom_integrated_frames_dir_name = custom_integrate_function.__name__
-
-                frames_np_root = os.path.join(root, custom_integrated_frames_dir_name)
-                if os.path.exists(frames_np_root):
-                    print(f'The directory [{frames_np_root}] already exists.')
-                else:
-                    os.mkdir(frames_np_root)
-                    print(f'Mkdir [{frames_np_root}].')
-
-                    frames_np_train_root = os.path.join(frames_np_root, 'train')
-                    os.mkdir(frames_np_train_root)
-                    print(f'Mkdir [{frames_np_train_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_train_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_train_root, str(i))}].')
-
-                    frames_np_test_root = os.path.join(frames_np_root, 'test')
-                    os.mkdir(frames_np_test_root)
-                    print(f'Mkdir [{frames_np_test_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_test_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_test_root, str(i))}].')
-
-                    # use multi-thread to accelerate
-                    t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
-                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-                        sub_threads = []
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'shd_train.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_train_root, self.get_W()))
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'shd_test.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_test_root, self.get_W()))
-
-                        for sub_thread in sub_threads:
-                            if sub_thread.exception():
-                                print(sub_thread.exception())
-                                exit(-1)
-
-
-                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-
-                self.frames_np_root = frames_np_root
-            else:
-                raise ValueError('At least one of "frames_number", "duration" and "custom_integrate_function" should not be None.')
-
-            self.frames_path = []
-            self.frames_label = []
-            if self.train:
-                sub_dir = 'train'
-            else:
-                sub_dir = 'test'
-
-            for i in range(self.classes_number()):
-                for fname in os.listdir(os.path.join(self.frames_np_root, sub_dir, str(i))):
-                    self.frames_path.append(
-                        os.path.join(self.frames_np_root, sub_dir, str(i), fname)
-                    )
-                    self.frames_label.append(i)
-
-            self.length = self.frames_label.__len__()
-
-        else:
-                raise NotImplementedError(self.data_type)
-
-
-    def classes_number(self):
-        return 20
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, i: int):
-        if self.data_type == 'event':
-            events = {'t': self.h5_file['spikes']['times'][i], 'x': self.h5_file['spikes']['units'][i]}
-            label = self.h5_file['labels'][i]
-            if self.transform is not None:
-                events = self.transform(events)
-            if self.target_transform is not None:
-                label = self.target_transform(label)
-
-            return events, label
-
-        elif self.data_type == 'frame':
-            frames = np.load(self.frames_path[i], allow_pickle=True)['frames'].astype(np.float32)
-            label = self.frames_label[i]
-
-            if self.transform is not None:
-                frames = self.transform(frames)
-            if self.target_transform is not None:
-                label = self.target_transform(label)
-
-            return frames, label
-
-
-
-
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
+    @classmethod
+    def resource_url_md5(cls) -> list:
         return [
             ('shd_train.h5.zip', 'https://zenkelab.org/datasets/shd_train.h5.zip', 'f3252aeb598ac776c1b526422d90eecb'),
             ('shd_test.h5.zip', 'https://zenkelab.org/datasets/shd_test.h5.zip', '1503a5064faa34311c398fb0a1ed0a6f'),
         ]
 
-    @staticmethod
-    def downloadable() -> bool:
-        '''
-        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
-        :rtype: bool
-        '''
+    @classmethod
+    def downloadable(cls) -> bool:
+        """
+        :return: ``True``
+        """
         return True
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
-
-        This function defines how to extract download files.
-        '''
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
-            sub_threads = []
-            for zip_file in os.listdir(download_root):
-                zip_file = os.path.join(download_root, zip_file)
+            futures = []
+            for zip_file in download_root.iterdir():
                 print(f'Extract [{zip_file}] to [{extract_root}].')
-                sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+                futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
+            for future in futures:
+                future.result()
 
-    @staticmethod
-    def get_W():
-        return 700
+    @classmethod
+    def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
+        for f in extract_root.iterdir():
+            target = raw_root / f.name
+            if target.exists():
+                continue
+            target.symlink_to(f)
+
+    def __len__(self):
+        if self.cfg.data_type == "event":
+            return self.length
+        return super().__len__()
+
+    def __getitem__(self, index):
+        if self.cfg.data_type != "event":
+            return super().__getitem__(index)
+
+        events = {
+            't': self.h5_file['spikes']['times'][index],
+            'x': self.h5_file['spikes']['units'][index]
+        }
+        label = self.h5_file['labels'][index]
+        if self.transform is not None:
+            events = self.transform(events)
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+        return events, label
 
 
+class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
-
-class SpikingSpeechCommands(Dataset):
     def __init__(
-            self,
-            root: str,
-            split: str = 'train',
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-    ) -> None:
+        self,
+        root: str,
+        split: str = "train", # 'train' | 'valid' | 'test'
+        data_type: str = 'event',
+        frames_number: Optional[int] = None,
+        split_by: Optional[str] = None,
+        duration: Optional[int] = None,
+        custom_integrate_function: Optional[Callable] = None,
+        custom_integrated_frames_dir_name: Optional[str] = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
         """
-        The Spiking Speech Commands (SSC) dataset, which is proposed by `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_.
+        * **English**
+
+        The Spiking Speech Commands (SSC) dataset, which is proposed by
+        `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
 
-        .. admonition:: Note
-            :class: note
+        .. note::
 
-            Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``. Thus, this dataset is not inherited from :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` directly. But their procedures are similar.
+            Unlike other datasets in SpikingJelly, SSC is a neuromorphic audio dataset.
 
-        :class:`spikingjelly.datasets.shd.custom_integrate_function_example` is an example of ``custom_integrate_function``, which is similar to the cunstom function for DVS Gesture in the ``Neuromorphic Datasets Processing`` tutorial.
+            #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
+            #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of three ``.h5`` files instead of a series of ``.npz`` files.
+            #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
         """
-        super().__init__()
-        self.root = root
+        self.splits = ("train", "valid", "test")
+        if split not in self.splits:
+            raise ValueError(f'Invalid split: {split}; valid splits are {self.splits}')
         self.split = split
-        self.data_type = data_type
-        self.frames_number = frames_number
-        self.split_by = split_by
-        self.duration = duration
-        self.custom_integrate_function = custom_integrate_function
-        self.custom_integrated_frames_dir_name = custom_integrated_frames_dir_name
-        self.transform = transform
-        self.target_transform = target_transform
 
-        download_root = os.path.join(root, 'download')
-        extract_root = os.path.join(root, 'extract')
+        self.cfg = NeuromorphicDatasetConfig(
+            root=Path(root),
+            train=None,
+            data_type=data_type,
+            frames_number=frames_number,
+            split_by=split_by,
+            duration=duration,
+            custom_integrate_function=custom_integrate_function,
+            custom_integrated_frames_dir_name=custom_integrated_frames_dir_name,
+            transform=transform,
+            target_transform=target_transform
+        )
 
-        if not os.path.exists(extract_root):
+        self.prepare_raw_dataset()
+        builder = self.get_dataset_builder()
+        self.processed_root, loader = builder.build()
 
-            if os.path.exists(download_root):
-                print(f'The [{download_root}] directory for saving downloaded files already exists, check files...')
-                # check files
-                resource_list = self.resource_url_md5()
-                for i in range(resource_list.__len__()):
-                    file_name, url, md5 = resource_list[i]
-                    fpath = os.path.join(download_root, file_name)
-                    if not utils.check_integrity(fpath=fpath, md5=md5):
-                        print(f'The file [{fpath}] does not exist or is corrupted.')
+        split_root = self.get_root_when_train_is_none(self.processed_root)
 
-                        if os.path.exists(fpath):
-                            # If file is corrupted, we will remove it.
-                            os.remove(fpath)
-                            print(f'Remove [{fpath}]')
+        if data_type == 'event': # init as Dataset
+            self.transform = transform
+            self.target_transform = target_transform
+        else: # init as DatasetFolder
+            super(NeuromorphicDatasetFolder, self).__init__(
+                root=split_root,
+                loader=loader,
+                extensions=self.get_extensions(),
+                transform=self.cfg.transform,
+                target_transform=self.cfg.target_transform
+            )
 
-                        if self.downloadable():
-                            # If file does not exist, we will download it.
-                            print(f'Download [{file_name}] from [{url}] to [{download_root}]')
-                            utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
-                        else:
-                            raise NotImplementedError(
-                                f'This dataset can not be downloaded by SpikingJelly, please download [{file_name}] from [{url}] manually and put files at {download_root}.')
+    def get_root_when_train_is_none(self, _root: Path):
+        return _root / self.split
 
-            else:
-                os.mkdir(download_root)
-                print(f'Mkdir [{download_root}] to save downloaded files.')
-                resource_list = self.resource_url_md5()
-                if self.downloadable():
-                    # download and extract file
-                    for i in range(resource_list.__len__()):
-                        file_name, url, md5 = resource_list[i]
-                        print(f'Download [{file_name}] from [{url}] to [{download_root}]')
-                        utils.download_url(url=url, root=download_root, filename=file_name, md5=md5)
-                else:
-                    raise NotImplementedError(f'This dataset can not be downloaded by SpikingJelly, '
-                                              f'please download files manually and put files at [{download_root}]. '
-                                              f'The resources file_name, url, and md5 are: \n{resource_list}')
+    @property
+    def raw_root(self) -> Path:
+        """
+        ``root / "events_h5"``
+        """
+        return self.cfg.root / "events_h5"
 
-            os.mkdir(extract_root)
-            print(f'Mkdir [{extract_root}].')
-            self.extract_downloaded_files(download_root, extract_root)
+    def get_dataset_builder(self):
+        if self.cfg.data_type == 'event':
+            # prepare for manual __getitem__
+            h5_file = self.raw_root / f"ssc_{self.split}.h5"
+            self.h5_file = h5py.File(h5_file)
+            self.length = len(self.h5_file['labels'])
+            return NullBuilder(self.cfg, self.raw_root)
 
+        _, W = self.get_H_W()
+        if self.cfg.frames_number is not None:
+            return SHDFrameFixedNumberBuilder(
+                self.cfg, self.raw_root, W, dataset_name="ssc",
+                splits=self.splits, n_classes=SSC_N_CLASSES
+            )
+        elif self.cfg.duration is not None:
+            return SHDFrameFixedDurationBuilder(
+                self.cfg, self.raw_root, W, dataset_name="ssc",
+                splits=self.splits, n_classes=SSC_N_CLASSES
+            )
+        elif self.cfg.custom_integrate_function is not None:
+            return SHDFrameCustomIntegrateBuilder(
+                self.cfg, self.raw_root, W, dataset_name="ssc",
+                splits=self.splits, n_classes=SSC_N_CLASSES
+            )
         else:
-            print(f'The directory [{extract_root}] for saving extracted files already exists.\n'
-                  f'SpikingJelly will not check the data integrity of extracted files.\n'
-                  f'If extracted files are not integrated, please delete [{extract_root}] manually, '
-                  f'then SpikingJelly will re-extract files from [{download_root}].')
-            # shutil.rmtree(extract_root)
-            # print(f'Delete [{extract_root}].')
+            # not reachable
+            raise NotImplementedError(
+                f'Please specify the frames number or duration or '
+                f'custom integrate function.'
+            )
 
-        if self.data_type == 'event':
-            if self.split == 'train':
-                self.h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
-            elif self.split == 'valid':
-                self.h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
-            else:
-                self.h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
-            self.length = self.h5_file['labels'].__len__()
+    @classmethod
+    def get_H_W(cls) -> Tuple:
+        """
+        :return: ``(None, 700)`` (i.e., 700 channels)
+        """
+        return None, 700
 
-            return
-
-        elif self.data_type == 'frame':
-
-            if frames_number is not None:
-                assert frames_number > 0 and isinstance(frames_number, int)
-                assert split_by == 'time' or split_by == 'number'
-                frames_np_root = os.path.join(root, f'frames_number_{frames_number}_split_by_{split_by}')
-                if os.path.exists(frames_np_root):
-                    print(f'The directory [{frames_np_root}] already exists.')
-                else:
-                    os.mkdir(frames_np_root)
-                    print(f'Mkdir [{frames_np_root}].')
-
-                    frames_np_train_root = os.path.join(frames_np_root, 'train')
-                    os.mkdir(frames_np_train_root)
-                    print(f'Mkdir [{frames_np_train_root}].')
-
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_train_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_train_root, str(i))}].')
-
-                    frames_np_valid_root = os.path.join(frames_np_root, 'valid')
-                    os.mkdir(frames_np_valid_root)
-                    print(f'Mkdir [{frames_np_valid_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_valid_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_valid_root, str(i))}].')
-
-                    frames_np_test_root = os.path.join(frames_np_root, 'test')
-                    os.mkdir(frames_np_test_root)
-                    print(f'Mkdir [{frames_np_test_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_test_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_test_root, str(i))}].')
-
-
-
-                    # use multi-thread to accelerate
-                    t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
-                        sub_threads = []
-                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file,
-                                       i, frames_np_train_root, self.split_by, frames_number, self.get_W(), True))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_valid_root, self.split_by, frames_number, self.get_W(), True))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_frames_number_shd, h5_file, i,
-                                       frames_np_test_root, self.split_by, frames_number, self.get_W(), True))
-
-
-                        for sub_thread in sub_threads:
-                            if sub_thread.exception():
-                                print(sub_thread.exception())
-                                exit(-1)
-
-
-
-
-                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-
-                self.frames_np_root = frames_np_root
-            elif duration is not None:
-                assert duration > 0 and isinstance(duration, int)
-                frames_np_root = os.path.join(root, f'duration_{duration}')
-                if os.path.exists(frames_np_root):
-                    print(f'The directory [{frames_np_root}] already exists.')
-                else:
-                    os.mkdir(frames_np_root)
-                    print(f'Mkdir [{frames_np_root}].')
-
-                    frames_np_train_root = os.path.join(frames_np_root, 'train')
-                    os.mkdir(frames_np_train_root)
-                    print(f'Mkdir [{frames_np_train_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_train_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_train_root, str(i))}].')
-
-                    frames_np_valid_root = os.path.join(frames_np_root, 'valid')
-                    os.mkdir(frames_np_valid_root)
-                    print(f'Mkdir [{frames_np_valid_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_valid_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_valid_root, str(i))}].')
-
-                    frames_np_test_root = os.path.join(frames_np_root, 'test')
-                    os.mkdir(frames_np_test_root)
-                    print(f'Mkdir [{frames_np_test_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_test_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_test_root, str(i))}].')
-
-
-                    # use multi-thread to accelerate
-                    t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
-                        sub_threads = []
-                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_train_root, self.duration, self.get_W(), True))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_valid_root, self.duration, self.get_W(), True))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            sub_threads.append(tpe.submit(integrate_events_file_to_frames_file_by_fixed_duration_shd, h5_file, i,
-                                       frames_np_test_root, self.duration, self.get_W(), True))
-
-
-                        for sub_thread in sub_threads:
-                            if sub_thread.exception():
-                                print(sub_thread.exception())
-                                exit(-1)
-
-                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-                self.frames_np_root = frames_np_root
-            elif custom_integrate_function is not None:
-                if custom_integrated_frames_dir_name is None:
-                    custom_integrated_frames_dir_name = custom_integrate_function.__name__
-
-                frames_np_root = os.path.join(root, custom_integrated_frames_dir_name)
-                if os.path.exists(frames_np_root):
-                    print(f'The directory [{frames_np_root}] already exists.')
-                else:
-                    os.mkdir(frames_np_root)
-                    print(f'Mkdir [{frames_np_root}].')
-
-                    frames_np_train_root = os.path.join(frames_np_root, 'train')
-                    os.mkdir(frames_np_train_root)
-                    print(f'Mkdir [{frames_np_train_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_train_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_train_root, str(i))}].')
-
-                    frames_np_valid_root = os.path.join(frames_np_root, 'valid')
-                    os.mkdir(frames_np_valid_root)
-                    print(f'Mkdir [{frames_np_valid_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_valid_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_valid_root, str(i))}].')
-
-                    frames_np_test_root = os.path.join(frames_np_root, 'test')
-                    os.mkdir(frames_np_test_root)
-                    print(f'Mkdir [{frames_np_test_root}].')
-                    for i in range(self.classes_number()):
-                        os.mkdir(os.path.join(frames_np_test_root, str(i)))
-                        print(f'Mkdir [{os.path.join(frames_np_test_root, str(i))}].')
-
-                    # use multi-thread to accelerate
-                    t_ckp = time.time()
-                    with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
-                        print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-                        sub_threads = []
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_train.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th train sample to frames and save to [{frames_np_train_root}].')
-                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_train_root, self.get_W()))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_valid.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th valid sample to frames and save to [{frames_np_valid_root}].')
-                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_valid_root, self.get_W()))
-
-
-                        h5_file = h5py.File(os.path.join(extract_root, 'ssc_test.h5'))
-                        for i in range(h5_file['labels'].__len__()):
-                            print(
-                                f'Start to integrate [{i}]-th test sample to frames and save to [{frames_np_test_root}].')
-                            sub_threads.append(tpe.submit(custom_integrate_function, h5_file, i,
-                                       frames_np_test_root, self.get_W()))
-
-                        for sub_thread in sub_threads:
-                            if sub_thread.exception():
-                                print(sub_thread.exception())
-                                exit(-1)
-
-
-
-                    print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-
-                self.frames_np_root = frames_np_root
-            else:
-                raise ValueError('At least one of "frames_number", "duration" and "custom_integrate_function" should not be None.')
-
-            self.frames_path = []
-            self.frames_label = []
-            if self.split == 'train':
-                sub_dir = 'train'
-            elif self.split == 'valid':
-                sub_dir = 'valid'
-            else:
-                sub_dir = 'test'
-
-            for i in range(self.classes_number()):
-                for fname in os.listdir(os.path.join(self.frames_np_root, sub_dir, str(i))):
-                    self.frames_path.append(
-                        os.path.join(self.frames_np_root, sub_dir, str(i), fname)
-                    )
-                    self.frames_label.append(i)
-
-            self.length = self.frames_label.__len__()
-
-        else:
-                raise NotImplementedError(self.data_type)
-
-    def classes_number(self):
-        return 35
-    
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, i: int):
-        if self.data_type == 'event':
-            events = {'t': self.h5_file['spikes']['times'][i], 'x': self.h5_file['spikes']['units'][i]}
-            label = self.h5_file['labels'][i]
-            if self.transform is not None:
-                events = self.transform(events)
-            if self.target_transform is not None:
-                label = self.target_transform(label)
-
-            return events, label
-
-        elif self.data_type == 'frame':
-            frames = np.load(self.frames_path[i], allow_pickle=True)['frames'].astype(np.float32)
-            label = self.frames_label[i]
-
-            if self.transform is not None:
-                frames = self.transform(frames)
-            if self.target_transform is not None:
-                label = self.target_transform(label)
-
-            return frames, label
-
-
-
-
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
+    @classmethod
+    def resource_url_md5(cls) -> list:
         return [
-            ('ssc_train.h5.zip', 'https://zenkelab.org/datasets/ssc_train.h5.zip', 'd102be95e7144fcc0553d1f45ba94170'),
-            ('ssc_valid.h5.zip', 'https://zenkelab.org/datasets/ssc_valid.h5.zip', 'b4eee3516a4a90dd0c71a6ac23a8ae43'),
-            ('ssc_test.h5.zip', 'https://zenkelab.org/datasets/ssc_test.h5.zip', 'a35ff1e9cffdd02a20eb850c17c37748'),
+            ('shd_train.h5.zip', 'https://zenkelab.org/datasets/shd_train.h5.zip', 'f3252aeb598ac776c1b526422d90eecb'),
+            ('shd_test.h5.zip', 'https://zenkelab.org/datasets/shd_test.h5.zip', '1503a5064faa34311c398fb0a1ed0a6f'),
         ]
 
-    @staticmethod
-    def downloadable() -> bool:
-        '''
-        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
-        :rtype: bool
-        '''
+    @classmethod
+    def downloadable(cls) -> bool:
+        """
+        :return: ``True``
+        """
         return True
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
-
-        This function defines how to extract download files.
-        '''
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
-            sub_threads = []
-            for zip_file in os.listdir(download_root):
-                zip_file = os.path.join(download_root, zip_file)
+            futures = []
+            for zip_file in download_root.iterdir():
                 print(f'Extract [{zip_file}] to [{extract_root}].')
-                sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+                futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
+            for future in futures:
+                future.result()
 
-    @staticmethod
-    def get_W():
-        return 700
+    @classmethod
+    def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
+        for f in extract_root.iterdir():
+            target = raw_root / f.name
+            if target.exists():
+                continue
+            target.symlink_to(f)
+
+    def __len__(self):
+        if self.cfg.data_type == "event":
+            return self.length
+        return super().__len__()
+
+    def __getitem__(self, index):
+        if self.cfg.data_type != "event":
+            return super().__getitem__(index)
+
+        events = {
+            't': self.h5_file['spikes']['times'][index],
+            'x': self.h5_file['spikes']['units'][index]
+        }
+        label = self.h5_file['labels'][index]
+        if self.transform is not None:
+            events = self.transform(events)
+        if self.target_transform is not None:
+            label = self.target_transform(label)
+        return events, label

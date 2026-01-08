@@ -2,6 +2,10 @@ import torch.nn as nn
 import torch
 import numpy as np
 
+
+__all__ = ['VoltageHook', 'VoltageScaler']
+
+
 class VoltageHook(nn.Module):
     def __init__(self, scale=1.0, momentum=0.1, mode='Max'):
         """
@@ -85,6 +89,7 @@ class VoltageHook(nn.Module):
             self.scale = (1 - self.momentum) * self.scale + self.momentum * s_t
         self.num_batches_tracked += x.shape[0]
         return x
+
 
 class VoltageScaler(nn.Module):
     def __init__(self, scale=1.0):

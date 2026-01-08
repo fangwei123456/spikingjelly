@@ -1,12 +1,22 @@
-from typing import Callable, Dict, Optional, Tuple
-import numpy as np
 import os
+from pathlib import Path
 import time
-from .utils import create_same_directory_structure
+from typing import Callable, Optional, Tuple, Union
+from concurrent.futures import ThreadPoolExecutor
+
+import numpy as np
+
+from . import utils
 from .base import NeuromorphicDatasetFolder
+from .base import NeuromorphicDatasetBuilder
+from .base import NeuromorphicDatasetConfig
+from .. import configure
 
 
-def load_events(fname: str):
+__all__ = ["ESImageNet"]
+
+
+def _load_events(fname: Union[str, Path]):
     events = np.load(fname)
     e_pos = events['pos']
     e_neg = events['neg']
@@ -23,41 +33,232 @@ def load_events(fname: str):
     }
 
 
+class ESImageNetEventBuilder(NeuromorphicDatasetBuilder):
+
+    def build_impl(self) -> None:
+        pass
+
+    def build(self) -> Tuple[Path, Callable]:
+        return self.processed_root, self.get_loader()
+
+    @property
+    def processed_root(self) -> Path:
+        return self.raw_root
+
+    def get_loader(self) -> Callable:
+        return _load_events
+
+
+class ESImageNetFrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
+
+    def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
+        super().__init__(cfg, raw_root)
+        self.H, self.W = H, W
+
+    def build_impl(self) -> None:
+        # create the same directory structure
+        utils.create_same_directory_structure(self.raw_root, self.processed_root)
+
+        # use multi-thread to accelerate
+        t_ckp = time.time()
+        with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+            futures = []
+            print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+            for e_root, e_dirs, e_files in os.walk(self.raw_root):
+                #! Path.walk is not available until Python 3.12
+                e_root = Path(e_root)
+                if len(e_files) <= 0:
+                    continue
+                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
+                for e_file in e_files:
+                    events_np_file = e_root / e_file
+                    print(
+                        f'Start to integrate [{events_np_file}] to frames '
+                        f'and save to [{output_dir}].'
+                    )
+                    futures.append(tpe.submit(
+                        utils.integrate_events_file_to_frames_file_by_fixed_frames_number,
+                        _load_events,
+                        events_np_file,
+                        output_dir,
+                        self.cfg.split_by,
+                        self.cfg.frames_number,
+                        self.H,
+                        self.W,
+                        True
+                    ))
+            for future in futures:
+                future.result()
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+    @property
+    def processed_root(self) -> Path:
+        return self.cfg.root / f"frames_number_{self.cfg.frames_number}_split_by_{self.cfg.split_by}"
+
+    def get_loader(self) -> Callable:
+        return utils.load_npz_frames
+
+
+class ESImageNetFrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
+
+    def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
+        super().__init__(cfg, raw_root)
+        self.H, self.W = H, W
+
+    def build_impl(self) -> None:
+        # create the same directory structure
+        utils.create_same_directory_structure(self.raw_root, self.processed_root)
+
+        # use multi-thread to accelerate
+        t_ckp = time.time()
+        with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+            futures = []
+            print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+            for e_root, e_dirs, e_files in os.walk(self.raw_root):
+                #! Path.walk is not available until Python 3.12
+                e_root = Path(e_root)
+                if len(e_files) <= 0:
+                    continue
+                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
+                for e_file in e_files:
+                    events_np_file = e_root / e_file
+                    print(
+                        f'Start to integrate [{events_np_file}] to frames '
+                        f'and save to [{output_dir}].'
+                    )
+                    futures.append(tpe.submit(
+                        utils.integrate_events_file_to_frames_file_by_fixed_duration,
+                        _load_events,
+                        events_np_file,
+                        output_dir,
+                        self.cfg.duration,
+                        self.H,
+                        self.W,
+                        True
+                    ))
+            for future in futures:
+                future.result()
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+    @property
+    def processed_root(self) -> Path:
+        return self.cfg.root / f"duration_{self.cfg.duration}"
+
+    def get_loader(self) -> Callable:
+        return utils.load_npz_frames
+
+
+class ESImageNetFrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
+
+    def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
+        super().__init__(cfg, raw_root)
+        self.H, self.W = H, W
+
+    def build_impl(self) -> None:
+        # create the same directory structure
+        utils.create_same_directory_structure(self.raw_root, self.processed_root)
+        # use multi-thread to accelerate
+        t_ckp = time.time()
+        with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+            futures = []
+            print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+            for e_root, e_dirs, e_files in os.walk(self.raw_root):
+                #! Path.walk is not available until Python 3.12
+                e_root = Path(e_root)
+                if len(e_files) <= 0:
+                    continue
+                output_dir = self.processed_root / e_root.relative_to(self.raw_root)
+                for e_file in e_files:
+                    events_np_file: Path = e_root / e_file
+                    print(
+                        f'Start to integrate [{events_np_file}] to frames '
+                        f'and save to [{output_dir}].'
+                    )
+                    futures.append(tpe.submit(
+                        utils.save_frames_to_npz_and_print,
+                        output_dir / events_np_file.name,
+                        self.cfg.custom_integrate_function(
+                            _load_events(events_np_file), self.H, self.W
+                        )
+                    ))
+
+            for future in futures:
+                future.result()
+
+        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+    @property
+    def processed_root(self) -> Path:
+        custom_dir_name = self.cfg.custom_integrated_frames_dir_name
+        if custom_dir_name is None:
+            custom_dir_name = self.cfg.custom_integrate_function.__name__
+        return self.cfg.root / custom_dir_name
+
+    def get_loader(self) -> Callable:
+        return utils.load_npz_frames
+
+
 class ESImageNet(NeuromorphicDatasetFolder):
+
     def __init__(
-            self,
-            root: str,
-            train: bool = None,
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-    ) -> None:
+        self,
+        root: str,
+        train: bool = True,
+        data_type: str = 'event',
+        frames_number: int = None,
+        split_by: str = None,
+        duration: int = None,
+        custom_integrate_function: Callable = None,
+        custom_integrated_frames_dir_name: str = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
         """
+        * **English**
+
         The ES-ImageNet dataset, which is proposed by `ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks <https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
-        assert train is not None
-        super().__init__(root, train, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
+        if train is None:
+            raise ValueError(
+                "The argument `train` must be specified as a boolean value."
+            )
+        super().__init__(
+            root, train, data_type, frames_number, split_by, duration,
+            custom_integrate_function, custom_integrated_frames_dir_name,
+            transform, target_transform
+        )
 
-        if data_type == 'event':
-            self.loader = load_events
+    def get_dataset_builder(self):
+        if self.cfg.data_type == "event":
+            return ESImageNetEventBuilder(self.cfg, self.raw_root)
 
-    @staticmethod
-    def load_events_np(fname: str):
-        return load_events(fname)
+        H, W = self.get_H_W()
+        if self.cfg.frames_number is not None:
+            return ESImageNetFrameFixedNumberBuilder(self.cfg, self.raw_root, H, W)
+        elif self.cfg.duration is not None:
+            return ESImageNetFrameFixedDurationBuilder(self.cfg, self.raw_root, H, W)
+        elif self.cfg.custom_integrate_function is not None:
+            return ESImageNetFrameCustomIntegrateBuilder(self.cfg, self.raw_root, H, W)
+        else:
+            # not reachable
+            raise NotImplementedError(
+                f'Please specify the frames number or duration or '
+                f'custom integrate function.'
+            )
 
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
+    @classmethod
+    def get_H_W(cls) -> Tuple:
+        """
+        :return: ``(256, 256)``
+        """
+        return 256, 256
+
+    @classmethod
+    def resource_url_md5(cls) -> list:
         urls = [
             ('ES-imagenet-0.18.part01.rar',
              'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part01.rar&dl=1',
@@ -135,84 +336,63 @@ class ESImageNet(NeuromorphicDatasetFolder):
              'https://cloud.tsinghua.edu.cn/d/94873ab4ec2a4eb497b3/files/?p=%2FES-imagenet-0.18.part25.rar&dl=1',
              '0802ccdeb0cff29237faf55164524101')
         ]
-
         return urls
 
-
-    @staticmethod
-    def downloadable() -> bool:
-        '''
-        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
-        :rtype: bool
-        '''
+    @classmethod
+    def downloadable(cls) -> bool:
+        """
+        :return: ``True``
+        """
         return True
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        """
+        .. warning::
 
-        This function defines how to extract download files.
-        '''
+            Require ``rarfile`` package.
+        """
         import rarfile
-        rar_file = os.path.join(download_root, 'ES-imagenet-0.18.part01.rar')
+        rar_file = download_root / "ES-imagenet-0.18.part01.rar"
         print(f'Extract [{rar_file}] to [{extract_root}].')
         rar_file = rarfile.RarFile(rar_file)
         rar_file.extractall(extract_root)
         rar_file.close()
 
-
-
-    @staticmethod
-    def create_events_np_files(extract_root: str, events_np_root: str):
-        '''
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :param events_np_root: Root directory path which saves events files in the ``npz`` format
-        :type events_np_root:
-        :return: None
-
-        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
-        '''
+    @classmethod
+    def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         t_ckp = time.time()
-        train_dir = os.path.join(events_np_root, 'train')
-        os.mkdir(train_dir)
+        train_dir = raw_root / 'train'
+        source_train_dir = extract_root / "ES-imagenet-0.18" / "train"
+        train_dir.mkdir()
         print(f'Mkdir [{train_dir}].')
-        create_same_directory_structure(os.path.join(extract_root, 'ES-imagenet-0.18/train'), train_dir)
-        for class_dir in os.listdir(os.path.join(extract_root, 'ES-imagenet-0.18/train')):
-            source_dir = os.path.join(extract_root, 'ES-imagenet-0.18/train', class_dir)
-            target_dir = os.path.join(train_dir, class_dir)
+        utils.create_same_directory_structure(source_train_dir, train_dir)
+        for class_dir in os.listdir(source_train_dir):
+            source_dir = source_train_dir / class_dir
+            target_dir = train_dir / class_dir
             print(f'Create soft links from [{source_dir}] to [{target_dir}].')
-            for class_sample in os.listdir(source_dir):
-                os.symlink(os.path.join(source_dir, class_sample),
-                           os.path.join(target_dir, class_sample))
+            for sample in os.listdir(source_dir):
+                source_file = source_dir / sample
+                target_file = target_dir / sample
+                target_file.symlink_to(source_file)
 
-
-
-
-        val_label = np.loadtxt(os.path.join(extract_root, 'ES-imagenet-0.18/vallabel.txt'), delimiter=' ', usecols=(1, ), dtype=int)
-        val_fname = np.loadtxt(os.path.join(extract_root, 'ES-imagenet-0.18/vallabel.txt'), delimiter=' ', usecols=(0, ), dtype=str)
-        source_dir = os.path.join(extract_root, 'ES-imagenet-0.18/val')
-        target_dir = os.path.join(events_np_root, 'test')
-        os.mkdir(target_dir)
+        val_txt_path = extract_root / 'ES-imagenet-0.18' / 'vallabel.txt'
+        val_label = np.loadtxt(val_txt_path, delimiter=' ', usecols=(1, ), dtype=int)
+        val_fname = np.loadtxt(val_txt_path, delimiter=' ', usecols=(0, ), dtype=str)
+        source_dir = extract_root / 'ES-imagenet-0.18' / 'val'
+        target_dir = raw_root / 'test'
+        target_dir.mkdir()
         print(f'Mkdir [{target_dir}].')
-        create_same_directory_structure(train_dir, target_dir)
+        utils.create_same_directory_structure(source_train_dir, target_dir)
 
-        for i in range(val_fname.__len__()):
-            os.symlink(os.path.join(source_dir, val_fname[i]), os.path.join(target_dir, f'class{val_label[i]}/{val_fname[i]}'))
+        for fname, label in zip(val_fname, val_label):
+            source_file = source_dir / fname
+            target_file = target_dir / f'class{label}' / f'{fname}'
+            target_file.symlink_to(source_file)
 
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
-        print(f'Note that files in [{events_np_root}] are soft links whose source files are in [{extract_root}]. If you want to use events, do not delete [{extract_root}].')
-
-    @staticmethod
-    def get_H_W() -> Tuple:
-        '''
-        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
-            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
-        :rtype: tuple
-        '''
-        return 256, 256
+        print(
+            f'Note that files in [{raw_root}] are soft links whose source files '
+            f'are in [{extract_root}]. If you want to use events, do not '
+            f'delete [{extract_root}].'
+        )

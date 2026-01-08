@@ -14,6 +14,9 @@ from ..triton_utils import amp_custom_fwd, amp_custom_bwd
 from .info import FlexSNInfo
 
 
+__all__ = ["FlexSNFunction"]
+
+
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]

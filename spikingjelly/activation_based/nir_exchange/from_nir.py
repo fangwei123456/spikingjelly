@@ -9,6 +9,9 @@ import nirtorch
 from .. import layer, functional, neuron
 
 
+__all__ = ["import_from_nir"]
+
+
 def _from_numpy(x):
     if isinstance(x, (int, np.int64)):
         return int(x)

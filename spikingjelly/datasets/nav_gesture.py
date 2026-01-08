@@ -1,30 +1,30 @@
 
 # Codes from the source dataset:
-# ---------------------------------------------------------------------------------------------
-#!/usr/bin/python
-# -*- coding: utf8 -*
-#####################
-# read_td_events.py #
-#####################
+# ------------------------------------------------------------------------------
 # Feb 2017 - Jean-Matthieu Maro
 # Email: jean-matthieu dot maro, hosted at inserm, which is located in FRance.
 # Thanks to Germain Haessig and Laurent Dardelet.
 
-from struct import unpack, pack
+from struct import unpack
 import numpy as np
 import sys
 
 
-def peek(f, length=1):
+__all__ = ["NAVGestureWalk", "NAVGestureSit"]
+
+def _peek(f, length=1):
     pos = f.tell()
     data = f.read(length)
     f.seek(pos)
     return data
 
-def readATIS_tddat(file_name, orig_at_zero = True, drop_negative_dt = True, verbose = True, events_restriction = [0, np.inf]):
 
+def _readATIS_tddat(
+    file_name, orig_at_zero = True, drop_negative_dt = True, verbose = True,
+    events_restriction = [0, np.inf]
+):
     """
-    reads ATIS td events in .dat format
+    Reads ATIS td events in .dat format
 
     input:
     filename: string, path to the .dat file
@@ -38,9 +38,7 @@ def readATIS_tddat(file_name, orig_at_zero = True, drop_negative_dt = True, verb
     coords: numpy array of size (number of events, 2), spatial coordinates: col 0 is x, col 1 is y.
     polarities: numpy array of length (number of events), polarities
     removed_events: integer, number of removed events (negative delta-ts)
-
     """
-
     polmask = 0x0002000000000000
     xmask = 0x000001FF00000000
     ymask = 0x0001FE0000000000
@@ -54,7 +52,7 @@ def readATIS_tddat(file_name, orig_at_zero = True, drop_negative_dt = True, verb
     file = open(file_name,'rb')
 
     header = False
-    while peek(file) == b'%':
+    while _peek(file) == b'%':
         file.readline()
         header = True
     if header:
@@ -160,200 +158,160 @@ def readATIS_tddat(file_name, orig_at_zero = True, drop_negative_dt = True, verb
     if verbose:
         print("> Sequence duration: {0:.2f}s, ts[0] = {1}, ts[{2}] = {3}.".format(float(timestamps[-1] - timestamps[0]) / 1e6, timestamps[0], len(timestamps)-1, timestamps[-1]))
 
-
     return timestamps, coords, polarities, removed_events
-# ---------------------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
 
-from typing import Callable, Dict, Optional, Tuple
-from torchvision.datasets.utils import extract_archive
+
+from typing import Callable, Optional, Tuple, Union
 import os
+from pathlib import Path
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import shutil
 import time
+
+from torchvision.datasets.utils import extract_archive
+
 from .. import configure
-from .utils import np_savez
+from . import utils
 from .base import NeuromorphicDatasetFolder
 
+
+def _read_aedat_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
+    t, xy, p, _ = _readATIS_tddat(bin_file, verbose=False)
+    x = xy[:, 0]
+    y = 239 - xy[:, 1]
+    utils.np_savez(np_file, t=t, x=x, y=y, p=p)
+    print(f'Save [{bin_file}] to [{np_file}].')
 
 
 class NAVGestureWalk(NeuromorphicDatasetFolder):
     # 6 gestures: left, right, up, down, home, select.
     # 10 subjects, holding the phone in one hand (selfie mode) while walking indoor and outdoor
     def __init__(
-            self,
-            root: str,
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-    ) -> None:
+        self,
+        root: str,
+        data_type: str = 'event',
+        frames_number: Optional[int] = None,
+        split_by: Optional[str] = None,
+        duration: Optional[int] = None,
+        custom_integrate_function: Optional[Callable] = None,
+        custom_integrated_frames_dir_name: Optional[str] = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
         """
-        The Nav Gesture dataset, which is proposed by `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
+        * **English**
+
+        The Nav Gesture dataset, which is proposed by
+        `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
-        super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform, target_transform)
+        super().__init__(
+            root, None, data_type, frames_number, split_by, duration,
+            custom_integrate_function, custom_integrated_frames_dir_name,
+            transform, target_transform
+        )
 
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
+    @classmethod
+    def get_H_W(cls) -> Tuple:
+        """
+        .. note::
+
+            The camera is 240*320, but ``x.max() = 303``. So, we set ``W=304``.
+
+        :return: ``(240, 304)``
+        """
+        return 240, 304  # this camera is 240*320, but x.max() = 303. So, I set W = 304.
+
+    @classmethod
+    def resource_url_md5(cls) -> list:
         return [('navgesture-walk.zip', 'https://www.neuromorphic-vision.com/public/downloads/navgesture/navgesture-walk.zip', '5d305266f13005401959e819abe206f0')]
 
-    @staticmethod
-    def downloadable() -> bool:
-        '''
-        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
-        :rtype: bool
-        '''
-        print('This dataset can not be downloaded now. Refer to https://github.com/fangwei123456/spikingjelly/issues/423 for more details.')
+    @classmethod
+    def downloadable(cls) -> bool:
+        print(
+            'This dataset can not be downloaded now. '
+            'Refer to https://github.com/fangwei123456/spikingjelly/issues/423 for more details.'
+        )
         return False
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
-
-        This function defines how to extract download files.
-        '''
-        temp_ext_dir = os.path.join(download_root, 'temp_ext')
-        os.mkdir(temp_ext_dir)
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        temp_ext_dir = download_root / 'temp_ext'
+        temp_ext_dir.mkdir()
         print(f'Mkdir [{temp_ext_dir}].')
-        extract_archive(os.path.join(download_root, 'navgesture-walk.zip'), temp_ext_dir)
+        extract_archive(download_root / 'navgesture-walk.zip', temp_ext_dir)
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 4)) as tpe:
-            sub_threads = []
+            futures = []
             for zip_file in os.listdir(temp_ext_dir):
                 if os.path.splitext(zip_file)[1] == '.zip':
-                    zip_file = os.path.join(temp_ext_dir, zip_file)
+                    zip_file = temp_ext_dir / zip_file
                     print(f'Extract [{zip_file}] to [{extract_root}].')
-                    sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+                    futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
+            for future in futures:
+                future.result()
 
         shutil.rmtree(temp_ext_dir)
         print(f'Rmtree [{temp_ext_dir}].')
 
-    @staticmethod
-    def get_H_W() -> Tuple:
-        '''
-        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
-            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
-        :rtype: tuple
-        '''
-        return 240, 304  # this camera is 240*320, but x.max() = 303. So, I set W = 304.
-
-
-    @staticmethod
-    def load_origin_data(file_name: str) -> Dict:
-        t, xy, p, _ = readATIS_tddat(file_name, verbose=False)
-        x = xy[:, 0]
-        y = 239 - xy[:, 1]
-        return {'t': t, 'x': x, 'y': y, 'p': p}
-
-    @staticmethod
-    def read_aedat_save_to_np(bin_file: str, np_file: str):
-        t, xy, p, _ = readATIS_tddat(bin_file, verbose=False)
-        x = xy[:, 0]
-        y = 239 - xy[:, 1]
-        np_savez(np_file,
-                 t=t,
-                 x=x,
-                 y=y,
-                 p=p
-                 )
-        print(f'Save [{bin_file}] to [{np_file}].')
-
-    @staticmethod
-    def create_events_np_files(extract_root: str, events_np_root: str):
-        '''
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :param events_np_root: Root directory path which saves events files in the ``npz`` format
-        :type events_np_root:
-        :return: None
-
-        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
-        '''
+    @classmethod
+    def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         t_ckp = time.time()
         np_dir_dict = {}
         for label in ['le', 'ri', 'up', 'do', 'ho', 'se']:
-            np_dir = os.path.join(events_np_root, label)
-            os.mkdir(np_dir)
+            np_dir = raw_root / label
+            np_dir.mkdir()
             print(f'Mkdir [{np_dir}].')
             np_dir_dict[label] = np_dir
 
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(),
-                                                configure.max_threads_number_for_datasets_preprocess)) as tpe:
+        with ThreadPoolExecutor(max_workers=min(
+            multiprocessing.cpu_count(),
+            configure.max_threads_number_for_datasets_preprocess
+        )) as tpe:
             for user_name in os.listdir(extract_root):
-                sub_threads = []
-                aedat_dir = os.path.join(extract_root, user_name)
+                futures = []
+                aedat_dir = extract_root / user_name
                 for bin_file in os.listdir(aedat_dir):
                     base_name = os.path.splitext(bin_file)[0]
                     label = base_name.split('_')[1]
-                    source_file = os.path.join(aedat_dir, bin_file)
-                    target_file = os.path.join(np_dir_dict[label], base_name + '.npz')
+                    source_file = aedat_dir / bin_file
+                    target_file = np_dir_dict[label] / (base_name + '.npz')
                     print(f'Start to convert [{source_file}] to [{target_file}].')
+                    futures.append(tpe.submit(
+                        _read_aedat_save_to_np, source_file, target_file
+                    ))
 
-                    sub_threads.append(tpe.submit(NAVGestureWalk.read_aedat_save_to_np, source_file,
-                               target_file))
+                for future in futures:
+                    future.result()
 
-                for sub_thread in sub_threads:
-                    if sub_thread.exception():
-                        print(sub_thread.exception())
-                        exit(-1)
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
 
 
 class NAVGestureSit(NAVGestureWalk):
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
+
+    @classmethod
+    def resource_url_md5(cls) -> list:
         return [('navgesture-sit.zip', 'https://www.neuromorphic-vision.com/public/downloads/navgesture/navgesture-sit.zip', '1571753ace4d9e0946e6503313712c22')]
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
-
-        This function defines how to extract download files.
-        '''
-        temp_ext_dir = os.path.join(download_root, 'temp_ext')
-        os.mkdir(temp_ext_dir)
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        temp_ext_dir = download_root / 'temp_ext'
+        temp_ext_dir.mkdir()
         print(f'Mkdir [{temp_ext_dir}].')
-        extract_archive(os.path.join(download_root, 'navgesture-sit.zip'), temp_ext_dir)
+        extract_archive(download_root / 'navgesture-sit.zip', temp_ext_dir)
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 4)) as tpe:
-            sub_threads = []
+            futures = []
             for zip_file in os.listdir(temp_ext_dir):
                 if os.path.splitext(zip_file)[1] == '.zip':
-                    zip_file = os.path.join(temp_ext_dir, zip_file)
+                    zip_file = temp_ext_dir / zip_file
                     print(f'Extract [{zip_file}] to [{extract_root}].')
-                    sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+                    futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
+            for future in futures:
+                future.result()
 
         shutil.rmtree(temp_ext_dir)
         print(f'Rmtree [{temp_ext_dir}].')

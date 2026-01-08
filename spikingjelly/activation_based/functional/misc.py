@@ -7,6 +7,15 @@ import math
 from .. import neuron
 
 
+__all__ = [
+    "set_threshold_margin",
+    "redundant_one_hot",
+    "first_spike_index",
+    "kaiming_normal_conv_linear_weight",
+    "delay",
+]
+
+
 def set_threshold_margin(
     output_layer: neuron.BaseNode, label_one_hot: Tensor,
     eval_threshold=1.0, threshold0=0.9, threshold1=1.1

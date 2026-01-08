@@ -1,6 +1,8 @@
 from typing import Type, Dict, Any, Tuple, Iterable
 from spikingjelly.activation_based import neuron
 from spikingjelly.activation_based.ann2snn.modules import *
+import torch
+import torch.nn as nn
 from torch import fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 from tqdm import tqdm

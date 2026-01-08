@@ -3,6 +3,13 @@ import torch.nn.functional as F
 from torch import Tensor
 
 
+__all__ = [
+    "kernel_dot_product",
+    "spike_similar_loss",
+    "temporal_efficient_training_cross_entropy",
+]
+
+
 def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
     r"""
     **API Language:**

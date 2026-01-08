@@ -12,6 +12,9 @@ import nirtorch
 from .. import layer, neuron
 
 
+__all__ = ["export_to_nir"]
+
+
 def _to_numpy(x: torch.Tensor) -> np.ndarray:
     return x.detach().cpu().numpy()
 

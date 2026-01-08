@@ -9,6 +9,14 @@ except BaseException as e:
 from ..torch2triton import compile_triton_code_str
 from .info import FlexSNInfo
 
+
+__all__ = [
+    "get_flexsn_inference_kernel",
+    "get_flexsn_forward_kernel",
+    "get_flexsn_backward_kernel",
+]
+
+
 INDENTATION = " " * 4
 
 init_state_load_template = """

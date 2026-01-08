@@ -2,6 +2,15 @@ import torch
 import torch.nn as nn
 
 
+__all__ = [
+    "fused_conv2d_weight_of_convbn2d",
+    "fused_conv2d_bias_of_convbn2d",
+    "scale_fused_conv2d_weight_of_convbn2d",
+    "scale_fused_conv2d_bias_of_convbn2d",
+    "fuse_convbn2d",
+]
+
+
 def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
     """
     **API Language:**

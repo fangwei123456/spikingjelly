@@ -5,3 +5,4 @@ spikingjelly.datasets.utils module
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: np_savez

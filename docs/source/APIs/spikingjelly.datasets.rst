@@ -62,8 +62,8 @@ Datasets
    spikingjelly.datasets.asl_dvs
    spikingjelly.datasets.bullying10k
    spikingjelly.datasets.cifar10_dvs
-   spikingjelly.datasets.dvs128_gesture
    spikingjelly.datasets.dvs_lip
+   spikingjelly.datasets.dvs128_gesture
    spikingjelly.datasets.es_imagenet
    spikingjelly.datasets.hardvs
    spikingjelly.datasets.n_caltech101

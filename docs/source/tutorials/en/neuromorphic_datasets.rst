@@ -9,15 +9,16 @@ Authors: `fangwei123456 <https://github.com/fangwei123456>`_
 
 Download Automatically/Manually
 -------------------------------------------------------
-SpikingJelly can download some datasets (e.g., CIFAR10-DVS) automatically. When we first use these datasets, SpikingJelly
+
+SpikingJelly can download some datasets (e.g., CIFAR10-DVS) automatically. When we use these datasets for the first time, SpikingJelly
 will download the dataset to ``download`` in the root directory. The ``downloadable()`` function of each dataset defines
 whether this dataset can be downloaded automatically, and the ``resource_url_md5()`` function defines the download url and
 MD5 of each file. Here is an example:
 
 .. code:: python
 
-    from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
-    from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+    from spikingjelly.datasets import CIFAR10DVS
+    from spikingjelly.datasets import DVS128Gesture
 
     print('CIFAR10-DVS downloadable', CIFAR10DVS.downloadable())
     print('resource, url, md5/n', CIFAR10DVS.resource_url_md5())
@@ -53,17 +54,18 @@ Suppose we have downloaded the dataset into ``E:/datasets/DVS128Gesture/download
 .. admonition:: Note
     :class: note
 
-    Different frameworks may use different pre-processing methods on the DVS128 Gesture dataset and cause different samples \
+    Different frameworks may use different pre-processing methods on the DVS128 Gesture dataset and cause different samples
     number. Refer to the API doc of :class:`spikingjelly.datasets.dvs128_gesture.DVS128Gesture` for more details.
 
 
-Get Events Data
+Get Event Data
 -----------------------
+
 Let us create a train set. We set ``data_type='event'`` to use Event data rather than frame data.
 
 .. code:: python
 
-    from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+    from spikingjelly.datasets import DVS128Gesture
 
     root_dir = 'D:/datasets/DVS128Gesture'
     train_set = DVS128Gesture(root_dir, train=True, data_type='event')
@@ -124,10 +126,11 @@ The output is:
     p [1 0 0 ... 1 0 0]
     label 0
 
-where ``event`` is a dictionary with keys ``['t', 'x', 'y', 'p']``;``label`` is the label of the sample. Note that the class number of DVS128 Gesture is 11.
+where ``event`` is a dictionary with keys ``['t', 'x', 'y', 'p']`` ; ``label`` is the label of the sample. Note that there are 11 classes in DVS128 Gesture.
 
-Get Frames Data
+Get Frame Data
 -----------------------
+
 The event-to-frame integrating method for pre-processing neuromorphic datasets is widely used. We use the same method from [#PLIF]_ in SpikingJelly. Data in neuromorphic datasets are in the formulation of :math:`E(x_{i}, y_{i}, t_{i}, p_{i})` that represent the event's coordinate, time and polarity. We split the event's number :math:`N` into :math:`T` slices with nearly the same number of events in each slice and integrate events to frames. Note that :math:`T` is also the simulating time-step. Denote a two channels frame as :math:`F(j)` and a pixel at :math:`(p, x, y)` as :math:`F(j, p, x, y)`, the pixel value is integrated from the events data whose indices are between :math:`j_{l}` and :math:`j_{r}`:
 
 .. math::
@@ -211,8 +214,9 @@ We will get the images like:
 .. image:: ../../_static/tutorials/neuromorphic_datasets/dvsg.*
     :width: 100%
 
-Fixed Duration Integrating
+Fixed Duration Integration
 --------------------------------------
+
 Integrating by fixed duration is more compatible with the practical application. For example, if we set duration as ``10 ms``,
 then a sample with length ``L ms`` can be integrated to frames with frame number ``math.floor(L / 10)``. However, the lengths
 of samples in neuromorphic datasets are not identical, and we will get frames with different frame numbers when integrating
@@ -226,10 +230,10 @@ Example codes:
     import torch
     from torch.utils.data import DataLoader
     from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
-    from spikingjelly.datasets import dvs128_gesture
+    from spikingjelly.datasets import DVS128Gesture
 
     root='D:/datasets/DVS128Gesture'
-    train_set = dvs128_gesture.DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
+    train_set = DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
     for i in range(5):
         x, y = train_set[i]
         print(f'x[{i}].shape=[T, C, H, W]={x.shape}')
@@ -262,6 +266,7 @@ The outputs are:
 
 Custom Integrating Method
 ----------------------------
+
 SpikingJelly provides user-defined integrating method. The user should provide a function ``custom_integrate_function`` and
 the name of directory ``custom_integrated_frames_dir_name`` for saving frames.
 
@@ -277,13 +282,13 @@ a function:
 
 .. code:: python
 
-    import spikingjelly.datasets as sjds
+    from spikingjelly.datasets.utils import integrate_events_segment_to_frame
     def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
-        index_split = np.random.randint(low=0, high=events['t'].__len__())
+        index_split = np.random.randint(low=0, high=len(events['t']))
         frames = np.zeros([2, 2, H, W])
         t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
-        frames[0] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
-        frames[1] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
+        frames[0] = integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+        frames[1] = integrate_events_segment_to_frame(x, y, p, H, W, index_split, len(events['t']))
         return frames
 
 Now let us use this function to create a frames dataset:

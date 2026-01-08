@@ -10,6 +10,9 @@ from torch import Tensor
 from .. import base
 
 
+__all__ = ['Dropout', 'Dropout2d', 'DropConnectLinear']
+
+
 class Dropout(base.MemoryModule):
     def __init__(self, p=0.5, step_mode='s'):
         """

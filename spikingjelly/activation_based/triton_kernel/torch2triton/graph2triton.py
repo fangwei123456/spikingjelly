@@ -1,4 +1,4 @@
-from typing import Callable, Tuple
+from typing import Tuple
 import tempfile
 from pathlib import Path
 import hashlib
@@ -17,6 +17,12 @@ except BaseException as e:
 
 from ..triton_utils import type_str_dict
 from ..triton_utils import ensure_cleanup_tmp_python_files
+
+
+__all__ = [
+    "generate_triton_code_str",
+    "compile_triton_code_str",
+]
 
 
 def _generate_hash(s: str, w: int = 8) -> str:

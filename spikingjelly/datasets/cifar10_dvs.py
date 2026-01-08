@@ -1,20 +1,35 @@
-from typing import Callable, Dict, Optional, Tuple
-import numpy as np
-from torchvision.datasets.utils import extract_archive
 import os
+from pathlib import Path
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
+from typing import Callable, Optional, Tuple, Union
+
+import numpy as np
+from torchvision.datasets.utils import extract_archive
+
 from .. import configure
-from .utils import np_savez
-from .base import NeuromorphicDatasetFolder
+from . import utils
+from .base import NeuromorphicDatasetFolder, NeuromorphicDatasetConfig
 # https://github.com/jackd/events-tfds/blob/master/events_tfds/data_io/aedat.py
 
+
+__all__ = [
+    "CIFAR10DVS_CLASS_NAMES",
+    "CIFAR10DVS",
+    "CIFAR10DVSTEBNSplit",
+]
+
+CIFAR10DVS_CLASS_NAMES = (
+    'airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse',
+    'ship', 'truck'
+)
 
 EVT_DVS = 0  # DVS event type
 EVT_APS = 1  # APS event
 
-def read_bits(arr, mask=None, shift=None):
+
+def _read_bits(arr, mask=None, shift=None):
     if mask is not None:
         arr = arr & mask
     if shift is not None:
@@ -35,7 +50,7 @@ valid_mask = 0x80000000
 valid_shift = 31
 
 
-def skip_header(fp):
+def _skip_header(fp):
     p = 0
     lt = fp.readline()
     ltd = lt.decode().strip()
@@ -49,12 +64,10 @@ def skip_header(fp):
     return p
 
 
-def load_raw_events(fp,
-                    bytes_skip=0,
-                    bytes_trim=0,
-                    filter_dvs=False,
-                    times_first=False):
-    p = skip_header(fp)
+def _load_raw_events(
+    fp, bytes_skip=0, bytes_trim=0, filter_dvs=False, times_first=False
+):
+    p = _skip_header(fp)
     fp.seek(p + bytes_skip)
     data = fp.read()
     if bytes_trim > 0:
@@ -70,69 +83,93 @@ def load_raw_events(fp,
     if times_first:
         timestamp, raw_addr = raw_addr, timestamp
     if filter_dvs:
-        valid = read_bits(raw_addr, valid_mask, valid_shift) == EVT_DVS
+        valid = _read_bits(raw_addr, valid_mask, valid_shift) == EVT_DVS
         timestamp = timestamp[valid]
         raw_addr = raw_addr[valid]
     return timestamp, raw_addr
 
 
-def parse_raw_address(addr,
-                      x_mask=x_mask,
-                      x_shift=x_shift,
-                      y_mask=y_mask,
-                      y_shift=y_shift,
-                      polarity_mask=polarity_mask,
-                      polarity_shift=polarity_shift):
-    polarity = read_bits(addr, polarity_mask, polarity_shift).astype(np.bool_)
-    x = read_bits(addr, x_mask, x_shift)
-    y = read_bits(addr, y_mask, y_shift)
+def _parse_raw_address(
+    addr, x_mask=x_mask, x_shift=x_shift, y_mask=y_mask, y_shift=y_shift,
+    polarity_mask=polarity_mask, polarity_shift=polarity_shift
+):
+    polarity = _read_bits(addr, polarity_mask, polarity_shift).astype(np.bool_)
+    x = _read_bits(addr, x_mask, x_shift)
+    y = _read_bits(addr, y_mask, y_shift)
     return x, y, polarity
 
 
-def load_events(
+def _load_events(
         fp,
         filter_dvs=False,
         # bytes_skip=0,
         # bytes_trim=0,
         # times_first=False,
         **kwargs):
-    timestamp, addr = load_raw_events(
+    timestamp, addr = _load_raw_events(
         fp,
         filter_dvs=filter_dvs,
         #   bytes_skip=bytes_skip,
         #   bytes_trim=bytes_trim,
         #   times_first=times_first
     )
-    x, y, polarity = parse_raw_address(addr, **kwargs)
+    x, y, polarity = _parse_raw_address(addr, **kwargs)
     return timestamp, x, y, polarity
+
+
+def _load_origin_data(file_name: Union[str, Path]) -> dict:
+    with open(file_name, 'rb') as fp:
+        t, x, y, p = _load_events(
+            fp, x_mask=0xfE, x_shift=1, y_mask=0x7f00, y_shift=8, 
+            polarity_mask=1, polarity_shift=None
+        )
+        return {'t': t, 'x': 127 - y, 'y': 127 - x, 'p': 1 - p.astype(int)}
+
+
+def _read_aedat_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
+    events = _load_origin_data(bin_file)
+    utils.np_savez(
+        np_file, t=events['t'], x=events['x'], y=events['y'], p=events['p']
+    )
+    print(f'Save [{bin_file}] to [{np_file}].')
+
 
 class CIFAR10DVS(NeuromorphicDatasetFolder):
     def __init__(
-            self,
-            root: str,
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-    ) -> None:
+        self,
+        root: str,
+        data_type: str = 'event',
+        frames_number: int = None,
+        split_by: str = None,
+        duration: int = None,
+        custom_integrate_function: Callable = None,
+        custom_integrated_frames_dir_name: str = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
         """
-        The CIFAR10-DVS dataset, which is proposed by `CIFAR10-DVS: An Event-Stream Dataset for Object Classification
- <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_.
+        * **English**
+
+        The CIFAR10-DVS dataset, which is proposed by
+        `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
-        super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform,
-                         target_transform)
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
+        super().__init__(
+            root, None, data_type, frames_number, split_by, duration,
+            custom_integrate_function, custom_integrated_frames_dir_name,
+            transform, target_transform
+        )
+
+    @classmethod
+    def get_H_W(cls) -> Tuple:
+        """
+        :return: ``(128, 128)``
+        """
+        return 128, 128
+
+    @classmethod
+    def resource_url_md5(cls) -> list:
         return [
             ('airplane.zip', 'https://ndownloader.figshare.com/files/7712788', '0afd5c4bf9ae06af762a77b180354fdd'),
             ('automobile.zip', 'https://ndownloader.figshare.com/files/7712791', '8438dfeba3bc970c94962d995b1b9bdd'),
@@ -146,109 +183,143 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
             ('truck.zip', 'https://ndownloader.figshare.com/files/7712839', '89f3922fd147d9aeff89e76a2b0b70a7')
         ]
 
-    @staticmethod
-    def downloadable() -> bool:
-        '''
-        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
-        :rtype: bool
-        '''
+    @classmethod
+    def downloadable(cls) -> bool:
+        """
+        :return: ``True``
+        """
         return True
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
-
-        This function defines how to extract download files.
-        '''
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 10)) as tpe:
-            sub_threads = []
-            for zip_file in os.listdir(download_root):
-                zip_file = os.path.join(download_root, zip_file)
+            futures = []
+            for zip_file in download_root.iterdir():
                 print(f'Extract [{zip_file}] to [{extract_root}].')
-                sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
+                futures.append(tpe.submit(
+                    extract_archive, zip_file, extract_root
+                ))
 
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
+            for future in futures:
+                future.result()
 
-
-
-    @staticmethod
-    def load_origin_data(file_name: str) -> Dict:
-        '''
-        :param file_name: path of the events file
-        :type file_name: str
-        :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-        :rtype: Dict
-
-        This function defines how to read the origin binary data.
-        '''
-        with open(file_name, 'rb') as fp:
-            t, x, y, p = load_events(fp,
-                        x_mask=0xfE,
-                        x_shift=1,
-                        y_mask=0x7f00,
-                        y_shift=8,
-                        polarity_mask=1,
-                        polarity_shift=None)
-            # return {'t': t, 'x': 127 - x, 'y': y, 'p': 1 - p.astype(int)}  # this will get the same data with http://www2.imse-cnm.csic.es/caviar/MNIST_DVS/dat2mat.m
-            # see https://github.com/jackd/events-tfds/pull/1 for more details about this problem
-            return {'t': t, 'x': 127 - y, 'y': 127 - x, 'p': 1 - p.astype(int)}
-
-    @staticmethod
-    def get_H_W() -> Tuple:
-        '''
-        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
-            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
-        :rtype: tuple
-        '''
-        return 128, 128
-
-    @staticmethod
-    def read_aedat_save_to_np(bin_file: str, np_file: str):
-        events = CIFAR10DVS.load_origin_data(bin_file)
-        np_savez(np_file,
-                 t=events['t'],
-                 x=events['x'],
-                 y=events['y'],
-                 p=events['p']
-                 )
-        print(f'Save [{bin_file}] to [{np_file}].')
-
-    @staticmethod
-    def create_events_np_files(extract_root: str, events_np_root: str):
-        '''
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :param events_np_root: Root directory path which saves events files in the ``npz`` format
-        :type events_np_root:
-        :return: None
-
-        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
-        '''
+    @classmethod
+    def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         t_ckp = time.time()
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
-            sub_threads = []
+            futures = []
             for class_name in os.listdir(extract_root):
-                aedat_dir = os.path.join(extract_root, class_name)
-                np_dir = os.path.join(events_np_root, class_name)
-                os.mkdir(np_dir)
+                aedat_dir = extract_root / class_name
+                np_dir = raw_root / class_name
+                np_dir.mkdir()
                 print(f'Mkdir [{np_dir}].')
                 for bin_file in os.listdir(aedat_dir):
-                    source_file = os.path.join(aedat_dir, bin_file)
-                    target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
+                    source_file = aedat_dir / bin_file
+                    target_file = np_dir / (os.path.splitext(bin_file)[0] + '.npz')
                     print(f'Start to convert [{source_file}] to [{target_file}].')
-                    sub_threads.append(tpe.submit(CIFAR10DVS.read_aedat_save_to_np, source_file,
-                               target_file))
+                    futures.append(tpe.submit(
+                        _read_aedat_save_to_np, source_file, target_file
+                    ))
+            for future in futures:
+                future.result()
 
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+
+
+def _move_data(root: Union[str, Path]):
+    root = Path(root)
+
+    for cn in CIFAR10DVS_CLASS_NAMES:
+        source = root / cn
+
+        target = root / "test" / cn
+        if not target.exists():
+            target.mkdir(parents=True)
+            print(f"mkdir [{target}]")
+            for i in range(100):
+                source_file = source / f"cifar10_{cn}_{i}.npz"
+                target_file = target / f"cifar10_{cn}_{i}.npz"
+                target_file.symlink_to(source_file)
+                print(f"symlink: [{target_file}] -> [{source_file}]")
+
+        target = root / "train" / cn
+        if not target.exists():
+            target.mkdir(parents=True)
+            print(f"mkdir [{target}]")
+            for i in range(100, 1000):
+                source_file = source / f"cifar10_{cn}_{i}.npz"
+                target_file = target / f"cifar10_{cn}_{i}.npz"
+                target_file.symlink_to(source_file)
+                print(f"symlink: [{target_file}] -> [{source_file}]")
+
+
+class CIFAR10DVSTEBNSplit(CIFAR10DVS):
+
+    def __init__(
+        self,
+        root: str,
+        train: bool = True,
+        data_type: str = 'event',
+        frames_number: int = None,
+        split_by: str = None,
+        duration: int = None,
+        custom_integrate_function: Callable = None,
+        custom_integrated_frames_dir_name: str = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
+        """
+        * **English**
+
+        The CIFAR10-DVS dataset, which is proposed by
+        `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_.
+
+        The original CIFAR10-DVS dataset does not provide train and test split.
+        In `Temporal Effective Batch Normalization in Spiking Neural Networks <https://proceedings.neurips.cc/paper_files/paper/2022/hash/de2ad3ed44ee4e675b3be42aa0b615d0-Abstract-Conference.html>`_ ,
+        the authors use sample 0-99 in each class as the test set, and the 100-999 as the train set.
+        This split is widely used by later works. This class implements this split.
+
+        .. note::
+
+            The validation accuracy on this split is typically much higher than
+            that on a random split. Be careful when making comparisons!
+
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+        for more details about params information.
+        """
+        if train is None:
+            raise ValueError("`train` must be `True` or `False`")
+
+        self.cfg = NeuromorphicDatasetConfig(
+            root=Path(root),
+            train=train,
+            data_type=data_type,
+            frames_number=frames_number,
+            split_by=split_by,
+            duration=duration,
+            custom_integrate_function=custom_integrate_function,
+            custom_integrated_frames_dir_name=custom_integrated_frames_dir_name,
+            transform=transform,
+            target_transform=target_transform
+        )
+
+        self.prepare_raw_dataset()
+        builder = self.get_dataset_builder()
+        self.processed_root, loader = builder.build()
+
+        split_root = self.processed_root / ('train' if self.cfg.train else 'test')
+        if not split_root.exists():
+            print(
+                f"We have the unsplit processed dataset at [{self.processed_root}]. "
+                f"_move_data() is called to split the dataset following TEBN's approach."
+            )
+            _move_data(self.processed_root)
+        print("CIFAR10-DVS has been split after TEBN's approach.")
+
+        super(NeuromorphicDatasetFolder, self).__init__(
+            root=split_root,
+            loader=loader,
+            extensions=self.get_extensions(),
+            transform=self.cfg.transform,
+            target_transform=self.cfg.target_transform
+        )

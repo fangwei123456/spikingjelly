@@ -17,6 +17,8 @@ from ..triton_utils import type_dict, contiguous_and_device_guard
 from ..triton_utils import amp_custom_fwd, amp_custom_bwd, convert_and_store
 
 
+__all__ = ["MultiStepParametricLIFNodePTT"]
+
 @triton.autotune(
     configs=[
         triton.Config({"BLOCK_NCL": f * w * 32}, num_warps=w)

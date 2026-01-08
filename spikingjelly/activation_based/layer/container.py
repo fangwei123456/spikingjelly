@@ -11,6 +11,17 @@ from torch import Tensor
 from .. import base, functional
 
 
+__all__ = [
+    'MultiStepContainer',
+    'SeqToANNContainer',
+    'TLastMultiStepContainer',
+    'TLastSeqToANNContainer',
+    'StepModeContainer',
+    'ElementWiseRecurrentContainer',
+    'LinearRecurrentContainer',
+]
+
+
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 
     def __init__(self, *args):
@@ -391,4 +402,3 @@ class LinearRecurrentContainer(base.MemoryModule):
 
     def extra_repr(self) -> str:
         return f', step_mode={self.step_mode}'
-

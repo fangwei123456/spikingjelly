@@ -1,165 +1,140 @@
-from typing import Callable, Dict,  Optional, Tuple
-import scipy.io
-from torchvision.datasets.utils import extract_archive
 import os
+from pathlib import Path
+from typing import Callable, Optional, Tuple, Union
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
 import time
 import shutil
 
+import scipy.io
+from torchvision.datasets.utils import extract_archive
+
 from .. import configure
 from .base import NeuromorphicDatasetFolder
-from .utils import np_savez
+from . import utils
+
+
+__all__ = ["ASLDVS"]
+
+
+def _read_mat_save_to_np(mat_file: Union[str, Path], np_file: Union[str, Path]):
+    mat_file, np_file = str(mat_file), str(np_file)
+    events = scipy.io.loadmat(mat_file)
+    events = {
+        't': events['ts'].squeeze(),
+        'x': 239 - events['x'].squeeze(),
+        'y': 179 - events['y'].squeeze(),
+        'p': events['pol'].squeeze()
+    }
+    utils.np_savez(
+        np_file,
+        t=events['t'],
+        x=events['x'],
+        y=events['y'],
+        p=events['p']
+    )
+    print(f'Save [{mat_file}] to [{np_file}].')
+
 
 class ASLDVS(NeuromorphicDatasetFolder):
     def __init__(
-            self,
-            root: str,
-            data_type: str = 'event',
-            frames_number: int = None,
-            split_by: str = None,
-            duration: int = None,
-            custom_integrate_function: Callable = None,
-            custom_integrated_frames_dir_name: str = None,
-            transform: Optional[Callable] = None,
-            target_transform: Optional[Callable] = None,
-    ) -> None:
+        self,
+        root: str,
+        data_type: str = 'event',
+        frames_number: int = None,
+        split_by: str = None,
+        duration: int = None,
+        custom_integrate_function: Callable = None,
+        custom_integrated_frames_dir_name: str = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
         """
+        * **English**
+
         The ASL-DVS dataset, which is proposed by `Graph-based Object Classification for Neuromorphic Vision Sensing <https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
         for more details about params information.
         """
-        super().__init__(root, None, data_type, frames_number, split_by, duration, custom_integrate_function, custom_integrated_frames_dir_name, transform,
-                         target_transform)
-    @staticmethod
-    def resource_url_md5() -> list:
-        '''
-        :return: A list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
-        :rtype: list
-        '''
-        print('The ICCV2019_DVS_dataset.zip is packed by dropbox. We find that the MD5 of this zip file can change. So, MD5 check will not be used for this ASL-DVS dataset.')
-        print('Update: The Dropbox link is expired now. You can download this dataset from the OpenI mirror manually by the following commands:\n'
-              '----------\n'
-              'pip install openi\n'
-              'openi dataset download OpenI/spikingjelly ASLDVS.zip  --cluster NPU --save_path .\n'
-              '----------\n'
-              'Then you can extract "ASLDVS.zip" and get "ICCV2019_DVS_dataset.zip".')
+        super().__init__(
+            root, None, data_type, frames_number, split_by, duration,
+            custom_integrate_function, custom_integrated_frames_dir_name,
+            transform, target_transform
+        )
+
+    @classmethod
+    def get_H_W(cls) -> Tuple:
+        """
+        :return: ``(180, 240)``
+        """
+        return 180, 240
+
+    @classmethod
+    def resource_url_md5(cls) -> list:
+        print(
+            'The ICCV2019_DVS_dataset.zip is packed by dropbox. We find that the'
+            'MD5 of this zip file can change. So, MD5 check will not be used for'
+            'ASL-DVS dataset.'
+        )
+        print(
+            'Update: The Dropbox link is expired now. You can download this dataset'
+            'from the OpenI mirror manually by the following commands:\n'
+            '----------\n'
+            'pip install openi\n'
+            'openi dataset download OpenI/spikingjelly ASLDVS.zip  --cluster NPU --save_path .\n'
+            '----------\n'
+            'Then you can extract "ASLDVS.zip" and get "ICCV2019_DVS_dataset.zip".'
+        )
         url = 'https://www.dropbox.com/sh/ibq0jsicatn7l6r/AACNrNELV56rs1YInMWUs9CAa?dl=0'
         return [
             ('ICCV2019_DVS_dataset.zip', url, None)
         ]
 
-    @staticmethod
-    def downloadable() -> bool:
-        '''
-        :return: Whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
-        :rtype: bool
-        '''
+    @classmethod
+    def downloadable(cls) -> bool:
+        """
+        :return: ``False``
+        """
         return False
 
-    @staticmethod
-    def extract_downloaded_files(download_root: str, extract_root: str):
-        '''
-        :param download_root: Root directory path which saves downloaded dataset files
-        :type download_root: str
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :return: None
-
-        This function defines how to extract download files.
-        '''
-        temp_ext_dir = os.path.join(download_root, 'temp_ext')
-        os.mkdir(temp_ext_dir)
+    @classmethod
+    def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        temp_ext_dir = download_root / 'temp_ext'
+        temp_ext_dir.mkdir()
         print(f'Mkdir [{temp_ext_dir}].')
-        extract_archive(os.path.join(download_root, 'ICCV2019_DVS_dataset.zip'), temp_ext_dir)
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
-            sub_threads = []
-            for zip_file in os.listdir(temp_ext_dir):
-                if os.path.splitext(zip_file)[1] == '.zip':
-                    zip_file = os.path.join(temp_ext_dir, zip_file)
-                    print(f'Extract [{zip_file}] to [{extract_root}].')
-                    sub_threads.append(tpe.submit(extract_archive, zip_file, extract_root))
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
+        extract_archive(download_root / 'ICCV2019_DVS_dataset.zip', temp_ext_dir)
 
+        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
+            futures = []
+            for zip_file in temp_ext_dir.iterdir():
+                if zip_file.suffix == '.zip':
+                    print(f'Extract [{zip_file}] to [{extract_root}].')
+                    futures.append(tpe.submit(extract_archive, zip_file, extract_root))
+            for future in futures:
+                future.result()
 
         shutil.rmtree(temp_ext_dir)
         print(f'Rmtree [{temp_ext_dir}].')
 
-    @staticmethod
-    def load_origin_data(file_name: str) -> Dict:
-        '''
-        :param file_name: path of the events file
-        :type file_name: str
-        :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
-        :rtype: Dict
-
-        This function defines how to read the origin binary data.
-        '''
-        events = scipy.io.loadmat(file_name)
-        events = {
-            't': events['ts'].squeeze(),
-            'x': 239 - events['x'].squeeze(),
-            'y': 179 - events['y'].squeeze(),
-            'p': events['pol'].squeeze()
-        }
-
-        return events
-
-    @staticmethod
-    def get_H_W() -> Tuple:
-        '''
-        :return: A tuple ``(H, W)``, where ``H`` is the height of the data and ``W` is the weight of the data.
-            For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
-        :rtype: tuple
-        '''
-        return 180, 240
-
-    @staticmethod
-    def read_mat_save_to_np(mat_file: str, np_file: str):
-        events = ASLDVS.load_origin_data(mat_file)
-        np_savez(np_file,
-                 t=events['t'],
-                 x=events['x'],
-                 y=events['y'],
-                 p=events['p']
-                 )
-        print(f'Save [{mat_file}] to [{np_file}].')
-
-
-    @staticmethod
-    def create_events_np_files(extract_root: str, events_np_root: str):
-        '''
-        :param extract_root: Root directory path which saves extracted files from downloaded files
-        :type extract_root: str
-        :param events_np_root: Root directory path which saves events files in the ``npz`` format
-        :type events_np_root:
-        :return: None
-
-        This function defines how to convert the origin binary data in ``extract_root`` to ``npz`` format and save converted files in ``events_np_root``.
-        '''
+    @classmethod
+    def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         t_ckp = time.time()
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
-            sub_threads = []
+            futures = []
             for class_name in os.listdir(extract_root):
-                mat_dir = os.path.join(extract_root, class_name)
-                np_dir = os.path.join(events_np_root, class_name)
-                os.mkdir(np_dir)
+                mat_dir = extract_root / class_name
+                np_dir = raw_root / class_name
+                np_dir.mkdir()
                 print(f'Mkdir [{np_dir}].')
                 for bin_file in os.listdir(mat_dir):
-                    source_file = os.path.join(mat_dir, bin_file)
-                    target_file = os.path.join(np_dir, os.path.splitext(bin_file)[0] + '.npz')
+                    source_file = mat_dir / bin_file
+                    target_file = np_dir / (os.path.splitext(bin_file)[0] + '.npz')
                     print(f'Start to convert [{source_file}] to [{target_file}].')
-                    sub_threads.append(tpe.submit(ASLDVS.read_mat_save_to_np, source_file,
-                               target_file))
-            for sub_thread in sub_threads:
-                if sub_thread.exception():
-                    print(sub_thread.exception())
-                    exit(-1)
-
-
+                    futures.append(tpe.submit(
+                        _read_mat_save_to_np, source_file, target_file
+                    ))
+            for future in futures:
+                future.result()
 
         print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')

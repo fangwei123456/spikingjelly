@@ -3,6 +3,14 @@ import torch.nn as nn
 from torch import Tensor
 
 
+__all__ = [
+    "ReplaceforGrad",
+    "GradwithTrace",
+    "SpikeTraceOp",
+    "OTTTSequential",
+]
+
+
 class ReplaceforGrad(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, x_r):
@@ -104,4 +112,3 @@ class OTTTSequential(nn.Sequential):
                     module = SpikeTraceOp(module)
                 input = module(input)
         return input
-

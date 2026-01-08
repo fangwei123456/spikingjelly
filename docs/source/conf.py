@@ -104,7 +104,11 @@ html_css_files = ["css/custom.css"]
 
 html_favicon = "_static/logo/sj-logo.png"
 
-autodoc_mock_imports = ['loris', 'readline', '_C_gemm', '_C_neuron', 'torchaudio', 'onnx', 'onnxruntime', 'gym', 'cloudpickle', 'rarfile', 'lava', 'lyngor', 'lynpy', 'sklearn', 'h5py', 'triton', 'cupy', 'nir', 'nirtorch']
+autodoc_mock_imports = [
+    'loris', 'readline', '_C_gemm', '_C_neuron', 'torchaudio', 'onnx',
+    'onnxruntime', 'gym', 'cloudpickle', 'rarfile', 'lava', 'lyngor', 'lynpy',
+    'sklearn', 'h5py', 'triton', 'cupy', 'nir', 'nirtorch'
+]
 autoclass_content = 'both'
 autodoc_member_order = 'bysource'
 autodoc_inherit_docstrings = False

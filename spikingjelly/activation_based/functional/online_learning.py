@@ -8,6 +8,13 @@ from .. import base
 from .net_config import detach_net
 
 
+__all__ = [
+    'fptt_online_training_init_w_ra',
+    'fptt_online_training',
+    'ottt_online_training'
+]
+
+
 def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     """
     .. _fptt_online_training_init_w_ra-en:

@@ -1,18 +1,19 @@
 import os
-from typing import Callable, Tuple, Dict, Optional
+from typing import Callable, Tuple, Optional
 from pathlib import Path
+from random import choice
 
 import torch
 import torchaudio
 from torch.utils.data import Dataset
 from torch import Tensor
-from torchvision.datasets.utils import (
-    download_url,
-    extract_archive
-)
+from torchvision.datasets.utils import download_url, extract_archive
 from torchvision.datasets.utils import verify_str_arg
 import numpy as np
-from random import choice
+
+
+__all__ = ["SpeechCommands", "SPEECHCOMMANDS"]
+
 
 FOLDER_IN_ARCHIVE = "SpeechCommands"
 URL = "speech_commands_v0.02"
@@ -29,7 +30,7 @@ TEST_RECORD = "testing_list.txt"
 TRAIN_RECORD = "training_list.txt"
 
 
-def load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str, str, int]:
+def _load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str, str, int]:
     filepath = os.path.join(path, relpath)
     label, filename = os.path.split(relpath)
     speaker, _ = os.path.splitext(filename)
@@ -43,37 +44,23 @@ def load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str,
 
 
 class SpeechCommands(Dataset):
-    def __init__(self,
-                 label_dict: Dict,
-                 root: str,
-                 silence_cnt: Optional[int] = 0,
-                 silence_size: Optional[int] = 16000,
-                 transform: Optional[Callable] = None,
-                 url: Optional[str] = URL,
-                 split: Optional[str] = "train",
-                 folder_in_archive: Optional[str] = FOLDER_IN_ARCHIVE,
-                 download: Optional[bool] = False) -> None:
+    def __init__(
+        self,
+        label_dict: dict,
+        root: str,
+        silence_cnt: Optional[int] = 0,
+        silence_size: Optional[int] = 16000,
+        transform: Optional[Callable] = None,
+        url: Optional[str] = URL,
+        split: Optional[str] = "train",
+        folder_in_archive: Optional[str] = FOLDER_IN_ARCHIVE,
+        download: Optional[bool] = False
+    ) -> None:
         '''
-        :param label_dict: 标签与类别的对应字典
-        :type label_dict: Dict
-        :param root: 数据集的根目录
-        :type root: str
-        :param silence_cnt: Silence数据的数量
-        :type silence_cnt: int, optional
-        :param silence_size: Silence数据的尺寸
-        :type silence_size: int, optional
-        :param transform: A function/transform that takes in a raw audio
-        :type transform: Callable, optional
-        :param url: 数据集版本，默认为v0.02
-        :type url: str, optional
-        :param split: 数据集划分，可以是 ``"train", "test", "val"``，默认为 ``"train"``
-        :type split: str, optional
-        :param folder_in_archive: 解压后的目录名称，默认为 ``"SpeechCommands"``
-        :type folder_in_archive: str, optional
-        :param download: 是否下载数据，默认为False
-        :type download: bool, optional
+        * **中文**
 
-        SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_，根据给出的测试集与验证集列表进行了划分，包含v0.01与v0.02两个版本。
+        SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_ ，
+        根据给出的测试集与验证集列表进行了划分，包含v0.01与v0.02两个版本。
 
         数据集包含三大类单词的音频：
 
@@ -83,11 +70,45 @@ class SpeechCommands(Dataset):
 
         #. 辅助词，可以视为干扰词，共10个："Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
 
-        v0.01版本包含共计30类，64,727个音频片段，v0.02版本包含共计35类，105,829个音频片段。更详细的介绍参见前述论文，以及数据集的README。
+        v0.01版本包含共计30类，64,727个音频片段，v0.02版本包含共计35类，105,829个音频片段。
+        更详细的介绍参见前述论文，以及数据集的README。
 
         代码实现基于torchaudio并扩充了功能，同时也参考了 `原论文的实现 <https://github.com/romainzimmer/s2net/blob/b073f755e70966ef133bbcd4a8f0343354f5edcd/data.py>`_。
-        '''
 
+        .. note::
+
+            SpeechCommands 并非神经形态数据集。因此， :class:`SpeechCommands` 并不继承自
+            :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` ，
+            而是继承自 :class:`torch.utils.data.Dataset` 。
+
+
+        :param label_dict: 标签与类别的对应字典
+        :type label_dict: dict
+
+        :param root: 数据集的根目录
+        :type root: str
+
+        :param silence_cnt: Silence数据的数量
+        :type silence_cnt: int, optional
+
+        :param silence_size: Silence数据的尺寸
+        :type silence_size: int, optional
+
+        :param transform: A function/transform that takes in a raw audio
+        :type transform: Callable, optional
+
+        :param url: 数据集版本，默认为v0.02
+        :type url: str, optional
+
+        :param split: 数据集划分，可以是 ``"train", "test", "val"``，默认为 ``"train"``
+        :type split: str, optional
+
+        :param folder_in_archive: 解压后的目录名称，默认为 ``"SpeechCommands"``
+        :type folder_in_archive: str, optional
+
+        :param download: 是否下载数据，默认为False
+        :type download: bool, optional
+        '''
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
         self.label_dict = label_dict
         self.transform = transform
@@ -98,14 +119,13 @@ class SpeechCommands(Dataset):
             raise ValueError(f"Invalid silence_cnt parameter: {silence_cnt}")
         if silence_size <= 0:
             raise ValueError(f"Invalid silence_size parameter: {silence_size}")
-        
+
         if url in [
             "speech_commands_v0.01",
             "speech_commands_v0.02",
         ]:
             base_url = "https://storage.googleapis.com/download.tensorflow.org/data/"
             ext_archive = ".tar.gz"
-
             url = os.path.join(base_url, url + ext_archive)
 
         basename = os.path.basename(url)
@@ -179,7 +199,7 @@ class SpeechCommands(Dataset):
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if n < len(self._walker):
             fileid = self._walker[n]
-            waveform, sample_rate, label, speaker_id, utterance_number = load_speechcommands_item(fileid, self._path)
+            waveform, sample_rate, label, speaker_id, utterance_number = _load_speechcommands_item(fileid, self._path)
         else:
             # Silence data are randomly and dynamically generated from noise data
 

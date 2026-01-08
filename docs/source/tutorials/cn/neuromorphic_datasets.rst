@@ -10,13 +10,14 @@ English version: :doc:`../en/neuromorphic_datasets`
 
 自动下载和手动下载
 -----------------------
+
 CIFAR10-DVS等数据集支持自动下载。支持自动下载的数据集，在首次运行时原始数据集将会被下载到数据集根目录下的 ``download`` 文件夹。每个数据集的 ``downloadable()``
 函数定义了该数据集是否能够自动下载，而 ``resource_url_md5()`` 函数定义了各个文件的下载链接和MD5。示例：
 
 .. code:: python
 
-    from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
-    from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+    from spikingjelly.datasets import CIFAR10DVS
+    from spikingjelly.datasets import DVS128Gesture
 
     print('CIFAR10-DVS downloadable', CIFAR10DVS.downloadable())
     print('resource, url, md5/n', CIFAR10DVS.resource_url_md5())
@@ -53,18 +54,19 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 获取Event数据
 -----------------------
+
 创建训练集和测试集，其中参数 ``data_type='event'`` 表示我们使用Event数据。
 
 .. code:: python
 
-    from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+    from spikingjelly.datasets import DVS128Gesture
 
     root_dir = 'D:/datasets/DVS128Gesture'
     train_set = DVS128Gesture(root_dir, train=True, data_type='event')
 
 运行这段代码，惊蜇框架将会完成以下工作：
 
-#. 检测数据集是否存在，如果存在，则进行MD5校验，确认数据集无误后，开始进行解压。将原始数据解压到同级目录下的 ``extract`` 文件夹
+#. 检测数据集是否存在。如果存在，则进行MD5校验，确认数据集无误后，开始进行解压。将原始数据解压到同级目录下的 ``extract`` 文件夹
 #. DVS128 Gesture中的每个样本，是在不同光照环境下，对不同表演者进行录制的手势视频。一个AER文件中包含了多个手势，对应的会有一个csv文件来标注整个视频内各个时间段内都是哪种手势。因此，单个的视频文件并不是一个类别，而是多个类别的集合。惊蜇框架会启动多线程进行划分，将每个视频中的每个手势类别文件单独提取出来
 
 下面是运行过程中的命令行输出：
@@ -118,11 +120,12 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
     p [1 0 0 ... 1 0 0]
     label 0
 
-其中 ``event`` 使用字典格式存储Events数据，键为 ``['t', 'x', 'y', 'p']``；``label`` 是数据的标签，DVS128 Gesture共有11类。
+其中 ``event`` 使用字典格式存储Events数据，键为 ``['t', 'x', 'y', 'p']``； ``label`` 是数据的标签，DVS128 Gesture共有11类。
 
 获取Frame数据
 -----------------------
-将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i < N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_num=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
+
+将原始的Event流积分成Frame数据，是常用的处理方法，我们采用 [#PLIF]_ 的实现方式。我们将原始的Event数据记为 :math:`E(x_{i}, y_{i}, t_{i}, p_{i}), 0 \leq i < N`；设置 ``split_by='number'`` 表示从Event数量 :math:`N` 上进行划分，接近均匀地划分为 ``frames_num=20``， 也就是 :math:`T` 段。记积分后的Frame数据中的某一帧
 为 :math:`F(j)`，在 :math:`(p, x, y)` 位置的像素值为 :math:`F(j, p, x, y)`；:math:`F(j)` 是从Event流中索引介于 :math:`j_{l}` 和 :math:`j_{r}` 的Event
 积分而来：
 
@@ -209,6 +212,7 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 固定时间间隔积分
 ----------------------------
+
 使用固定时间间隔积分，更符合实际物理系统。例如每 ``10 ms`` 积分一次，则长度为 ``L ms`` 的数据，可以得到  ``math.floor(L / 10)`` 帧。但
 神经形态数据集中每个样本的长度往往不相同，因此会得到不同长度的帧数据。使用惊蜇框架提供的 :class:`spikingjelly.datasets.utils.pad_sequence_collate`
 和 :class:`spikingjelly.datasets.utils.padded_sequence_mask` 可以很方便的对不等长数据进行对齐和还原。
@@ -220,10 +224,10 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
     import torch
     from torch.utils.data import DataLoader
     from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
-    from spikingjelly.datasets import dvs128_gesture
+    from spikingjelly.datasets import DVS128Gesture
 
     root='D:/datasets/DVS128Gesture'
-    train_set = dvs128_gesture.DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
+    train_set = DVS128Gesture(root, data_type='frame', duration=1000000, train=True)
     for i in range(5):
         x, y = train_set[i]
         print(f'x[{i}].shape=[T, C, H, W]={x.shape}')
@@ -254,11 +258,11 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
             [1, 1, 1, 1, 1, 0, 0],
             [1, 1, 1, 1, 1, 1, 1]], dtype=torch.int32)
 
-
 自定义积分方法
 -----------------------
+
 惊蜇框架支持用户自定义积分方法。用户只需要提供积分函数 ``custom_integrate_function`` 以及保存frames的文件夹名 ``custom_integrated_frames_dir_name``。
-``custom_integrate_function`` 是用户定义的函数，输入是 ``events, H, W``，其中 ``events`` 是一个pythono字典，键为
+``custom_integrate_function`` 是用户定义的函数，输入是 ``events, H, W``，其中 ``events`` 是一个 Python 字典，键为
 ``['t', 'x', 'y', 'p']`` 值为 ``numpy.ndarray`` 类型。``H`` 是数据高度，``W`` 是数据宽度。例如，对于DVS手势数据集，H=128, W=128。
 这个函数的返回值应该是frames。
 
@@ -269,13 +273,13 @@ DVS128 Gesture数据集不支持自动下载，但它的 ``resource_url_md5()`` 
 
 .. code:: python
 
-    import spikingjelly.datasets as sjds
+    from spikingjelly.datasets.utils import integrate_events_segment_to_frame
     def integrate_events_to_2_frames_randomly(events: Dict, H: int, W: int):
-        index_split = np.random.randint(low=0, high=events['t'].__len__())
+        index_split = np.random.randint(low=0, high=len(events['t']))
         frames = np.zeros([2, 2, H, W])
         t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
-        frames[0] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
-        frames[1] = sjds.utils.integrate_events_segment_to_frame(x, y, p, H, W, index_split, events['t'].__len__())
+        frames[0] = integrate_events_segment_to_frame(x, y, p, H, W, 0, index_split)
+        frames[1] = integrate_events_segment_to_frame(x, y, p, H, W, index_split, len(events['t']))
         return frames
 
 接下来创建数据集：

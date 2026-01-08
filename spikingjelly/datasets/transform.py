@@ -4,6 +4,9 @@ import numpy as np
 import torch
 
 
+__all__ = ['random_temporal_delete', 'RandomTemporalDelete']
+
+
 def random_temporal_delete(x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first):
     """
     * **English**

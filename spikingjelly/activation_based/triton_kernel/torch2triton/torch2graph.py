@@ -8,6 +8,12 @@ from torch._functorch.aot_autograd import aot_function
 warnings.filterwarnings("ignore", category=UserWarning)
 
 
+__all__ = [
+    "generate_inference_graph",
+    "generate_forward_and_backward_graph",
+]
+
+
 class GraphCollector:
     """Provide this class to aot_function to collect forward and backward graph.
     """

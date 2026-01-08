@@ -5,4 +5,4 @@ spikingjelly.datasets.speechcommands module
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: load_speechcommands_item
+   :exclude-members:

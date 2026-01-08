@@ -8,6 +8,14 @@ from torch import Tensor
 from .. import base, functional
 
 
+__all__ = [
+    'SynapseFilter',
+    'PrintShapeModule',
+    'VotingLayer',
+    'Delay',
+]
+
+
 class SynapseFilter(base.MemoryModule):
 
     def __init__(self, tau=100.0, learnable=False, step_mode='s'):

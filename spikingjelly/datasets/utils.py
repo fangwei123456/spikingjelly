@@ -42,6 +42,30 @@ except BaseException as e:
     pass
 
 
+__all__ = [
+    "np_savez",
+    "save_as_pic",
+    "save_every_frame_of_an_entire_DVS_dataset",
+    "play_frame",
+    "load_aedat_v3",
+    "load_ATIS_bin",
+    "load_npz_frames",
+    "integrate_events_segment_to_frame",
+    "cal_fixed_frames_number_segment_index",
+    "integrate_events_by_fixed_frames_number",
+    "integrate_events_file_to_frames_file_by_fixed_frames_number",
+    "integrate_events_by_fixed_duration",
+    "integrate_events_file_to_frames_file_by_fixed_duration",
+    "save_frames_to_npz_and_print",
+    "create_same_directory_structure",
+    "split_to_train_test_set",
+    "fast_split_to_train_test_set",
+    "pad_sequence_collate",
+    "padded_sequence_mask",
+    "create_sub_dataset",
+]
+
+
 np_savez = np.savez_compressed if configure.save_datasets_compressed else np.savez
 
 
@@ -50,7 +74,7 @@ def save_as_pic(
     save_pic_to: str = './',
     pic_first_name: str = 'pic'
 ) -> None:
-    '''
+    r'''
     * **English**
 
     :param x: frames with ``shape=[T, 2, H, W]``
@@ -59,7 +83,7 @@ def save_as_pic(
     :param save_pic_to: where to store images
     :type save_pic_to: str
 
-    :param pic_first_name: prefix for image names before _t (stored image names are: ``pic_first_name``_t.png)
+    :param pic_first_name: prefix for image names (stored image names are: ``f"{pic_first_name}_{t}.png"``)
     :type pic_first_name: str
 
     :return: None
@@ -184,13 +208,13 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
         print(f'Save frames to [{save_gif_to}].')
 
 
-def load_aedat_v3(file_name: str) -> dict:
+def load_aedat_v3(file_name: Union[str, Path]) -> dict:
     '''
     This function is written by referring to https://gitlab.com/inivation/dv/dv-python .
     It can be used for DVS128 Gesture.
 
     :param file_name: path of the aedat v3 file
-    :type file_name: str
+    :type file_name: Union[str, pathlib.Path]
 
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: dict
@@ -251,7 +275,7 @@ def load_aedat_v3(file_name: str) -> dict:
         return txyp
 
 
-def load_ATIS_bin(file_name: str) -> dict:
+def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
     '''
     * **English**
 
@@ -280,7 +304,7 @@ def load_ATIS_bin(file_name: str) -> dict:
     return {'t': t, 'x': x, 'y': y, 'p': p}
 
 
-def load_npz_frames(file_name: str) -> np.ndarray:
+def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     '''
     * **English**
 
@@ -623,17 +647,19 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     print(f'Frames [{fname}] saved.')
 
 
-def create_same_directory_structure(source_dir: str, target_dir: str) -> None:
+def create_same_directory_structure(
+    source_dir: Union[str, Path], target_dir: Union[str, Path]
+) -> None:
     '''
     * **English**
 
     Create the same directory structure in ``target_dir`` with that of ``source_dir``.
 
     :param source_dir: Path of the directory that be copied from
-    :type source_dir: str
+    :type source_dir: Union[str, pathlib.Path]
 
     :param target_dir: Path of the directory that be copied to
-    :type target_dir: str
+    :type target_dir: Union[str, pathlib.Path]
 
     :return: None
     '''

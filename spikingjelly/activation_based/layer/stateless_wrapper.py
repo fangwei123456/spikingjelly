@@ -15,6 +15,16 @@ import numpy as np
 from .. import base, functional
 
 
+__all__ = [
+    "Conv1d", "Conv2d", "Conv3d",
+    "Upsample", "ConvTranspose1d", "ConvTranspose2d", "ConvTranspose3d", 
+    "GroupNorm", "MaxPool1d", "MaxPool2d", "MaxPool3d",
+    "AvgPool1d", "AvgPool2d", "AvgPool3d",
+    "AdaptiveAvgPool1d", "AdaptiveAvgPool2d", "AdaptiveAvgPool3d",
+    "Linear", "Flatten", "WSConv2d", "WSLinear"
+]
+
+
 ################################################################################
 # nn.Module wrappers with ``step_mode``                                        #
 ################################################################################
