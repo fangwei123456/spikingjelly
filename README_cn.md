@@ -40,7 +40,14 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 
 **版本亮点**
 
-...
+在latest版本（Github版本）中，
+
+- 已添加`IFNode`，`LIFNode`和`ParametricLIFNode`的 [Triton](https://github.com/triton-lang/triton) 后端；
+- 已添加`FlexSN`，可将PyTorch神经元动力学转换到Triton内核；
+- 已添加`SpikingSelfAttention`和`QKAttention`；
+- 已添加`nir_exchange`；
+- 已重构`spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional`和`spikingjelly.datasets`；
+- 已更新文档和教程。
 
 **计划**
 
@@ -58,7 +65,6 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 - [ ] 支持华为 NPU 加速。
 
 如果想尝试前沿实验性功能，请查看我们的配套项目[flashsnn](https://github.com/AllenYolk/flash-snn)。今后，新功能将先在 flashsnn中原型化，待技术成熟后再合并到SpikingJelly。
-
 
 **版本说明**
 
@@ -197,18 +203,21 @@ SpikingJelly为部分神经元提供给了多种后端。可以使用对用户�
 
 SpikingJelly 已经将下列数据集纳入：
 
-| 数据集                          | 来源                                                         |
+| 数据集 | 来源 |
 | ------------------------------- | ------------------------------------------------------------ |
-| ASL-DVS                         | [Graph-based Object Classification for Neuromorphic Vision Sensing](https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html) |
-| CIFAR10-DVS                     | [CIFAR10-DVS: An Event-Stream Dataset for Object Classification](https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full) |
-| DVS128 Gesture                  | [A Low Power, Fully Event-Based Gesture Recognition System](https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html) |
-| ES-ImageNet                     | [ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks](https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full) |
-| HARDVS                          | [HARDVS: Revisiting Human Activity Recognition with Dynamic Vision Sensors](https://arxiv.org/abs/2211.09648) |
-| N-Caltech101                    | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
-| N-MNIST                         | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
-| Nav Gesture                     | [Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full) |
+| ASL-DVS | [Graph-based Object Classification for Neuromorphic Vision Sensing](https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html) |
+| Bullying10K | [Bullying10K: A Large-Scale Neuromorphic Dataset towards Privacy-Preserving Bullying Recognition](https://proceedings.neurips.cc/paper_files/paper/2023/file/05ffe69463062b7f9fb506c8351ffdd7-Paper-Datasets_and_Benchmarks.pdf) |
+| CIFAR10-DVS | [CIFAR10-DVS: An Event-Stream Dataset for Object Classification](https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full) |
+| DVS-Lip | [Multi-Grained Spatio-Temporal Features Perceived Network for Event-Based Lip-Reading](https://openaccess.thecvf.com/content/CVPR2022/html/Tan_Multi-Grained_Spatio-Temporal_Features_Perceived_Network_for_Event-Based_Lip-Reading_CVPR_2022_paper.html) |
+| DVS128 Gesture | [A Low Power, Fully Event-Based Gesture Recognition System](https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html) |
+| ES-ImageNet | [ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks](https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full) |
+| HARDVS | [HARDVS: Revisiting Human Activity Recognition with Dynamic Vision Sensors](https://arxiv.org/abs/2211.09648) |
+| N-Caltech101 | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
+| N-MNIST | [Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades](https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full) |
+| Nav Gesture | [Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities](https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full) |
 | Spiking Heidelberg Digits (SHD) | [The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks](https://doi.org/10.1109/TNNLS.2020.3044364) |
-| DVS-Lip                         | [Multi-Grained Spatio-Temporal Features Perceived Network for Event-Based Lip-Reading](https://openaccess.thecvf.com/content/CVPR2022/html/Tan_Multi-Grained_Spatio-Temporal_Features_Perceived_Network_for_Event-Based_Lip-Reading_CVPR_2022_paper.html) |
+| Spiking Speech Commands (SSC) | [The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks](https://doi.org/10.1109/TNNLS.2020.3044364) |
+| Speech Commands | [Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition](https://arxiv.org/abs/1804.03209) |
 
 用户可以轻松使用事件数据，或由SpikingJelly积分生成的帧数据：
 
@@ -216,7 +225,7 @@ SpikingJelly 已经将下列数据集纳入：
 import torch
 from torch.utils.data import DataLoader
 from spikingjelly.datasets.utils import pad_sequence_collate, padded_sequence_mask
-from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+from spikingjelly.datasets import DVS128Gesture
 root_dir = 'D:/datasets/DVS128Gesture'
 event_set = DVS128Gesture(root_dir, train=True, data_type='event')
 event, label = event_set[0]
@@ -277,7 +286,7 @@ for x, y, x_len in train_data_loader:
 
 SpikingJelly精心准备了多项教程。下面展示了**部分**教程：
 
-| 图例                                                         | 教程                                                         |
+| 图例 | 教程 |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | ![basic_concept](./docs/source/_static/tutorials/basic_concept/step-by-step.png) | [基本概念](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/basic_concept.html) |
 | ![neuron](./docs/source/_static/tutorials/neuron/0.png) | [神经元](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based/neuron.html) |
