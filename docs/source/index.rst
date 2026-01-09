@@ -51,7 +51,7 @@
 
     git clone https://github.com/fangwei123456/spikingjelly.git
     cd spikingjelly
-    python setup.py install
+    pip install .
 
 通过 `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_ ：
 
@@ -59,7 +59,7 @@
 
     git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
-    python setup.py install
+    pip install .
 
 上手教程
 ----------------------
@@ -160,7 +160,7 @@ From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
     git clone https://github.com/fangwei123456/spikingjelly.git
     cd spikingjelly
-    python setup.py install
+    pip install .
 
 From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
 
@@ -168,7 +168,7 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
 
     git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
-    python setup.py install
+    pip install .
 
 Tutorials
 ------------------------

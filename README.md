@@ -104,7 +104,7 @@ From [GitHub](https://github.com/fangwei123456/spikingjelly):
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-python setup.py install
+pip install .
 ```
 
 From [OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
@@ -112,7 +112,7 @@ From [OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
 ```bash
 git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
-python setup.py install
+pip install .
 ```
 
 ## Build SNN In An Unprecedented Simple Way

@@ -104,7 +104,7 @@ pip install spikingjelly
 ```bash
 git clone https://github.com/fangwei123456/spikingjelly.git
 cd spikingjelly
-python setup.py install
+pip install .
 ```
 
 通过[OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
@@ -112,7 +112,7 @@ python setup.py install
 ```bash
 git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
-python setup.py install
+pip install .
 ```
 
 ## 以前所未有的简单方式搭建SNN

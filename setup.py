@@ -1,8 +1,3 @@
-'''
-python setup.py sdist bdist_wheel
-python -m twine upload dist/*
-'''
-
 from setuptools import find_packages
 from setuptools import setup
 
