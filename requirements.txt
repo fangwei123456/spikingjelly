@@ -1,8 +1,23 @@
-torch
-matplotlib
-numpy
-tqdm
+# Core Dependencies
+torch>=2.2.0   # tested on 2.7.1+cu118
 torchvision
 torchaudio
-scipy
 tensorboard
+numpy
+scipy
+einops
+tqdm
+
+# Visualization
+matplotlib
+SciencePlots
+
+# Cupy Backend
+# cupy
+
+# Triton Backend
+# triton>=3.3.1
+
+# NIR Exchange
+# nir
+# nirtorch

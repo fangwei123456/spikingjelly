@@ -72,7 +72,7 @@ def _load_raw_events(
     data = fp.read()
     if bytes_trim > 0:
         data = data[:-bytes_trim]
-    data = np.fromstring(data, dtype='>u4')
+    data = np.frombuffer(data, dtype='>u4')
     if len(data) % 2 != 0:
         print(data[:20:2])
         print('---')

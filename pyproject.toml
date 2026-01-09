@@ -1,0 +1,46 @@
+[build-system]
+requires = [
+    "setuptools>=77.0.3",
+    "wheel",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spikingjelly"
+version = "0.0.0.0.15"
+description = "A deep learning framework for SNNs built on PyTorch."
+readme = {file = "README.md", content-type = "text/markdown"}
+authors = [
+    {name = "PKU MLG, PCL, and other contributors"},
+    {email = "fwei@pku.edu.cn"},
+    {email = "chyq@pku.edu.cn"},
+    {email = "yfhuang@pku.edu.cn"}
+]
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.2.0",
+    "torchvision",
+    "torchaudio",
+    "tensorboard",
+    "numpy",
+    "scipy",
+    "einops",
+    "tqdm",
+    "matplotlib",
+    "SciencePlots"
+]
+classifiers = [
+    "Programming Language :: Python :: 3 :: Only",
+    "License :: Other/Proprietary License",
+    "Operating System :: OS Independent",
+]
+license-files = ["LICEN[CS]E*"]
+
+[project.optional-dependencies]
+cupy = ["cupy"]
+triton = ["triton>=3.3.1"]
+nir = ["nir", "nirtorch"]
+
+[project.urls]
+Homepage = "https://github.com/fangwei123456/spikingjelly"
+Documentation = "https://spikingjelly.readthedocs.io/"

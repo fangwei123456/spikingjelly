@@ -19,6 +19,14 @@ The ``nir_exchange`` package provides two key interfaces:
 
 This tutorial provides a detailed introduction to these two functions.
 
+.. note::
+
+    ``nir_exchange`` package depends on ``nir`` and ``nir_exchange``. Install them using ``pip`` :
+
+    .. code:: shell
+
+        pip install nir nir_exchange
+
 From SpikingJelly to NIR
 ============================
 

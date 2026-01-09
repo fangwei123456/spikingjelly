@@ -89,7 +89,7 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 
 ## 安装
 
-注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
+注意，SpikingJelly是基于PyTorch的。安装SpikingJelly前，请先确保环境中已经安装了[PyTorch、torchvision和torchaudio](https://pytorch.org)。最新版的SpikingJelly依赖`torch>=2.2.0`；所有测试均在`torch==2.7.1`上进行。
 
 **从** [**PyPI**](https://pypi.org/project/spikingjelly/) **安装最新的稳定版本**：
 
@@ -115,16 +115,37 @@ cd spikingjelly
 pip install .
 ```
 
+**可选依赖**
+
+若想使用`cupy`后端，需安装[CuPy](https://docs.cupy.dev/en/stable/install.html#installing-cupy)。
+
+```bash
+pip install cupy-cuda12x # for CUDA 12.x
+pip install cupy-cuda11x # for CUDA 11.x
+```
+
+若想使用`triton`后端，请确保安装了[Triton](https://github.com/triton-lang/triton)。通常，在安装 PyTorch 2.X 时，`triton`会被作为依赖项而自动安装。针对`triton`后端的测试均在`triton==3.3.1`上进行。
+
+```bash
+pip install triton==3.3.1
+```
+
+若想使用`nir_exchange`功能，请安装[NIR](https://github.com/neuromorphs/NIR)和[NIRTorch](https://github.com/neuromorphs/NIRTorch)。
+
+```bash
+pip install nir nirtorch
+```
+
 ## 以前所未有的简单方式搭建SNN
 
 SpikingJelly非常易于使用。使用SpikingJelly搭建SNN，就像使用PyTorch搭建ANN一样简单：
 
 ```python
 nn.Sequential(
-        layer.Flatten(),
-        layer.Linear(28 * 28, 10, bias=False),
-        neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
-        )
+    layer.Flatten(),
+    layer.Linear(28 * 28, 10, bias=False),
+    neuron.LIFNode(tau=tau, surrogate_function=surrogate.ATan())
+)
 ```
 
 这个简单的网络，使用泊松编码器，在MNIST的测试集上可以达到92%的正确率。 更多信息，参见教程。您还可以在Python中运行以下代码，以使用转换后的模型对MNIST进行分类：

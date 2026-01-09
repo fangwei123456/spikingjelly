@@ -89,7 +89,7 @@ For early-stage experimental features, see our companion project [flashsnn](http
 
 ## Installation
 
-Note that SpikingJelly is based on PyTorch. Please make sure that you have installed [PyTorch](https://pytorch.org) before you install SpikingJelly.
+Note that SpikingJelly is based on PyTorch. Please make sure that you have installed [PyTorch, torchvision and torchaudio](https://pytorch.org) before you install SpikingJelly. Note that the latest version of SpikingJelly requires `torch>=2.2.0` and is tested on `torch==2.7.1` .
 
 **Install the last stable version from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
@@ -113,6 +113,27 @@ From [OpenI](https://openi.pcl.ac.cn/OpenI/spikingjelly):
 git clone https://openi.pcl.ac.cn/OpenI/spikingjelly.git
 cd spikingjelly
 pip install .
+```
+
+**Optional Dependencies**
+
+To enable `cupy` backend, install [CuPy](https://docs.cupy.dev/en/stable/install.html#installing-cupy).
+
+```bash
+pip install cupy-cuda12x # for CUDA 12.x
+pip install cupy-cuda11x # for CUDA 11.x
+```
+
+To enable `triton` backend, make sure that [Triton](https://github.com/triton-lang/triton) is installed. Typically, `triton` is installed with PyTorch 2.X. We test `triton` backend on `triton==3.3.1`.
+
+```bash
+pip install triton==3.3.1
+```
+
+To enable `nir_exchange`, install [NIR](https://github.com/neuromorphs/NIR) and [NIRTorch](https://github.com/neuromorphs/NIRTorch).
+
+```bash
+pip install nir nirtorch
 ```
 
 ## Build SNN In An Unprecedented Simple Way

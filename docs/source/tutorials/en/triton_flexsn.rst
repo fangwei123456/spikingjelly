@@ -30,7 +30,7 @@ The way to enable the Triton backend is similar to that of the CuPy backend. Tak
     import torch
     from spikingjelly.activation_based import neuron
 
-    n = neuron.LIFNode(step_mode="m", backend="cupy").to("cuda:0")
+    n = neuron.LIFNode(step_mode="m", backend="triton").to("cuda:0")
     x = torch.randn([16, 1, 3, 32, 32], device="cuda:0") # [T, B, C, H, W]
 
     s = n(x)
@@ -46,7 +46,7 @@ Here, we construct an LIF neuron running in multi-step mode ``step_mode="m"`` an
     from spikingjelly.activation_based import neuron
 
     n_triton = neuron.LIFNode(
-        step_mode="m", backend="cupy", store_v_seq=True
+        step_mode="m", backend="triton", store_v_seq=True
     ).to("cuda:0")
     n_torch = neuron.LIFNode(
         step_mode="m", backend="torch", store_v_seq=True

@@ -19,6 +19,14 @@ SpikingJelly 的 ``nir_exchange`` 包提供了两个关键的用户接口：
 
 本教程将对这两个函数展开介绍。
 
+.. note::
+
+    ``nir_exchange`` 功能依赖于 ``nir`` 和 ``nir_exchange`` 包。可以用 ``pip`` 安装：
+
+    .. code:: shell
+
+        pip install nir nir_exchange
+
 从 SpikingJelly 到 NIR
 ==========================
 
