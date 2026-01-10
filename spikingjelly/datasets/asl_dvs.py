@@ -82,7 +82,7 @@ class ASLDVS(NeuromorphicDatasetFolder):
             'from the OpenI mirror manually by the following commands:\n'
             '----------\n'
             'pip install openi\n'
-            'openi dataset download OpenI/spikingjelly ASLDVS.zip  --cluster NPU --save_path .\n'
+            'openi dataset download OpenI/ASLDVS --local_dir ./ASLDVS --max_workers 10\n'
             '----------\n'
             'Then you can extract "ASLDVS.zip" and get "ICCV2019_DVS_dataset.zip".'
         )
