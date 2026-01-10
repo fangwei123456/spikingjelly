@@ -56,6 +56,18 @@ class ASLDVS(NeuromorphicDatasetFolder):
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
         for more details about params information.
+
+        .. note::
+
+            ASLDVS's Dropbox link is expired. Users can download this dataset
+            from the OpenI mirror manually by the following commands:
+
+            .. code:: shell
+
+                pip install openi
+                openi dataset download OpenI/ASLDVS --local_dir ./ASLDVS --max_workers 10
+
+            Then you can extract ``ASLDVS.zip`` and get ``ICCV2019_DVS_dataset.zip`` .
         """
         super().__init__(
             root, None, data_type, frames_number, split_by, duration,
