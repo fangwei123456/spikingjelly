@@ -57,6 +57,7 @@ Batch Normalization Variants
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: bn_type, extra_repr
 
 Dropout Variants
 -------------------------------------

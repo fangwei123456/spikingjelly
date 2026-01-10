@@ -33,17 +33,17 @@
 安装
 ----------------
 
-注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装spikingjelly。
+注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
 
 奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
 
-从 `PyPI <https://pypi.org/project/spikingjelly/>`_ 安装最新的稳定版本：
+**从 PyPI 安装最新的稳定版本：**
 
 .. code-block:: bash
 
     pip install spikingjelly
 
-从源代码安装最新的开发版：
+**从源代码安装最新的开发版：**
 
 通过 `GitHub <https://github.com/fangwei123456/spikingjelly>`_：
 
@@ -60,6 +60,27 @@
     git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
     pip install .
+
+**可选依赖**
+
+若想使用 CuPy 后端，需安装 `CuPy <https://docs.cupy.dev/en/stable/install.html#installing-cupy>`_ 。
+
+.. code:: bash
+
+    pip install cupy-cuda12x # for CUDA 12.x
+    pip install cupy-cuda11x # for CUDA 11.x
+
+若想使用 Triton 后端，请确保安装了 `Triton <https://github.com/triton-lang/triton>`_。
+
+.. code:: bash
+
+    pip install triton==3.3.1 # spikingjelly is tested with triton==3.3.1
+
+若想使用 ``nir_exchange`` 功能，请安装 `NIR <https://github.com/neuromorphs/NIR>`_ 和 `NIRTorch <https://github.com/neuromorphs/NIRTorch>`_ 。
+
+.. code:: bash
+
+    pip install nir nirtorch
 
 上手教程
 ----------------------
@@ -128,7 +149,7 @@ Docs for different versions (`latest` is the developing version):
 - `0.0.0.0.4 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.4/#index-en>`_
 
 - `0.0.0.0.6 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.6/#index-en>`_
-  
+
 - `0.0.0.0.8 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.8/#index-en>`_
 
 - `0.0.0.0.10 <https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.10/#index-en>`_
@@ -146,13 +167,13 @@ Note that SpikingJelly is based on PyTorch. Please make sure that you have insta
 
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
 
-Install the last stable version from `PyPI <https://pypi.org/project/spikingjelly/>`_:
+**Install the last stable version from PyPI:**
 
 .. code-block:: bash
 
     pip install spikingjelly
 
-Install the latest developing version from the source codes:
+**Install the latest developing version from the source codes:**
 
 From `GitHub <https://github.com/fangwei123456/spikingjelly>`_:
 
@@ -169,6 +190,27 @@ From `OpenI <https://git.openi.org.cn/OpenI/spikingjelly>`_：
     git clone https://git.openi.org.cn/OpenI/spikingjelly.git
     cd spikingjelly
     pip install .
+
+**Optional Dependencies**
+
+To enable CuPy backend, install `CuPy <https://docs.cupy.dev/en/stable/install.html#installing-cupy>`_ .
+
+.. code:: bash
+
+    pip install cupy-cuda12x # for CUDA 12.x
+    pip install cupy-cuda11x # for CUDA 11.x
+
+To enable Triton backend, make sure that `Triton <https://github.com/triton-lang/triton>`_ is installed.
+
+.. code:: bash
+
+    pip install triton==3.3.1 # spikingjelly is tested with triton==3.3.1
+
+To enable ``nir_exchange`` , install `NIR <https://github.com/neuromorphs/NIR>`_ and `NIRTorch <https://github.com/neuromorphs/NIRTorch>`_ .
+
+.. code:: bash
+
+    pip install nir nirtorch
 
 Tutorials
 ------------------------
