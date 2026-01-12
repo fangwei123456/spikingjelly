@@ -30,7 +30,8 @@ dependencies = [
     "einops",
     "tqdm",
     "matplotlib",
-    "SciencePlots"
+    "SciencePlots",
+    "h5py",
 ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
