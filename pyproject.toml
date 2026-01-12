@@ -5,6 +5,9 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools.packages.find]
+include = ["spikingjelly"]
+
 [project]
 name = "spikingjelly"
 version = "0.0.0.0.15"
