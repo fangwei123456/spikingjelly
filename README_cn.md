@@ -354,6 +354,8 @@ abstract = {Spiking neural networks (SNNs) aim to realize brain-inspired intelli
 
 因开发者精力有限，惊蜇(SpikingJelly)的API文档并没有被中英双语完全覆盖，我们非常欢迎各位用户参与翻译补全工作（中译英、英译中）。
 
+阅读[贡献指南](./CONTRIBUTING.md)以获取更多信息。
+
 ## 项目信息
 
 北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](https://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。

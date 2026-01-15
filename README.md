@@ -359,6 +359,8 @@ You can read the issues and get the problems to be solved and the latest develop
 
 Not all API documents are written in both English and Chinese. We welcome users to complete translation (from English to Chinese or from Chinese to English).
 
+Read the [Contributing Guide](./CONTRIBUTING.md) for more information.
+
 ## About
 
 [Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
