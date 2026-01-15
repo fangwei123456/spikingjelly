@@ -41,9 +41,13 @@ classifiers = [
 license-files = ["LICEN[CS]E*"]
 
 [project.optional-dependencies]
-cupy = ["cupy"]
+cupy11 = ["cupy-cuda12x"]
+cupy12 = ["cupy-cuda11x"]
 triton = ["triton>=3.3.1"]
 nir = ["nir", "nirtorch"]
+
+[dependency-groups]
+dev = ["pytest", "pyclean"]
 
 [project.urls]
 Homepage = "https://github.com/fangwei123456/spikingjelly"

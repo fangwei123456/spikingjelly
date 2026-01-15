@@ -267,4 +267,9 @@ API 文档 | API Docs
 .. toctree::
     :hidden:
 
+    贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>
+
+.. toctree::
+    :hidden:
+
     出版物 | Publications <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>

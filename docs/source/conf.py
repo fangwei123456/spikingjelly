@@ -67,7 +67,7 @@ html_theme_options = {
     "navigation_depth": 4,
     "collapse_navigation": False,
     "show_nav_level": 1,
-    "navbar_align": "left",
+    "navbar_align": "right",
     "header_links_before_dropdown": 4,
     "navbar_center": ["navbar-nav"],
     "secondary_sidebar_items": ["page-toc", "sourcelink"],

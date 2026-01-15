@@ -1,4 +1,4 @@
-中文教程 | Tutorials in Chinese
+中文教程 | Chinese Tutorials
 ===============================================
 
 .. toctree::

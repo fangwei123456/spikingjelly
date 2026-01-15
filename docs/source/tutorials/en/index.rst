@@ -1,4 +1,4 @@
-英文教程 | Tutorials in English
+英文教程 | English Tutorials
 ========================================
 
 .. toctree::
