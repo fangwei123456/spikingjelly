@@ -33,7 +33,7 @@
 安装
 ----------------
 
-注意，SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。
+SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，才能安装SpikingJelly。最新版的 SpikingJelly 要求 ``torch>=2.2.0`` ，并在 ``torch==2.7.1`` 上测试。
 
 奇数版本是开发版，随着GitHub/OpenI不断更新。偶数版本是稳定版，可以从PyPI获取。
 
@@ -163,7 +163,7 @@ Docs for different versions (`latest` is the developing version):
 Installation
 ----------------
 
-Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly.
+Note that SpikingJelly is based on PyTorch. Please make sure that you have installed PyTorch before you install SpikingJelly. The latest version of SpikingJelly requires ``torch>=2.2.0`` and is tested on ``torch==2.7.1`` .
 
 The odd version number is the developing version, which is updated with GitHub/OpenI repository. The even version number is the stable version and available at PyPI.
 

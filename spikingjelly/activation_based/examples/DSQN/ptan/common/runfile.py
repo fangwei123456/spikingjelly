@@ -11,6 +11,7 @@ class RunFile(configparser.ConfigParser):
     """
     Configuration for the run with way to reload options.
     """
+
     def __init__(self, file_name):
         super(RunFile, self).__init__()
         if not self.read(file_name):
@@ -33,7 +34,7 @@ class RunFile(configparser.ConfigParser):
     def _merge_tweak_file(self, file_name):
         """
         Reads and merges config file, returning list of (section, name) tuples which were updated
-        :param file_name: 
+        :param file_name:
         :return: None if nothing was updated, or list of tuples (section, name) of changed options
         """
         updated = []
@@ -43,7 +44,9 @@ class RunFile(configparser.ConfigParser):
         for s in c.sections():
             for k in c[s].keys():
                 if k not in self[s].keys():
-                    self.logger.warning("Tweak file contains unknown option %s in section %s", k, s)
+                    self.logger.warning(
+                        "Tweak file contains unknown option %s in section %s", k, s
+                    )
                 else:
                     if c[s][k] != self[s][k]:
                         updated.append((s, k))
@@ -57,5 +60,3 @@ class RunFile(configparser.ConfigParser):
     @property
     def cuda_enabled(self):
         return self.getboolean("defaults", "cuda", fallback=False)
-
-

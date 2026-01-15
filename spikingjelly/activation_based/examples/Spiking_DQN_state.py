@@ -16,8 +16,8 @@ import os
 
 from tensorboardX import SummaryWriter
 
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'next_state', 'reward'))
+Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
+
 
 class ReplayMemory(object):
     def __init__(self, capacity):
@@ -50,15 +50,23 @@ class NonSpikingLIFNode(neuron.LIFNode):
         else:
             if self.v_reset is None:
                 if self.decay_input:
-                    self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
+                    self.v = self.neuronal_charge_decay_input_reset0(
+                        x, self.v, self.tau
+                    )
                 else:
-                    self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
-                
+                    self.v = self.neuronal_charge_no_decay_input_reset0(
+                        x, self.v, self.tau
+                    )
+
             else:
                 if self.decay_input:
-                    self.v = self.neuronal_charge_decay_input(x, self.v, self.v_reset, self.tau)
+                    self.v = self.neuronal_charge_decay_input(
+                        x, self.v, self.v_reset, self.tau
+                    )
                 else:
-                    self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau)
+                    self.v = self.neuronal_charge_no_decay_input(
+                        x, self.v, self.v_reset, self.tau
+                    )
 
 
 # Spiking DQN algorithm
@@ -70,7 +78,7 @@ class DQSN(nn.Module):
             layer.Linear(input_size, hidden_size),
             neuron.IFNode(),
             layer.Linear(hidden_size, output_size),
-            NonSpikingLIFNode(tau=2.0)
+            NonSpikingLIFNode(tau=2.0),
         )
 
         self.T = T
@@ -78,7 +86,7 @@ class DQSN(nn.Module):
     def forward(self, x):
         for t in range(self.T):
             self.fc(x)
-            
+
         return self.fc[-1].v
 
 
@@ -121,15 +129,20 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
 
     def select_action(state, steps_done):
         sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-                        math.exp(-1. * steps_done / EPS_DECAY)
+        eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(
+            -1.0 * steps_done / EPS_DECAY
+        )
         if sample > eps_threshold:
             with torch.no_grad():
                 ac = policy_net(state).max(1)[1].view(1, 1)
                 functional.reset_net(policy_net)
                 return ac
         else:
-            return torch.tensor([[random.randrange(env.action_space.n)]], device=device, dtype=torch.long)
+            return torch.tensor(
+                [[random.randrange(env.action_space.n)]],
+                device=device,
+                dtype=torch.long,
+            )
 
     def optimize_model():
         if len(memory) < BATCH_SIZE:
@@ -139,10 +152,14 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
 
         batch = Transition(*zip(*transitions))
 
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                                batch.next_state)), device=device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                                    if s is not None])
+        non_final_mask = torch.tensor(
+            tuple(map(lambda s: s is not None, batch.next_state)),
+            device=device,
+            dtype=torch.bool,
+        )
+        non_final_next_states = torch.cat(
+            [s for s in batch.next_state if s is not None]
+        )
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
@@ -150,11 +167,15 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
         state_action_values = policy_net(state_batch).gather(1, action_batch)
 
         next_state_values = torch.zeros(BATCH_SIZE, device=device)
-        next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
+        next_state_values[non_final_mask] = (
+            target_net(non_final_next_states).max(1)[0].detach()
+        )
         functional.reset_net(target_net)
         expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = F.smooth_l1_loss(
+            state_action_values, expected_state_action_values.unsqueeze(1)
+        )
 
         optimizer.zero_grad()
         loss.backward()
@@ -168,8 +189,8 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
         os.makedirs(model_dir)
 
     max_reward = 0
-    max_pt_path = os.path.join(model_dir, f'policy_net_{hidden_size}_max.pt')
-    pt_path = os.path.join(model_dir, f'policy_net_{hidden_size}.pt')
+    max_pt_path = os.path.join(model_dir, f"policy_net_{hidden_size}_max.pt")
+    pt_path = os.path.join(model_dir, f"policy_net_{hidden_size}.pt")
 
     for i_episode in range(num_episodes):
         # Initialize the environment and state
@@ -195,30 +216,42 @@ def train(use_cuda, model_dir, log_dir, env_name, hidden_size, num_episodes, see
             if done and total_reward > max_reward:
                 max_reward = total_reward
                 torch.save(policy_net.state_dict(), max_pt_path)
-                print(f'max_reward={max_reward}, save models')
+                print(f"max_reward={max_reward}, save models")
 
             optimize_model()
 
             if done:
-                print(f'Episode: {i_episode}, Reward: {total_reward}')
-                writer.add_scalar('Spiking-DQN-state-' + env_name + '/Reward', total_reward, i_episode)
+                print(f"Episode: {i_episode}, Reward: {total_reward}")
+                writer.add_scalar(
+                    "Spiking-DQN-state-" + env_name + "/Reward", total_reward, i_episode
+                )
                 break
 
         if i_episode % TARGET_UPDATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
 
-    print('complete')
+    print("complete")
     torch.save(policy_net.state_dict(), pt_path)
-    print('state_dict path is', pt_path)
+    print("state_dict path is", pt_path)
 
     writer.close()
 
 
-def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_num=0, fig_dir=None, figsize=(12, 6), firing_rates_plot_type='bar', heatmap_shape=None):
-    
+def play(
+    use_cuda,
+    pt_path,
+    env_name,
+    hidden_size,
+    played_frames=60,
+    save_fig_num=0,
+    fig_dir=None,
+    figsize=(12, 6),
+    firing_rates_plot_type="bar",
+    heatmap_shape=None,
+):
     T = 16
 
-    plt.rcParams['figure.figsize'] = figsize
+    plt.rcParams["figure.figsize"] = figsize
     plt.ion()
 
     env = gym.make(env_name).unwrapped
@@ -244,88 +277,96 @@ def play(use_cuda, pt_path, env_name, hidden_size, played_frames=60, save_fig_nu
             LIF_v = policy_net(state)  # shape=[1, 2]
             action = LIF_v.max(1)[1].view(1, 1).item()
 
-            if firing_rates_plot_type == 'bar':
+            if firing_rates_plot_type == "bar":
                 plt.subplot2grid((2, 9), (1, 0), colspan=3)
-            elif firing_rates_plot_type == 'heatmap':
+            elif firing_rates_plot_type == "heatmap":
                 plt.subplot2grid((2, 3), (1, 0))
 
-            plt.xticks(np.arange(2), ('Left', 'Right'))
-            plt.ylabel('Voltage')
-            plt.title('Voltage of LIF neurons at last time step')
+            plt.xticks(np.arange(2), ("Left", "Right"))
+            plt.ylabel("Voltage")
+            plt.title("Voltage of LIF neurons at last time step")
             delta_lim = (LIF_v.max() - LIF_v.min()) * 0.5
             plt.ylim(LIF_v.min() - delta_lim, LIF_v.max() + delta_lim)
             plt.yticks([])
-            plt.text(0, LIF_v[0][0], str(round(LIF_v[0][0].item(), 2)), ha='center')
-            plt.text(1, LIF_v[0][1], str(round(LIF_v[0][1].item(), 2)), ha='center')
+            plt.text(0, LIF_v[0][0], str(round(LIF_v[0][0].item(), 2)), ha="center")
+            plt.text(1, LIF_v[0][1], str(round(LIF_v[0][1].item(), 2)), ha="center")
 
-            plt.bar(np.arange(2), LIF_v.squeeze(), color=['r', 'gray'] if action == 0 else ['gray', 'r'], width=0.5)
-            
+            plt.bar(
+                np.arange(2),
+                LIF_v.squeeze(),
+                color=["r", "gray"] if action == 0 else ["gray", "r"],
+                width=0.5,
+            )
+
             if LIF_v.min() - delta_lim < 0:
-                plt.axhline(0, color='black', linewidth=0.1)
+                plt.axhline(0, color="black", linewidth=0.1)
 
             IF_spikes = torch.cat(spike_seq_monitor.records, 0)
             firing_rates = IF_spikes.mean(axis=0)
-            
-            if firing_rates_plot_type == 'bar':
-                plt.subplot2grid((2, 9), (0, 4), rowspan=2, colspan=5)
-            elif firing_rates_plot_type == 'heatmap':
-                plt.subplot2grid((2, 3), (0, 1), rowspan=2, colspan=2)
-            
-            plt.title('Firing rates of IF neurons')
 
-            if firing_rates_plot_type == 'bar':
+            if firing_rates_plot_type == "bar":
+                plt.subplot2grid((2, 9), (0, 4), rowspan=2, colspan=5)
+            elif firing_rates_plot_type == "heatmap":
+                plt.subplot2grid((2, 3), (0, 1), rowspan=2, colspan=2)
+
+            plt.title("Firing rates of IF neurons")
+
+            if firing_rates_plot_type == "bar":
                 # 绘制柱状图
-                plt.xlabel('Neuron index')
-                plt.ylabel('Firing rate')
+                plt.xlabel("Neuron index")
+                plt.ylabel("Firing rate")
                 plt.xlim(0, firing_rates.size(0))
                 plt.ylim(0, 1.01)
                 plt.bar(np.arange(firing_rates.size(0)), firing_rates, width=0.5)
 
-            elif firing_rates_plot_type == 'heatmap':
+            elif firing_rates_plot_type == "heatmap":
                 # 绘制热力图
-                heatmap = plt.imshow(firing_rates.reshape(heatmap_shape), vmin=0, vmax=1, cmap='ocean')
+                heatmap = plt.imshow(
+                    firing_rates.reshape(heatmap_shape), vmin=0, vmax=1, cmap="ocean"
+                )
                 plt.gca().invert_yaxis()
                 cbar = heatmap.figure.colorbar(heatmap)
-                cbar.ax.set_ylabel('Magnitude', rotation=90, va='top')
-            
+                cbar.ax.set_ylabel("Magnitude", rotation=90, va="top")
+
             functional.reset_net(policy_net)
-            subtitle = f'Position={state[0][0].item(): .2f}, Velocity={state[0][1].item(): .2f}, Pole Angle={state[0][2].item(): .2f}, Pole Velocity At Tip={state[0][3].item(): .2f}, Score={i}'
+            subtitle = f"Position={state[0][0].item(): .2f}, Velocity={state[0][1].item(): .2f}, Pole Angle={state[0][2].item(): .2f}, Pole Velocity At Tip={state[0][3].item(): .2f}, Score={i}"
 
             state, reward, done, _ = env.step(action)
-            
+
             if done:
                 over_score = min(over_score, i)
-                subtitle = f'Game over, Score={over_score}'
+                subtitle = f"Game over, Score={over_score}"
             plt.suptitle(subtitle)
 
             state = torch.from_numpy(state).float().to(device).unsqueeze(0)
-            screen = env.render(mode='rgb_array').copy()
+            screen = env.render(mode="rgb_array").copy()
             screen[300, :, :] = 0  # 画出黑线
-            
-            if firing_rates_plot_type == 'bar':
+
+            if firing_rates_plot_type == "bar":
                 plt.subplot2grid((2, 9), (0, 0), colspan=3)
-            elif firing_rates_plot_type == 'heatmap':
+            elif firing_rates_plot_type == "heatmap":
                 plt.subplot2grid((2, 3), (0, 0))
-            
+
             plt.xticks([])
             plt.yticks([])
-            plt.title('Game screen')
-            plt.imshow(screen, interpolation='bicubic')
+            plt.title("Game screen")
+            plt.imshow(screen, interpolation="bicubic")
             plt.pause(0.001)
-            
+
             if i < save_fig_num:
-                plt.savefig(os.path.join(fig_dir, f'{i}.png'))
-            
+                plt.savefig(os.path.join(fig_dir, f"{i}.png"))
+
             if done and i >= played_frames:
                 env.close()
                 plt.close()
                 break
 
-'''
+
+"""
 train(use_cuda=False, model_dir='./model/CartPole-v0', log_dir='./log', env_name='CartPole-v0', \
         hidden_size=256, num_episodes=500, seed=1)
-'''
-'''
+"""
+"""
 play(use_cuda=False, pt_path='./model/CartPole-v0/policy_net_256_max.pt', env_name='CartPole-v0', \
         hidden_size=256, played_frames=300)
-'''
+"""

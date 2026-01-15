@@ -3,11 +3,11 @@ import torch
 import numpy as np
 
 
-__all__ = ['VoltageHook', 'VoltageScaler']
+__all__ = ["VoltageHook", "VoltageScaler"]
 
 
 class VoltageHook(nn.Module):
-    def __init__(self, scale=1.0, momentum=0.1, mode='Max'):
+    def __init__(self, scale=1.0, momentum=0.1, mode="Max"):
         """
         * :ref:`API in English <VoltageHook.__init__-en>`
 
@@ -37,7 +37,7 @@ class VoltageHook(nn.Module):
 
         """
         super().__init__()
-        self.register_buffer('scale', torch.tensor(scale))
+        self.register_buffer("scale", torch.tensor(scale))
         self.mode = mode
         self.num_batches_tracked = 0
         self.momentum = momentum
@@ -67,14 +67,16 @@ class VoltageHook(nn.Module):
         It doesn't process input tensors, but hooks the activation values of ReLU.
 
         """
-        err_msg = 'You have used a non-defined VoltageScale Method.'
+        err_msg = "You have used a non-defined VoltageScale Method."
         if isinstance(self.mode, str):
-            if self.mode[-1] == '%':
+            if self.mode[-1] == "%":
                 try:
-                    s_t = torch.tensor(np.percentile(x.detach().cpu(), float(self.mode[:-1])))
+                    s_t = torch.tensor(
+                        np.percentile(x.detach().cpu(), float(self.mode[:-1]))
+                    )
                 except ValueError:
                     raise NotImplementedError(err_msg)
-            elif self.mode.lower() in ['max']:
+            elif self.mode.lower() in ["max"]:
                 s_t = x.max().detach()
             else:
                 raise NotImplementedError(err_msg)
@@ -82,7 +84,7 @@ class VoltageHook(nn.Module):
             s_t = x.max().detach() * self.mode
         else:
             raise NotImplementedError(err_msg)
-        
+
         if self.num_batches_tracked == 0:
             self.scale = s_t
         else:
@@ -114,7 +116,7 @@ class VoltageScaler(nn.Module):
 
         """
         super().__init__()
-        self.register_buffer('scale', torch.tensor(scale))
+        self.register_buffer("scale", torch.tensor(scale))
 
     def forward(self, x):
         """
@@ -140,4 +142,4 @@ class VoltageScaler(nn.Module):
         return x * self.scale
 
     def extra_repr(self):
-        return '%f' % self.scale.item()
+        return "%f" % self.scale.item()

@@ -21,7 +21,7 @@ try:
     import cupy
     from ..activation_based.cuda_kernel import cuda_utils
 
-    padded_sequence_mask_kernel_code = r'''
+    padded_sequence_mask_kernel_code = r"""
     extern "C" __global__
             void padded_sequence_mask_kernel(const int* sequence_len, bool *mask, const int &T, const int &N)
             {
@@ -34,9 +34,9 @@ try:
                     }
                 }
             }
-    '''
+    """
 except BaseException as e:
-    logging.info(f'spikingjelly.dataset.__init__: {e}')
+    logging.info(f"spikingjelly.dataset.__init__: {e}")
     cupy = None
     cuda_utils = None
     pass
@@ -71,10 +71,10 @@ np_savez = np.savez_compressed if configure.save_datasets_compressed else np.sav
 
 def save_as_pic(
     x: Union[torch.Tensor, np.ndarray],
-    save_pic_to: str = './',
-    pic_first_name: str = 'pic'
+    save_pic_to: str = "./",
+    pic_first_name: str = "pic",
 ) -> None:
-    r'''
+    r"""
     * **English**
 
     :param x: frames with ``shape=[T, 2, H, W]``
@@ -95,7 +95,7 @@ def save_as_pic(
     .. code:: python
 
         save_as_pic(frame, './demo', 'first_pic')
-    '''
+    """
     if isinstance(x, np.ndarray):
         x = torch.from_numpy(x)
     save_pic_to = Path(save_pic_to)
@@ -107,18 +107,20 @@ def save_as_pic(
 
     for t in range(img_tensor.shape[0]):
         plt.imshow(to_img(img_tensor[t]))
-        plt.axis('off')
-        plt.savefig(save_pic_to / f'{pic_first_name}_{t}.png', bbox_inches='tight', pad_inches=0)
+        plt.axis("off")
+        plt.savefig(
+            save_pic_to / f"{pic_first_name}_{t}.png", bbox_inches="tight", pad_inches=0
+        )
 
 
 def save_every_frame_of_an_entire_DVS_dataset(
     dataset: str,
     dataset_path: str,
     time_steps: int,
-    save_pic_to: str = './',
-    number_of_threads: int = 4
+    save_pic_to: str = "./",
+    number_of_threads: int = 4,
 ):
-    '''
+    """
     * **English**
 
     :param dataset: name of the dataset to be saved. The current available options
@@ -149,22 +151,46 @@ def save_every_frame_of_an_entire_DVS_dataset(
                                                 time_steps=10, save_pic_to='./demo', number_of_threads=20)
         save_every_frame_of_an_entire_DVS_dataset(dataset='NCaltech101', dataset_path="../../datasets/NCaltech101",
                                                 time_steps=14, save_pic_to='./demo', number_of_threads=20)
-    '''
+    """
     if not dataset or not dataset_path or time_steps is None or not save_pic_to:
-        raise ValueError("All parameters(dataset, dataset_path, time_steps and save_pic_to) must be provided and cannot be empty.")
-    if dataset == 'DVS128Gesture':
+        raise ValueError(
+            "All parameters(dataset, dataset_path, time_steps and save_pic_to) must be provided and cannot be empty."
+        )
+    if dataset == "DVS128Gesture":
         from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
-        data = DVS128Gesture(root=dataset_path, train=False, data_type='frame', split_by='number', frames_number=time_steps)
-    elif dataset == 'CIFAR10DVS':
+
+        data = DVS128Gesture(
+            root=dataset_path,
+            train=False,
+            data_type="frame",
+            split_by="number",
+            frames_number=time_steps,
+        )
+    elif dataset == "CIFAR10DVS":
         from spikingjelly.datasets.cifar10_dvs import CIFAR10DVS
-        data = CIFAR10DVS(root=dataset_path, data_type='frame', split_by='number', frames_number=time_steps)
-    elif dataset == 'NCaltech101':
+
+        data = CIFAR10DVS(
+            root=dataset_path,
+            data_type="frame",
+            split_by="number",
+            frames_number=time_steps,
+        )
+    elif dataset == "NCaltech101":
         from spikingjelly.datasets.n_caltech101 import NCaltech101
-        data = NCaltech101(root=dataset_path, data_type='frame', split_by='number', frames_number=time_steps)
+
+        data = NCaltech101(
+            root=dataset_path,
+            data_type="frame",
+            split_by="number",
+            frames_number=time_steps,
+        )
     else:
-        raise ValueError("The dataset attribute can only be DVS128Gesture, CIFAR10DVS or NCaltech101")
+        raise ValueError(
+            "The dataset attribute can only be DVS128Gesture, CIFAR10DVS or NCaltech101"
+        )
 
     import multiprocessing
+
     multiprocessing.freeze_support()
     pool = multiprocessing.Pool(processes=number_of_threads)
     for i in range(len(data)):
@@ -172,11 +198,11 @@ def save_every_frame_of_an_entire_DVS_dataset(
         pool.apply_async(save_as_pic, args=(frame, save_pic_to, str(i)))
     pool.close()
     pool.join()
-    print('complete!!!')
+    print("complete!!!")
 
 
 def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> None:
-    '''
+    """
     * **English**
 
     :param x: frames with ``shape=[T, 2, H, W]``
@@ -188,7 +214,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
     :type save_gif_to: str
 
     :return: None
-    '''
+    """
     if isinstance(x, np.ndarray):
         x = torch.from_numpy(x)
     to_img = transforms.ToPILImage()
@@ -198,18 +224,18 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
     if save_gif_to is None:
         while True:
             for t in range(img_tensor.shape[0]):
-                    plt.imshow(to_img(img_tensor[t]))
-                    plt.pause(0.01)
+                plt.imshow(to_img(img_tensor[t]))
+                plt.pause(0.01)
     else:
         img_list = []
         for t in range(img_tensor.shape[0]):
             img_list.append(to_img(img_tensor[t]))
         img_list[0].save(save_gif_to, save_all=True, append_images=img_list[1:], loop=0)
-        print(f'Save frames to [{save_gif_to}].')
+        print(f"Save frames to [{save_gif_to}].")
 
 
 def load_aedat_v3(file_name: Union[str, Path]) -> dict:
-    '''
+    """
     This function is written by referring to https://gitlab.com/inivation/dv/dv-python .
     It can be used for DVS128 Gesture.
 
@@ -218,65 +244,63 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
 
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: dict
-    '''
-    with open(file_name, 'rb') as bin_f:
+    """
+    with open(file_name, "rb") as bin_f:
         # skip ascii header
         line = bin_f.readline()
-        while line.startswith(b'#'):
-            if line == b'#!END-HEADER\r\n':
+        while line.startswith(b"#"):
+            if line == b"#!END-HEADER\r\n":
                 break
             else:
                 line = bin_f.readline()
 
-        txyp = {
-            't': [],
-            'x': [],
-            'y': [],
-            'p': []
-        }
+        txyp = {"t": [], "x": [], "y": [], "p": []}
         while True:
             header = bin_f.read(28)
             if not header or len(header) == 0:
                 break
 
             # read header
-            e_type = struct.unpack('H', header[0:2])[0]
-            e_source = struct.unpack('H', header[2:4])[0]
-            e_size = struct.unpack('I', header[4:8])[0]
-            e_offset = struct.unpack('I', header[8:12])[0]
-            e_tsoverflow = struct.unpack('I', header[12:16])[0]
-            e_capacity = struct.unpack('I', header[16:20])[0]
-            e_number = struct.unpack('I', header[20:24])[0]
-            e_valid = struct.unpack('I', header[24:28])[0]
+            e_type = struct.unpack("H", header[0:2])[0]
+            e_source = struct.unpack("H", header[2:4])[0]
+            e_size = struct.unpack("I", header[4:8])[0]
+            e_offset = struct.unpack("I", header[8:12])[0]
+            e_tsoverflow = struct.unpack("I", header[12:16])[0]
+            e_capacity = struct.unpack("I", header[16:20])[0]
+            e_number = struct.unpack("I", header[20:24])[0]
+            e_valid = struct.unpack("I", header[24:28])[0]
 
             data_length = e_capacity * e_size
             data = bin_f.read(data_length)
             counter = 0
 
             if e_type == 1:
-                while data[counter:counter + e_size]:
-                    aer_data = struct.unpack('I', data[counter:counter + 4])[0]
-                    timestamp = struct.unpack('I', data[counter + 4:counter + 8])[0] | e_tsoverflow << 31
+                while data[counter : counter + e_size]:
+                    aer_data = struct.unpack("I", data[counter : counter + 4])[0]
+                    timestamp = (
+                        struct.unpack("I", data[counter + 4 : counter + 8])[0]
+                        | e_tsoverflow << 31
+                    )
                     x = (aer_data >> 17) & 0x00007FFF
                     y = (aer_data >> 2) & 0x00007FFF
                     pol = (aer_data >> 1) & 0x00000001
                     counter = counter + e_size
-                    txyp['x'].append(x)
-                    txyp['y'].append(y)
-                    txyp['t'].append(timestamp)
-                    txyp['p'].append(pol)
+                    txyp["x"].append(x)
+                    txyp["y"].append(y)
+                    txyp["t"].append(timestamp)
+                    txyp["p"].append(pol)
             else:
                 # non-polarity event packet, not implemented
                 pass
-        txyp['x'] = np.asarray(txyp['x'])
-        txyp['y'] = np.asarray(txyp['y'])
-        txyp['t'] = np.asarray(txyp['t'])
-        txyp['p'] = np.asarray(txyp['p'])
+        txyp["x"] = np.asarray(txyp["x"])
+        txyp["y"] = np.asarray(txyp["y"])
+        txyp["t"] = np.asarray(txyp["t"])
+        txyp["p"] = np.asarray(txyp["p"])
         return txyp
 
 
 def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
-    '''
+    """
     * **English**
 
     This function is written by referring to https://github.com/jackd/events-tfds .
@@ -291,8 +315,8 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
 
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: dict
-    '''
-    with open(file_name, 'rb') as bin_f:
+    """
+    with open(file_name, "rb") as bin_f:
         # `& 128` 是取一个8位二进制数的最高位
         # `& 127` 是取其除了最高位，也就是剩下的7位
         raw_data = np.uint32(np.fromfile(bin_f, dtype=np.uint8))
@@ -301,11 +325,11 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
         rd_2__5 = raw_data[2::5]
         p = (rd_2__5 & 128) >> 7
         t = ((rd_2__5 & 127) << 16) | (raw_data[3::5] << 8) | (raw_data[4::5])
-    return {'t': t, 'x': x, 'y': y, 'p': p}
+    return {"t": t, "x": x, "y": y, "p": p}
 
 
 def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
-    '''
+    """
     * **English**
 
     :param file_name: path of the npz file that saves the frames
@@ -313,15 +337,20 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
 
     :return: frames
     :rtype: np.ndarray
-    '''
-    return np.load(file_name, allow_pickle=True)['frames'].astype(np.float32)
+    """
+    return np.load(file_name, allow_pickle=True)["frames"].astype(np.float32)
 
 
 def integrate_events_segment_to_frame(
-    x: np.ndarray, y: np.ndarray, p: np.ndarray,
-    H: int, W: int, j_l: int = 0, j_r: int = -1
+    x: np.ndarray,
+    y: np.ndarray,
+    p: np.ndarray,
+    H: int,
+    W: int,
+    j_l: int = 0,
+    j_r: int = -1,
 ) -> np.ndarray:
-    '''
+    """
     * **English**
 
     Denote a two channels frame as :math:`F` and a pixel at :math:`(p, x, y)` as :math:`F(p, x, y)`, the pixel value is integrated from the events data whose indices are in :math:`[j_{l}, j_{r})`:
@@ -355,7 +384,7 @@ def integrate_events_segment_to_frame(
 
     :return: frames
     :rtype: np.ndarray
-    '''
+    """
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
     # https://stackoverflow.com/questions/15973827/handling-of-duplicate-indices-in-numpy-assignments
     # We must use ``bincount`` rather than simply ``+``. See the following reference:
@@ -395,9 +424,9 @@ def integrate_events_segment_to_frame(
     # print('correct accumulation by bincount\n', frames)
 
     frame = np.zeros(shape=[2, H * W])
-    x = x[j_l: j_r].astype(int)  # avoid overflow
-    y = y[j_l: j_r].astype(int)
-    p = p[j_l: j_r]
+    x = x[j_l:j_r].astype(int)  # avoid overflow
+    y = y[j_l:j_r].astype(int)
+    p = p[j_l:j_r]
     mask = []
     mask.append(p == 0)
     mask.append(np.logical_not(mask[0]))
@@ -411,7 +440,7 @@ def integrate_events_segment_to_frame(
 def cal_fixed_frames_number_segment_index(
     events_t: np.ndarray, split_by: str, frames_num: int
 ) -> tuple:
-    '''
+    """
     * **English**
 
     Denote ``frames_num`` as :math:`M`, if ``split_by`` is ``'time'``, then
@@ -440,19 +469,19 @@ def cal_fixed_frames_number_segment_index(
 
     :return: a tuple ``(j_l, j_r)``
     :rtype: tuple
-    '''
+    """
     j_l = np.zeros(shape=[frames_num], dtype=int)
     j_r = np.zeros(shape=[frames_num], dtype=int)
     N = events_t.size
 
-    if split_by == 'number':
+    if split_by == "number":
         di = N // frames_num
         for i in range(frames_num):
             j_l[i] = i * di
             j_r[i] = j_l[i] + di
         j_r[-1] = N
 
-    elif split_by == 'time':
+    elif split_by == "time":
         dt = (events_t[-1] - events_t[0]) // frames_num
         idx = np.arange(N)
         for i in range(frames_num):
@@ -473,7 +502,7 @@ def cal_fixed_frames_number_segment_index(
 def integrate_events_by_fixed_frames_number(
     events: dict, split_by: str, frames_num: int, H: int, W: int
 ) -> np.ndarray:
-    '''
+    """
     * **English**
 
     Integrate events to frames by fixed frames number.
@@ -497,8 +526,8 @@ def integrate_events_by_fixed_frames_number(
 
     :return: frames
     :rtype: np.ndarray
-    '''
-    t, x, y, p = (events[key] for key in ('t', 'x', 'y', 'p'))
+    """
+    t, x, y, p = (events[key] for key in ("t", "x", "y", "p"))
     j_l, j_r = cal_fixed_frames_number_segment_index(t, split_by, frames_num)
     frames = np.zeros([frames_num, 2, H, W])
     for i in range(frames_num):
@@ -507,10 +536,16 @@ def integrate_events_by_fixed_frames_number(
 
 
 def integrate_events_file_to_frames_file_by_fixed_frames_number(
-    loader: Callable, events_np_file: str, output_dir: str, split_by: str,
-    frames_num: int, H: int, W: int, print_save: bool = False
+    loader: Callable,
+    events_np_file: str,
+    output_dir: str,
+    split_by: str,
+    frames_num: int,
+    H: int,
+    W: int,
+    print_save: bool = False,
 ) -> None:
-    '''
+    """
     Integrate a events file to frames by fixed frames number and save it.
     See :func:`cal_fixed_frames_number_segment_index` and
     :func:`integrate_events_segment_to_frame` for more details.
@@ -540,15 +575,22 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     :type print_save: bool
 
     :return: None
-    '''
+    """
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
-    np_savez(fname, frames=integrate_events_by_fixed_frames_number(loader(events_np_file), split_by, frames_num, H, W))
+    np_savez(
+        fname,
+        frames=integrate_events_by_fixed_frames_number(
+            loader(events_np_file), split_by, frames_num, H, W
+        ),
+    )
     if print_save:
-        print(f'Frames [{fname}] saved.')
+        print(f"Frames [{fname}] saved.")
 
 
-def integrate_events_by_fixed_duration(events: dict, duration: int, H: int, W: int) -> np.ndarray:
-    '''
+def integrate_events_by_fixed_duration(
+    events: dict, duration: int, H: int, W: int
+) -> np.ndarray:
+    """
     * **English**
 
     Integrate events to frames by fixed time duration of each frame.
@@ -567,11 +609,11 @@ def integrate_events_by_fixed_duration(events: dict, duration: int, H: int, W: i
 
     :return: frames
     :rtype: np.ndarray
-    '''
-    x = events['x']
-    y = events['y']
-    t = events['t']
-    p = events['p']
+    """
+    x = events["x"]
+    y = events["y"]
+    t = events["t"]
+    p = events["p"]
     N = t.size
 
     t = t - t.min()
@@ -582,7 +624,7 @@ def integrate_events_by_fixed_duration(events: dict, duration: int, H: int, W: i
     left = 0
 
     for i in range(frames_num - 1):
-        right = np.searchsorted(frame_index, i + 1, side='left')
+        right = np.searchsorted(frame_index, i + 1, side="left")
         frames[i] = integrate_events_segment_to_frame(x, y, p, H, W, left, right)
         left = right
 
@@ -591,10 +633,15 @@ def integrate_events_by_fixed_duration(events: dict, duration: int, H: int, W: i
 
 
 def integrate_events_file_to_frames_file_by_fixed_duration(
-    loader: Callable, events_np_file: str, output_dir: str, duration: int, 
-    H: int, W: int, print_save: bool = False
+    loader: Callable,
+    events_np_file: str,
+    output_dir: str,
+    duration: int,
+    H: int,
+    W: int,
+    print_save: bool = False,
 ) -> None:
-    '''
+    """
     * **English**
 
     Integrate events to frames by fixed time duration of each frame.
@@ -621,13 +668,13 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :type print_save: bool
 
     :return: None
-    '''
+    """
     frames = integrate_events_by_fixed_duration(loader(events_np_file), duration, H, W)
     fname, _ = os.path.splitext(os.path.basename(events_np_file))
-    fname = os.path.join(output_dir, f'{fname}_{frames.shape[0]}.npz')
+    fname = os.path.join(output_dir, f"{fname}_{frames.shape[0]}.npz")
     np_savez(fname, frames=frames)
     if print_save:
-        print(f'Frames [{fname}] saved.')
+        print(f"Frames [{fname}] saved.")
     return frames.shape[0]
 
 
@@ -644,13 +691,13 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
     :return: None
     """
     np_savez(fname, frames=frames)
-    print(f'Frames [{fname}] saved.')
+    print(f"Frames [{fname}] saved.")
 
 
 def create_same_directory_structure(
     source_dir: Union[str, Path], target_dir: Union[str, Path]
 ) -> None:
-    '''
+    """
     * **English**
 
     Create the same directory structure in ``target_dir`` with that of ``source_dir``.
@@ -662,21 +709,23 @@ def create_same_directory_structure(
     :type target_dir: Union[str, pathlib.Path]
 
     :return: None
-    '''
+    """
     for sub_dir_name in os.listdir(source_dir):
         source_sub_dir = os.path.join(source_dir, sub_dir_name)
         if os.path.isdir(source_sub_dir):
             target_sub_dir = os.path.join(target_dir, sub_dir_name)
             os.mkdir(target_sub_dir)
-            print(f'Mkdir [{target_sub_dir}].')
+            print(f"Mkdir [{target_sub_dir}].")
             create_same_directory_structure(source_sub_dir, target_sub_dir)
 
 
 def split_to_train_test_set(
-    train_ratio: float, origin_dataset: torch.utils.data.Dataset,
-    num_classes: int, random_split: bool = False
+    train_ratio: float,
+    origin_dataset: torch.utils.data.Dataset,
+    num_classes: int,
+    random_split: bool = False,
 ):
-    '''
+    """
     * **English**
 
     :param train_ratio: split the ratio of the origin dataset as the train set
@@ -690,13 +739,13 @@ def split_to_train_test_set(
 
     :param random_split: If ``False``, the front ratio of samples in each classes will
         be included in train set, while the reset will be included in test set.
-        If ``True``, this function will split samples in each classes randomly. 
+        If ``True``, this function will split samples in each classes randomly.
         The randomness is controlled by ``numpy.random.seed``
     :type random_split: int
 
     :return: a tuple ``(train_set, test_set)``
     :rtype: tuple
-    '''
+    """
     label_idx = []
     for i in range(num_classes):
         label_idx.append([])
@@ -714,17 +763,22 @@ def split_to_train_test_set(
 
     for i in range(num_classes):
         pos = math.ceil(label_idx[i].__len__() * train_ratio)
-        train_idx.extend(label_idx[i][0: pos])
-        test_idx.extend(label_idx[i][pos: label_idx[i].__len__()])
+        train_idx.extend(label_idx[i][0:pos])
+        test_idx.extend(label_idx[i][pos : label_idx[i].__len__()])
 
-    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(origin_dataset, test_idx)
+    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(
+        origin_dataset, test_idx
+    )
 
 
 def fast_split_to_train_test_set(
-    train_ratio: float, origin_dataset: torch.utils.data.Dataset, 
-    num_classes: int, random_split: bool = False, batch_size: int = 16
+    train_ratio: float,
+    origin_dataset: torch.utils.data.Dataset,
+    num_classes: int,
+    random_split: bool = False,
+    batch_size: int = 16,
 ):
-    '''
+    """
     * **English**
 
     :param train_ratio: split the ratio of the origin dataset as the train set
@@ -747,7 +801,7 @@ def fast_split_to_train_test_set(
 
     :return: a tuple ``(train_set, test_set)``
     :rtype: tuple
-    '''
+    """
     label_idx = [[] for _ in range(num_classes)]
 
     def process_batch(start_idx, end_idx):
@@ -779,11 +833,13 @@ def fast_split_to_train_test_set(
         train_idx.extend(label_idx[i][:pos])
         test_idx.extend(label_idx[i][pos:])
 
-    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(origin_dataset, test_idx)
+    return torch.utils.data.Subset(origin_dataset, train_idx), torch.utils.data.Subset(
+        origin_dataset, test_idx
+    )
 
 
 def pad_sequence_collate(batch: list):
-    '''
+    """
     * **English**
 
     This function can be use as the ``collate_fn`` for ``DataLoader`` to process
@@ -808,20 +864,23 @@ def pad_sequence_collate(batch: list):
             def __init__(self, n=1000):
                 super().__init__()
                 self.n = n
+
             def __getitem__(self, i):
                 return torch.rand([i + 1, 2]), self.n - i - 1
+
             def __len__(self):
                 return self.n
+
 
         loader = torch.utils.data.DataLoader(
             VariableLengthDataset(n=32),
             batch_size=2,
             collate_fn=pad_sequence_collate,
-            shuffle=True
+            shuffle=True,
         )
 
         for i, (x_p, label, x_len) in enumerate(loader):
-            print(f'x_p.shape={x_p.shape}, label={label}, x_len={x_len}')
+            print(f"x_p.shape={x_p.shape}, label={label}, x_len={x_len}")
             if i == 2:
                 break
 
@@ -832,7 +891,7 @@ def pad_sequence_collate(batch: list):
         x_p.shape=torch.Size([2, 18, 2]), label=tensor([14, 30]), x_len=tensor([18,  2])
         x_p.shape=torch.Size([2, 29, 2]), label=tensor([3, 6]), x_len=tensor([29, 26])
         x_p.shape=torch.Size([2, 23, 2]), label=tensor([ 9, 23]), x_len=tensor([23,  9])
-    '''
+    """
     x_list = []
     x_len_list = []
     y_list = []
@@ -841,11 +900,15 @@ def pad_sequence_collate(batch: list):
         x_len_list.append(x.shape[0])
         y_list.append(y)
 
-    return torch.nn.utils.rnn.pad_sequence(x_list, batch_first=True), torch.as_tensor(y_list), torch.as_tensor(x_len_list)
+    return (
+        torch.nn.utils.rnn.pad_sequence(x_list, batch_first=True),
+        torch.as_tensor(y_list),
+        torch.as_tensor(x_len_list),
+    )
 
 
 def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
-    r'''
+    r"""
     * **English**
 
     :param sequence_len: a tensor ``shape = [N]`` that contains sequences lengths of each batch element
@@ -867,11 +930,11 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
         x2 = torch.rand([3, 6])
         x3 = torch.rand([4, 6])
         x = torch.nn.utils.rnn.pad_sequence([x1, x2, x3])  # [T, N, *]
-        print('x.shape=', x.shape)
+        print("x.shape=", x.shape)
         x_len = torch.as_tensor([x1.shape[0], x2.shape[0], x3.shape[0]])
         mask = padded_sequence_mask(x_len)
-        print('mask.shape=', mask.shape)
-        print('mask=\n', mask)
+        print("mask.shape=", mask.shape)
+        print("mask=\n", mask)
 
     Outputs:
 
@@ -884,7 +947,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
                 [ True,  True,  True],
                 [False,  True,  True],
                 [False, False,  True]])
-    '''
+    """
     if T is None:
         T = sequence_len.max().item()
     N = sequence_len.numel()
@@ -896,15 +959,20 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
             blocks = cuda_utils.cal_blocks(N)
             T = cupy.asarray(T)
             N = cupy.asarray(N)
-            sequence_len, mask, T, N = cuda_utils.get_contiguous(sequence_len.to(torch.int), mask, T, N)
+            sequence_len, mask, T, N = cuda_utils.get_contiguous(
+                sequence_len.to(torch.int), mask, T, N
+            )
             kernel_args = [sequence_len, mask, T, N]
-            kernel = cupy.RawKernel(padded_sequence_mask_kernel_code, 'padded_sequence_mask_kernel', options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend)
+            kernel = cupy.RawKernel(
+                padded_sequence_mask_kernel_code,
+                "padded_sequence_mask_kernel",
+                options=configure.cuda_compiler_options,
+                backend=configure.cuda_compiler_backend,
+            )
             kernel(
-                (blocks,), (configure.cuda_threads,),
-                cuda_utils.wrap_args_to_raw_kernel(
-                    device_id,
-                    *kernel_args
-                )
+                (blocks,),
+                (configure.cuda_threads,),
+                cuda_utils.wrap_args_to_raw_kernel(device_id, *kernel_args),
             )
         return mask
 
@@ -939,19 +1007,21 @@ def create_sub_dataset(
     """
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
-        print(f'Mkdir [{target_dir}].')
+        print(f"Mkdir [{target_dir}].")
     create_same_directory_structure(source_dir, target_dir)
 
     warnings_info = []
     for e_root, e_dirs, e_files in os.walk(source_dir, followlinks=True):
         if e_files.__len__() > 0:
             output_dir = os.path.join(target_dir, os.path.relpath(e_root, source_dir))
-            if ratio >= 1.:
+            if ratio >= 1.0:
                 samples_number = e_files.__len__()
             else:
                 samples_number = int(ratio * e_files.__len__())
             if samples_number == 0:
-                warnings_info.append(f'Warning: the samples number is 0 in [{output_dir}].')
+                warnings_info.append(
+                    f"Warning: the samples number is 0 in [{output_dir}]."
+                )
             if randomly:
                 np.random.shuffle(e_files)
             for i, e_file in enumerate(e_files):
@@ -965,7 +1035,9 @@ def create_sub_dataset(
                 else:
                     shutil.copyfile(source_file, target_file)
                     # print(f'copyfile {source_file} -> {target_file}')
-            print(f'[{samples_number}] files in [{e_root}] have been copied to [{output_dir}].')
+            print(
+                f"[{samples_number}] files in [{e_root}] have been copied to [{output_dir}]."
+            )
 
     for i in range(len(warnings_info)):
         print(warnings_info[i])

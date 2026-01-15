@@ -1,7 +1,6 @@
 import torch
 
 
-
 class round_atgf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor):
@@ -10,6 +9,7 @@ class round_atgf(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         return grad_output
+
 
 @torch.jit.ignore
 def round(x: torch.Tensor):
@@ -24,6 +24,7 @@ def round(x: torch.Tensor):
     """
     return round_atgf.apply(x)
 
+
 class ceil_atgf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor):
@@ -32,6 +33,8 @@ class ceil_atgf(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         return grad_output
+
+
 @torch.jit.ignore
 def ceil(x: torch.Tensor):
     """
@@ -45,6 +48,7 @@ def ceil(x: torch.Tensor):
     """
     return ceil_atgf.apply(x)
 
+
 class floor_atgf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor):
@@ -53,6 +57,8 @@ class floor_atgf(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         return grad_output
+
+
 @torch.jit.ignore
 def floor(x: torch.Tensor):
     """
@@ -66,10 +72,15 @@ def floor(x: torch.Tensor):
     """
     return floor_atgf.apply(x)
 
+
 @torch.jit.script
-def clamp_backward(grad_output: torch.Tensor, x: torch.Tensor, min_value: float, max_value: float):
+def clamp_backward(
+    grad_output: torch.Tensor, x: torch.Tensor, min_value: float, max_value: float
+):
     mask = (x >= min_value).to(x) * (x <= max_value).to(x)
     return grad_output * mask
+
+
 class clamp_atgf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, min_value: float, max_value: float):
@@ -81,7 +92,15 @@ class clamp_atgf(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
-        return clamp_backward(grad_output, ctx.saved_tensors[0], ctx.min_value, ctx.max_value), None, None
+        return (
+            clamp_backward(
+                grad_output, ctx.saved_tensors[0], ctx.min_value, ctx.max_value
+            ),
+            None,
+            None,
+        )
+
+
 @torch.jit.ignore
 def clamp(x: torch.Tensor, min_value: float, max_value: float):
     """
@@ -105,9 +124,13 @@ def clamp(x: torch.Tensor, min_value: float, max_value: float):
 
     """
     return clamp_atgf.apply(x, min_value, max_value)
+
+
 @torch.jit.script
 def step_quantize_forward(x: torch.Tensor, step: float):
     return torch.round_(x / step) * step
+
+
 class step_quantize_atgf(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x: torch.Tensor, step: float):
@@ -116,6 +139,8 @@ class step_quantize_atgf(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output: torch.Tensor):
         return grad_output, None
+
+
 @torch.jit.ignore
 def step_quantize(x: torch.Tensor, step: float):
     """
@@ -135,6 +160,8 @@ def step_quantize(x: torch.Tensor, step: float):
 
     """
     return step_quantize_atgf.apply(x, step)
+
+
 """
 import torch
 from spikingjelly.activation_based import quantize
@@ -162,10 +189,9 @@ plt.savefig('./docs/source/_static/API/activation_based/quantize/step_quantize.p
 """
 
 
-
 @torch.jit.script
 def k_bit_quantize_forward(x: torch.Tensor, k: int):
-    c = float(1 << k) - 1.
+    c = float(1 << k) - 1.0
     x = x * c
     torch.round_(x)
     return x / c
@@ -179,6 +205,7 @@ class k_bit_quantize_atgf(torch.autograd.Function):
     @staticmethod
     def backward(ctx, grad_output):
         return grad_output, None
+
 
 @torch.jit.ignore
 def k_bit_quantize(x: torch.Tensor, k: int):
@@ -208,12 +235,13 @@ def k_bit_quantize(x: torch.Tensor, k: int):
 
         x = torch.rand(8)
         y = k_bit_quantize(x, 2)
-        print(f'x={x}')
-        print(f'y={y}')
+        print(f"x={x}")
+        print(f"y={y}")
         # x=tensor([0.6965, 0.5697, 0.9883, 0.0438, 0.1332, 0.7613, 0.9704, 0.2384])
         # y=tensor([0.6667, 0.6667, 1.0000, 0.0000, 0.0000, 0.6667, 1.0000, 0.3333])
     """
     return k_bit_quantize_atgf.apply(x, k)
+
 
 def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Tensor):
     """
@@ -231,6 +259,7 @@ def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Ten
     Apply an affine quantization with ``y = w * round((2 ** k - 1) * x) / (2 ** k - 1) + b``.
     """
     return w * k_bit_quantize(x, k) + b
+
 
 """
 import torch
@@ -256,6 +285,7 @@ plt.savefig('./docs/source/_static/API/activation_based/quantize/k_bit_quantize.
 plt.savefig('./docs/source/_static/API/activation_based/quantize/k_bit_quantize.svg')
 plt.savefig('./docs/source/_static/API/activation_based/quantize/k_bit_quantize.png')
 """
+
 
 @torch.jit.script
 def clamp_by_linear(x: torch.Tensor, eps: float = 1e-5):

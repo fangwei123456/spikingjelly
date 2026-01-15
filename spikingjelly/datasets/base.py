@@ -39,7 +39,7 @@ class NeuromorphicDatasetConfig:
 
     root: Path
     train: Optional[bool]
-    data_type: str = 'event'  # 'event' | 'frame'
+    data_type: str = "event"  # 'event' | 'frame'
     frames_number: Optional[int] = None
     split_by: Optional[str] = None  # 'time' | 'number'
     duration: Optional[int] = None
@@ -49,20 +49,22 @@ class NeuromorphicDatasetConfig:
     target_transform: Optional[Callable] = None
 
     def __post_init__(self):
-        if self.data_type not in ('event', 'frame'):
+        if self.data_type not in ("event", "frame"):
             raise ValueError(
                 f'data_type must be "event" or "frame", but got {self.data_type}'
             )
 
-        if self.data_type == 'event':
+        if self.data_type == "event":
             return
 
         # data_type == "frame"
-        cnt = sum([
-            self.frames_number is not None,
-            self.duration is not None,
-            self.custom_integrate_function is not None
-        ])
+        cnt = sum(
+            [
+                self.frames_number is not None,
+                self.duration is not None,
+                self.custom_integrate_function is not None,
+            ]
+        )
         if cnt != 1:
             raise ValueError(
                 'When data_type="frame", one and only one of '
@@ -71,19 +73,18 @@ class NeuromorphicDatasetConfig:
 
         if self.frames_number is not None:
             if not isinstance(self.frames_number, int) or self.frames_number <= 0:
-                raise ValueError('frames_number must be a positive integer')
-            if self.split_by not in ('time', 'number'):
+                raise ValueError("frames_number must be a positive integer")
+            if self.split_by not in ("time", "number"):
                 raise ValueError('split_by must be "time" or "number"')
 
         if self.duration is not None:
             if not isinstance(self.duration, int) or self.duration <= 0:
-                raise ValueError('duration must be a positive integer')
+                raise ValueError("duration must be a positive integer")
 
 
 class NeuromorphicDatasetBuilder(abc.ABC):
-
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path):
-        r'''
+        r"""
         * **English**
 
         Abstract base class for neuromorphic dataset builders.
@@ -108,25 +109,25 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :param raw_root: root directory of the raw dataset. The builder will read
             data from this directory.
         :type raw_root: pathlib.Path
-        '''
+        """
         self.cfg = cfg
         self.raw_root = raw_root
 
     @property
     @abc.abstractmethod
     def processed_root(self) -> Path:
-        r'''
+        r"""
         * **English**
 
         Root directory of the processed dataset.
 
         This directory stores the output of the preprocessing step defined by
         the builder.
-        '''
+        """
         return self.cfg.root / "processed"
 
     def build(self) -> Tuple[Path, Callable]:
-        r'''
+        r"""
         * **English**
 
         Build the processed dataset if necessary.
@@ -139,18 +140,18 @@ class NeuromorphicDatasetBuilder(abc.ABC):
             defined by property :attr:`processed_root` . ``loader`` is a
             function that loads individual samples.
         :rtype: Tuple[pathlib.Path, Callable]
-        '''
+        """
         if self.processed_root.exists():
-            print(f'The directory [{self.processed_root}] already exists.')
+            print(f"The directory [{self.processed_root}] already exists.")
         else:
             self.processed_root.mkdir()
-            print(f'Mkdir [{self.processed_root}].')
+            print(f"Mkdir [{self.processed_root}].")
             self.build_impl()
         return self.processed_root, self.get_loader()
 
     @abc.abstractmethod
     def build_impl(self) -> None:
-        r'''
+        r"""
         * **English**
 
         Implement dataset-specific preprocessing logic.
@@ -159,26 +160,25 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         dataset files and saved under :attr:`processed_root`.
 
         Subclasses must implement this method.
-        '''
+        """
         pass
 
     @abc.abstractmethod
     def get_loader(self) -> Callable:
-        r'''
+        r"""
         * **English**
 
         Return a loader function for processed dataset files.
 
         The returned callable should load a single processed file and return
         the corresponding sample. It will be passed to :class:`DatasetFolder <torchvision.datasets.DatasetFolder>` .
-        '''
+        """
         pass
 
 
 class EventBuilder(NeuromorphicDatasetBuilder):
-
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path):
-        r'''
+        r"""
         * **English**
 
         Dataset builder for raw event data.
@@ -188,7 +188,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         file (e.g., ``.npz``) without frame integration.
 
         Typically, this builder is used when ``data_type == "event"``.
-        '''
+        """
         super().__init__(cfg, raw_root)
 
     def build_impl(self) -> None:
@@ -206,9 +206,8 @@ class EventBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
-
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
-        r'''
+        r"""
         * **English**
 
         Dataset builder for fixed-frame-number integration.
@@ -226,7 +225,7 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
-        '''
+        """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
 
@@ -236,10 +235,12 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
 
         # use multi-thread to accelerate
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+        with ThreadPoolExecutor(
+            max_workers=configure.max_threads_number_for_datasets_preprocess
+        ) as tpe:
             futures = []
-            print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
-            for e_root, e_dirs, e_files in os.walk(self.raw_root): 
+            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
+            for e_root, e_dirs, e_files in os.walk(self.raw_root):
                 #! Path.walk is not available until Python 3.12
                 e_root = Path(e_root)
                 if len(e_files) <= 0:
@@ -248,37 +249,41 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
                 for e_file in e_files:
                     events_np_file = e_root / e_file
                     print(
-                        f'Start to integrate [{events_np_file}] to frames '
-                        f'and save to [{output_dir}].'
+                        f"Start to integrate [{events_np_file}] to frames "
+                        f"and save to [{output_dir}]."
                     )
-                    futures.append(tpe.submit(
-                        utils.integrate_events_file_to_frames_file_by_fixed_frames_number,
-                        np.load,
-                        events_np_file,
-                        output_dir,
-                        self.cfg.split_by,
-                        self.cfg.frames_number,
-                        self.H,
-                        self.W,
-                        True
-                    ))
+                    futures.append(
+                        tpe.submit(
+                            utils.integrate_events_file_to_frames_file_by_fixed_frames_number,
+                            np.load,
+                            events_np_file,
+                            output_dir,
+                            self.cfg.split_by,
+                            self.cfg.frames_number,
+                            self.H,
+                            self.W,
+                            True,
+                        )
+                    )
             for future in futures:
                 future.result()
 
-        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
 
     @property
     def processed_root(self) -> Path:
-        return self.cfg.root / f"frames_number_{self.cfg.frames_number}_split_by_{self.cfg.split_by}"
+        return (
+            self.cfg.root
+            / f"frames_number_{self.cfg.frames_number}_split_by_{self.cfg.split_by}"
+        )
 
     def get_loader(self) -> Callable:
         return utils.load_npz_frames
 
 
 class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
-
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
-        r'''
+        r"""
         * **English**
 
         Dataset builder for fixed-duration integration.
@@ -295,7 +300,7 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
-        '''
+        """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
 
@@ -305,9 +310,11 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
 
         # use multi-thread to accelerate
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+        with ThreadPoolExecutor(
+            max_workers=configure.max_threads_number_for_datasets_preprocess
+        ) as tpe:
             futures = []
-            print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
             for e_root, e_dirs, e_files in os.walk(self.raw_root):
                 #! Path.walk is not available until Python 3.12
                 e_root = Path(e_root)
@@ -317,23 +324,25 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
                 for e_file in e_files:
                     events_np_file = e_root / e_file
                     print(
-                        f'Start to integrate [{events_np_file}] to frames '
-                        f'and save to [{output_dir}].'
+                        f"Start to integrate [{events_np_file}] to frames "
+                        f"and save to [{output_dir}]."
                     )
-                    futures.append(tpe.submit(
-                        utils.integrate_events_file_to_frames_file_by_fixed_duration,
-                        np.load,
-                        events_np_file,
-                        output_dir,
-                        self.cfg.duration,
-                        self.H,
-                        self.W,
-                        True
-                    ))
+                    futures.append(
+                        tpe.submit(
+                            utils.integrate_events_file_to_frames_file_by_fixed_duration,
+                            np.load,
+                            events_np_file,
+                            output_dir,
+                            self.cfg.duration,
+                            self.H,
+                            self.W,
+                            True,
+                        )
+                    )
             for future in futures:
                 future.result()
 
-        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
 
     @property
     def processed_root(self) -> Path:
@@ -344,9 +353,8 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
 
 
 class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
-
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
-        r'''
+        r"""
         * **English**
 
         Dataset builder for custom event-to-frame integration.
@@ -365,7 +373,7 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
-        '''
+        """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
 
@@ -374,9 +382,11 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         utils.create_same_directory_structure(self.raw_root, self.processed_root)
         # use multi-thread to accelerate
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=configure.max_threads_number_for_datasets_preprocess) as tpe:
+        with ThreadPoolExecutor(
+            max_workers=configure.max_threads_number_for_datasets_preprocess
+        ) as tpe:
             futures = []
-            print(f'Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+            print(f"Start ThreadPoolExecutor with max workers = [{tpe._max_workers}].")
             for e_root, e_dirs, e_files in os.walk(self.raw_root):
                 #! Path.walk is not available until Python 3.12
                 e_root = Path(e_root)
@@ -386,21 +396,23 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
                 for e_file in e_files:
                     events_np_file: Path = e_root / e_file
                     print(
-                        f'Start to integrate [{events_np_file}] to frames '
-                        f'and save to [{output_dir}].'
+                        f"Start to integrate [{events_np_file}] to frames "
+                        f"and save to [{output_dir}]."
                     )
-                    futures.append(tpe.submit(
-                        utils.save_frames_to_npz_and_print,
-                        output_dir / events_np_file.name,
-                        self.cfg.custom_integrate_function(
-                            np.load(events_np_file), self.H, self.W
+                    futures.append(
+                        tpe.submit(
+                            utils.save_frames_to_npz_and_print,
+                            output_dir / events_np_file.name,
+                            self.cfg.custom_integrate_function(
+                                np.load(events_np_file), self.H, self.W
+                            ),
                         )
-                    ))
+                    )
 
             for future in futures:
                 future.result()
 
-        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
 
     @property
     def processed_root(self) -> Path:
@@ -414,12 +426,11 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
 
 
 class NeuromorphicDatasetFolder(DatasetFolder):
-
     def __init__(
         self,
         root: Union[str, Path],
         train: bool = None,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: int = None,
         split_by: str = None,
         duration: int = None,
@@ -428,7 +439,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
     ):
-        r'''
+        r"""
         * **English**
 
         The base class for SpikingJelly's neuromorphic datasets. Users can define
@@ -511,7 +522,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param target_transform: a function/transform that takes in the target
             and transforms it.
         :type target_transform: Callable
-        '''
+        """
         self.cfg = NeuromorphicDatasetConfig(
             root=Path(root),
             train=train,
@@ -522,7 +533,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             custom_integrate_function=custom_integrate_function,
             custom_integrated_frames_dir_name=custom_integrated_frames_dir_name,
             transform=transform,
-            target_transform=target_transform
+            target_transform=target_transform,
         )
 
         self.prepare_raw_dataset()
@@ -530,7 +541,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         self.processed_root, loader = builder.build()
 
         if self.cfg.train is not None:
-            split_root = self.processed_root / ('train' if self.cfg.train else 'test')
+            split_root = self.processed_root / ("train" if self.cfg.train else "test")
         else:
             split_root = self.get_root_when_train_is_none(self.processed_root)
 
@@ -539,12 +550,12 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             loader=loader,
             extensions=self.get_extensions(),
             transform=self.cfg.transform,
-            target_transform=self.cfg.target_transform
+            target_transform=self.cfg.target_transform,
         )
 
     @property
     def raw_root(self) -> Path:
-        r'''
+        r"""
         * **English**
 
         Root directory of the raw dataset.
@@ -553,7 +564,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         the original dataset. Processed dataset is generated based on the raw dataset.
 
         :return: default to ``root/events_np``
-        '''
+        """
         return self.cfg.root / "events_np"
 
     @classmethod
@@ -562,19 +573,21 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         for file_name, url, md5 in resource_list:
             fpath = download_root / file_name
             if not check_integrity(fpath=fpath, md5=md5):
-                print(f'The file [{fpath}] does not exist or is corrupted.')
+                print(f"The file [{fpath}] does not exist or is corrupted.")
                 if fpath.exists():
                     fpath.unlink()
-                    print(f'Remove [{fpath}]')
+                    print(f"Remove [{fpath}]")
 
                 if cls.downloadable():
-                    print(f'Download [{file_name}] from [{url}] to [{download_root}]')
-                    download_url(url=url, root=download_root, filename=file_name, md5=md5)
+                    print(f"Download [{file_name}] from [{url}] to [{download_root}]")
+                    download_url(
+                        url=url, root=download_root, filename=file_name, md5=md5
+                    )
                 else:
                     raise NotImplementedError(
-                        f'This dataset can not be downloaded by SpikingJelly, '
-                        f'please download [{file_name}] from [{url}] manually '
-                        f'and put files at {download_root}.'
+                        f"This dataset can not be downloaded by SpikingJelly, "
+                        f"please download [{file_name}] from [{url}] manually "
+                        f"and put files at {download_root}."
                     )
 
     @classmethod
@@ -582,17 +595,17 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         resource_list = cls.resource_url_md5()
         if cls.downloadable():
             for file_name, url, md5 in resource_list:
-                print(f'Download [{file_name}] from [{url}] to [{download_root}]')
+                print(f"Download [{file_name}] from [{url}] to [{download_root}]")
                 download_url(url=url, root=download_root, filename=file_name, md5=md5)
         else:
             raise NotImplementedError(
-                f'This dataset can not be downloaded by SpikingJelly, '
-                f'please download files manually and put files at [{download_root}]. '
-                f'The resources file_name, url, and md5 are: \n{resource_list}'
+                f"This dataset can not be downloaded by SpikingJelly, "
+                f"please download files manually and put files at [{download_root}]. "
+                f"The resources file_name, url, and md5 are: \n{resource_list}"
             )
 
     def prepare_raw_dataset(self):
-        r'''
+        r"""
         * **English**
 
         Prepare the **raw dataset**.
@@ -603,7 +616,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         1. Download dataset files to ``root/download`` (if supported) or verify existing downloads.
         2. Extract downloaded files into ``root/extract`` by calling :meth:`extract_downloaded_files`.
         3. Convert extracted data into raw dataset by calling :meth:`create_raw_from_extracted`, and save the raw dataset to :attr:`raw_root`.
-        '''
+        """
         if self.raw_root.exists():
             return
 
@@ -611,39 +624,39 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         download_root = self.cfg.root / "download"
         if download_root.exists():
             print(
-                f'The [{download_root}] directory for saving downloaded files '
-                f'already exists, check files...'
+                f"The [{download_root}] directory for saving downloaded files "
+                f"already exists, check files..."
             )
             self._check_downloaded_files(download_root)
         else:
             download_root.mkdir()
-            print(f'Mkdir [{download_root}] to save downloaded files.')
+            print(f"Mkdir [{download_root}] to save downloaded files.")
             self._download_all_files(download_root)
 
         # extract
         extract_root = self.cfg.root / "extract"
         if extract_root.exists():
             print(
-                f'The directory [{extract_root}] for saving extracted files already exists.\n'
-                f'SpikingJelly will not check the data integrity of extracted files.\n'
-                f'If extracted files are corrupted, please delete [{extract_root}] manually.'
+                f"The directory [{extract_root}] for saving extracted files already exists.\n"
+                f"SpikingJelly will not check the data integrity of extracted files.\n"
+                f"If extracted files are corrupted, please delete [{extract_root}] manually."
             )
         else:
             extract_root.mkdir()
-            print(f'Mkdir [{extract_root}].')
+            print(f"Mkdir [{extract_root}].")
             self.extract_downloaded_files(download_root, extract_root)
 
         # generate raw dataset in self.raw_root
-        self.raw_root.mkdir(exist_ok=True) # raw_root might be equal to extract_root
-        print(f'Mkdir [{self.raw_root}].')
+        self.raw_root.mkdir(exist_ok=True)  # raw_root might be equal to extract_root
+        print(f"Mkdir [{self.raw_root}].")
         print(
-            f'Start to convert the extracted dataset from [{extract_root}] to '
-            f'raw dataset in [{self.raw_root}].'
+            f"Start to convert the extracted dataset from [{extract_root}] to "
+            f"raw dataset in [{self.raw_root}]."
         )
         self.create_raw_from_extracted(extract_root, self.raw_root)
 
     def get_dataset_builder(self):
-        r'''
+        r"""
         * **English**
 
         Create a dataset builder according to the configuration.
@@ -654,7 +667,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         :return: A dataset builder instance.
         :rtype: :class:`NeuromorphicDatasetBuilder`
-        '''
+        """
         if self.cfg.data_type == "event":
             return EventBuilder(self.cfg, self.raw_root)
 
@@ -668,12 +681,12 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         else:
             # not reachable
             raise NotImplementedError(
-                f'Please specify the frames number or duration or '
-                f'custom integrate function.'
+                f"Please specify the frames number or duration or "
+                f"custom integrate function."
             )
 
     def get_root_when_train_is_none(self, _root: Path) -> Path:
-        r'''
+        r"""
         * **English**
 
         Determine the directory of the processed dataset when ``train`` is ``None``.
@@ -687,12 +700,12 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         :return: directory of the processed dataset used by :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`.
         :rtype: pathlib.Path
-        '''
+        """
         return _root
 
     @classmethod
     def get_extensions(cls) -> Tuple[str]:
-        r'''
+        r"""
         * **English**
 
         Return valid file extensions for processed dataset samples.
@@ -702,47 +715,47 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         :return: tuple of supported file extensions.
         :rtype: Tuple[str]
-        '''
+        """
         return (".npy", ".npz")
 
     @classmethod
     @abc.abstractmethod
     def get_H_W(cls) -> Tuple[int]:
-        '''
+        """
         * **English**
 
         :return: a tuple ``(H, W)``, where ``H`` is the height of the data and ``W`` is the weight of the data.
             For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
         :rtype: Tuple[int]
-        '''
+        """
         pass
 
     @classmethod
     @abc.abstractmethod
     def resource_url_md5(cls) -> list:
-        '''
+        """
         * **English**
 
         :return: a list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
         :rtype: list
-        '''
+        """
         pass
 
     @classmethod
     @abc.abstractmethod
     def downloadable(cls) -> bool:
-        '''
+        """
         * **English**
 
         :return: whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
         :rtype: bool
-        '''
+        """
         pass
 
     @classmethod
     @abc.abstractmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
-        '''
+        """
         * **English**
 
         This function defines how to extract downloaded files.
@@ -754,13 +767,13 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type extract_root: pathlib.Path
 
         :return: None
-        '''
+        """
         pass
 
     @classmethod
     @abc.abstractmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
-        '''
+        """
         * **English**
 
         This function defines how to convert the extracted dataset in
@@ -774,5 +787,5 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type raw_root: pathlib.Path
 
         :return: None
-        '''
+        """
         pass

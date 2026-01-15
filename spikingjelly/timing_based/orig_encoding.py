@@ -22,9 +22,7 @@ class GaussianTuning:
         )  # shape=[n, m]
         self.mu = x_min.unsqueeze(-1).repeat(1, m) + (2 * i - 3) / 2 * (
             x_max.unsqueeze(-1).repeat(1, m) - x_min.unsqueeze(-1).repeat(1, m)
-        ) / (
-            m - 2
-        )  # shape=[n, m]
+        ) / (m - 2)  # shape=[n, m]
         self.sigma2 = (
             (1 / 1.5 * (x_max - x_min) / (m - 2)).unsqueeze(-1).square().repeat(1, m)
         )  # shape=[n, m]

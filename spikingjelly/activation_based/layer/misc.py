@@ -9,16 +9,15 @@ from .. import base, functional
 
 
 __all__ = [
-    'SynapseFilter',
-    'PrintShapeModule',
-    'VotingLayer',
-    'Delay',
+    "SynapseFilter",
+    "PrintShapeModule",
+    "VotingLayer",
+    "Delay",
 ]
 
 
 class SynapseFilter(base.MemoryModule):
-
-    def __init__(self, tau=100.0, learnable=False, step_mode='s'):
+    def __init__(self, tau=100.0, learnable=False, step_mode="s"):
         """
         * :ref:`API in English <LowPassSynapse.__init__-en>`
 
@@ -54,18 +53,18 @@ class SynapseFilter(base.MemoryModule):
             in_spikes = (torch.rand(size=[T]) >= 0.95).float()
             lp_syn = LowPassSynapse(tau=10.0)
             pyplot.subplot(2, 1, 1)
-            pyplot.bar(torch.arange(0, T).tolist(), in_spikes, label='in spike')
-            pyplot.xlabel('t')
-            pyplot.ylabel('spike')
+            pyplot.bar(torch.arange(0, T).tolist(), in_spikes, label="in spike")
+            pyplot.xlabel("t")
+            pyplot.ylabel("spike")
             pyplot.legend()
 
             out_i = []
             for i in range(T):
                 out_i.append(lp_syn(in_spikes[i]))
             pyplot.subplot(2, 1, 2)
-            pyplot.plot(out_i, label='out i')
-            pyplot.xlabel('t')
-            pyplot.ylabel('i')
+            pyplot.plot(out_i, label="out i")
+            pyplot.xlabel("t")
+            pyplot.ylabel("i")
             pyplot.legend()
             pyplot.show()
 
@@ -120,18 +119,18 @@ class SynapseFilter(base.MemoryModule):
             in_spikes = (torch.rand(size=[T]) >= 0.95).float()
             lp_syn = LowPassSynapse(tau=10.0)
             pyplot.subplot(2, 1, 1)
-            pyplot.bar(torch.arange(0, T).tolist(), in_spikes, label='in spike')
-            pyplot.xlabel('t')
-            pyplot.ylabel('spike')
+            pyplot.bar(torch.arange(0, T).tolist(), in_spikes, label="in spike")
+            pyplot.xlabel("t")
+            pyplot.ylabel("spike")
             pyplot.legend()
 
             out_i = []
             for i in range(T):
                 out_i.append(lp_syn(in_spikes[i]))
             pyplot.subplot(2, 1, 2)
-            pyplot.plot(out_i, label='out i')
-            pyplot.xlabel('t')
-            pyplot.ylabel('i')
+            pyplot.plot(out_i, label="out i")
+            pyplot.xlabel("t")
+            pyplot.ylabel("i")
             pyplot.legend()
             pyplot.show()
 
@@ -160,41 +159,43 @@ class SynapseFilter(base.MemoryModule):
         self.learnable = learnable
         assert tau > 1
         if learnable:
-            init_w = - math.log(tau - 1)
+            init_w = -math.log(tau - 1)
             self.w = nn.Parameter(torch.as_tensor(init_w))
         else:
             self.tau = tau
 
-        self.register_memory('out_i', 0.)
+        self.register_memory("out_i", 0.0)
 
     def extra_repr(self):
         if self.learnable:
             with torch.no_grad():
-                tau = 1. / self.w.sigmoid()
+                tau = 1.0 / self.w.sigmoid()
         else:
             tau = self.tau
 
-        return f'tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}'
+        return f"tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}"
 
     @staticmethod
     @torch.jit.script
-    def js_single_step_forward_learnable(x: torch.Tensor, w: torch.Tensor, out_i: torch.Tensor):
+    def js_single_step_forward_learnable(
+        x: torch.Tensor, w: torch.Tensor, out_i: torch.Tensor
+    ):
         inv_tau = w.sigmoid()
-        out_i = out_i - (1. - x) * out_i * inv_tau + x
+        out_i = out_i - (1.0 - x) * out_i * inv_tau + x
         return out_i
 
     @staticmethod
     @torch.jit.script
     def js_single_step_forward(x: torch.Tensor, tau: float, out_i: torch.Tensor):
-        inv_tau = 1. / tau
-        out_i = out_i - (1. - x) * out_i * inv_tau + x
+        inv_tau = 1.0 / tau
+        out_i = out_i - (1.0 - x) * out_i * inv_tau + x
         return out_i
 
     def single_step_forward(self, x: Tensor):
         if isinstance(self.out_i, float):
             out_i_init = self.out_i
             self.out_i = torch.zeros_like(x.data)
-            if out_i_init != 0.:
+            if out_i_init != 0.0:
                 torch.fill_(self.out_i, out_i_init)
 
         if self.learnable:
@@ -205,7 +206,7 @@ class SynapseFilter(base.MemoryModule):
 
 
 class PrintShapeModule(nn.Module):
-    def __init__(self, ext_str='PrintShapeModule'):
+    def __init__(self, ext_str="PrintShapeModule"):
         """
         * :ref:`API in English <PrintModule.__init__-en>`
 
@@ -235,7 +236,7 @@ class PrintShapeModule(nn.Module):
 
 
 class VotingLayer(nn.Module, base.StepModule):
-    def __init__(self, voting_size: int = 10, step_mode='s'):
+    def __init__(self, voting_size: int = 10, step_mode="s"):
         """
         * :ref:`API in English <VotingLayer-en>`
 
@@ -265,20 +266,25 @@ class VotingLayer(nn.Module, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f'voting_size={self.voting_size}, step_mode={self.step_mode}'
+        return (
+            super().extra_repr()
+            + f"voting_size={self.voting_size}, step_mode={self.step_mode}"
+        )
 
     def single_step_forward(self, x: torch.Tensor):
-        return F.avg_pool1d(x.unsqueeze(1), self.voting_size, self.voting_size).squeeze(1)
+        return F.avg_pool1d(x.unsqueeze(1), self.voting_size, self.voting_size).squeeze(
+            1
+        )
 
     def forward(self, x: torch.Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             return self.single_step_forward(x)
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             return functional.seq_to_ann_forward(x, self.single_step_forward)
 
 
 class Delay(base.MemoryModule):
-    def __init__(self, delay_steps: int, step_mode='s'):
+    def __init__(self, delay_steps: int, step_mode="s"):
         """
         * :ref:`API in English <DelayModule.__init__-en>`
 
@@ -295,17 +301,17 @@ class Delay(base.MemoryModule):
 
         .. code-block:: python
 
-            delay_layer = Delay(delay=1, step_mode='m')
+            delay_layer = Delay(delay=1, step_mode="m")
             x = torch.rand([5, 2])
             x[3:].zero_()
             x.requires_grad = True
             y = delay_layer(x)
-            print('x=')
+            print("x=")
             print(x)
-            print('y=')
+            print("y=")
             print(y)
             y.sum().backward()
-            print('x.grad=')
+            print("x.grad=")
             print(x.grad)
 
         输出为：
@@ -347,17 +353,17 @@ class Delay(base.MemoryModule):
 
         .. code-block:: python
 
-            delay_layer = Delay(delay=1, step_mode='m')
+            delay_layer = Delay(delay=1, step_mode="m")
             x = torch.rand([5, 2])
             x[3:].zero_()
             x.requires_grad = True
             y = delay_layer(x)
-            print('x=')
+            print("x=")
             print(x)
-            print('y=')
+            print("y=")
             print(y)
             y.sum().backward()
-            print('x.grad=')
+            print("x.grad=")
             print(x.grad)
 
         The outputs are:
@@ -388,7 +394,7 @@ class Delay(base.MemoryModule):
         self._delay_steps = delay_steps
         self.step_mode = step_mode
 
-        self.register_memory('queue', [])
+        self.register_memory("queue", [])
         # used for single step mode
 
     @property

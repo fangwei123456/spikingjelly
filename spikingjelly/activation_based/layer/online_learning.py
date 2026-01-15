@@ -106,9 +106,9 @@ class OTTTSequential(nn.Sequential):
             if not isinstance(input, list):
                 input = module(input)
             else:
-                if len(list(module.parameters())) > 0: # e.g., Conv2d, Linear, etc.
+                if len(list(module.parameters())) > 0:  # e.g., Conv2d, Linear, etc.
                     module = GradwithTrace(module)
-                else: # e.g., Dropout, AvgPool, etc.
+                else:  # e.g., Dropout, AvgPool, etc.
                     module = SpikeTraceOp(module)
                 input = module(input)
         return input

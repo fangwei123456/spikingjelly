@@ -1,5 +1,4 @@
-"""For more information about container, refer to :doc:`../tutorials/en/container` .
-"""
+"""For more information about container, refer to :doc:`../tutorials/en/container` ."""
 
 import logging
 from typing import Callable
@@ -12,18 +11,17 @@ from .. import base, functional
 
 
 __all__ = [
-    'MultiStepContainer',
-    'SeqToANNContainer',
-    'TLastMultiStepContainer',
-    'TLastSeqToANNContainer',
-    'StepModeContainer',
-    'ElementWiseRecurrentContainer',
-    'LinearRecurrentContainer',
+    "MultiStepContainer",
+    "SeqToANNContainer",
+    "TLastMultiStepContainer",
+    "TLastSeqToANNContainer",
+    "StepModeContainer",
+    "ElementWiseRecurrentContainer",
+    "LinearRecurrentContainer",
 ]
 
 
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):
-
     def __init__(self, *args):
         """
         **API Language:**
@@ -49,10 +47,12 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
         """
         super().__init__(*args)
         for m in self:
-            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            assert not hasattr(m, "step_mode") or m.step_mode == "s"
             if isinstance(m, base.StepModule):
-                if 'm' in m.supported_step_mode():
-                    logging.warning(f"{m} supports step_mode == 'm', which should not be contained by MultiStepContainer!")
+                if "m" in m.supported_step_mode():
+                    logging.warning(
+                        f"{m} supports step_mode == 'm', which should not be contained by MultiStepContainer!"
+                    )
 
     def forward(self, x_seq: Tensor):
         """
@@ -66,7 +66,6 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 
 
 class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
-
     def __init__(self, *args):
         """
         **API Language:**
@@ -92,10 +91,12 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         """
         super().__init__(*args)
         for m in self:
-            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            assert not hasattr(m, "step_mode") or m.step_mode == "s"
             if isinstance(m, base.StepModule):
-                if 'm' in m.supported_step_mode():
-                    logging.warning(f"{m} supports step_mode == 'm', which should not be contained by SeqToANNContainer!")
+                if "m" in m.supported_step_mode():
+                    logging.warning(
+                        f"{m} supports step_mode == 'm', which should not be contained by SeqToANNContainer!"
+                    )
 
     def forward(self, x_seq: Tensor):
         """
@@ -109,14 +110,15 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
 
 
 class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
-
     def __init__(self, *args):
         super().__init__(*args)
         for m in self:
-            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            assert not hasattr(m, "step_mode") or m.step_mode == "s"
             if isinstance(m, base.StepModule):
-                if 'm' in m.supported_step_mode():
-                    logging.warning(f"{m} supports for step_mode == 's', which should not be contained by MultiStepContainer!")
+                if "m" in m.supported_step_mode():
+                    logging.warning(
+                        f"{m} supports for step_mode == 's', which should not be contained by MultiStepContainer!"
+                    )
 
     def forward(self, x_seq: Tensor):
         """
@@ -129,18 +131,18 @@ class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
 
 
 class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
-
     def __init__(self, *args):
         """
         Please refer to :class:`spikingjelly.activation_based.functional.t_last_seq_to_ann_forward` .
         """
         super().__init__(*args)
         for m in self:
-            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            assert not hasattr(m, "step_mode") or m.step_mode == "s"
             if isinstance(m, base.StepModule):
-                if 'm' in m.supported_step_mode():
-                    logging.warning(f"{m} supports for step_mode == 's', which should not be contained by SeqToANNContainer!")
-
+                if "m" in m.supported_step_mode():
+                    logging.warning(
+                        f"{m} supports for step_mode == 's', which should not be contained by SeqToANNContainer!"
+                    )
 
     def forward(self, x_seq: Tensor):
         """
@@ -149,7 +151,7 @@ class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
         :return: y_seq, shape=[batch_size, ..., T]
         :rtype: Tensor
         """
-        return functional.t_last_seq_to_ann_forward(x_seq, super().forward) 
+        return functional.t_last_seq_to_ann_forward(x_seq, super().forward)
 
 
 class StepModeContainer(nn.Sequential, base.StepModule):
@@ -157,17 +159,18 @@ class StepModeContainer(nn.Sequential, base.StepModule):
         super().__init__(*args)
         self.stateful = stateful
         for m in self:
-            assert not hasattr(m, 'step_mode') or m.step_mode == 's'
+            assert not hasattr(m, "step_mode") or m.step_mode == "s"
             if isinstance(m, base.StepModule):
-                if 'm' in m.supported_step_mode():
-                    logging.warning(f"{m} supports for step_mode == 's', which should not be contained by StepModeContainer!")
-        self.step_mode = 's'
-
+                if "m" in m.supported_step_mode():
+                    logging.warning(
+                        f"{m} supports for step_mode == 's', which should not be contained by StepModeContainer!"
+                    )
+        self.step_mode = "s"
 
     def forward(self, x: torch.Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             return super().forward(x)
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if self.stateful:
                 return functional.multi_step_forward(x, super().forward)
             else:
@@ -175,7 +178,9 @@ class StepModeContainer(nn.Sequential, base.StepModule):
 
 
 class ElementWiseRecurrentContainer(base.MemoryModule):
-    def __init__(self, sub_module: nn.Module, element_wise_function: Callable, step_mode='s'):
+    def __init__(
+        self, sub_module: nn.Module, element_wise_function: Callable, step_mode="s"
+    ):
         """
         * :ref:`API in English <ElementWiseRecurrentContainer-en>`
 
@@ -207,12 +212,14 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         .. code-block:: python
 
             T = 8
-            net = ElementWiseRecurrentContainer(neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y)
+            net = ElementWiseRecurrentContainer(
+                neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y
+            )
             print(net)
             x = torch.zeros([T])
             x[0] = 1.5
             for t in range(T):
-                print(t, f'x[t]={x[t]}, s[t]={net(x[t])}')
+                print(t, f"x[t]={x[t]}, s[t]={net(x[t])}")
 
             functional.reset_net(net)
 
@@ -248,21 +255,23 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         .. code-block:: python
 
             T = 8
-            net = ElementWiseRecurrentContainer(neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y)
+            net = ElementWiseRecurrentContainer(
+                neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y
+            )
             print(net)
             x = torch.zeros([T])
             x[0] = 1.5
             for t in range(T):
-                print(t, f'x[t]={x[t]}, s[t]={net(x[t])}')
+                print(t, f"x[t]={x[t]}, s[t]={net(x[t])}")
 
             functional.reset_net(net)
         """
         super().__init__()
         self.step_mode = step_mode
-        assert not hasattr(sub_module, 'step_mode') or sub_module.step_mode == 's'
+        assert not hasattr(sub_module, "step_mode") or sub_module.step_mode == "s"
         self.sub_module = sub_module
         self.element_wise_function = element_wise_function
-        self.register_memory('y', None)
+        self.register_memory("y", None)
 
     def single_step_forward(self, x: Tensor):
         if self.y is None:
@@ -271,12 +280,18 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
         return self.y
 
     def extra_repr(self) -> str:
-        return f'element-wise function={self.element_wise_function}, step_mode={self.step_mode}'
+        return f"element-wise function={self.element_wise_function}, step_mode={self.step_mode}"
 
 
 class LinearRecurrentContainer(base.MemoryModule):
-    def __init__(self, sub_module: nn.Module, in_features: int, out_features: int, bias: bool = True,
-                 step_mode='s') -> None:
+    def __init__(
+        self,
+        sub_module: nn.Module,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <LinearRecurrentContainer-en>`
 
@@ -319,7 +334,9 @@ class LinearRecurrentContainer(base.MemoryModule):
                     nn.Linear(in_features, out_features),
                     neuron.LIFNode(),
                 ),
-                in_features, out_features)
+                in_features,
+                out_features,
+            )
             print(net)
             x = torch.rand([T, N, in_features])
             for t in range(T):
@@ -370,7 +387,9 @@ class LinearRecurrentContainer(base.MemoryModule):
                     nn.Linear(in_features, out_features),
                     neuron.LIFNode(),
                 ),
-                in_features, out_features)
+                in_features,
+                out_features,
+            )
             print(net)
             x = torch.rand([T, N, in_features])
             for t in range(T):
@@ -381,11 +400,11 @@ class LinearRecurrentContainer(base.MemoryModule):
         """
         super().__init__()
         self.step_mode = step_mode
-        assert not hasattr(sub_module, 'step_mode') or sub_module.step_mode == 's'
+        assert not hasattr(sub_module, "step_mode") or sub_module.step_mode == "s"
         self.sub_module_out_features = out_features
         self.rc = nn.Linear(in_features + out_features, in_features, bias)
         self.sub_module = sub_module
-        self.register_memory('y', None)
+        self.register_memory("y", None)
 
     def single_step_forward(self, x: Tensor):
         if self.y is None:
@@ -401,4 +420,4 @@ class LinearRecurrentContainer(base.MemoryModule):
         return self.y
 
     def extra_repr(self) -> str:
-        return f', step_mode={self.step_mode}'
+        return f", step_mode={self.step_mode}"

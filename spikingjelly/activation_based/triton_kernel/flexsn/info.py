@@ -8,11 +8,18 @@ __all__ = ["FlexSNInfo", "extract_info"]
 FlexSNInfo = namedtuple(
     typename="FlexSNInfo",
     field_names=[
-        "num_inputs", "num_outputs", "num_states", "fwd_core_args",
-        "fwd_core_returns", "fwd_core_recipients", "fwd_kernel_returns",
-        "num_fwd_kernel_returns", "c2k_return_mapping"
-    ]
+        "num_inputs",
+        "num_outputs",
+        "num_states",
+        "fwd_core_args",
+        "fwd_core_returns",
+        "fwd_core_recipients",
+        "fwd_kernel_returns",
+        "num_fwd_kernel_returns",
+        "c2k_return_mapping",
+    ],
 )
+
 
 def extract_info(
     fwd_graph: fx.Graph,
@@ -74,7 +81,7 @@ def extract_info(
     ):  # 2. states
         symbols[v] = f"v{i}"
         fwd_core_recipients.append(f"v{i}")
-        fwd_kernel_returns.append(f"v{i}") # states are also returned by kernel
+        fwd_kernel_returns.append(f"v{i}")  # states are also returned by kernel
 
     n = 0
     c2k_return_mapping = []

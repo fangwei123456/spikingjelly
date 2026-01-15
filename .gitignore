@@ -135,10 +135,14 @@ dmypy.json
 .history/
 
 /experiments
-/test.py
+
 # event data
 *.bin
 *.dat
 *.pt
+
 /test*.py
 .DS_Store
+uv.lock
+events.out.tfevents.*
+.ruff_cache/

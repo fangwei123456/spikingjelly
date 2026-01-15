@@ -15,7 +15,10 @@ __all__ = [
 
 
 def multi_step_forward(
-    x_seq: Tensor, single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
+    x_seq: Tensor,
+    single_step_module: Union[
+        nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable
+    ],
 ):
     """
     **API Language:**
@@ -72,7 +75,10 @@ def multi_step_forward(
 
 
 def t_last_multi_step_forward(
-    x_seq: Tensor, single_step_module: Union[nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable]
+    x_seq: Tensor,
+    single_step_module: Union[
+        nn.Module, list[nn.Module], tuple[nn.Module], nn.Sequential, Callable
+    ],
 ):
     """
     **API Language:**
@@ -126,7 +132,9 @@ def t_last_multi_step_forward(
     return torch.stack(y_seq, dim=-1)
 
 
-def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: nn.Module):
+def chunk_multi_step_forward(
+    split_size: int, x_seq: Tensor, multi_step_module: nn.Module
+):
     """
     **API Language:**
     :ref:`中文 <chunk_multi_step_forward-cn>` | :ref:`English <chunk_multi_step_forward-en>`
@@ -189,9 +197,9 @@ def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: 
 
         net = nn.Sequential(
             layer.Linear(8, 4),
-            neuron.IFNode(step_mode='m'),
+            neuron.IFNode(step_mode="m"),
             layer.Linear(4, 2),
-            neuron.IFNode(step_mode='m'),
+            neuron.IFNode(step_mode="m"),
         )
 
         x_seq = torch.rand([1024, 8])
@@ -207,7 +215,8 @@ def chunk_multi_step_forward(split_size: int, x_seq: Tensor, multi_step_module: 
 
 
 def seq_to_ann_forward(
-    x_seq: Tensor, stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]
+    x_seq: Tensor,
+    stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
 ):
     """
     **API Language:**
@@ -262,7 +271,10 @@ def seq_to_ann_forward(
     return y.view(y_shape)
 
 
-def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable]):
+def t_last_seq_to_ann_forward(
+    x_seq: Tensor,
+    stateless_module: Union[nn.Module, list, tuple, nn.Sequential, Callable],
+):
     """
     **API Language:**
     :ref:`中文 <t_last_seq_to_ann_forward-cn>` | :ref:`English <t_last_seq_to_ann_forward-en>`
@@ -320,7 +332,7 @@ def t_last_seq_to_ann_forward(x_seq: Tensor, stateless_module: Union[nn.Module, 
     :return: the output tensor with ``shape=[batch_size, ..., T]``
     :rtype: torch.Tensor
     """
-    if hasattr(torch, 'vmap'):
+    if hasattr(torch, "vmap"):
         vmap_f = torch.vmap(stateless_module, in_dims=-1, out_dims=-1)
         return vmap_f(x_seq)
     else:

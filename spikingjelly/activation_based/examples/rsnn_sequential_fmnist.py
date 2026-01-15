@@ -10,6 +10,7 @@ import time
 import datetime
 import sys
 
+
 class PlainNet(nn.Module):
     def __init__(self):
         super().__init__()
@@ -17,11 +18,12 @@ class PlainNet(nn.Module):
             layer.Linear(28, 32),
             neuron.IFNode(surrogate_function=surrogate.ATan()),
             layer.Linear(32, 10),
-            neuron.IFNode(surrogate_function=surrogate.ATan())
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
         )
 
     def forward(self, x: torch.Tensor):
         return self.fc(x).mean(0)
+
 
 class StatefulSynapseNet(nn.Module):
     def __init__(self):
@@ -29,13 +31,14 @@ class StatefulSynapseNet(nn.Module):
         self.fc = nn.Sequential(
             layer.Linear(28, 32),
             neuron.IFNode(surrogate_function=surrogate.ATan()),
-            layer.SynapseFilter(tau=2., learnable=True),
+            layer.SynapseFilter(tau=2.0, learnable=True),
             layer.Linear(32, 10),
-            neuron.IFNode(surrogate_function=surrogate.ATan())
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
         )
 
     def forward(self, x: torch.Tensor):
         return self.fc(x).mean(0)
+
 
 class FeedBackNet(nn.Module):
     def __init__(self):
@@ -45,10 +48,12 @@ class FeedBackNet(nn.Module):
             layer.Linear(28, 32),
             layer.LinearRecurrentContainer(
                 neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
-                in_features=32, out_features=32, bias=True
+                in_features=32,
+                out_features=32,
+                bias=True,
             ),
             layer.Linear(32, 10),
-            neuron.IFNode(surrogate_function=surrogate.ATan())
+            neuron.IFNode(surrogate_function=surrogate.ATan()),
         )
 
     def forward(self, x: torch.Tensor):
@@ -57,55 +62,79 @@ class FeedBackNet(nn.Module):
 
 def main():
     # python -m spikingjelly.activation_based.examples.rsnn_sequential_fmnist -device cuda:0 -b 256 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt adam -lr 0.001 -j 8 -model plain
-    parser = argparse.ArgumentParser(description='Classify Sequential Fashion-MNIST')
-    parser.add_argument('-model', default='plain', type=str, help='use which model, "plain", "ss" (StatefulSynapseNet) or "fb" (FeedBackNet)')
-    parser.add_argument('-device', default='cuda:0', help='device')
-    parser.add_argument('-b', default=128, type=int, help='batch size')
-    parser.add_argument('-epochs', default=64, type=int, metavar='N',
-                        help='number of total epochs to run')
-    parser.add_argument('-j', default=4, type=int, metavar='N',
-                        help='number of data loading workers (default: 4)')
-    parser.add_argument('-data-dir', type=str, help='root dir of Fashion-MNIST dataset')
-    parser.add_argument('-out-dir', type=str, default='./logs', help='root dir for saving logs and checkpoint')
-    parser.add_argument('-resume', type=str, help='resume from the checkpoint path')
-    parser.add_argument('-amp', action='store_true', help='automatic mixed precision training')
-    parser.add_argument('-cupy', action='store_true', help='use cupy backend')
-    parser.add_argument('-opt', type=str, help='use which optimizer. SDG or Adam')
-    parser.add_argument('-momentum', default=0.9, type=float, help='momentum for SGD')
-    parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
+    parser = argparse.ArgumentParser(description="Classify Sequential Fashion-MNIST")
+    parser.add_argument(
+        "-model",
+        default="plain",
+        type=str,
+        help='use which model, "plain", "ss" (StatefulSynapseNet) or "fb" (FeedBackNet)',
+    )
+    parser.add_argument("-device", default="cuda:0", help="device")
+    parser.add_argument("-b", default=128, type=int, help="batch size")
+    parser.add_argument(
+        "-epochs",
+        default=64,
+        type=int,
+        metavar="N",
+        help="number of total epochs to run",
+    )
+    parser.add_argument(
+        "-j",
+        default=4,
+        type=int,
+        metavar="N",
+        help="number of data loading workers (default: 4)",
+    )
+    parser.add_argument("-data-dir", type=str, help="root dir of Fashion-MNIST dataset")
+    parser.add_argument(
+        "-out-dir",
+        type=str,
+        default="./logs",
+        help="root dir for saving logs and checkpoint",
+    )
+    parser.add_argument("-resume", type=str, help="resume from the checkpoint path")
+    parser.add_argument(
+        "-amp", action="store_true", help="automatic mixed precision training"
+    )
+    parser.add_argument("-cupy", action="store_true", help="use cupy backend")
+    parser.add_argument("-opt", type=str, help="use which optimizer. SDG or Adam")
+    parser.add_argument("-momentum", default=0.9, type=float, help="momentum for SGD")
+    parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
 
     args = parser.parse_args()
     print(args)
 
-    if args.model == 'plain':
+    if args.model == "plain":
         net = PlainNet()
-    elif args.model == 'ss':
+    elif args.model == "ss":
         net = StatefulSynapseNet()
-    elif args.model == 'fb':
+    elif args.model == "fb":
         net = FeedBackNet()
 
     net.to(args.device)
 
     # `functional.set_step_mode` will not set neurons in LinearRecurrentContainer to use step_mode = 'm'
-    functional.set_step_mode(net, step_mode='m')
+    functional.set_step_mode(net, step_mode="m")
 
     if args.cupy:
         # neurons in LinearRecurrentContainer still use step_mode = 's', so, they will still use backend = 'torch'
-        functional.set_backend(net, backend='cupy')
+        functional.set_backend(net, backend="cupy")
 
     print(net)
 
     train_set = torchvision.datasets.FashionMNIST(
-            root=args.data_dir,
-            train=True,
-            transform=torchvision.transforms.ToTensor(),
-            download=True)
+        root=args.data_dir,
+        train=True,
+        transform=torchvision.transforms.ToTensor(),
+        download=True,
+    )
 
     test_set = torchvision.datasets.FashionMNIST(
-            root=args.data_dir,
-            train=False,
-            transform=torchvision.transforms.ToTensor(),
-            download=True)
+        root=args.data_dir,
+        train=False,
+        transform=torchvision.transforms.ToTensor(),
+        download=True,
+    )
 
     train_data_loader = torch.utils.data.DataLoader(
         dataset=train_set,
@@ -113,7 +142,7 @@ def main():
         shuffle=True,
         drop_last=True,
         num_workers=args.j,
-        pin_memory=True
+        pin_memory=True,
     )
 
     test_data_loader = torch.utils.data.DataLoader(
@@ -122,9 +151,8 @@ def main():
         shuffle=True,
         drop_last=False,
         num_workers=args.j,
-        pin_memory=True
+        pin_memory=True,
     )
-
 
     scaler = None
     if args.amp:
@@ -134,9 +162,11 @@ def main():
     max_test_acc = -1
 
     optimizer = None
-    if args.opt == 'sgd':
-        optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum)
-    elif args.opt == 'adam':
+    if args.opt == "sgd":
+        optimizer = torch.optim.SGD(
+            net.parameters(), lr=args.lr, momentum=args.momentum
+        )
+    elif args.opt == "adam":
         optimizer = torch.optim.Adam(net.parameters(), lr=args.lr)
     else:
         raise NotImplementedError(args.opt)
@@ -144,30 +174,32 @@ def main():
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs)
 
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location='cpu')
-        net.load_state_dict(checkpoint['net'])
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr_scheduler.load_state_dict(checkpoint['lr_scheduler'])
-        start_epoch = checkpoint['epoch'] + 1
-        max_test_acc = checkpoint['max_test_acc']
+        checkpoint = torch.load(args.resume, map_location="cpu")
+        net.load_state_dict(checkpoint["net"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        lr_scheduler.load_state_dict(checkpoint["lr_scheduler"])
+        start_epoch = checkpoint["epoch"] + 1
+        max_test_acc = checkpoint["max_test_acc"]
 
-    out_dir = os.path.join(args.out_dir, f'{args.model}_b{args.b}_{args.opt}_lr{args.lr}')
+    out_dir = os.path.join(
+        args.out_dir, f"{args.model}_b{args.b}_{args.opt}_lr{args.lr}"
+    )
 
     if args.amp:
-        out_dir += '_amp'
+        out_dir += "_amp"
 
     if args.cupy:
-        out_dir += '_cupy'
+        out_dir += "_cupy"
 
     if not os.path.exists(out_dir):
         os.makedirs(out_dir)
-        print(f'Mkdir {out_dir}.')
+        print(f"Mkdir {out_dir}.")
 
     writer = SummaryWriter(out_dir, purge_step=start_epoch)
-    with open(os.path.join(out_dir, 'args.txt'), 'w', encoding='utf-8') as args_txt:
+    with open(os.path.join(out_dir, "args.txt"), "w", encoding="utf-8") as args_txt:
         args_txt.write(str(args))
-        args_txt.write('\n')
-        args_txt.write(' '.join(sys.argv))
+        args_txt.write("\n")
+        args_txt.write(" ".join(sys.argv))
 
     for epoch in range(start_epoch, args.epochs):
         start_time = time.time()
@@ -209,8 +241,8 @@ def main():
         train_loss /= train_samples
         train_acc /= train_samples
 
-        writer.add_scalar('train_loss', train_loss, epoch)
-        writer.add_scalar('train_acc', train_acc, epoch)
+        writer.add_scalar("train_loss", train_loss, epoch)
+        writer.add_scalar("train_acc", train_acc, epoch)
         lr_scheduler.step()
 
         net.eval()
@@ -238,8 +270,8 @@ def main():
         test_speed = test_samples / (test_time - train_time)
         test_loss /= test_samples
         test_acc /= test_samples
-        writer.add_scalar('test_loss', test_loss, epoch)
-        writer.add_scalar('test_acc', test_acc, epoch)
+        writer.add_scalar("test_loss", test_loss, epoch)
+        writer.add_scalar("test_acc", test_acc, epoch)
 
         save_max = False
         if test_acc > max_test_acc:
@@ -247,24 +279,30 @@ def main():
             save_max = True
 
         checkpoint = {
-            'net': net.state_dict(),
-            'optimizer': optimizer.state_dict(),
-            'lr_scheduler': lr_scheduler.state_dict(),
-            'epoch': epoch,
-            'max_test_acc': max_test_acc
+            "net": net.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "lr_scheduler": lr_scheduler.state_dict(),
+            "epoch": epoch,
+            "max_test_acc": max_test_acc,
         }
 
         if save_max:
-            torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_max.pth'))
+            torch.save(checkpoint, os.path.join(out_dir, "checkpoint_max.pth"))
 
-        torch.save(checkpoint, os.path.join(out_dir, 'checkpoint_latest.pth'))
+        torch.save(checkpoint, os.path.join(out_dir, "checkpoint_latest.pth"))
 
         print(args)
         print(out_dir)
-        print(f'epoch = {epoch}, train_loss ={train_loss: .4f}, train_acc ={train_acc: .4f}, test_loss ={test_loss: .4f}, test_acc ={test_acc: .4f}, max_test_acc ={max_test_acc: .4f}')
-        print(f'train speed ={train_speed: .4f} images/s, test speed ={test_speed: .4f} images/s')
-        print(f'escape time = {(datetime.datetime.now() + datetime.timedelta(seconds=(time.time() - start_time) * (args.epochs - epoch))).strftime("%Y-%m-%d %H:%M:%S")}\n')
+        print(
+            f"epoch = {epoch}, train_loss ={train_loss: .4f}, train_acc ={train_acc: .4f}, test_loss ={test_loss: .4f}, test_acc ={test_acc: .4f}, max_test_acc ={max_test_acc: .4f}"
+        )
+        print(
+            f"train speed ={train_speed: .4f} images/s, test speed ={test_speed: .4f} images/s"
+        )
+        print(
+            f"escape time = {(datetime.datetime.now() + datetime.timedelta(seconds=(time.time() - start_time) * (args.epochs - epoch))).strftime('%Y-%m-%d %H:%M:%S')}\n"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

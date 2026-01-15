@@ -9,16 +9,15 @@ from torchvision.datasets.utils import extract_archive
 from .base import NeuromorphicDatasetFolder
 
 
-__all__ = ['HARDVS']
+__all__ = ["HARDVS"]
 
 
 class HARDVS(NeuromorphicDatasetFolder):
-
     def __init__(
         self,
         root: str,
         train_test_val: str = None,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: int = None,
         split_by: str = None,
         duration: int = None,
@@ -37,9 +36,16 @@ class HARDVS(NeuromorphicDatasetFolder):
         """
         self.train_test_val = train_test_val
         super().__init__(
-            root, None, data_type, frames_number, split_by, duration,
-            custom_integrate_function, custom_integrated_frames_dir_name,
-            transform, target_transform
+            root,
+            None,
+            data_type,
+            frames_number,
+            split_by,
+            duration,
+            custom_integrate_function,
+            custom_integrated_frames_dir_name,
+            transform,
+            target_transform,
         )
 
     def get_root_when_train_is_none(self, _root: Path):
@@ -54,12 +60,12 @@ class HARDVS(NeuromorphicDatasetFolder):
 
     @classmethod
     def resource_url_md5(cls) -> list:
-        url = 'https://github.com/Event-AHU/HARDVS'
+        url = "https://github.com/Event-AHU/HARDVS"
         return [
-            ('MINI_HARDVS_files.zip', url, '9c4cc0d9ba043faa17f6f1a9e9aff982'),
-            ('test_label.txt', url, '5b664af5843f9b476a9c22626f7f5a59'),
-            ('train_label.txt', url, '0d642b6e6871034f151b2649a89d8d3c'),
-            ('val_label.txt', url, 'cd2cebcba80e4552102bbacf2b5df812'),
+            ("MINI_HARDVS_files.zip", url, "9c4cc0d9ba043faa17f6f1a9e9aff982"),
+            ("test_label.txt", url, "5b664af5843f9b476a9c22626f7f5a59"),
+            ("train_label.txt", url, "0d642b6e6871034f151b2649a89d8d3c"),
+            ("val_label.txt", url, "cd2cebcba80e4552102bbacf2b5df812"),
         ]
 
     @classmethod
@@ -71,52 +77,52 @@ class HARDVS(NeuromorphicDatasetFolder):
 
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
-        temp_ext_dir = download_root / 'temp_ext'
+        temp_ext_dir = download_root / "temp_ext"
         temp_ext_dir.mkdir()
-        print(f'Mkdir [{temp_ext_dir}].')
-        extract_archive(download_root / 'MINI_HARDVS_files.zip', temp_ext_dir)
+        print(f"Mkdir [{temp_ext_dir}].")
+        extract_archive(download_root / "MINI_HARDVS_files.zip", temp_ext_dir)
 
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
             futures = []
             for i in range(1, 301):
                 s = str(i).zfill(3)
-                zip_file = temp_ext_dir / 'MINI_HARDVS_files' / f'action_{s}.zip'
-                target_dir = extract_root / f'action_{s}'
-                print(f'Extract [{zip_file}] to [{target_dir}].')
+                zip_file = temp_ext_dir / "MINI_HARDVS_files" / f"action_{s}.zip"
+                target_dir = extract_root / f"action_{s}"
+                print(f"Extract [{zip_file}] to [{target_dir}].")
                 futures.append(tpe.submit(extract_archive, zip_file, target_dir))
 
             for future in futures:
                 future.result()
 
         shutil.rmtree(temp_ext_dir)
-        print(f'Rmtree [{temp_ext_dir}].')
+        print(f"Rmtree [{temp_ext_dir}].")
 
-        shutil.copy(download_root / 'train_label.txt', extract_root / 'train_label.txt')
-        shutil.copy(download_root / 'val_label.txt', extract_root / 'val_label.txt')
-        shutil.copy(download_root / 'test_label.txt', extract_root / 'test_label.txt')
+        shutil.copy(download_root / "train_label.txt", extract_root / "train_label.txt")
+        shutil.copy(download_root / "val_label.txt", extract_root / "val_label.txt")
+        shutil.copy(download_root / "test_label.txt", extract_root / "test_label.txt")
         print(
-            f'Copy [{download_root / "train_label.txt"}], '
-            f'[{download_root / "val_label.txt"}], '
-            f'[{download_root / "test_label.txt"}] to [{extract_root}].'
+            f"Copy [{download_root / 'train_label.txt'}], "
+            f"[{download_root / 'val_label.txt'}], "
+            f"[{download_root / 'test_label.txt'}] to [{extract_root}]."
         )
 
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
-        for prefix in ('train', 'val', 'test'):
+        for prefix in ("train", "val", "test"):
             target_dir = raw_root / prefix
             target_dir.mkdir()
-            print(f'Mkdir {target_dir}.')
+            print(f"Mkdir {target_dir}.")
             for i in range(1, 301):
                 class_dir = target_dir / f"action_{str(i).zfill(3)}"
                 class_dir.mkdir()
-                print(f'Mkdir {class_dir}.')
+                print(f"Mkdir {class_dir}.")
 
-            with open(extract_root / f'{prefix}_label.txt') as txt_file:
+            with open(extract_root / f"{prefix}_label.txt") as txt_file:
                 for line in txt_file:
                     if len(line) <= 1:
                         continue
                     # e.g., "action_001/dvSave-2021_10_15_19_18_02"
-                    class_name, sample_name = line.split(' ')[0].split('/')
+                    class_name, sample_name = line.split(" ")[0].split("/")
                     source_file = extract_root / class_name / f"{sample_name}.npz"
                     target_file = target_dir / class_name / f"{sample_name}.npz"
                     target_file.symlink_to(source_file)

@@ -14,9 +14,13 @@ class EpisodeEvents(EventEnum):
 
 
 class EndOfEpisodeHandler:
-    def __init__(self, exp_source: ptan.experience.ExperienceSource, alpha: float = 0.98,
-                 bound_avg_reward: Optional[float] = None,
-                 subsample_end_of_episode: Optional[int] = None):
+    def __init__(
+        self,
+        exp_source: ptan.experience.ExperienceSource,
+        alpha: float = 0.98,
+        bound_avg_reward: Optional[float] = None,
+        subsample_end_of_episode: Optional[int] = None,
+    ):
         """
         Construct end-of-episode event handler
         :param exp_source: experience source to use
@@ -42,32 +46,38 @@ class EndOfEpisodeHandler:
             engine.state.episode = getattr(engine.state, "episode", 0) + 1
             engine.state.episode_reward = reward
             engine.state.episode_steps = steps
-            engine.state.metrics['reward'] = reward
-            engine.state.metrics['steps'] = steps
+            engine.state.metrics["reward"] = reward
+            engine.state.metrics["steps"] = steps
             self._update_smoothed_metrics(engine, reward, steps)
-            if self._subsample_end_of_episode is None or engine.state.episode % self._subsample_end_of_episode == 0:
+            if (
+                self._subsample_end_of_episode is None
+                or engine.state.episode % self._subsample_end_of_episode == 0
+            ):
                 engine.fire_event(EpisodeEvents.EPISODE_COMPLETED)
-            if self._bound_avg_reward is not None and engine.state.metrics['avg_reward'] >= self._bound_avg_reward:
+            if (
+                self._bound_avg_reward is not None
+                and engine.state.metrics["avg_reward"] >= self._bound_avg_reward
+            ):
                 engine.fire_event(EpisodeEvents.BOUND_REWARD_REACHED)
             if self._best_avg_reward is None:
-                self._best_avg_reward = engine.state.metrics['avg_reward']
-            elif self._best_avg_reward < engine.state.metrics['avg_reward']:
+                self._best_avg_reward = engine.state.metrics["avg_reward"]
+            elif self._best_avg_reward < engine.state.metrics["avg_reward"]:
                 engine.fire_event(EpisodeEvents.BEST_REWARD_REACHED)
-                self._best_avg_reward = engine.state.metrics['avg_reward']
+                self._best_avg_reward = engine.state.metrics["avg_reward"]
 
     def _update_smoothed_metrics(self, engine: Engine, reward: float, steps: int):
-        for attr_name, val in zip(('avg_reward', 'avg_steps'), (reward, steps)):
+        for attr_name, val in zip(("avg_reward", "avg_steps"), (reward, steps)):
             if attr_name not in engine.state.metrics:
                 engine.state.metrics[attr_name] = val
             else:
                 engine.state.metrics[attr_name] *= self._alpha
-                engine.state.metrics[attr_name] += (1-self._alpha) * val
+                engine.state.metrics[attr_name] += (1 - self._alpha) * val
 
 
 class EpisodeFPSHandler:
-    FPS_METRIC = 'fps'
-    AVG_FPS_METRIC = 'avg_fps'
-    TIME_PASSED_METRIC = 'time_passed'
+    FPS_METRIC = "fps"
+    AVG_FPS_METRIC = "avg_fps"
+    TIME_PASSED_METRIC = "time_passed"
 
     def __init__(self, fps_mul: float = 1.0, fps_smooth_alpha: float = 0.98):
         self._timer = Timer(average=True)
@@ -76,7 +86,9 @@ class EpisodeFPSHandler:
         self._fps_smooth_alpha = fps_smooth_alpha
 
     def attach(self, engine: Engine, manual_step: bool = False):
-        self._timer.attach(engine, step=None if manual_step else Events.ITERATION_COMPLETED)
+        self._timer.attach(
+            engine, step=None if manual_step else Events.ITERATION_COMPLETED
+        )
         engine.add_event_handler(EpisodeEvents.EPISODE_COMPLETED, self)
 
     def step(self):
@@ -96,7 +108,7 @@ class EpisodeFPSHandler:
                 avg_fps = fps
             else:
                 avg_fps *= self._fps_smooth_alpha
-                avg_fps += (1-self._fps_smooth_alpha) * fps
+                avg_fps += (1 - self._fps_smooth_alpha) * fps
             engine.state.metrics[self.AVG_FPS_METRIC] = avg_fps
             engine.state.metrics[self.FPS_METRIC] = fps
         engine.state.metrics[self.TIME_PASSED_METRIC] = time.time() - self._started_ts
@@ -135,4 +147,3 @@ class PeriodicEvents:
         for period, event in self.INTERVAL_TO_EVENT.items():
             if engine.state.iteration % period == 0:
                 engine.fire_event(event)
-

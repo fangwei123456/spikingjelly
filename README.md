@@ -26,7 +26,7 @@ The [documentation](https://spikingjelly.readthedocs.io) of SpikingJelly is writ
 - [Installation](#installation)
 - [Build SNN In An Unprecedented Simple Way](#build-snn-in-an-unprecedented-simple-way)
 - [Fast And Handy ANN-SNN Conversion](#fast-and-handy-ann-snn-conversion)
-- [CUDA-Enhanced Neuron](#cuda-enhanced-neuron)
+- [CUDA/Triton-Enhanced Neuron](#cudatriton-enhanced-neuron)
 - [Device Supports](#device-supports)
 - [Neuromorphic Datasets Supports](#neuromorphic-datasets-supports)
 - [Tutorials](#tutorials)

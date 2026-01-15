@@ -49,12 +49,9 @@ def network_layer_to_space(net_arch):
     return space
 
 
-Genotype = namedtuple('Genotype_2D', 'cell cell_concat')
-PRIMITIVES = [
-    'skip_connect',
-    'snn_b3',
-    'snn_b5'
-]
+Genotype = namedtuple("Genotype_2D", "cell cell_concat")
+PRIMITIVES = ["skip_connect", "snn_b3", "snn_b5"]
+
 
 class Identity(nn.Module):
     def __init__(self, C_in, C_out, signal):
@@ -64,26 +61,27 @@ class Identity(nn.Module):
     def forward(self, x):
         return x
 
+
 OPS = {
-    'skip_connect': lambda Cin, Cout, stride, signal: (
-        SpikingConv2d(Cin, Cout, stride=stride, padding=1, spiking=False) if signal == 1 else Identity(Cin, Cout,
-                                                                                                       signal)),
-    'snn_b3': lambda Cin, Cout, stride, signal: SpikingConv2d(Cin, Cout, kernel_size=3, stride=stride, padding=1,
-                                                              spiking=False),
-    'snn_b5': lambda Cin, Cout, stride, signal: SpikingConv2d(Cin, Cout, kernel_size=3, stride=stride, padding=1,
-                                                              spiking=False)
+    "skip_connect": lambda Cin, Cout, stride, signal: (
+        SpikingConv2d(Cin, Cout, stride=stride, padding=1, spiking=False)
+        if signal == 1
+        else Identity(Cin, Cout, signal)
+    ),
+    "snn_b3": lambda Cin, Cout, stride, signal: SpikingConv2d(
+        Cin, Cout, kernel_size=3, stride=stride, padding=1, spiking=False
+    ),
+    "snn_b5": lambda Cin, Cout, stride, signal: SpikingConv2d(
+        Cin, Cout, kernel_size=3, stride=stride, padding=1, spiking=False
+    ),
 }
-
-
-
 
 
 @script
 def dSpike_backward(grad_output: Tensor, x: Tensor, alpha: float):
     mask = x.abs() > 0.5
-    const = alpha / (2. * tanh(alpha / 2.))
-    grad_x = (grad_output * const / (alpha * x).cosh_().square_()
-              ).masked_fill_(mask, 0)
+    const = alpha / (2.0 * tanh(alpha / 2.0))
+    grad_x = (grad_output * const / (alpha * x).cosh_().square_()).masked_fill_(mask, 0)
     return grad_x, None
 
 
@@ -103,7 +101,7 @@ class dSpike(Function):
 class DSpike(SurrogateFunctionBase):
     def __init__(self, alpha: float = 3, spiking=True):
         super().__init__(alpha, spiking)
-        assert alpha > 0, 'alpha must be lager than 0.'
+        assert alpha > 0, "alpha must be lager than 0."
 
     @staticmethod
     def spiking_function(x: Tensor, alpha: float):
@@ -137,18 +135,41 @@ class save_v_LIFNode(LIFNode):
 
 
 def getSpikingNode(v_threshold=0.5):
-    return LIFNode(tau=1.25, decay_input=False, v_threshold=v_threshold, detach_reset=True, surrogate_function=DSpike())
+    return LIFNode(
+        tau=1.25,
+        decay_input=False,
+        v_threshold=v_threshold,
+        detach_reset=True,
+        surrogate_function=DSpike(),
+    )
 
 
 def get_save_v_SpikingNode(v_threshold=0.5):
-    return save_v_LIFNode(tau=1.25, decay_input=False, v_threshold=v_threshold, detach_reset=True,
-                          surrogate_function=DSpike())
+    return save_v_LIFNode(
+        tau=1.25,
+        decay_input=False,
+        v_threshold=v_threshold,
+        detach_reset=True,
+        surrogate_function=DSpike(),
+    )
 
 
 class SpikingConv2d(nn.Module):
-    def __init__(self, input_c, output_c, kernel_size=3, stride=1, padding=1, b=3, spiking=True, v_threshold=0.5):
+    def __init__(
+        self,
+        input_c,
+        output_c,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        b=3,
+        spiking=True,
+        v_threshold=0.5,
+    ):
         super(SpikingConv2d, self).__init__()
-        self.conv = layer.Conv2d(input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.conv = layer.Conv2d(
+            input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
+        )
         self.bn = layer.BatchNorm2d(output_c)
         self.spiking = spiking
         if self.spiking:
@@ -162,11 +183,27 @@ class SpikingConv2d(nn.Module):
 
 
 class SearchSpikingConv2d_stem(nn.Module):
-    def __init__(self, input_c, output_c, kernel_size=3, stride=1, padding=1, b=3, spiking=True, v_threshold=0.5):
+    def __init__(
+        self,
+        input_c,
+        output_c,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        b=3,
+        spiking=True,
+        v_threshold=0.5,
+    ):
         super(SearchSpikingConv2d_stem, self).__init__()
-        self.conv_m = layer.Conv2d(input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.conv_b = layer.Conv2d(input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.conv_s = layer.Conv2d(input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.conv_m = layer.Conv2d(
+            input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
+        )
+        self.conv_b = layer.Conv2d(
+            input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
+        )
+        self.conv_s = layer.Conv2d(
+            input_c, output_c, kernel_size=kernel_size, stride=stride, padding=padding
+        )
 
         self.bn_m = layer.BatchNorm2d(output_c)
         self.bn_b = layer.BatchNorm2d(output_c)
@@ -189,8 +226,12 @@ class SearchSpikingConv2d_stem(nn.Module):
         self.bn_s.load_state_dict(self.bn_m.state_dict())
         self.bn_b.load_state_dict(self.bn_m.state_dict())
 
-        self.spike_s.surrogate_function.alpha = self.spike_m.surrogate_function.alpha - self.dgs_step
-        self.spike_b.surrogate_function.alpha = self.spike_m.surrogate_function.alpha + self.dgs_step
+        self.spike_s.surrogate_function.alpha = (
+            self.spike_m.surrogate_function.alpha - self.dgs_step
+        )
+        self.spike_b.surrogate_function.alpha = (
+            self.spike_m.surrogate_function.alpha + self.dgs_step
+        )
 
         self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
 
@@ -208,30 +249,53 @@ class SearchSpikingConv2d_stem(nn.Module):
     def forward(self, x):
         if self.is_DGS:
             n_a = F.softmax(self.dgs_alpha, dim=0)
-            x = n_a[0] * self.spike_s(self.bn_s(self.conv_s(x))) + \
-                n_a[1] * self.spike_m(self.bn_m(self.conv_m(x))) + \
-                n_a[2] * self.spike_b(self.bn_b(self.conv_b(x)))
+            x = (
+                n_a[0] * self.spike_s(self.bn_s(self.conv_s(x)))
+                + n_a[1] * self.spike_m(self.bn_m(self.conv_m(x)))
+                + n_a[2] * self.spike_b(self.bn_b(self.conv_b(x)))
+            )
         else:
             x = self.spike_m(self.bn_m(self.conv_m(x)))
         return x
 
 
 class SearchSpikingConv2d_cell(nn.Module):
-    def __init__(self, io_c, kernel_size=3, stride=1, padding=1, b=3, spiking=True, v_threshold=0.5):
+    def __init__(
+        self,
+        io_c,
+        kernel_size=3,
+        stride=1,
+        padding=1,
+        b=3,
+        spiking=True,
+        v_threshold=0.5,
+    ):
         super(SearchSpikingConv2d_cell, self).__init__()
         [input_c1, output_c1, primitive1], [input_c2, output_c2, primitive2] = io_c
 
-        self.conv1_m = layer.Conv2d(input_c1, output_c1, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.conv1_b = layer.Conv2d(input_c1, output_c1, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.conv1_s = layer.Conv2d(input_c1, output_c1, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.conv1_m = layer.Conv2d(
+            input_c1, output_c1, kernel_size=kernel_size, stride=stride, padding=padding
+        )
+        self.conv1_b = layer.Conv2d(
+            input_c1, output_c1, kernel_size=kernel_size, stride=stride, padding=padding
+        )
+        self.conv1_s = layer.Conv2d(
+            input_c1, output_c1, kernel_size=kernel_size, stride=stride, padding=padding
+        )
 
         self.bn1_m = layer.BatchNorm2d(output_c1)
         self.bn1_b = layer.BatchNorm2d(output_c1)
         self.bn1_s = layer.BatchNorm2d(output_c1)
 
-        self.conv2_m = layer.Conv2d(input_c2, output_c2, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.conv2_b = layer.Conv2d(input_c2, output_c2, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.conv2_s = layer.Conv2d(input_c2, output_c2, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.conv2_m = layer.Conv2d(
+            input_c2, output_c2, kernel_size=kernel_size, stride=stride, padding=padding
+        )
+        self.conv2_b = layer.Conv2d(
+            input_c2, output_c2, kernel_size=kernel_size, stride=stride, padding=padding
+        )
+        self.conv2_s = layer.Conv2d(
+            input_c2, output_c2, kernel_size=kernel_size, stride=stride, padding=padding
+        )
 
         self.bn2_m = layer.BatchNorm2d(output_c2)
         self.bn2_b = layer.BatchNorm2d(output_c2)
@@ -260,8 +324,12 @@ class SearchSpikingConv2d_cell(nn.Module):
         self.bn2_s.load_state_dict(self.bn2_m.state_dict())
         self.bn2_b.load_state_dict(self.bn2_m.state_dict())
 
-        self.spike_s.surrogate_function.alpha = self.spike_m.surrogate_function.alpha - self.dgs_step
-        self.spike_b.surrogate_function.alpha = self.spike_m.surrogate_function.alpha + self.dgs_step
+        self.spike_s.surrogate_function.alpha = (
+            self.spike_m.surrogate_function.alpha - self.dgs_step
+        )
+        self.spike_b.surrogate_function.alpha = (
+            self.spike_m.surrogate_function.alpha + self.dgs_step
+        )
 
         self.dgs_alpha = nn.Parameter(1e-3 * torch.ones(3).cuda(), requires_grad=True)
 
@@ -279,11 +347,24 @@ class SearchSpikingConv2d_cell(nn.Module):
     def forward(self, x1, x2):
         if self.is_DGS:
             n_a = F.softmax(self.dgs_alpha, dim=0)
-            x = n_a[0] * self.spike_s(self.bn1_s(self.conv1_s(x1)) + self.bn2_s(self.conv2_s(x2))) + \
-                n_a[1] * self.spike_m(self.bn1_m(self.conv1_m(x1)) + self.bn2_m(self.conv2_m(x2))) + \
-                n_a[2] * self.spike_b(self.bn1_b(self.conv1_b(x1)) + self.bn2_b(self.conv2_b(x2)))
+            x = (
+                n_a[0]
+                * self.spike_s(
+                    self.bn1_s(self.conv1_s(x1)) + self.bn2_s(self.conv2_s(x2))
+                )
+                + n_a[1]
+                * self.spike_m(
+                    self.bn1_m(self.conv1_m(x1)) + self.bn2_m(self.conv2_m(x2))
+                )
+                + n_a[2]
+                * self.spike_b(
+                    self.bn1_b(self.conv1_b(x1)) + self.bn2_b(self.conv2_b(x2))
+                )
+            )
         else:
-            x = self.spike_m(self.bn1_m(self.conv1_m(x1)) + self.bn2_m(self.conv2_m(x2)))
+            x = self.spike_m(
+                self.bn1_m(self.conv1_m(x1)) + self.bn2_m(self.conv2_m(x2))
+            )
         return x
 
 
@@ -307,7 +388,13 @@ class SpikingAvgPool2d(nn.Module):
     def __init__(self, kernel_size=5, stride=3, padding=0, b=3, spiking=True):
         super(SpikingAvgPool2d, self).__init__()
         self.pooling = layer.SeqToANNContainer(
-            nn.AvgPool2d(kernel_size=kernel_size, stride=stride, padding=padding, count_include_pad=False))
+            nn.AvgPool2d(
+                kernel_size=kernel_size,
+                stride=stride,
+                padding=padding,
+                count_include_pad=False,
+            )
+        )
         self.spike = getSpikingNode()
 
     def forward(self, x):
@@ -335,10 +422,20 @@ class Nearest(nn.Module):
 
 ### Model ###
 
+
 class Cell(nn.Module):
-    def __init__(self, steps, block_multiplier, prev_prev_fmultiplier,
-                 prev_filter_multiplier, cell_arch, network_arch,
-                 filter_multiplier, downup_sample, args=None):
+    def __init__(
+        self,
+        steps,
+        block_multiplier,
+        prev_prev_fmultiplier,
+        prev_filter_multiplier,
+        cell_arch,
+        network_arch,
+        filter_multiplier,
+        downup_sample,
+        args=None,
+    ):
         """
         :param steps: number of nodes
         :type steps: int
@@ -396,11 +493,14 @@ class Cell(nn.Module):
                 self._ops.append(op)
                 ops_channel = []
 
-        self.spikes = nn.ModuleList([getSpikingNode()
-                                     for _ in range(self._steps)])
+        self.spikes = nn.ModuleList([getSpikingNode() for _ in range(self._steps)])
 
     def scale_dimension(self, dim, scale):
-        return (int((float(dim) - 1.0) * scale + 1.0) if dim % 2 == 1 else int((float(dim) * scale)))
+        return (
+            int((float(dim) - 1.0) * scale + 1.0)
+            if dim % 2 == 1
+            else int((float(dim) * scale))
+        )
 
     def forward(self, prev_prev_input, prev_input):
         s0 = prev_prev_input
@@ -408,7 +508,9 @@ class Cell(nn.Module):
         if self.downup_sample != 0:
             feature_size_h = self.scale_dimension(s1.shape[3], self.scale)
             feature_size_w = self.scale_dimension(s1.shape[4], self.scale)
-            interpolate = layer.SeqToANNContainer(Nearest([feature_size_h, feature_size_w]))
+            interpolate = layer.SeqToANNContainer(
+                Nearest([feature_size_h, feature_size_w])
+            )
             s1 = interpolate(s1)
         if (s0.shape[3] != s1.shape[3]) or (s0.shape[4] != s1.shape[4]):
             interpolate = layer.SeqToANNContainer(Nearest([s1.shape[3], s1.shape[4]]))
@@ -428,7 +530,7 @@ class Cell(nn.Module):
         spike = self._ops[2](states[2], states[3])
         states.append(spike)
 
-        concat_feature = torch.cat(states[-self.block_multiplier:], dim=2)
+        concat_feature = torch.cat(states[-self.block_multiplier :], dim=2)
         return prev_input, concat_feature
 
 
@@ -460,8 +562,14 @@ class newFeature(nn.Module):
         f_initial = int(self._filter_multiplier)
         half_f_initial = int(f_initial / 2)
         self._num_end = self._filter_multiplier * self._block_multiplier
-        self.stem0 = SearchSpikingConv2d_stem(frame_rate, f_initial * self._block_multiplier, kernel_size=3, stride=1,
-                                              padding=1, b=3)
+        self.stem0 = SearchSpikingConv2d_stem(
+            frame_rate,
+            f_initial * self._block_multiplier,
+            kernel_size=3,
+            stride=1,
+            padding=1,
+            b=3,
+        )
         self.auxiliary_head = AuxiliaryHeadCIFAR(576, 100)
 
         filter_param_dict = {0: 1, 1: 2, 2: 4, 3: 8}
@@ -475,30 +583,49 @@ class newFeature(nn.Module):
             prev_prev_level = torch.argmax(prev_prev_level_option).item()
 
             if i == 0:
-                downup_sample = - torch.argmax(torch.sum(self.network_arch[0], dim=1))
-                _cell = cell(self._step, self._block_multiplier, self._filter_multiplier,
-                             self._filter_multiplier,
-                             self.cell_arch, self.network_arch[i],
-                             int(self._filter_multiplier * filter_param_dict[level]),
-                             downup_sample, self.args)
+                downup_sample = -torch.argmax(torch.sum(self.network_arch[0], dim=1))
+                _cell = cell(
+                    self._step,
+                    self._block_multiplier,
+                    self._filter_multiplier,
+                    self._filter_multiplier,
+                    self.cell_arch,
+                    self.network_arch[i],
+                    int(self._filter_multiplier * filter_param_dict[level]),
+                    downup_sample,
+                    self.args,
+                )
 
             else:
                 three_branch_options = torch.sum(self.network_arch[i], dim=0)
                 downup_sample = torch.argmax(three_branch_options).item() - 1
                 if i == 1:
-                    _cell = cell(self._step, self._block_multiplier,
-                                 self._filter_multiplier,
-                                 int(self._filter_multiplier * filter_param_dict[prev_level]),
-                                 self.cell_arch, self.network_arch[i],
-                                 int(self._filter_multiplier * filter_param_dict[level]),
-                                 downup_sample, self.args)
+                    _cell = cell(
+                        self._step,
+                        self._block_multiplier,
+                        self._filter_multiplier,
+                        int(self._filter_multiplier * filter_param_dict[prev_level]),
+                        self.cell_arch,
+                        self.network_arch[i],
+                        int(self._filter_multiplier * filter_param_dict[level]),
+                        downup_sample,
+                        self.args,
+                    )
 
                 else:
-                    _cell = cell(self._step, self._block_multiplier,
-                                 int(self._filter_multiplier * filter_param_dict[prev_prev_level]),
-                                 int(self._filter_multiplier * filter_param_dict[prev_level]),
-                                 self.cell_arch, self.network_arch[i],
-                                 int(self._filter_multiplier * filter_param_dict[level]), downup_sample, self.args)
+                    _cell = cell(
+                        self._step,
+                        self._block_multiplier,
+                        int(
+                            self._filter_multiplier * filter_param_dict[prev_prev_level]
+                        ),
+                        int(self._filter_multiplier * filter_param_dict[prev_level]),
+                        self.cell_arch,
+                        self.network_arch[i],
+                        int(self._filter_multiplier * filter_param_dict[level]),
+                        downup_sample,
+                        self.args,
+                    )
 
             self.cells += [_cell]
 
@@ -509,7 +636,7 @@ class newFeature(nn.Module):
 
         for i in range(self._num_layers):
             out = self.cells[i](out[0], out[1])
-            '''
+            """
             cell torch.Size([50, 144, 32, 32])
             cell torch.Size([50, 144, 32, 32])
             cell torch.Size([50, 288, 16, 16])
@@ -518,7 +645,7 @@ class newFeature(nn.Module):
             cell torch.Size([50, 576, 8, 8] -> auxiliary [50, 10]
             cell torch.Size([50, 576, 8, 8])
             cell torch.Size([50, 576, 8, 8])
-            '''
+            """
             if i == 2 * 8 // 3:
                 if self.training:
                     logits_aux = self.auxiliary_head(out[-1])
@@ -534,7 +661,7 @@ class newFeature(nn.Module):
         bn_params = []
         non_bn_params = []
         for name, param in self.named_parameters():
-            if 'bn' in name or 'downsample.1' in name:
+            if "bn" in name or "downsample.1" in name:
                 bn_params.append(param)
             else:
                 bn_params.append(param)
@@ -542,7 +669,6 @@ class newFeature(nn.Module):
 
 
 class AuxiliaryHeadCIFAR(nn.Module):
-
     def __init__(self, C, num_classes):
         """assuming input size 8x8"""
         super(AuxiliaryHeadCIFAR, self).__init__()
@@ -576,15 +702,12 @@ class SpikeDHS(nn.Module):
         network_path_fea = np.array(network_path_fea)
         network_arch_fea = network_layer_to_space(network_path_fea)
 
-        cell_arch_fea = [[1, 1],
-                         [0, 1],
-                         [3, 2],
-                         [2, 1],
-                         [7, 1],
-                         [8, 1]]
+        cell_arch_fea = [[1, 1], [0, 1], [3, 2], [2, 1], [7, 1], [8, 1]]
         cell_arch_fea = np.array(cell_arch_fea)
 
-        self.feature = newFeature(init_channels, network_arch_fea, cell_arch_fea, args=args)
+        self.feature = newFeature(
+            init_channels, network_arch_fea, cell_arch_fea, args=args
+        )
         self.global_pooling = SpikingAdaptiveAvgPool2d(1)
         self.classifier = SpikingLinear(576, 100, spiking=False)
         self._time_step = 6
@@ -624,18 +747,24 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser("cifar")
 
-    parser.add_argument('--layers', type=int, default=8, help='total number of layers')
+    parser.add_argument("--layers", type=int, default=8, help="total number of layers")
 
-    parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
-    parser.add_argument('--auxiliary_weight', type=float, default=0.4, help='weight for auxiliary loss')
+    parser.add_argument(
+        "--auxiliary", action="store_true", default=False, help="use auxiliary tower"
+    )
+    parser.add_argument(
+        "--auxiliary_weight", type=float, default=0.4, help="weight for auxiliary loss"
+    )
 
-    parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--arch', type=str, default='DARTS', help='which architecture to use')
-    parser.add_argument('--fea_num_layers', type=int, default=8)
-    parser.add_argument('--fea_filter_multiplier', type=int, default=48)
-    parser.add_argument('--fea_block_multiplier', type=int, default=3)
-    parser.add_argument('--fea_step', type=int, default=3)
-    parser.add_argument('--net_arch_fea', default=None, type=str)
-    parser.add_argument('--cell_arch_fea', default=None, type=str)
+    parser.add_argument("--seed", type=int, default=0, help="random seed")
+    parser.add_argument(
+        "--arch", type=str, default="DARTS", help="which architecture to use"
+    )
+    parser.add_argument("--fea_num_layers", type=int, default=8)
+    parser.add_argument("--fea_filter_multiplier", type=int, default=48)
+    parser.add_argument("--fea_block_multiplier", type=int, default=3)
+    parser.add_argument("--fea_step", type=int, default=3)
+    parser.add_argument("--net_arch_fea", default=None, type=str)
+    parser.add_argument("--cell_arch_fea", default=None, type=str)
     args = parser.parse_args()
     spikedhs = SpikeDHS(init_channels=3, args=args)

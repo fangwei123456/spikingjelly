@@ -9,9 +9,9 @@ from .net_config import detach_net
 
 
 __all__ = [
-    'fptt_online_training_init_w_ra',
-    'fptt_online_training',
-    'ottt_online_training'
+    "fptt_online_training_init_w_ra",
+    "fptt_online_training",
+    "ottt_online_training",
 ]
 
 
@@ -31,13 +31,21 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     """
     w_ra = []
     for item in optimizer.param_groups:
-        for w in item['params']:
+        for w in item["params"]:
             w_ra.append(w.data)
 
     return w_ra
 
 
-def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, alpha: float, w_ra: list) -> None:
+def fptt_online_training(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    x_seq: torch.Tensor,
+    target_seq: torch.Tensor,
+    f_loss_t: Callable,
+    alpha: float,
+    w_ra: list,
+) -> None:
     """
     .. _fptt_online_training-en:
 
@@ -75,10 +83,7 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
         from spikingjelly.activation_based import neuron
 
         net = nn.Sequential(
-            nn.Linear(8, 4),
-            neuron.IFNode(),
-            nn.Linear(4, 2),
-            neuron.IFNode()
+            nn.Linear(8, 4), neuron.IFNode(), nn.Linear(4, 2), neuron.IFNode()
         )
 
         optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
@@ -87,11 +92,18 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
         N = 2
         w_ra = fptt_online_training_init_w_ra(optimizer)
         for epoch in range(2):
-
             x_seq = torch.rand([T, N, 8])
             target_seq = torch.rand([T, N, 2])
 
-            fptt_online_training(model=net, optimizer=optimizer, x_seq=x_seq, target_seq=target_seq, f_loss_t=F.mse_loss, alpha=0.1, w_ra=w_ra)
+            fptt_online_training(
+                model=net,
+                optimizer=optimizer,
+                x_seq=x_seq,
+                target_seq=target_seq,
+                f_loss_t=F.mse_loss,
+                alpha=0.1,
+                w_ra=w_ra,
+            )
             functional.reset_net(net)
     """
     T = x_seq.shape[0]
@@ -99,22 +111,24 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
     grad__l_t_last__to__w_t = []
 
     for item in optimizer.param_groups:
-        for w in item['params']:
-            grad__l_t_last__to__w_t.append(0.)
+        for w in item["params"]:
+            grad__l_t_last__to__w_t.append(0.0)
 
     for t in range(T):
         optimizer.zero_grad()
 
         y_t = model(x_seq[t])
         loss_t = f_loss_t(y_t, target_seq[t])
-        loss_reg = 0.
+        loss_reg = 0.0
         i = 0
         for item in optimizer.param_groups:
-            for w in item['params']:
-                loss_reg = loss_reg + F.mse_loss(w, w_ra[i] + grad__l_t_last__to__w_t[i] / (2. * alpha))
+            for w in item["params"]:
+                loss_reg = loss_reg + F.mse_loss(
+                    w, w_ra[i] + grad__l_t_last__to__w_t[i] / (2.0 * alpha)
+                )
                 i += 1
 
-        loss_reg = loss_reg * (alpha / 2.)
+        loss_reg = loss_reg * (alpha / 2.0)
 
         loss = loss_t + loss_reg
         loss.backward()
@@ -140,9 +154,9 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
             with torch.no_grad():
                 i = 0
                 for item in optimizer.param_groups:
-                    for w in item['params']:
+                    for w in item["params"]:
                         grad__l_t_last__to__w_t[i] = w.grad
-                        w_ra[i] = (w_ra[i] + w) / 2. - w.grad / (2. * alpha)
+                        w_ra[i] = (w_ra[i] + w) / 2.0 - w.grad / (2.0 * alpha)
                         i += 1
         optimizer.zero_grad()
 
@@ -154,7 +168,14 @@ def fptt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
                 i += 1
 
 
-def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_seq: torch.Tensor, target_seq: torch.Tensor, f_loss_t: Callable, online: bool) -> None:
+def ottt_online_training(
+    model: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    x_seq: torch.Tensor,
+    target_seq: torch.Tensor,
+    f_loss_t: Callable,
+    online: bool,
+) -> None:
     """
     .. _ottt_online_training-en:
 
@@ -190,10 +211,7 @@ def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
         from spikingjelly.activation_based import neuron, layer, functional
 
         net = layer.OTTTSequential(
-            nn.Linear(8, 4),
-            neuron.OTTTLIFNode(),
-            nn.Linear(4, 2),
-            neuron.LIFNode()
+            nn.Linear(8, 4), neuron.OTTTLIFNode(), nn.Linear(4, 2), neuron.LIFNode()
         )
 
         optimizer = torch.optim.SGD(net.parameters(), lr=0.1)
@@ -202,11 +220,17 @@ def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
         N = 2
         online = True
         for epoch in range(2):
-
             x_seq = torch.rand([N, T, 8])
             target_seq = torch.rand([N, T, 2])
 
-            functional.ottt_online_training(model=net, optimizer=optimizer, x_seq=x_seq, target_seq=target_seq, f_loss_t=F.mse_loss, online=online)
+            functional.ottt_online_training(
+                model=net,
+                optimizer=optimizer,
+                x_seq=x_seq,
+                target_seq=target_seq,
+                f_loss_t=F.mse_loss,
+                online=online,
+            )
             functional.reset_net(net)
     """
 
@@ -216,7 +240,7 @@ def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
     target_seq = target_seq.transpose(0, 1)
     T = x_seq.shape[0]
 
-    batch_loss = 0.
+    batch_loss = 0.0
     y_all = []
     if not online:
         optimizer.zero_grad()
@@ -243,4 +267,3 @@ def ottt_online_training(model: nn.Module, optimizer: torch.optim.Optimizer, x_s
     y_all = torch.stack(y_all, dim=1)
 
     return batch_loss, y_all
-

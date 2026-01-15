@@ -15,15 +15,13 @@ __all__ = [
 
 
 class GraphCollector:
-    """Provide this class to aot_function to collect forward and backward graph.
-    """
+    """Provide this class to aot_function to collect forward and backward graph."""
 
     def __init__(self):
         self.fwd_graph = None
         self.bwd_graph = None
 
     def get_forward_compiler(self):
-
         def _fw_compiler(fx_module, *args, **kwargs):
             self.fwd_graph = fx_module.graph
             return fx_module
@@ -31,7 +29,6 @@ class GraphCollector:
         return _fw_compiler
 
     def get_backward_compiler(self):
-
         def _bw_compiler(fx_module, *args, **kwargs):
             self.bwd_graph = fx_module.graph
             return fx_module
@@ -40,7 +37,6 @@ class GraphCollector:
 
 
 class GraphOptimizer(fx.Transformer):
-
     def call_function(self, target, args, kwargs):
         if target.__name__ == "detach.default":
             # Remove `.detach()` operation.
@@ -70,7 +66,7 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple):
     f = aot_function(
         fn,
         fw_compiler=collector.get_forward_compiler(),
-        bw_compiler=collector.get_backward_compiler()
+        bw_compiler=collector.get_backward_compiler(),
     )  # ahead-of-time autograd
 
     for i in example_inputs:
@@ -83,9 +79,7 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple):
 
 
 def generate_forward_and_backward_graph(
-    fn: Callable,
-    example_inputs: tuple,
-    requires_grad: Optional[Tuple[bool]] = None
+    fn: Callable, example_inputs: tuple, requires_grad: Optional[Tuple[bool]] = None
 ):
     """Generate optimized forward and backward graphs from a PyTorch function.
 
@@ -107,7 +101,7 @@ def generate_forward_and_backward_graph(
     f = aot_function(
         fn,
         fw_compiler=collector.get_forward_compiler(),
-        bw_compiler=collector.get_backward_compiler()
+        bw_compiler=collector.get_backward_compiler(),
     )
 
     if requires_grad is not None:

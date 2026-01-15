@@ -17,8 +17,11 @@ __all__ = [
 
 
 def set_threshold_margin(
-    output_layer: neuron.BaseNode, label_one_hot: Tensor,
-    eval_threshold=1.0, threshold0=0.9, threshold1=1.1
+    output_layer: neuron.BaseNode,
+    label_one_hot: Tensor,
+    eval_threshold=1.0,
+    threshold0=0.9,
+    threshold1=1.1,
 ):
     """
     **API Language:**
@@ -347,6 +350,5 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
                 [0., 0.]])
     """
     # x_seq.shape = [T, *]
-    y = torch.zeros_like(x_seq[0: delay_steps].data)
-    return torch.cat((y, x_seq[0: x_seq.shape[0] - delay_steps]), 0)
-
+    y = torch.zeros_like(x_seq[0:delay_steps].data)
+    return torch.cat((y, x_seq[0 : x_seq.shape[0] - delay_steps]), 0)

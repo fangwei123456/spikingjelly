@@ -1,6 +1,7 @@
 """
 Simple wrappers
 """
+
 import gym
 import numpy as np
 import collections
@@ -10,6 +11,7 @@ class FrameStack1D(gym.Wrapper):
     """
     Stacks observations into 1D array
     """
+
     def __init__(self, env, k):
         assert isinstance(env, gym.Env)
         assert isinstance(env.observation_space, gym.spaces.Box)
@@ -18,10 +20,12 @@ class FrameStack1D(gym.Wrapper):
         self.k = k
         self.frames = collections.deque([], maxlen=k)
         shp = env.observation_space.shape
-        self.observation_space = gym.spaces.Box(low=np.min(env.observation_space.low),
-                                                high=np.max(env.observation_space.high),
-                                                shape=(env.observation_space.shape[0]*k,),
-                                                dtype=env.observation_space.dtype)
+        self.observation_space = gym.spaces.Box(
+            low=np.min(env.observation_space.low),
+            high=np.max(env.observation_space.high),
+            shape=(env.observation_space.shape[0] * k,),
+            dtype=env.observation_space.dtype,
+        )
 
     def reset(self):
         ob = self.env.reset()
@@ -37,5 +41,3 @@ class FrameStack1D(gym.Wrapper):
     def _get_ob(self):
         assert len(self.frames) == self.k
         return np.concatenate(self.frames)
-
-

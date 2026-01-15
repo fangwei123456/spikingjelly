@@ -1,6 +1,7 @@
 """
 Agent is something which converts states into actions and has state
 """
+
 import copy
 import numpy as np
 import torch
@@ -15,6 +16,7 @@ class BaseAgent:
     """
     Abstract Agent interface
     """
+
     def initial_state(self):
         """
         Should create initial empty state for the agent. It will be called for the start of the episode
@@ -59,7 +61,14 @@ class DQNAgent(BaseAgent):
     DQNAgent is a memoryless DQN agent which calculates Q values
     from the observations and  converts them into the actions using action_selector
     """
-    def __init__(self, dqn_model, action_selector, device, preprocessor=default_states_preprocessor):
+
+    def __init__(
+        self,
+        dqn_model,
+        action_selector,
+        device,
+        preprocessor=default_states_preprocessor,
+    ):
         self.dqn_model = dqn_model
         self.action_selector = action_selector
         self.preprocessor = preprocessor
@@ -73,10 +82,14 @@ class DQNAgent(BaseAgent):
             states = self.preprocessor(states)
             if torch.is_tensor(states):
                 states = states.to(self.device)
-        q_v = self.dqn_model(states) if 'dqn' in self.dqn_model.model_name else self.dqn_model.qvals(states)
+        q_v = (
+            self.dqn_model(states)
+            if "dqn" in self.dqn_model.model_name
+            else self.dqn_model.qvals(states)
+        )
         q = q_v.data.cpu().numpy()
         actions = self.action_selector(q)
-        if 'spiking' in self.dqn_model.model_name:
+        if "spiking" in self.dqn_model.model_name:
             functional.reset_net(self.dqn_model)
         return actions, agent_states
 
@@ -85,6 +98,7 @@ class TargetNet:
     """
     Wrapper around model which provides copy of it instead of trained weights
     """
+
     def __init__(self, model, target_model=None):
         self.model = model
         if target_model:
@@ -113,9 +127,16 @@ class PolicyAgent(BaseAgent):
     """
     Policy agent gets action probabilities from the model and samples actions from it
     """
+
     # TODO: unify code with DQNAgent, as only action selector is differs.
-    def __init__(self, model, action_selector=actions.ProbabilityActionSelector(), device="cpu",
-                 apply_softmax=False, preprocessor=default_states_preprocessor):
+    def __init__(
+        self,
+        model,
+        action_selector=actions.ProbabilityActionSelector(),
+        device="cpu",
+        apply_softmax=False,
+        preprocessor=default_states_preprocessor,
+    ):
         self.model = model
         self.action_selector = action_selector
         self.device = device
@@ -148,8 +169,15 @@ class ActorCriticAgent(BaseAgent):
     Policy agent which returns policy and value tensors from observations. Value are stored in agent's state
     and could be reused for rollouts calculations by ExperienceSource.
     """
-    def __init__(self, model, action_selector=actions.ProbabilityActionSelector(), device="cpu",
-                 apply_softmax=False, preprocessor=default_states_preprocessor):
+
+    def __init__(
+        self,
+        model,
+        action_selector=actions.ProbabilityActionSelector(),
+        device="cpu",
+        apply_softmax=False,
+        preprocessor=default_states_preprocessor,
+    ):
         self.model = model
         self.action_selector = action_selector
         self.device = device

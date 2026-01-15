@@ -1,4 +1,3 @@
-
 import math
 from typing import Optional
 
@@ -10,11 +9,11 @@ from torch import Tensor
 from .. import base
 
 
-__all__ = ['Dropout', 'Dropout2d', 'DropConnectLinear']
+__all__ = ["Dropout", "Dropout2d", "DropConnectLinear"]
 
 
 class Dropout(base.MemoryModule):
-    def __init__(self, p=0.5, step_mode='s'):
+    def __init__(self, p=0.5, step_mode="s"):
         """
         * :ref:`API in English <Dropout.__init__-en>`
 
@@ -81,11 +80,11 @@ class Dropout(base.MemoryModule):
         super().__init__()
         self.step_mode = step_mode
         assert 0 <= p < 1
-        self.register_memory('mask', None)
+        self.register_memory("mask", None)
         self.p = p
 
     def extra_repr(self):
-        return f'p={self.p}'
+        return f"p={self.p}"
 
     def create_mask(self, x: Tensor):
         self.mask = F.dropout(torch.ones_like(x.data), self.p, training=True)
@@ -110,7 +109,7 @@ class Dropout(base.MemoryModule):
 
 
 class Dropout2d(Dropout):
-    def __init__(self, p=0.2, step_mode='s'):
+    def __init__(self, p=0.2, step_mode="s"):
         """
         * :ref:`API in English <Dropout2d.__init__-en>`
 
@@ -148,8 +147,17 @@ class Dropout2d(Dropout):
 
 
 class DropConnectLinear(base.MemoryModule):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, p: float = 0.5, samples_num: int = 1024,
-                 invariant: bool = False, activation: Optional[nn.Module] = nn.ReLU(), step_mode='s') -> None:
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        p: float = 0.5,
+        samples_num: int = 1024,
+        invariant: bool = False,
+        activation: Optional[nn.Module] = nn.ReLU(),
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <DropConnectLinear.__init__-en>`
 
@@ -233,14 +241,14 @@ class DropConnectLinear(base.MemoryModule):
         if bias:
             self.bias = nn.Parameter(Tensor(out_features))
         else:
-            self.register_parameter('bias', None)
+            self.register_parameter("bias", None)
 
         self.reset_parameters()
 
         self.p = p  # 置0的概率
-        self.register_memory('dropped_w', None)
+        self.register_memory("dropped_w", None)
         if self.bias is not None:
-            self.register_memory('dropped_b', None)
+            self.register_memory("dropped_b", None)
 
         self.samples_num = samples_num
         self.invariant = invariant
@@ -294,16 +302,26 @@ class DropConnectLinear(base.MemoryModule):
         also reset it.
         """
         super().reset()
-        if hasattr(self.activation, 'reset'):
+        if hasattr(self.activation, "reset"):
             self.activation.reset()
 
     def drop(self, batch_size: int):
-        mask_w = (torch.rand_like(self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())) > self.p)
+        mask_w = (
+            torch.rand_like(
+                self.weight.unsqueeze(0).repeat([batch_size] + [1] * self.weight.dim())
+            )
+            > self.p
+        )
         # self.dropped_w = mask_w.to(self.weight) * self.weight  # shape = [batch_size, out_features, in_features]
         self.dropped_w = self.weight * mask_w
 
         if self.bias is not None:
-            mask_b = (torch.rand_like(self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())) > self.p)
+            mask_b = (
+                torch.rand_like(
+                    self.bias.unsqueeze(0).repeat([batch_size] + [1] * self.bias.dim())
+                )
+                > self.p
+            )
             # self.dropped_b = mask_b.to(self.bias) * self.bias
             self.dropped_b = self.bias * mask_b
 
@@ -317,17 +335,30 @@ class DropConnectLinear(base.MemoryModule):
             if self.bias is None:
                 ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
             else:
-                ret = torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1) + self.dropped_b
+                ret = (
+                    torch.bmm(self.dropped_w, input.unsqueeze(-1)).squeeze(-1)
+                    + self.dropped_b
+                )
             if self.activation is None:
                 return ret
             else:
                 return self.activation(ret)
         else:
-            mu = (1 - self.p) * F.linear(input, self.weight, self.bias)  # shape = [batch_size, out_features]
+            mu = (1 - self.p) * F.linear(
+                input, self.weight, self.bias
+            )  # shape = [batch_size, out_features]
             if self.bias is None:
-                sigma2 = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square())
+                sigma2 = (
+                    self.p
+                    * (1 - self.p)
+                    * F.linear(input.square(), self.weight.square())
+                )
             else:
-                sigma2 = self.p * (1 - self.p) * F.linear(input.square(), self.weight.square(), self.bias.square())
+                sigma2 = (
+                    self.p
+                    * (1 - self.p)
+                    * F.linear(input.square(), self.weight.square(), self.bias.square())
+                )
             dis = torch.distributions.normal.Normal(mu, sigma2.sqrt())
             samples = dis.sample(torch.Size([self.samples_num]))
 
@@ -338,4 +369,4 @@ class DropConnectLinear(base.MemoryModule):
             return ret.mean(dim=0)
 
     def extra_repr(self) -> str:
-        return f'in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}'
+        return f"in_features={self.in_features}, out_features={self.out_features}, bias={self.bias is not None}, p={self.p}, invariant={self.invariant}"

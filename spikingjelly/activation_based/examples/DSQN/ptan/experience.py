@@ -12,7 +12,7 @@ from .agent import BaseAgent
 from .common import utils
 
 # one single experience step
-Experience = namedtuple('Experience', ['state', 'action', 'reward', 'done'])
+Experience = namedtuple("Experience", ["state", "action", "reward", "done"])
 
 
 class ExperienceSource:
@@ -21,6 +21,7 @@ class ExperienceSource:
 
     Every experience contains n list of Experience entries
     """
+
     def __init__(self, env, agent, steps_count=2, steps_delta=1, vectorized=False):
         """
         Create simple experience source
@@ -75,18 +76,22 @@ class ExperienceSource:
 
             for idx, state in enumerate(states):
                 if state is None:
-                    actions[idx] = self.pool[0].action_space.sample()  # assume that all envs are from the same family
+                    actions[idx] = self.pool[
+                        0
+                    ].action_space.sample()  # assume that all envs are from the same family
                 else:
                     states_input.append(state)
                     states_indices.append(idx)
 
             if states_input:
-                states_actions, new_agent_states = self.agent(states_input, agent_states)
+                states_actions, new_agent_states = self.agent(
+                    states_input, agent_states
+                )
                 for idx, action in enumerate(states_actions):
                     g_idx = states_indices[idx]
                     actions[g_idx] = action
                     agent_states[g_idx] = new_agent_states[idx]
-            
+
             grouped_actions = _group_list(actions, env_lens)
 
             global_ofs = 0
@@ -97,7 +102,9 @@ class ExperienceSource:
                     next_state, r, is_done, _ = env.step(action_n[0])
                     next_state_n, r_n, is_done_n = [next_state], [r], [is_done]
 
-                for ofs, (action, next_state, r, is_done) in enumerate(zip(action_n, next_state_n, r_n, is_done_n)):
+                for ofs, (action, next_state, r, is_done) in enumerate(
+                    zip(action_n, next_state_n, r_n, is_done_n)
+                ):
                     idx = global_ofs + ofs
                     state = states[idx]
                     history = histories[idx]
@@ -106,9 +113,16 @@ class ExperienceSource:
                     cur_steps[idx] += 1
 
                     if state is not None:
-                        history.append(Experience(state=state, action=action, reward=r, done=is_done))
-                    
-                    if len(history) == self.steps_count and iter_idx % self.steps_delta == 0:
+                        history.append(
+                            Experience(
+                                state=state, action=action, reward=r, done=is_done
+                            )
+                        )
+
+                    if (
+                        len(history) == self.steps_count
+                        and iter_idx % self.steps_delta == 0
+                    ):
                         yield tuple(history)
 
                     states[idx] = next_state
@@ -158,13 +172,15 @@ def _group_list(items, lens):
     res = []
     cur_ofs = 0
     for g_len in lens:
-        res.append(items[cur_ofs:cur_ofs+g_len])
+        res.append(items[cur_ofs : cur_ofs + g_len])
         cur_ofs += g_len
     return res
 
 
 # those entries are emitted from ExperienceSourceFirstLast. Reward is discounted over the trajectory piece
-ExperienceFirstLast = collections.namedtuple('ExperienceFirstLast', ('state', 'action', 'reward', 'last_state'))
+ExperienceFirstLast = collections.namedtuple(
+    "ExperienceFirstLast", ("state", "action", "reward", "last_state")
+)
 
 
 class ExperienceSourceFirstLast(ExperienceSource):
@@ -175,9 +191,14 @@ class ExperienceSourceFirstLast(ExperienceSource):
 
     If we have partial trajectory at the end of episode, last_state will be None
     """
-    def __init__(self, env, agent, gamma, steps_count=1, steps_delta=1, vectorized=False):
+
+    def __init__(
+        self, env, agent, gamma, steps_count=1, steps_delta=1, vectorized=False
+    ):
         assert isinstance(gamma, float)
-        super(ExperienceSourceFirstLast, self).__init__(env, agent, steps_count + 1, steps_delta, vectorized=vectorized)
+        super(ExperienceSourceFirstLast, self).__init__(
+            env, agent, steps_count + 1, steps_delta, vectorized=vectorized
+        )
         self.gamma = gamma
         self.steps = steps_count
 
@@ -195,16 +216,20 @@ class ExperienceSourceFirstLast(ExperienceSource):
             for e in reversed(elems):
                 total_reward *= self.gamma
                 total_reward += e.reward
-                
-            yield ExperienceFirstLast(state=exp[0].state, action=exp[0].action,
-                                      reward=total_reward, last_state=last_state)
+
+            yield ExperienceFirstLast(
+                state=exp[0].state,
+                action=exp[0].action,
+                reward=total_reward,
+                last_state=last_state,
+            )
 
 
 def discount_with_dones(rewards, dones, gamma):
     discounted = []
     r = 0
     for reward, done in zip(rewards[::-1], dones[::-1]):
-        r = reward + gamma * r * (1. - done)
+        r = reward + gamma * r * (1.0 - done)
         discounted.append(r)
     return discounted[::-1]
 
@@ -220,6 +245,7 @@ class ExperienceSourceRollouts:
     3. discounted rewards, with values approximation
     4. values
     """
+
     def __init__(self, env, agent, gamma, steps_count=5):
         """
         Constructs the rollout experience source
@@ -246,7 +272,9 @@ class ExperienceSourceRollouts:
     def __iter__(self):
         pool_size = len(self.pool)
         states = [np.array(e.reset()) for e in self.pool]
-        mb_states = np.zeros((pool_size, self.steps_count) + states[0].shape, dtype=states[0].dtype)
+        mb_states = np.zeros(
+            (pool_size, self.steps_count) + states[0].shape, dtype=states[0].dtype
+        )
         mb_rewards = np.zeros((pool_size, self.steps_count), dtype=np.float32)
         mb_values = np.zeros((pool_size, self.steps_count), dtype=np.float32)
         mb_actions = np.zeros((pool_size, self.steps_count), dtype=np.int64)
@@ -277,15 +305,26 @@ class ExperienceSourceRollouts:
             # we need an extra step to get values approximation for rollouts
             if step_idx == self.steps_count:
                 # calculate rollout rewards
-                for env_idx, (env_rewards, env_dones, last_value) in enumerate(zip(mb_rewards, mb_dones, agent_states)):
+                for env_idx, (env_rewards, env_dones, last_value) in enumerate(
+                    zip(mb_rewards, mb_dones, agent_states)
+                ):
                     env_rewards = env_rewards.tolist()
                     env_dones = env_dones.tolist()
                     if not env_dones[-1]:
-                        env_rewards = discount_with_dones(env_rewards + [last_value], env_dones + [False], self.gamma)[:-1]
+                        env_rewards = discount_with_dones(
+                            env_rewards + [last_value], env_dones + [False], self.gamma
+                        )[:-1]
                     else:
-                        env_rewards = discount_with_dones(env_rewards, env_dones, self.gamma)
+                        env_rewards = discount_with_dones(
+                            env_rewards, env_dones, self.gamma
+                        )
                     mb_rewards[env_idx] = env_rewards
-                yield mb_states.reshape((-1,) + mb_states.shape[2:]), mb_rewards.flatten(), mb_actions.flatten(), mb_values.flatten()
+                yield (
+                    mb_states.reshape((-1,) + mb_states.shape[2:]),
+                    mb_rewards.flatten(),
+                    mb_actions.flatten(),
+                    mb_values.flatten(),
+                )
                 step_idx = 0
             mb_states[:, step_idx] = states
             mb_rewards[:, step_idx] = rewards
@@ -313,6 +352,7 @@ class ExperienceSourceBuffer:
     """
     The same as ExperienceSource, but takes episodes from the buffer
     """
+
     def __init__(self, buffer, steps_count=1):
         """
         Create buffered experience source
@@ -333,14 +373,16 @@ class ExperienceSourceBuffer:
         while True:
             episode = random.randrange(len(self.buffer))
             ofs = random.randrange(self.lens[episode] - self.steps_count - 1)
-            yield self.buffer[episode][ofs:ofs+self.steps_count]
+            yield self.buffer[episode][ofs : ofs + self.steps_count]
 
 
 class ExperienceReplayBuffer:
     def __init__(self, experience_source, buffer_size):
         assert isinstance(experience_source, (ExperienceSource, type(None)))
         assert isinstance(buffer_size, int)
-        self.experience_source_iter = None if experience_source is None else iter(experience_source)
+        self.experience_source_iter = (
+            None if experience_source is None else iter(experience_source)
+        )
         self.buffer = []
         self.capacity = buffer_size
         self.pos = 0
@@ -388,7 +430,7 @@ class PrioReplayBufferNaive:
         self.capacity = buf_size
         self.pos = 0
         self.buffer = []
-        self.priorities = np.zeros((buf_size, ), dtype=np.float32)
+        self.priorities = np.zeros((buf_size,), dtype=np.float32)
 
     def __len__(self):
         return len(self.buffer)
@@ -408,7 +450,7 @@ class PrioReplayBufferNaive:
         if len(self.buffer) == self.capacity:
             prios = self.priorities
         else:
-            prios = self.priorities[:self.pos]
+            prios = self.priorities[: self.pos]
         probs = np.array(prios, dtype=np.float32) ** self.prob_alpha
 
         probs /= probs.sum()
@@ -441,8 +483,8 @@ class PrioritizedReplayBuffer(ExperienceReplayBuffer):
     def _add(self, *args, **kwargs):
         idx = self.pos
         super()._add(*args, **kwargs)
-        self._it_sum[idx] = self._max_priority ** self._alpha
-        self._it_min[idx] = self._max_priority ** self._alpha
+        self._it_sum[idx] = self._max_priority**self._alpha
+        self._it_min[idx] = self._max_priority**self._alpha
 
     def _sample_proportional(self, batch_size):
         res = []
@@ -474,8 +516,8 @@ class PrioritizedReplayBuffer(ExperienceReplayBuffer):
         for idx, priority in zip(idxes, priorities):
             assert priority > 0
             assert 0 <= idx < len(self)
-            self._it_sum[idx] = priority ** self._alpha
-            self._it_min[idx] = priority ** self._alpha
+            self._it_sum[idx] = priority**self._alpha
+            self._it_min[idx] = priority**self._alpha
 
             self._max_priority = max(self._max_priority, priority)
 
@@ -485,6 +527,7 @@ class BatchPreprocessor:
     Abstract preprocessor class descendants to which converts experience
     batch to form suitable to learning.
     """
+
     def preprocess(self, batch):
         raise NotImplementedError
 
@@ -496,7 +539,16 @@ class QLearningPreprocessor(BatchPreprocessor):
 
     To use different modes, use appropriate class method
     """
-    def __init__(self, model, target_model, use_double_dqn=False, batch_td_error_hook=None, gamma=0.99, device="cpu"):
+
+    def __init__(
+        self,
+        model,
+        target_model,
+        use_double_dqn=False,
+        batch_td_error_hook=None,
+        gamma=0.99,
+        device="cpu",
+    ):
         self.model = model
         self.target_model = target_model
         self.use_double_dqn = use_double_dqn
@@ -506,11 +558,15 @@ class QLearningPreprocessor(BatchPreprocessor):
 
     @staticmethod
     def simple_dqn(model, **kwargs):
-        return QLearningPreprocessor(model=model, target_model=None, use_double_dqn=False, **kwargs)
+        return QLearningPreprocessor(
+            model=model, target_model=None, use_double_dqn=False, **kwargs
+        )
 
     @staticmethod
     def target_dqn(model, target_model, **kwards):
-        return QLearningPreprocessor(model, target_model, use_double_dqn=False, **kwards)
+        return QLearningPreprocessor(
+            model, target_model, use_double_dqn=False, **kwards
+        )
 
     @staticmethod
     def double_dqn(model, target_model, **kwargs):
@@ -526,9 +582,11 @@ class QLearningPreprocessor(BatchPreprocessor):
         # here we need both first and last values calculated using our main model, so we
         # combine both states into one batch for efficiency and separate results later
         if self.target_model is None or self.use_double_dqn:
-            states_t = torch.tensor(np.concatenate((states_first, states_last), axis=0)).to(self.device)
+            states_t = torch.tensor(
+                np.concatenate((states_first, states_last), axis=0)
+            ).to(self.device)
             res_both = self.model(states_t).data.cpu().numpy()
-            return res_both[:len(states_first)], res_both[len(states_first):]
+            return res_both[: len(states_first)], res_both[len(states_first) :]
 
         # in this case we have target_model set and use_double_dqn==False
         # so, we should calculate first_q and last_q using different models

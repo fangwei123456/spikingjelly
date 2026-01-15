@@ -21,8 +21,16 @@ __all__ = [
 ]
 
 CIFAR10DVS_CLASS_NAMES = (
-    'airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse',
-    'ship', 'truck'
+    "airplane",
+    "automobile",
+    "bird",
+    "cat",
+    "deer",
+    "dog",
+    "frog",
+    "horse",
+    "ship",
+    "truck",
 )
 
 EVT_DVS = 0  # DVS event type
@@ -72,12 +80,12 @@ def _load_raw_events(
     data = fp.read()
     if bytes_trim > 0:
         data = data[:-bytes_trim]
-    data = np.frombuffer(data, dtype='>u4')
+    data = np.frombuffer(data, dtype=">u4")
     if len(data) % 2 != 0:
         print(data[:20:2])
-        print('---')
+        print("---")
         print(data[1:21:2])
-        raise ValueError('odd number of data elements')
+        raise ValueError("odd number of data elements")
     raw_addr = data[::2]
     timestamp = data[1::2]
     if times_first:
@@ -90,8 +98,13 @@ def _load_raw_events(
 
 
 def _parse_raw_address(
-    addr, x_mask=x_mask, x_shift=x_shift, y_mask=y_mask, y_shift=y_shift,
-    polarity_mask=polarity_mask, polarity_shift=polarity_shift
+    addr,
+    x_mask=x_mask,
+    x_shift=x_shift,
+    y_mask=y_mask,
+    y_shift=y_shift,
+    polarity_mask=polarity_mask,
+    polarity_shift=polarity_shift,
 ):
     polarity = _read_bits(addr, polarity_mask, polarity_shift).astype(np.bool_)
     x = _read_bits(addr, x_mask, x_shift)
@@ -100,12 +113,13 @@ def _parse_raw_address(
 
 
 def _load_events(
-        fp,
-        filter_dvs=False,
-        # bytes_skip=0,
-        # bytes_trim=0,
-        # times_first=False,
-        **kwargs):
+    fp,
+    filter_dvs=False,
+    # bytes_skip=0,
+    # bytes_trim=0,
+    # times_first=False,
+    **kwargs,
+):
     timestamp, addr = _load_raw_events(
         fp,
         filter_dvs=filter_dvs,
@@ -118,27 +132,30 @@ def _load_events(
 
 
 def _load_origin_data(file_name: Union[str, Path]) -> dict:
-    with open(file_name, 'rb') as fp:
+    with open(file_name, "rb") as fp:
         t, x, y, p = _load_events(
-            fp, x_mask=0xfE, x_shift=1, y_mask=0x7f00, y_shift=8, 
-            polarity_mask=1, polarity_shift=None
+            fp,
+            x_mask=0xFE,
+            x_shift=1,
+            y_mask=0x7F00,
+            y_shift=8,
+            polarity_mask=1,
+            polarity_shift=None,
         )
-        return {'t': t, 'x': 127 - y, 'y': 127 - x, 'p': 1 - p.astype(int)}
+        return {"t": t, "x": 127 - y, "y": 127 - x, "p": 1 - p.astype(int)}
 
 
 def _read_aedat_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):
     events = _load_origin_data(bin_file)
-    utils.np_savez(
-        np_file, t=events['t'], x=events['x'], y=events['y'], p=events['p']
-    )
-    print(f'Save [{bin_file}] to [{np_file}].')
+    utils.np_savez(np_file, t=events["t"], x=events["x"], y=events["y"], p=events["p"])
+    print(f"Save [{bin_file}] to [{np_file}].")
 
 
 class CIFAR10DVS(NeuromorphicDatasetFolder):
     def __init__(
         self,
         root: str,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: int = None,
         split_by: str = None,
         duration: int = None,
@@ -156,9 +173,16 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
         """
         super().__init__(
-            root, None, data_type, frames_number, split_by, duration,
-            custom_integrate_function, custom_integrated_frames_dir_name,
-            transform, target_transform
+            root,
+            None,
+            data_type,
+            frames_number,
+            split_by,
+            duration,
+            custom_integrate_function,
+            custom_integrated_frames_dir_name,
+            transform,
+            target_transform,
         )
 
     @classmethod
@@ -171,16 +195,56 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
     @classmethod
     def resource_url_md5(cls) -> list:
         return [
-            ('airplane.zip', 'https://ndownloader.figshare.com/files/7712788', '0afd5c4bf9ae06af762a77b180354fdd'),
-            ('automobile.zip', 'https://ndownloader.figshare.com/files/7712791', '8438dfeba3bc970c94962d995b1b9bdd'),
-            ('bird.zip', 'https://ndownloader.figshare.com/files/7712794', 'a9c207c91c55b9dc2002dc21c684d785'),
-            ('cat.zip', 'https://ndownloader.figshare.com/files/7712812', '52c63c677c2b15fa5146a8daf4d56687'),
-            ('deer.zip', 'https://ndownloader.figshare.com/files/7712815', 'b6bf21f6c04d21ba4e23fc3e36c8a4a3'),
-            ('dog.zip', 'https://ndownloader.figshare.com/files/7712818', 'f379ebdf6703d16e0a690782e62639c3'),
-            ('frog.zip', 'https://ndownloader.figshare.com/files/7712842', 'cad6ed91214b1c7388a5f6ee56d08803'),
-            ('horse.zip', 'https://ndownloader.figshare.com/files/7712851', 'e7cbbf77bec584ffbf913f00e682782a'),
-            ('ship.zip', 'https://ndownloader.figshare.com/files/7712836', '41c7bd7d6b251be82557c6cce9a7d5c9'),
-            ('truck.zip', 'https://ndownloader.figshare.com/files/7712839', '89f3922fd147d9aeff89e76a2b0b70a7')
+            (
+                "airplane.zip",
+                "https://ndownloader.figshare.com/files/7712788",
+                "0afd5c4bf9ae06af762a77b180354fdd",
+            ),
+            (
+                "automobile.zip",
+                "https://ndownloader.figshare.com/files/7712791",
+                "8438dfeba3bc970c94962d995b1b9bdd",
+            ),
+            (
+                "bird.zip",
+                "https://ndownloader.figshare.com/files/7712794",
+                "a9c207c91c55b9dc2002dc21c684d785",
+            ),
+            (
+                "cat.zip",
+                "https://ndownloader.figshare.com/files/7712812",
+                "52c63c677c2b15fa5146a8daf4d56687",
+            ),
+            (
+                "deer.zip",
+                "https://ndownloader.figshare.com/files/7712815",
+                "b6bf21f6c04d21ba4e23fc3e36c8a4a3",
+            ),
+            (
+                "dog.zip",
+                "https://ndownloader.figshare.com/files/7712818",
+                "f379ebdf6703d16e0a690782e62639c3",
+            ),
+            (
+                "frog.zip",
+                "https://ndownloader.figshare.com/files/7712842",
+                "cad6ed91214b1c7388a5f6ee56d08803",
+            ),
+            (
+                "horse.zip",
+                "https://ndownloader.figshare.com/files/7712851",
+                "e7cbbf77bec584ffbf913f00e682782a",
+            ),
+            (
+                "ship.zip",
+                "https://ndownloader.figshare.com/files/7712836",
+                "41c7bd7d6b251be82557c6cce9a7d5c9",
+            ),
+            (
+                "truck.zip",
+                "https://ndownloader.figshare.com/files/7712839",
+                "89f3922fd147d9aeff89e76a2b0b70a7",
+            ),
         ]
 
     @classmethod
@@ -192,13 +256,13 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
 
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 10)) as tpe:
+        with ThreadPoolExecutor(
+            max_workers=min(multiprocessing.cpu_count(), 10)
+        ) as tpe:
             futures = []
             for zip_file in download_root.iterdir():
-                print(f'Extract [{zip_file}] to [{extract_root}].')
-                futures.append(tpe.submit(
-                    extract_archive, zip_file, extract_root
-                ))
+                print(f"Extract [{zip_file}] to [{extract_root}].")
+                futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
                 future.result()
@@ -206,24 +270,29 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+        with ThreadPoolExecutor(
+            max_workers=min(
+                multiprocessing.cpu_count(),
+                configure.max_threads_number_for_datasets_preprocess,
+            )
+        ) as tpe:
             futures = []
             for class_name in os.listdir(extract_root):
                 aedat_dir = extract_root / class_name
                 np_dir = raw_root / class_name
                 np_dir.mkdir()
-                print(f'Mkdir [{np_dir}].')
+                print(f"Mkdir [{np_dir}].")
                 for bin_file in os.listdir(aedat_dir):
                     source_file = aedat_dir / bin_file
-                    target_file = np_dir / (os.path.splitext(bin_file)[0] + '.npz')
-                    print(f'Start to convert [{source_file}] to [{target_file}].')
-                    futures.append(tpe.submit(
-                        _read_aedat_save_to_np, source_file, target_file
-                    ))
+                    target_file = np_dir / (os.path.splitext(bin_file)[0] + ".npz")
+                    print(f"Start to convert [{source_file}] to [{target_file}].")
+                    futures.append(
+                        tpe.submit(_read_aedat_save_to_np, source_file, target_file)
+                    )
             for future in futures:
                 future.result()
 
-        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
 
 
 def _move_data(root: Union[str, Path]):
@@ -254,12 +323,11 @@ def _move_data(root: Union[str, Path]):
 
 
 class CIFAR10DVSTEBNSplit(CIFAR10DVS):
-
     def __init__(
         self,
         root: str,
         train: bool = True,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: int = None,
         split_by: str = None,
         duration: int = None,
@@ -300,14 +368,14 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
             custom_integrate_function=custom_integrate_function,
             custom_integrated_frames_dir_name=custom_integrated_frames_dir_name,
             transform=transform,
-            target_transform=target_transform
+            target_transform=target_transform,
         )
 
         self.prepare_raw_dataset()
         builder = self.get_dataset_builder()
         self.processed_root, loader = builder.build()
 
-        split_root = self.processed_root / ('train' if self.cfg.train else 'test')
+        split_root = self.processed_root / ("train" if self.cfg.train else "test")
         if not split_root.exists():
             print(
                 f"We have the unsplit processed dataset at [{self.processed_root}]. "
@@ -321,5 +389,5 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
             loader=loader,
             extensions=self.get_extensions(),
             transform=self.cfg.transform,
-            target_transform=self.cfg.target_transform
+            target_transform=self.cfg.target_transform,
         )

@@ -1,4 +1,5 @@
 """basic wrappers, useful for reinforcement learning on gym envs"""
+
 # Mostly copy-pasted from https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
 import numpy as np
 from collections import deque
@@ -15,13 +16,13 @@ class NoopResetEnv(gym.Wrapper):
         super(NoopResetEnv, self).__init__(env)
         self.noop_max = noop_max
         self.override_num_noops = None
-        assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
+        assert env.unwrapped.get_action_meanings()[0] == "NOOP"
 
     def step(self, action):
         return self.env.step(action)
 
     def reset(self):
-        """ Do no-op action for a number of steps in [1, noop_max]."""
+        """Do no-op action for a number of steps in [1, noop_max]."""
         self.env.reset()
         if self.override_num_noops is not None:
             noops = self.override_num_noops
@@ -40,7 +41,7 @@ class FireResetEnv(gym.Wrapper):
     def __init__(self, env=None):
         """For environments where the user need to press FIRE for the game to start."""
         super(FireResetEnv, self).__init__(env)
-        assert env.unwrapped.get_action_meanings()[1] == 'FIRE'
+        assert env.unwrapped.get_action_meanings()[1] == "FIRE"
         assert len(env.unwrapped.get_action_meanings()) >= 3
 
     def step(self, action):
@@ -130,7 +131,9 @@ class MaxAndSkipEnv(gym.Wrapper):
 class ProcessFrame84(gym.ObservationWrapper):
     def __init__(self, env=None):
         super(ProcessFrame84, self).__init__(env)
-        self.observation_space = spaces.Box(low=0, high=255, shape=(84, 84, 1), dtype=np.uint8)
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(84, 84, 1), dtype=np.uint8
+        )
 
     def observation(self, obs):
         return ProcessFrame84.process(obs)
@@ -184,7 +187,9 @@ class FrameStack(gym.Wrapper):
         self.k = k
         self.frames = deque([], maxlen=k)
         shp = env.observation_space.shape
-        self.observation_space = spaces.Box(low=0, high=255, shape=(shp[0]*k, shp[1], shp[2]), dtype=np.float32)
+        self.observation_space = spaces.Box(
+            low=0, high=255, shape=(shp[0] * k, shp[1], shp[2]), dtype=np.float32
+        )
 
     def reset(self):
         ob = self.env.reset()
@@ -213,11 +218,16 @@ class ImageToPyTorch(gym.ObservationWrapper):
     """
     Change image shape to CWH
     """
+
     def __init__(self, env):
         super(ImageToPyTorch, self).__init__(env)
         old_shape = self.observation_space.shape
-        self.observation_space = gym.spaces.Box(low=0.0, high=1.0, shape=(old_shape[-1], old_shape[0], old_shape[1]),
-                                                dtype=np.float32)
+        self.observation_space = gym.spaces.Box(
+            low=0.0,
+            high=1.0,
+            shape=(old_shape[-1], old_shape[0], old_shape[1]),
+            dtype=np.float32,
+        )
 
     def observation(self, observation):
         return np.swapaxes(observation, 2, 0)
@@ -225,12 +235,12 @@ class ImageToPyTorch(gym.ObservationWrapper):
 
 def wrap_dqn(env, stack_frames=4, episodic_life=True, reward_clipping=True):
     """Apply a common set of wrappers for Atari games."""
-    assert 'NoFrameskip' in env.spec.id
+    assert "NoFrameskip" in env.spec.id
     if episodic_life:
         env = EpisodicLifeEnv(env)
     env = NoopResetEnv(env, noop_max=30)
     env = MaxAndSkipEnv(env, skip=4)
-    if 'FIRE' in env.unwrapped.get_action_meanings():
+    if "FIRE" in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
     env = ProcessFrame84(env)
     env = ImageToPyTorch(env)

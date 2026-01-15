@@ -2,6 +2,7 @@
 https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
+
 from typing import Callable
 import functools
 import contextlib
@@ -14,6 +15,7 @@ import torch
 try:
     import triton
     import triton.language as tl
+
     type_dict = {
         torch.bool: tl.int1,
         torch.float32: tl.float32,
@@ -27,11 +29,13 @@ try:
 except BaseException as e:
     import logging
     from . import dummy
-    logging.info(f'spikingjelly.activation_based.triton_kernel.triton_utils: {e}')
+
+    logging.info(f"spikingjelly.activation_based.triton_kernel.triton_utils: {e}")
     triton = dummy.DummyTriton
     tl = None
     type_dict = {}
     type_str_dict = {}
+
 
 @triton.jit
 def convert_and_store(pointer, value, boundary_check):
@@ -41,15 +45,14 @@ def convert_and_store(pointer, value, boundary_check):
     value = value.to(pointer.dtype.element_ty.element_ty)
     tl.store(pointer, value, boundary_check=boundary_check)
 
+
 def contiguous_and_device_guard(f: Callable) -> Callable:
-    """Make sure all input tensors are contiguous and set to the same device.
-    """
+    """Make sure all input tensors are contiguous and set to the same device."""
 
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         contiguous_args = (
-            i if not isinstance(i, torch.Tensor) else i.contiguous()
-            for i in args
+            i if not isinstance(i, torch.Tensor) else i.contiguous() for i in args
         )
         contiguous_kwargs = {
             k: (v if not isinstance(v, torch.Tensor) else v.contiguous())
@@ -79,11 +82,11 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
 
 
 @functools.lru_cache(maxsize=None)
-def _check_pytorch_version(version_s: str = '2.4') -> bool:
+def _check_pytorch_version(version_s: str = "2.4") -> bool:
     return version.parse(torch.__version__) >= version.parse(version_s)
 
 
-if _check_pytorch_version('2.4'):
+if _check_pytorch_version("2.4"):
     amp_custom_fwd = functools.partial(torch.amp.custom_fwd, device_type="cuda")
     amp_custom_bwd = functools.partial(torch.amp.custom_bwd, device_type="cuda")
 else:
@@ -100,11 +103,10 @@ def cleanup_tmp_python_files():
         try:
             f.unlink(missing_ok=True)
         except BaseException as e:
-            pass # ignore the errors
+            pass  # ignore the errors
 
 
 def ensure_cleanup_tmp_python_files(fn):
-
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         global _CLEANUP_TMP_PYTHON_FILES_REGISTERED

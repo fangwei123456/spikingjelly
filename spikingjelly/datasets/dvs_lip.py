@@ -15,7 +15,7 @@ class DVSLip(NeuromorphicDatasetFolder):
         self,
         root: str,
         train: bool = True,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: Optional[int] = None,
         split_by: Optional[str] = None,
         duration: Optional[int] = None,
@@ -37,9 +37,16 @@ class DVSLip(NeuromorphicDatasetFolder):
                 "The argument `train` must be specified as a boolean value."
             )
         super().__init__(
-            root, train, data_type, frames_number, split_by, duration,
-            custom_integrate_function, custom_integrated_frames_dir_name,
-            transform, target_transform
+            root,
+            train,
+            data_type,
+            frames_number,
+            split_by,
+            duration,
+            custom_integrate_function,
+            custom_integrated_frames_dir_name,
+            transform,
+            target_transform,
         )
 
     @classmethod
@@ -52,7 +59,11 @@ class DVSLip(NeuromorphicDatasetFolder):
     @classmethod
     def resource_url_md5(cls) -> list:
         return [
-            ('DVS-Lip.zip', 'https://sites.google.com/view/event-based-lipreading', '2dcb959255122d4cdeb6094ca282494b')
+            (
+                "DVS-Lip.zip",
+                "https://sites.google.com/view/event-based-lipreading",
+                "2dcb959255122d4cdeb6094ca282494b",
+            )
         ]
 
     @classmethod
@@ -65,12 +76,12 @@ class DVSLip(NeuromorphicDatasetFolder):
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         zip_file = download_root / "DVS-Lip.zip"
-        print(f'Extract [{zip_file}] to [{extract_root}].')
+        print(f"Extract [{zip_file}] to [{extract_root}].")
         extract_archive(zip_file, extract_root)
 
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
-        for split in ('train', 'test'):
+        for split in ("train", "test"):
             source_split_dir = extract_root / "DVS-Lip" / split
             target_split_dir = raw_root / split
             target_split_dir.mkdir()

@@ -10,7 +10,7 @@ __all__ = [
 ]
 
 
-def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
+def kernel_dot_product(x: Tensor, y: Tensor, kernel="linear", *args):
     r"""
     **API Language:**
     :ref:`中文 <kernel_dot_product-cn>` | :ref:`English <kernel_dot_product-en>`
@@ -51,7 +51,7 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
 
     * **English**
 
-    Calculate inner product of ``x`` and ``y`` in kernel space. These 2 M-dim tensors are denoted by :math:`\boldsymbol{x_{i}}` and :math:`\boldsymbol{y_{j}}`. ``kernel`` determine the kind of inner product: 
+    Calculate inner product of ``x`` and ``y`` in kernel space. These 2 M-dim tensors are denoted by :math:`\boldsymbol{x_{i}}` and :math:`\boldsymbol{y_{j}}`. ``kernel`` determine the kind of inner product:
 
     - ``linear`` -- Linear kernel, :math:`\kappa(\boldsymbol{x_{i}}, \boldsymbol{y_{j}}) = \boldsymbol{x_{i}}^{T}\boldsymbol{y_{j}}`.
 
@@ -75,15 +75,15 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
     :return: ret, Tensor of shape=[N, N], ``ret[i][j]`` is inner product of ``x[i]`` and ``y[j]``.
     :rtype: torch.Tensor
     """
-    if kernel == 'linear':
+    if kernel == "linear":
         return x.mm(y.t())
-    elif kernel == 'polynomial':
+    elif kernel == "polynomial":
         d = args[0]
         return x.mm(y.t()).pow(d)
-    elif kernel == 'sigmoid':
+    elif kernel == "sigmoid":
         alpha = args[0]
         return torch.sigmoid(alpha * x.mm(y.t()))
-    elif kernel == 'gaussian':
+    elif kernel == "gaussian":
         sigma = args[0]
         N = x.shape[0]
         x2 = x.square().sum(dim=1)  # shape=[N]
@@ -92,13 +92,13 @@ def kernel_dot_product(x: Tensor, y: Tensor, kernel='linear', *args):
         d_xy = x2.unsqueeze(1).repeat(1, N) + y2.unsqueeze(0).repeat(N, 1) - 2 * xy
         # d_xy[i][j]的元素是x[i]的平方和，加上y[j]的平方和，减去2倍的sum_{k} x[i][k]y[j][k]，因此
         # d_xy[i][j]就是x[i]和y[j]相减，平方，求和
-        return torch.exp(- d_xy / (2 * sigma * sigma))
+        return torch.exp(-d_xy / (2 * sigma * sigma))
     else:
         raise NotImplementedError
 
 
 def spike_similar_loss(
-    spikes: Tensor, labels: Tensor, kernel_type='linear', loss_type='mse', *args
+    spikes: Tensor, labels: Tensor, kernel_type="linear", loss_type="mse", *args
 ):
     r"""
     **API Language:**
@@ -218,19 +218,21 @@ def spike_similar_loss(
 
     sim_p = kernel_dot_product(spikes, spikes, kernel_type, *args)
 
-    if kernel_type == 'linear':
+    if kernel_type == "linear":
         spikes_len = spikes.norm(p=2, dim=1, keepdim=True)
         sim_p = sim_p / ((spikes_len.mm(spikes_len.t())) + 1e-8)
 
     labels = labels.float()
-    sim = labels.mm(labels.t()).clamp_max(1)  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
+    sim = labels.mm(labels.t()).clamp_max(
+        1
+    )  # labels.mm(labels.t())[i][j]位置的元素表现输入数据i和数据数据j有多少个相同的标签
     # 将大于1的元素设置为1，因为共享至少同一个标签，就认为他们相似
 
-    if loss_type == 'mse':
+    if loss_type == "mse":
         return F.mse_loss(sim_p, sim)
-    elif loss_type == 'l1':
+    elif loss_type == "l1":
         return F.l1_loss(sim_p, sim)
-    elif loss_type == 'bce':
+    elif loss_type == "bce":
         return F.binary_cross_entropy(sim_p, sim)
     else:
         raise NotImplementedError
@@ -292,7 +294,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     .. code-block:: python
 
         def tet_ce_for_loop_version(x_seq: torch.Tensor, target: torch.LongTensor):
-            loss = 0.
+            loss = 0.0
             for t in range(x_seq.shape[0]):
                 loss += F.cross_entropy(x_seq[t], target)
             return loss / x_seq.shape[0]
@@ -303,7 +305,9 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
         C = 10
         x_seq = torch.rand([T, N, C])
         target = torch.randint(low=0, high=C - 1, size=[N])
-        print(f'max error = {(tet_ce_for_loop_version(x_seq, target) - temporal_efficient_training_cross_entropy(x_seq, target)).abs().max()}')
+        print(
+            f"max error = {(tet_ce_for_loop_version(x_seq, target) - temporal_efficient_training_cross_entropy(x_seq, target)).abs().max()}"
+        )
         # max error < 1e-6
     """
     # x_seq.shape = [T, N, C, *]

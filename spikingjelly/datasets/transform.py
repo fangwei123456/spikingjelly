@@ -4,10 +4,12 @@ import numpy as np
 import torch
 
 
-__all__ = ['random_temporal_delete', 'RandomTemporalDelete']
+__all__ = ["random_temporal_delete", "RandomTemporalDelete"]
 
 
-def random_temporal_delete(x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first):
+def random_temporal_delete(
+    x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first
+):
     """
     * **English**
 
@@ -33,12 +35,16 @@ def random_temporal_delete(x_seq: Union[torch.Tensor, np.ndarray], T_remain: int
 
         import torch
         from spikingjelly.datasets import random_temporal_delete
+
         T = 8
         T_remain = 5
         N = 4
-        x_seq = torch.arange(0, N*T).view([N, T])
-        print('x_seq=\\n', x_seq)
-        print('random_temporal_delete(x_seq)=\\n', random_temporal_delete(x_seq, T_remain, batch_first=True))
+        x_seq = torch.arange(0, N * T).view([N, T])
+        print("x_seq=\\n", x_seq)
+        print(
+            "random_temporal_delete(x_seq)=\\n",
+            random_temporal_delete(x_seq, T_remain, batch_first=True),
+        )
 
     Outputs:
 

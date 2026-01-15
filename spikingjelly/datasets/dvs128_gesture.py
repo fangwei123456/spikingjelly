@@ -20,10 +20,10 @@ def _split_aedat_files_to_np(
     fname: str, aedat_file: Path, csv_file: Path, output_dir: Path
 ):
     events = utils.load_aedat_v3(aedat_file)
-    print(f'Start to split [{aedat_file}] to samples.')
+    print(f"Start to split [{aedat_file}] to samples.")
     # read csv file and get time stamp and label of each sample
     # then split the origin data to samples
-    csv_data = np.loadtxt(csv_file, dtype=np.uint32, delimiter=',', skiprows=1)
+    csv_data = np.loadtxt(csv_file, dtype=np.uint32, delimiter=",", skiprows=1)
 
     # Note that there are some files that many samples have the same label, e.g., user26_fluorescent_labels.csv
     label_file_num = [0] * 11
@@ -37,16 +37,16 @@ def _split_aedat_files_to_np(
         label = csv_data[i][0] - 1
         t_start = csv_data[i][1]
         t_end = csv_data[i][2]
-        mask = np.logical_and(events['t'] >= t_start, events['t'] < t_end)
-        file_name = output_dir / str(label) / f'{fname}_{label_file_num[label]}.npz'
+        mask = np.logical_and(events["t"] >= t_start, events["t"] < t_end)
+        file_name = output_dir / str(label) / f"{fname}_{label_file_num[label]}.npz"
         utils.np_savez(
             file_name,
-            t=events['t'][mask],
-            x=events['x'][mask],
-            y=events['y'][mask],
-            p=events['p'][mask]
+            t=events["t"][mask],
+            x=events["x"][mask],
+            y=events["y"][mask],
+            p=events["p"][mask],
         )
-        print(f'[{file_name}] saved.')
+        print(f"[{file_name}] saved.")
         label_file_num[label] += 1
 
 
@@ -55,7 +55,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         self,
         root: str,
         train: bool = True,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: int = None,
         split_by: str = None,
         duration: int = None,
@@ -80,11 +80,13 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
                 from spikingjelly.datasets import dvs128_gesture
 
-                data_dir = 'D:/datasets/DVS128Gesture'
+                data_dir = "D:/datasets/DVS128Gesture"
                 train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
                 test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
-                print(f'train samples = {train_set.__len__()}, test samples = {test_set.__len__()}')
-                print(f'total samples = {train_set.__len__() + test_set.__len__()}')
+                print(
+                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                )
+                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -99,10 +101,22 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
                 from snntorch.spikevision import spikedata
 
-                train_set = spikedata.DVSGesture("D:/datasets/DVS128Gesture/temp2", train=True, num_steps=500, dt=1000)
-                test_set = spikedata.DVSGesture("D:/datasets/DVS128Gesture/temp2", train=False, num_steps=1800, dt=1000)
-                print(f'train samples = {train_set.__len__()}, test samples = {test_set.__len__()}')
-                print(f'total samples = {train_set.__len__() + test_set.__len__()}')
+                train_set = spikedata.DVSGesture(
+                    "D:/datasets/DVS128Gesture/temp2",
+                    train=True,
+                    num_steps=500,
+                    dt=1000,
+                )
+                test_set = spikedata.DVSGesture(
+                    "D:/datasets/DVS128Gesture/temp2",
+                    train=False,
+                    num_steps=1800,
+                    dt=1000,
+                )
+                print(
+                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                )
+                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
 
                 # train samples = 1176, test samples = 288
                 # total samples = 1464
@@ -114,10 +128,16 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
                 import tonic
 
-                train_set = tonic.datasets.DVSGesture(save_to='D:/datasets/DVS128Gesture/temp', train=True)
-                test_set = tonic.datasets.DVSGesture(save_to='D:/datasets/DVS128Gesture/temp', train=False)
-                print(f'train samples = {train_set.__len__()}, test samples = {test_set.__len__()}')
-                print(f'total samples = {train_set.__len__() + test_set.__len__()}')
+                train_set = tonic.datasets.DVSGesture(
+                    save_to="D:/datasets/DVS128Gesture/temp", train=True
+                )
+                test_set = tonic.datasets.DVSGesture(
+                    save_to="D:/datasets/DVS128Gesture/temp", train=False
+                )
+                print(
+                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                )
+                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
 
                 # train samples = 1077, test samples = 264
                 # total samples = 1341
@@ -173,9 +193,16 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         if train is None:
             raise ValueError("`train` must be `True` or `False`")
         super().__init__(
-            root, train, data_type, frames_number, split_by, duration,
-            custom_integrate_function, custom_integrated_frames_dir_name,
-            transform, target_transform
+            root,
+            train,
+            data_type,
+            frames_number,
+            split_by,
+            duration,
+            custom_integrate_function,
+            custom_integrated_frames_dir_name,
+            transform,
+            target_transform,
         )
 
     @classmethod
@@ -187,12 +214,12 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
     @classmethod
     def resource_url_md5(cls) -> list:
-        url = 'https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794'
+        url = "https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794"
         return [
-            ('DvsGesture.tar.gz', url, '8a5c71fb11e24e5ca5b11866ca6c00a1'),
-            ('gesture_mapping.csv', url, '109b2ae64a0e1f3ef535b18ad7367fd1'),
-            ('LICENSE.txt', url, '065e10099753156f18f51941e6e44b66'),
-            ('README.txt', url, 'a0663d3b1d8307c329a43d949ee32d19')
+            ("DvsGesture.tar.gz", url, "8a5c71fb11e24e5ca5b11866ca6c00a1"),
+            ("gesture_mapping.csv", url, "109b2ae64a0e1f3ef535b18ad7367fd1"),
+            ("LICENSE.txt", url, "065e10099753156f18f51941e6e44b66"),
+            ("README.txt", url, "a0663d3b1d8307c329a43d949ee32d19"),
         ]
 
     @classmethod
@@ -205,7 +232,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
         fpath = download_root / "DVSGesture.tar.gz"
-        print(f'Extract [{fpath}] to [{extract_root}].')
+        print(f"Extract [{fpath}] to [{extract_root}].")
         extract_archive(fpath, extract_root)
 
     @classmethod
@@ -215,48 +242,66 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         test_dir = raw_root / "test"
         train_dir.mkdir()
         test_dir.mkdir()
-        print(f'Mkdir [{train_dir, test_dir}.')
+        print(f"Mkdir [{train_dir, test_dir}.")
         for label in range(11):
             (train_dir / str(label)).mkdir()
             (test_dir / str(label)).mkdir()
-        print(f'Mkdir {os.listdir(train_dir)} in [{train_dir}] and {os.listdir(test_dir)} in [{test_dir}].')
+        print(
+            f"Mkdir {os.listdir(train_dir)} in [{train_dir}] and {os.listdir(test_dir)} in [{test_dir}]."
+        )
 
-        with open(aedat_dir / "trials_to_train.txt") as trials_to_train_txt, open(aedat_dir / "trials_to_test.txt") as trials_to_test_txt:
+        with (
+            open(aedat_dir / "trials_to_train.txt") as trials_to_train_txt,
+            open(aedat_dir / "trials_to_test.txt") as trials_to_test_txt,
+        ):
             # use multi-thread to accelerate
             t_ckp = time.time()
-            with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), configure.max_threads_number_for_datasets_preprocess)) as tpe:
+            with ThreadPoolExecutor(
+                max_workers=min(
+                    multiprocessing.cpu_count(),
+                    configure.max_threads_number_for_datasets_preprocess,
+                )
+            ) as tpe:
                 futures = []
-                print(f'Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}].')
+                print(
+                    f"Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
+                )
 
                 for fname in trials_to_train_txt.readlines():
                     fname = fname.strip()
                     if len(fname) > 0:
                         aedat_file = aedat_dir / fname
                         fname = os.path.splitext(fname)[0]
-                        futures.append(tpe.submit(
-                            _split_aedat_files_to_np,
-                            fname,
-                            aedat_file,
-                            aedat_dir / f"{fname}_labels.csv",
-                            train_dir
-                        ))
+                        futures.append(
+                            tpe.submit(
+                                _split_aedat_files_to_np,
+                                fname,
+                                aedat_file,
+                                aedat_dir / f"{fname}_labels.csv",
+                                train_dir,
+                            )
+                        )
 
                 for fname in trials_to_test_txt.readlines():
                     fname = fname.strip()
                     if len(fname) > 0:
                         aedat_file = aedat_dir / fname
                         fname = os.path.splitext(fname)[0]
-                        futures.append(tpe.submit(
-                            _split_aedat_files_to_np,
-                            fname,
-                            aedat_file,
-                            aedat_dir / f"{fname}_labels.csv",
-                            test_dir
-                        ))
+                        futures.append(
+                            tpe.submit(
+                                _split_aedat_files_to_np,
+                                fname,
+                                aedat_file,
+                                aedat_dir / f"{fname}_labels.csv",
+                                test_dir,
+                            )
+                        )
 
                 for future in futures:
                     future.result()
 
-            print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+            print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
 
-        print(f'All aedat files have been split to samples and saved into [{train_dir, test_dir}].')
+        print(
+            f"All aedat files have been split to samples and saved into [{train_dir, test_dir}]."
+        )

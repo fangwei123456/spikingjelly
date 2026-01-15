@@ -9,8 +9,9 @@ from tqdm import tqdm
 
 
 class Converter(nn.Module):
-
-    def __init__(self, dataloader, device=None, mode='Max', momentum=0.1, fuse_flag=True):
+    def __init__(
+        self, dataloader, device=None, mode="Max", momentum=0.1, fuse_flag=True
+    ):
         """
         * :ref:`API in English <Converter.__init__-en>`
 
@@ -106,7 +107,9 @@ class Converter(nn.Module):
         ann = fx.symbolic_trace(ann).to(self.device)
         ann.eval()
         ann_fused = self.fuse(ann, fuse_flag=self.fuse_flag).to(self.device)
-        ann_with_hook = self.set_voltagehook(ann_fused, momentum=self.momentum, mode=self.mode).to(self.device)
+        ann_with_hook = self.set_voltagehook(
+            ann_fused, momentum=self.momentum, mode=self.mode
+        ).to(self.device)
         for _, data in enumerate(tqdm(self.dataloader)):
             # changed this because I was using a detection dataset
             imgs = data[0].float()
@@ -115,27 +118,29 @@ class Converter(nn.Module):
         return snn  # return type: GraphModule
 
     def _check_mode(self):
-        err_msg = 'You have used a non-defined VoltageScale Method.'
+        err_msg = "You have used a non-defined VoltageScale Method."
         if isinstance(self.mode, str):
-            if self.mode[-1] == '%':
+            if self.mode[-1] == "%":
                 try:
                     float(self.mode[:-1])
                 except ValueError:
                     raise NotImplementedError(err_msg)
-            elif self.mode.lower() in ['max']:
+            elif self.mode.lower() in ["max"]:
                 pass
             else:
                 raise NotImplementedError(err_msg)
         elif isinstance(self.mode, float):
             try:
-                assert (self.mode <= 1 and self.mode > 0)
+                assert self.mode <= 1 and self.mode > 0
             except AssertionError:
                 raise NotImplementedError(err_msg)
         else:
             raise NotImplementedError(err_msg)
 
     @staticmethod
-    def fuse(fx_model: torch.fx.GraphModule, fuse_flag: bool = True) -> torch.fx.GraphModule:
+    def fuse(
+        fx_model: torch.fx.GraphModule, fuse_flag: bool = True
+    ) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.fuse-en>`
 
@@ -169,15 +174,16 @@ class Converter(nn.Module):
         if not fuse_flag:
             return fx_model
 
-
-        def matches_module_pattern(pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]) -> bool:
+        def matches_module_pattern(
+            pattern: Iterable[Type], node: fx.Node, modules: Dict[str, Any]
+        ) -> bool:
             if len(node.args) == 0:
                 return False
             nodes: Tuple[Any, fx.Node] = (node.args[0], node)
             for expected_type, current_node in zip(pattern, nodes):
                 if not isinstance(current_node, fx.Node):
                     return False
-                if current_node.op != 'call_module':
+                if current_node.op != "call_module":
                     return False
                 if not isinstance(current_node.target, str):
                     return False
@@ -187,38 +193,41 @@ class Converter(nn.Module):
                     return False
             return True
 
-        def replace_node_module(node: fx.Node, modules: Dict[str, Any],
-                                new_module: torch.nn.Module):
+        def replace_node_module(
+            node: fx.Node, modules: Dict[str, Any], new_module: torch.nn.Module
+        ):
             def parent_name(target: str) -> Tuple[str, str]:
                 """
                 Splits a qualname into parent path and last atom.
                 For example, `foo.bar.baz` -> (`foo.bar`, `baz`)
                 """
-                *parent, name = target.rsplit('.', 1)
-                return parent[0] if parent else '', name
+                *parent, name = target.rsplit(".", 1)
+                return parent[0] if parent else "", name
 
-            assert (isinstance(node.target, str))
+            assert isinstance(node.target, str)
             parent_name, name = parent_name(node.target)
             modules[node.target] = new_module
             setattr(modules[parent_name], name, new_module)
 
-        patterns = [(nn.Conv1d, nn.BatchNorm1d),
-                    (nn.Conv2d, nn.BatchNorm2d),
-                    (nn.Conv3d, nn.BatchNorm3d)]
+        patterns = [
+            (nn.Conv1d, nn.BatchNorm1d),
+            (nn.Conv2d, nn.BatchNorm2d),
+            (nn.Conv3d, nn.BatchNorm3d),
+        ]
 
         modules = dict(fx_model.named_modules())
 
         for pattern in patterns:
             for node in fx_model.graph.nodes:
-                if matches_module_pattern(pattern, node,
-                                          modules):
-                    if len(node.args[0].users) > 1:  # Output of conv is used by other nodes
+                if matches_module_pattern(pattern, node, modules):
+                    if (
+                        len(node.args[0].users) > 1
+                    ):  # Output of conv is used by other nodes
                         continue
                     conv = modules[node.args[0].target]
                     bn = modules[node.target]
                     fused_conv = fuse_conv_bn_eval(conv, bn)
-                    replace_node_module(node.args[0], modules,
-                                        fused_conv)
+                    replace_node_module(node.args[0], modules, fused_conv)
                     node.replace_all_uses_with(node.args[0])
                     fx_model.graph.erase_node(node)
         fx_model.graph.lint()
@@ -227,7 +236,9 @@ class Converter(nn.Module):
         return fx_model
 
     @staticmethod
-    def set_voltagehook(fx_model: torch.fx.GraphModule, mode='Max', momentum=0.1) -> torch.fx.GraphModule:
+    def set_voltagehook(
+        fx_model: torch.fx.GraphModule, mode="Max", momentum=0.1
+    ) -> torch.fx.GraphModule:
         """
         * :ref:`API in English <Converter.set_voltagehook-en>`
 
@@ -263,13 +274,13 @@ class Converter(nn.Module):
 
         hook_counts_per_prefix = {}
         for node in fx_model.graph.nodes:
-            if node.op != 'call_module':
+            if node.op != "call_module":
                 continue
 
             if type(fx_model.get_submodule(node.target)) is nn.ReLU:
                 # use the input to ReLU to get the prefix
                 prefix = str(node.args[0])
-                prefix = prefix.split('_')
+                prefix = prefix.split("_")
 
                 # if we have a prefix, it means we are at a submodule
                 if len(prefix) > 1:
@@ -321,48 +332,59 @@ class Converter(nn.Module):
 
         hook_cnt = -1
         for node in fx_model.graph.nodes:
-            if node.op != 'call_module':
+            if node.op != "call_module":
                 continue
-            if (type(fx_model.get_submodule(node.target)) is VoltageHook and
-                type(fx_model.get_submodule(node.args[0].target)) is nn.ReLU):
-                    hook_cnt += 1
-                    hook_node = node
-                    relu_node = node.args[0]
-                    if len(relu_node.args) != 1:
-                        raise NotImplementedError('The number of relu_node.args should be 1.')
+            if (
+                type(fx_model.get_submodule(node.target)) is VoltageHook
+                and type(fx_model.get_submodule(node.args[0].target)) is nn.ReLU
+            ):
+                hook_cnt += 1
+                hook_node = node
+                relu_node = node.args[0]
+                if len(relu_node.args) != 1:
+                    raise NotImplementedError(
+                        "The number of relu_node.args should be 1."
+                    )
 
-                    # get the voltage hook prefix
-                    prefix = node.name.replace("voltage_hook_", "spiking")
-                    prefix = prefix.split('_')
-                    prefix = ".".join(prefix)
+                # get the voltage hook prefix
+                prefix = node.name.replace("voltage_hook_", "spiking")
+                prefix = prefix.split("_")
+                prefix = ".".join(prefix)
 
-                    s = fx_model.get_submodule(node.target).scale.item()
-                    # this allows for easier import/export of the model
-                    target0 = f"{prefix}.scaler0"  # voltage_scaler
-                    target1 = f"{prefix}.if_node"  # IF_node
-                    target2 = f"{prefix}.scaler1"  # voltage_scaler
+                s = fx_model.get_submodule(node.target).scale.item()
+                # this allows for easier import/export of the model
+                target0 = f"{prefix}.scaler0"  # voltage_scaler
+                target1 = f"{prefix}.if_node"  # IF_node
+                target2 = f"{prefix}.scaler1"  # voltage_scaler
 
-                    m0 = VoltageScaler(1.0 / s)
-                    m1 = neuron.IFNode(v_threshold=1., v_reset=None)
-                    m2 = VoltageScaler(s)
+                m0 = VoltageScaler(1.0 / s)
+                m1 = neuron.IFNode(v_threshold=1.0, v_reset=None)
+                m2 = VoltageScaler(s)
 
-                    node0 = Converter._add_module_and_node(fx_model, target0, hook_node, m0, relu_node.args)
-                    node1 = Converter._add_module_and_node(fx_model, target1, node0, m1, (node0,))
-                    node2 = Converter._add_module_and_node(fx_model, target2, node1, m2, args=(node1,))
+                node0 = Converter._add_module_and_node(
+                    fx_model, target0, hook_node, m0, relu_node.args
+                )
+                node1 = Converter._add_module_and_node(
+                    fx_model, target1, node0, m1, (node0,)
+                )
+                node2 = Converter._add_module_and_node(
+                    fx_model, target2, node1, m2, args=(node1,)
+                )
 
-                    relu_node.replace_all_uses_with(node2)
-                    node2.args = (node1,)
-                    fx_model.graph.erase_node(hook_node)
-                    fx_model.graph.erase_node(relu_node)
-                    fx_model.delete_all_unused_submodules()
+                relu_node.replace_all_uses_with(node2)
+                node2.args = (node1,)
+                fx_model.graph.erase_node(hook_node)
+                fx_model.graph.erase_node(relu_node)
+                fx_model.delete_all_unused_submodules()
 
         fx_model.graph.lint()
         fx_model.recompile()
         return fx_model
 
     @staticmethod
-    def _add_module_and_node(fx_model: fx.GraphModule, target: str, after: fx.Node, m: nn.Module,
-                             args: Tuple) -> fx.Node:
+    def _add_module_and_node(
+        fx_model: fx.GraphModule, target: str, after: fx.Node, m: nn.Module, args: Tuple
+    ) -> fx.Node:
         fx_model.add_submodule(target=target, m=m)
         with fx_model.graph.inserting_after(n=after):
             new_node = fx_model.graph.call_module(module_name=target, args=args)

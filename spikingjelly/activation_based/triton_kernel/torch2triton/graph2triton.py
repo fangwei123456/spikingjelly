@@ -5,13 +5,17 @@ import hashlib
 
 import torch
 import torch.fx as fx
+
 try:
     import triton
     import triton.language as tl
 except BaseException as e:
     import logging
     from .. import dummy
-    logging.info(f'spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {e}')
+
+    logging.info(
+        f"spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {e}"
+    )
     triton = dummy.DummyTriton
     tl = None
 
@@ -31,8 +35,7 @@ def _generate_hash(s: str, w: int = 8) -> str:
 
 
 def _uw(arg) -> str:
-    """Unwrap an argument to its string representation for Triton code generation.
-    """
+    """Unwrap an argument to its string representation for Triton code generation."""
     if isinstance(arg, fx.Node):
         return arg.name
     elif isinstance(arg, torch.dtype):
@@ -42,68 +45,45 @@ def _uw(arg) -> str:
 
 # code generation rules
 FX_TO_TRITON = {
-    "add":
-        lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
-    "add.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
-    "add.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
-    "sub":
-        lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
-    "sub.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
-    "rsub.Scalar":
-        lambda args, kwargs: f"{_uw(args[1])} - {_uw(args[0])}",
-    "mul":
-        lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
-    "mul.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
-    "mul.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
-    "bitwise_and.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} & {_uw(args[1])}",
-    "bitwise_or.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} | {_uw(args[1])}",
-    "bitwise_not.default":
-        lambda args, kwargs: f"~{_uw(args[0])}",
-    "eq.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
-    "eq.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
-    "ge.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
-    "ge.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
-    "le.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} <= {_uw(args[1])}",
-    "le.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} <= {_uw(args[1])}",
-    "gt.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} > {_uw(args[1])}",
-    "gt.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} > {_uw(args[1])}",
-    "lt.Tensor":
-        lambda args, kwargs: f"{_uw(args[0])} < {_uw(args[1])}",
-    "lt.Scalar":
-        lambda args, kwargs: f"{_uw(args[0])} < {_uw(args[1])}",
-    "reciprocal.default": # may result in change of dtype!!!
-        lambda args, kwargs: f"(1. / {_uw(args[0])}).to({_uw(args[0])}.dtype)",
-    "neg.default":
-        lambda args, kwargs: f"-{_uw(args[0])}",
-    "spike_fn.default":
-        lambda args, kwargs: f"({_uw(args[0])} >= 0.).to({_uw(args[0])}.dtype)",
-    "detach.default":
-        lambda args, kwargs: f"{_uw(args[0])}",
-    "sigmoid.default": # triton does not support exponential operations on fp16
-        lambda args, kwargs: f"tl.sigmoid({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "sigmoid_backward.default": # args[1] is the output of sigmoid
-        lambda args, kwargs: (f"{_uw(args[0])} * {_uw(args[1])} * (1 - {_uw(args[1])})"),
-    "_to_copy.default":
-        lambda args, kwargs: f"{_uw(args[0])}.to({_uw(kwargs['dtype'])})",
-    "scalar_tensor.default":
-        lambda args, kwargs: f"tl.full([], {_uw(args[0])}, {_uw(kwargs['dtype'])})",
-    "where.self":
-        lambda args, kwargs: f"tl.where({_uw(args[0])}.to(tl.int1), {_uw(args[1])}, {_uw(args[2])})"
+    "add": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
+    "add.Scalar": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
+    "add.Tensor": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
+    "sub": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
+    "sub.Tensor": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
+    "rsub.Scalar": lambda args, kwargs: f"{_uw(args[1])} - {_uw(args[0])}",
+    "mul": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
+    "mul.Tensor": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
+    "mul.Scalar": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
+    "bitwise_and.Tensor": lambda args, kwargs: f"{_uw(args[0])} & {_uw(args[1])}",
+    "bitwise_or.Tensor": lambda args, kwargs: f"{_uw(args[0])} | {_uw(args[1])}",
+    "bitwise_not.default": lambda args, kwargs: f"~{_uw(args[0])}",
+    "eq.Tensor": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
+    "eq.Scalar": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
+    "ge.Tensor": lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
+    "ge.Scalar": lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
+    "le.Tensor": lambda args, kwargs: f"{_uw(args[0])} <= {_uw(args[1])}",
+    "le.Scalar": lambda args, kwargs: f"{_uw(args[0])} <= {_uw(args[1])}",
+    "gt.Tensor": lambda args, kwargs: f"{_uw(args[0])} > {_uw(args[1])}",
+    "gt.Scalar": lambda args, kwargs: f"{_uw(args[0])} > {_uw(args[1])}",
+    "lt.Tensor": lambda args, kwargs: f"{_uw(args[0])} < {_uw(args[1])}",
+    "lt.Scalar": lambda args, kwargs: f"{_uw(args[0])} < {_uw(args[1])}",
+    "reciprocal.default":  # may result in change of dtype!!!
+    lambda args, kwargs: f"(1. / {_uw(args[0])}).to({_uw(args[0])}.dtype)",
+    "neg.default": lambda args, kwargs: f"-{_uw(args[0])}",
+    "spike_fn.default": lambda args,
+    kwargs: f"({_uw(args[0])} >= 0.).to({_uw(args[0])}.dtype)",
+    "detach.default": lambda args, kwargs: f"{_uw(args[0])}",
+    "sigmoid.default":  # triton does not support exponential operations on fp16
+    lambda args,
+    kwargs: f"tl.sigmoid({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
+    "sigmoid_backward.default":  # args[1] is the output of sigmoid
+    lambda args, kwargs: (f"{_uw(args[0])} * {_uw(args[1])} * (1 - {_uw(args[1])})"),
+    "_to_copy.default": lambda args,
+    kwargs: f"{_uw(args[0])}.to({_uw(kwargs['dtype'])})",
+    "scalar_tensor.default": lambda args,
+    kwargs: f"tl.full([], {_uw(args[0])}, {_uw(kwargs['dtype'])})",
+    "where.self": lambda args,
+    kwargs: f"tl.where({_uw(args[0])}.to(tl.int1), {_uw(args[1])}, {_uw(args[2])})",
 }
 
 INDENTATION = " " * 4  # four spaces
@@ -134,8 +114,7 @@ def generate_triton_code_str(
             inputs.append(node.name)
         elif node.op in ["call_function", "call_method"]:
             op_name = (
-                node.target.__name__
-                if node.op == "call_function" else node.target
+                node.target.__name__ if node.op == "call_function" else node.target
             )  # e.g. mul.Tensor, spike_fn.default, rsub.Scalar, ...
             if op_name in FX_TO_TRITON:  # apply the transpile rule
                 rhs = FX_TO_TRITON[op_name](node.args, node.kwargs)
@@ -158,9 +137,7 @@ def generate_triton_code_str(
                 f"Operation {node.op} has not yet been implemented."
             )
 
-    triton_code_lines = f"{INDENTATION}" + f"\n{INDENTATION}".join(
-        triton_code_lines
-    )
+    triton_code_lines = f"{INDENTATION}" + f"\n{INDENTATION}".join(triton_code_lines)
     fn_name = f"{fn_name}_{_generate_hash(triton_code_lines)}"
     signature = ", ".join(inputs)
     signature = f"@triton.jit\ndef {fn_name}({signature}):"
@@ -197,11 +174,13 @@ def compile_triton_code_str(
             print(f"Triton code `{kernel_name}` written to {fpath}")
         # the file will not be deleted until the end of the program
 
-    name_space.update({
-        "triton": triton,
-        "tl": tl,
-        "__name__": "spikingjelly.activation_based.triton_kernel.codegen",
-    })
+    name_space.update(
+        {
+            "triton": triton,
+            "tl": tl,
+            "__name__": "spikingjelly.activation_based.triton_kernel.codegen",
+        }
+    )
     with open(fpath, "r") as f:
         code = compile(f.read(), fpath, "exec")
         exec(code, name_space)  # name_space will be updated
@@ -209,6 +188,4 @@ def compile_triton_code_str(
     if kernel_name in name_space:
         return name_space[kernel_name]
     else:
-        raise ValueError(
-            f"Function {kernel_name} not found in compiled namespace"
-        )
+        raise ValueError(f"Function {kernel_name} not found in compiled namespace")

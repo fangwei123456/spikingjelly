@@ -8,7 +8,7 @@ from abc import abstractmethod
 
 
 class StatelessEncoder(nn.Module, base.StepModule):
-    def __init__(self, step_mode='s'):
+    def __init__(self, step_mode="s"):
         """
         * :ref:`API in English <StatelessEncoder.__init__-en>`
 
@@ -52,7 +52,7 @@ class StatelessEncoder(nn.Module, base.StepModule):
 
 
 class StatefulEncoder(base.MemoryModule):
-    def __init__(self, T: int, step_mode='s'):
+    def __init__(self, T: int, step_mode="s"):
         """
         * :ref:`API in English <StatefulEncoder.__init__-en>`
 
@@ -92,9 +92,8 @@ class StatefulEncoder(base.MemoryModule):
         self.step_mode = step_mode
         assert isinstance(T, int) and T >= 1
         self.T = T
-        self.register_memory('spike', None)
-        self.register_memory('t', 0)
-
+        self.register_memory("spike", None)
+        self.register_memory("t", 0)
 
     def single_step_forward(self, x: torch.Tensor = None):
         """
@@ -150,11 +149,11 @@ class StatefulEncoder(base.MemoryModule):
         raise NotImplementedError
 
     def extra_repr(self) -> str:
-        return f'T={self.T}'
+        return f"T={self.T}"
 
 
 class PeriodicEncoder(StatefulEncoder):
-    def __init__(self, spike: torch.Tensor, step_mode='s'):
+    def __init__(self, spike: torch.Tensor, step_mode="s"):
         """
         * :ref:`API in English <PeriodicEncoder.__init__-en>`
 
@@ -194,7 +193,7 @@ class PeriodicEncoder(StatefulEncoder):
 
 
 class LatencyEncoder(StatefulEncoder):
-    def __init__(self, T: int, enc_function='linear', step_mode='s'):
+    def __init__(self, T: int, enc_function="linear", step_mode="s"):
         """
         * :ref:`API in English <LatencyEncoder.__init__-en>`
 
@@ -264,7 +263,7 @@ class LatencyEncoder(StatefulEncoder):
         .. code-block:: python
 
             x = torch.rand(size=[8, 2])
-            print('x', x)
+            print("x", x)
             T = 20
             encoder = LatencyEncoder(T)
             for t in range(T):
@@ -282,18 +281,18 @@ class LatencyEncoder(StatefulEncoder):
 
         """
         super().__init__(T, step_mode)
-        if enc_function == 'log':
-            self.alpha = math.exp(T - 1.) - 1.
-        elif enc_function != 'linear':
+        if enc_function == "log":
+            self.alpha = math.exp(T - 1.0) - 1.0
+        elif enc_function != "linear":
             raise NotImplementedError
 
         self.enc_function = enc_function
 
     def single_step_encode(self, x: torch.Tensor):
-        if self.enc_function == 'log':
-            t_f = (self.T - 1. - torch.log(self.alpha * x + 1.)).round().long()
+        if self.enc_function == "log":
+            t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()
         else:
-            t_f = ((self.T - 1.) * (1. - x)).round().long()
+            t_f = ((self.T - 1.0) * (1.0 - x)).round().long()
 
         self.spike = F.one_hot(t_f, num_classes=self.T).to(x)
         # [*, T] -> [T, *]
@@ -303,7 +302,7 @@ class LatencyEncoder(StatefulEncoder):
 
 
 class PoissonEncoder(StatelessEncoder):
-    def __init__(self, step_mode='s'):
+    def __init__(self, step_mode="s"):
         """
         * :ref:`API in English <PoissonEncoder.__init__-en>`
 
@@ -334,7 +333,7 @@ class PoissonEncoder(StatelessEncoder):
 
 
 class WeightedPhaseEncoder(StatefulEncoder):
-    def __init__(self, K: int, step_mode='s'):
+    def __init__(self, K: int, step_mode="s"):
         """
         * :ref:`API in English <WeightedPhaseEncoder.__init__-en>`
 
@@ -405,7 +404,9 @@ class WeightedPhaseEncoder(StatefulEncoder):
     def single_step_encode(self, x: torch.Tensor):
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
-        self.spike = torch.empty((self.T,) + x.shape, device=x.device)  # Encoding to [T, batch_size, *]
+        self.spike = torch.empty(
+            (self.T,) + x.shape, device=x.device
+        )  # Encoding to [T, batch_size, *]
         w = 0.5
         for i in range(self.T):
             self.spike[i] = inputs >= w
@@ -414,7 +415,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
 
 class PopSpikeEncoderDeterministic(nn.Module):
-    """ Learnable Population Coding Spike Encoder with Deterministic Spike Trains"""
+    """Learnable Population Coding Spike Encoder with Deterministic Spike Trains"""
 
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         super().__init__()
@@ -433,23 +434,31 @@ class PopSpikeEncoderDeterministic(nn.Module):
         self.mean = nn.Parameter(tmp_mean)
         self.std = nn.Parameter(tmp_std)
 
-        self.neurons = neuron.IFNode(v_threshold=0.999, v_reset=None, surrogate_function=surrogate.DeterministicPass(), detach_reset=True)
+        self.neurons = neuron.IFNode(
+            v_threshold=0.999,
+            v_reset=None,
+            surrogate_function=surrogate.DeterministicPass(),
+            detach_reset=True,
+        )
 
-        functional.set_step_mode(self, step_mode='m')
-        functional.set_backend(self, backend='torch')
+        functional.set_step_mode(self, step_mode="m")
+        functional.set_backend(self, backend="torch")
 
     def forward(self, obs):
         obs = obs.view(-1, self.obs_dim, 1)
 
         # Receptive Field of encoder population has Gaussian Shape
-        pop_act = torch.exp(-(1. / 2.) * (obs - self.mean).pow(2) / self.std.pow(2)).view(-1, self.encoder_neuron_num)
+        pop_act = torch.exp(
+            -(1.0 / 2.0) * (obs - self.mean).pow(2) / self.std.pow(2)
+        ).view(-1, self.encoder_neuron_num)
         pop_act = pop_act.unsqueeze(0).repeat(self.spike_ts, 1, 1)
 
         return self.neurons(pop_act)
 
 
 class PopSpikeEncoderRandom(nn.Module):
-    """ Learnable Population Coding Spike Encoder with Random Spike Trains """
+    """Learnable Population Coding Spike Encoder with Random Spike Trains"""
+
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         super().__init__()
         self.obs_dim = obs_dim
@@ -472,20 +481,25 @@ class PopSpikeEncoderRandom(nn.Module):
     def forward(self, obs):
         obs = obs.view(-1, self.obs_dim, 1)
         batch_size = obs.shape[0]
-        
+
         # Receptive Field of encoder population has Gaussian Shape
-        pop_act = torch.exp(-(1. / 2.) * (obs - self.mean).pow(2) / self.std.pow(2)).view(-1, self.encoder_neuron_num)
-        pop_spikes = torch.zeros(self.spike_ts, batch_size, self.encoder_neuron_num, device=obs.device)
-        
+        pop_act = torch.exp(
+            -(1.0 / 2.0) * (obs - self.mean).pow(2) / self.std.pow(2)
+        ).view(-1, self.encoder_neuron_num)
+        pop_spikes = torch.zeros(
+            self.spike_ts, batch_size, self.encoder_neuron_num, device=obs.device
+        )
+
         # Generate Random Spike Trains
         for step in range(self.spike_ts):
             pop_spikes[step, :, :] = self.pseudo_spike(pop_act)
-        
+
         return pop_spikes
 
 
 class PopEncoder(nn.Module):
-    """ Learnable Population Coding Encoder """
+    """Learnable Population Coding Encoder"""
+
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         super().__init__()
         self.obs_dim = obs_dim
@@ -506,13 +520,17 @@ class PopEncoder(nn.Module):
     def forward(self, obs):
         obs = obs.view(-1, self.obs_dim, 1)
         batch_size = obs.shape[0]
-        
+
         # Receptive Field of encoder population has Gaussian Shape
-        pop_act = torch.exp(-(1. / 2.) * (obs - self.mean).pow(2) / self.std.pow(2)).view(-1, self.encoder_neuron_num)
-        pop_inputs = torch.zeros(self.spike_ts, batch_size, self.encoder_neuron_num, device=obs.device)
-        
+        pop_act = torch.exp(
+            -(1.0 / 2.0) * (obs - self.mean).pow(2) / self.std.pow(2)
+        ).view(-1, self.encoder_neuron_num)
+        pop_inputs = torch.zeros(
+            self.spike_ts, batch_size, self.encoder_neuron_num, device=obs.device
+        )
+
         # Generate Input Trains
         for step in range(self.spike_ts):
             pop_inputs[step, :, :] = pop_act
-        
+
         return pop_inputs

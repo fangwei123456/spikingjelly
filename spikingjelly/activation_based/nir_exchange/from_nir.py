@@ -24,7 +24,6 @@ def _from_numpy(x):
 
 
 class _NodeMapper:
-
     def __init__(self, dt: float = 1e-4):
         self.dt = dt
 
@@ -38,20 +37,16 @@ class _NodeMapper:
             nir.Flatten: self.map_flatten,
             nir.IF: self.map_if,
             nir.LIF: self.map_lif,
-        } # all the functions return single-step modules
+        }  # all the functions return single-step modules
 
     def map_affine(self, node: nir.Affine) -> layer.Linear:
-        module = layer.Linear(
-            node.weight.shape[-1], node.weight.shape[-2], bias=True
-        )
+        module = layer.Linear(node.weight.shape[-1], node.weight.shape[-2], bias=True)
         module.weight.data = torch.from_numpy(node.weight)
         module.bias.data = torch.from_numpy(node.bias)
         return module
 
     def map_linear(self, node: nir.Linear) -> layer.Linear:
-        module = layer.Linear(
-            node.weight.shape[-1], node.weight.shape[-2], bias=False
-        )
+        module = layer.Linear(node.weight.shape[-1], node.weight.shape[-2], bias=False)
         module.weight.data = torch.from_numpy(node.weight)
         return module
 
@@ -97,68 +92,50 @@ class _NodeMapper:
     def map_if(self, node: nir.IF) -> neuron.IFNode:
         v_threshold = np.unique(node.v_threshold)
         if v_threshold.size != 1:
-            raise AssertionError(
-                "`v_threshold` must be the same for all neurons!"
-            )
+            raise AssertionError("`v_threshold` must be the same for all neurons!")
         v_threshold = _from_numpy(v_threshold[0])
 
         v_reset = np.unique(node.v_reset)
         if v_reset.size != 1:
-            raise AssertionError(
-                "`v_reset` must be the same for all neurons!"
-            )
+            raise AssertionError("`v_reset` must be the same for all neurons!")
         v_reset = _from_numpy(v_reset[0])
 
         # r can be reconstructed directly from self.dt
         r_value = 1.0 / self.dt
         if not np.allclose(np.unique(node.r), r_value):
-            raise AssertionError(
-                "`nir.IF.r` mismatch 1.0/dt !"
-            )
+            raise AssertionError("`nir.IF.r` mismatch 1.0/dt !")
 
         return neuron.IFNode(v_threshold=v_threshold, v_reset=v_reset)
 
     def map_lif(self, node: nir.LIF) -> neuron.LIFNode:
         tau_ = np.unique(node.tau)
         if tau_.size != 1:
-            raise AssertionError(
-                "`tau` must be the same for all neurons!"
-            )
+            raise AssertionError("`tau` must be the same for all neurons!")
         tau = _from_numpy(tau_[0] / self.dt)  # reverse tau_ = tau * dt
 
         r = np.unique(node.r)
         if r.size != 1:
-            raise AssertionError(
-                "`r` must be the same for all neurons!"
-            )
+            raise AssertionError("`r` must be the same for all neurons!")
         r = _from_numpy(r[0])
         # note that: r = 1. if decay_input else tau
-        decay_input = False if r == tau else (True if r == 1. else False)
+        decay_input = False if r == tau else (True if r == 1.0 else False)
 
         v_reset = np.unique(node.v_reset)
         if v_reset.size != 1:
-            raise AssertionError(
-                "`v_reset` must be the same for all neurons!"
-            )
+            raise AssertionError("`v_reset` must be the same for all neurons!")
         v_reset = _from_numpy(v_reset[0])
 
         # Recover v_leak (usually equals v_reset in torch->NIR conversion)
         v_leak = np.unique(node.v_leak)
         if v_leak.size != 1:
-            raise AssertionError(
-                "`v_leak` must be the same for all neurons!"
-            )
+            raise AssertionError("`v_leak` must be the same for all neurons!")
         v_leak = _from_numpy(v_leak[0])
         if v_leak != v_reset:
-            raise AssertionError(
-                "`v_leak` should be equal to `v_reset`!"
-            )
+            raise AssertionError("`v_leak` should be equal to `v_reset`!")
 
         v_threshold = np.unique(node.v_threshold)
         if v_threshold.size != 1:
-            raise AssertionError(
-                "`v_threshold` must be the same for all neurons!"
-            )
+            raise AssertionError("`v_threshold` must be the same for all neurons!")
         v_threshold = _from_numpy(v_threshold[0])
 
         return neuron.LIFNode(
@@ -187,7 +164,7 @@ def import_from_nir(
     * **中文**
 
     将 `NIR（Neuromorphic Intermediate Representation） <https://neuroir.org/docs/index.html>`_ 图
-    转换为 SpikingJelly 神经网络模型。函数会根据 NIR 节点类型自动映射为对应的 
+    转换为 SpikingJelly 神经网络模型。函数会根据 NIR 节点类型自动映射为对应的
     SpikingJelly 模块（如 Linear、Conv2d、IF/LIF 神经元等），并返回可直接运行的
     ``fx.GraphModule`` 对象。
 
@@ -245,8 +222,6 @@ def import_from_nir(
     """
     mapper = _NodeMapper(dt=dt)
 
-    gm = nirtorch.nir_to_torch(
-        graph, mapper.map_dict, device=device, dtype=dtype
-    )
+    gm = nirtorch.nir_to_torch(graph, mapper.map_dict, device=device, dtype=dtype)
     functional.set_step_mode(gm, step_mode)
     return gm

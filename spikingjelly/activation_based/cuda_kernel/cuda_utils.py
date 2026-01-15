@@ -4,11 +4,13 @@ import time
 import numpy as np
 from ... import configure
 from typing import Callable, Union
+
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.cuda_kernel.cuda_utils: {e}')
+    logging.info(f"spikingjelly.activation_based.cuda_kernel.cuda_utils: {e}")
     cupy = None
+
 
 def cpu_timer(f: Callable, *args, **kwargs):
     """
@@ -37,6 +39,7 @@ def cpu_timer(f: Callable, *args, **kwargs):
     start = time.perf_counter()
     f(*args, **kwargs)
     return time.perf_counter() - start
+
 
 def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     """
@@ -75,7 +78,10 @@ def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     torch.cuda.synchronize(device)
     return start.elapsed_time(end)
 
-def cal_fun_t(n: int, device: Union[str, torch.device, int], f: Callable, *args, **kwargs):
+
+def cal_fun_t(
+    n: int, device: Union[str, torch.device, int], f: Callable, *args, **kwargs
+):
     """
     * :ref:`API in English <cal_fun_t-en>`
 
@@ -119,28 +125,28 @@ def cal_fun_t(n: int, device: Union[str, torch.device, int], f: Callable, *args,
 
     """
     if n == 1:
-        if device == 'cpu':
+        if device == "cpu":
             return cpu_timer(f, *args, **kwargs)
         else:
             return cuda_timer(device, f, *args, **kwargs)
 
     # warm up
-    if device == 'cpu':
+    if device == "cpu":
         cpu_timer(f, *args, **kwargs)
     else:
         cuda_timer(device, f, *args, **kwargs)
 
     t_list = []
     for _ in range(n * 2):
-        if device == 'cpu':
+        if device == "cpu":
             ti = cpu_timer(f, *args, **kwargs)
         else:
             ti = cuda_timer(device, f, *args, **kwargs)
         t_list.append(ti)
 
-
     t_list = np.asarray(t_list)
     return t_list[n:].mean()
+
 
 def cal_blocks(numel: int, threads: int = -1):
     """
@@ -175,6 +181,7 @@ def cal_blocks(numel: int, threads: int = -1):
     if threads == -1:
         threads = configure.cuda_threads
     return (numel + threads - 1) // threads
+
 
 def get_contiguous(*args):
     """
@@ -218,6 +225,7 @@ def get_contiguous(*args):
             raise TypeError(type(item))
     return ret_list
 
+
 def wrap_args_to_raw_kernel(device: int, *args):
     """
     * :ref:`API in English <wrap_args_to_raw_kernel-en>`
@@ -254,12 +262,13 @@ def wrap_args_to_raw_kernel(device: int, *args):
 
         elif isinstance(item, cupy.ndarray):
             assert item.device.id == device
-            assert item.flags['C_CONTIGUOUS']
+            assert item.flags["C_CONTIGUOUS"]
             ret_list.append(item)
 
         else:
             raise TypeError
     return tuple(ret_list)
+
 
 class DeviceEnvironment:
     def __init__(self, device: int):
@@ -307,4 +316,3 @@ class DeviceEnvironment:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.previous_device is not None:
             torch.cuda.set_device(self.previous_device)
-

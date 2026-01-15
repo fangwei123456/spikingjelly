@@ -5,15 +5,16 @@ import threading
 from ... import configure
 from . import cuda_utils
 import logging
+
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.tensor_cache: {e}')
+    logging.info(f"spikingjelly.activation_based.tensor_cache: {e}")
     cupy = None
 
 
 class DataTypeConvertCUDACode:
-    float2bool = r'''
+    float2bool = r"""
     extern "C" __global__
             void float2bool(const float* fs, unsigned char* bs, const int &N)
             {
@@ -30,9 +31,9 @@ class DataTypeConvertCUDACode:
                     }
                 }
             }
-    '''
+    """
 
-    half2bool = r'''
+    half2bool = r"""
     #include <cuda_fp16.h>
     extern "C" __global__
             void half2bool(const half* fs, unsigned char* bs, const int &N)
@@ -50,9 +51,9 @@ class DataTypeConvertCUDACode:
                     }
                 }
             }
-    '''
+    """
 
-    bool2float = r'''
+    bool2float = r"""
     extern "C" __global__
             void bool2float(const unsigned char* bs, float* fs, const int &N)
             {
@@ -69,9 +70,9 @@ class DataTypeConvertCUDACode:
                     }
                 }
             }
-    '''
+    """
 
-    bool2half = r'''
+    bool2half = r"""
     #include <cuda_fp16.h>
     extern "C" __global__
             void bool2half(const unsigned char* bs, half* fs, const int &N)
@@ -89,7 +90,7 @@ class DataTypeConvertCUDACode:
                     }
                 }
             }
-    '''
+    """
 
 
 def float_spike_to_bool(spike: torch.Tensor):
@@ -109,10 +110,10 @@ def float_spike_to_bool(spike: torch.Tensor):
     s_dtype = spike.dtype
     if s_dtype == torch.float:
         kernel_codes = DataTypeConvertCUDACode.float2bool
-        kernel_name = 'float2bool'
+        kernel_name = "float2bool"
     elif s_dtype == torch.half:
         kernel_codes = DataTypeConvertCUDACode.half2bool
-        kernel_name = 'half2bool'
+        kernel_name = "half2bool"
     else:
         raise NotImplementedError
 
@@ -135,14 +136,13 @@ def float_spike_to_bool(spike: torch.Tensor):
             kernel = cupy.RawKernel(
                 kernel_codes,
                 kernel_name,
-                options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
+                options=configure.cuda_compiler_options,
+                backend=configure.cuda_compiler_backend,
             )
             kernel(
-                (blocks,), (configure.cuda_threads,),
-                cuda_utils.wrap_args_to_raw_kernel(
-                    device_id,
-                    *kernel_args
-                )
+                (blocks,),
+                (configure.cuda_threads,),
+                cuda_utils.wrap_args_to_raw_kernel(device_id, *kernel_args),
             )
     else:
         spike = spike.view(-1, 8).to(torch.uint8)
@@ -152,7 +152,9 @@ def float_spike_to_bool(spike: torch.Tensor):
     return spike_b, s_dtype, s_shape, s_padding
 
 
-def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0):
+def bool_spike_to_float(
+    spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0
+):
     """
     :param spike_b: a compressed spike tensor with ``dtype=torch.uint8`` and each element stores 8 spikes
     :type spike_b: torch.Tensor
@@ -169,10 +171,10 @@ def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: to
     spike = torch.zeros(spike_b.numel() * 8, device=spike_b.device, dtype=s_dtype)
     if s_dtype == torch.float:
         kernel_codes = DataTypeConvertCUDACode.bool2float
-        kernel_name = 'bool2float'
+        kernel_name = "bool2float"
     elif s_dtype == torch.half:
         kernel_codes = DataTypeConvertCUDACode.bool2half
-        kernel_name = 'bool2half'
+        kernel_name = "bool2half"
     else:
         raise NotImplementedError
 
@@ -186,14 +188,13 @@ def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: to
             kernel = cupy.RawKernel(
                 kernel_codes,
                 kernel_name,
-                options=configure.cuda_compiler_options, backend=configure.cuda_compiler_backend
+                options=configure.cuda_compiler_options,
+                backend=configure.cuda_compiler_backend,
             )
             kernel(
-                (blocks,), (configure.cuda_threads,),
-                cuda_utils.wrap_args_to_raw_kernel(
-                    device_id,
-                    *kernel_args
-                )
+                (blocks,),
+                (configure.cuda_threads,),
+                cuda_utils.wrap_args_to_raw_kernel(device_id, *kernel_args),
             )
     else:
         spike = spike.view(-1, 8)
@@ -201,9 +202,8 @@ def bool_spike_to_float(spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: to
             spike[:, i] = spike_b % 2
             spike_b = spike_b >> 1
 
-
     if s_padding != 0 and s_padding != 8:
-        spike = spike[0: spike.numel() - s_padding]
+        spike = spike[0 : spike.numel() - s_padding]
     return spike.reshape(s_shape)
 
 

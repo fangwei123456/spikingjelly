@@ -5,10 +5,13 @@ import numpy as np
 from spikingjelly.activation_based import rnn
 from torch.utils.tensorboard import SummaryWriter
 import sys
-if sys.platform != 'win32':
+
+if sys.platform != "win32":
     import readline
 import torchvision
 import tqdm
+
+
 class Net(nn.Module):
     def __init__(self):
         super().__init__()
@@ -19,14 +22,26 @@ class Net(nn.Module):
         x, _ = self.lstm(x)
         return self.fc(x[-1])
 
-def main():
 
-    device = input('输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": ')
-    dataset_dir = input('输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": ')
+def main():
+    device = input(
+        '输入运行的设备，例如“cpu”或“cuda:0”\n input device, e.g., "cpu" or "cuda:0": '
+    )
+    dataset_dir = input(
+        '输入保存MNIST数据集的位置，例如“./”\n input root directory for saving MNIST dataset, e.g., "./": '
+    )
     batch_size = int(input('输入batch_size，例如“64”\n input batch_size, e.g., "64": '))
-    learning_rate = float(input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": '))
-    train_epoch = int(input('输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '))
-    log_dir = input('输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": ')
+    learning_rate = float(
+        input('输入学习率，例如“1e-3”\n input learning rate, e.g., "1e-3": ')
+    )
+    train_epoch = int(
+        input(
+            '输入训练轮数，即遍历训练集的次数，例如“100”\n input training epochs, e.g., "100": '
+        )
+    )
+    log_dir = input(
+        '输入保存tensorboard日志文件的位置，例如“./”\n input root directory for saving tensorboard logs, e.g., "./": '
+    )
 
     writer = SummaryWriter(log_dir)
 
@@ -36,19 +51,23 @@ def main():
             root=dataset_dir,
             train=True,
             transform=torchvision.transforms.ToTensor(),
-            download=True),
+            download=True,
+        ),
         batch_size=batch_size,
         shuffle=True,
-        drop_last=True)
+        drop_last=True,
+    )
     test_data_loader = torch.utils.data.DataLoader(
         dataset=torchvision.datasets.MNIST(
             root=dataset_dir,
             train=False,
             transform=torchvision.transforms.ToTensor(),
-            download=True),
+            download=True,
+        ),
         batch_size=batch_size,
         shuffle=True,
-        drop_last=False)
+        drop_last=False,
+    )
 
     # 初始化网络
     net = Net().to(device)
@@ -74,10 +93,11 @@ def main():
             loss.backward()
             optimizer.step()
 
-
-            accuracy = (out_spikes_counter_frequency.max(1)[1] == label).float().mean().item()
+            accuracy = (
+                (out_spikes_counter_frequency.max(1)[1] == label).float().mean().item()
+            )
             if train_times % 256 == 0:
-                writer.add_scalar('train_accuracy', accuracy, train_times)
+                writer.add_scalar("train_accuracy", accuracy, train_times)
             train_times += 1
         net.eval()
         with torch.no_grad():
@@ -92,10 +112,15 @@ def main():
                 img = img.permute(1, 0, 2)  # [28, N, 28]
                 out_spikes_counter_frequency = net(img)
 
-                correct_sum += (out_spikes_counter_frequency.argmax(dim=1) == label).float().sum().item()
+                correct_sum += (
+                    (out_spikes_counter_frequency.argmax(dim=1) == label)
+                    .float()
+                    .sum()
+                    .item()
+                )
                 test_sum += label.numel()
             test_accuracy = correct_sum / test_sum
-            writer.add_scalar('test_accuracy', test_accuracy, epoch)
+            writer.add_scalar("test_accuracy", test_accuracy, epoch)
             # if max_test_accuracy < test_accuracy:
             #     max_test_accuracy = test_accuracy
             #     print('saving net...')
@@ -103,10 +128,17 @@ def main():
             #     print('saved')
 
         print(
-            'device={}, dataset_dir={}, batch_size={}, learning_rate={}, log_dir={}, max_test_accuracy={}, train_times={}'.format(
-                device, dataset_dir, batch_size, learning_rate, log_dir, max_test_accuracy, train_times
-            ))
+            "device={}, dataset_dir={}, batch_size={}, learning_rate={}, log_dir={}, max_test_accuracy={}, train_times={}".format(
+                device,
+                dataset_dir,
+                batch_size,
+                learning_rate,
+                log_dir,
+                max_test_accuracy,
+                train_times,
+            )
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

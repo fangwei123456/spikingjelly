@@ -6,31 +6,41 @@ from spikingjelly.activation_based.model import spiking_resnet, train_classify
 class SResNetTrainer(train_classify.Trainer):
     def preprocess_train_sample(self, args, x: torch.Tensor):
         # define how to process train sample before send it to model
-        return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+        return x.unsqueeze(0).repeat(
+            args.T, 1, 1, 1, 1
+        )  # [N, C, H, W] -> [T, N, C, H, W]
 
     def preprocess_test_sample(self, args, x: torch.Tensor):
         # define how to process test sample before send it to model
-        return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+        return x.unsqueeze(0).repeat(
+            args.T, 1, 1, 1, 1
+        )  # [N, C, H, W] -> [T, N, C, H, W]
 
     def process_model_output(self, args, y: torch.Tensor):
         return y.mean(0)  # return firing rate
 
     def get_args_parser(self, add_help=True):
         parser = super().get_args_parser()
-        parser.add_argument('--T', type=int, help="total time-steps")
-        parser.add_argument('--cupy', action="store_true", help="set the neurons to use cupy backend")
+        parser.add_argument("--T", type=int, help="total time-steps")
+        parser.add_argument(
+            "--cupy", action="store_true", help="set the neurons to use cupy backend"
+        )
         return parser
 
     def get_tb_logdir_name(self, args):
-        return super().get_tb_logdir_name(args) + f'_T{args.T}'
+        return super().get_tb_logdir_name(args) + f"_T{args.T}"
 
     def load_model(self, args, num_classes):
         if args.model in spiking_resnet.__all__:
-            model = spiking_resnet.__dict__[args.model](pretrained=args.pretrained, spiking_neuron=neuron.IFNode,
-                                                        surrogate_function=surrogate.ATan(), detach_reset=True)
-            functional.set_step_mode(model, step_mode='m')
+            model = spiking_resnet.__dict__[args.model](
+                pretrained=args.pretrained,
+                spiking_neuron=neuron.IFNode,
+                surrogate_function=surrogate.ATan(),
+                detach_reset=True,
+            )
+            functional.set_step_mode(model, step_mode="m")
             if args.cupy:
-                functional.set_backend(model, 'cupy', neuron.IFNode)
+                functional.set_backend(model, "cupy", neuron.IFNode)
 
             return model
         else:
@@ -43,4 +53,3 @@ if __name__ == "__main__":
     trainer = SResNetTrainer()
     args = trainer.get_args_parser().parse_args()
     trainer.main(args)
-

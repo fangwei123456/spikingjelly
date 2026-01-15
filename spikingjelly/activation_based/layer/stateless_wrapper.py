@@ -3,25 +3,47 @@ This module contains :class:`base.StepModule <spikingjelly.activation_based.base
 wrappers for commonly used :class:`torch.nn.Module`. See :doc:`../tutorials/en/basic_concept`
 for more details.
 """
+
 from typing import Optional, Union
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
-from torch.nn.common_types import _size_any_t, _size_1_t, _size_2_t, _size_3_t, _ratio_any_t
+from torch.nn.common_types import (
+    _size_any_t,
+    _size_1_t,
+    _size_2_t,
+    _size_3_t,
+    _ratio_any_t,
+)
 import numpy as np
 
 from .. import base, functional
 
 
 __all__ = [
-    "Conv1d", "Conv2d", "Conv3d",
-    "Upsample", "ConvTranspose1d", "ConvTranspose2d", "ConvTranspose3d", 
-    "GroupNorm", "MaxPool1d", "MaxPool2d", "MaxPool3d",
-    "AvgPool1d", "AvgPool2d", "AvgPool3d",
-    "AdaptiveAvgPool1d", "AdaptiveAvgPool2d", "AdaptiveAvgPool3d",
-    "Linear", "Flatten", "WSConv2d", "WSLinear"
+    "Conv1d",
+    "Conv2d",
+    "Conv3d",
+    "Upsample",
+    "ConvTranspose1d",
+    "ConvTranspose2d",
+    "ConvTranspose3d",
+    "GroupNorm",
+    "MaxPool1d",
+    "MaxPool2d",
+    "MaxPool3d",
+    "AvgPool1d",
+    "AvgPool2d",
+    "AvgPool3d",
+    "AdaptiveAvgPool1d",
+    "AdaptiveAvgPool2d",
+    "AdaptiveAvgPool3d",
+    "Linear",
+    "Flatten",
+    "WSConv2d",
+    "WSLinear",
 ]
 
 
@@ -29,19 +51,20 @@ __all__ = [
 # nn.Module wrappers with ``step_mode``                                        #
 ################################################################################
 
+
 class Conv1d(nn.Conv1d, base.StepModule):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_1_t,
-            stride: _size_1_t = 1,
-            padding: Union[str, _size_1_t] = 0,
-            dilation: _size_1_t = 1,
-            groups: int = 1,
-            bias: bool = True,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's'
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_1_t,
+        stride: _size_1_t = 1,
+        padding: Union[str, _size_1_t] = 0,
+        dilation: _size_1_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <Conv1d-en>`
@@ -62,19 +85,31 @@ class Conv1d(nn.Conv1d, base.StepModule):
 
         Refer to :class:`torch.nn.Conv1d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 4:
-                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -82,17 +117,17 @@ class Conv1d(nn.Conv1d, base.StepModule):
 
 class Conv2d(nn.Conv2d, base.StepModule):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_2_t,
-            stride: _size_2_t = 1,
-            padding: Union[str, _size_2_t] = 0,
-            dilation: _size_2_t = 1,
-            groups: int = 1,
-            bias: bool = True,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's'
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_2_t,
+        stride: _size_2_t = 1,
+        padding: Union[str, _size_2_t] = 0,
+        dilation: _size_2_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <Conv2d-en>`
@@ -113,19 +148,31 @@ class Conv2d(nn.Conv2d, base.StepModule):
 
         Refer to :class:`torch.nn.Conv2d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -133,17 +180,17 @@ class Conv2d(nn.Conv2d, base.StepModule):
 
 class Conv3d(nn.Conv3d, base.StepModule):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_3_t,
-            stride: _size_3_t = 1,
-            padding: Union[str, _size_3_t] = 0,
-            dilation: _size_3_t = 1,
-            groups: int = 1,
-            bias: bool = True,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's'
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_3_t,
+        stride: _size_3_t = 1,
+        padding: Union[str, _size_3_t] = 0,
+        dilation: _size_3_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <Conv3d-en>`
@@ -164,32 +211,45 @@ class Conv3d(nn.Conv3d, base.StepModule):
 
         Refer to :class:`torch.nn.Conv3d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 6:
-                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class Upsample(nn.Upsample, base.StepModule):
-    def __init__(self,
-                 size: Optional[_size_any_t] = None,
-                 scale_factor: Optional[_ratio_any_t] = None,
-                 mode: str = 'nearest',
-                 align_corners: Optional[bool] = None,
-                 recompute_scale_factor: Optional[bool] = None,
-                 step_mode: str = 's'
+    def __init__(
+        self,
+        size: Optional[_size_any_t] = None,
+        scale_factor: Optional[_ratio_any_t] = None,
+        mode: str = "nearest",
+        align_corners: Optional[bool] = None,
+        recompute_scale_factor: Optional[bool] = None,
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <Upsample-en>`
@@ -210,17 +270,19 @@ class Upsample(nn.Upsample, base.StepModule):
 
         Refer to :class:`torch.nn.Upsample` for other parameters' API
         """
-        super().__init__(size, scale_factor, mode, align_corners, recompute_scale_factor)
+        super().__init__(
+            size, scale_factor, mode, align_corners, recompute_scale_factor
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor) -> Tensor:
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -228,18 +290,18 @@ class Upsample(nn.Upsample, base.StepModule):
 
 class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_1_t,
-            stride: _size_1_t = 1,
-            padding: _size_1_t = 0,
-            output_padding: _size_1_t = 0,
-            groups: int = 1,
-            bias: bool = True,
-            dilation: _size_1_t = 1,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's'
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_1_t,
+        stride: _size_1_t = 1,
+        padding: _size_1_t = 0,
+        output_padding: _size_1_t = 0,
+        groups: int = 1,
+        bias: bool = True,
+        dilation: _size_1_t = 1,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <ConvTranspose1d-en>`
@@ -260,19 +322,32 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
 
         Refer to :class:`torch.nn.ConvTranspose1d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, bias, dilation, padding_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            output_padding,
+            groups,
+            bias,
+            dilation,
+            padding_mode,
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 4:
-                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -280,18 +355,18 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
 
 class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_2_t,
-            stride: _size_2_t = 1,
-            padding: _size_2_t = 0,
-            output_padding: _size_2_t = 0,
-            groups: int = 1,
-            bias: bool = True,
-            dilation: int = 1,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's'
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_2_t,
+        stride: _size_2_t = 1,
+        padding: _size_2_t = 0,
+        output_padding: _size_2_t = 0,
+        groups: int = 1,
+        bias: bool = True,
+        dilation: int = 1,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <ConvTranspose2d-en>`
@@ -312,19 +387,32 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
 
         Refer to :class:`torch.nn.ConvTranspose2d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, bias, dilation, padding_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            output_padding,
+            groups,
+            bias,
+            dilation,
+            padding_mode,
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -332,18 +420,18 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
 
 class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_3_t,
-            stride: _size_3_t = 1,
-            padding: _size_3_t = 0,
-            output_padding: _size_3_t = 0,
-            groups: int = 1,
-            bias: bool = True,
-            dilation: _size_3_t = 1,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's'
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_3_t,
+        stride: _size_3_t = 1,
+        padding: _size_3_t = 0,
+        output_padding: _size_3_t = 0,
+        groups: int = 1,
+        bias: bool = True,
+        dilation: _size_3_t = 1,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
     ) -> None:
         """
         * :ref:`API in English <ConvTranspose3d-en>`
@@ -364,19 +452,32 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
 
         Refer to :class:`torch.nn.ConvTranspose3d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, output_padding, groups, bias, dilation, padding_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            output_padding,
+            groups,
+            bias,
+            dilation,
+            padding_mode,
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 6:
-                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
@@ -384,9 +485,12 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
 
 class GroupNorm(nn.GroupNorm, base.StepModule):
     def __init__(
-            self,
-            num_groups: int, num_channels: int, eps: float = 1e-5, affine: bool = True,
-            step_mode='s'
+        self,
+        num_groups: int,
+        num_channels: int,
+        eps: float = 1e-5,
+        affine: bool = True,
+        step_mode="s",
     ):
         """
         * :ref:`API in English <GroupNorm-en>`
@@ -411,20 +515,27 @@ class GroupNorm(nn.GroupNorm, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             return super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             return functional.seq_to_ann_forward(x, super().forward)
 
 
 class MaxPool1d(nn.MaxPool1d, base.StepModule):
-    def __init__(self, kernel_size: _size_1_t, stride: Optional[_size_1_t] = None,
-                 padding: _size_1_t = 0, dilation: _size_1_t = 1,
-                 return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+    def __init__(
+        self,
+        kernel_size: _size_1_t,
+        stride: Optional[_size_1_t] = None,
+        padding: _size_1_t = 0,
+        dilation: _size_1_t = 1,
+        return_indices: bool = False,
+        ceil_mode: bool = False,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <MaxPool1d-en>`
 
@@ -444,28 +555,39 @@ class MaxPool1d(nn.MaxPool1d, base.StepModule):
 
         Refer to :class:`torch.nn.MaxPool1d` for other parameters' API
         """
-        super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+        super().__init__(
+            kernel_size, stride, padding, dilation, return_indices, ceil_mode
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 4:
-                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class MaxPool2d(nn.MaxPool2d, base.StepModule):
-    def __init__(self, kernel_size: _size_2_t, stride: Optional[_size_2_t] = None,
-                 padding: _size_2_t = 0, dilation: _size_2_t = 1,
-                 return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+    def __init__(
+        self,
+        kernel_size: _size_2_t,
+        stride: Optional[_size_2_t] = None,
+        padding: _size_2_t = 0,
+        dilation: _size_2_t = 1,
+        return_indices: bool = False,
+        ceil_mode: bool = False,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <MaxPool2d-en>`
 
@@ -485,28 +607,39 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
 
         Refer to :class:`torch.nn.MaxPool2d` for other parameters' API
         """
-        super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+        super().__init__(
+            kernel_size, stride, padding, dilation, return_indices, ceil_mode
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class MaxPool3d(nn.MaxPool3d, base.StepModule):
-    def __init__(self, kernel_size: _size_3_t, stride: Optional[_size_3_t] = None,
-                 padding: _size_3_t = 0, dilation: _size_3_t = 1,
-                 return_indices: bool = False, ceil_mode: bool = False, step_mode='s') -> None:
+    def __init__(
+        self,
+        kernel_size: _size_3_t,
+        stride: Optional[_size_3_t] = None,
+        padding: _size_3_t = 0,
+        dilation: _size_3_t = 1,
+        return_indices: bool = False,
+        ceil_mode: bool = False,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <MaxPool3d-en>`
 
@@ -526,27 +659,38 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
 
         Refer to :class:`torch.nn.MaxPool3d` for other parameters' API
         """
-        super().__init__(kernel_size, stride, padding, dilation, return_indices, ceil_mode)
+        super().__init__(
+            kernel_size, stride, padding, dilation, return_indices, ceil_mode
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 6:
-                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class AvgPool1d(nn.AvgPool1d, base.StepModule):
-    def __init__(self, kernel_size: _size_1_t, stride: _size_1_t = None, padding: _size_1_t = 0, ceil_mode: bool = False,
-                 count_include_pad: bool = True, step_mode='s') -> None:
+    def __init__(
+        self,
+        kernel_size: _size_1_t,
+        stride: _size_1_t = None,
+        padding: _size_1_t = 0,
+        ceil_mode: bool = False,
+        count_include_pad: bool = True,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <AvgPool1d-en>`
 
@@ -570,23 +714,33 @@ class AvgPool1d(nn.AvgPool1d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 4:
-                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class AvgPool2d(nn.AvgPool2d, base.StepModule):
-    def __init__(self, kernel_size: _size_2_t, stride: Optional[_size_2_t] = None, padding: _size_2_t = 0,
-                 ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None, step_mode='s') -> None:
+    def __init__(
+        self,
+        kernel_size: _size_2_t,
+        stride: Optional[_size_2_t] = None,
+        padding: _size_2_t = 0,
+        ceil_mode: bool = False,
+        count_include_pad: bool = True,
+        divisor_override: Optional[int] = None,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <AvgPool2d-en>`
 
@@ -606,27 +760,39 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
 
         Refer to :class:`torch.nn.AvgPool2d` for other parameters' API
         """
-        super().__init__(kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
+        super().__init__(
+            kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class AvgPool3d(nn.AvgPool3d, base.StepModule):
-    def __init__(self, kernel_size: _size_3_t, stride: Optional[_size_3_t] = None, padding: _size_3_t = 0,
-                 ceil_mode: bool = False, count_include_pad: bool = True, divisor_override: Optional[int] = None, step_mode='s') -> None:
+    def __init__(
+        self,
+        kernel_size: _size_3_t,
+        stride: Optional[_size_3_t] = None,
+        padding: _size_3_t = 0,
+        ceil_mode: bool = False,
+        count_include_pad: bool = True,
+        divisor_override: Optional[int] = None,
+        step_mode="s",
+    ) -> None:
         """
         * :ref:`API in English <AvgPool3d-en>`
 
@@ -646,26 +812,30 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
 
         Refer to :class:`torch.nn.AvgPool3d` for other parameters' API
         """
-        super().__init__(kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override)
+        super().__init__(
+            kernel_size, stride, padding, ceil_mode, count_include_pad, divisor_override
+        )
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 6:
-                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
-    def __init__(self, output_size, step_mode='s') -> None:
+    def __init__(self, output_size, step_mode="s") -> None:
         """
         * :ref:`API in English <AdaptiveAvgPool1d-en>`
 
@@ -689,22 +859,24 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 4:
-                raise ValueError(f'expected x with shape [T, N, C, L], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
-    def __init__(self, output_size, step_mode='s') -> None:
+    def __init__(self, output_size, step_mode="s") -> None:
         """
         * :ref:`API in English <AdaptiveAvgPool2d-en>`
 
@@ -728,22 +900,24 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
-    def __init__(self, output_size, step_mode='s') -> None:
+    def __init__(self, output_size, step_mode="s") -> None:
         """
         * :ref:`API in English <AdaptiveAvgPool3d-en>`
 
@@ -767,22 +941,26 @@ class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 6:
-                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, super().forward)
 
         return x
 
 
 class Linear(nn.Linear, base.StepModule):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, step_mode='s') -> None:
+    def __init__(
+        self, in_features: int, out_features: int, bias: bool = True, step_mode="s"
+    ) -> None:
         """
         * :ref:`API in English <Linear-en>`
 
@@ -807,7 +985,7 @@ class Linear(nn.Linear, base.StepModule):
 
 
 class Flatten(nn.Flatten, base.StepModule):
-    def __init__(self, start_dim: int = 1, end_dim: int = -1, step_mode='s') -> None:
+    def __init__(self, start_dim: int = 1, end_dim: int = -1, step_mode="s") -> None:
         """
         * :ref:`API in English <Flatten-en>`
 
@@ -831,37 +1009,37 @@ class Flatten(nn.Flatten, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             x = functional.seq_to_ann_forward(x, super().forward)
         return x
-
 
 
 ################################################################################
 # scaled weight standardization modules                                        #
 ################################################################################
 
+
 class WSConv2d(Conv2d):
     def __init__(
-            self,
-            in_channels: int,
-            out_channels: int,
-            kernel_size: _size_2_t,
-            stride: _size_2_t = 1,
-            padding: Union[str, _size_2_t] = 0,
-            dilation: _size_2_t = 1,
-            groups: int = 1,
-            bias: bool = True,
-            padding_mode: str = 'zeros',
-            step_mode: str = 's',
-            gain: bool = True,
-            eps: float = 1e-4
+        self,
+        in_channels: int,
+        out_channels: int,
+        kernel_size: _size_2_t,
+        stride: _size_2_t = 1,
+        padding: Union[str, _size_2_t] = 0,
+        dilation: _size_2_t = 1,
+        groups: int = 1,
+        bias: bool = True,
+        padding_mode: str = "zeros",
+        step_mode: str = "s",
+        gain: bool = True,
+        eps: float = 1e-4,
     ) -> None:
         """
         * :ref:`API in English <WSConv2d-en>`
@@ -888,7 +1066,18 @@ class WSConv2d(Conv2d):
 
         Refer to :class:`Conv2d` for other parameters' API
         """
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding, dilation, groups, bias, padding_mode, step_mode)
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride,
+            padding,
+            dilation,
+            groups,
+            bias,
+            padding_mode,
+            step_mode,
+        )
         if gain:
             self.gain = nn.Parameter(torch.ones(self.out_channels, 1, 1, 1))
         else:
@@ -905,22 +1094,40 @@ class WSConv2d(Conv2d):
         return weight
 
     def _forward(self, x: Tensor):
-        return F.conv2d(x, self.get_weight(), self.bias, self.stride, self.padding, self.dilation, self.groups)
+        return F.conv2d(
+            x,
+            self.get_weight(),
+            self.bias,
+            self.stride,
+            self.padding,
+            self.dilation,
+            self.groups,
+        )
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             x = self._forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             x = functional.seq_to_ann_forward(x, self._forward)
 
         return x
 
 
 class WSLinear(Linear):
-    def __init__(self, in_features: int, out_features: int, bias: bool = True, step_mode='s', gain=True, eps=1e-4) -> None:
+    def __init__(
+        self,
+        in_features: int,
+        out_features: int,
+        bias: bool = True,
+        step_mode="s",
+        gain=True,
+        eps=1e-4,
+    ) -> None:
         """
         * :ref:`API in English <WSLinear-en>`
 

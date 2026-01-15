@@ -84,8 +84,8 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         :type dimension: int
         """
         super().__init__()
-        self.step_mode = 'm'
-        assert dimension == 4 or dimension == 2, 'dimension must be 4 or 2'
+        self.step_mode = "m"
+        assert dimension == 4 or dimension == 2, "dimension must be 4 or 2"
 
         self.dimension = dimension
 
@@ -97,23 +97,28 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
             self.avg_pool = nn.AdaptiveAvgPool3d(1)
             self.max_pool = nn.AdaptiveMaxPool3d(1)
 
-        assert T >= reduction, 'reduction cannot be greater than T'
+        assert T >= reduction, "reduction cannot be greater than T"
 
         # Excitation
         self.sharedMLP = nn.Sequential(
             nn.Linear(T, T // reduction, bias=False),
             nn.ReLU(),
-            nn.Linear(T // reduction, T, bias=False)
+            nn.Linear(T // reduction, T, bias=False),
         )
 
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, x_seq: torch.Tensor):
         assert x_seq.dim() == 3 or x_seq.dim() == 5, ValueError(
-            f'expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}')
+            f"expected 3D or 5D input with shape [T, N, M] or [T, N, C, H, W], but got input with shape {x_seq.shape}"
+        )
         x_seq = x_seq.transpose(0, 1)
-        avgout = self.sharedMLP(self.avg_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
-        maxout = self.sharedMLP(self.max_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]]))
+        avgout = self.sharedMLP(
+            self.avg_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]])
+        )
+        maxout = self.sharedMLP(
+            self.max_pool(x_seq).view([x_seq.shape[0], x_seq.shape[1]])
+        )
         scores = self.sigmoid(avgout + maxout)
         if self.dimension == 2:
             y_seq = x_seq * scores[:, :, None]
@@ -124,7 +129,14 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
 
 class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
-    def __init__(self, T: int, C: int, reduction_t: int = 16, reduction_c: int = 16, kernel_size=3):
+    def __init__(
+        self,
+        T: int,
+        C: int,
+        reduction_t: int = 16,
+        reduction_c: int = 16,
+        kernel_size=3,
+    ):
         """
         **API Language:**
         :ref:`中文 <MultiStepMultiDimensionalAttention.__init__-cn>` | :ref:`English <MultiStepMultiDimensionalAttention.__init__-en>`
@@ -164,7 +176,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         * **English**
 
-        The MA-SNN model and MultiStepMultiDimensionalAttention layer are proposed in 
+        The MA-SNN model and MultiStepMultiDimensionalAttention layer are proposed in
         `Attention Spiking Neural Networks <https://ieeexplore.ieee.org/document/10032591>`_.
 
         You can find the example projects of MA-SNN in the following links:
@@ -190,8 +202,8 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         """
         super().__init__()
 
-        assert T >= reduction_t, 'reduction_t cannot be greater than T'
-        assert C >= reduction_c, 'reduction_c cannot be greater than C'
+        assert T >= reduction_t, "reduction_t cannot be greater than T"
+        assert C >= reduction_c, "reduction_c cannot be greater than C"
 
         from einops import rearrange
 
@@ -213,7 +225,6 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
                 maxout = self.sharedMLP(self.max_pool(x))
                 return self.sigmoid(avgout + maxout)
 
-
         class ChannelAttention(nn.Module):
             def __init__(self, in_planes, ratio=16):
                 super(ChannelAttention, self).__init__()
@@ -233,7 +244,6 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
                 out = self.sigmoid(avgout + maxout)
                 out = rearrange(out, "b c f h w -> b f c h w")
                 return out
-
 
         class SpatialAttention(nn.Module):
             def __init__(self, kernel_size=3):
@@ -260,7 +270,8 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
     def forward(self, x: torch.Tensor):
         assert x.dim() == 5, ValueError(
-            f'expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}')
+            f"expected 5D input with shape [T, N, C, H, W], but got input with shape {x.shape}"
+        )
         x = x.transpose(0, 1)
         out = self.ta(x) * x
         out = self.ca(out) * out
@@ -271,7 +282,6 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
 
 class SpikingSelfAttention(nn.Module, base.MultiStepModule):
-
     def __init__(self, dim, num_heads=8, backend: str = "torch"):
         """
         **API Language:**
@@ -288,7 +298,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         的基础上做了改进，显著提高了运行效率。关于 Spikformer 和本模块实现方式的更多信息，
         参见教程 :doc:`../tutorials/cn/spikformer` 。
 
-        本模块的输入是尺寸为 ``[T, N, C, L]`` 的脉冲张量，其中 ``T`` 是时间步数， 
+        本模块的输入是尺寸为 ``[T, N, C, L]`` 的脉冲张量，其中 ``T`` 是时间步数，
         ``N`` 是 batch size ，``C`` 是 channel 数量，``L`` 是 token 数量 （对于视觉任务， ``L=H*W`` ）。
         输出是尺寸为 ``[T, N, C, L]`` 的脉冲张量。
 
@@ -317,8 +327,8 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         The input to this module is a spike tensor of shape ``[T, N, C, L]``,
         where ``T`` denotes the number of time steps, ``N`` is the batch size,
-        ``C`` is the number of channels, and ``L`` is the number of tokens 
-        (for vision tasks, ``L = H * W``). The output is a spiking tensor with 
+        ``C`` is the number of channels, and ``L`` is the number of tokens
+        (for vision tasks, ``L = H * W``). The output is a spiking tensor with
         the same shape ``[T, N, C, L]``.
 
         :param dim: number of channels
@@ -332,9 +342,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         """
         super().__init__()
         if dim % num_heads != 0:
-            raise ValueError(
-                f"dim {dim} should be divided by num_heads {num_heads}."
-            )
+            raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")
         self.dim = dim
         self.num_heads = num_heads
         self.head_dim = dim // num_heads
@@ -343,15 +351,14 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         self.qkv_conv_bn = SeqToANNContainer(
             nn.Conv1d(dim, dim * 3, kernel_size=1, stride=1, bias=False),
-            nn.BatchNorm1d(dim*3),
+            nn.BatchNorm1d(dim * 3),
         )
         self.qkv_lif = neuron.LIFNode(
             tau=2.0, detach_reset=True, step_mode="m", backend=backend
         )
 
         self.attn_lif = neuron.LIFNode(
-            tau=2.0, v_threshold=0.5, detach_reset=True, step_mode="m",
-            backend=backend
+            tau=2.0, v_threshold=0.5, detach_reset=True, step_mode="m", backend=backend
         )
 
         self.proj_conv_bn = SeqToANNContainer(
@@ -379,13 +386,13 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         self.proj_lif.backend = value
 
     @staticmethod
-    def _ssa_kernel_torch(qkv, scale): # TODO: add triton implementation
+    def _ssa_kernel_torch(qkv, scale):  # TODO: add triton implementation
         # qkv.shape = [T, N, 3, NUM_HEADS, Cph, L]
         # qt, kt, vt.shape = [T, N, NUM_HEADS, Cph, L]
         qt, kt, vt = qkv.flatten(2, 3).chunk(3, dim=2)
         x_seq = vt @ kt.transpose(-2, -1)
-        x_seq = (x_seq@qt) * scale
-        return x_seq # [T, N, NUM_HEADS, Cph, L]
+        x_seq = (x_seq @ qt) * scale
+        return x_seq  # [T, N, NUM_HEADS, Cph, L]
 
     def forward(self, x_seq: torch.Tensor):
         """
@@ -397,20 +404,20 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         """
         if x_seq.ndim != 4:
             raise ValueError(
-                f'expected 4D input with shape [T, N, C, L], '
-                f'but got input with shape {x_seq.shape}'
+                f"expected 4D input with shape [T, N, C, L], "
+                f"but got input with shape {x_seq.shape}"
             )
         T, N, C, L = x_seq.shape
 
         qkv = self.qkv_conv_bn(x_seq)
-        qkv = self.qkv_lif(qkv) # [T, N, 3*C, L]
+        qkv = self.qkv_lif(qkv)  # [T, N, 3*C, L]
         qkv = qkv.reshape(T, N, 3, self.num_heads, C // self.num_heads, L)
 
         x_seq = self._ssa_kernel_torch(qkv, self.scale)
         x_seq = self.attn_lif(x_seq).reshape(T, N, C, L)
 
         x_seq = self.proj_conv_bn(x_seq)
-        x_seq = self.proj_lif(x_seq) # [T, N, C, L]
+        x_seq = self.proj_lif(x_seq)  # [T, N, C, L]
         return x_seq
 
     def extra_repr(self):
@@ -418,10 +425,12 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
 
 class QKAttention(nn.Module, base.MultiStepModule):
-
     def __init__(
-        self, dim: int, num_heads: int = 8,
-        qka_type: str = "token", backend: str ="torch"
+        self,
+        dim: int,
+        num_heads: int = 8,
+        qka_type: str = "token",
+        backend: str = "torch",
     ):
         """
         **API Language:**
@@ -437,7 +446,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
         中提出的 Q-K Attention 层。本模块在 `QKFormer源代码 <https://github.com/zhouchenlin2096/QKFormer/blob/master/imagenet/qkformer.py>`_
         的基础上做了改进，显著提高了运行效率；改进思路与 Spikformer 类似，见教程 :doc:`../tutorials/cn/spikformer` 。
 
-        本模块的输入是尺寸为 ``[T, N, C, L]`` 的脉冲张量，其中 ``T`` 是时间步数， 
+        本模块的输入是尺寸为 ``[T, N, C, L]`` 的脉冲张量，其中 ``T`` 是时间步数，
         ``N`` 是 batch size ，``C`` 是 channel 数量，``L`` 是 token 数量 （对于视觉任务， ``L=H*W`` ）。
         输出是尺寸为 ``[T, N, C, L]`` 的脉冲张量。
 
@@ -488,13 +497,10 @@ class QKAttention(nn.Module, base.MultiStepModule):
         """
         super().__init__()
         if dim % num_heads != 0:
-            raise ValueError(
-                f"dim {dim} should be divided by num_heads {num_heads}."
-            )
+            raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")
         if qka_type not in ["token", "channel"]:
             raise ValueError(
-                f"qka_type should be either 'token' or 'channel', "
-                f"but got {qka_type}."
+                f"qka_type should be either 'token' or 'channel', but got {qka_type}."
             )
         self.dim = dim
         self.num_heads = num_heads
@@ -503,9 +509,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
         self._backend = backend
 
         self.qk_conv_bn = SeqToANNContainer(
-            nn.Conv1d(
-                dim, dim * 2, kernel_size=1, stride=1, bias=False
-            ),
+            nn.Conv1d(dim, dim * 2, kernel_size=1, stride=1, bias=False),
             nn.BatchNorm1d(dim * 2),
         )
         self.qk_lif = neuron.LIFNode(
@@ -514,8 +518,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
         self.sum_dim = 3 if qka_type == "token" else 4
         self.attn_lif = neuron.LIFNode(
-            tau=2.0, v_threshold=0.5, detach_reset=True, step_mode="m",
-            backend=backend
+            tau=2.0, v_threshold=0.5, detach_reset=True, step_mode="m", backend=backend
         )
 
         self.proj_conv_bn = SeqToANNContainer(
@@ -572,13 +575,13 @@ class QKAttention(nn.Module, base.MultiStepModule):
         """
         if x_seq.ndim != 4:
             raise ValueError(
-                f'expected 4D input with shape [T, N, C, L], '
-                f'but got input with shape {x_seq.shape}'
+                f"expected 4D input with shape [T, N, C, L], "
+                f"but got input with shape {x_seq.shape}"
             )
         T, N, C, L = x_seq.shape
 
         qk = self.qk_conv_bn(x_seq)
-        qk = self.qk_lif(qk) # [T, N, 2*C, L]
+        qk = self.qk_lif(qk)  # [T, N, 2*C, L]
         qk = qk.reshape(T, N, 2, self.num_heads, C // self.num_heads, L)
 
         x_seq = self._qka_forward_torch(qk)
@@ -596,8 +599,7 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
 
 class TokenQKAttention(QKAttention):
-
-    def __init__(self, dim: int, num_heads: int =8, backend: str = "torch"):
+    def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch"):
         """
         ``QKAttention(..., qka_type="token")`` . See :class:`QKAttention` .
         """
@@ -605,7 +607,6 @@ class TokenQKAttention(QKAttention):
 
 
 class ChannelQKAttention(QKAttention):
-
     def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch"):
         """
         ``QKAttention(..., qka_type="channel")`` . See :class:`QKAttention` .

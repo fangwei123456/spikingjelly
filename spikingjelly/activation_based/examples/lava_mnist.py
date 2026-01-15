@@ -5,7 +5,13 @@ import torch
 import torch.nn as nn
 import torchvision
 from torchvision import transforms
-from spikingjelly.activation_based import functional, lava_exchange, surrogate, encoding, neuron
+from spikingjelly.activation_based import (
+    functional,
+    lava_exchange,
+    surrogate,
+    encoding,
+    neuron,
+)
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 import os
@@ -15,10 +21,10 @@ import h5py
 
 def export_hdf5(net, filename):
     # network export to hdf5 format
-    h = h5py.File(filename, 'w')
-    layer = h.create_group('layer')
+    h = h5py.File(filename, "w")
+    layer = h.create_group("layer")
     for i, b in enumerate(net):
-        handle = layer.create_group(f'{i}')
+        handle = layer.create_group(f"{i}")
         b.export_hdf5(handle)
 
 
@@ -28,39 +34,32 @@ class MNISTNet(nn.Module):
         self.conv_fc = nn.Sequential(
             lava_exchange.BlockContainer(
                 nn.Conv2d(1, channels, kernel_size=3, stride=1, padding=1, bias=False),
-                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True)
+                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
             ),
-
             lava_exchange.BlockContainer(
                 nn.Conv2d(channels, channels, kernel_size=2, stride=2, bias=False),
-                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True)
+                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
             ),
             # 14 * 14
-
             lava_exchange.BlockContainer(
-                nn.Conv2d(channels, channels, kernel_size=3, stride=1, padding=1, bias=False),
-                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True)
+                nn.Conv2d(
+                    channels, channels, kernel_size=3, stride=1, padding=1, bias=False
+                ),
+                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
             ),
-
             lava_exchange.BlockContainer(
                 nn.Conv2d(channels, channels, kernel_size=2, stride=2, bias=False),
-                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True)
+                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
             ),
-
             # 7 * 7
-
-            lava_exchange.BlockContainer(
-                nn.Flatten(),
-                None
-            ),
+            lava_exchange.BlockContainer(nn.Flatten(), None),
             lava_exchange.BlockContainer(
                 nn.Linear(channels * 7 * 7, 128, bias=False),
-                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True)
+                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
             ),
-
             lava_exchange.BlockContainer(
                 nn.Linear(128, 10, bias=False),
-                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True)
+                neuron.IFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
             ),
         )
 
@@ -82,36 +81,39 @@ def main():
     # python -m spikingjelly.activation_based.examples.lava_mnist -T 32 -device cuda:0 -b 128 -epochs 16 -data-dir /datasets/MNIST/ -lr 0.1 -channels 16
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('-T', default=16, type=int, help='simulating time-steps')
-    parser.add_argument('-b', default=128, type=int, help='batch size')
-    parser.add_argument('-device', default='cuda:0', type=str, help='device')
-    parser.add_argument('-data-dir', type=str, default='/datasets/MNIST/', help='root dir of the MNIST dataset')
-    parser.add_argument('-channels', default=16, type=int, help='channels of CSNN')
-    parser.add_argument('-epochs', default=16, type=int, help='training epochs')
-    parser.add_argument('-lr', default=0.1, type=float, help='learning rate')
-    parser.add_argument('-out-dir', default='./', type=str, help='path for saving weights')
+    parser.add_argument("-T", default=16, type=int, help="simulating time-steps")
+    parser.add_argument("-b", default=128, type=int, help="batch size")
+    parser.add_argument("-device", default="cuda:0", type=str, help="device")
+    parser.add_argument(
+        "-data-dir",
+        type=str,
+        default="/datasets/MNIST/",
+        help="root dir of the MNIST dataset",
+    )
+    parser.add_argument("-channels", default=16, type=int, help="channels of CSNN")
+    parser.add_argument("-epochs", default=16, type=int, help="training epochs")
+    parser.add_argument("-lr", default=0.1, type=float, help="learning rate")
+    parser.add_argument(
+        "-out-dir", default="./", type=str, help="path for saving weights"
+    )
 
     args = parser.parse_args()
     print(args)
 
     net = MNISTNet(channels=args.channels)
     net.to(args.device)
-    functional.set_step_mode(net, step_mode='m')
+    functional.set_step_mode(net, step_mode="m")
     optimizer = torch.optim.SGD(net.parameters(), lr=args.lr, momentum=0.9)
 
-    encoder = encoding.PoissonEncoder(step_mode='m')
+    encoder = encoding.PoissonEncoder(step_mode="m")
 
     train_set = torchvision.datasets.MNIST(
-        root=args.data_dir,
-        train=True,
-        transform=transforms.ToTensor(),
-        download=True)
+        root=args.data_dir, train=True, transform=transforms.ToTensor(), download=True
+    )
 
     test_set = torchvision.datasets.MNIST(
-        root=args.data_dir,
-        train=False,
-        transform=transforms.ToTensor(),
-        download=True)
+        root=args.data_dir, train=False, transform=transforms.ToTensor(), download=True
+    )
 
     train_data_loader = torch.utils.data.DataLoader(
         dataset=train_set,
@@ -119,7 +121,7 @@ def main():
         shuffle=True,
         drop_last=True,
         num_workers=4,
-        pin_memory=True
+        pin_memory=True,
     )
 
     test_data_loader = torch.utils.data.DataLoader(
@@ -128,7 +130,7 @@ def main():
         shuffle=False,
         drop_last=False,
         num_workers=4,
-        pin_memory=True
+        pin_memory=True,
     )
     max_test_acc = -1
     for epoch in range(args.epochs):
@@ -177,10 +179,11 @@ def main():
         max_test_acc = max(max_test_acc, test_acc)
         print(args)
         print(
-            f'epoch = {epoch}, train_loss ={train_loss: .4f}, train_acc ={train_acc: .4f}, test_loss ={test_loss: .4f}, test_acc ={test_acc: .4f}, max_test_acc ={max_test_acc: .4f}')
+            f"epoch = {epoch}, train_loss ={train_loss: .4f}, train_acc ={train_acc: .4f}, test_loss ={test_loss: .4f}, test_acc ={test_acc: .4f}, max_test_acc ={max_test_acc: .4f}"
+        )
 
-    print('finish training')
-    print('test acc[sj] =', test_acc)
+    print("finish training")
+    print("test acc[sj] =", test_acc)
 
     net_ladl = net.to_lava().to(args.device)
     net_ladl.eval()
@@ -204,20 +207,15 @@ def main():
     test_loss /= test_samples
     test_acc /= test_samples
 
-    print('test acc[lava dl] =', test_acc)
+    print("test acc[lava dl] =", test_acc)
 
-    torch.save(net.state_dict(), os.path.join(args.out_dir, 'net.pt'))
+    torch.save(net.state_dict(), os.path.join(args.out_dir, "net.pt"))
     print(f"save net.state_dict() to {os.path.join(args.out_dir, 'net.pt')}")
-    torch.save(net_ladl.state_dict(), os.path.join(args.out_dir, 'net_ladl.pt'))
+    torch.save(net_ladl.state_dict(), os.path.join(args.out_dir, "net_ladl.pt"))
     print(f"save net_ladl.state_dict() to {os.path.join(args.out_dir, 'net_ladl.pt')}")
-    export_hdf5(net_ladl, os.path.join(args.out_dir, 'net_la.net'))
+    export_hdf5(net_ladl, os.path.join(args.out_dir, "net_la.net"))
     print(f"export net_ladl to {os.path.join(args.out_dir, 'net_la.net')}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-
-
-
-
-

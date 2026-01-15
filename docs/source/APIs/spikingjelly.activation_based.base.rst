@@ -5,3 +5,4 @@ spikingjelly.activation_based.base module
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: extra_repr

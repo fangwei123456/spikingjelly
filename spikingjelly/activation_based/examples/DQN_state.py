@@ -48,17 +48,17 @@ class DQN(nn.Module):
 
         return self.fc2(x)
 
-if __name__ == '__main__':
 
-    parser = argparse.ArgumentParser(description='DQN State')
-    parser.add_argument('--seed', type=int, default=1,
-                        help='random seed (default: 1)')
-    parser.add_argument('--use-cuda', default=False,
-                        help='use cuda or not (default: False)')
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="DQN State")
+    parser.add_argument("--seed", type=int, default=1, help="random seed (default: 1)")
+    parser.add_argument(
+        "--use-cuda", default=False, help="use cuda or not (default: False)"
+    )
 
     args = parser.parse_args()
 
-    env_name = 'CartPole-v0'
+    env_name = "CartPole-v0"
 
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -69,16 +69,13 @@ if __name__ == '__main__':
 
     device = torch.device("cuda" if args.use_cuda else "cpu")
 
-    writer = SummaryWriter(log_dir='./log')
+    writer = SummaryWriter(log_dir="./log")
 
     env = gym.make(env_name).unwrapped
     env.seed(args.seed)
 
     # Replay Memory
-    Transition = namedtuple('Transition',
-                            ('state', 'action', 'next_state', 'reward'))
-
-
+    Transition = namedtuple("Transition", ("state", "action", "next_state", "reward"))
 
     # Hyperparameters and utilitie
     BATCH_SIZE = 128
@@ -94,7 +91,7 @@ if __name__ == '__main__':
     n_states = env.observation_space.shape[0]
     n_actions = env.action_space.n
 
-    print('State Num: %d, Action Num: %d' % (n_states, n_actions))
+    print("State Num: %d, Action Num: %d" % (n_states, n_actions))
 
     policy_net = DQN(n_states, hidden_size, n_actions).to(device)
     target_net = DQN(n_states, hidden_size, n_actions).to(device)
@@ -109,15 +106,17 @@ if __name__ == '__main__':
     def select_action(state):
         global steps_done
         sample = random.random()
-        eps_threshold = EPS_END + (EPS_START - EPS_END) * \
-            math.exp(-1. * steps_done / EPS_DECAY)
+        eps_threshold = EPS_END + (EPS_START - EPS_END) * math.exp(
+            -1.0 * steps_done / EPS_DECAY
+        )
         steps_done += 1
         if sample > eps_threshold:
             with torch.no_grad():
                 return policy_net(state).max(1)[1].view(1, 1)
         else:
-            return torch.tensor([[random.randrange(n_actions)]], device=device, dtype=torch.long)
-
+            return torch.tensor(
+                [[random.randrange(n_actions)]], device=device, dtype=torch.long
+            )
 
     # Training loop
     def optimize_model():
@@ -128,10 +127,14 @@ if __name__ == '__main__':
 
         batch = Transition(*zip(*transitions))
 
-        non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
-                                              batch.next_state)), device=device, dtype=torch.bool)
-        non_final_next_states = torch.cat([s for s in batch.next_state
-                                                    if s is not None])
+        non_final_mask = torch.tensor(
+            tuple(map(lambda s: s is not None, batch.next_state)),
+            device=device,
+            dtype=torch.bool,
+        )
+        non_final_next_states = torch.cat(
+            [s for s in batch.next_state if s is not None]
+        )
         state_batch = torch.cat(batch.state)
         action_batch = torch.cat(batch.action)
         reward_batch = torch.cat(batch.reward)
@@ -139,12 +142,16 @@ if __name__ == '__main__':
         state_action_values = policy_net(state_batch).gather(1, action_batch)
 
         next_state_values = torch.zeros(BATCH_SIZE, device=device)
-        next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
+        next_state_values[non_final_mask] = (
+            target_net(non_final_next_states).max(1)[0].detach()
+        )
         # Compute the expected Q values
         expected_state_action_values = (next_state_values * GAMMA) + reward_batch
 
         # Compute Huber loss
-        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+        loss = F.smooth_l1_loss(
+            state_action_values, expected_state_action_values.unsqueeze(1)
+        )
 
         # Optimize the model
         optimizer.zero_grad()
@@ -152,7 +159,6 @@ if __name__ == '__main__':
         for param in policy_net.parameters():
             param.grad.data.clamp_(-1, 1)
         optimizer.step()
-
 
     # Train
     for i_episode in range(num_episodes):
@@ -180,14 +186,16 @@ if __name__ == '__main__':
             optimize_model()
 
             if done:
-                print(f'Episode: {i_episode}, Reward: {total_reward}')
-                writer.add_scalar('DQN-state-' + env_name + '/Reward', total_reward, i_episode)
+                print(f"Episode: {i_episode}, Reward: {total_reward}")
+                writer.add_scalar(
+                    "DQN-state-" + env_name + "/Reward", total_reward, i_episode
+                )
                 break
 
         # Update the target network, copying all weights and biases in DQN
         if i_episode % TARGET_UPDATE == 0:
             target_net.load_state_dict(policy_net.state_dict())
 
-    print('Complete')
+    print("Complete")
 
     writer.close()

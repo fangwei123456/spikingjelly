@@ -20,9 +20,11 @@ def _to_numpy(x: torch.Tensor) -> np.ndarray:
 
 
 class _ModuleMapper:
-
     def __init__(
-        self, net: nn.Module, example_input: torch.Tensor, dt: float = 1e-4,
+        self,
+        net: nn.Module,
+        example_input: torch.Tensor,
+        dt: float = 1e-4,
     ):
         self.dt = dt
         self.net = net
@@ -48,7 +50,7 @@ class _ModuleMapper:
             for in_node in node.all_input_nodes:
                 if "tensor_meta" in in_node.meta:
                     input_shapes.append(in_node.meta["tensor_meta"].shape)
-            input_shape = input_shapes[0] # most modules has only one input
+            input_shape = input_shapes[0]  # most modules has only one input
 
             self.module_io_shape[module] = {
                 "input_shape": input_shape,
@@ -116,7 +118,7 @@ class _ModuleMapper:
             input_type_start = 2
 
         return nir.Flatten(
-            input_type=input_shape[input_type_start:], # remove the T and B dims
+            input_type=input_shape[input_type_start:],  # remove the T and B dims
             start_dim=start_dim,
             end_dim=end_dim,
         )
@@ -133,13 +135,13 @@ class _ModuleMapper:
         v_threshold = module.v_threshold
 
         r = 1 / self.dt
-        v_reset_ = 0. if v_reset is None else v_reset
+        v_reset_ = 0.0 if v_reset is None else v_reset
 
         input_shape = self.module_io_shape[module]["input_shape"]
         output_shape = self.module_io_shape[module]["output_shape"]
         type_start = 1 if module.step_mode == "s" else 2
         input_type = input_shape[type_start:]
-        output_type = output_shape[type_start:] # remove the T and B dims
+        output_type = output_shape[type_start:]  # remove the T and B dims
 
         return nir.IF(
             r=np.full(input_type, r),
@@ -163,15 +165,15 @@ class _ModuleMapper:
         decay_input = module.decay_input
 
         tau_ = tau * self.dt
-        r = 1. if decay_input else tau
-        v_leak = 0. if v_reset is None else v_reset
-        v_reset_ = 0. if v_reset is None else v_reset
+        r = 1.0 if decay_input else tau
+        v_leak = 0.0 if v_reset is None else v_reset
+        v_reset_ = 0.0 if v_reset is None else v_reset
 
         input_shape = self.module_io_shape[module]["input_shape"]
         output_shape = self.module_io_shape[module]["output_shape"]
         type_start = 1 if module.step_mode == "s" else 2
         input_type = input_shape[type_start:]
-        output_type = output_shape[type_start:] # remove the T and B dims
+        output_type = output_shape[type_start:]  # remove the T and B dims
 
         return nir.LIF(
             tau=np.full(input_type, tau_),
@@ -192,21 +194,21 @@ class _ModuleMapper:
             `module.v_reset=0` (i.e. hard reset with 0 reset potential).
         """
         with torch.no_grad():
-            tau = 1. / module.w.sigmoid()
+            tau = 1.0 / module.w.sigmoid()
         v_reset = module.v_reset
         v_threshold = module.v_threshold
         decay_input = module.decay_input
 
         tau_ = tau * self.dt
-        r = 1. if decay_input else tau
-        v_leak = 0. if v_reset is None else v_reset
-        v_reset_ = 0. if v_reset is None else v_reset
+        r = 1.0 if decay_input else tau
+        v_leak = 0.0 if v_reset is None else v_reset
+        v_reset_ = 0.0 if v_reset is None else v_reset
 
         input_shape = self.module_io_shape[module]["input_shape"]
         output_shape = self.module_io_shape[module]["output_shape"]
         type_start = 1 if module.step_mode == "s" else 2
         input_type = input_shape[type_start:]
-        output_type = output_shape[type_start:] # remove the T and B dims
+        output_type = output_shape[type_start:]  # remove the T and B dims
 
         return nir.LIF(
             tau=np.full(input_type, tau_),
@@ -220,10 +222,10 @@ class _ModuleMapper:
 
 
 def export_to_nir(
-    net: nn.Module, 
+    net: nn.Module,
     example_input: torch.Tensor,
     save_path: Optional[Union[str, Path]] = None,
-    dt: float = 1e-4
+    dt: float = 1e-4,
 ):
     """
     **API Language:**
@@ -290,11 +292,8 @@ def export_to_nir(
     """
     mapper = _ModuleMapper(net, example_input, dt=dt)
 
-    graph = nirtorch.torch_to_nir(
-        net, mapper.map_dict, type_check=True
-    )
+    graph = nirtorch.torch_to_nir(net, mapper.map_dict, type_check=True)
 
     if save_path is not None:
         nir.write(save_path, graph)
     return graph
-

@@ -20,17 +20,17 @@ URL = "speech_commands_v0.02"
 HASH_DIVIDER = "_nohash_"
 EXCEPT_FOLDER = "_background_noise_"
 _CHECKSUMS = {
-    "https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.01.tar.gz":
-    "3cd23799cb2bbdec517f1cc028f8d43c",
-    "https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz":
-    "6b74f3901214cb2c2934e98196829835",
+    "https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.01.tar.gz": "3cd23799cb2bbdec517f1cc028f8d43c",
+    "https://storage.googleapis.com/download.tensorflow.org/data/speech_commands_v0.02.tar.gz": "6b74f3901214cb2c2934e98196829835",
 }
 VAL_RECORD = "validation_list.txt"
 TEST_RECORD = "testing_list.txt"
 TRAIN_RECORD = "training_list.txt"
 
 
-def _load_speechcommands_item(relpath: str, path: str) -> Tuple[Tensor, int, str, str, int]:
+def _load_speechcommands_item(
+    relpath: str, path: str
+) -> Tuple[Tensor, int, str, str, int]:
     filepath = os.path.join(path, relpath)
     label, filename = os.path.split(relpath)
     speaker, _ = os.path.splitext(filename)
@@ -54,9 +54,9 @@ class SpeechCommands(Dataset):
         url: Optional[str] = URL,
         split: Optional[str] = "train",
         folder_in_archive: Optional[str] = FOLDER_IN_ARCHIVE,
-        download: Optional[bool] = False
+        download: Optional[bool] = False,
     ) -> None:
-        '''
+        """
         * **中文**
 
         SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_ ，
@@ -108,7 +108,7 @@ class SpeechCommands(Dataset):
 
         :param download: 是否下载数据，默认为False
         :type download: bool, optional
-        '''
+        """
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
         self.label_dict = label_dict
         self.transform = transform
@@ -136,7 +136,9 @@ class SpeechCommands(Dataset):
 
         self._path = os.path.join(root, folder_in_archive)
 
-        self.noise_list = sorted(str(p) for p in Path(self._path).glob('_background_noise_/*.wav'))
+        self.noise_list = sorted(
+            str(p) for p in Path(self._path).glob("_background_noise_/*.wav")
+        )
 
         if download:
             if not os.path.isdir(self._path):
@@ -145,61 +147,74 @@ class SpeechCommands(Dataset):
                     download_url(url, root, md5=checksum)
                 extract_archive(archive, self._path)
         elif not os.path.isdir(self._path):
-            raise FileNotFoundError("Audio data not found. Please specify \"download=True\" and try again.")
-
+            raise FileNotFoundError(
+                'Audio data not found. Please specify "download=True" and try again.'
+            )
 
         if self.split == "train":
             record = os.path.join(self._path, TRAIN_RECORD)
             if os.path.exists(record):
-                with open(record, 'r') as f:
-                    self._walker = list([line.rstrip('\n') for line in f])
+                with open(record, "r") as f:
+                    self._walker = list([line.rstrip("\n") for line in f])
             else:
                 print("No training list, generating...")
-                walker = sorted(str(p) for p in Path(self._path).glob('*/*.wav'))
-                walker = filter(lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker)
+                walker = sorted(str(p) for p in Path(self._path).glob("*/*.wav"))
+                walker = filter(
+                    lambda w: HASH_DIVIDER in w and EXCEPT_FOLDER not in w, walker
+                )
                 walker = map(lambda w: os.path.relpath(w, self._path), walker)
 
                 walker = set(walker)
 
                 val_record = os.path.join(self._path, VAL_RECORD)
-                with open(val_record, 'r') as f:
-                    val_walker = set([line.rstrip('\n') for line in f])
+                with open(val_record, "r") as f:
+                    val_walker = set([line.rstrip("\n") for line in f])
 
                 test_record = os.path.join(self._path, TEST_RECORD)
-                with open(test_record, 'r') as f:
-                    test_walker = set([line.rstrip('\n') for line in f])
+                with open(test_record, "r") as f:
+                    test_walker = set([line.rstrip("\n") for line in f])
 
                 walker = walker - val_walker - test_walker
                 self._walker = list(walker)
 
-                with open(record, 'w') as f:
-                    f.write('\n'.join(self._walker))
+                with open(record, "w") as f:
+                    f.write("\n".join(self._walker))
 
                 print("Training list generated!")
 
-            labels = [self.label_dict.get(os.path.split(relpath)[0]) for relpath in self._walker]
-            label_weights = 1. / np.unique(labels, return_counts=True)[1]
+            labels = [
+                self.label_dict.get(os.path.split(relpath)[0])
+                for relpath in self._walker
+            ]
+            label_weights = 1.0 / np.unique(labels, return_counts=True)[1]
             if self.silence_cnt == 0:
                 label_weights /= np.sum(label_weights)
-                self.weights = torch.DoubleTensor([label_weights[label] for label in labels])
+                self.weights = torch.DoubleTensor(
+                    [label_weights[label] for label in labels]
+                )
             else:
-                silence_weight = 1. / self.silence_cnt
+                silence_weight = 1.0 / self.silence_cnt
                 total_weight = np.sum(label_weights) + silence_weight
                 label_weights /= total_weight
-                self.weights = torch.DoubleTensor([label_weights[label] for label in labels] + [silence_weight / total_weight] * self.silence_cnt)
+                self.weights = torch.DoubleTensor(
+                    [label_weights[label] for label in labels]
+                    + [silence_weight / total_weight] * self.silence_cnt
+                )
 
         else:
             if self.split == "val":
                 record = os.path.join(self._path, VAL_RECORD)
             else:
                 record = os.path.join(self._path, TEST_RECORD)
-            with open(record, 'r') as f:
-                self._walker = list([line.rstrip('\n') for line in f])
+            with open(record, "r") as f:
+                self._walker = list([line.rstrip("\n") for line in f])
 
     def __getitem__(self, n: int) -> Tuple[Tensor, int]:
         if n < len(self._walker):
             fileid = self._walker[n]
-            waveform, sample_rate, label, speaker_id, utterance_number = _load_speechcommands_item(fileid, self._path)
+            waveform, sample_rate, label, speaker_id, utterance_number = (
+                _load_speechcommands_item(fileid, self._path)
+            )
         else:
             # Silence data are randomly and dynamically generated from noise data
 
@@ -209,7 +224,7 @@ class SpeechCommands(Dataset):
 
             # Random crop
             offset = np.random.randint(waveform.shape[1] - self.silence_size)
-            waveform = waveform[:, offset:offset + self.silence_size]
+            waveform = waveform[:, offset : offset + self.silence_size]
             label = "_silence_"
 
         m = waveform.abs().max()
@@ -225,4 +240,4 @@ class SpeechCommands(Dataset):
         return len(self._walker) + self.silence_cnt
 
 
-SPEECHCOMMANDS = SpeechCommands # for backward compatibility
+SPEECHCOMMANDS = SpeechCommands  # for backward compatibility

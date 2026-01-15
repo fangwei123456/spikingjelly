@@ -40,18 +40,17 @@ def _convert_npy_to_npz(src_path: Path, dst_dir: Path, label: int):
     x = np.array([d[1] for d in original_data])
     y = np.array([d[2] for d in original_data])
     p = np.array([d[3] for d in original_data])
-    target_file_path = dst_dir / str(label) / f'{src_path.stem}.npz'
+    target_file_path = dst_dir / str(label) / f"{src_path.stem}.npz"
     utils.np_savez(target_file_path, t=t, x=x, y=y, p=p)
     print(f"[{target_file_path}] saved.")
 
 
 class Bullying10kClassification(NeuromorphicDatasetFolder):
-
     def __init__(
         self,
         root: str,
         train: bool = True,
-        data_type: str = 'event',
+        data_type: str = "event",
         frames_number: Optional[int] = None,
         split_by: Optional[str] = None,
         duration: Optional[int] = None,
@@ -75,9 +74,16 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                 "The argument `train` must be specified as a boolean value."
             )
         super().__init__(
-            root, train, data_type, frames_number, split_by, duration,
-            custom_integrate_function, custom_integrated_frames_dir_name,
-            transform, target_transform
+            root,
+            train,
+            data_type,
+            frames_number,
+            split_by,
+            duration,
+            custom_integrate_function,
+            custom_integrated_frames_dir_name,
+            transform,
+            target_transform,
         )
 
     @classmethod
@@ -90,16 +96,56 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
     @classmethod
     def resource_url_md5(cls) -> List[Tuple[str, str, str]]:
         return [
-            ("handshake.zip", "https://figshare.com/ndownloader/files/41268834", "681d70f499e736a1e805305284ddc425"),
-            ("slapping.zip", "https://figshare.com/ndownloader/files/41247021", "84b41d6805958f9f62f425223916ffc2"),
-            ("punching.zip", "https://figshare.com/ndownloader/files/41263314", "40954f480ab210099d448b7b88fc4719"),
-            ("walking.zip", "https://figshare.com/ndownloader/files/41247024", "56e4cac9c0814ce701c3b2292c15b6a9"),
-            ("fingerguess.zip", "https://figshare.com/ndownloader/files/41253057", "f83114e5b4f0ea57cac86fb080c7e4d7"),
-            ("strangling.zip", "https://figshare.com/ndownloader/files/41261904", "8185ecd6f3147e9b609d22f06270aa86"),
-            ("greeting.zip", "https://figshare.com/ndownloader/files/41268792", "4a763fad728b04c8356db8544f1121fe"),
-            ("pushing.zip", "https://figshare.com/ndownloader/files/41268951", "7986c74ade7149a98672120a89b13ba8"),
-            ("hairgrabs.zip", "https://figshare.com/ndownloader/files/41277855", "a9cf690ed0a3305da4a4b8e110f64db1"),
-            ("kicking.zip", "https://figshare.com/ndownloader/files/41278008", "6c3218f977de4ac29c84a10b17779c33"),
+            (
+                "handshake.zip",
+                "https://figshare.com/ndownloader/files/41268834",
+                "681d70f499e736a1e805305284ddc425",
+            ),
+            (
+                "slapping.zip",
+                "https://figshare.com/ndownloader/files/41247021",
+                "84b41d6805958f9f62f425223916ffc2",
+            ),
+            (
+                "punching.zip",
+                "https://figshare.com/ndownloader/files/41263314",
+                "40954f480ab210099d448b7b88fc4719",
+            ),
+            (
+                "walking.zip",
+                "https://figshare.com/ndownloader/files/41247024",
+                "56e4cac9c0814ce701c3b2292c15b6a9",
+            ),
+            (
+                "fingerguess.zip",
+                "https://figshare.com/ndownloader/files/41253057",
+                "f83114e5b4f0ea57cac86fb080c7e4d7",
+            ),
+            (
+                "strangling.zip",
+                "https://figshare.com/ndownloader/files/41261904",
+                "8185ecd6f3147e9b609d22f06270aa86",
+            ),
+            (
+                "greeting.zip",
+                "https://figshare.com/ndownloader/files/41268792",
+                "4a763fad728b04c8356db8544f1121fe",
+            ),
+            (
+                "pushing.zip",
+                "https://figshare.com/ndownloader/files/41268951",
+                "7986c74ade7149a98672120a89b13ba8",
+            ),
+            (
+                "hairgrabs.zip",
+                "https://figshare.com/ndownloader/files/41277855",
+                "a9cf690ed0a3305da4a4b8e110f64db1",
+            ),
+            (
+                "kicking.zip",
+                "https://figshare.com/ndownloader/files/41278008",
+                "6c3218f977de4ac29c84a10b17779c33",
+            ),
         ]
 
     @classmethod
@@ -123,10 +169,8 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
                     shutil.copy(src_file, dst_file)
                 else:
                     zip_file = download_root / file_name
-                    print(f'Extract [{zip_file}] to [{extract_root}].')
-                    futures.append(tpe.submit(
-                        extract_archive, zip_file, extract_root
-                    ))
+                    print(f"Extract [{zip_file}] to [{extract_root}].")
+                    futures.append(tpe.submit(extract_archive, zip_file, extract_root))
 
             for future in futures:
                 future.result()
@@ -147,16 +191,20 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         )
 
         all_files_labels = []
-        categories = list(filter(
-            lambda x: (not x.endswith(".json")) and (not x.startswith(".")),
-            os.listdir(extract_root)
-        ))
+        categories = list(
+            filter(
+                lambda x: (not x.endswith(".json")) and (not x.startswith(".")),
+                os.listdir(extract_root),
+            )
+        )
         for c in categories:
             cpath = extract_root / c
             for dir_path, _, dir_file_names in os.walk(cpath):
                 dir_path = Path(dir_path)
                 for dfn in dir_file_names:
-                    all_files_labels.append((dir_path / dfn, BULLYING10K_CATEGORY_LABEL[c]))
+                    all_files_labels.append(
+                        (dir_path / dfn, BULLYING10K_CATEGORY_LABEL[c])
+                    )
         num_files = len(all_files_labels)
         all_files_labels = np.array(all_files_labels)
         print(f"Found {num_files} files in total.")
@@ -175,28 +223,23 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         )
 
         t_ckp = time.time()
-        with ThreadPoolExecutor(max_workers=min(
-            multiprocessing.cpu_count(),
-            configure.max_threads_number_for_datasets_preprocess
-        )) as tpe:
+        with ThreadPoolExecutor(
+            max_workers=min(
+                multiprocessing.cpu_count(),
+                configure.max_threads_number_for_datasets_preprocess,
+            )
+        ) as tpe:
             futures = []
             print(
-                f"Start the ThreadPoolExecutor with max workers"
-                f" = [{tpe._max_workers}]."
+                f"Start the ThreadPoolExecutor with max workers = [{tpe._max_workers}]."
             )
             for fpath, label in train_files_labels:
-                futures.append(tpe.submit(
-                    _convert_npy_to_npz,
-                    fpath, train_dir, label
-                ))
+                futures.append(tpe.submit(_convert_npy_to_npz, fpath, train_dir, label))
             for fpath, label in test_files_labels:
-                futures.append(tpe.submit(
-                    _convert_npy_to_npz,
-                    fpath, test_dir, label
-                ))
+                futures.append(tpe.submit(_convert_npy_to_npz, fpath, test_dir, label))
             for future in futures:
                 future.result()
-        print(f'Used time = [{round(time.time() - t_ckp, 2)}s].')
+        print(f"Used time = [{round(time.time() - t_ckp, 2)}s].")
         print(
             f"All npy files have been converted into npz files "
             f"and into [{train_dir, test_dir}]."

@@ -48,3 +48,12 @@ nir = ["nir", "nirtorch"]
 [project.urls]
 Homepage = "https://github.com/fangwei123456/spikingjelly"
 Documentation = "https://spikingjelly.readthedocs.io/"
+
+[tool.ruff]
+src = ["spikingjelly", "test"]
+exclude = ["*.ipynb"]
+line-length = 88
+
+[tool.ruff.format]
+docstring-code-format = true
+quote-style = "double"

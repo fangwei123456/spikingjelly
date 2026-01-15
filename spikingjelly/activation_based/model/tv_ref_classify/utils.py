@@ -61,7 +61,11 @@ class SmoothedValue:
 
     def __str__(self):
         return self.fmt.format(
-            median=self.median, avg=self.avg, global_avg=self.global_avg, max=self.max, value=self.value
+            median=self.median,
+            avg=self.avg,
+            global_avg=self.global_avg,
+            max=self.max,
+            value=self.value,
         )
 
 
@@ -82,7 +86,9 @@ class MetricLogger:
             return self.meters[attr]
         if attr in self.__dict__:
             return self.__dict__[attr]
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{attr}'")
+        raise AttributeError(
+            f"'{type(self).__name__}' object has no attribute '{attr}'"
+        )
 
     def __str__(self):
         loss_str = []
@@ -120,7 +126,14 @@ class MetricLogger:
             )
         else:
             log_msg = self.delimiter.join(
-                [header, "[{0" + space_fmt + "}/{1}]", "eta: {eta}", "{meters}", "time: {time}", "data: {data}"]
+                [
+                    header,
+                    "[{0" + space_fmt + "}/{1}]",
+                    "eta: {eta}",
+                    "{meters}",
+                    "time: {time}",
+                    "data: {data}",
+                ]
             )
         MB = 1024.0 * 1024.0
         for obj in iterable:
@@ -145,7 +158,12 @@ class MetricLogger:
                 else:
                     print(
                         log_msg.format(
-                            i, len(iterable), eta=eta_string, meters=str(self), time=str(iter_time), data=str(data_time)
+                            i,
+                            len(iterable),
+                            eta=eta_string,
+                            meters=str(self),
+                            time=str(iter_time),
+                            data=str(data_time),
                         )
                     )
             i += 1
@@ -169,13 +187,17 @@ class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
         super().__init__(model, device, ema_avg)
 
     def update_parameters(self, model):
-        for p_swa, p_model in zip(self.module.state_dict().values(), model.state_dict().values()):
+        for p_swa, p_model in zip(
+            self.module.state_dict().values(), model.state_dict().values()
+        ):
             device = p_swa.device
             p_model_ = p_model.detach().to(device)
             if self.n_averaged == 0:
                 p_swa.detach().copy_(p_model_)
             else:
-                p_swa.detach().copy_(self.avg_fn(p_swa.detach(), p_model_, self.n_averaged.to(device)))
+                p_swa.detach().copy_(
+                    self.avg_fn(p_swa.detach(), p_model_, self.n_averaged.to(device))
+                )
         self.n_averaged += 1
 
 
@@ -272,7 +294,10 @@ def init_distributed_mode(args):
     args.dist_backend = "nccl"
     print(f"| distributed init (rank {args.rank}): {args.dist_url}", flush=True)
     torch.distributed.init_process_group(
-        backend=args.dist_backend, init_method=args.dist_url, world_size=args.world_size, rank=args.rank
+        backend=args.dist_backend,
+        init_method=args.dist_url,
+        world_size=args.world_size,
+        rank=args.rank,
     )
     setup_for_distributed(args.rank == 0)
 
@@ -296,7 +321,9 @@ def average_checkpoints(inputs):
         with open(fpath, "rb") as f:
             state = torch.load(
                 f,
-                map_location=(lambda s, _: torch.serialization.default_restore_location(s, "cpu")),
+                map_location=(
+                    lambda s, _: torch.serialization.default_restore_location(s, "cpu")
+                ),
             )
         # Copies over the settings from the first checkpoint
         if new_state is None:
@@ -381,7 +408,9 @@ def store_model_weights(model, checkpoint_path, checkpoint_key="model", strict=T
     # and remove unnecessary weights (such as auxiliaries, etc)
     if checkpoint_key == "model_ema":
         del checkpoint[checkpoint_key]["n_averaged"]
-        torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(checkpoint[checkpoint_key], "module.")
+        torch.nn.modules.utils.consume_prefix_in_state_dict_if_present(
+            checkpoint[checkpoint_key], "module."
+        )
     model.load_state_dict(checkpoint[checkpoint_key], strict=strict)
 
     tmp_path = os.path.join(output_dir, str(model.__hash__()))

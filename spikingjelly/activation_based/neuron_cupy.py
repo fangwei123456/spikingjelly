@@ -34,8 +34,16 @@ class IFNodeCuPy(torch.autograd.Function):
             blocks = (numel // 4 + threads - 1) // threads
 
         forward_kernel(
-            (blocks,), (threads,),
-            (inputs.data_ptr(), spike_seq.data_ptr(), h_seq.data_ptr(), v_seq.data_ptr(), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                inputs.data_ptr(),
+                spike_seq.data_ptr(),
+                h_seq.data_ptr(),
+                v_seq.data_ptr(),
+                numel,
+                T,
+            ),
         )
 
         ctx.save_for_backward(h_seq)
@@ -61,17 +69,30 @@ class IFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         backward_kernel(
-            (blocks,), (threads,),
-            (grad_spike_seq.data_ptr(), grad_v_seq.data_ptr(),
-             h_seq.data_ptr(), grad_x_seq.data_ptr(), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                grad_spike_seq.data_ptr(),
+                grad_v_seq.data_ptr(),
+                h_seq.data_ptr(),
+                grad_x_seq.data_ptr(),
+                numel,
+                T,
+            ),
         )
 
         return grad_x_seq, None, None
 
 
 class IFNode(nn.Module):
-    def __init__(self, v_threshold: float = 1., v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False, store_v_seq: bool = False):
+    def __init__(
+        self,
+        v_threshold: float = 1.0,
+        v_reset: float = 0.0,
+        surrogate_function: Callable = surrogate.Sigmoid(),
+        detach_reset: bool = False,
+        store_v_seq: bool = False,
+    ):
         super().__init__()
         self.v_th = v_threshold
         self.v_reset = v_reset
@@ -82,7 +103,7 @@ class IFNode(nn.Module):
         self.cupy_backward_kernel = None
         self.hard_reset = True
         if self.v_reset is None:
-            self.v_reset = 0.
+            self.v_reset = 0.0
             self.hard_reset = False
 
         self.alpha = 0
@@ -90,14 +111,18 @@ class IFNode(nn.Module):
             self.alpha = surrogate_function.alpha
         elif isinstance(surrogate_function, surrogate.ATan):
             self.alpha = surrogate_function.alpha * 2
-            self.pai = math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
+            self.pai = (
+                math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
+            )
         else:
             raise f"Surrogate: Sigmoid | ATan, alpha: {self.alpha}"
         self.sn_apply = IFNodeCuPy.apply
 
     def extra_repr(self):
-        return f"IFNode CuPy: v_threshold={self.v_th}, v_reset={self.v_reset}, detach_reset={self.detach_reset}," \
-               f" store_v_seq={self.store_v_seq}"
+        return (
+            f"IFNode CuPy: v_threshold={self.v_th}, v_reset={self.v_reset}, detach_reset={self.detach_reset},"
+            f" store_v_seq={self.store_v_seq}"
+        )
 
     def get_cupy_forward_codes(self, dtype=torch.float32):
         if dtype == torch.float16:
@@ -106,7 +131,7 @@ class IFNode(nn.Module):
             return self.get_cupy_codes_forward_float()
 
     def get_cupy_codes_forward_float(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void IFNodeFPTTFLOATKernel(
@@ -165,7 +190,7 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
                 h_seq[index + i] = v[i];
             }
         }
-'''
+"""
 
         # reset
         if self.hard_reset:
@@ -208,7 +233,7 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
         return kernel_code, "IFNodeFPTTFLOATKernel"
 
     def get_cupy_codes_forward_half(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #include <cuda_fp16.h>
 
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
@@ -271,7 +296,7 @@ extern "C" __global__ void IFNodeFPTTHALFKernel(
                 h_seq[index + i] = ptr[i];
             }
         }
-'''
+"""
 
         if self.hard_reset:
             kernel_code += r"""
@@ -626,17 +651,23 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
 
     def get_cupy_kernel(self, dtype=torch.float32):
         forward_codes, kernel_name = self.get_cupy_forward_codes(dtype)
-        self.cupy_forward_kernel = cp.RawKernel(forward_codes, kernel_name, backend="nvrtc")
+        self.cupy_forward_kernel = cp.RawKernel(
+            forward_codes, kernel_name, backend="nvrtc"
+        )
 
         backward_codes, kernel_name = self.get_cupy_backward_codes(dtype)
-        self.cupy_backward_kernel = cp.RawKernel(backward_codes, kernel_name, backend="nvrtc")
+        self.cupy_backward_kernel = cp.RawKernel(
+            backward_codes, kernel_name, backend="nvrtc"
+        )
 
     def forward(self, x):
         if self.cupy_forward_kernel is None:
             self.get_cupy_kernel(x.dtype)
 
         with DeviceEnvironment(x.get_device()):
-            spike_seq, v_seq = self.sn_apply(x, self.cupy_forward_kernel, self.cupy_backward_kernel)
+            spike_seq, v_seq = self.sn_apply(
+                x, self.cupy_forward_kernel, self.cupy_backward_kernel
+            )
 
         if self.store_v_seq:
             return spike_seq, v_seq
@@ -662,8 +693,16 @@ class LIFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         forward_kernel(
-            (blocks,), (threads,),
-            (inputs.data_ptr(), spike_seq.data_ptr(), h_seq.data_ptr(), v_seq.data_ptr(), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                inputs.data_ptr(),
+                spike_seq.data_ptr(),
+                h_seq.data_ptr(),
+                v_seq.data_ptr(),
+                numel,
+                T,
+            ),
         )
 
         ctx.save_for_backward(h_seq)
@@ -689,20 +728,34 @@ class LIFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         backward_kernel(
-            (blocks,), (threads,),
-            (grad_spike_seq.data_ptr(), grad_v_seq.data_ptr(),
-             h_seq.data_ptr(), grad_x_seq.data_ptr(), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                grad_spike_seq.data_ptr(),
+                grad_v_seq.data_ptr(),
+                h_seq.data_ptr(),
+                grad_x_seq.data_ptr(),
+                numel,
+                T,
+            ),
         )
 
         return grad_x_seq, None, None
 
 
 class LIFNode(nn.Module):
-    def __init__(self, tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False, store_v_seq: bool = False):
+    def __init__(
+        self,
+        tau: float = 2.0,
+        decay_input: bool = True,
+        v_threshold: float = 1.0,
+        v_reset: float = 0.0,
+        surrogate_function: Callable = surrogate.Sigmoid(),
+        detach_reset: bool = False,
+        store_v_seq: bool = False,
+    ):
         super().__init__()
-        self.decay = 1. / tau
+        self.decay = 1.0 / tau
         self.decay_input = decay_input
         self.v_th = v_threshold
         self.v_reset = v_reset
@@ -713,7 +766,7 @@ class LIFNode(nn.Module):
         self.cupy_backward_kernel = None
         self.hard_reset = True
         if self.v_reset is None:
-            self.v_reset = 0.
+            self.v_reset = 0.0
             self.hard_reset = False
 
         self.alpha = 0
@@ -722,14 +775,18 @@ class LIFNode(nn.Module):
             self.alpha = surrogate_function.alpha
         elif isinstance(surrogate_function, surrogate.ATan):
             self.alpha = surrogate_function.alpha * 2
-            self.pai = math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
+            self.pai = (
+                math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
+            )
         else:
             raise f"Surrogate: Sigmoid | ATan, alpha: {self.alpha}"
         self.sn_apply = LIFNodeCuPy.apply
 
     def extra_repr(self):
-        return f"LIFNode CuPy: decay={self.decay}, decay_input={self.decay_input}, v_threshold={self.v_th}," \
-               f" v_reset={self.v_reset}, detach_reset={self.detach_reset}, store_v_seq={self.store_v_seq}"
+        return (
+            f"LIFNode CuPy: decay={self.decay}, decay_input={self.decay_input}, v_threshold={self.v_th},"
+            f" v_reset={self.v_reset}, detach_reset={self.detach_reset}, store_v_seq={self.store_v_seq}"
+        )
 
     def get_cupy_forward_codes(self, dtype=torch.float32):
         if dtype == torch.float16:
@@ -738,7 +795,7 @@ class LIFNode(nn.Module):
             return self.get_cupy_codes_forward_float()
 
     def get_cupy_codes_forward_float(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void LIFNodeFPTTFLOATKernel(
@@ -779,7 +836,7 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
                 v[i] = inputs[index + i];
             }
         }
-'''
+"""
         # neuron charge
         if self.decay_input:
             kernel_code += r"""
@@ -853,7 +910,7 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
         return kernel_code, "LIFNodeFPTTFLOATKernel"
 
     def get_cupy_codes_forward_half(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #include <cuda_fp16.h>
 
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
@@ -897,7 +954,7 @@ extern "C" __global__ void LIFNodeFPTTHALFKernel(
                 ptr[i] = inputs[index + i];
             }
         }
-'''
+"""
         # neuron charge
         if self.decay_input:
             kernel_code += r"""
@@ -1353,17 +1410,23 @@ void LIFNodeBPTTKernel(
 
     def get_cupy_kernel(self, dtype=torch.float32):
         forward_codes, kernel_name = self.get_cupy_forward_codes(dtype)
-        self.cupy_forward_kernel = cp.RawKernel(forward_codes, kernel_name, backend="nvrtc")
+        self.cupy_forward_kernel = cp.RawKernel(
+            forward_codes, kernel_name, backend="nvrtc"
+        )
 
         backward_codes, kernel_name = self.get_cupy_backward_codes(dtype)
-        self.cupy_backward_kernel = cp.RawKernel(backward_codes, kernel_name, backend="nvrtc")
+        self.cupy_backward_kernel = cp.RawKernel(
+            backward_codes, kernel_name, backend="nvrtc"
+        )
 
     def forward(self, x):
         if self.cupy_forward_kernel is None:
             self.get_cupy_kernel(x.dtype)
 
         with DeviceEnvironment(x.get_device()):
-            spike_seq, v_seq = self.sn_apply(x, self.cupy_forward_kernel, self.cupy_backward_kernel)
+            spike_seq, v_seq = self.sn_apply(
+                x, self.cupy_forward_kernel, self.cupy_backward_kernel
+            )
 
         if self.store_v_seq:
             return spike_seq, v_seq
@@ -1390,8 +1453,17 @@ class PLIFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         forward_kernel(
-            (blocks,), (threads,),
-            (inputs.data_ptr(), spike_seq.data_ptr(), h_seq.data_ptr(), v_seq.data_ptr(), np.float32(decay), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                inputs.data_ptr(),
+                spike_seq.data_ptr(),
+                h_seq.data_ptr(),
+                v_seq.data_ptr(),
+                np.float32(decay),
+                numel,
+                T,
+            ),
         )
 
         ctx.save_for_backward(h_seq, v_seq)
@@ -1408,7 +1480,9 @@ class PLIFNodeCuPy(torch.autograd.Function):
         grad_v_seq = grad_v_seq.contiguous()
 
         grad_x_seq = torch.empty_like(h_seq, dtype=h_seq.dtype)
-        grad_tau_seq = torch.zeros([1], device=h_seq.device, requires_grad=True, dtype=torch.float32)
+        grad_tau_seq = torch.zeros(
+            [1], device=h_seq.device, requires_grad=True, dtype=torch.float32
+        )
 
         T = grad_spike_seq.shape[0]
         numel = grad_spike_seq.numel() // T
@@ -1420,21 +1494,40 @@ class PLIFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         backward_kernel(
-            (blocks,), (threads,),
-            (grad_spike_seq.data_ptr(), grad_v_seq.data_ptr(), h_seq.data_ptr(), v_seq.data_ptr(),
-             grad_x_seq.data_ptr(), grad_tau_seq.data_ptr(), np.float32(ctx.decay), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                grad_spike_seq.data_ptr(),
+                grad_v_seq.data_ptr(),
+                h_seq.data_ptr(),
+                v_seq.data_ptr(),
+                grad_x_seq.data_ptr(),
+                grad_tau_seq.data_ptr(),
+                np.float32(ctx.decay),
+                numel,
+                T,
+            ),
         )
 
         return grad_x_seq, grad_tau_seq, None, None
 
 
 class ParametricLIFNode(nn.Module):
-    def __init__(self, init_tau: float = 2., decay_input: bool = True, v_threshold: float = 1.,
-                 v_reset: float = 0., surrogate_function: Callable = surrogate.Sigmoid(),
-                 detach_reset: bool = False, store_v_seq: bool = False):
+    def __init__(
+        self,
+        init_tau: float = 2.0,
+        decay_input: bool = True,
+        v_threshold: float = 1.0,
+        v_reset: float = 0.0,
+        surrogate_function: Callable = surrogate.Sigmoid(),
+        detach_reset: bool = False,
+        store_v_seq: bool = False,
+    ):
         super().__init__()
-        init_w = - math.log(init_tau - 1.)
-        self.w = nn.Parameter(torch.as_tensor(init_w, dtype=torch.float32), requires_grad=True)
+        init_w = -math.log(init_tau - 1.0)
+        self.w = nn.Parameter(
+            torch.as_tensor(init_w, dtype=torch.float32), requires_grad=True
+        )
 
         self.decay_input = decay_input
         self.v_th = v_threshold
@@ -1446,7 +1539,7 @@ class ParametricLIFNode(nn.Module):
         self.cupy_backward_kernel = None
         self.hard_reset = True
         if self.v_reset is None:
-            self.v_reset = 0.
+            self.v_reset = 0.0
             self.hard_reset = False
 
         self.alpha = 0
@@ -1454,17 +1547,21 @@ class ParametricLIFNode(nn.Module):
             self.alpha = surrogate_function.alpha
         elif isinstance(surrogate_function, surrogate.ATan):
             self.alpha = surrogate_function.alpha * 2
-            self.pai = math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
+            self.pai = (
+                math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
+            )
         else:
             raise f"Surrogate: Sigmoid | ATan, alpha: {self.alpha}"
         self.sn_apply = PLIFNodeCuPy.apply
 
     def extra_repr(self):
         with torch.no_grad():
-            tau = 1. / self.w.sigmoid()
+            tau = 1.0 / self.w.sigmoid()
 
-        return f"ParametricLIFNode CuPy: tau={tau}, decay_input={self.decay_input}, v_threshold={self.v_th}, " \
-               f"v_reset={self.v_reset}, detach_reset={self.detach_reset}, store_v_seq={self.store_v_seq}"
+        return (
+            f"ParametricLIFNode CuPy: tau={tau}, decay_input={self.decay_input}, v_threshold={self.v_th}, "
+            f"v_reset={self.v_reset}, detach_reset={self.detach_reset}, store_v_seq={self.store_v_seq}"
+        )
 
     def get_cupy_forward_codes(self, dtype=torch.float32):
         if dtype == torch.float16:
@@ -1473,7 +1570,7 @@ class ParametricLIFNode(nn.Module):
             return self.get_cupy_codes_forward_float()
 
     def get_cupy_codes_forward_float(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
@@ -1514,7 +1611,7 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
                 v[i] = inputs[index + i];
             }
         }
-'''
+"""
         # neuron charge
         if self.decay_input:
             kernel_code += r"""
@@ -1588,7 +1685,7 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
         return kernel_code, "PLIFNodeFPTTFLOATKernel"
 
     def get_cupy_codes_forward_half(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #include <cuda_fp16.h>
 
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
@@ -1632,7 +1729,7 @@ extern "C" __global__ void PLIFNodeFPTTHALFKernel(
                 ptr[i] = inputs[index + i];
             }
         }
-'''
+"""
 
         if self.decay_input:
             kernel_code += r"""
@@ -2196,17 +2293,23 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
 
     def get_cupy_kernel(self, dtype=torch.float32):
         forward_codes, kernel_name = self.get_cupy_forward_codes(dtype)
-        self.cupy_forward_kernel = cp.RawKernel(forward_codes, kernel_name, backend="nvrtc")
+        self.cupy_forward_kernel = cp.RawKernel(
+            forward_codes, kernel_name, backend="nvrtc"
+        )
 
         backward_codes, kernel_name = self.get_cupy_backward_codes(dtype)
-        self.cupy_backward_kernel = cp.RawKernel(backward_codes, kernel_name, backend="nvrtc")
+        self.cupy_backward_kernel = cp.RawKernel(
+            backward_codes, kernel_name, backend="nvrtc"
+        )
 
     def forward(self, x):
         if self.cupy_forward_kernel is None:
             self.get_cupy_kernel(x.dtype)
 
         with DeviceEnvironment(x.get_device()):
-            spike_seq, v_seq = self.sn_apply(x, self.w.sigmoid(), self.cupy_forward_kernel, self.cupy_backward_kernel)
+            spike_seq, v_seq = self.sn_apply(
+                x, self.w.sigmoid(), self.cupy_forward_kernel, self.cupy_backward_kernel
+            )
 
         if self.store_v_seq:
             return spike_seq, v_seq
@@ -2231,8 +2334,9 @@ class ILIFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         forward_kernel(
-            (blocks,), (threads,),
-            (inputs.data_ptr(), spike_seq.data_ptr(), h_seq.data_ptr(), numel, T)
+            (blocks,),
+            (threads,),
+            (inputs.data_ptr(), spike_seq.data_ptr(), h_seq.data_ptr(), numel, T),
         )
 
         ctx.save_for_backward(h_seq)
@@ -2257,16 +2361,30 @@ class ILIFNodeCuPy(torch.autograd.Function):
         else:
             blocks = (numel // 4 + threads - 1) // threads
         backward_kernel(
-            (blocks,), (threads,),
-            (grad_spike_seq.data_ptr(), h_seq.data_ptr(), grad_x_seq.data_ptr(), numel, T)
+            (blocks,),
+            (threads,),
+            (
+                grad_spike_seq.data_ptr(),
+                h_seq.data_ptr(),
+                grad_x_seq.data_ptr(),
+                numel,
+                T,
+            ),
         )
 
         return grad_x_seq, None, None
 
 
 class ILIFNode(nn.Module):
-    def __init__(self, decay: float = 0.25, min_value: float = 0.0, max_value: float = 4.0, store_v_seq: bool = False,
-                 *args, **kwargs):
+    def __init__(
+        self,
+        decay: float = 0.25,
+        min_value: float = 0.0,
+        max_value: float = 4.0,
+        store_v_seq: bool = False,
+        *args,
+        **kwargs,
+    ):
         super().__init__()
         self.decay = decay
         self.min_value = float(min_value)
@@ -2288,7 +2406,7 @@ class ILIFNode(nn.Module):
             return self.get_cupy_codes_forward_float()
 
     def get_cupy_codes_forward_float(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
@@ -2328,7 +2446,7 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
                 v[i] = inputs[index + i];
             }
         }
-'''
+"""
         # neuron charge
         kernel_code += r"""
 #pragma unroll
@@ -2361,7 +2479,9 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
             v[i] = min(v[i], max_value);
             spikes[i] = floor(v[i] + 0.5f);
         }
-""".replace("min_value", f"{self.min_value}f").replace("max_value", f"{self.max_value}f")
+""".replace("min_value", f"{self.min_value}f").replace(
+            "max_value", f"{self.max_value}f"
+        )
 
         kernel_code += r"""
         if (isLegalIndex)
@@ -2382,7 +2502,7 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
         return kernel_code, "ILIFNodeFPTTFLOATKernel"
 
     def get_cupy_codes_forward_half(self):
-        kernel_code = r'''
+        kernel_code = r"""
 #include <cuda_fp16.h>
 
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
@@ -2425,7 +2545,7 @@ extern "C" __global__ void ILIFNodeFPTTHALFKernel(
                 ptr[i] = inputs[index + i];
             }
         }
-'''
+"""
         # neuron charge
         kernel_code += r"""
 #pragma unroll
@@ -2460,7 +2580,9 @@ extern "C" __global__ void ILIFNodeFPTTHALFKernel(
             v[i] += __float2half2_rn(0.5f);
             spikes[i] = h2floor(v[i]);
         }
-""".replace("min_value", f"{self.min_value}f").replace("max_value", f"{self.max_value}f")
+""".replace("min_value", f"{self.min_value}f").replace(
+            "max_value", f"{self.max_value}f"
+        )
 
         kernel_code += r"""
         if (isLegalIndex)
@@ -2546,7 +2668,9 @@ extern "C" __global__ void ILIFNodeBPTTFLOATKernel(
             if (h[i] < min_value || h[i] > max_value)
             { grad_spike[i] = 0; }
         }
-""".replace("min_value", f"{self.min_value}f").replace("max_value", f"{self.max_value}f")
+""".replace("min_value", f"{self.min_value}f").replace(
+            "max_value", f"{self.max_value}f"
+        )
 
         kernel_code += r"""
 #pragma unroll
@@ -2635,7 +2759,9 @@ extern "C" __global__ void ILIFNodeBPTTHALFKernel(
             if (h_ptr[i] < __float2half_rn(min_value) || h_ptr[i] > __float2half_rn(max_value)) 
             { s_ptr[i] = __float2half_rn(0); }
         }
-""".replace("min_value", f"{self.min_value}f").replace("max_value", f"{self.max_value}f")
+""".replace("min_value", f"{self.min_value}f").replace(
+            "max_value", f"{self.max_value}f"
+        )
 
         kernel_code += r"""
 #pragma unroll
@@ -2663,16 +2789,22 @@ extern "C" __global__ void ILIFNodeBPTTHALFKernel(
 
     def get_cupy_kernel(self, dtype=torch.float32):
         forward_codes, kernel_name = self.get_cupy_forward_codes(dtype)
-        self.cupy_forward_kernel = cp.RawKernel(forward_codes, kernel_name, backend="nvrtc")
+        self.cupy_forward_kernel = cp.RawKernel(
+            forward_codes, kernel_name, backend="nvrtc"
+        )
 
         backward_codes, kernel_name = self.get_cupy_backward_codes(dtype)
-        self.cupy_backward_kernel = cp.RawKernel(backward_codes, kernel_name, backend="nvrtc")
+        self.cupy_backward_kernel = cp.RawKernel(
+            backward_codes, kernel_name, backend="nvrtc"
+        )
 
     def forward(self, x):
         if self.cupy_forward_kernel is None:
             self.get_cupy_kernel(x.dtype)
 
         with DeviceEnvironment(x.get_device()):
-            spike_seq = self.sn_apply(x, self.cupy_forward_kernel, self.cupy_backward_kernel)
+            spike_seq = self.sn_apply(
+                x, self.cupy_forward_kernel, self.cupy_backward_kernel
+            )
 
         return spike_seq

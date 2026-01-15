@@ -3,9 +3,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                    plot_colorbar=True, colorbar_y_label='magnitude', x_max=None, figsize=(12, 8), dpi=200):
-    '''
+def plot_2d_heatmap(
+    array: np.ndarray,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    int_x_ticks=True,
+    int_y_ticks=True,
+    plot_colorbar=True,
+    colorbar_y_label="magnitude",
+    x_max=None,
+    figsize=(12, 8),
+    dpi=200,
+):
+    """
     :param array: shape=[T, N]的任意数组
     :param title: 热力图的标题
     :param xlabel: 热力图的x轴的label
@@ -28,7 +39,7 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
         from matplotlib import pyplot as plt
         import numpy as np
 
-        lif = neuron.LIFNode(tau=100.)
+        lif = neuron.LIFNode(tau=100.0)
         x = torch.rand(size=[32]) * 4
         T = 50
         s_list = []
@@ -40,22 +51,31 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
         s_list = torch.cat(s_list)
         v_list = torch.cat(v_list)
 
-        visualizing.plot_2d_heatmap(array=np.asarray(v_list), title='Membrane Potentials', xlabel='Simulating Step',
-                                    ylabel='Neuron Index', int_x_ticks=True, x_max=T, dpi=200)
+        visualizing.plot_2d_heatmap(
+            array=np.asarray(v_list),
+            title="Membrane Potentials",
+            xlabel="Simulating Step",
+            ylabel="Neuron Index",
+            int_x_ticks=True,
+            x_max=T,
+            dpi=200,
+        )
         plt.show()
 
     .. image:: ../_static/API/visualizing/plot_2d_heatmap.*
         :width: 100%
 
-    '''
+    """
     if array.ndim != 2:
         raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
 
     fig, heatmap = plt.subplots(figsize=figsize, dpi=dpi)
     if x_max is not None:
-        im = heatmap.imshow(array.T, aspect='auto', extent=[-0.5, x_max, array.shape[1] - 0.5, -0.5])
+        im = heatmap.imshow(
+            array.T, aspect="auto", extent=[-0.5, x_max, array.shape[1] - 0.5, -0.5]
+        )
     else:
-        im = heatmap.imshow(array.T, aspect='auto')
+        im = heatmap.imshow(array.T, aspect="auto")
 
     heatmap.set_title(title)
     heatmap.set_xlabel(xlabel)
@@ -68,12 +88,23 @@ def plot_2d_heatmap(array: np.ndarray, title: str, xlabel: str, ylabel: str, int
 
     if plot_colorbar:
         cbar = heatmap.figure.colorbar(im)
-        cbar.ax.set_ylabel(colorbar_y_label, rotation=90, va='top')
+        cbar.ax.set_ylabel(colorbar_y_label, rotation=90, va="top")
         cbar.ax.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     return fig
 
-def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, zlabel: str, int_x_ticks=True, int_y_ticks=True, int_z_ticks=False, dpi=200):
-    '''
+
+def plot_2d_bar_in_3d(
+    array: np.ndarray,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    zlabel: str,
+    int_x_ticks=True,
+    int_y_ticks=True,
+    int_z_ticks=False,
+    dpi=200,
+):
+    """
     :param array: shape=[T, N]的任意数组
     :param title: 图的标题
     :param xlabel: x轴的label
@@ -99,9 +130,17 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
         init_firing_rate = torch.rand(size=[N])
         for i in range(Epochs):
             firing_rate[i] = torch.softmax(init_firing_rate * (i + 1) ** 2, dim=0)
-        visualizing.plot_2d_bar_in_3d(firing_rate.numpy(), title='spiking rates of output layer', xlabel='neuron index',
-                                      ylabel='training epoch', zlabel='spiking rate', int_x_ticks=True, int_y_ticks=True,
-                                      int_z_ticks=False, dpi=200)
+        visualizing.plot_2d_bar_in_3d(
+            firing_rate.numpy(),
+            title="spiking rates of output layer",
+            xlabel="neuron index",
+            ylabel="training epoch",
+            zlabel="spiking rate",
+            int_x_ticks=True,
+            int_y_ticks=True,
+            int_z_ticks=False,
+            dpi=200,
+        )
         plt.show()
 
     .. image:: ../_static/API/visualizing/plot_2d_bar_in_3d.png
@@ -117,7 +156,7 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
 
         neuron_num = 4
         T = 50
-        lif_node = neuron.LIFNode(tau=100.)
+        lif_node = neuron.LIFNode(tau=100.0)
         w = torch.rand([neuron_num]) * 10
         v_list = []
         for t in range(T):
@@ -125,26 +164,36 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
             v_list.append(lif_node.v.unsqueeze(0))
 
         v_list = torch.cat(v_list)
-        visualizing.plot_2d_bar_in_3d(v_list, title='voltage of neurons', xlabel='neuron index',
-                                      ylabel='simulating step', zlabel='voltage', int_x_ticks=True, int_y_ticks=True,
-                                      int_z_ticks=False, dpi=200)
+        visualizing.plot_2d_bar_in_3d(
+            v_list,
+            title="voltage of neurons",
+            xlabel="neuron index",
+            ylabel="simulating step",
+            zlabel="voltage",
+            int_x_ticks=True,
+            int_y_ticks=True,
+            int_z_ticks=False,
+            dpi=200,
+        )
         plt.show()
 
     .. image:: ../_static/API/visualizing/plot_2d_bar_in_3d_1.png
 
-    '''
+    """
     if array.ndim != 2:
         raise ValueError(f"Expected 2D array, got {array.ndim}D array instead")
 
     fig = plt.figure(dpi=dpi)
-    ax = fig.add_subplot(111, projection='3d')
+    ax = fig.add_subplot(111, projection="3d")
     ax.set_title(title)
-    colormap = plt.get_cmap('tab10')  # cmap的种类参见https://matplotlib.org/gallery/color/colormap_reference.html
+    colormap = plt.get_cmap(
+        "tab10"
+    )  # cmap的种类参见https://matplotlib.org/gallery/color/colormap_reference.html
 
     array_T = array.T
     xs = np.arange(array_T.shape[1])
     for i in range(array_T.shape[0]):
-        ax.bar(xs, array_T[i], i, zdir='x', color=colormap(i % 10), alpha=0.8)
+        ax.bar(xs, array_T[i], i, zdir="x", color=colormap(i % 10), alpha=0.8)
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.set_zlabel(zlabel)
@@ -153,9 +202,20 @@ def plot_2d_bar_in_3d(array: np.ndarray, title: str, xlabel: str, ylabel: str, z
     ax.zaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_z_ticks))
     return fig
 
-def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int_x_ticks=True, int_y_ticks=True,
-                   plot_firing_rate=True, firing_rate_map_title='firing rate', figsize=(12, 8), dpi=200):
-    '''
+
+def plot_1d_spikes(
+    spikes: np.asarray,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    int_x_ticks=True,
+    int_y_ticks=True,
+    plot_firing_rate=True,
+    firing_rate_map_title="firing rate",
+    figsize=(12, 8),
+    dpi=200,
+):
+    """
 
 
     :param spikes: shape=[T, N]的np数组，其中的元素只为0或1，表示N个时长为T的脉冲数据
@@ -179,7 +239,7 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         from matplotlib import pyplot as plt
         import numpy as np
 
-        lif = neuron.LIFNode(tau=100.)
+        lif = neuron.LIFNode(tau=100.0)
         x = torch.rand(size=[32]) * 4
         T = 50
         s_list = []
@@ -191,14 +251,19 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         s_list = torch.cat(s_list)
         v_list = torch.cat(v_list)
 
-        visualizing.plot_1d_spikes(spikes=np.asarray(s_list), title='Membrane Potentials', xlabel='Simulating Step',
-                                   ylabel='Neuron Index', dpi=200)
+        visualizing.plot_1d_spikes(
+            spikes=np.asarray(s_list),
+            title="Membrane Potentials",
+            xlabel="Simulating Step",
+            ylabel="Neuron Index",
+            dpi=200,
+        )
         plt.show()
 
     .. image:: ../_static/API/visualizing/plot_1d_spikes.*
         :width: 100%
 
-    '''
+    """
     if spikes.ndim != 2:
         raise ValueError(f"Expected 2D array, got {spikes.ndim}D array instead")
 
@@ -215,8 +280,12 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     spikes_map.set_xlabel(xlabel)
     spikes_map.set_ylabel(ylabel)
 
-    spikes_map.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_x_ticks))
-    spikes_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=int_y_ticks))
+    spikes_map.xaxis.set_major_locator(
+        matplotlib.ticker.MaxNLocator(integer=int_x_ticks)
+    )
+    spikes_map.yaxis.set_major_locator(
+        matplotlib.ticker.MaxNLocator(integer=int_y_ticks)
+    )
 
     spikes_map.xaxis.set_minor_locator(matplotlib.ticker.NullLocator())
     spikes_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
@@ -228,12 +297,16 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
     T = spikes_T.shape[1]
     t = np.arange(0, T)
     t_spike = spikes_T * t
-    mask = (spikes_T == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
+    mask = spikes_T == 1  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
 
-    colormap = plt.get_cmap('tab10')  # cmap的种类参见https://matplotlib.org/gallery/color/colormap_reference.html
+    colormap = plt.get_cmap(
+        "tab10"
+    )  # cmap的种类参见https://matplotlib.org/gallery/color/colormap_reference.html
 
     for i in range(N):
-        spikes_map.eventplot(t_spike[i][mask[i]], lineoffsets=i, colors=colormap(i % 10))
+        spikes_map.eventplot(
+            t_spike[i][mask[i]], lineoffsets=i, colors=colormap(i % 10)
+        )
 
     if plot_firing_rate:
         firing_rate = np.mean(spikes_T, axis=1, keepdims=True)
@@ -241,17 +314,31 @@ def plot_1d_spikes(spikes: np.asarray, title: str, xlabel: str, ylabel: str, int
         max_rate = firing_rate.max()
         min_rate = firing_rate.min()
 
-        firing_rate_map.yaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+        firing_rate_map.yaxis.set_major_locator(
+            matplotlib.ticker.MaxNLocator(integer=True)
+        )
         firing_rate_map.yaxis.set_minor_locator(matplotlib.ticker.NullLocator())
-        firing_rate_map.imshow(firing_rate, cmap='magma', aspect='auto')
+        firing_rate_map.imshow(firing_rate, cmap="magma", aspect="auto")
         for i in range(firing_rate.shape[0]):
-            firing_rate_map.text(0, i, f'{firing_rate[i][0]:.2f}', ha='center', va='center', color='w' if firing_rate[i][0] < 0.7 * max_rate or min_rate == max_rate else 'black')
+            firing_rate_map.text(
+                0,
+                i,
+                f"{firing_rate[i][0]:.2f}",
+                ha="center",
+                va="center",
+                color="w"
+                if firing_rate[i][0] < 0.7 * max_rate or min_rate == max_rate
+                else "black",
+            )
         firing_rate_map.get_xaxis().set_visible(False)
         firing_rate_map.set_title(firing_rate_map_title)
     return fig
 
-def plot_2d_feature_map(x3d: np.asarray, nrows, ncols, space, title: str, figsize=(12, 8), dpi=200):
-    '''
+
+def plot_2d_feature_map(
+    x3d: np.asarray, nrows, ncols, space, title: str, figsize=(12, 8), dpi=200
+):
+    """
     :param x3d: shape=[C, W, H]，C个尺寸为W * H的矩阵。这样的矩阵一般来源于卷积层后的脉冲神经元的输出
     :param nrows: 画成多少行
     :param ncols: 画成多少列
@@ -280,13 +367,13 @@ def plot_2d_feature_map(x3d: np.asarray, nrows, ncols, space, title: str, figsiz
     .. image:: ../_static/API/visualizing/plot_2d_feature_map.*
         :width: 100%
 
-    '''
+    """
     if x3d.ndim != 3:
         raise ValueError(f"Expected 3D array, got {x3d.ndim}D array instead")
 
     C = x3d.shape[0]
 
-    assert nrows * ncols == C, 'nrows * ncols != C'
+    assert nrows * ncols == C, "nrows * ncols != C"
 
     h = x3d.shape[1]
     w = x3d.shape[2]
@@ -294,19 +381,27 @@ def plot_2d_feature_map(x3d: np.asarray, nrows, ncols, space, title: str, figsiz
     index = 0
     for i in range(space // 2, y.shape[0], h + space):
         for j in range(space // 2, y.shape[1], w + space):
-            y[i:i + h, j:j + w] = x3d[index]
+            y[i : i + h, j : j + w] = x3d[index]
             index += 1
     fig, maps = plt.subplots(figsize=figsize, dpi=dpi)
     maps.set_title(title)
-    maps.imshow(y, cmap='gray')
+    maps.imshow(y, cmap="gray")
 
     maps.get_xaxis().set_visible(False)
     maps.get_yaxis().set_visible(False)
     return fig, maps
 
-def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0.0,
-                        title='$V[t]$ and $S[t]$ of the neuron', figsize=(12, 8), dpi=200):
-    '''
+
+def plot_one_neuron_v_s(
+    v: np.ndarray,
+    s: np.ndarray,
+    v_threshold=1.0,
+    v_reset=0.0,
+    title="$V[t]$ and $S[t]$ of the neuron",
+    figsize=(12, 8),
+    dpi=200,
+):
+    """
     :param v: shape=[T], 存放神经元不同时刻的电压
     :param s: shape=[T], 存放神经元不同时刻释放的脉冲
     :param v_threshold: 神经元的阈值电压
@@ -324,7 +419,7 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
         from spikingjelly import visualizing
         from matplotlib import pyplot as plt
 
-        lif = neuron.LIFNode(tau=100.)
+        lif = neuron.LIFNode(tau=100.0)
         x = torch.Tensor([2.0])
         T = 150
         s_list = []
@@ -332,13 +427,14 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
         for t in range(T):
             s_list.append(lif(x))
             v_list.append(lif.v)
-        visualizing.plot_one_neuron_v_s(v_list, s_list, v_threshold=lif.v_threshold, v_reset=lif.v_reset,
-                                        dpi=200)
+        visualizing.plot_one_neuron_v_s(
+            v_list, s_list, v_threshold=lif.v_threshold, v_reset=lif.v_reset, dpi=200
+        )
         plt.show()
 
     .. image:: ../_static/API/visualizing/plot_one_neuron_v_s.*
         :width: 100%
-    '''
+    """
     fig = plt.figure(figsize=figsize, dpi=dpi)
     ax0 = plt.subplot2grid((3, 1), (0, 0), rowspan=2)
     ax0.set_title(title)
@@ -346,19 +442,19 @@ def plot_one_neuron_v_s(v: np.ndarray, s: np.ndarray, v_threshold=1.0, v_reset=0
     t = np.arange(0, T)
     ax0.plot(t, v)
     ax0.set_xlim(-0.5, T - 0.5)
-    ax0.set_ylabel('voltage')
-    ax0.axhline(v_threshold, label='$V_{threshold}$', linestyle='-.', c='r')
+    ax0.set_ylabel("voltage")
+    ax0.axhline(v_threshold, label="$V_{threshold}$", linestyle="-.", c="r")
     if v_reset is not None:
-        ax0.axhline(v_reset, label='$V_{reset}$', linestyle='-.', c='g')
+        ax0.axhline(v_reset, label="$V_{reset}$", linestyle="-.", c="g")
     ax0.legend(frameon=True)
     t_spike = s * t
-    mask = (s == 1)  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
+    mask = s == 1  # eventplot中的数值是时间发生的时刻，因此需要用mask筛选出
     ax1 = plt.subplot2grid((3, 1), (2, 0))
-    ax1.eventplot(t_spike[mask], lineoffsets=0, colors='r')
+    ax1.eventplot(t_spike[mask], lineoffsets=0, colors="r")
     ax1.set_xlim(-0.5, T - 0.5)
 
-    ax1.set_xlabel('simulating step')
-    ax1.set_ylabel('spike')
+    ax1.set_xlabel("simulating step")
+    ax1.set_ylabel("spike")
     ax1.set_yticks([])
 
     ax1.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))

@@ -9,24 +9,23 @@ from .. import base, functional
 
 
 __all__ = [
-    'BatchNorm1d',
-    'BatchNorm2d',
-    'BatchNorm3d',
-    'NeuNorm',
-    'ThresholdDependentBatchNorm1d',
-    'ThresholdDependentBatchNorm2d',
-    'ThresholdDependentBatchNorm3d',
-    'TemporalEffectiveBatchNorm1d',
-    'TemporalEffectiveBatchNorm2d',
-    'TemporalEffectiveBatchNorm3d',
+    "BatchNorm1d",
+    "BatchNorm2d",
+    "BatchNorm3d",
+    "NeuNorm",
+    "ThresholdDependentBatchNorm1d",
+    "ThresholdDependentBatchNorm2d",
+    "ThresholdDependentBatchNorm3d",
+    "TemporalEffectiveBatchNorm1d",
+    "TemporalEffectiveBatchNorm2d",
+    "TemporalEffectiveBatchNorm3d",
     "BatchNormThroughTime1d",
-    'BatchNormThroughTime2d',
+    "BatchNormThroughTime2d",
     "BatchNormThroughTime3d",
 ]
 
 
 class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
-
     def __init__(
         self,
         num_features: int,
@@ -34,7 +33,7 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode='s'
+        step_mode="s",
     ):
         """
         **API Language:**
@@ -66,20 +65,21 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             return super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 4 and x.dim() != 3:
-                raise ValueError(f'expected x with shape [T, N, C, L] or [T, N, C], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, L] or [T, N, C], but got x with shape {x.shape}!"
+                )
             return functional.seq_to_ann_forward(x, super().forward)
 
 
 class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
-
     def __init__(
         self,
         num_features: int,
@@ -87,7 +87,7 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode='s'
+        step_mode="s",
     ):
         """
         **API Language:**
@@ -119,20 +119,21 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             return super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 5:
-                raise ValueError(f'expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
+                )
             return functional.seq_to_ann_forward(x, super().forward)
 
 
 class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
-
     def __init__(
         self,
         num_features: int,
@@ -140,7 +141,7 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode='s'
+        step_mode="s",
     ):
         """
         **API Language:**
@@ -172,23 +173,29 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
         self.step_mode = step_mode
 
     def extra_repr(self):
-        return super().extra_repr() + f', step_mode={self.step_mode}'
+        return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def forward(self, x: Tensor):
-        if self.step_mode == 's':
+        if self.step_mode == "s":
             return super().forward(x)
 
-        elif self.step_mode == 'm':
+        elif self.step_mode == "m":
             if x.dim() != 6:
-                raise ValueError(f'expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!')
+                raise ValueError(
+                    f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
+                )
             return functional.seq_to_ann_forward(x, super().forward)
 
 
 class NeuNorm(base.MemoryModule):
-
     def __init__(
-        self, in_channels: int, height: int, width: int, k: float = 0.9,
-        shared_across_channels: bool = False, step_mode: str = 's'
+        self,
+        in_channels: int,
+        height: int,
+        width: int,
+        k: float = 0.9,
+        shared_across_channels: bool = False,
+        step_mode: str = "s",
     ):
         r"""
         **API Language:**
@@ -270,9 +277,9 @@ class NeuNorm(base.MemoryModule):
         """
         super().__init__()
         self.step_mode = step_mode
-        self.register_memory('x', 0.)
+        self.register_memory("x", 0.0)
         self.k0 = k
-        self.k1 = (1. - self.k0) / in_channels ** 2
+        self.k1 = (1.0 - self.k0) / in_channels**2
         if shared_across_channels:
             self.w = nn.Parameter(Tensor(1, height, width))
         else:
@@ -285,14 +292,13 @@ class NeuNorm(base.MemoryModule):
         return in_spikes - self.w * self.x
 
     def extra_repr(self) -> str:
-        return f'shape={self.w.shape}'
+        return f"shape={self.w.shape}"
 
 
 class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
-
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.step_mode = 'm'
+        self.step_mode = "m"
         self.alpha = alpha
         self.v_th = v_th
         assert self.affine, "ThresholdDependentBatchNorm needs to set `affine = True`!"
@@ -303,7 +309,6 @@ class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
 
 
 class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
-
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
         **API Language:**
@@ -359,7 +364,6 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
 
 
 class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
-
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
         **API Language:**
@@ -415,7 +419,6 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
 
 
 class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
-
     def __init__(self, alpha: float, v_th: float, *args, **kwargs):
         """
         **API Language:**
@@ -471,7 +474,6 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
 
 
 class _TemporalEffectiveBatchNormBase(_BatchNorm, base.MultiStepModule):
-
     def __init__(self, T: int, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.step_mode = "m"
@@ -483,7 +485,6 @@ class _TemporalEffectiveBatchNormBase(_BatchNorm, base.MultiStepModule):
 
 
 class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
-
     def __init__(self, T: int, *args, **kwargs):
         """
         **API Language:**
@@ -544,7 +545,6 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
 
 
 class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
-
     def __init__(self, T: int, *args, **kwargs):
         """
         **API Language:**
@@ -605,7 +605,6 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
 
 
 class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
-
     def __init__(self, T: int, *args, **kwargs):
         """
         **API Language:**
@@ -666,7 +665,6 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
 
 
 class _BatchNormThroughTimeBase(base.MemoryModule):
-
     bn_type = _BatchNorm
 
     def __init__(
@@ -677,7 +675,7 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode: str = 's'
+        step_mode: str = "s",
     ):
         super().__init__()
         self.bn_list = nn.ModuleList(
@@ -692,12 +690,10 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor):
         self.t = self.t + 1
-        print(f"Call bn_list[{self.t}]")
         return self.bn_list[self.t](x)
 
 
 class BatchNormThroughTime1d(_BatchNormThroughTimeBase):
-
     bn_type = nn.BatchNorm1d
 
     def __init__(
@@ -708,7 +704,7 @@ class BatchNormThroughTime1d(_BatchNormThroughTimeBase):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode: str = 's'
+        step_mode: str = "s",
     ):
         """
         **API Language:**
@@ -772,11 +768,12 @@ class BatchNormThroughTime1d(_BatchNormThroughTimeBase):
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm1d`.
         """
-        super().__init__(T, num_features, eps, momentum, affine, track_running_stats, step_mode)
+        super().__init__(
+            T, num_features, eps, momentum, affine, track_running_stats, step_mode
+        )
 
 
 class BatchNormThroughTime2d(_BatchNormThroughTimeBase):
-
     bn_type = nn.BatchNorm2d
 
     def __init__(
@@ -787,7 +784,7 @@ class BatchNormThroughTime2d(_BatchNormThroughTimeBase):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode: str = 's'
+        step_mode: str = "s",
     ):
         """
         **API Language:**
@@ -851,11 +848,12 @@ class BatchNormThroughTime2d(_BatchNormThroughTimeBase):
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm2d`.
         """
-        super().__init__(T, num_features, eps, momentum, affine, track_running_stats, step_mode)
+        super().__init__(
+            T, num_features, eps, momentum, affine, track_running_stats, step_mode
+        )
 
 
 class BatchNormThroughTime3d(_BatchNormThroughTimeBase):
-
     bn_type = nn.BatchNorm3d
 
     def __init__(
@@ -866,7 +864,7 @@ class BatchNormThroughTime3d(_BatchNormThroughTimeBase):
         momentum: float = 0.1,
         affine: bool = True,
         track_running_stats: bool = True,
-        step_mode: str = 's'
+        step_mode: str = "s",
     ):
         """
         **API Language:**
@@ -930,4 +928,6 @@ class BatchNormThroughTime3d(_BatchNormThroughTimeBase):
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm3d`.
         """
-        super().__init__(T, num_features, eps, momentum, affine, track_running_stats, step_mode)
+        super().__init__(
+            T, num_features, eps, momentum, affine, track_running_stats, step_mode
+        )

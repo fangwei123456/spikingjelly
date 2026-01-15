@@ -10,14 +10,16 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 
 from torch.utils.tensorboard import SummaryWriter
-from spikingjelly.activation_based.examples.common.multiprocessing_env import SubprocVecEnv
+from spikingjelly.activation_based.examples.common.multiprocessing_env import (
+    SubprocVecEnv,
+)
 
 from spikingjelly.activation_based import neuron, functional, layer
 
 
 # Use CUDA
 use_cuda = torch.cuda.is_available()
-device = torch.device('cuda' if use_cuda else 'cpu')
+device = torch.device("cuda" if use_cuda else "cpu")
 
 # Set Seed
 seed = 1
@@ -42,15 +44,23 @@ class NonSpikingLIFNode(neuron.LIFNode):
         else:
             if self.v_reset is None:
                 if self.decay_input:
-                    self.v = self.neuronal_charge_decay_input_reset0(x, self.v, self.tau)
+                    self.v = self.neuronal_charge_decay_input_reset0(
+                        x, self.v, self.tau
+                    )
                 else:
-                    self.v = self.neuronal_charge_no_decay_input_reset0(x, self.v, self.tau)
-                
+                    self.v = self.neuronal_charge_no_decay_input_reset0(
+                        x, self.v, self.tau
+                    )
+
             else:
                 if self.decay_input:
-                    self.v = self.neuronal_charge_decay_input(x, self.v, self.v_reset, self.tau)
+                    self.v = self.neuronal_charge_decay_input(
+                        x, self.v, self.v_reset, self.tau
+                    )
                 else:
-                    self.v = self.neuronal_charge_no_decay_input(x, self.v, self.v_reset, self.tau)
+                    self.v = self.neuronal_charge_no_decay_input(
+                        x, self.v, self.v_reset, self.tau
+                    )
 
 
 # Neural Network
@@ -62,14 +72,14 @@ class ActorCritic(nn.Module):
             layer.Linear(num_inputs, hidden_size),
             neuron.IFNode(),
             layer.Linear(hidden_size, 1),
-            NonSpikingLIFNode(tau=2.0)
+            NonSpikingLIFNode(tau=2.0),
         )
 
         self.actor = nn.Sequential(
             layer.Linear(num_inputs, hidden_size),
             neuron.IFNode(),
             layer.Linear(hidden_size, num_outputs),
-            NonSpikingLIFNode(tau=2.0)
+            NonSpikingLIFNode(tau=2.0),
         )
 
         self.T = T
@@ -85,11 +95,10 @@ class ActorCritic(nn.Module):
         return dist, value
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     # Create Environments
     num_envs = 4
-    env_name = 'CartPole-v0'
+    env_name = "CartPole-v0"
 
     def make_env():
         def _thunk():
@@ -105,10 +114,10 @@ if __name__ == '__main__':
     env = gym.make(env_name)
     env.seed(seed)
 
-
     def test_env(vis=False):
         state = env.reset()
-        if vis: env.render()
+        if vis:
+            env.render()
         done = False
         total_reward = 0
         while not done:
@@ -117,10 +126,10 @@ if __name__ == '__main__':
             functional.reset_net(model)
             next_state, reward, done, _ = env.step(dist.sample().cpu().numpy()[0])
             state = next_state
-            if vis: env.render()
+            if vis:
+                env.render()
             total_reward += reward
         return total_reward
-
 
     # A2C: Synchronous Advantage Actor Critic
     def compute_returns(next_value, rewards, masks, gamma=0.99):
@@ -131,10 +140,10 @@ if __name__ == '__main__':
             returns.insert(0, R)
         return returns
 
-    num_inputs  = envs.observation_space.shape[0]
+    num_inputs = envs.observation_space.shape[0]
     num_outputs = envs.action_space.n
 
-    print('State Num: %d, Action Num: %d' % (num_inputs, num_outputs))
+    print("State Num: %d, Action Num: %d" % (num_inputs, num_outputs))
 
     # Hyper params:
     hidden_size = 256
@@ -150,14 +159,13 @@ if __name__ == '__main__':
 
     state = envs.reset()
 
-    writer = SummaryWriter(logdir='./log')
+    writer = SummaryWriter(logdir="./log")
 
     while step_idx < max_steps:
-
         log_probs = []
-        values    = []
-        rewards   = []
-        masks     = []
+        values = []
+        rewards = []
+        masks = []
         entropy = 0
 
         for _ in range(num_steps):
@@ -181,8 +189,12 @@ if __name__ == '__main__':
 
             if step_idx % 1000 == 0:
                 test_reward = test_env()
-                print('Step: %d, Reward: %.2f' % (step_idx, test_reward))
-                writer.add_scalar('Spiking-A2C-multi_env-' + env_name + '/Reward', test_reward, step_idx)
+                print("Step: %d, Reward: %.2f" % (step_idx, test_reward))
+                writer.add_scalar(
+                    "Spiking-A2C-multi_env-" + env_name + "/Reward",
+                    test_reward,
+                    step_idx,
+                )
 
         next_state = torch.FloatTensor(next_state).to(device)
         _, next_value = model(next_state)
@@ -190,12 +202,12 @@ if __name__ == '__main__':
         returns = compute_returns(next_value, rewards, masks)
 
         log_probs = torch.cat(log_probs)
-        returns   = torch.cat(returns).detach()
-        values    = torch.cat(values)
+        returns = torch.cat(returns).detach()
+        values = torch.cat(values)
 
         advantage = returns - values
 
-        actor_loss  = - (log_probs * advantage.detach()).mean()
+        actor_loss = -(log_probs * advantage.detach()).mean()
         critic_loss = advantage.pow(2).mean()
 
         loss = actor_loss + 0.5 * critic_loss - 0.001 * entropy
@@ -205,7 +217,7 @@ if __name__ == '__main__':
         optimizer.step()
 
     # print(test_env(True))
-    print('----------------------------')
-    print('Complete')
+    print("----------------------------")
+    print("Complete")
 
     writer.close()

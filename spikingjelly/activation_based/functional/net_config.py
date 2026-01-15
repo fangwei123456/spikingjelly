@@ -6,12 +6,7 @@ import torch.nn as nn
 from .. import base
 
 
-__all__ = [
-    'reset_net',
-    'set_step_mode',
-    'set_backend',
-    'detach_net'
-]
+__all__ = ["reset_net", "set_step_mode", "set_backend", "detach_net"]
 
 
 def reset_net(net: nn.Module):
@@ -48,10 +43,12 @@ def reset_net(net: nn.Module):
     :return: None
     """
     for m in net.modules():
-        if hasattr(m, 'reset'):
+        if hasattr(m, "reset"):
             if not isinstance(m, base.MemoryModule):
-                logging.warning(f'Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base'
-                                f'.MemoryModule')
+                logging.warning(
+                    f"Trying to call `reset()` of {m}, which is not spikingjelly.activation_based.base"
+                    f".MemoryModule"
+                )
             m.reset()
 
 
@@ -108,10 +105,16 @@ def set_step_mode(net: nn.Module, step_mode: str):
 
     :return: None
     """
-    from ..layer import StepModeContainer, ElementWiseRecurrentContainer, LinearRecurrentContainer
+    from ..layer import (
+        StepModeContainer,
+        ElementWiseRecurrentContainer,
+        LinearRecurrentContainer,
+    )
 
     keep_step_mode_instance = (
-        StepModeContainer, ElementWiseRecurrentContainer, LinearRecurrentContainer
+        StepModeContainer,
+        ElementWiseRecurrentContainer,
+        LinearRecurrentContainer,
     )
     # step_mode of sub-modules in keep_step_mode_instance will not be changed
 
@@ -121,10 +124,13 @@ def set_step_mode(net: nn.Module, step_mode: str):
             keep_step_mode_containers.append(m)
 
     for m in net.modules():
-        if hasattr(m, 'step_mode'):
+        if hasattr(m, "step_mode"):
             is_contained = False
             for container in keep_step_mode_containers:
-                if not isinstance(m, keep_step_mode_instance) and m in container.modules():
+                if (
+                    not isinstance(m, keep_step_mode_instance)
+                    and m in container.modules()
+                ):
                     is_contained = True
                     break
             if is_contained:
@@ -132,13 +138,17 @@ def set_step_mode(net: nn.Module, step_mode: str):
                 pass
             else:
                 if not isinstance(m, (base.StepModule)):
-                    logging.warning(f'Trying to set the step mode for {m}, which is not spikingjelly.activation_based'
-                                    f'.base.StepModule')
+                    logging.warning(
+                        f"Trying to set the step mode for {m}, which is not spikingjelly.activation_based"
+                        f".base.StepModule"
+                    )
                 m.step_mode = step_mode
 
 
 def set_backend(
-    net: nn.Module, backend: str, instance: Optional[Union[nn.Module, tuple[nn.Module]]] = None
+    net: nn.Module,
+    backend: str,
+    instance: Optional[Union[nn.Module, tuple[nn.Module]]] = None,
 ):
     """
     **API Language:**
@@ -187,14 +197,17 @@ def set_backend(
     instance = (nn.Module,) if instance is None else instance
     for m in net.modules():
         if isinstance(m, instance):
-            if hasattr(m, 'backend'):
+            if hasattr(m, "backend"):
                 if not isinstance(m, base.MemoryModule):
                     logging.warning(
-                        f'Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule')
+                        f"Trying to set the backend for {m}, which is not spikingjelly.activation_based.base.MemoryModule"
+                    )
                 if backend in m.supported_backends:
                     m.backend = backend
                 else:
-                    logging.warning(f'{m} does not supports for backend={backend}. It will still use backend={m.backend}.')
+                    logging.warning(
+                        f"{m} does not supports for backend={backend}. It will still use backend={m.backend}."
+                    )
 
 
 def detach_net(net: nn.Module):
@@ -232,8 +245,10 @@ def detach_net(net: nn.Module):
     :return: None
     """
     for m in net.modules():
-        if hasattr(m, 'detach'):
+        if hasattr(m, "detach"):
             if not isinstance(m, base.MemoryModule):
-                logging.warning(f'Trying to call `detach()` of {m}, which is not spikingjelly.activation_based.base'
-                                f'.MemoryModule')
+                logging.warning(
+                    f"Trying to call `detach()` of {m}, which is not spikingjelly.activation_based.base"
+                    f".MemoryModule"
+                )
             m.detach()

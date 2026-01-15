@@ -65,7 +65,39 @@ import argparse
 from typing import Optional
 from tqdm import tqdm
 
-label_dict = {'yes': 0, 'stop': 1, 'no': 2, 'right': 3, 'up': 4, 'left': 5, 'on': 6, 'down': 7, 'off': 8, 'go': 9, 'bed': 10, 'three': 10, 'one': 10, 'four': 10, 'two': 10, 'five': 10, 'cat': 10, 'dog': 10, 'eight': 10, 'bird': 10, 'happy': 10, 'sheila': 10, 'zero': 10, 'wow': 10, 'marvin': 10, 'house': 10, 'six': 10, 'seven': 10, 'tree': 10, 'nine': 10, '_silence_': 11}
+label_dict = {
+    "yes": 0,
+    "stop": 1,
+    "no": 2,
+    "right": 3,
+    "up": 4,
+    "left": 5,
+    "on": 6,
+    "down": 7,
+    "off": 8,
+    "go": 9,
+    "bed": 10,
+    "three": 10,
+    "one": 10,
+    "four": 10,
+    "two": 10,
+    "five": 10,
+    "cat": 10,
+    "dog": 10,
+    "eight": 10,
+    "bird": 10,
+    "happy": 10,
+    "sheila": 10,
+    "zero": 10,
+    "wow": 10,
+    "marvin": 10,
+    "house": 10,
+    "six": 10,
+    "seven": 10,
+    "tree": 10,
+    "nine": 10,
+    "_silence_": 11,
+}
 label_cnt = len(set(label_dict.values()))
 n_mels = 40
 f_max = 4000
@@ -74,13 +106,15 @@ delta_order = 0
 size = 16000
 try:
     import cupy
-    backend = 'cupy'
+
+    backend = "cupy"
 except ModuleNotFoundError:
-    backend = 'torch'
-    print('Cupy is not intalled. Using torch backend for neurons.')
+    backend = "torch"
+    print("Cupy is not intalled. Using torch backend for neurons.")
+
 
 def mel_to_hz(mels, dct_type):
-    if dct_type == 'htk':
+    if dct_type == "htk":
         return 700.0 * (10 ** (mels / 2595.0) - 1.0)
 
     # Fill in the linear scale
@@ -96,8 +130,7 @@ def mel_to_hz(mels, dct_type):
     if torch.is_tensor(mels) and mels.ndim:
         # If we have vector data, vectorize
         log_t = mels >= min_log_mel
-        freqs[log_t] = min_log_hz * \
-            torch.exp(logstep * (mels[log_t] - min_log_mel))
+        freqs[log_t] = min_log_hz * torch.exp(logstep * (mels[log_t] - min_log_mel))
     elif mels >= min_log_mel:
         # If we have scalar data, check directly
         freqs = min_log_hz * math.exp(logstep * (mels - min_log_mel))
@@ -106,7 +139,7 @@ def mel_to_hz(mels, dct_type):
 
 
 def hz_to_mel(frequencies, dct_type):
-    if dct_type == 'htk':
+    if dct_type == "htk":
         if torch.is_tensor(frequencies) and frequencies.ndim:
             return 2595.0 * torch.log10(1.0 + frequencies / 700.0)
         return 2595.0 * math.log10(1.0 + frequencies / 700.0)
@@ -126,8 +159,7 @@ def hz_to_mel(frequencies, dct_type):
     if torch.is_tensor(frequencies) and frequencies.ndim:
         # If we have array data, vectorize
         log_t = frequencies >= min_log_hz
-        mels[log_t] = min_log_mel + \
-            torch.log(frequencies[log_t] / min_log_hz) / logstep
+        mels[log_t] = min_log_mel + torch.log(frequencies[log_t] / min_log_hz) / logstep
     elif frequencies >= min_log_hz:
         # If we have scalar data, heck directly
         mels = min_log_mel + math.log(frequencies / min_log_hz) / logstep
@@ -136,13 +168,13 @@ def hz_to_mel(frequencies, dct_type):
 
 
 def create_fb_matrix(
-        n_freqs: int,
-        f_min: float,
-        f_max: float,
-        n_mels: int,
-        sample_rate: int,
-        dct_type: Optional[str] = 'slaney') -> Tensor:
-
+    n_freqs: int,
+    f_min: float,
+    f_max: float,
+    n_mels: int,
+    sample_rate: int,
+    dct_type: Optional[str] = "slaney",
+) -> Tensor:
     if dct_type != "htk" and dct_type != "slaney":
         raise ValueError("DCT type must be either 'htk' or 'slaney'")
 
@@ -169,23 +201,25 @@ def create_fb_matrix(
 
     if dct_type == "slaney":
         # Slaney-style mel is scaled to be approx constant energy per channel
-        enorm = 2.0 / (f_pts[2:n_mels + 2] - f_pts[:n_mels])
+        enorm = 2.0 / (f_pts[2 : n_mels + 2] - f_pts[:n_mels])
         fb *= enorm.unsqueeze(0)
 
     return fb
 
 
 class MelScaleDelta(nn.Module):
-    __constants__ = ['n_mels', 'sample_rate', 'f_min', 'f_max']
+    __constants__ = ["n_mels", "sample_rate", "f_min", "f_max"]
 
-    def __init__(self,
-                 order,
-                 n_mels: int = 128,
-                 sample_rate: int = 16000,
-                 f_min: float = 0.,
-                 f_max: Optional[float] = None,
-                 n_stft: Optional[int] = None,
-                 dct_type: Optional[str] = 'slaney') -> None:
+    def __init__(
+        self,
+        order,
+        n_mels: int = 128,
+        sample_rate: int = 16000,
+        f_min: float = 0.0,
+        f_max: Optional[float] = None,
+        n_stft: Optional[int] = None,
+        dct_type: Optional[str] = "slaney",
+    ) -> None:
         super(MelScaleDelta, self).__init__()
         self.order = order
         self.n_mels = n_mels
@@ -194,12 +228,23 @@ class MelScaleDelta(nn.Module):
         self.f_min = f_min
         self.dct_type = dct_type
 
-        assert f_min <= self.f_max, 'Require f_min: {} < f_max: {}'.format(
-            f_min, self.f_max)
+        assert f_min <= self.f_max, "Require f_min: {} < f_max: {}".format(
+            f_min, self.f_max
+        )
 
-        fb = torch.empty(0) if n_stft is None else create_fb_matrix(
-            n_stft, self.f_min, self.f_max, self.n_mels, self.sample_rate, self.dct_type)
-        self.register_buffer('fb', fb)
+        fb = (
+            torch.empty(0)
+            if n_stft is None
+            else create_fb_matrix(
+                n_stft,
+                self.f_min,
+                self.f_max,
+                self.n_mels,
+                self.sample_rate,
+                self.dct_type,
+            )
+        )
+        self.register_buffer("fb", fb)
 
     def forward(self, specgram: Tensor) -> Tensor:
         # pack batch
@@ -207,37 +252,45 @@ class MelScaleDelta(nn.Module):
         specgram = specgram.reshape(-1, shape[-2], shape[-1])
 
         if self.fb.numel() == 0:
-            tmp_fb = create_fb_matrix(specgram.size(
-                1), self.f_min, self.f_max, self.n_mels, self.sample_rate, self.dct_type)
+            tmp_fb = create_fb_matrix(
+                specgram.size(1),
+                self.f_min,
+                self.f_max,
+                self.n_mels,
+                self.sample_rate,
+                self.dct_type,
+            )
             # Attributes cannot be reassigned outside __init__ so workaround
             self.fb.resize_(tmp_fb.size())
             self.fb.copy_(tmp_fb)
 
         # (channel, frequency, time).transpose(...) dot (frequency, n_mels)
         # -> (channel, time, n_mels).transpose(...)
-        mel_specgram = torch.matmul(
-            specgram.transpose(1, 2), self.fb).transpose(1, 2)
+        mel_specgram = torch.matmul(specgram.transpose(1, 2), self.fb).transpose(1, 2)
 
         # unpack batch
         mel_specgram = mel_specgram.reshape(
-            shape[:-2] + mel_specgram.shape[-2:]).squeeze()
+            shape[:-2] + mel_specgram.shape[-2:]
+        ).squeeze()
 
         M = torch.max(torch.abs(mel_specgram))
         if M > 0:
-            feat = torch.log1p(mel_specgram/M)
+            feat = torch.log1p(mel_specgram / M)
         else:
             feat = mel_specgram
 
         feat_list = [feat.numpy().T]
         for k in range(1, self.order + 1):
-            feat_list.append(savgol_filter(
-                feat.numpy(), 9, deriv=k, axis=-1, mode='interp', polyorder=k).T)
+            feat_list.append(
+                savgol_filter(
+                    feat.numpy(), 9, deriv=k, axis=-1, mode="interp", polyorder=k
+                ).T
+            )
 
         return torch.as_tensor(np.expand_dims(np.stack(feat_list), axis=0))
 
 
 class Pad(object):
-
     def __init__(self, size):
         self.size = size
 
@@ -245,20 +298,22 @@ class Pad(object):
         wav_size = wav.shape[-1]
         pad_size = (self.size - wav_size) // 2
         padded_wav = torch.nn.functional.pad(
-            wav, (pad_size, self.size-wav_size-pad_size), mode='constant', value=0)
+            wav, (pad_size, self.size - wav_size - pad_size), mode="constant", value=0
+        )
         return padded_wav
 
 
 class Rescale(object):
-
     def __call__(self, input):
-        std = torch.std(input, axis=2, keepdims=True, unbiased=False) # Numpy std is calculated via the Numpy's biased estimator. https://github.com/romainzimmer/s2net/blob/82c38bf80b55d16d12d0243440e34e52d237a2df/data.py#L201 
+        std = torch.std(
+            input, axis=2, keepdims=True, unbiased=False
+        )  # Numpy std is calculated via the Numpy's biased estimator. https://github.com/romainzimmer/s2net/blob/82c38bf80b55d16d12d0243440e34e52d237a2df/data.py#L201
         std.masked_fill_(std == 0, 1)
 
         return input / std
 
-def collate_fn(data):
 
+def collate_fn(data):
     X_batch = torch.cat([d[0] for d in data])
     std = X_batch.std(axis=(0, 2), keepdim=True, unbiased=False)
     X_batch.div_(std)
@@ -267,28 +322,30 @@ def collate_fn(data):
 
     return X_batch, y_batch
 
+
 #### Network ####
 class LIFWrapper(nn.Module):
     def __init__(self, module, flatten=False):
         super().__init__()
         self.module = module
         self.flatten = flatten
-    
+
     def forward(self, x_seq: torch.Tensor):
-        '''
+        """
         :param x_seq: shape=[batch size, channel, T, n_mel]
         :type x_seq: torch.Tensor
         :return: y_seq, shape=[batch size, channel, T, n_mel]
         :rtype: torch.Tensor
-        '''
+        """
         # Input: [batch size, channel, T, n_mel]
-        y_seq = self.module(x_seq.transpose(0, 2)) # [T, channel, batch size, n_mel]
+        y_seq = self.module(x_seq.transpose(0, 2))  # [T, channel, batch size, n_mel]
         if self.flatten:
-            y_seq = y_seq.permute(2, 0, 1, 3) # [batch size, T, channel, n_mel]
+            y_seq = y_seq.permute(2, 0, 1, 3)  # [batch size, T, channel, n_mel]
             shape = y_seq.shape[:2]
-            return y_seq.reshape(shape + (-1,)) # [batch size, T, channel * n_mel]
+            return y_seq.reshape(shape + (-1,))  # [batch size, T, channel * n_mel]
         else:
-            return y_seq.transpose(0, 2) # [batch size, channel, T, n_mel]
+            return y_seq.transpose(0, 2)  # [batch size, channel, T, n_mel]
+
 
 class Net(nn.Module):
     def __init__(self):
@@ -301,41 +358,81 @@ class Net(nn.Module):
         # batch size * delta_order+1 * T * n_mel
         self.conv = nn.Sequential(
             # 101 * 40
-            nn.Conv2d(in_channels=delta_order+1, out_channels=64,
-                      kernel_size=(4, 3), stride=1, padding=(2, 1), bias=False),
-            LIFWrapper(neuron.LIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend=backend, step_mode='m')),
-
+            nn.Conv2d(
+                in_channels=delta_order + 1,
+                out_channels=64,
+                kernel_size=(4, 3),
+                stride=1,
+                padding=(2, 1),
+                bias=False,
+            ),
+            LIFWrapper(
+                neuron.LIFNode(
+                    tau=10.0 / 7,
+                    surrogate_function=surrogate.Sigmoid(alpha=10.0),
+                    backend=backend,
+                    step_mode="m",
+                )
+            ),
             # 102 * 40
-            nn.Conv2d(in_channels=64, out_channels=64,
-                      kernel_size=(4, 3), stride=1, padding=(6, 3), dilation=(4, 3), bias=False),
-            LIFWrapper(neuron.LIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend=backend, step_mode='m')),
-
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=64,
+                kernel_size=(4, 3),
+                stride=1,
+                padding=(6, 3),
+                dilation=(4, 3),
+                bias=False,
+            ),
+            LIFWrapper(
+                neuron.LIFNode(
+                    tau=10.0 / 7,
+                    surrogate_function=surrogate.Sigmoid(alpha=10.0),
+                    backend=backend,
+                    step_mode="m",
+                )
+            ),
             # 102 * 40
-                nn.Conv2d(in_channels=64, out_channels=64,
-                      kernel_size=(4, 3), stride=1, padding=(24, 9), dilation=(16, 9), bias=False),
-            LIFWrapper(neuron.LIFNode(tau=10.0 / 7, surrogate_function=surrogate.Sigmoid(alpha=10.), backend=backend, step_mode='m'), flatten=True),
+            nn.Conv2d(
+                in_channels=64,
+                out_channels=64,
+                kernel_size=(4, 3),
+                stride=1,
+                padding=(24, 9),
+                dilation=(16, 9),
+                bias=False,
+            ),
+            LIFWrapper(
+                neuron.LIFNode(
+                    tau=10.0 / 7,
+                    surrogate_function=surrogate.Sigmoid(alpha=10.0),
+                    backend=backend,
+                    step_mode="m",
+                ),
+                flatten=True,
+            ),
         )
         # [batch size, T, channel * n_mel]
         self.fc = nn.Linear(64 * 40, label_cnt)
 
     def forward(self, x):
-        x = self.fc(self.conv(x)) # [batch size, T, #Class]
-        return x.mean(dim=1) # [batch size, #Class]
+        x = self.fc(self.conv(x))  # [batch size, T, #Class]
+        return x.mean(dim=1)  # [batch size, #Class]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('-b', '--batch-size', type=int, default=64)
-    parser.add_argument('-sr', '--sample-rate', type=int, default=16000)
-    parser.add_argument('-lr', '--learning-rate', type=float, default=1e-2)
-    parser.add_argument('-dir', '--dataset-dir', type=str)
-    parser.add_argument('-e', '--epoch', type=int, default=50)
-    parser.add_argument('-d', '--device', type=str, default='cuda:0')
+    parser.add_argument("-b", "--batch-size", type=int, default=64)
+    parser.add_argument("-sr", "--sample-rate", type=int, default=16000)
+    parser.add_argument("-lr", "--learning-rate", type=float, default=1e-2)
+    parser.add_argument("-dir", "--dataset-dir", type=str)
+    parser.add_argument("-e", "--epoch", type=int, default=50)
+    parser.add_argument("-d", "--device", type=str, default="cuda:0")
     args = parser.parse_args()
 
     sr = args.sample_rate
-    n_fft = int(30e-3*sr) # 48
-    hop_length = int(10e-3*sr) # 16
+    n_fft = int(30e-3 * sr)  # 48
+    hop_length = int(10e-3 * sr)  # 16
     dataset_dir = args.dataset_dir
     batch_size = args.batch_size
     lr = args.learning_rate
@@ -344,44 +441,75 @@ if __name__ == '__main__':
 
     pad = Pad(size)
     spec = Spectrogram(n_fft=n_fft, hop_length=hop_length)
-    melscale = MelScaleDelta(order=delta_order, n_mels=n_mels,
-                             sample_rate=sr, f_min=f_min, f_max=f_max, dct_type='slaney')
+    melscale = MelScaleDelta(
+        order=delta_order,
+        n_mels=n_mels,
+        sample_rate=sr,
+        f_min=f_min,
+        f_max=f_max,
+        dct_type="slaney",
+    )
     rescale = Rescale()
 
-    transform = torchvision.transforms.Compose([pad,
-                                                spec,
-                                                melscale,
-                                                rescale])
+    transform = torchvision.transforms.Compose([pad, spec, melscale, rescale])
 
     print(label_cnt)
 
     train_dataset = SPEECHCOMMANDS(
-        label_dict, dataset_dir, silence_cnt=2300, url="speech_commands_v0.01", split="train", transform=transform, download=True)
+        label_dict,
+        dataset_dir,
+        silence_cnt=2300,
+        url="speech_commands_v0.01",
+        split="train",
+        transform=transform,
+        download=True,
+    )
     train_sampler = torch.utils.data.WeightedRandomSampler(
-        train_dataset.weights, len(train_dataset.weights))
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, num_workers=16,
-                                  sampler=train_sampler, collate_fn=collate_fn)
+        train_dataset.weights, len(train_dataset.weights)
+    )
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        num_workers=16,
+        sampler=train_sampler,
+        collate_fn=collate_fn,
+    )
 
     test_dataset = SPEECHCOMMANDS(
-        label_dict, dataset_dir, silence_cnt=260, url="speech_commands_v0.01", split="test", transform=transform, download=True)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, num_workers=16, collate_fn=collate_fn, shuffle=False,
-                                 drop_last=False)
+        label_dict,
+        dataset_dir,
+        silence_cnt=260,
+        url="speech_commands_v0.01",
+        split="test",
+        transform=transform,
+        download=True,
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        num_workers=16,
+        collate_fn=collate_fn,
+        shuffle=False,
+        drop_last=False,
+    )
 
     net = Net().to(device)
 
     optimizer = Adam(net.parameters(), lr=lr)
     gamma = 0.85
-    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma, last_epoch=-1)
+    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(
+        optimizer, gamma, last_epoch=-1
+    )
     warmup_epochs = 1
     print(net)
 
-    writer = SummaryWriter('./logs/')
+    writer = SummaryWriter("./logs/")
 
     criterion = nn.CrossEntropyLoss().to(device)
 
     for e in range(epoch):
         net.train()
-        print(f'Epoch {net.epochs}')
+        print(f"Epoch {net.epochs}")
 
         time_start = time.time()
         ##### TRAIN #####
@@ -403,8 +531,12 @@ if __name__ == '__main__':
             reset_net(net)
 
             # Rate-based output decoding
-            correct_rate = (out_spikes_counter_frequency.argmax(
-                dim=1) == labels).float().mean().item()
+            correct_rate = (
+                (out_spikes_counter_frequency.argmax(dim=1) == labels)
+                .float()
+                .mean()
+                .item()
+            )
 
             net.train_times += 1
 
@@ -413,7 +545,7 @@ if __name__ == '__main__':
 
         net.eval()
 
-        writer.add_scalar('Train Loss', loss.item(), global_step=net.epochs)
+        writer.add_scalar("Train Loss", loss.item(), global_step=net.epochs)
 
         ##### TEST #####
         with torch.no_grad():
@@ -453,8 +585,10 @@ if __name__ == '__main__':
             #                   global_step=net.epochs)
 
             test_accuracy = correct_sum / test_sum
-            writer.add_scalar('Test Acc.', test_accuracy, global_step=net.epochs)
+            writer.add_scalar("Test Acc.", test_accuracy, global_step=net.epochs)
 
         net.epochs += 1
         time_end = time.time()
-        print(f'Test Acc: {test_accuracy} Loss: {loss} Elapse: {time_end - time_start:.2f}s')
+        print(
+            f"Test Acc: {test_accuracy} Loss: {loss} Elapse: {time_end - time_start:.2f}s"
+        )

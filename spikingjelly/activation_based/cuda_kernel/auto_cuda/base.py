@@ -1,9 +1,10 @@
 import numpy as np
 import logging
+
 try:
     import cupy
 except BaseException as e:
-    logging.info(f'spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {e}')
+    logging.info(f"spikingjelly.activation_based.cuda_kernel.auto_cuda.base: {e}")
     cupy = None
 
 import torch
@@ -17,7 +18,15 @@ from .... import configure
 
 def wrap_with_comment(code: str, comment: str):
     if logging.DEBUG >= logging.root.level:
-        return '\n//------' + comment + ' start------\n' + code + '\n//------' + comment + ' end--------\n\n'
+        return (
+            "\n//------"
+            + comment
+            + " start------\n"
+            + code
+            + "\n//------"
+            + comment
+            + " end--------\n\n"
+        )
     else:
         return code
 
@@ -29,6 +38,7 @@ def startswiths(x: str, prefixes: tuple):
             ret = True
 
     return ret
+
 
 class CKernel:
     def __init__(self, kernel_name: str):
@@ -53,7 +63,7 @@ class CKernel:
 
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
-            example_ck = base.CKernel(kernel_name='example_ck')
+            example_ck = base.CKernel(kernel_name="example_ck")
             print(example_ck.full_codes)
 
         The outputs are:
@@ -76,10 +86,11 @@ class CKernel:
         .. code-block:: python
 
             import logging
+
             logging.basicConfig(level=logging.DEBUG)
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
-            example_ck = base.CKernel(kernel_name='example_ck')
+            example_ck = base.CKernel(kernel_name="example_ck")
             print(example_ck.full_codes)
 
         The outputs are:
@@ -115,7 +126,7 @@ class CKernel:
         self.cparams = {}
         self.reserved_cnames = []
         self.kernel_name = kernel_name
-        self._core = ''
+        self._core = ""
 
     def check_attributes(self, **kwargs):
         """
@@ -132,7 +143,6 @@ class CKernel:
 
         else:
             return True
-
 
     @property
     def core(self):
@@ -154,7 +164,6 @@ class CKernel:
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
                 value = value.contiguous()
-
 
             elif isinstance(value, cupy.ndarray):
                 value = cupy.ascontiguousarray(value)
@@ -207,13 +216,15 @@ class CKernel:
         If not, this function will raise an error.
         """
         if py_dict.keys() != self.cparams.keys():
-            missed_keys = (py_dict.keys() | self.cparams.keys()) - (py_dict.keys() & self.cparams.keys())
+            missed_keys = (py_dict.keys() | self.cparams.keys()) - (
+                py_dict.keys() & self.cparams.keys()
+            )
 
             if missed_keys.__len__() > 0:
                 if (missed_keys & py_dict.keys()).__len__() > 0:
-                    msg = f'{missed_keys} is in py_dict but not in cparams!'
+                    msg = f"{missed_keys} is in py_dict but not in cparams!"
                 else:
-                    msg = f'{missed_keys} is in cparams but not in py_dict!'
+                    msg = f"{missed_keys} is in cparams but not in py_dict!"
                 raise ValueError(msg)
 
     def check_ctypes(self, py_dict: dict):
@@ -235,20 +246,22 @@ class CKernel:
             ctype: str = self.cparams[key]
             if isinstance(value, torch.Tensor):
                 if value.dtype == torch.float:
-                    assert startswiths(ctype, ('const float', 'float'))
+                    assert startswiths(ctype, ("const float", "float"))
 
                 elif value.dtype == torch.half:
-                    assert startswiths(ctype, ('const half2', 'half2'))
+                    assert startswiths(ctype, ("const half2", "half2"))
 
             if isinstance(value, cupy.ndarray):
                 if value.dtype == np.float32:
-                    assert startswiths(ctype, ('const float', 'float'))
+                    assert startswiths(ctype, ("const float", "float"))
 
                 elif value.dtype == np.float16:
-                    assert startswiths(ctype, ('const half2', 'half2'))
+                    assert startswiths(ctype, ("const half2", "half2"))
 
-                elif value.dtype == int or (hasattr(np, 'int') and value.dtype == np.int):
-                    assert startswiths(ctype, ('const int', 'int'))
+                elif value.dtype == int or (
+                    hasattr(np, "int") and value.dtype == np.int
+                ):
+                    assert startswiths(ctype, ("const int", "int"))
 
     def check_half2(self, py_dict: dict):
         """
@@ -295,22 +308,14 @@ class CKernel:
 
         .. code-block:: python
 
-            {
-                'numel': 'const int &',
-                'x': 'const float *',
-                'y': 'const float *'
-            }
+            {"numel": "const int &", "x": "const float *", "y": "const float *"}
 
 
         Then ``py_dict`` sould be
 
         .. code-block:: python
 
-            {
-                'numel': numel,
-                'x': x,
-                'y': y
-            }
+            {"numel": numel, "x": x, "y": y}
 
         where ``numel, x, y`` should be ``torch.Tensor`` or ``cupy.ndarray`` with the corresponding data type, e.g.,
         ``x`` in ``py_dict`` should have data type ``torch.float`` because ``x`` in ``self.cparams`` have value ``'const float *'`` .
@@ -334,9 +339,12 @@ class CKernel:
         # 需要使用有序词典
         # python >= 3.6时，字典默认是有序的
 
-
-        cp_kernel = cupy.RawKernel(self.full_codes, self.kernel_name, options=configure.cuda_compiler_options,
-                                   backend=configure.cuda_compiler_backend)
+        cp_kernel = cupy.RawKernel(
+            self.full_codes,
+            self.kernel_name,
+            options=configure.cuda_compiler_options,
+            backend=configure.cuda_compiler_backend,
+        )
 
         with cuda_utils.DeviceEnvironment(device):
             cp_kernel(grid, block, self.get_ptrs(py_dict), *args_1, **kwargs)
@@ -362,16 +370,16 @@ class CKernel:
 
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
-            example_ck = base.CKernel(kernel_name='example_ck')
-            print('origin:')
+            example_ck = base.CKernel(kernel_name="example_ck")
+            print("origin:")
             print(example_ck.full_codes)
 
 
-            example_ck.add_param(ctype='const float*', cname='x')
-            example_ck.add_param(ctype='const float*', cname='y')
-            example_ck.add_param(ctype='float', cname='z')
+            example_ck.add_param(ctype="const float*", cname="x")
+            example_ck.add_param(ctype="const float*", cname="y")
+            example_ck.add_param(ctype="float", cname="z")
 
-            print('after:')
+            print("after:")
             print(example_ck.full_codes)
 
         .. code-block:: c++
@@ -396,40 +404,41 @@ class CKernel:
         """
         # example: ctype = 'const float *', cname = 'x'
         if cname in self.cparams:
-            raise ValueError(f'{cname} has been added to cparams!')
+            raise ValueError(f"{cname} has been added to cparams!")
 
         if cname in self.reserved_cnames:
             raise ValueError(
-                f'{cname} is the reserved cname. You should change the name of your variable to avoid conflict.')
+                f"{cname} is the reserved cname. You should change the name of your variable to avoid conflict."
+            )
 
         self.cparams[cname] = ctype
 
     @property
     def declaration(self):
-        codes = f'''
+        codes = f"""
         #include <cuda_fp16.h>
         extern "C" __global__
         void {self.kernel_name}(
-        '''
+        """
         self.cparams = dict(sorted(self.cparams.items()))
         params_list = []
         for cname, ctype in self.cparams.items():
-            params_list.append(f'{ctype} {cname}')
+            params_list.append(f"{ctype} {cname}")
 
-        codes += ', '.join(params_list)
+        codes += ", ".join(params_list)
 
-        codes += '''
+        codes += """
         )
-        '''
+        """
         return codes
 
     @property
     def head(self):
-        return '{'
+        return "{"
 
     @property
     def tail(self):
-        return '}'
+        return "}"
 
     @property
     def full_codes(self):
@@ -438,9 +447,12 @@ class CKernel:
         :rtype: str
 
         """
-        return wrap_with_comment(self.declaration, 'declaration') + wrap_with_comment(self.head,
-                                                                                      'head') + wrap_with_comment(
-            self.core, 'core') + wrap_with_comment(self.tail, 'tail')
+        return (
+            wrap_with_comment(self.declaration, "declaration")
+            + wrap_with_comment(self.head, "head")
+            + wrap_with_comment(self.core, "core")
+            + wrap_with_comment(self.tail, "tail")
+        )
 
 
 class CKernel1D(CKernel):
@@ -470,7 +482,8 @@ class CKernel1D(CKernel):
         .. code-block:: python
 
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
-            temp_kernel = base.CKernel1D(kernel_name='temp_kernel')
+
+            temp_kernel = base.CKernel1D(kernel_name="temp_kernel")
             print(temp_kernel.full_codes)
 
         The outputs are:
@@ -496,9 +509,11 @@ class CKernel1D(CKernel):
         .. code-block:: python
 
             import logging
+
             logging.basicConfig(level=logging.DEBUG)
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
-            temp_kernel = base.CKernel1D(kernel_name='temp_kernel')
+
+            temp_kernel = base.CKernel1D(kernel_name="temp_kernel")
             print(temp_kernel.full_codes)
 
         The outputs are:
@@ -548,9 +563,9 @@ class CKernel1D(CKernel):
 
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
-            c_heaviside = base.CKernel1D(kernel_name='heaviside')
-            c_heaviside.add_param(ctype='const float *', cname='x')
-            c_heaviside.add_param(ctype='float *', cname='y')
+            c_heaviside = base.CKernel1D(kernel_name="heaviside")
+            c_heaviside.add_param(ctype="const float *", cname="x")
+            c_heaviside.add_param(ctype="float *", cname="y")
             c_heaviside.core = '''
                         y[index] = x[index] >= 0.0f ? 1.0f: 0.0f;
             '''
@@ -625,25 +640,25 @@ class CKernel1D(CKernel):
 
         """
         super().__init__(*args, **kwargs)
-        self.cparams['numel'] = 'const int &'
-        self.reserved_cnames.append('index')
+        self.cparams["numel"] = "const int &"
+        self.reserved_cnames.append("index")
 
     @property
     def head(self):
-        codes = '''
+        codes = """
         {
             const int index = blockIdx.x * blockDim.x + threadIdx.x;
             if (index < numel)
             {
-        '''
+        """
         return codes
 
     @property
     def tail(self):
-        codes = '''
+        codes = """
             }
         }
-        '''
+        """
         return codes
 
     def check_half2(self, py_dict: dict):
@@ -668,11 +683,15 @@ class CKernel1D(CKernel):
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
                 if value.dtype == torch.half:
-                    assert value.numel() % 2 == 0, f'please pad the numel of {key} to assert mod 2 == 0! (for half2)'
+                    assert value.numel() % 2 == 0, (
+                        f"please pad the numel of {key} to assert mod 2 == 0! (for half2)"
+                    )
 
             if isinstance(value, cupy.ndarray):
                 if value.dtype == np.float16:
-                    assert value.size % 2 == 0, f'please pad the numel of {key} to assert mod 2 == 0! (for half2)'
+                    assert value.size % 2 == 0, (
+                        f"please pad the numel of {key} to assert mod 2 == 0! (for half2)"
+                    )
 
     def __call__(self, grid: tuple, block: tuple, py_dict: dict, *args_1, **kwargs):
         """
@@ -692,22 +711,14 @@ class CKernel1D(CKernel):
 
         .. code-block:: python
 
-            {
-                'numel': 'const int &',
-                'x': 'const float *',
-                'y': 'const float *'
-            }
+            {"numel": "const int &", "x": "const float *", "y": "const float *"}
 
 
         Then ``py_dict`` sould be
 
         .. code-block:: python
 
-            {
-                'numel': numel,
-                'x': x,
-                'y': y
-            }
+            {"numel": numel, "x": x, "y": y}
 
         where ``numel, x, y`` should be ``torch.Tensor`` or ``cupy.ndarray`` with the corresponding data type, e.g.,
         ``x`` in ``py_dict`` should have data type ``torch.float`` because ``x`` in ``self.cparams`` have value ``'const float *'`` .
@@ -743,7 +754,6 @@ class CKernel1D(CKernel):
 
                     py_dict[key] = value
 
-
             elif isinstance(value, cupy.ndarray) and value.dtype == np.float16:
                 if value.size % 2 != 0:
                     pad_shapes.append(value.shape)
@@ -759,7 +769,7 @@ class CKernel1D(CKernel):
         # move pad values
         for key, shape in zip(pad_keys, pad_shapes):
             value = py_dict[key]
-            value = value[: -1]
+            value = value[:-1]
 
             if isinstance(value, torch.Tensor):
                 value = value.view(shape)
@@ -788,21 +798,21 @@ class CKernel1D(CKernel):
             from spikingjelly.activation_based import cuda_utils
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
-            c_heaviside = base.CKernel1D(kernel_name='heaviside')
-            c_heaviside.add_param(ctype='const float *', cname='x')
-            c_heaviside.add_param(ctype='float *', cname='y')
+            c_heaviside = base.CKernel1D(kernel_name="heaviside")
+            c_heaviside.add_param(ctype="const float *", cname="x")
+            c_heaviside.add_param(ctype="float *", cname="y")
             c_heaviside.core = '''
                         y[index] = x[index] >= 0.0f ? 1.0f: 0.0f;
             '''
-            device = 'cuda:0'
+            device = "cuda:0"
 
             x = torch.rand([4, 4], device=device) - 0.5
             y = torch.zeros_like(x)
 
-            print('x=')
+            print("x=")
             print(x)
             c_heaviside.simple_call(x=x, y=y)
-            print('y=')
+            print("y=")
             print(y)
 
         The outputs are:
@@ -831,19 +841,18 @@ class CKernel1D(CKernel):
                 numel = value.size
 
         if numel is None:
-            raise ValueError('No torch.Tensor or cupy.ndarray in kwargs!')
+            raise ValueError("No torch.Tensor or cupy.ndarray in kwargs!")
 
         with cuda_utils.DeviceEnvironment(device):
             threads = configure.cuda_threads
             blocks = cuda_utils.cal_blocks(numel)
             numel = cupy.asarray(numel)
-            py_dict['numel'] = numel
-            self.__call__((blocks, ), (threads, ), py_dict)
+            py_dict["numel"] = numel
+            self.__call__((blocks,), (threads,), py_dict)
 
 
 class CKernel2D(CKernel):
     def __init__(self, kernel_name: str, reverse: bool = False):
-
         """
         :param kernel_name: the name of kernel
         :type kernel_name: str
@@ -917,10 +926,11 @@ class CKernel2D(CKernel):
         .. code-block:: python
 
             import logging
+
             logging.basicConfig(level=logging.DEBUG)
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
 
-            temp_kernel = base.CKernel2D(kernel_name='temp_kernel')
+            temp_kernel = base.CKernel2D(kernel_name="temp_kernel")
             print(temp_kernel.full_codes)
 
         The outputs are:
@@ -987,9 +997,9 @@ class CKernel2D(CKernel):
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
             from spikingjelly.activation_based import cuda_utils
 
-            cumsum = base.CKernel2D(kernel_name='cumsum')
-            cumsum.add_param(ctype='const float *', cname='x')
-            cumsum.add_param(ctype='float *', cname='y')
+            cumsum = base.CKernel2D(kernel_name="cumsum")
+            cumsum.add_param(ctype="const float *", cname="x")
+            cumsum.add_param(ctype="float *", cname="y")
 
             cumsum.core = '''
                                 if (t - dt < 0)
@@ -1006,7 +1016,7 @@ class CKernel2D(CKernel):
 
             T = 4
             N = 3
-            device = 'cuda:0'
+            device = "cuda:0"
 
             x = torch.randint(low=0, high=4, size=[T, N], device=device).float()
             y = torch.zeros_like(x)
@@ -1017,17 +1027,12 @@ class CKernel2D(CKernel):
             with cuda_utils.DeviceEnvironment(device=x.get_device()):
                 numel = cupy.asarray(T * N)
                 N = cupy.asarray(N)
-                py_dict = {
-                    'N': N,
-                    'numel': numel,
-                    'x': x,
-                    'y': y
-                }
-                cumsum((blocks, ), (threads, ), py_dict)
+                py_dict = {"N": N, "numel": numel, "x": x, "y": y}
+                cumsum((blocks,), (threads,), py_dict)
 
-            print('x=')
+            print("x=")
             print(x)
-            print('y=')
+            print("y=")
             print(y)
 
 
@@ -1079,15 +1084,15 @@ class CKernel2D(CKernel):
 
         """
         super().__init__(kernel_name)
-        self.cparams['numel'] = 'const int &'
+        self.cparams["numel"] = "const int &"
         self.reverse = reverse
-        self.cparams['N'] = 'const int &'
-        self.reserved_cnames.append('index')
-        self.reserved_cnames.append('dt')
-        self.reserved_cnames.append('t')
+        self.cparams["N"] = "const int &"
+        self.reserved_cnames.append("index")
+        self.reserved_cnames.append("dt")
+        self.reserved_cnames.append("t")
 
-        self._pre_core = ''
-        self._post_core = ''
+        self._pre_core = ""
+        self._post_core = ""
 
     @property
     def pre_core(self):
@@ -1138,7 +1143,6 @@ class CKernel2D(CKernel):
         """
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor):
-
                 if value.dtype == torch.half:
                     if value.ndim <= 1:
                         assert value.numel() % 2 == 0
@@ -1170,22 +1174,14 @@ class CKernel2D(CKernel):
 
         .. code-block:: python
 
-            {
-                'numel': 'const int &',
-                'x': 'const float *',
-                'y': 'const float *'
-            }
+            {"numel": "const int &", "x": "const float *", "y": "const float *"}
 
 
         Then ``py_dict`` sould be
 
         .. code-block:: python
 
-            {
-                'numel': numel,
-                'x': x,
-                'y': y
-            }
+            {"numel": numel, "x": x, "y": y}
 
         where ``numel, x, y`` should be ``torch.Tensor`` or ``cupy.ndarray`` with the corresponding data type, e.g.,
         ``x`` in ``py_dict`` should have data type ``torch.float`` because ``x`` in ``self.cparams`` have value ``'const float *'`` .
@@ -1216,7 +1212,6 @@ class CKernel2D(CKernel):
         pad_shapes = []
         for key, value in py_dict.items():
             if isinstance(value, torch.Tensor) and value.dtype == torch.half:
-
                 if value.ndim <= 1:
                     # 1D tensor
                     if value.numel() % 2 != 0:
@@ -1228,8 +1223,6 @@ class CKernel2D(CKernel):
 
                         py_dict[key] = value
 
-
-
                 elif value.shape[1] % 2 != 0:
                     # 2D tensor with shape = [T, N] and N % 2 != 0
                     pad_shapes.append(value.shape)
@@ -1239,10 +1232,7 @@ class CKernel2D(CKernel):
                     # [T, N] -> [T, N + 1]
                     py_dict[key] = value
 
-
-
             elif isinstance(value, cupy.ndarray) and value.dtype == np.float16:
-
                 if value.ndim <= 1:
                     # 1D tensor
                     if value.size % 2 != 0:
@@ -1254,13 +1244,14 @@ class CKernel2D(CKernel):
 
                         py_dict[key] = value
 
-
                 elif value.shape[1] % 2 != 0:
                     pad_shapes.append(value.shape)
                     pad_keys.append(key)
                     # [T, N] -> [T, N + 1]
 
-                    value = cupy.concatenate((value, cupy.reshape(value[:, -1], (-1, 1))), axis=1)
+                    value = cupy.concatenate(
+                        (value, cupy.reshape(value[:, -1], (-1, 1))), axis=1
+                    )
                     py_dict[key] = value
 
         super().__call__(grid, block, py_dict, *args_1, **kwargs)
@@ -1271,10 +1262,10 @@ class CKernel2D(CKernel):
             shape = pad_shapes[i]
             if isinstance(value, torch.Tensor):
                 if value.ndim <= 1:
-                    value = value[: -1]
+                    value = value[:-1]
                     value = value.view(shape)
                 else:
-                    value = value[:, : -1]
+                    value = value[:, :-1]
 
             elif isinstance(value, cupy.ndarray):
                 if value.ndim <= 1:
@@ -1282,46 +1273,46 @@ class CKernel2D(CKernel):
                     value = cupy.reshape(value, shape)
 
                 else:
-                    value = value[:, : -1]
+                    value = value[:, :-1]
 
             py_dict[key] = value
 
     @property
     def head(self):
-        codes = '''
+        codes = """
         {
             const int index = blockIdx.x * blockDim.x + threadIdx.x;
             if (index < N)
             {
                 const int dt = N;
-        '''
+        """
 
-        codes += wrap_with_comment(self.pre_core, 'pre_core')
+        codes += wrap_with_comment(self.pre_core, "pre_core")
 
         if self.reverse:
-            codes += '''
+            codes += """
                 for(int t = numel - N + index; t >= 0; t -= dt)
                 {
-            '''
+            """
         else:
-            codes += '''
+            codes += """
                 for(int t = index; t < numel; t += dt)
                 {
-            '''
+            """
         return codes
 
     @property
     def tail(self):
-        codes = '''
+        codes = """
                 }
-        '''
+        """
 
-        codes += wrap_with_comment(self.post_core, 'post_core')
+        codes += wrap_with_comment(self.post_core, "post_core")
 
-        codes += '''
+        codes += """
             }
         }
-        '''
+        """
         return codes
 
     def simple_call(self, **kwargs):
@@ -1344,9 +1335,9 @@ class CKernel2D(CKernel):
             from spikingjelly.activation_based.cuda_kernel.auto_cuda import base
             from spikingjelly.activation_based import cuda_utils
 
-            cumsum = base.CKernel2D(kernel_name='cumsum')
-            cumsum.add_param(ctype='const float *', cname='x')
-            cumsum.add_param(ctype='float *', cname='y')
+            cumsum = base.CKernel2D(kernel_name="cumsum")
+            cumsum.add_param(ctype="const float *", cname="x")
+            cumsum.add_param(ctype="float *", cname="y")
 
             cumsum.core = '''
                                 if (t - dt < 0)
@@ -1361,15 +1352,15 @@ class CKernel2D(CKernel):
 
             T = 4
             N = 3
-            device = 'cuda:0'
+            device = "cuda:0"
 
             x = torch.randint(low=0, high=4, size=[T, N], device=device).float()
             y = torch.zeros_like(x)
 
             cumsum.simple_call(x=x, y=y)
-            print('x=')
+            print("x=")
             print(x)
-            print('y=')
+            print("y=")
             print(y)
 
         The outputs are:
@@ -1402,17 +1393,16 @@ class CKernel2D(CKernel):
                 N = value.shape[1]
 
         if numel is None or N is None:
-            raise ValueError('No 2D torch.Tensor or cupy.ndarray in kwargs!')
+            raise ValueError("No 2D torch.Tensor or cupy.ndarray in kwargs!")
 
         with cuda_utils.DeviceEnvironment(device):
             threads = configure.cuda_threads
             blocks = cuda_utils.cal_blocks(numel)
             numel = cupy.asarray(numel)
             N = cupy.asarray(N)
-            py_dict['numel'] = numel
-            py_dict['N'] = N
+            py_dict["numel"] = numel
+            py_dict["N"] = N
             self.__call__((blocks,), (threads,), py_dict)
-
 
 
 class CodeTyper:
@@ -1427,27 +1417,30 @@ class CodeTyper:
 
         .. code-block:: python
 
-            from spikingjelly.activation_based.cuda_kernel.auto_cuda import base, cfunction
+            from spikingjelly.activation_based.cuda_kernel.auto_cuda import (
+                base,
+                cfunction,
+            )
 
-            code0 = cfunction.if_else(z='z', x='x', y='y', mask='mask', dtype='float')
-            code1 = cfunction.sigmoid_backward(y='y', x='x', alpha=2., dtype='float')
+            code0 = cfunction.if_else(z="z", x="x", y="y", mask="mask", dtype="float")
+            code1 = cfunction.sigmoid_backward(y="y", x="x", alpha=2.0, dtype="float")
 
-            codes = ''
+            codes = ""
             codes += code0
             codes += code1
 
-            print('// Without CodeTyper:')
-            print('// ------------------')
+            print("// Without CodeTyper:")
+            print("// ------------------")
             print(codes)
-            print('// ------------------')
+            print("// ------------------")
 
             ctyper = base.CodeTyper(4)
             ctyper.append(code0)
             ctyper.append(code1)
-            print('// With CodeTyper:')
-            print('// ------------------')
+            print("// With CodeTyper:")
+            print("// ------------------")
             print(ctyper.codes)
-            print('// ------------------')
+            print("// ------------------")
 
         .. code-block:: c++
 
@@ -1467,8 +1460,8 @@ class CodeTyper:
 
 
         """
-        self.indent = ' ' * indent_num
-        self.codes = '\n'
+        self.indent = " " * indent_num
+        self.codes = "\n"
 
     def append(self, codes: str):
         """
@@ -1477,14 +1470,14 @@ class CodeTyper:
 
         Append codes in ``self.codes``.
         """
-        codes = codes.replace('\n', '')
-        codes = codes.split(';')
+        codes = codes.replace("\n", "")
+        codes = codes.split(";")
         for i in range(codes.__len__()):
             if codes[i].__len__() > 0:
-                if codes[i] in ('{', '}'):
-                    self.codes += (self.indent + codes[i] + '\n')
+                if codes[i] in ("{", "}"):
+                    self.codes += self.indent + codes[i] + "\n"
                 else:
-                    self.codes += (self.indent + codes[i] + ';\n')
+                    self.codes += self.indent + codes[i] + ";\n"
 
 
 class CodeBlock:
@@ -1503,10 +1496,10 @@ class CodeBlock:
 
             ctyper = base.CodeTyper(4)
             with base.CodeBlock(ctyper):
-                ctyper.append('// swap x and y')
-                ctyper.append('float temp_var = x;')
-                ctyper.append('x = y;')
-                ctyper.append('y = temp_var;')
+                ctyper.append("// swap x and y")
+                ctyper.append("float temp_var = x;")
+                ctyper.append("x = y;")
+                ctyper.append("y = temp_var;")
 
             print(ctyper.codes)
 
@@ -1526,10 +1519,9 @@ class CodeBlock:
         self.env = env
 
     def __enter__(self):
-        self.env.append('{')
-        self.env.indent += ' '
+        self.env.append("{")
+        self.env.indent += " "
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.env.indent = self.env.indent[: -1]
-        self.env.append('}')
-
+        self.env.indent = self.env.indent[:-1]
+        self.env.append("}")

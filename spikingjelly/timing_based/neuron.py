@@ -42,9 +42,7 @@ class _TempotronConfig(BaseModel):
             description="Synaptic current time constant",
             gt=0,
         ),
-    ] = (
-        15.0 / 4
-    )
+    ] = 15.0 / 4
     threshold_voltage: Annotated[
         float,
         Field(
@@ -242,8 +240,8 @@ class _Tempotron(nn.Module):
 # NOTE: Facade class for backward compatibility
 class Tempotron(nn.Module):
     """
-    Tempotron is a Leaky Integrate-and-Fire (LIF) Neuron Model that accepts 
-    spikes from sensory neurons spikes and learns to classify spatiotemporal 
+    Tempotron is a Leaky Integrate-and-Fire (LIF) Neuron Model that accepts
+    spikes from sensory neurons spikes and learns to classify spatiotemporal
     patterns of those spikes.
 
     Reference:

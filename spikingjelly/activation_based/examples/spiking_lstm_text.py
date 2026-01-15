@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from spikingjelly.activation_based import rnn
+
 # from torch.utils.tensorboard import SummaryWriter
 # import sys
 # if sys.platform != 'win32':
@@ -23,8 +24,7 @@ import math
 ####################
 # prepare the data
 ####################
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     all_letters = string.ascii_letters + " .,;'-"
     n_letters = len(all_letters)
 
@@ -33,15 +33,15 @@ if __name__ == '__main__':
 
     # Turn a Unicode string to plain ASCII, thanks to http://stackoverflow.com/a/518232/2809427
     def unicodeToAscii(s):
-        return ''.join(
-            c for c in unicodedata.normalize('NFD', s)
-            if unicodedata.category(c) != 'Mn'
-            and c in all_letters
+        return "".join(
+            c
+            for c in unicodedata.normalize("NFD", s)
+            if unicodedata.category(c) != "Mn" and c in all_letters
         )
 
     # Read a file and split into lines
     def readLines(filename):
-        lines = open(filename).read().strip().split('\n')
+        lines = open(filename).read().strip().split("\n")
         return [unicodeToAscii(line) for line in lines]
 
     # Build the category_lines dictionary, a list of lines per category
@@ -49,8 +49,12 @@ if __name__ == '__main__':
     all_categories = []
 
     # Ubuntu
-    for filename in findFiles('./data/names/*.txt'):  # Windows findFiles('.\data\\names\*.txt')
-        category = filename.split('/')[-1].split('.')[0]  # Windows filename.split('\\')[-1].split('.')[0]
+    for filename in findFiles(
+        "./data/names/*.txt"
+    ):  # Windows findFiles('.\data\\names\*.txt')
+        category = filename.split("/")[-1].split(".")[
+            0
+        ]  # Windows filename.split('\\')[-1].split('.')[0]
         all_categories.append(category)
         lines = readLines(filename)
         category_lines[category] = lines
@@ -64,18 +68,22 @@ if __name__ == '__main__':
 
     n_categories = len(all_categories)
 
-
     # split the data into training set and testing set
     numExamplesPerCategory = []
     category_lines_train = {}
     category_lines_test = {}
     testNumtot = 0
     for c, names in category_lines.items():
-        category_lines_train[c] = names[:int(len(names)*0.8)]
-        category_lines_test[c] = names[int(len(names)*0.8):]
-        numExamplesPerCategory.append([len(category_lines[c]), len(category_lines_train[c]), len(category_lines_test[c])])
+        category_lines_train[c] = names[: int(len(names) * 0.8)]
+        category_lines_test[c] = names[int(len(names) * 0.8) :]
+        numExamplesPerCategory.append(
+            [
+                len(category_lines[c]),
+                len(category_lines_train[c]),
+                len(category_lines_test[c]),
+            ]
+        )
         testNumtot += len(category_lines_test[c])
-
 
     # Find letter index from all_letters, e.g. "a" = 0
     def letterToIndex(letter):
@@ -106,13 +114,15 @@ if __name__ == '__main__':
             category, line, category_tensor, line_tensor
         """
         category = randomChoice(all_categories)
-        if sampleSource == 'train':
+        if sampleSource == "train":
             line = randomChoice(category_lines_train[category])
-        elif sampleSource == 'test':
+        elif sampleSource == "test":
             line = randomChoice(category_lines_test[category])
-        elif sampleSource == 'all':
+        elif sampleSource == "all":
             line = randomChoice(category_lines[category])
-        category_tensor = torch.tensor([all_categories.index(category)], dtype=torch.float)
+        category_tensor = torch.tensor(
+            [all_categories.index(category)], dtype=torch.float
+        )
         line_tensor = lineToTensor(line)
         return category, line, category_tensor, line_tensor
 
@@ -121,8 +131,7 @@ if __name__ == '__main__':
         s = now - since
         m = math.floor(s / 60)
         s -= m * 60
-        return '%dm %ds' % (m, s)
-
+        return "%dm %ds" % (m, s)
 
     ####################
     # prepare the net
@@ -146,7 +155,6 @@ if __name__ == '__main__':
             output = F.softmax(output, dim=1)
             return output
 
-
     ####################
     # training and testing
     ####################
@@ -163,7 +171,7 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(net.parameters(), lr=learning_rate)
 
     if IF_TRAIN:
-        print('Training...')
+        print("Training...")
         current_loss = 0
         correct_num = 0
         avg_losses = []
@@ -171,9 +179,9 @@ if __name__ == '__main__':
         # all_losses = []
         test_accu_rec = []
         start = time.time()
-        for epoch in range(1, TRAIN_EPISODES+1):
+        for epoch in range(1, TRAIN_EPISODES + 1):
             net.train()
-            category, line, category_tensor, line_tensor = randomPair('train')
+            category, line, category_tensor, line_tensor = randomPair("train")
             label_one_hot = F.one_hot(category_tensor.to(int), n_categories).float()
 
             optimizer.zero_grad()
@@ -211,40 +219,49 @@ if __name__ == '__main__':
                                 numCorrect += 1
                     test_accu = numCorrect / testNumtot
                     test_accu_rec.append(test_accu)
-                    print('Epoch %d %d%% (%s); Avg_loss %.4f; Train accuracy %.4f; Test accuracy %.4f' % (
-                        epoch, epoch / TRAIN_EPISODES * 100, timeSince(start), avg_losses[-1], accuracy_rec[-1], test_accu))
+                    print(
+                        "Epoch %d %d%% (%s); Avg_loss %.4f; Train accuracy %.4f; Test accuracy %.4f"
+                        % (
+                            epoch,
+                            epoch / TRAIN_EPISODES * 100,
+                            timeSince(start),
+                            avg_losses[-1],
+                            accuracy_rec[-1],
+                            test_accu,
+                        )
+                    )
 
-        torch.save(net, 'char_rnn_classification.pth')
-        np.save('avg_losses.npy', np.array(avg_losses))
-        np.save('accuracy_rec.npy', np.array(accuracy_rec))
-        np.save('test_accu_rec.npy', np.array(test_accu_rec))
-        np.save('category_lines_train.npy', category_lines_train, allow_pickle=True)
-        np.save('category_lines_test.npy', category_lines_test, allow_pickle=True)
+        torch.save(net, "char_rnn_classification.pth")
+        np.save("avg_losses.npy", np.array(avg_losses))
+        np.save("accuracy_rec.npy", np.array(accuracy_rec))
+        np.save("test_accu_rec.npy", np.array(test_accu_rec))
+        np.save("category_lines_train.npy", category_lines_train, allow_pickle=True)
+        np.save("category_lines_test.npy", category_lines_test, allow_pickle=True)
         # x = np.load('category_lines_test.npy', allow_pickle=True)
         # xdict = x.item()
 
         plt.figure()
         plt.subplot(311)
         plt.plot(avg_losses)
-        plt.title('Average loss')
+        plt.title("Average loss")
         plt.subplot(312)
         plt.plot(accuracy_rec)
-        plt.title('Train accuracy')
+        plt.title("Train accuracy")
         plt.subplot(313)
         plt.plot(test_accu_rec)
-        plt.title('Test accuracy')
-        plt.xlabel('Epoch (*1000)')
+        plt.title("Test accuracy")
+        plt.xlabel("Epoch (*1000)")
         plt.subplots_adjust(hspace=0.6)
-        plt.savefig('TrainingProcess.svg')
+        plt.savefig("TrainingProcess.svg")
         plt.close()
 
     else:
-        print('Testing...')
+        print("Testing...")
 
-        net = torch.load('char_rnn_classification.pth')
+        net = torch.load("char_rnn_classification.pth")
 
         # 遍历测试集计算准确率
-        print('Calculating testing accuracy...')
+        print("Calculating testing accuracy...")
         numCorrect = 0
         for i in range(n_categories):
             category = all_categories[i]
@@ -254,21 +271,29 @@ if __name__ == '__main__':
                 if guess == category:
                     numCorrect += 1
         test_accu = numCorrect / testNumtot
-        print('Test accuracy: {:.3f}, Random guess: {:.3f}'.format(test_accu, 1/n_categories))
+        print(
+            "Test accuracy: {:.3f}, Random guess: {:.3f}".format(
+                test_accu, 1 / n_categories
+            )
+        )
         plt.figure()
         plt.bar(1, test_accu)
         plt.xlim(0, 5)
         plt.ylim(0, 1)
-        plt.title('Test accuracy: {:.3f}, Random guess: {:.3f}'.format(test_accu, 1/n_categories))
+        plt.title(
+            "Test accuracy: {:.3f}, Random guess: {:.3f}".format(
+                test_accu, 1 / n_categories
+            )
+        )
         plt.show()
-        plt.savefig('TestAccuracy.png')
+        plt.savefig("TestAccuracy.png")
         plt.close()
 
         # 让用户输入姓氏以判断其属于哪种语系
         n_predictions = 3
         for j in range(3):
-            first_name = input('请输入一个姓氏以判断其属于哪种语系：')
-            print('\n> %s' % first_name)
+            first_name = input("请输入一个姓氏以判断其属于哪种语系：")
+            print("\n> %s" % first_name)
             output = net(lineToTensor(first_name))
             # Get top N categories
             topv, topi = output.topk(n_predictions, 1, True)
@@ -277,24 +302,24 @@ if __name__ == '__main__':
             for i in range(n_predictions):
                 value = topv[0][i].item()
                 category_index = topi[0][i].item()
-                print('(%.2f) %s' % (value, all_categories[category_index]))
+                print("(%.2f) %s" % (value, all_categories[category_index]))
                 predictions.append([value, all_categories[category_index]])
 
         # 计算confusion矩阵
-        print('Calculating confusion matrix...')
+        print("Calculating confusion matrix...")
         confusion = torch.zeros(n_categories, n_categories)
         n_confusion = 10000
 
         # Keep track of correct guesses in a confusion matrix
         for i in range(n_confusion):
-            category, line, category_tensor, line_tensor = randomPair('all')
+            category, line, category_tensor, line_tensor = randomPair("all")
             output = net(line_tensor)
             guess, guess_i = categoryFromOutput(output.data)
             category_i = all_categories.index(category)
             confusion[category_i][guess_i] += 1
 
         confusion = confusion / confusion.sum(1)
-        np.save('confusion.npy', confusion)
+        np.save("confusion.npy", confusion)
 
         # Set up plot
         fig = plt.figure(figsize=(10, 8))
@@ -302,12 +327,12 @@ if __name__ == '__main__':
         cax = ax.matshow(confusion.numpy())
         fig.colorbar(cax)
         # Set up axes
-        ax.set_xticklabels([''] + all_categories, rotation=90)
-        ax.set_yticklabels([''] + all_categories)
+        ax.set_xticklabels([""] + all_categories, rotation=90)
+        ax.set_yticklabels([""] + all_categories)
         # Force label at every tick
         ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
         ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
         # sphinx_gallery_thumbnail_number = 2
         plt.show()
-        plt.savefig('ConfusionMatrix.svg')
+        plt.savefig("ConfusionMatrix.svg")
         plt.close()
