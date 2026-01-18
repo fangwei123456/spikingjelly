@@ -244,7 +244,7 @@ ann2snn框架在2022年4月又迎来一次较大更新。取消了parser和simul
 
 训练ANN。示例中，我们的模型训练了10个epoch。训练时测试集准确率变化情况如下：
 
-.. code-block:: python
+.. code-block:: shell
 
     Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
     Validating Accuracy: 0.972
@@ -277,7 +277,7 @@ ann2snn框架在2022年4月又迎来一次较大更新。取消了parser和simul
 
 输出结果如下：
 
-.. code-block:: python
+.. code-block:: shell
 
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870

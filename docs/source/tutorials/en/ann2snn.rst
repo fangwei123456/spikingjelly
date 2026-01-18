@@ -272,7 +272,7 @@ If you want to train, you also need to initialize the data loader, optimizer, lo
 
 Train the ANN. In the example, our model is trained for 10 epochs. The test set accuracy changes during training are as follows:
 
-.. code-block::
+.. code-block:: shell
 
     Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
     Validating Accuracy: 0.972
@@ -305,7 +305,7 @@ After training the model, we quickly load the model to test the performance of t
 
 The output is as follows:
 
-.. code-block::
+.. code-block:: shell
 
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870
@@ -377,7 +377,7 @@ The type of snn_model is ``GraphModule`` , referring to `GraphModule <https://py
 
 Call the ``GraphModule.graph.print_tabular()`` method to view the graph of the intermediate representation of the model in tabular form:
 
-.. code-block:: python
+.. code-block:: shell
 
     #snn_model.graph.print_tabular()
     opcode       name            target          args               kwargs
@@ -463,7 +463,7 @@ Following this example, we define the modes as ``max``, ``99.9%`` , ``1.0/2`` , 
 
 Observe the control bar output:
 
-.. code-block::
+.. code-block:: shell
 
     ---------------------------------------------
     Converting using MaxNorm

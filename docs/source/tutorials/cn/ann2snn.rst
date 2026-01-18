@@ -268,7 +268,7 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 
 训练ANN。示例中，我们的模型训练了10个epoch。训练时测试集准确率变化情况如下：
 
-.. code-block::
+.. code-block:: shell
 
     Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
     Validating Accuracy: 0.972
@@ -301,7 +301,7 @@ ann2snn框架在2022年10月再次更新。在converter类中添加fuse方法，
 
 输出结果如下：
 
-.. code-block::
+.. code-block:: shell
 
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870
@@ -372,7 +372,7 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
 
 调用 ``GraphModule.graph.print_tabular()`` 方法，用表格的形式查看模型的计算图的中间表示：
 
-.. code-block:: python
+.. code-block:: shell
 
     #snn_model.graph.print_tabular()
     opcode       name            target          args               kwargs
@@ -458,7 +458,7 @@ snn_model的类型为 ``GraphModule`` ，参见 `GraphModule <https://pytorch.or
 
 观察控制栏输出：
 
-.. code-block::
+.. code-block:: shell
 
     ---------------------------------------------
     Converting using MaxNorm

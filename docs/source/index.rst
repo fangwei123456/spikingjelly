@@ -114,7 +114,7 @@ SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，
 
 项目信息
 -------------------------
-北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <https://www.pcl.ac.cn/>`_ 是SpikingJelly的主要开发者。
+北京大学信息科学技术学院数字媒体所媒体学习组 `Multimedia Learning Group <https://pkuml.org/>`_ 和 `鹏城实验室 <https://www.pcl.ac.cn/>`_ 是SpikingJelly的主要负责机构。
 
 .. image:: ./_static/logo/pku.png
     :width: 20%
@@ -122,7 +122,13 @@ SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，
 .. image:: ./_static/logo/pcl.png
     :width: 20%
 
-开发人员名单可见于 `贡献者 <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_ 。
+SpikingJelly主要由以下开发者开发维护：
+
+**2024.07~现在:** `黄一凡 <https://github.com/AllenYolk>`_, `薛鹏 <https://github.com/PengXue0812>`_
+
+**2019.12~2024.06:** `方维 <https://github.com/fangwei123456>`_, `陈彦骐 <https://github.com/Yanqi-Chen>`_, `丁健豪 <https://github.com/DingJianhao>`_, `陈鼎 <https://github.com/lucifer2859>`_, `黄力炜 <https://github.com/Grasshlw>`_
+
+全体贡献者名单可见于 `贡献者 <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_ 。
 
 友情链接
 -------------------------
@@ -246,7 +252,7 @@ Publications using SpikingJelly are recorded in `Publications using SpikingJelly
 
 About
 -------------------------
-`Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University <https://pkuml.org/>`_ and `Peng Cheng Laboratory <http://www.szpclab.com/>`_ are the main developers of SpikingJelly.
+`Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University <https://pkuml.org/>`_ and `Peng Cheng Laboratory <http://www.szpclab.com/>`_ are the main institutions behind the development of SpikingJelly.
 
 .. image:: ./_static/logo/pku.png
     :width: 20%
@@ -254,7 +260,13 @@ About
 .. image:: ./_static/logo/pcl.png
     :width: 20%
 
-The list of developers can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
+SpikingJelly has been developed and maintained by multiple main developers over time.
+
+**2024.07~Now:** `Yifan Huang <https://github.com/AllenYolk>`_, `Peng Xue <https://github.com/PengXue0812>`_
+
+**2019.12~2024.06**: `Wei Fang <https://github.com/fangwei123456>`_, `Yanqi Chen <https://github.com/Yanqi-Chen>`_, `Jianhao Ding <https://github.com/DingJianhao>`_, `Ding Chen <https://github.com/lucifer2859>`_, `Liwei Huang <https://github.com/Grasshlw>`_
+
+The list of contributors can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
 
 API 文档 | API Docs
 ##########################

@@ -244,7 +244,7 @@ If you want to train, you also need to initialize the data loader, optimizer, lo
 
 Train the ANN. In the example, our model is trained for 10 epochs. The test set accuracy changes during training are as follows:
 
-.. code-block::python
+.. code-block:: shell
 
     Epoch: 0 100%|██████████| 600/600 [00:05<00:00, 112.04it/s]
     Validating Accuracy: 0.972
@@ -269,7 +269,7 @@ Train the ANN. In the example, our model is trained for 10 epochs. The test set 
 
 After training the model, we quickly load the model to test the performance of the saved model:
 
-.. code-block::python
+.. code-block:: python
 
     model.load_state_dict(torch.load('SJ-mnist-cnn_model-sample.pth'))
     acc = val(model, device, test_data_loader)
@@ -277,14 +277,14 @@ After training the model, we quickly load the model to test the performance of t
 
 The output is as follows:
 
-.. code-block::python
+.. code-block:: shell
 
     100%|██████████| 200/200 [00:02<00:00, 89.44it/s]
     ANN Validating Accuracy: 0.9870
 
 Converting with Converter is very simple, you only need to set the mode you want to use in the parameters. For example, to use MaxNorm, you need to define an ``ann2snn.Converter`` first, and forward the model to this object:
 
-.. code-block::python
+.. code-block:: python
 
     model_converter = ann2snn.Converter(mode='max', dataloader=train_data_loader)
     snn_model = model_converter(model)
@@ -293,7 +293,7 @@ snn_model is the output SNN model.
 
 Following this example, we define the modes as ``max``, ``99.9%``, ``1.0/2``, ``1.0/3``, ``1.0/4``, ``1.0/ 5`` case SNN transformation and separate inference T steps to get the accuracy.
 
-.. code-block::python
+.. code-block:: python
 
     print('---------------------------------------------')
     print('Converting using MaxNorm')
@@ -345,7 +345,7 @@ Following this example, we define the modes as ``max``, ``99.9%``, ``1.0/2``, ``
 
 Observe the control bar output:
 
-.. code-block::python
+.. code-block:: shell
 
     ---------------------------------------------
     Converting using MaxNorm
@@ -376,7 +376,7 @@ Observe the control bar output:
 The speed of model conversion can be seen to be very fast. Model inference speed of 200 steps takes only 11s to complete (GTX 2080ti).
 Based on the time-varying accuracy of the model output, we can plot the accuracy for different settings.
 
-.. code-block::python
+.. code-block:: python
 
     fig = plt.figure()
     plt.plot(np.arange(0, T), mode_max_accs, label='mode: max')

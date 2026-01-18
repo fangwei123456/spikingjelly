@@ -47,6 +47,7 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 - 已添加`SpikingSelfAttention`和`QKAttention`；
 - 已添加`nir_exchange`；
 - 已重构`spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional`和`spikingjelly.datasets`；
+- 已重构数据集的实现。
 - 已更新文档和教程。
 
 **计划**
@@ -358,8 +359,33 @@ abstract = {Spiking neural networks (SNNs) aim to realize brain-inspired intelli
 
 ## 项目信息
 
-北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](https://www.pcl.ac.cn/) 是SpikingJelly的主要开发者。
+### 机构
 
-<img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" /><img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
+北京大学信息科学技术学院数字媒体所媒体学习组 [Multimedia Learning Group](https://pkuml.org/) 和 [鹏城实验室](https://www.pcl.ac.cn/) 是SpikingJelly的主要负责机构。
 
-开发人员名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
+<p align="left">
+    <img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" />
+    <img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
+</p>
+
+### 主要开发者
+
+SpikingJelly主要由以下开发者开发维护：
+
+**2024.07~现在**
+
+[黄一凡](https://github.com/AllenYolk), [薛鹏](https://github.com/PengXue0812)
+
+**2019.12~2024.06**
+
+[方维](https://github.com/fangwei123456), [陈彦骐](https://github.com/Yanqi-Chen), [丁健豪](https://github.com/DingJianhao), [陈鼎](https://github.com/lucifer2859), [黄力炜](https://github.com/Grasshlw)
+
+### 感谢全体贡献者
+
+贡献者名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
+
+<a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />
+</a>
+
+<p align="right"><a href="#top"><img src="https://cdn-icons-png.flaticon.com/512/892/892692.png" height="50px"></a></p>

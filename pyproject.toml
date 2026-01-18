@@ -35,7 +35,8 @@ dependencies = [
 ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
-    "License :: Other/Proprietary License",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
     "Operating System :: OS Independent",
 ]
 license-files = ["LICEN[CS]E*"]

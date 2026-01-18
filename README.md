@@ -47,6 +47,7 @@ In the latest version (Github version),
 - `SpikingSelfAttention` and `QKAttention` are available;
 - `nir_exchange` is available;
 - `spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional` and `spikingjelly.datasets` are refactored;
+- Dataset implementations are refactored.
 - Docs and tutorials are updated.
 
 **Planned**
@@ -314,7 +315,7 @@ All datasets saved in the OpenI mirror are allowable by their license or author'
 
 SpikingJelly provides elaborate tutorials. Here are some tutorials:
 
-| Figure                                                       | Tutorial                                                     |
+| Figure | Tutorial |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | ![basic_concept](./docs/source/_static/tutorials/basic_concept/step-by-step.png) | [Basic Conception](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/basic_concept.html) |
 | ![neuron](./docs/source/_static/tutorials/neuron/0.png) | [Neuron](https://spikingjelly.readthedocs.io/zh_CN/0.0.0.0.14/activation_based_en/neuron.html) |
@@ -363,15 +364,30 @@ Read the [Contributing Guide](./CONTRIBUTING.md) for more information.
 
 ## About
 
-[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main developers of SpikingJelly.
+### Institutions
 
-<img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" />
+[Multimedia Learning Group, Institute of Digital Media (NELVT), Peking University](https://pkuml.org/) and [Peng Cheng Laboratory](http://www.szpclab.com/) are the main institutions behind the development of SpikingJelly.
 
-<img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
+<p align="left">
+    <img src="./docs/source/_static/logo/pku.png" alt="PKU" width="160" />
+    <img src="./docs/source/_static/logo/pcl.png" alt="PCL" width="160" />
+</p>
 
-## All Thanks to Our Contributors
+### Main Developers
 
-The list of developers can be found [in the contributor page](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
+SpikingJelly has been developed and maintained by multiple main developers over time.
+
+**2024.07~Now**
+
+[Yifan Huang](https://github.com/AllenYolk), [Peng Xue](https://github.com/PengXue0812)
+
+**2019.12~2024.06**
+
+[Wei Fang](https://github.com/fangwei123456), [Yanqi Chen](https://github.com/Yanqi-Chen), [Jianhao Ding](https://github.com/DingJianhao), [Ding Chen](https://github.com/lucifer2859), [Liwei Huang](https://github.com/Grasshlw)
+
+### All Thanks to Our Contributors
+
+The list of contributors can be found [in the contributor page](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
 <a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />
