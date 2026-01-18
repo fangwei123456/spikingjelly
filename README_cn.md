@@ -385,7 +385,7 @@ SpikingJelly主要由以下开发者开发维护：
 贡献者名单可以在[这里](https://github.com/fangwei123456/spikingjelly/graphs/contributors)找到。
 
 <a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />
+  <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" alt="contributors" />
 </a>
 
-<p align="right"><a href="#top"><img src="https://cdn-icons-png.flaticon.com/512/892/892692.png" height="50px"></a></p>
+<p align="right"><a href="#top"><img src="https://cdn-icons-png.flaticon.com/512/892/892692.png" height="50px" alt="to-top" ></a></p>

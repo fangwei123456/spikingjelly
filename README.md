@@ -390,7 +390,7 @@ SpikingJelly has been developed and maintained by multiple main developers over 
 The list of contributors can be found [in the contributor page](https://github.com/fangwei123456/spikingjelly/graphs/contributors).
 
 <a href="https://github.com/fangwei123456/spikingjelly/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" />
+  <img src="https://contrib.rocks/image?repo=fangwei123456/spikingjelly" alt="contributors" />
 </a>
 
-<p align="right"><a href="#top"><img src="https://cdn-icons-png.flaticon.com/512/892/892692.png" height="50px"></a></p>
+<p align="right"><a href="#top"><img src="https://cdn-icons-png.flaticon.com/512/892/892692.png" height="50px" alt="to-top" /></a></p>
