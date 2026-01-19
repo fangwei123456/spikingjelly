@@ -1,0 +1,307 @@
+from typing import Callable, Optional, Tuple
+import os
+import logging
+
+import torch
+
+from .. import base
+
+try:
+    from .. import triton_kernel
+except BaseException as e:
+    logging.info(f"spikingjelly.activation_based.neuron: {e}")
+    triton_kernel = None
+
+
+__all__ = ["FlexSN"]
+
+
+class FlexSN(base.MemoryModule):
+    def __init__(
+        self,
+        core: Callable,
+        example_inputs: Tuple[torch.Tensor],
+        num_inputs: int,
+        num_states: int,
+        num_outputs: int,
+        requires_grad: Optional[Tuple[bool]] = None,
+        step_mode: str = "m",
+        backend: str = "triton",
+        store_state_seqs: bool = False,
+    ):
+        """
+        **API Language:**
+        :ref:`中文 <FlexSN.__init__-cn>` | :ref:`English <FlexSN.__init__-en>`
+
+        ----
+
+        .. _FlexSN.__init__-cn:
+
+        * **中文**
+
+        ``FlexSN`` 可以根据自定义的 PyTorch 单步函数生成 Triton 多步脉冲神经元核。
+
+        .. admonition:: 警告
+            :class: warning
+
+            使用 FlexSN 需要禁用 ``torch.jit``。请在运行脚本前设置环境变量 ``PYTORCH_JIT=0``。
+            参见: https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging 。
+
+        :param core: 描述单步前向推理的函数，签名应为 ``[*inputs, *states] -> [*outputs, *updated_states]``，
+            其中输入与输出均为张量。“inputs”和“outputs”的数量任意，需用 ``num_inputs`` 和 ``num_outputs`` 指明。
+            “states”的数量任意，与“updated_states”数量一致，且需用 ``num_states`` 指明。
+        :type core: Callable
+
+        :param example_inputs: 提供给 ``core`` 的示例输入，形式为 ``[*inputs, *states]``。
+        :type example_inputs: Tuple[torch.Tensor]
+
+        :param num_inputs: 输入的数量，应严格对应 ``core`` 参数及 ``example_inputs`` 中“inputs”的数量。
+        :type num_inputs: int
+
+        :param num_states: 状态的数量，应严格对应 ``core`` 的参数、返回值及 ``example_inputs`` 中的“states”的数量。
+        :type num_states: int
+
+        :param num_outputs: 输出的数量，应严格对应 ``core`` 返回值中“outputs”的数量。
+        :type num_outputs: int
+
+        :param requires_grad: 指示 ``core`` 的参数 (即 ``[*inputs, *states]``) 是否需要梯度。
+            用于生成前向和反向计算图。长度应与 ``core`` 的参数及 ``example_inputs`` 对应。
+            若为 ``None``，则所有参数均需梯度。默认 ``None``。
+        :type requires_grad: Optional[Tuple[bool]]
+
+        :param step_mode: 步进模式。Triton 内核仅在 ``"m"`` 模式下可用。默认 ``"m"``。
+        :type step_mode: str
+
+        :param backend: 使用的后端。``"triton"`` 仅在 ``step_mode="m"`` 时可用；``"torch"`` 始终可用。
+            默认 ``"triton"``。
+        :type backend: str
+
+        :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
+            ``state_seqs`` 是个列表，每个元素是形状为 ``[T, ...]`` 的张量。默认 ``False``。
+        :type store_state_seqs: bool
+
+        ----
+
+        .. _FlexSN.__init__-en:
+
+        * **English**
+
+        ``FlexSN`` can generate Triton multi-step spiking neuron kernels from
+        customized PyTorch single-step functions.
+
+        .. admonition:: Warning
+            :class: warning
+
+            FlexSN requires ``torch.jit`` to be disabled. Please set the env var
+            ``PYTORCH_JIT=0``. See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging .
+
+        :param core: a function describing the single-step inference dynamics of
+            the spiking neuron. Its signature should be ``[*inputs, *states] -> [*outputs, *updated_states]``,
+            and the arguments and return values should all be tensors. There can
+            be arbitrary number of inputs and outputs (specified by ``num_inputs`` and ``num_outputs``).
+            There can be arbitrary number of states (specified by ``num_states``),
+            and the number of updated states should match the number of states.
+        :type core: Callable
+
+        :param example_inputs: example inputs to ``core`` with the form of
+            ``[*inputs, *states]``.
+        :type example_inputs: Tuple[torch.Tensor]
+
+        :param num_inputs: number of inputs. It should strictly match the
+            number of inputs" in ``core``'s arguments and ``example_inputs``.
+        :type num_inputs: int
+
+        :param num_states: number of states. It should strictly match the
+            number of "states" in ``core``'s arguments, ``core``'s return values,
+            and ``example_inputs``.
+        :type num_states: int
+
+        :param num_outputs: number of outputs. It should strictly match the
+            number of "outputs" in ``core``'s return values.
+        :type num_outputs: int
+
+        :param requires_grad: whether the core's arguments (i.e.
+            ``[*inputs, *states]``) requires gradients. This info is used to
+            generate the forward and backward graphs. Its length should match
+            the number of ``core``'s arguments and the length of ``example_inputs``.
+            If None, all argument tensors require grad. Defaults to ``None``.
+        :type requires_grad: Optional[Tuple[bool]]
+
+        :param step_mode: step mode. Triton kernel is available only in "m"
+            mode. Defaults to ``"m"``.
+        :type step_mode: str
+
+        :param backend: backend to use. ``"triton"`` is available only when
+            ``step_mode="m"``. ``"torch"`` is always available. Defaults to ``"triton"``.
+        :type backend: str
+
+        :param store_state_seqs: whether to store the state sequences. If ``True``,
+            users can access the state sequences via ``state_seqs`` property.
+            ``state_seqs`` is a list of tensors with shape ``[T, ...]``. Defaults
+            to ``False``.
+        :type store_state_seqs: bool
+        """
+        super().__init__()
+        jit_disabled = os.environ.get("PYTORCH_JIT", "1") == "0"
+        if not jit_disabled:
+            raise RuntimeError(
+                "FlexSN requires torch.jit to be disabled. "
+                "Please set the env var PYTORCH_JIT=0 before running your script. "
+                "See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging ."
+            )
+
+        self.core = core
+        self.inf_graph = triton_kernel.torch2triton.generate_inference_graph(
+            core, example_inputs
+        )
+        self.fwd_graph, self.bwd_graph = (
+            triton_kernel.torch2triton.generate_forward_and_backward_graph(
+                core, example_inputs, requires_grad=requires_grad
+            )
+        )
+        self.info = triton_kernel.flexsn.extract_info(
+            self.fwd_graph, num_inputs, num_states, num_outputs
+        )
+        self.num_inputs = num_inputs
+        self.num_states = num_states
+        self.num_outputs = num_outputs
+
+        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
+            self.inf_graph, core.__name__ + "_inference"
+        )
+        self.f_inf = triton_kernel.flexsn.get_flexsn_inference_kernel(
+            core_str, core_name, info=self.info
+        )
+
+        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
+            self.fwd_graph, core.__name__ + "_forward"
+        )
+        self.f_fwd = triton_kernel.flexsn.get_flexsn_forward_kernel(
+            core_str, core_name, info=self.info
+        )
+
+        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
+            self.bwd_graph, core.__name__ + "_backward"
+        )
+        self.f_bwd = triton_kernel.flexsn.get_flexsn_backward_kernel(
+            core_str, core_name, info=self.info
+        )
+
+        # register states as memory buffers
+        self.register_memory("states", None)
+
+        self.step_mode = step_mode
+        self.backend = backend
+        self.store_state_seqs = store_state_seqs
+
+    @property
+    def supported_backends(self):
+        return ("triton", "torch")
+
+    @property
+    def store_state_seqs(self):
+        return self._store_state_seqs
+
+    @store_state_seqs.setter
+    def store_state_seqs(self, value: bool):
+        self._store_state_seqs = value
+        if value:
+            if not hasattr(self, "state_seqs"):
+                self.register_memory("state_seqs", None)
+
+    def init_states(self, *args):
+        """
+        **API Language:**
+        :ref:`中文 <FlexSN.init_states-cn>` | :ref:`English <FlexSN.init_states-en>`
+
+        ----
+
+        .. _FlexSN.init_states-cn:
+
+        * **中文**
+
+        初始化神经元的状态张量。用户可以通过重写此方法来自定义状态初始化规则。默认情况下，所有
+        状态均被初始化为零张量。
+
+        神经元的状态张量被存储在 ``states`` 属性中。这是一个列表，其每个元素是一个张量，顺序
+        对应了 ``core`` 参数的“states”部分。
+
+        :param args: ``forward`` 的输入，即 ``[*inputs]``。用户应根据 ``args``
+            和 ``FlexSN`` 的 ``step_mode`` 等信息来决定状态张量的初始化方式。
+        :type args: Sequence[Tensor]
+
+        ----
+
+        .. _FlexSN.init_states-en:
+
+        * **English**
+
+        Initialize the neuron state tensors. Users can override this method to
+        customize the state initialization rules. By default, all state tensors
+        are initialized to zero.
+
+        The state tensors are stored in the ``states`` attribute, which is a list
+        of tensors, whose order corresponds to the "states" part of ``core``.
+
+        :param args: the input of ``forward``, i.e., ``[*inputs]``.
+            Users should initialize state tensors based on ``args`` and ``step_mode``.
+        :type args: Sequence[Tensor]
+        """
+
+        if self.step_mode == "s":
+            self.states = [torch.zeros_like(args[0]) for _ in range(self.num_states)]
+        elif self.step_mode == "m":
+            self.states = [torch.zeros_like(args[0][0]) for _ in range(self.num_states)]
+        else:
+            raise ValueError(f"Unsupported step mode: {self.step_mode}")
+
+    def single_step_forward(self, *args):
+        # only torch backend is supported for single-step forward
+        results = self.core(*args, *self.states)  # [*outputs, *states]
+        self.states = results[self.num_outputs :]
+        return results[: self.num_outputs]
+
+    def multi_step_forward(self, *args):
+        if self.backend == "torch":
+            T = args[0].shape[0]
+            output_seqs = [[] for _ in range(self.num_outputs)]
+            if self.store_state_seqs:
+                state_seqs = [[] for _ in range(self.num_states)]
+
+            for t in range(T):
+                outputs = self.single_step_forward(*[arg[t] for arg in args])
+                for i in range(self.num_outputs):
+                    output_seqs[i].append(outputs[i])
+                if self.store_state_seqs:
+                    for i in range(self.num_states):
+                        state_seqs[i].append(self.states[i])
+
+            if self.store_state_seqs:
+                self.state_seqs = [torch.stack(v, dim=0) for v in state_seqs]
+
+            return [torch.stack(y, dim=0) for y in output_seqs]
+
+        elif self.backend == "triton":
+            result_seqs = triton_kernel.flexsn.FlexSNFunction.apply(
+                self.f_inf, self.f_fwd, self.f_bwd, self.info, *args, *self.states
+            )
+            output_seqs = result_seqs[: self.num_outputs]
+            state_seqs = result_seqs[self.num_outputs :]
+            self.states = [v[-1] for v in state_seqs]
+            if self.store_state_seqs:
+                self.state_seqs = state_seqs
+            return output_seqs
+
+    def forward(self, *args):
+        if self.states is None:
+            self.init_states(*args)
+        output = super().forward(*args)
+        return output[0] if len(output) == 1 else output
+
+    def extra_repr(self):
+        return (
+            f"core={self.core.__name__}, "
+            f"num_inputs={self.num_inputs}, "
+            f"num_states={self.num_states}, "
+            f"num_outputs={self.num_outputs}, "
+        )

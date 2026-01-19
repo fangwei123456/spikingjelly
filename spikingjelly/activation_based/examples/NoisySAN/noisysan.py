@@ -19,7 +19,7 @@ class NoisySpikeMLP(nn.Module):
                 ("linear0", layer.Linear(in_pop_dim, hidden_sizes[0])),
                 (
                     "sn0",
-                    neuron.NoisyCLIFNode(
+                    neuron.NoisyCUBALIFNode(
                         hidden_sizes[0], T=spike_ts, sigma_init=sigma_init, beta=beta
                     ),
                 ),
@@ -30,7 +30,7 @@ class NoisySpikeMLP(nn.Module):
                 hidden_layers["linear" + str(hidden_layer)] = layer.Linear(
                     hidden_sizes[hidden_layer - 1], hidden_sizes[hidden_layer]
                 )
-                hidden_layers["sn" + str(hidden_layer)] = neuron.NoisyCLIFNode(
+                hidden_layers["sn" + str(hidden_layer)] = neuron.NoisyCUBALIFNode(
                     hidden_sizes[hidden_layer],
                     T=spike_ts,
                     sigma_init=sigma_init,
@@ -40,7 +40,7 @@ class NoisySpikeMLP(nn.Module):
         hidden_layers["linear" + str(hidden_num)] = layer.Linear(
             hidden_sizes[-1], act_dim * dec_pop_dim
         )
-        hidden_layers["sn" + str(hidden_num)] = neuron.NoisyILCCLIFNode(
+        hidden_layers["sn" + str(hidden_num)] = neuron.NoisyILCCUBALIFNode(
             act_dim, dec_pop_dim, T=spike_ts, sigma_init=sigma_init, beta=beta
         )
 

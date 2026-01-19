@@ -18,8 +18,8 @@ class SpikeMLP(nn.Module):
             [
                 ("Linear0", layer.Linear(in_pop_dim, hidden_sizes[0])),
                 (
-                    neuron_type + "0",
-                    neuron.CLIFNode(surrogate_function=surrogate.Rect()),
+                    "CUBALIFNode" + "0",
+                    neuron.CUBALIFNode(surrogate_function=surrogate.Rect()),
                 ),
             ]
         )
@@ -28,14 +28,14 @@ class SpikeMLP(nn.Module):
                 hidden_layers["Linear" + str(hidden_layer)] = layer.Linear(
                     hidden_sizes[hidden_layer - 1], hidden_sizes[hidden_layer]
                 )
-                hidden_layers[neuron_type + str(hidden_layer)] = neuron.CLIFNode(
+                hidden_layers["CUBALIFNode" + str(hidden_layer)] = neuron.CUBALIFNode(
                     surrogate_function=surrogate.Rect()
                 )
 
         hidden_layers["Linear" + str(hidden_num)] = layer.Linear(
             hidden_sizes[-1], act_dim * dec_pop_dim
         )
-        hidden_layers[neuron_type + str(hidden_num)] = neuron.ILCCLIFNode(
+        hidden_layers["ILCCUBALIFNode" + str(hidden_num)] = neuron.ILCCUBALIFNode(
             act_dim, dec_pop_dim, surrogate_function=surrogate.Rect()
         )
 

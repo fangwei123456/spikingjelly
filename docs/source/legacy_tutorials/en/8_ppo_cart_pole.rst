@@ -30,14 +30,14 @@ and the NonSpikingLIF neuron layer can be regraded as the decision making unit.
     class ActorCritic(nn.Module):
         def __init__(self, num_inputs, num_outputs, hidden_size, T=16, std=0.0):
             super(ActorCritic, self).__init__()
-            
+
             self.critic = nn.Sequential(
                 nn.Linear(num_inputs, hidden_size),
                 neuron.IFNode(),
                 nn.Linear(hidden_size, 1),
                 NonSpikingLIFNode(tau=2.0)
             )
-            
+
             self.actor = nn.Sequential(
                 nn.Linear(num_inputs, hidden_size),
                 neuron.IFNode(),
@@ -48,7 +48,7 @@ and the NonSpikingLIF neuron layer can be regraded as the decision making unit.
             self.log_std = nn.Parameter(torch.ones(1, num_outputs) * std)
 
             self.T = T
-            
+
         def forward(self, x):
             for t in range(self.T):
                 self.critic(x)

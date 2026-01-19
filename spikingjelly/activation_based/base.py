@@ -242,7 +242,7 @@ class MemoryModule(nn.Module, StepModule):
         self._memories = {}
         self._memories_rv = {}
         self._backend = "torch"
-        self.step_mode = "s"
+        self._step_mode = "s"
 
     @property
     def supported_backends(self) -> Tuple[str]:
