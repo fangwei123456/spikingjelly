@@ -42,8 +42,8 @@ classifiers = [
 license-files = ["LICEN[CS]E*"]
 
 [project.optional-dependencies]
-cupy11 = ["cupy-cuda12x"]
-cupy12 = ["cupy-cuda11x"]
+cupy11 = ["cupy-cuda11x"]
+cupy12 = ["cupy-cuda12x"]
 triton = ["triton>=3.3.1"]
 nir = ["nir", "nirtorch"]
 
