@@ -250,13 +250,13 @@ To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activat
 
     f = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
+        num_inputs=2,
+        num_states=2,
+        num_outputs=2,
         example_inputs=(
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
         ),
-        num_inputs=2,
-        num_states=2,
-        num_outputs=2,
         requires_grad=(True, True, True, True),
         step_mode="m",
         backend="triton",
@@ -273,12 +273,11 @@ To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activat
     print(v.mean()) # tensor(-0.2750, device='cuda:0', grad_fn=<MeanBackward0>)
     print(rho.mean()) # tensor(0.4842, device='cuda:0', grad_fn=<MeanBackward0>)
 
-The construction of ``FlexSN`` requires the following arguments:
+The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` requires the following arguments:
 
-* ``core`` : a function that describes the single-step neuron dynamics, with the signature
-  ``[*inputs, *states] -> [*outputs, *states]``.
-* ``example_inputs`` : example arguments for ``core``. ``FlexSN`` will call ``core`` with these example inputs in order to capture the computation graph.
+* ``core`` : a function that describes the single-step neuron dynamics, with the signature ``[*inputs, *states] -> [*outputs, *states]``.
 * ``num_inputs, num_states, num_outputs`` : the numbers of inputs, state variables, and outputs, which should be consistent with the signature of ``core``.
+* ``example_inputs`` : example arguments for ``core``. ``FlexSN`` will call ``core`` with these example inputs in order to capture the computation graph.
 * ``requires_grad`` : whether the arguments of ``core`` require gradients. The default value is ``None``, which means that all arguments require gradients (i.e., equivalent to all ``True``).
 * ``step_mode, backend`` : similar to other neuron modules, these two arguments determine the step mode and the backend. The ``triton`` backend is only valid when ``step_mode="m"``.
 * ``store_state_seqs`` : similar to ``store_v_seq`` in other neuron modules, this argument determines whether state sequences are stored. If ``True``, the state sequences from the last run can be accessed via the ``state_seqs`` attribute. This attribute is a list, where each element corresponds to the sequence of a specific state variable.
@@ -289,13 +288,13 @@ The construction of ``FlexSN`` requires the following arguments:
 
     n_triton = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
+        num_inputs=2,
+        num_states=2,
+        num_outputs=2,
         example_inputs=(
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
         ),
-        num_inputs=2,
-        num_states=2,
-        num_outputs=2,
         requires_grad=(True, True, True, True),
         step_mode="m",
         backend="triton",
@@ -304,13 +303,13 @@ The construction of ``FlexSN`` requires the following arguments:
 
     n_torch = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
+        num_inputs=2,
+        num_states=2,
+        num_outputs=2,
         example_inputs=(
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
         ),
-        num_inputs=2,
-        num_states=2,
-        num_outputs=2,
         requires_grad=(True, True, True, True),
         step_mode="m",
         backend="torch",

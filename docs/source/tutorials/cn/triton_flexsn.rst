@@ -247,13 +247,13 @@ FlexSN 使用流程
 
     f = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
+        num_inputs=2,
+        num_states=2,
+        num_outputs=2,
         example_inputs=(
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
         ),
-        num_inputs=2,
-        num_states=2,
-        num_outputs=2,
         requires_grad=(True, True, True, True),
         step_mode="m",
         backend="triton",
@@ -270,11 +270,11 @@ FlexSN 使用流程
     print(v.mean()) # tensor(-0.2750, device='cuda:0', grad_fn=<MeanBackward0>)
     print(rho.mean()) # tensor(0.4842, device='cuda:0', grad_fn=<MeanBackward0>)
 
-``FlexSN`` 的构造需要以下关键参数：
+:class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` 的构造需要以下关键参数：
 
 * ``core`` ：描述单步神经元动力学的函数，签名为 ``[*inputs, *states] -> [*outputs, *states]`` 。
-* ``example_inputs`` ： ``core`` 的参数示例。 ``FlexSN`` 内部将使用这些示例输入调用 ``core`` ，从而捕获计算图。
 * ``num_inputs, num_states, num_outputs`` ：输入、状态变量和输出的个数。应与 ``core`` 签名的情况相一致。
+* ``example_inputs`` ： ``core`` 的参数示例。 ``FlexSN`` 内部将使用这些示例输入调用 ``core`` ，从而捕获计算图。
 * ``requires_grad`` ： ``core`` 参数是否需要求梯度。默认值为 ``None`` ，含义为“所有参数都需要梯度”（即等价于全为 ``True`` ）。
 * ``step_mode, backend`` ：类似于其他神经元模块，这两个参数决定了步进模式和后端。 ``triton`` 后端只在 ``step_mode="m"`` 时有效。
 * ``store_state_seqs`` ：类似于其他神经元的 ``store_v_seq``，该参数决定是否保存状态序列。若为 ``True``，则可通过 ``state_seqs`` 属性获取上一次运行的状态序列：该属性是一个列表，列表的每个元素对应着某个状态的序列。
@@ -285,13 +285,13 @@ FlexSN 使用流程
 
     n_triton = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
+        num_inputs=2,
+        num_states=2,
+        num_outputs=2,
         example_inputs=(
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
         ),
-        num_inputs=2,
-        num_states=2,
-        num_outputs=2,
         requires_grad=(True, True, True, True),
         step_mode="m",
         backend="triton",
@@ -300,13 +300,13 @@ FlexSN 使用流程
 
     n_torch = neuron.FlexSN(
         core=complicated_lif_core_generator(beta=0.5, gamma=0.9),
+        num_inputs=2,
+        num_states=2,
+        num_outputs=2,
         example_inputs=(
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
             torch.zeros([1], device="cuda"), torch.zeros([1], device="cuda"),
         ),
-        num_inputs=2,
-        num_states=2,
-        num_outputs=2,
         requires_grad=(True, True, True, True),
         step_mode="m",
         backend="torch",

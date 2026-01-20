@@ -20,10 +20,10 @@ class FlexSN(base.MemoryModule):
     def __init__(
         self,
         core: Callable,
-        example_inputs: Tuple[torch.Tensor],
         num_inputs: int,
         num_states: int,
         num_outputs: int,
+        example_inputs: Optional[Tuple[torch.Tensor]] = None,
         requires_grad: Optional[Tuple[bool]] = None,
         step_mode: str = "m",
         backend: str = "triton",
@@ -52,9 +52,6 @@ class FlexSN(base.MemoryModule):
             “states”的数量任意，与“updated_states”数量一致，且需用 ``num_states`` 指明。
         :type core: Callable
 
-        :param example_inputs: 提供给 ``core`` 的示例输入，形式为 ``[*inputs, *states]``。
-        :type example_inputs: Tuple[torch.Tensor]
-
         :param num_inputs: 输入的数量，应严格对应 ``core`` 参数及 ``example_inputs`` 中“inputs”的数量。
         :type num_inputs: int
 
@@ -63,6 +60,11 @@ class FlexSN(base.MemoryModule):
 
         :param num_outputs: 输出的数量，应严格对应 ``core`` 返回值中“outputs”的数量。
         :type num_outputs: int
+
+        :param example_inputs: 提供给 ``core`` 的示例输入，形式为 ``[*inputs, *states]``。
+            这些张量都会自动被放置到 ``cuda`` 设备上。若为 ``None`` ，则自动生成
+            ``num_inputs + num_states`` 个仅含一个元素的张量。默认为 ``None`` 。
+        :type example_inputs: Optional[Tuple[torch.Tensor]]
 
         :param requires_grad: 指示 ``core`` 的参数 (即 ``[*inputs, *states]``) 是否需要梯度。
             用于生成前向和反向计算图。长度应与 ``core`` 的参数及 ``example_inputs`` 对应。
@@ -103,10 +105,6 @@ class FlexSN(base.MemoryModule):
             and the number of updated states should match the number of states.
         :type core: Callable
 
-        :param example_inputs: example inputs to ``core`` with the form of
-            ``[*inputs, *states]``.
-        :type example_inputs: Tuple[torch.Tensor]
-
         :param num_inputs: number of inputs. It should strictly match the
             number of inputs" in ``core``'s arguments and ``example_inputs``.
         :type num_inputs: int
@@ -119,6 +117,11 @@ class FlexSN(base.MemoryModule):
         :param num_outputs: number of outputs. It should strictly match the
             number of "outputs" in ``core``'s return values.
         :type num_outputs: int
+
+        :param example_inputs: example inputs to ``core`` with the form of ``[*inputs, *states]``.
+            These tensors will be moved to ``cuda`` device. If None, ``example_inputs`` will be
+            ``num_inputs + num_states`` tensors with single element. Defaults to ``None``.
+        :type example_inputs: Optional[Tuple[torch.Tensor]]
 
         :param requires_grad: whether the core's arguments (i.e.
             ``[*inputs, *states]``) requires gradients. This info is used to
@@ -149,6 +152,13 @@ class FlexSN(base.MemoryModule):
                 "Please set the env var PYTORCH_JIT=0 before running your script. "
                 "See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging ."
             )
+
+        if example_inputs is None:
+            example_inputs = [
+                torch.randn([1], device="cuda") for _ in range(num_inputs + num_states)
+            ]
+            example_inputs = tuple(example_inputs)
+        example_inputs = tuple(x.to("cuda") for x in example_inputs)
 
         self.core = core
         self.inf_graph = triton_kernel.torch2triton.generate_inference_graph(

@@ -266,7 +266,6 @@ class OTTTLIFNode(LIFNode):
             return spike
 
 
-
 class SLTTLIFNode(LIFNode):
     def __init__(
         self,
