@@ -242,7 +242,7 @@ This model has two inputs ``x, y``, two outputs ``s1, s2``, and two state variab
 .. image:: ../../_static/tutorials/triton_flexsn/neuron.png
     :width: 100%
 
-To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` :
+To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>` :
 
 .. code:: python
 
@@ -273,7 +273,7 @@ To generate a multi-step Triton kernel, use :class:`FlexSN <spikingjelly.activat
     print(v.mean()) # tensor(-0.2750, device='cuda:0', grad_fn=<MeanBackward0>)
     print(rho.mean()) # tensor(0.4842, device='cuda:0', grad_fn=<MeanBackward0>)
 
-The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` requires the following arguments:
+The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>` requires the following arguments:
 
 * ``core`` : a function that describes the single-step neuron dynamics, with the signature ``[*inputs, *states] -> [*outputs, *states]``.
 * ``num_inputs, num_states, num_outputs`` : the numbers of inputs, state variables, and outputs, which should be consistent with the signature of ``core``.
@@ -374,19 +374,16 @@ general.
 
             ...
 
-            def init_states(self, *args):
-                if self.step_mode == "s":
-                    self.states = [
-                        torch.zeros_like(args[0]) for _ in range(self.num_states)
-                    ]
-                elif self.step_mode == "m":
-                    self.states = [
-                        torch.zeros_like(args[0][0]) for _ in range(self.num_states)
-                    ]
+            @staticmethod
+            def init_states(num_states: int, step_mode: str, *args) -> List[torch.Tensor]:
+                if step_mode == "s":
+                    return [torch.zeros_like(args[0]) for _ in range(num_states)]
+                elif step_mode == "m":
+                    return [torch.zeros_like(args[0][0]) for _ in range(num_states)]
                 else:
-                    raise ValueError(f"Unsupported step mode: {self.step_mode}")
+                    raise ValueError(f"Unsupported step mode: {step_mode}")
 
-    See :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` for details.
+    See :class:`FlexSN.init_states <spikingjelly.activation_based.neuron.flexsn.FlexSN.init_states>` for details.
 
 
 .. admonition:: Warning

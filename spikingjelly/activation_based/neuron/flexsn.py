@@ -1,4 +1,4 @@
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, List
 import os
 import logging
 
@@ -219,7 +219,8 @@ class FlexSN(base.MemoryModule):
             if not hasattr(self, "state_seqs"):
                 self.register_memory("state_seqs", None)
 
-    def init_states(self, *args):
+    @staticmethod
+    def init_states(num_states: int, step_mode: str, *args) -> List[torch.Tensor]:
         """
         **API Language:**
         :ref:`中文 <FlexSN.init_states-cn>` | :ref:`English <FlexSN.init_states-en>`
@@ -233,12 +234,18 @@ class FlexSN(base.MemoryModule):
         初始化神经元的状态张量。用户可以通过重写此方法来自定义状态初始化规则。默认情况下，所有
         状态均被初始化为零张量。
 
-        神经元的状态张量被存储在 ``states`` 属性中。这是一个列表，其每个元素是一个张量，顺序
-        对应了 ``core`` 参数的“states”部分。
+        :param num_states: 状态变量的数量。应与 ``core`` 的“states”部分中的张量数量一致。
+        :type num_states: int
+
+        :param step_mode: 本模块当前所处的步进模式。可选值为 ``"s"`` 或 ``"m"`` 。
+        :type step_mode: str
 
         :param args: ``forward`` 的输入，即 ``[*inputs]``。用户应根据 ``args``
             和 ``FlexSN`` 的 ``step_mode`` 等信息来决定状态张量的初始化方式。
-        :type args: Sequence[Tensor]
+        :type args: Sequence[torch.Tensor]
+
+        :return: 初始化后的状态张量列表，顺序对应了 ``core`` 参数的“states”部分。
+        :rtype: List[torch.Tensor]
 
         ----
 
@@ -253,17 +260,29 @@ class FlexSN(base.MemoryModule):
         The state tensors are stored in the ``states`` attribute, which is a list
         of tensors, whose order corresponds to the "states" part of ``core``.
 
+        :param num_states: number of states. It should strictly match the
+            number of "states" in ``core``'s return values.
+        :type num_states: int
+
+        :param step_mode: the current step mode of this module. It can be ``"s"`` or ``"m"`` .
+        :type step_mode: str
+
         :param args: the input of ``forward``, i.e., ``[*inputs]``.
             Users should initialize state tensors based on ``args`` and ``step_mode``.
         :type args: Sequence[Tensor]
+
+        :return: the list of initialized state tensors, whose order corresponds to
+            the "states" part of ``core``.
+        :rtype: List[torch.Tensor]
+
         """
 
-        if self.step_mode == "s":
-            self.states = [torch.zeros_like(args[0]) for _ in range(self.num_states)]
-        elif self.step_mode == "m":
-            self.states = [torch.zeros_like(args[0][0]) for _ in range(self.num_states)]
+        if step_mode == "s":
+            return [torch.zeros_like(args[0]) for _ in range(num_states)]
+        elif step_mode == "m":
+            return [torch.zeros_like(args[0][0]) for _ in range(num_states)]
         else:
-            raise ValueError(f"Unsupported step mode: {self.step_mode}")
+            raise ValueError(f"Unsupported step mode: {step_mode}")
 
     def single_step_forward(self, *args):
         # only torch backend is supported for single-step forward
@@ -304,7 +323,7 @@ class FlexSN(base.MemoryModule):
 
     def forward(self, *args):
         if self.states is None:
-            self.init_states(*args)
+            self.states = self.init_states(self.num_states, self.step_mode, *args)
         output = super().forward(*args)
         return output[0] if len(output) == 1 else output
 

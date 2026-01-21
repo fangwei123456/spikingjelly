@@ -303,7 +303,7 @@ def get_flexsn_backward_kernel(
     )
     kernel_output_signature += f",\n{INDENTATION}"
     kernel_output_signature += f",\n{INDENTATION}".join(
-        [f"grad_v{i}_init_ptr" for i in range(num_inputs)]
+        [f"grad_v{i}_init_ptr" for i in range(num_states)]
     )
 
     autotune_restore = f", ".join([f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)])

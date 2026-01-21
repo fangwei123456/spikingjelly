@@ -239,7 +239,7 @@ FlexSN 使用流程
 .. image:: ../../_static/tutorials/triton_flexsn/neuron.png
     :width: 100%
 
-为了生成多步 Triton 内核，使用 :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` 模块进行包装：
+为了生成多步 Triton 内核，使用 :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>` 模块进行包装：
 
 .. code:: python
 
@@ -270,7 +270,7 @@ FlexSN 使用流程
     print(v.mean()) # tensor(-0.2750, device='cuda:0', grad_fn=<MeanBackward0>)
     print(rho.mean()) # tensor(0.4842, device='cuda:0', grad_fn=<MeanBackward0>)
 
-:class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>` 的构造需要以下关键参数：
+:class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>` 的构造需要以下关键参数：
 
 * ``core`` ：描述单步神经元动力学的函数，签名为 ``[*inputs, *states] -> [*outputs, *states]`` 。
 * ``num_inputs, num_states, num_outputs`` ：输入、状态变量和输出的个数。应与 ``core`` 签名的情况相一致。
@@ -366,19 +366,16 @@ FlexSN 使用流程
 
             ...
 
-            def init_states(self, *args):
-                if self.step_mode == "s":
-                    self.states = [
-                        torch.zeros_like(args[0]) for _ in range(self.num_states)
-                    ]
-                elif self.step_mode == "m":
-                    self.states = [
-                        torch.zeros_like(args[0][0]) for _ in range(self.num_states)
-                    ]
+            @staticmethod
+            def init_states(num_states: int, step_mode: str, *args) -> List[torch.Tensor]:
+                if step_mode == "s":
+                    return [torch.zeros_like(args[0]) for _ in range(num_states)]
+                elif step_mode == "m":
+                    return [torch.zeros_like(args[0][0]) for _ in range(num_states)]
                 else:
-                    raise ValueError(f"Unsupported step mode: {self.step_mode}")
+                    raise ValueError(f"Unsupported step mode: {step_mode}")
 
-    详见 :class:`FlexSN <spikingjelly.activation_based.neuron.FlexSN>`。
+    详见 :meth:`FlexSN.init_states <spikingjelly.activation_based.neuron.flexsn.FlexSN.init_states>`。
 
 
 .. admonition:: 警告
