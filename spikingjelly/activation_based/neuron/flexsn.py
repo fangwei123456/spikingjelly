@@ -269,7 +269,7 @@ class FlexSN(base.MemoryModule):
 
         :param args: the input of ``forward``, i.e., ``[*inputs]``.
             Users should initialize state tensors based on ``args`` and ``step_mode``.
-        :type args: Sequence[Tensor]
+        :type args: Sequence[torch.Tensor]
 
         :return: the list of initialized state tensors, whose order corresponds to
             the "states" part of ``core``.

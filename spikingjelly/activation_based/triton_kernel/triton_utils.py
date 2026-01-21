@@ -26,6 +26,14 @@ try:
         torch.float32: "tl.float32",
         torch.float16: "tl.float16",
     }
+
+    # check bfloat16 support
+    dc = torch.cuda.get_device_capability()
+    if dc[0] < 8 or not hasattr(tl, "bfloat16") or not hasattr(torch, "bfloat16"):
+        print("bfloat16 is not supported on this device.")
+    else:
+        type_dict[torch.bfloat16] = tl.bfloat16
+        type_str_dict[torch.bfloat16] = "tl.bfloat16"
 except BaseException as e:
     import logging
     from . import dummy
