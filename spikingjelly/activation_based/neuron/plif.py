@@ -159,6 +159,9 @@ class ParametricLIFNode(BaseNode):
         init_w = -math.log(init_tau - 1.0)
         self.w = nn.Parameter(torch.as_tensor(init_w))  # as reciprocal_tau
 
+        if self.backend == "triton":
+            self.surrogate_function_triton = self.surrogate_function.triton_codes()
+
     @property
     def supported_backends(self):
         if self.step_mode == "s":
@@ -245,7 +248,7 @@ class ParametricLIFNode(BaseNode):
                 self.v_threshold,
                 self.v_reset,
                 self.detach_reset,
-                self.surrogate_function.triton_codes(),
+                self.surrogate_function_triton,
             )
             if self.store_v_seq:
                 self.v_seq = v_seq
