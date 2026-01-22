@@ -104,7 +104,9 @@ FlexSN
 .. list-table::
 
    * - :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>`
-     - FlexSN for auto-generating Triton neuron kernels.
+     - High-level FlexSN neuron module for automatic Triton kernel generation.
+   * - :class:`FlexSNKernel <spikingjelly.activation_based.neuron.flexsn.FlexSNKernel>`
+     - Low-level callable interface for the generated Triton neuron kernel.
 
 Research-specific Neuron Modules
 ++++++++++++++++++++++++++++++++++++++++

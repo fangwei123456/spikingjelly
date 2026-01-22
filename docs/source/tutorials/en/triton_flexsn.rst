@@ -385,6 +385,11 @@ general.
 
     See :class:`FlexSN.init_states <spikingjelly.activation_based.neuron.flexsn.FlexSN.init_states>` for details.
 
+.. admonition:: Note
+    :class: note
+
+    :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>` implements most features of SpikingJelly's neuron modules.
+    To use directly call the Triton kernel in a lightweight, transparent and functional style, please use :class:`FlexSNKernel <spikingjelly.activation_based.neuron.flexsn.FlexSNKernel>`.
 
 .. admonition:: Warning
     :class: warning

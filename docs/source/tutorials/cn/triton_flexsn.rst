@@ -377,6 +377,11 @@ FlexSN 使用流程
 
     详见 :meth:`FlexSN.init_states <spikingjelly.activation_based.neuron.flexsn.FlexSN.init_states>`。
 
+.. admonition:: 注意
+    :class: note
+
+    :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.FlexSN>` 实现了 SpikingJelly 神经元模块的大多数功能。
+    若想用轻量化、透明化、函数式的方式直接调用 Triton 内核，请使用 :class:`FlexSNKernel <spikingjelly.activation_based.neuron.flexsn.FlexSNKernel>` 。
 
 .. admonition:: 警告
     :class: warning
