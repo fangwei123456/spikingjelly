@@ -4,7 +4,6 @@ torchvision
 scipy
 einops
 tensorboard
-tensorboardX
 matplotlib
 tqdm
 pydantic

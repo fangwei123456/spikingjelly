@@ -32,6 +32,7 @@ dependencies = [
     "matplotlib",
     "SciencePlots",
     "h5py",
+    "pydantic",
 ]
 classifiers = [
     "Programming Language :: Python :: 3 :: Only",
@@ -48,7 +49,12 @@ triton = ["triton>=3.3.1"]
 nir = ["nir", "nirtorch"]
 
 [dependency-groups]
-dev = ["pytest", "pyclean"]
+dev = [
+    "pytest",
+    "pyclean",
+    "pydata-sphinx-theme>=0.16.1",
+    "sphinx>=8.0.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/fangwei123456/spikingjelly"

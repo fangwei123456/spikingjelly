@@ -106,6 +106,7 @@ html_css_files = ["css/custom.css"]
 html_favicon = "_static/logo/sj-logo.png"
 
 autodoc_mock_imports = [
+    "tensorboardX",
     "loris",
     "readline",
     "_C_gemm",
