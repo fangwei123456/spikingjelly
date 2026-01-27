@@ -56,7 +56,14 @@ class SpeechCommands(Dataset):
         folder_in_archive: Optional[str] = FOLDER_IN_ARCHIVE,
         download: Optional[bool] = False,
     ) -> None:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <SpeechCommands.__init__-cn>` | :ref:`English <SpeechCommands.__init__-en>`
+
+        ----
+
+        .. _SpeechCommands.__init__-cn:
+
         * **中文**
 
         SpeechCommands语音数据集，出自 `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_ ，
@@ -79,7 +86,7 @@ class SpeechCommands(Dataset):
 
             SpeechCommands 并非神经形态数据集。因此， :class:`SpeechCommands` 并不继承自
             :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` ，
-            而是继承自 :class:`torch.utils.data.Dataset` 。
+            而是继承自 :class:`torch.utils.data.Dataset` .
 
 
         :param label_dict: 标签与类别的对应字典
@@ -108,6 +115,59 @@ class SpeechCommands(Dataset):
 
         :param download: 是否下载数据，默认为False
         :type download: bool, optional
+
+        ----
+
+        .. _SpeechCommands.__init__-en:
+
+        * **English**
+
+        The SpeechCommands dataset, from `Speech Commands: A Dataset for Limited-Vocabulary Speech Recognition <https://arxiv.org/abs/1804.03209>`_,
+        is divided based on provided test set and validation set lists, containing both v0.01 and v0.02 versions.
+
+        The dataset contains audio of three major categories of words:
+
+        #. Command words, totaling 10: "Yes", "No", "Up", "Down", "Left", "Right", "On", "Off", "Stop", "Go". For v0.02, 5 additional words are included: "Forward", "Backward", "Follow", "Learn", "Visual".
+        #. Numbers 0-9, totaling 10: "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine".
+        #. Auxiliary words, can be considered as noise words, totaling 10: "Bed", "Bird", "Cat", "Dog", "Happy", "House", "Marvin", "Sheila", "Tree", "Wow".
+
+        The v0.01 version contains a total of 30 classes and 64,727 audio clips, while the v0.02 version contains a total of 35 classes and 105,829 audio clips.
+        For more details, please refer to the aforementioned paper and the dataset's README.
+
+        The code implementation is based on torchaudio with expanded functionality, and also refers to `the original paper implementation <https://github.com/romainzimmer/s2net/blob/b073f755e70966ef133bbcd4a8f0343354f5edcd/data.py>`_.
+
+        .. note::
+
+            SpeechCommands is not a neuromorphic dataset. Therefore, :class:`SpeechCommands` does not inherit from
+            :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` ,
+            but instead inherits from :class:`torch.utils.data.Dataset`.
+
+        :param label_dict: dictionary mapping labels to categories
+        :type label_dict: dict
+
+        :param root: root directory of the dataset
+        :type root: str
+
+        :param silence_cnt: number of Silence data samples
+        :type silence_cnt: Optional[int]
+
+        :param silence_size: size of Silence data samples
+        :type silence_size: Optional[int]
+
+        :param transform: a function/transform that takes in a raw audio
+        :type transform: Optional[Callable]
+
+        :param url: dataset version, default is v0.02
+        :type url: Optional[str]
+
+        :param split: dataset split, can be ``"train", "test", "val"``, default is ``"train"``
+        :type split: Optional[str]
+
+        :param folder_in_archive: directory name after extraction, default is ``"SpeechCommands"``
+        :type folder_in_archive: Optional[str]
+
+        :param download: whether to download the dataset, default is False
+        :type download: Optional[bool]
         """
         self.split = verify_str_arg(split, "split", ("train", "val", "test"))
         self.label_dict = label_dict

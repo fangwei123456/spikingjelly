@@ -35,6 +35,23 @@ class NCaltech101(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ) -> None:
         """
+        **API Language:**
+        :ref:`中文 <NCaltech101.__init__-cn>` | :ref:`English <NCaltech101.__init__-en>`
+
+        ----
+
+        .. _NCaltech101.__init__-cn:
+
+        * **中文**
+
+        N-Caltech101 数据集，由 `Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades <https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _NCaltech101.__init__-en:
+
         * **English**
 
         The N-Caltech101 dataset, which is proposed by

@@ -66,19 +66,26 @@ class Conv1d(nn.Conv1d, base.StepModule):
         padding_mode: str = "zeros",
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <Conv1d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Conv1d.__init__-cn>` | :ref:`English <Conv1d.__init__-en>`
 
-        .. _Conv1d-cn:
+        ----
+
+        .. _Conv1d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.Conv1d`
 
-        * :ref:`中文 API <Conv1d-cn>`
+        ----
 
-        .. _Conv1d-en:
+        .. _Conv1d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -129,19 +136,26 @@ class Conv2d(nn.Conv2d, base.StepModule):
         padding_mode: str = "zeros",
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <Conv2d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Conv2d.__init__-cn>` | :ref:`English <Conv2d.__init__-en>`
 
-        .. _Conv2d-cn:
+        ----
+
+        .. _Conv2d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.Conv2d`
 
-        * :ref:`中文 API <Conv2d-cn>`
+        ----
 
-        .. _Conv2d-en:
+        .. _Conv2d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -192,19 +206,26 @@ class Conv3d(nn.Conv3d, base.StepModule):
         padding_mode: str = "zeros",
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <Conv3d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Conv3d.__init__-cn>` | :ref:`English <Conv3d.__init__-en>`
 
-        .. _Conv3d-cn:
+        ----
+
+        .. _Conv3d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.Conv3d`
 
-        * :ref:`中文 API <Conv3d-cn>`
+        ----
 
-        .. _Conv3d-en:
+        .. _Conv3d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -251,19 +272,26 @@ class Upsample(nn.Upsample, base.StepModule):
         recompute_scale_factor: Optional[bool] = None,
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <Upsample-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Upsample.__init__-cn>` | :ref:`English <Upsample.__init__-en>`
 
-        .. _Upsample-cn:
+        ----
+
+        .. _Upsample.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.Upsample`
 
-        * :ref:`中文 API <Upsample-cn>`
+        ----
 
-        .. _Upsample-en:
+        .. _Upsample.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -303,19 +331,26 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
         padding_mode: str = "zeros",
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <ConvTranspose1d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <ConvTranspose1d.__init__-cn>` | :ref:`English <ConvTranspose1d.__init__-en>`
 
-        .. _ConvTranspose1d-cn:
+        ----
+
+        .. _ConvTranspose1d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.ConvTranspose1d`
 
-        * :ref:`中文 API <ConvTranspose1d-cn>`
+        ----
 
-        .. _ConvTranspose1d-en:
+        .. _ConvTranspose1d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -368,19 +403,26 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
         padding_mode: str = "zeros",
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <ConvTranspose2d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <ConvTranspose2d.__init__-cn>` | :ref:`English <ConvTranspose2d.__init__-en>`
 
-        .. _ConvTranspose2d-cn:
+        ----
+
+        .. _ConvTranspose2d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.ConvTranspose2d`
 
-        * :ref:`中文 API <ConvTranspose2d-cn>`
+        ----
 
-        .. _ConvTranspose2d-en:
+        .. _ConvTranspose2d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -433,19 +475,26 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
         padding_mode: str = "zeros",
         step_mode: str = "s",
     ) -> None:
-        """
-        * :ref:`API in English <ConvTranspose3d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <ConvTranspose3d.__init__-cn>` | :ref:`English <ConvTranspose3d.__init__-en>`
 
-        .. _ConvTranspose3d-cn:
+        ----
+
+        .. _ConvTranspose3d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.ConvTranspose3d`
 
-        * :ref:`中文 API <ConvTranspose3d-cn>`
+        ----
 
-        .. _ConvTranspose3d-en:
+        .. _ConvTranspose3d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -492,19 +541,26 @@ class GroupNorm(nn.GroupNorm, base.StepModule):
         affine: bool = True,
         step_mode="s",
     ):
-        """
-        * :ref:`API in English <GroupNorm-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <GroupNorm.__init__-cn>` | :ref:`English <GroupNorm.__init__-en>`
 
-        .. _GroupNorm-cn:
+        ----
+
+        .. _GroupNorm.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.GroupNorm`
 
-        * :ref:`中文 API <GroupNorm-cn>`
+        ----
 
-        .. _GroupNorm-en:
+        .. _GroupNorm.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -536,19 +592,26 @@ class MaxPool1d(nn.MaxPool1d, base.StepModule):
         ceil_mode: bool = False,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <MaxPool1d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <MaxPool1d.__init__-cn>` | :ref:`English <MaxPool1d.__init__-en>`
 
-        .. _MaxPool1d-cn:
+        ----
+
+        .. _MaxPool1d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.MaxPool1d`
 
-        * :ref:`中文 API <MaxPool1d-cn>`
+        ----
 
-        .. _MaxPool1d-en:
+        .. _MaxPool1d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -588,19 +651,26 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
         ceil_mode: bool = False,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <MaxPool2d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <MaxPool2d.__init__-cn>` | :ref:`English <MaxPool2d.__init__-en>`
 
-        .. _MaxPool2d-cn:
+        ----
+
+        .. _MaxPool2d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.MaxPool2d`
 
-        * :ref:`中文 API <MaxPool2d-cn>`
+        ----
 
-        .. _MaxPool2d-en:
+        .. _MaxPool2d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -640,19 +710,26 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
         ceil_mode: bool = False,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <MaxPool3d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <MaxPool3d.__init__-cn>` | :ref:`English <MaxPool3d.__init__-en>`
 
-        .. _MaxPool3d-cn:
+        ----
+
+        .. _MaxPool3d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.MaxPool3d`
 
-        * :ref:`中文 API <MaxPool3d-cn>`
+        ----
 
-        .. _MaxPool3d-en:
+        .. _MaxPool3d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -691,19 +768,26 @@ class AvgPool1d(nn.AvgPool1d, base.StepModule):
         count_include_pad: bool = True,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <AvgPool1d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <AvgPool1d.__init__-cn>` | :ref:`English <AvgPool1d.__init__-en>`
 
-        .. _AvgPool1d-cn:
+        ----
+
+        .. _AvgPool1d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.AvgPool1d`
 
-        * :ref:`中文 API <AvgPool1d-cn>`
+        ----
 
-        .. _AvgPool1d-en:
+        .. _AvgPool1d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -741,19 +825,26 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
         divisor_override: Optional[int] = None,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <AvgPool2d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <AvgPool2d.__init__-cn>` | :ref:`English <AvgPool2d.__init__-en>`
 
-        .. _AvgPool2d-cn:
+        ----
+
+        .. _AvgPool2d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.AvgPool2d`
 
-        * :ref:`中文 API <AvgPool2d-cn>`
+        ----
 
-        .. _AvgPool2d-en:
+        .. _AvgPool2d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -793,19 +884,26 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
         divisor_override: Optional[int] = None,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <AvgPool3d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <AvgPool3d.__init__-cn>` | :ref:`English <AvgPool3d.__init__-en>`
 
-        .. _AvgPool3d-cn:
+        ----
+
+        .. _AvgPool3d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.AvgPool3d`
 
-        * :ref:`中文 API <AvgPool3d-cn>`
+        ----
 
-        .. _AvgPool3d-en:
+        .. _AvgPool3d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -836,19 +934,26 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
 
 class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
     def __init__(self, output_size, step_mode="s") -> None:
-        """
-        * :ref:`API in English <AdaptiveAvgPool1d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <AdaptiveAvgPool1d.__init__-cn>` | :ref:`English <AdaptiveAvgPool1d.__init__-en>`
 
-        .. _AdaptiveAvgPool1d-cn:
+        ----
+
+        .. _AdaptiveAvgPool1d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.AdaptiveAvgPool1d`
 
-        * :ref:`中文 API <AdaptiveAvgPool1d-cn>`
+        ----
 
-        .. _AdaptiveAvgPool1d-en:
+        .. _AdaptiveAvgPool1d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -877,19 +982,26 @@ class AdaptiveAvgPool1d(nn.AdaptiveAvgPool1d, base.StepModule):
 
 class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
     def __init__(self, output_size, step_mode="s") -> None:
-        """
-        * :ref:`API in English <AdaptiveAvgPool2d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <AdaptiveAvgPool2d.__init__-cn>` | :ref:`English <AdaptiveAvgPool2d.__init__-en>`
 
-        .. _AdaptiveAvgPool2d-cn:
+        ----
+
+        .. _AdaptiveAvgPool2d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.AdaptiveAvgPool2d`
 
-        * :ref:`中文 API <AdaptiveAvgPool2d-cn>`
+        ----
 
-        .. _AdaptiveAvgPool2d-en:
+        .. _AdaptiveAvgPool2d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -918,19 +1030,26 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
 
 class AdaptiveAvgPool3d(nn.AdaptiveAvgPool3d, base.StepModule):
     def __init__(self, output_size, step_mode="s") -> None:
-        """
-        * :ref:`API in English <AdaptiveAvgPool3d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <AdaptiveAvgPool3d.__init__-cn>` | :ref:`English <AdaptiveAvgPool3d.__init__-en>`
 
-        .. _AdaptiveAvgPool3d-cn:
+        ----
+
+        .. _AdaptiveAvgPool3d.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.AdaptiveAvgPool3d`
 
-        * :ref:`中文 API <AdaptiveAvgPool3d-cn>`
+        ----
 
-        .. _AdaptiveAvgPool3d-en:
+        .. _AdaptiveAvgPool3d.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -961,19 +1080,26 @@ class Linear(nn.Linear, base.StepModule):
     def __init__(
         self, in_features: int, out_features: int, bias: bool = True, step_mode="s"
     ) -> None:
-        """
-        * :ref:`API in English <Linear-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Linear.__init__-cn>` | :ref:`English <Linear.__init__-en>`
 
-        .. _Linear-cn:
+        ----
+
+        .. _Linear.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.Linear`
 
-        * :ref:`中文 API <Linear-cn>`
+        ----
 
-        .. _Linear-en:
+        .. _Linear.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -986,19 +1112,26 @@ class Linear(nn.Linear, base.StepModule):
 
 class Flatten(nn.Flatten, base.StepModule):
     def __init__(self, start_dim: int = 1, end_dim: int = -1, step_mode="s") -> None:
-        """
-        * :ref:`API in English <Flatten-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Flatten.__init__-cn>` | :ref:`English <Flatten.__init__-en>`
 
-        .. _Flatten-cn:
+        ----
+
+        .. _Flatten.__init__-cn:
+
+        * **中文**
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
 
         其他的参数API参见 :class:`torch.nn.Flatten`
 
-        * :ref:`中文 API <Flatten-cn>`
+        ----
 
-        .. _Flatten-en:
+        .. _Flatten.__init__-en:
+
+        * **English**
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -1041,10 +1174,15 @@ class WSConv2d(Conv2d):
         gain: bool = True,
         eps: float = 1e-4,
     ) -> None:
-        """
-        * :ref:`API in English <WSConv2d-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <WSConv2d.__init__-cn>` | :ref:`English <WSConv2d.__init__-en>`
 
-        .. _WSConv2d-cn:
+        ----
+
+        .. _WSConv2d.__init__-cn:
+
+        * **中文**
 
         :param gain: 是否对权重引入可学习的缩放系数
         :type gain: bool
@@ -1054,9 +1192,11 @@ class WSConv2d(Conv2d):
 
         其他的参数API参见 :class:`Conv2d`
 
-        * :ref:`中文 API <WSConv2d-cn>`
+        ----
 
-        .. _WSConv2d-en:
+        .. _WSConv2d.__init__-en:
+
+        * **English**
 
         :param gain: whether introduce learnable scale factors for weights
         :type step_mode: bool
@@ -1128,10 +1268,15 @@ class WSLinear(Linear):
         gain=True,
         eps=1e-4,
     ) -> None:
-        """
-        * :ref:`API in English <WSLinear-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <WSLinear.__init__-cn>` | :ref:`English <WSLinear.__init__-en>`
 
-        .. _WSLinear-cn:
+        ----
+
+        .. _WSLinear.__init__-cn:
+
+        * **中文**
 
         :param gain: 是否对权重引入可学习的缩放系数
         :type gain: bool
@@ -1141,9 +1286,11 @@ class WSLinear(Linear):
 
         其他的参数API参见 :class:`Linear`
 
-        * :ref:`中文 API <WSLinear-cn>`
+        ----
 
-        .. _WSLinear-en:
+        .. _WSLinear.__init__-en:
+
+        * **English**
 
         :param gain: whether introduce learnable scale factors for weights
         :type step_mode: bool

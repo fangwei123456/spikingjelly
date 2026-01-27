@@ -23,25 +23,33 @@ class ReplaceforGrad(torch.autograd.Function):
 
 class GradwithTrace(nn.Module):
     def __init__(self, module):
-        """
-        * :ref:`API in English <GradwithTrace-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <GradwithTrace.__init__-cn>` | :ref:`English <GradwithTrace.__init__-en>`
 
-        .. _GradwithTrace-cn:
+        ----
 
-        :param module: 需要包装的模块
+        .. _GradwithTrace.__init__-cn:
+
+        * **中文**
 
         用于随时间在线训练时，根据神经元的迹计算梯度
         出处：'Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>'
 
-        * :ref:`中文 API <GradwithTrace-cn>`
+        :param module: 需要包装的模块
 
-        .. _GradwithTrace-en:
+        ----
 
-        :param module: the module that requires wrapping
+        .. _GradwithTrace.__init__-en:
+
+        * **English**
 
         Used for online training through time, calculate gradients by the traces of neurons
         Reference: 'Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>'
 
+        :param module: the module that requires wrapping
+
+        ----
         """
         super().__init__()
         self.module = module
@@ -63,23 +71,30 @@ class GradwithTrace(nn.Module):
 
 class SpikeTraceOp(nn.Module):
     def __init__(self, module):
-        """
-        * :ref:`API in English <SpikeTraceOp-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikeTraceOp.__init__-cn>` | :ref:`English <SpikeTraceOp.__init__-en>`
 
-        .. _SpikeTraceOp-cn:
+        ----
 
-        :param module: 需要包装的模块
+        .. _SpikeTraceOp.__init__-cn:
+
+        * **中文**
 
         对脉冲和迹进行相同的运算，如Dropout，AvgPool等
 
-        * :ref:`中文 API <GradwithTrace-cn>`
+        :param module: 需要包装的模块
 
-        .. _SpikeTraceOp-en:
+        ----
 
-        :param module: the module that requires wrapping
+        .. _SpikeTraceOp.__init__-en:
+
+        * **English**
 
         perform the same operations for spike and trace, such as Dropout, Avgpool, etc.
 
+        :param module: the module that requires wrapping
+        ----
         """
         super().__init__()
         self.module = module

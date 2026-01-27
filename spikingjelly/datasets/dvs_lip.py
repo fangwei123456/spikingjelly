@@ -25,6 +25,23 @@ class DVSLip(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <DVSLip.__init__-cn>` | :ref:`English <DVSLip.__init__-en>`
+
+        ----
+
+        .. _DVSLip.__init__-cn:
+
+        * **中文**
+
+        DVS-Lip 数据集，由 `Multi-Grained Spatio-Temporal Features Perceived Network for Event-Based Lip-Reading <https://openaccess.thecvf.com/content/CVPR2022/html/Tan_Multi-Grained_Spatio-Temporal_Features_Perceived_Network_for_Event-Based_Lip-Reading_CVPR_2022_paper.html>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _DVSLip.__init__-en:
+
         * **English**
 
         The DVS-Lip dataset, which is proposed by `Multi-Grained Spatio-Temporal Features Perceived Network for Event-Based Lip-Reading <https://openaccess.thecvf.com/content/CVPR2022/html/Tan_Multi-Grained_Spatio-Temporal_Features_Perceived_Network_for_Event-Based_Lip-Reading_CVPR_2022_paper.html>`_.

@@ -28,6 +28,23 @@ __all__ = [
 @dataclass(frozen=True)
 class NeuromorphicDatasetConfig:
     """
+    **API Language:**
+    :ref:`中文 <NeuromorphicDatasetConfig-cn>` | :ref:`English <NeuromorphicDatasetConfig-en>`
+
+    ----
+
+    .. _NeuromorphicDatasetConfig-cn:
+
+    * **中文**
+
+    神经形态数据集的配置容器。
+
+    该数据类封装了所有用户指定的选项，用于控制神经形态数据集的准备、处理和加载方式。它是**不可变的**，并且在**初始化时进行验证**。
+
+    ----
+
+    .. _NeuromorphicDatasetConfig-en:
+
     * **English**
 
     Configuration container for neuromorphic datasets.
@@ -85,6 +102,37 @@ class NeuromorphicDatasetConfig:
 class NeuromorphicDatasetBuilder(abc.ABC):
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path):
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetBuilder.__init__-cn>` | :ref:`English <NeuromorphicDatasetBuilder.__init__-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.__init__-cn:
+
+        * **中文**
+
+        神经形态数据集构建器的抽象基类。
+
+        数据集构建器定义了原始事件数据如何转换为可以被 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>` 加载的处理后的数据集。每个构建器封装了一种具体的预处理策略（例如：事件数据、固定帧数积分、固定时长积分）。
+
+        构建器负责：
+
+        * 确定处理后的数据集的保存目录。
+        * 如果处理后的文件不存在，则创建它们。
+        * 为 :class:`torchvision.datasets.DatasetFolder` 提供加载器函数。
+
+        子类应实现抽象方法 :meth:`build_impl`、:meth:`get_loader` 和属性 :attr:`processed_root`。
+
+        :param cfg: 数据集配置
+        :type cfg: NeuromorphicDatasetConfig
+
+        :param raw_root: 原始数据集的根目录。构建器将读取该目录中的数据。
+        :type raw_root: pathlib.Path
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.__init__-en:
+
         * **English**
 
         Abstract base class for neuromorphic dataset builders.
@@ -117,6 +165,23 @@ class NeuromorphicDatasetBuilder(abc.ABC):
     @abc.abstractmethod
     def processed_root(self) -> Path:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetBuilder.processed_root-cn>` | :ref:`English <NeuromorphicDatasetBuilder.processed_root-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.processed_root-cn:
+
+        * **中文**
+
+        处理后的数据集的根目录。
+
+        该目录存储由构建器定义的预处理步骤的输出。
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.processed_root-en:
+
         * **English**
 
         Root directory of the processed dataset.
@@ -128,6 +193,25 @@ class NeuromorphicDatasetBuilder(abc.ABC):
 
     def build(self) -> Tuple[Path, Callable]:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetBuilder.build-cn>` | :ref:`English <NeuromorphicDatasetBuilder.build-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.build-cn:
+
+        * **中文**
+
+        必要时构建处理后的数据集。
+
+        如果处理后的数据集目录已存在，该方法将跳过预处理。否则，它将调用 :meth:`build_impl` 来生成处理后的文件。
+
+        :return: 一个元组 ``(processed_root, loader)``。``processed_root`` 由属性 :attr:`processed_root` 定义，``loader`` 是一个加载单个样本的函数。
+        :rtype: Tuple[pathlib.Path, Callable]
+        ----
+
+        .. _NeuromorphicDatasetBuilder.build-en:
+
         * **English**
 
         Build the processed dataset if necessary.
@@ -152,6 +236,25 @@ class NeuromorphicDatasetBuilder(abc.ABC):
     @abc.abstractmethod
     def build_impl(self) -> None:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetBuilder.build_impl-cn>` | :ref:`English <NeuromorphicDatasetBuilder.build_impl-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.build_impl-cn:
+
+        * **中文**
+
+        实现数据集特定的预处理逻辑。
+
+        此方法定义了原始数据如何转换为处理后的数据集文件，并保存到 :attr:`processed_root` 下。
+
+        子类必须实现此方法。
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.build_impl-en:
+
         * **English**
 
         Implement dataset-specific preprocessing logic.
@@ -166,6 +269,23 @@ class NeuromorphicDatasetBuilder(abc.ABC):
     @abc.abstractmethod
     def get_loader(self) -> Callable:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetBuilder.get_loader-cn>` | :ref:`English <NeuromorphicDatasetBuilder.get_loader-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.get_loader-cn:
+
+        * **中文**
+
+        为处理后的数据集文件返回一个加载器函数。
+
+        返回的可调用对象应加载单个处理后的文件并返回对应的样本。它将被传递给 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`。
+
+        ----
+
+        .. _NeuromorphicDatasetBuilder.get_loader-en:
+
         * **English**
 
         Return a loader function for processed dataset files.
@@ -179,6 +299,25 @@ class NeuromorphicDatasetBuilder(abc.ABC):
 class EventBuilder(NeuromorphicDatasetBuilder):
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path):
         r"""
+        **API Language:**
+        :ref:`中文 <EventBuilder.__init__-cn>` | :ref:`English <EventBuilder.__init__-en>`
+
+        ----
+
+        .. _EventBuilder.__init__-cn:
+
+        * **中文**
+
+        原始事件数据的数据集构建器。
+
+        此构建器不执行任何预处理，直接使用原始数据集作为处理后的数据集。每个样本通过 ``np.load`` 直接加载为原始事件文件（例如 ``.npz``），无需帧积分。
+
+        通常，当 ``data_type == "event"`` 时使用此构建器。
+
+        ----
+
+        .. _EventBuilder.__init__-en:
+
         * **English**
 
         Dataset builder for raw event data.
@@ -208,6 +347,33 @@ class EventBuilder(NeuromorphicDatasetBuilder):
 class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
+        **API Language:**
+        :ref:`中文 <FrameFixedNumberBuilder.__init__-cn>` | :ref:`English <FrameFixedNumberBuilder.__init__-en>`
+
+        ----
+
+        .. _FrameFixedNumberBuilder.__init__-cn:
+
+        * **中文**
+
+        固定帧数积分的数据集构建器。
+
+        此构建器将原始事件数据转换为每个样本固定数量的帧。根据指定的策略（按时间或按事件计数）将事件分割并积分到帧中。
+
+        当 ``data_type == "frame"`` 且 ``frames_number`` 被指定时使用此构建器。
+
+        :param H: 输出帧的高度。
+        :type H: int
+
+        :param W: 输出帧的宽度。
+        :type W: int
+
+        其他参数与 :class:`NeuromorphicDatasetBuilder` 中的相同。
+
+        ----
+
+        .. _FrameFixedNumberBuilder.__init__-en:
+
         * **English**
 
         Dataset builder for fixed-frame-number integration.
@@ -284,6 +450,33 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
 class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
+        **API Language:**
+        :ref:`中文 <FrameFixedDurationBuilder.__init__-cn>` | :ref:`English <FrameFixedDurationBuilder.__init__-en>`
+
+        ----
+
+        .. _FrameFixedDurationBuilder.__init__-cn:
+
+        * **中文**
+
+        固定时长积分的数据集构建器。
+
+        此构建器将原始事件数据转换为帧序列，其中每帧对应固定的时间时长。不同样本的长度可能不同。
+
+        当 ``data_type == "frame"`` 且 ``duration`` 被指定时使用此构建器。
+
+        :param H: 输出帧的高度。
+        :type H: int
+
+        :param W: 输出帧的宽度。
+        :type W: int
+
+        其他参数与 :class:`NeuromorphicDatasetBuilder` 中的相同。
+
+        ----
+
+        .. _FrameFixedDurationBuilder.__init__-en:
+
         * **English**
 
         Dataset builder for fixed-duration integration.
@@ -355,6 +548,33 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
 class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
     def __init__(self, cfg: NeuromorphicDatasetConfig, raw_root: Path, H: int, W: int):
         r"""
+        **API Language:**
+        :ref:`中文 <FrameCustomIntegrateBuilder.__init__-cn>` | :ref:`English <FrameCustomIntegrateBuilder.__init__-en>`
+
+        ----
+
+        .. _FrameCustomIntegrateBuilder.__init__-cn:
+
+        * **中文**
+
+        自定义事件到帧积分的数据集构建器。
+
+        此构建器应用用户定义的积分函数将原始事件数据转换为帧序列。生成的帧保存在用户指定的目录下。请参阅 :doc:`../tutorials/en/neuromorphic_datasets` 了解如何定义自定义积分函数。
+
+        当 ``data_type == "frame"`` 且 ``custom_integrate_function`` 被指定时使用此构建器。
+
+        :param H: 输出帧的高度。
+        :type H: int
+
+        :param W: 输出帧的宽度。
+        :type W: int
+
+        其他参数与 :class:`NeuromorphicDatasetBuilder` 中的相同。
+
+        ----
+
+        .. _FrameCustomIntegrateBuilder.__init__-en:
+
         * **English**
 
         Dataset builder for custom event-to-frame integration.
@@ -440,6 +660,86 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.__init__-cn>` | :ref:`English <NeuromorphicDatasetFolder.__init__-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.__init__-cn:
+
+        * **中文**
+
+        SpikingJelly 神经形态数据集的基类。用户可以通过继承此类并实现所有抽象方法来定义新的数据集。用户可以参考 :class:`DVS128Gesture <spikingjelly.datasets.dvs128_gesture.DVS128Gesture>`。
+
+        用户可以通过设置参数来控制数据格式：
+
+        如果 ``data_type == 'event'``：
+            数据集中的每个样本是一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``。
+        如果 ``data_type == 'frame'``：
+            如果 ``frames_number`` 不为 ``None``：
+                事件将积分到固定帧数的帧中。``split_by`` 定义如何分割事件。
+                详见 :func:`cal_fixed_frames_number_segment_index <spikingjelly.datasets.utils.cal_fixed_frames_number_segment_index>`。
+            如果 ``duration`` 不为 ``None``：
+                事件将积分到每帧固定时间时长的帧中。
+                结果序列的长度彼此不同。
+            如果 ``custom_integrate_function`` 不为 ``None``：
+                事件将通过用户定义的函数进行积分，并保存到 ``root`` 目录下的 ``custom_integrated_frames_dir_name`` 目录中。
+                详见 :doc:`../tutorials/en/neuromorphic_datasets`。
+
+        数据集准备过程包括以下步骤：
+
+        #. 参数检查。
+            这由 :class:`NeuromorphicDatasetConfig` 完成。
+        #. 准备*原始数据集*。
+            #. 数据集文件下载到 ``root/download``（如果支持）并验证。
+            #. 下载的文件提取到 ``root/extract``
+            #. 提取的数据转换为统一的原始事件格式（例如 ``.npz``）并保存到 :attr:`raw_root`。
+        #. 将原始数据集转换为*处理后的数据集*。
+            根据与 ``data_type`` 和相关参数对应的最终数据集格式，将原始事件数据转换为处理后的数据集。
+            此过程由 :class:`NeuromorphicDatasetBuilder` 完成。
+            处理后的数据集保存到自动生成的目录 :attr:`processed_root`。
+        #. 加载处理后的数据集。
+            通过继承 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>` 并使用其 ``__getitem__()``。
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+
+        :param train: 是否使用训练集。对于提供训练/测试划分的数据集，设置为 ``True`` 或 ``False``，例如 DVS128 Gesture。
+            如果数据集不提供训练/测试划分，例如 CIFAR10-DVS，请设置为 ``None`` 并使用 :func:`split_to_train_test_set <spikingjelly.datasets.utils.split_to_train_test_set>`
+            函数来获取训练/测试集
+        :type train: bool
+
+        :param data_type: ``"event"`` 或 ``"frame"``
+        :type data_type: str
+
+        :param frames_number: 积分帧的数量
+        :type frames_number: int
+
+        :param split_by: ``"time"`` 或 ``"number"``
+        :type split_by: str
+
+        :param duration: 每帧的时间时长，其单位与特定数据集的时间单位相同
+        :type duration: int
+
+        :param custom_integrate_function: 一个用户定义的函数，其输入为 ``events, H, W``。``events`` 是一个键为 ``['t', 'x', 'y', 'p']``、值为 ``numpy.ndarray`` 的字典。
+            ``H`` 是数据的高度，``W`` 是数据的宽度。
+            例如，对于 DVS128 Gesture 数据集，``H=128`` 和 ``W=128``。
+            应返回积分后的帧序列（``np.ndarray``）。
+        :type custom_integrate_function: Callable
+
+        :param custom_integrated_frames_dir_name: 用于保存通过 ``custom_integrate_function`` 积分帧的目录名称。
+            如果 ``None``，则设置为 ``custom_integrate_function.__name__``
+        :type custom_integrated_frames_dir_name: Optional[str]
+
+        :param transform: 一个函数/转换器，接收样本并返回转换后的版本。例如图像的 ``transforms.RandomCrop``。
+        :type transform: Callable
+
+        :param target_transform: 一个函数/转换器，接收目标并对其进行转换。
+        :type target_transform: Callable
+        ----
+
+        .. _NeuromorphicDatasetFolder.__init__-en:
+
         * **English**
 
         The base class for SpikingJelly's neuromorphic datasets. Users can define
@@ -556,6 +856,24 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @property
     def raw_root(self) -> Path:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.raw_root-cn>` | :ref:`English <NeuromorphicDatasetFolder.raw_root-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.raw_root-cn:
+
+        * **中文**
+
+        原始数据集的根目录。
+
+        **原始数据集**作为原始数据集的中间和统一表示。处理后的数据集是基于原始数据集生成的。
+
+        :return: 默认为 ``root/events_np``
+        ----
+
+        .. _NeuromorphicDatasetFolder.raw_root-en:
+
         * **English**
 
         Root directory of the raw dataset.
@@ -606,6 +924,27 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
     def prepare_raw_dataset(self):
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.prepare_raw_dataset-cn>` | :ref:`English <NeuromorphicDatasetFolder.prepare_raw_dataset-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.prepare_raw_dataset-cn:
+
+        * **中文**
+
+        准备**原始数据集**。
+
+        此方法确保原始数据集存在于 :attr:`raw_root` 下。如果不存在，则按顺序执行以下步骤：
+
+        1. 将数据集文件下载到 ``root/download``（如果支持）或验证现有下载。
+        2. 通过调用 :meth:`extract_downloaded_files` 将下载的文件提取到 ``root/extract`` 中。
+        3. 通过调用 :meth:`create_raw_from_extracted` 将提取的数据转换为原始数据集，并将原始数据集保存到 :attr:`raw_root`。
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.prepare_raw_dataset-en:
+
         * **English**
 
         Prepare the **raw dataset**.
@@ -657,6 +996,25 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
     def get_dataset_builder(self):
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.get_dataset_builder-cn>` | :ref:`English <NeuromorphicDatasetFolder.get_dataset_builder-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_dataset_builder-cn:
+
+        * **中文**
+
+        根据配置创建数据集构建器。
+
+        构建器定义了**如何将原始数据集转换为最终处理后的数据集**。根据 ``data_type`` 和相关参数选择特定的构建器。
+
+        :return: 数据集构建器实例。
+        :rtype: :class:`NeuromorphicDatasetBuilder`
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_dataset_builder-en:
+
         * **English**
 
         Create a dataset builder according to the configuration.
@@ -687,6 +1045,28 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
     def get_root_when_train_is_none(self, _root: Path) -> Path:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.get_root_when_train_is_none-cn>` | :ref:`English <NeuromorphicDatasetFolder.get_root_when_train_is_none-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_root_when_train_is_none-cn:
+
+        * **中文**
+
+        当 ``train`` 为 ``None`` 时确定处理后的数据集的目录。
+
+        此方法用于不提供预定义的训练/测试划分的数据集。子类可以覆盖此方法以实现自定义目录布局。
+
+        :param _root: 处理后的数据集的根目录。
+        :type _root: pathlib.Path
+
+        :return: 由 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>` 使用的处理后的数据集的目录。
+        :rtype: pathlib.Path
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_root_when_train_is_none-en:
+
         * **English**
 
         Determine the directory of the processed dataset when ``train`` is ``None``.
@@ -721,7 +1101,23 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @classmethod
     @abc.abstractmethod
     def get_H_W(cls) -> Tuple[int]:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.get_H_W-cn>` | :ref:`English <NeuromorphicDatasetFolder.get_H_W-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_H_W-cn:
+
+        * **中文**
+
+        :return: 一个元组 ``(H, W)``，其中 ``H`` 是数据的高度，``W`` 是数据的宽度。
+            例如，对于 DVS128 Gesture 数据集，此函数返回 ``(128, 128)``。
+        :rtype: Tuple[int]
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_H_W-en:
+
         * **English**
 
         :return: a tuple ``(H, W)``, where ``H`` is the height of the data and ``W`` is the weight of the data.

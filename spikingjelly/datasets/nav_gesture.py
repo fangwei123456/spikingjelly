@@ -221,6 +221,23 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <NAVGestureWalk.__init__-cn>` | :ref:`English <NAVGestureWalk.__init__-en>`
+
+        ----
+
+        .. _NAVGestureWalk.__init__-cn:
+
+        * **中文**
+
+        Nav Gesture 数据集，由 `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _NAVGestureWalk.__init__-en:
+
         * **English**
 
         The Nav Gesture dataset, which is proposed by

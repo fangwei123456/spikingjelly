@@ -221,6 +221,23 @@ class ESImageNet(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <ESImageNet.__init__-cn>` | :ref:`English <ESImageNet.__init__-en>`
+
+        ----
+
+        .. _ESImageNet.__init__-cn:
+
+        * **中文**
+
+        ES-ImageNet 数据集，由 `ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks <https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _ESImageNet.__init__-en:
+
         * **English**
 
         The ES-ImageNet dataset, which is proposed by `ES-ImageNet: A Million Event-Stream Classification Dataset for Spiking Neural Networks <https://www.frontiersin.org/articles/10.3389/fnins.2021.726582/full>`_.

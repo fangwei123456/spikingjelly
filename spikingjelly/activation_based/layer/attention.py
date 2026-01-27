@@ -13,6 +13,7 @@ For more information about Spiking Transformers, see :doc:`../tutorials/en/spikf
 
 import torch
 import torch.nn as nn
+from einops import rearrange
 
 from .. import base, neuron
 from .container import SeqToANNContainer
@@ -204,8 +205,6 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         assert T >= reduction_t, "reduction_t cannot be greater than T"
         assert C >= reduction_c, "reduction_c cannot be greater than C"
-
-        from einops import rearrange
 
         # Attention
         class TimeAttention(nn.Module):

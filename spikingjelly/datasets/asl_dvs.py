@@ -44,6 +44,34 @@ class ASLDVS(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <ASLDVS.__init__-cn>` | :ref:`English <ASLDVS.__init__-en>`
+
+        ----
+
+        .. _ASLDVS.__init__-cn:
+
+        * **中文**
+
+        ASL-DVS 数据集，由 `Graph-based Object Classification for Neuromorphic Vision Sensing <https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html>`_ 提出。
+
+        有关参数信息的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        .. note::
+
+            ASLDVS 的 Dropbox 链接已过期。用户可以通过以下命令从 OpenI 镜像手动下载此数据集：
+
+            .. code:: shell
+
+                pip install openi
+                openi dataset download OpenI/ASLDVS --local_dir ./ASLDVS --max_workers 10
+
+            然后您可以解压 ``ASLDVS.zip`` 并获取 ``ICCV2019_DVS_dataset.zip`` 。
+
+        ----
+
+        .. _ASLDVS.__init__-en:
+
         * **English**
 
         The ASL-DVS dataset, which is proposed by `Graph-based Object Classification for Neuromorphic Vision Sensing <https://openaccess.thecvf.com/content_ICCV_2019/html/Bi_Graph-Based_Object_Classification_for_Neuromorphic_Vision_Sensing_ICCV_2019_paper.html>`_.

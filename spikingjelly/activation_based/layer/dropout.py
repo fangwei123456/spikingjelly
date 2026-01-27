@@ -14,17 +14,17 @@ __all__ = ["Dropout", "Dropout2d", "DropConnectLinear"]
 
 class Dropout(base.MemoryModule):
     def __init__(self, p=0.5, step_mode="s"):
-        """
-        * :ref:`API in English <Dropout.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Dropout.__init__-cn>` | :ref:`English <Dropout.__init__-en>`
+
+        ----
 
         .. _Dropout.__init__-cn:
 
-        :param p: 每个元素被设置为0的概率
-        :type p: float
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
-        :type step_mode: str
+        * **中文**
 
-        与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
+        与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\
         数后，才会按照概率去重新决定，哪些位置被置0。
 
         .. tip::
@@ -45,14 +45,17 @@ class Dropout(base.MemoryModule):
             are updated at the last time step. Therefore, we need to keep the set of randomly connected units for the entire
             time window within an iteration.
 
-        * :ref:`中文API <Dropout.__init__-cn>`
+        :param p: 每个元素被设置为0的概率
+        :type p: float
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        ----
 
         .. _Dropout.__init__-en:
 
-        :param p: probability of an element to be zeroed
-        :type p: float
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
-        :type step_mode: str
+        * **English**
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
@@ -76,6 +79,12 @@ class Dropout(base.MemoryModule):
             iteration. Then, the dropout effect would fade-out once the output error is propagated backward and the parameters
             are updated at the last time step. Therefore, we need to keep the set of randomly connected units for the entire
             time window within an iteration.
+
+        :param p: probability of an element to be zeroed
+        :type p: float
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
         """
         super().__init__()
         self.step_mode = step_mode
@@ -110,35 +119,44 @@ class Dropout(base.MemoryModule):
 
 class Dropout2d(Dropout):
     def __init__(self, p=0.2, step_mode="s"):
-        """
-        * :ref:`API in English <Dropout2d.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Dropout2d.__init__-cn>` | :ref:`English <Dropout2d.__init__-en>`
+
+        ----
 
         .. _Dropout2d.__init__-cn:
 
-        :param p: 每个元素被设置为0的概率
-        :type p: float
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
-        :type step_mode: str
+        * **中文**
 
-        与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\\
+        与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\
         数后，才会按照概率去重新决定，哪些位置被置0。
 
         关于SNN中Dropout的更多信息，参见 :ref:`layer.Dropout <Dropout.__init__-cn>`。
 
-        * :ref:`中文API <Dropout2d.__init__-cn>`
+        :param p: 每个元素被设置为0的概率
+        :type p: float
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        ----
 
         .. _Dropout2d.__init__-en:
 
-        :param p: probability of an element to be zeroed
-        :type p: float
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
-        :type step_mode: str
+        * **English**
 
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
         step during a simulation will always be zero. The indexes of zeroed elements will be update only after ``reset()``
         has been called and a new simulation is started.
 
         For more information about Dropout in SNN, refer to :ref:`layer.Dropout <Dropout.__init__-en>`.
+
+        :param p: probability of an element to be zeroed
+        :type p: float
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
         """
         super().__init__(p, step_mode)
 
@@ -158,32 +176,15 @@ class DropConnectLinear(base.MemoryModule):
         activation: Optional[nn.Module] = nn.ReLU(),
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <DropConnectLinear.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <DropConnectLinear.__init__-cn>` | :ref:`English <DropConnectLinear.__init__-en>`
+
+        ----
 
         .. _DropConnectLinear.__init__-cn:
 
-        :param in_features: 每个输入样本的特征数
-        :type in_features: int
-        :param out_features: 每个输出样本的特征数
-        :type out_features: int
-        :param bias: 若为 ``False``，则本层不会有可学习的偏置项。
-            默认为 ``True``
-        :type bias: bool
-        :param p: 每个连接被断开的概率。默认为0.5
-        :type p: float
-        :param samples_num: 在推理时，从高斯分布中采样的数据数量。默认为1024
-        :type samples_num: int
-        :param invariant: 若为 ``True``，线性层会在第一次执行前向传播时被按概率断开，断开后的线性层会保持不变，直到 ``reset()`` 函数
-            被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为
-            ``False``，在每一次前向传播时线性层都会被重新完全连接再按概率断开。 阅读 :ref:`layer.Dropout <Dropout.__init__-cn>` 以
-            获得更多关于此参数的信息。
-            默认为 ``False``
-        :type invariant: bool
-        :param activation: 在线性层后的激活层
-        :type activation: Optional[nn.Module]
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
-        :type step_mode: str
+        * **中文**
 
         DropConnect，由 `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
         一文提出。DropConnect与Dropout非常类似，区别在于DropConnect是以概率 ``p`` 断开连接，而Dropout是将输入以概率置0。
@@ -194,31 +195,38 @@ class DropConnectLinear(base.MemoryModule):
             详细的流程可以在 `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
             一文中的 `Algorithm 2` 找到。激活层 ``activation`` 在中间的步骤起作用，因此我们将其作为模块的成员。
 
-        * :ref:`中文API <DropConnectLinear.__init__-cn>`
+        :param in_features: 每个输入样本的特征数
+        :type in_features: int
+
+        :param out_features: 每个输出样本的特征数
+        :type out_features: int
+
+        :param bias: 若为 ``False``，则本层不会有可学习的偏置项。默认为 ``True``
+        :type bias: bool
+
+        :param p: 每个连接被断开的概率。默认为0.5
+        :type p: float
+
+        :param samples_num: 在推理时，从高斯分布中采样的数据数量。默认为1024
+        :type samples_num: int
+
+        :param invariant: 若为 ``True``，线性层会在第一次执行前向传播时被按概率断开，断开后的线性层会保持不变，直到 ``reset()`` 函数
+            被调用，线性层恢复为完全连接的状态。完全连接的线性层，调用 ``reset()`` 函数后的第一次前向传播时被重新按概率断开。 若为
+            ``False``，在每一次前向传播时线性层都会被重新完全连接再按概率断开。 阅读 :ref:`layer.Dropout <Dropout.__init__-cn>` 以
+            获得更多关于此参数的信息。默认为 ``False``
+        :type invariant: bool
+
+        :param activation: 在线性层后的激活层
+        :type activation: Optional[torch.nn.Module]
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
+        :type step_mode: str
+
+        ----
 
         .. _DropConnectLinear.__init__-en:
 
-        :param in_features: size of each input sample
-        :type in_features: int
-        :param out_features: size of each output sample
-        :type out_features: int
-        :param bias: If set to ``False``, the layer will not learn an additive bias.
-            Default: ``True``
-        :type bias: bool
-        :param p: probability of an connection to be zeroed. Default: 0.5
-        :type p: float
-        :param samples_num: number of samples drawn from the Gaussian during inference. Default: 1024
-        :type samples_num: int
-        :param invariant: If set to ``True``, the connections will be dropped at the first time of forward and the dropped
-            connections will remain unchanged until ``reset()`` is called and the connections recovery to fully-connected
-            status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to
-            ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>`
-            for more information to understand this parameter. Default: ``False``
-        :type invariant: bool
-        :param activation: the activation layer after the linear layer
-        :type activation: Optional[nn.Module]
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
-        :type step_mode: str
+        * **English**
 
         DropConnect, which is proposed by `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_,
         is similar with Dropout but drop connections of a linear layer rather than the elements of the input tensor with
@@ -232,6 +240,34 @@ class DropConnectLinear(base.MemoryModule):
             See `Algorithm 2` in `Regularization of Neural Networks using DropConnect <http://proceedings.mlr.press/v28/wan13.pdf>`_
             for more details. Note that activation is an intermediate process. This is the reason why we include
             ``activation`` as a member variable of this module.
+
+        :param in_features: size of each input sample
+        :type in_features: int
+
+        :param out_features: size of each output sample
+        :type out_features: int
+
+        :param bias: If set to ``False``, the layer will not learn an additive bias. Default: ``True``
+        :type bias: bool
+
+        :param p: probability of an connection to be zeroed. Default: 0.5
+        :type p: float
+
+        :param samples_num: number of samples drawn from the Gaussian during inference. Default: 1024
+        :type samples_num: int
+
+        :param invariant: If set to ``True``, the connections will be dropped at the first time of forward and the dropped
+            connections will remain unchanged until ``reset()`` is called and the connections recovery to fully-connected
+            status. Then the connections will be re-dropped at the first time of forward after ``reset()``. If set to
+            ``False``, the connections will be re-dropped at every forward. See :ref:`layer.Dropout <Dropout.__init__-en>`
+            for more information to understand this parameter. Default: ``False``
+        :type invariant: bool
+
+        :param activation: the activation layer after the linear layer
+        :type activation: Optional[nn.Module]
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
         """
         super().__init__()
         self.step_mode = step_mode
@@ -255,19 +291,26 @@ class DropConnectLinear(base.MemoryModule):
         self.activation = activation
 
     def reset_parameters(self) -> None:
-        """
-        * :ref:`API in English <DropConnectLinear.reset_parameters-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <DropConnectLinear.reset_parameters-cn>` | :ref:`English <DropConnectLinear.reset_parameters-en>`
+
+        ----
 
         .. _DropConnectLinear.reset_parameters-cn:
+
+        * **中文**
 
         :return: None
         :rtype: None
 
         初始化模型中的可学习参数。
 
-        * :ref:`中文API <DropConnectLinear.reset_parameters-cn>`
+        ----
 
         .. _DropConnectLinear.reset_parameters-en:
+
+        * **English**
 
         :return: None
         :rtype: None
@@ -281,25 +324,32 @@ class DropConnectLinear(base.MemoryModule):
             nn.init.uniform_(self.bias, -bound, bound)
 
     def reset(self):
-        """
-        * :ref:`API in English <DropConnectLinear.reset-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <DropConnectLinear.reset-cn>` | :ref:`English <DropConnectLinear.reset-en>`
+
+        ----
 
         .. _DropConnectLinear.reset-cn:
 
-        :return: None
-        :rtype: None
+        * **中文**
 
         将线性层重置为完全连接的状态，若 ``self.activation`` 也是一个有状态的层，则将其也重置。
 
-        * :ref:`中文API <DropConnectLinear.reset-cn>`
-
-        .. _DropConnectLinear.reset-en:
-
         :return: None
         :rtype: None
 
+        ----
+
+        .. _DropConnectLinear.reset-en:
+
+        * **English**
+
         Reset the linear layer to fully-connected status. If ``self.activation`` is also stateful, this function will
         also reset it.
+
+        :return: None
+        :rtype: None
         """
         super().reset()
         if hasattr(self.activation, "reset"):

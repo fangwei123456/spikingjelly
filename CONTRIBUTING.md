@@ -49,10 +49,11 @@ We highly suggest contributors to use [uv](https://docs.astral.sh/uv/) for envir
 2. Deactivate other Python environments.
 3. Create a new virtual environment at `.venv` inside the project directory: `uv venv --python 3.11`. `python>=3.11` is recommended.
 4. Install PyTorch from wheels following the [official instructions](https://pytorch.org/get-started/previous-versions/). We suggest using [`uv pip install`](https://docs.astral.sh/uv/pip/packages/) instead of `pip install`.
-5. Install SpikingJelly according to our `pyproject.toml`: `uv pip install --editable .` .
+5. Install SpikingJelly according to our `pyproject.toml`: `uv pip install --editable . --group dev` .
 
     - This will install SpikingJelly in **editable mode**, which means you can make changes to the code and they will be reflected in your environment immediately.
     - All dependencies will be installed automatically.
+    - The argument `--group dev` installs all development and doc tools (e.g. sphinx).
     - To install optional dependencies, use the syntax `uv pip install --editable ".[triton]"`. See the `project.optional-dependencies` table in `pyproject.toml` for a list of optional dependencies.
 
 6. Manually install other development tools: `uv pip install pyclean pytest ...`

@@ -27,6 +27,23 @@ class HARDVS(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <HARDVS.__init__-cn>` | :ref:`English <HARDVS.__init__-en>`
+
+        ----
+
+        .. _HARDVS.__init__-cn:
+
+        * **中文**
+
+        HARDVS 数据集，由 `HARDVS: Revisiting Human Activity Recognition with Dynamic Vision Sensors. <https://arxiv.org/pdf/2211.09648>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _HARDVS.__init__-en:
+
         * **English**
 
         The HARDVS dataset, which is proposed by

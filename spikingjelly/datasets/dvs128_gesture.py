@@ -65,6 +65,142 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <DVS128Gesture.__init__-cn>` | :ref:`English <DVS128Gesture.__init__-en>`
+
+        ----
+
+        .. _DVS128Gesture.__init__-cn:
+
+        * **中文**
+
+        DVS128 Gesture 数据集，由 `A Low Power, Fully Event-Based Gesture Recognition System <https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        .. admonition:: 注意
+            :class: note
+
+            在 SpikingJelly 中，有 1176 个训练样本和 288 个测试样本。总样本数为 1464 个。
+
+            .. code-block:: python
+
+                from spikingjelly.datasets import dvs128_gesture
+
+                data_dir = "D:/datasets/DVS128Gesture"
+                train_set = dvs128_gesture.DVS128Gesture(data_dir, train=True)
+                test_set = dvs128_gesture.DVS128Gesture(data_dir, train=False)
+                print(
+                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                )
+                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+
+                # train samples = 1176, test samples = 288
+                # total samples = 1464
+
+
+            虽然原始论文指出，`the DvsGesture dataset comprises 1342 instances of a set of 11 hand and arm
+            gestures`。差异可能是由于不同的预处理方法导致的。
+
+            `snnTorch <https://snntorch.readthedocs.io/>`_ 与 SpikingJelly 的数字相同：
+
+            .. code-block:: python
+
+                from snntorch.spikevision import spikedata
+
+                train_set = spikedata.DVSGesture(
+                    "D:/datasets/DVS128Gesture/temp2",
+                    train=True,
+                    num_steps=500,
+                    dt=1000,
+                )
+                test_set = spikedata.DVSGesture(
+                    "D:/datasets/DVS128Gesture/temp2",
+                    train=False,
+                    num_steps=1800,
+                    dt=1000,
+                )
+                print(
+                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                )
+                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+
+                # train samples = 1176, test samples = 288
+                # total samples = 1464
+
+
+            但 `tonic <https://tonic.readthedocs.io/>`_ 的数字不同，接近 `1342`：
+
+            .. code-block:: python
+
+                import tonic
+
+                train_set = tonic.datasets.DVSGesture(
+                    save_to="D:/datasets/DVS128Gesture/temp", train=True
+                )
+                test_set = tonic.datasets.DVSGesture(
+                    save_to="D:/datasets/DVS128Gesture/temp", train=False
+                )
+                print(
+                    f"train samples = {train_set.__len__()}, test samples = {test_set.__len__()}"
+                )
+                print(f"total samples = {train_set.__len__() + test_set.__len__()}")
+
+                # train samples = 1077, test samples = 264
+                # total samples = 1341
+
+
+            下面说明 SpikingJelly 如何获得 1176 个训练样本和 288 个测试样本。
+
+            原始数据集通过 ``trials_to_train.txt`` 和 ``trials_to_test.txt`` 划分为训练集和测试集。
+
+            .. code-block:: shell
+
+                trials_to_train.txt:
+
+                    user01_fluorescent.aedat
+                    user01_fluorescent_led.aedat
+                    ...
+                    user23_lab.aedat
+                    user23_led.aedat
+
+                trials_to_test.txt:
+
+                    user24_fluorescent.aedat
+                    user24_fluorescent_led.aedat
+                    ...
+                    user29_led.aedat
+                    user29_natural.aedat
+
+            SpikingJelly 将读取 txt 文件并获取 aedat 文件名，如 ``user01_fluorescent.aedat``。对应的
+            标签文件名将被视为 ``user01_fluorescent_labels.csv``。
+
+            .. code-block:: shell
+
+                user01_fluorescent_labels.csv:
+
+                    class	startTime_usec	endTime_usec
+                    1	80048239	85092709
+                    2	89431170	95231007
+                    3	95938861	103200075
+                    4	114845417	123499505
+                    5	124344363	131742581
+                    6	133660637	141880879
+                    7	142360393	149138239
+                    8	150717639	157362334
+                    8	157773346	164029864
+                    9	165057394	171518239
+                    10	172843790	179442817
+                    11	180675853	187389051
+
+            然后 SpikingJelly 将根据 csv 文件中的时间范围和类别将 aedat 切分为样本。在这个示例中，
+            第一个样本 ``user01_fluorescent_0.npz`` 是从原始事件 ``user01_fluorescent.aedat`` 中切分的，
+            带有 ``80048239 <= t < 85092709`` 和 ``label=0``。``user01_fluorescent_0.npz`` 将保存在 ``root/events_np/train/0``。
+
+        ----
+
+        .. _DVS128Gesture.__init__-en:
+
         * **English**
 
         The DVS128 Gesture dataset, which is proposed by `A Low Power, Fully Event-Based Gesture Recognition System <https://openaccess.thecvf.com/content_cvpr_2017/html/Amir_A_Low_Power_CVPR_2017_paper.html>`_.

@@ -10,7 +10,34 @@ __all__ = ["random_temporal_delete", "RandomTemporalDelete"]
 def random_temporal_delete(
     x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first
 ):
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <random_temporal_delete-cn>` | :ref:`English <random_temporal_delete-en>`
+
+    ----
+
+    .. _random_temporal_delete-cn:
+
+    * **中文**
+
+    在 `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_ 中使用的随机时间删除数据增强。
+
+    :param x_seq: 一个序列，其 `shape = [T, N, *]`，其中 `T` 是序列长度，`N` 是批次大小
+    :type x_seq: Union[torch.Tensor, np.ndarray]
+
+    :param T_remain: 剩余的长度
+    :type T_remain: int
+
+    :param batch_first: 如果 `True`，`x_seq` 将被视为 `shape = [N, T, *]`
+    :type batch_first: bool
+
+    :return: 长度为 `T_remain` 的序列，通过随机移除 `T - T_remain` 个切片获得
+    :rtype: Union[torch.Tensor, np.ndarray]
+
+    ----
+
+    .. _random_temporal_delete-en:
+
     * **English**
 
     The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.
@@ -40,9 +67,9 @@ def random_temporal_delete(
         T_remain = 5
         N = 4
         x_seq = torch.arange(0, N * T).view([N, T])
-        print("x_seq=\\n", x_seq)
+        print("x_seq=\n", x_seq)
         print(
-            "random_temporal_delete(x_seq)=\\n",
+            "random_temporal_delete(x_seq)=\n",
             random_temporal_delete(x_seq, T_remain, batch_first=True),
         )
 
@@ -74,7 +101,29 @@ def random_temporal_delete(
 
 class RandomTemporalDelete(torch.nn.Module):
     def __init__(self, T_remain: int, batch_first: bool):
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <RandomTemporalDelete.__init__-cn>` | :ref:`English <RandomTemporalDelete.__init__-en>`
+
+        ----
+
+        .. _RandomTemporalDelete.__init__-cn:
+
+        * **中文**
+
+        在 `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_ 中使用的随机时间删除数据增强。
+        详见 :func:`random_temporal_delete`。
+
+        :param T_remain: 剩余的长度
+        :type T_remain: int
+
+        :param batch_first: 如果 `True`，`x_seq` 将被视为 `shape = [N, T, *]`
+        :type batch_first: bool
+
+        ----
+
+        .. _RandomTemporalDelete.__init__-en:
+
         * **English**
 
         The random temporal delete data augmentation used in `Deep Residual Learning in Spiking Neural Networks <https://arxiv.org/abs/2102.04159>`_.

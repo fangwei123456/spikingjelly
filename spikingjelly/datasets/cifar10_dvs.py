@@ -165,6 +165,23 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <CIFAR10DVS.__init__-cn>` | :ref:`English <CIFAR10DVS.__init__-en>`
+
+        ----
+
+        .. _CIFAR10DVS.__init__-cn:
+
+        * **中文**
+
+        CIFAR10-DVS 数据集，由 `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _CIFAR10DVS.__init__-en:
+
         * **English**
 
         The CIFAR10-DVS dataset, which is proposed by
@@ -337,6 +354,32 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <CIFAR10DVSTEBNSplit.__init__-cn>` | :ref:`English <CIFAR10DVSTEBNSplit.__init__-en>`
+
+        ----
+
+        .. _CIFAR10DVSTEBNSplit.__init__-cn:
+
+        * **中文**
+
+        CIFAR10-DVS 数据集，由 `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_ 提出。
+
+        原始的 CIFAR10-DVS 数据集不提供训练集和测试集的划分。
+        在 `Temporal Effective Batch Normalization in Spiking Neural Networks <https://proceedings.neurips.cc/paper_files/paper/2022/hash/de2ad3ed44ee4e675b3be42aa0b615d0-Abstract-Conference.html>`_ 中，
+        作者使用每个类别中的样本 0-99 作为测试集，100-999 作为训练集。
+        这种划分被后来的工作广泛使用。此类实现了这种划分。
+
+        .. note::
+
+            在此划分上的验证准确率通常远高于随机划分的准确率。进行比较时要小心！
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _CIFAR10DVSTEBNSplit.__init__-en:
+
         * **English**
 
         The CIFAR10-DVS dataset, which is proposed by

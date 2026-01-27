@@ -382,6 +382,31 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <SpikingHeidelbergDigits.__init__-cn>` | :ref:`English <SpikingHeidelbergDigits.__init__-en>`
+
+        ----
+
+        .. _SpikingHeidelbergDigits.__init__-cn:
+
+        * **中文**
+
+        Spiking Heidelberg Digits (SHD) 数据集，由 `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_ 提出。
+
+        有关参数信息的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        .. note::
+
+            与 SpikingJelly 中的其他数据集不同，SHD 是一个神经形态音频数据集。
+
+            #. 此数据集中的事件格式为 ``(x, t)`` 而不是 ``(x, y, t, p)``。
+            #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由两个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
+            #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
+
+        ----
+
+        .. _SpikingHeidelbergDigits.__init__-en:
+
         * **English**
 
         The Spiking Heidelberg Digits (SHD) dataset, which is proposed by
@@ -546,6 +571,31 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <SpikingSpeechCommands.__init__-cn>` | :ref:`English <SpikingSpeechCommands.__init__-en>`
+
+        ----
+
+        .. _SpikingSpeechCommands.__init__-cn:
+
+        * **中文**
+
+        Spiking Speech Commands (SSC) 数据集，由 `The Heidelberg Spiking Data Sets for the Systematic Evaluation of Spiking Neural Networks <https://doi.org/10.1109/TNNLS.2020.3044364>`_ 提出。
+
+        有关参数信息的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        .. note::
+
+            与 SpikingJelly 中的其他数据集不同，SSC 是一个神经形态音频数据集。
+
+            #. 此数据集中的事件格式为 ``(x, t)`` 而不是 ``(x, y, t, p)``。
+            #. 原始数据集通过符号链接复制了解析后的数据集。原始数据集由三个 ``.h5`` 文件组成，而不是一系列 ``.npz`` 文件。
+            #. 当 ``data_type == "event"`` 时，将绕过 ``DatasetFolder`` 的数据加载过程。否则，将以 ``Dataset`` 样式加载数据。
+
+        ----
+
+        .. _SpikingSpeechCommands.__init__-en:
+
         * **English**
 
         The Spiking Speech Commands (SSC) dataset, which is proposed by

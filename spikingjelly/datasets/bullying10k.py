@@ -60,6 +60,24 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
         target_transform: Optional[Callable] = None,
     ):
         """
+        **API Language:**
+        :ref:`中文 <Bullying10kClassification.__init__-cn>` | :ref:`English <Bullying10kClassification.__init__-en>`
+
+        ----
+
+        .. _Bullying10kClassification.__init__-cn:
+
+        * **中文**
+
+        Bullying10K 动作识别（分类）数据集，由 `Bullying10K: A Neuromorphic Dataset towards
+        Privacy-Preserving Bullying Recognition <https://arxiv.org/abs/2306.11546>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _Bullying10kClassification.__init__-en:
+
         * **English**
 
         The Bullying10K dataset for action recognition (classification), which

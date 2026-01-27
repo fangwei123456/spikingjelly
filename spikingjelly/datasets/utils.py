@@ -121,6 +121,34 @@ def save_every_frame_of_an_entire_DVS_dataset(
     number_of_threads: int = 4,
 ):
     """
+    **API Language:**
+    :ref:`中文 <save_every_frame_of_an_entire_DVS_dataset-cn>` | :ref:`English <save_every_frame_of_an_entire_DVS_dataset-en>`
+
+    ----
+
+    .. _save_every_frame_of_an_entire_DVS_dataset-cn:
+
+    * **中文**
+
+    :param dataset: 要保存的数据集名称。当前可用的选项有：DVS128Gesture、CIFAR10DVS 和 NCaltech101。
+    :type dataset: str
+
+    :param dataset_path: 与加载数据集相同的存储路径。
+    :type dataset_path: str
+
+    :param time_steps: 与加载数据集相同的 T。
+    :type time_steps: int
+
+    :param save_pic_to: 每一帧图像的保存位置。
+    :type save_pic_to: str
+
+    :param number_of_threads: 用于保存图像的线程数。
+    :type number_of_threads: int
+
+    ----
+
+    .. _save_every_frame_of_an_entire_DVS_dataset-en:
+
     * **English**
 
     :param dataset: name of the dataset to be saved. The current available options
@@ -202,7 +230,28 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
 
 def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> None:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <play_frame-cn>` | :ref:`English <play_frame-en>`
+
+    ----
+
+    .. _play_frame-cn:
+
+    * **中文**
+
+    :param x: 形状为 ``shape=[T, 2, H, W]`` 的帧
+    :type x: Union[torch.Tensor, np.ndarray]
+
+    :param save_gif_to: 如果 ``None``，此函数将播放帧。
+        如果不为 ``None``，此函数将不播放帧，而是将帧保存到路径 ``save_gif_to`` 中的 gif 文件
+    :type save_gif_to: str
+
+    :return: None
+    ----
+
+    .. _play_frame-en:
+
     * **English**
 
     :param x: frames with ``shape=[T, 2, H, W]``
@@ -235,7 +284,31 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
 
 
 def load_aedat_v3(file_name: Union[str, Path]) -> dict:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <load_aedat_v3-cn>` | :ref:`English <load_aedat_v3-en>`
+
+    ----
+
+    .. _load_aedat_v3-cn:
+
+    * **中文**
+
+    此函数参考了 https://gitlab.com/inivation/dv/dv-python 编写。
+    它可以用于 DVS128 Gesture。
+
+    :param file_name: aedat v3 文件的路径
+    :type file_name: Union[str, pathlib.Path]
+
+    :return: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
+    :rtype: dict
+
+    ----
+
+    .. _load_aedat_v3-en:
+
+    * **English**
+
     This function is written by referring to https://gitlab.com/inivation/dv/dv-python .
     It can be used for DVS128 Gesture.
 
@@ -300,7 +373,33 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
 
 
 def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <load_ATIS_bin-cn>` | :ref:`English <load_ATIS_bin-en>`
+
+    ----
+
+    .. _load_ATIS_bin-cn:
+
+    * **中文**
+
+    此函数参考了 https://github.com/jackd/events-tfds 编写。
+    每个 ATIS 二进制示例都是一个独立的二进制文件，包含一个事件列表。每个事件占用 40 位，如下所述：
+    位 39 - 32: X地址（以像素为单位）
+    位 31 - 24: Y地址（以像素为单位）
+    位 23: 极性（0 表示 OFF，1 表示 ON）
+    位 22 - 0: 时间戳（以微秒为单位）
+
+    :param file_name: aedat v3 文件的路径
+    :type file_name: str
+
+    :return: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
+    :rtype: dict
+
+    ----
+
+    .. _load_ATIS_bin-en:
+
     * **English**
 
     This function is written by referring to https://github.com/jackd/events-tfds .
@@ -329,7 +428,26 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
 
 
 def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <load_npz_frames-cn>` | :ref:`English <load_npz_frames-en>`
+
+    ----
+
+    .. _load_npz_frames-cn:
+
+    * **中文**
+
+    :param file_name: 保存帧的 npz 文件的路径
+    :type file_name: str
+
+    :return: 帧
+    :rtype: np.ndarray
+
+    ----
+
+    .. _load_npz_frames-en:
+
     * **English**
 
     :param file_name: path of the npz file that saves the frames
@@ -350,7 +468,52 @@ def integrate_events_segment_to_frame(
     j_l: int = 0,
     j_r: int = -1,
 ) -> np.ndarray:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <integrate_events_segment_to_frame-cn>` | :ref:`English <integrate_events_segment_to_frame-en>`
+
+    ----
+
+    .. _integrate_events_segment_to_frame-cn:
+
+    * **中文**
+
+    将双通道帧记为 :math:`F`，像素 :math:`(p, x, y)` 的像素值是从索引在 :math:`[j_{l}, j_{r})` 内的事件数据积分得到的：
+
+    .. math::
+
+        F(p, x, y) = \\sum_{i = j_{l}}^{j_{r} - 1} \\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})
+
+    其中 :math:`\\lfloor \\cdot \\rfloor` 是取整运算，:math:`\\mathcal{I}_{p, x, y}(p_{i}, x_{i}, y_{i})` 是指示函数，仅在 :math:`(p, x, y) = (p_{i}, x_{i}, y_{i})` 时等于 1。
+
+    :param x: 事件的 x 坐标
+    :type x: numpy.ndarray
+
+    :param y: 事件的 y 坐标
+    :type y: numpy.ndarray
+
+    :param p: 事件的极性
+    :type p: numpy.ndarray
+
+    :param H: 帧的高度
+    :type H: int
+
+    :param W: 帧的宽度
+    :type W: int
+
+    :param j_l: 积分区间的起始索引（包含）
+    :type j_l: int
+
+    :param j_r: 积分区间的右端索引（不包含）
+    :type j_r:
+
+    :return: 帧
+    :rtype: np.ndarray
+
+    ----
+
+    .. _integrate_events_segment_to_frame-en:
+
     * **English**
 
     Denote a two channels frame as :math:`F` and a pixel at :math:`(p, x, y)` as :math:`F(p, x, y)`, the pixel value is integrated from the events data whose indices are in :math:`[j_{l}, j_{r})`:
@@ -440,7 +603,47 @@ def integrate_events_segment_to_frame(
 def cal_fixed_frames_number_segment_index(
     events_t: np.ndarray, split_by: str, frames_num: int
 ) -> tuple:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <cal_fixed_frames_number_segment_index-cn>` | :ref:`English <cal_fixed_frames_number_segment_index-en>`
+
+    ----
+
+    .. _cal_fixed_frames_number_segment_index-cn:
+
+    * **中文**
+
+    将 ``frames_num`` 记为 :math:`M`，如果 ``split_by`` 为 ``'time'``，则
+
+    .. math::
+
+        \\Delta T & = [\\frac{t_{N-1} - t_{0}}{M}] \\\\
+        j_{l} & = \\mathop{\\arg\\min}\\limits_{k} \\{t_{k} | t_{k} \\geq t_{0} + \\Delta T \\cdot j\\} \\\\
+        j_{r} & = \\begin{cases} \\mathop{\\arg\\max}\\limits_{k} \\{t_{k} | t_{k} < t_{0} + \\Delta T \\cdot (j + 1)\\} + 1, & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+
+    如果 ``split_by`` 为 ``'number'``，则
+
+    .. math::
+
+        j_{l} & = [\\frac{N}{M}] \\cdot j \\\\
+        j_{r} & = \\begin{cases} [\\frac{N}{M}] \\cdot (j + 1), & j <  M - 1 \\cr N, & j = M - 1 \\end{cases}
+
+    :param events_t: 事件的 t
+    :type events_t: numpy.ndarray
+
+    :param split_by: 'time' 或 'number'
+    :type split_by: str
+
+    :param frames_num: 帧的数量
+    :type frames_num: int
+
+    :return: 一个元组 ``(j_l, j_r)``
+    :rtype: tuple
+
+    ----
+
+    .. _cal_fixed_frames_number_segment_index-en:
+
     * **English**
 
     Denote ``frames_num`` as :math:`M`, if ``split_by`` is ``'time'``, then
@@ -502,7 +705,41 @@ def cal_fixed_frames_number_segment_index(
 def integrate_events_by_fixed_frames_number(
     events: dict, split_by: str, frames_num: int, H: int, W: int
 ) -> np.ndarray:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <integrate_events_by_fixed_frames_number-cn>` | :ref:`English <integrate_events_by_fixed_frames_number-en>`
+
+    ----
+
+    .. _integrate_events_by_fixed_frames_number-cn:
+
+    * **中文**
+
+    按固定帧数将事件积分到帧中。
+    详见 :func:`cal_fixed_frames_number_segment_index` 和 :func:`integrate_events_segment_to_frame`。
+
+    :param events: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
+    :type events: dict
+
+    :param split_by: 'time' 或 'number'
+    :type split_by: str
+
+    :param frames_num: 帧的数量
+    :type frames_num: int
+
+    :param H: 帧的高度
+    :type H: int
+
+    :param W: 帧的宽度
+    :type W: int
+
+    :return: 帧
+    :rtype: np.ndarray
+
+    ----
+
+    .. _integrate_events_by_fixed_frames_number-en:
+
     * **English**
 
     Integrate events to frames by fixed frames number.
@@ -590,7 +827,37 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
 def integrate_events_by_fixed_duration(
     events: dict, duration: int, H: int, W: int
 ) -> np.ndarray:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <integrate_events_by_fixed_duration-cn>` | :ref:`English <integrate_events_by_fixed_duration-en>`
+
+    ----
+
+    .. _integrate_events_by_fixed_duration-cn:
+
+    * **中文**
+
+    按每帧固定时间时长将事件积分到帧中。
+
+    :param events: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
+    :type events: dict
+
+    :param duration: 每帧的时间时长
+    :type duration: int
+
+    :param H: 帧的高度
+    :type H: int
+
+    :param W: 帧的宽度
+    :type W: int
+
+    :return: 帧
+    :rtype: np.ndarray
+
+    ----
+
+    .. _integrate_events_by_fixed_duration-en:
+
     * **English**
 
     Integrate events to frames by fixed time duration of each frame.
@@ -641,7 +908,45 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     W: int,
     print_save: bool = False,
 ) -> None:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_duration-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_duration-en>`
+
+    ----
+
+    .. _integrate_events_file_to_frames_file_by_fixed_duration-cn:
+
+    * **中文**
+
+    按每帧固定时间时长将事件积分到帧中并保存。
+
+    :param loader: 一个可以从 `events_np_file` 加载事件的函数
+    :type loader: Callable
+
+    :param events_np_file: 事件的 np 文件的路径
+    :type events_np_file: str
+
+    :param output_dir: 保存帧的输出目录
+    :type output_dir: str
+
+    :param duration: 每帧的时间时长
+    :type duration: int
+
+    :param H: 帧的高度
+    :type H: int
+
+    :param W: 帧的宽度
+    :type W: int
+
+    :param print_save: 如果 ``True``，此函数将打印保存的文件的路径。
+    :type print_save: bool
+
+    :return: None
+
+    ----
+
+    .. _integrate_events_file_to_frames_file_by_fixed_duration-en:
+
     * **English**
 
     Integrate events to frames by fixed time duration of each frame.
@@ -679,7 +984,28 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
 
 
 def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <save_frames_to_npz_and_print-cn>` | :ref:`English <save_frames_to_npz_and_print-en>`
+
+    ----
+
+    .. _save_frames_to_npz_and_print-cn:
+
+    * **中文**
+
+    :param fname: 目标 npz 文件的路径
+    :type fname: str
+
+    :param frames: 帧对象
+    :type frames: np.ndarray
+
+    :return: None
+
+    ----
+
+    .. _save_frames_to_npz_and_print-en:
+
     * **English**
 
     :param fname: path of the target npz file
@@ -697,7 +1023,30 @@ def save_frames_to_npz_and_print(fname: str, frames: np.ndarray):
 def create_same_directory_structure(
     source_dir: Union[str, Path], target_dir: Union[str, Path]
 ) -> None:
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <create_same_directory_structure-cn>` | :ref:`English <create_same_directory_structure-en>`
+
+    ----
+
+    .. _create_same_directory_structure-cn:
+
+    * **中文**
+
+    在 ``target_dir`` 中创建与 ``source_dir`` 相同的目录结构。
+
+    :param source_dir: 要复制的目录的路径
+    :type source_dir: Union[str, pathlib.Path]
+
+    :param target_dir: 要复制到的目录的路径
+    :type target_dir: Union[str, pathlib.Path]
+
+    :return: None
+
+    ----
+
+    .. _create_same_directory_structure-en:
+
     * **English**
 
     Create the same directory structure in ``target_dir`` with that of ``source_dir``.
@@ -725,7 +1074,37 @@ def split_to_train_test_set(
     num_classes: int,
     random_split: bool = False,
 ):
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <split_to_train_test_set-cn>` | :ref:`English <split_to_train_test_set-en>`
+
+    ----
+
+    .. _split_to_train_test_set-cn:
+
+    * **中文**
+
+    :param train_ratio: 将原始数据集按此比例划分为训练集
+    :type train_ratio: float
+
+    :param origin_dataset: 原始数据集
+    :type origin_dataset: torch.utils.data.Dataset
+
+    :param num_classes: 总类别数，例如 MNIST 数据集为 ``10``
+    :type num_classes: int
+
+    :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
+        如果 ``True``，此函数将随机划分每个类别的样本。
+        随机性由 ``numpy.random.seed`` 控制
+    :type random_split: int
+
+    :return: 一个元组 ``(train_set, test_set)``
+    :rtype: tuple
+
+    ----
+
+    .. _split_to_train_test_set-en:
+
     * **English**
 
     :param train_ratio: split the ratio of the origin dataset as the train set
@@ -778,7 +1157,40 @@ def fast_split_to_train_test_set(
     random_split: bool = False,
     batch_size: int = 16,
 ):
-    """
+    r"""
+    **API Language:**
+    :ref:`中文 <fast_split_to_train_test_set-cn>` | :ref:`English <fast_split_to_train_test_set-en>`
+
+    ----
+
+    .. _fast_split_to_train_test_set-cn:
+
+    * **中文**
+
+    :param train_ratio: 将原始数据集按此比例划分为训练集
+    :type train_ratio: float
+
+    :param origin_dataset: 原始数据集
+    :type origin_dataset: torch.utils.data.Dataset
+
+    :param num_classes: 总类别数，例如 MNIST 数据集为 ``10``
+    :type num_classes: int
+
+    :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
+        如果 ``True``，此函数将随机划分每个类别的样本。随机性由
+        ``numpy.random.seed`` 控制
+    :type random_split: int
+
+    :param batch_size: 每个批次处理的样本数量
+    :type batch_size: int
+
+    :return: 一个元组 ``(train_set, test_set)``
+    :rtype: tuple
+
+    ----
+
+    .. _fast_split_to_train_test_set-en:
+
     * **English**
 
     :param train_ratio: split the ratio of the origin dataset as the train set

@@ -23,13 +23,13 @@ __all__ = [
 
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
-        """
+        r"""
         **API Language:**
-        :ref:`中文 <MultiStepContainer-cn>` | :ref:`English <MultiStepContainer-en>`
+        :ref:`中文 <MultiStepContainer.__init__-cn>` | :ref:`English <MultiStepContainer.__init__-en>`
 
         ----
 
-        .. _MultiStepContainer-cn:
+        .. _MultiStepContainer.__init__-cn:
 
         * **中文**
 
@@ -38,7 +38,7 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
 
         ----
 
-        .. _MultiStepContainer-en:
+        .. _MultiStepContainer.__init__-en:
 
         * **English**
 
@@ -124,6 +124,7 @@ class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
         """
         :param x_seq: ``shape=[batch_size, ..., T]``
         :type x_seq: Tensor
+
         :return: y_seq with ``shape=[batch_size, ..., T]``
         :rtype: Tensor
         """
@@ -148,6 +149,7 @@ class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
         """
         :param x_seq: shape=[batch_size, ..., T]
         :type x_seq: Tensor
+
         :return: y_seq, shape=[batch_size, ..., T]
         :rtype: Tensor
         """
@@ -181,17 +183,15 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
     def __init__(
         self, sub_module: nn.Module, element_wise_function: Callable, step_mode="s"
     ):
-        """
-        * :ref:`API in English <ElementWiseRecurrentContainer-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <ElementWiseRecurrentContainer.__init__-cn>` | :ref:`English <ElementWiseRecurrentContainer.__init__-en>`
 
-        .. _ElementWiseRecurrentContainer-cn:
+        ----
 
-        :param sub_module: 被包含的模块
-        :type sub_module: torch.nn.Module
-        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(x, y)``
-        :type element_wise_function: Callable
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
-        :type step_mode: str
+        .. _ElementWiseRecurrentContainer.__init__-cn:
+
+        * **中文**
 
         使用逐元素运算的自连接包装器。记 ``sub_module`` 的输入输出为 :math:`i[t]` 和 :math:`y[t]` （注意 :math:`y[t]` 也是整个模块的输出），
         整个模块的输入为 :math:`x[t]`，则
@@ -207,33 +207,20 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
             ``sub_module`` 输入和输出的尺寸需要相同。
 
-        示例代码：
-
-        .. code-block:: python
-
-            T = 8
-            net = ElementWiseRecurrentContainer(
-                neuron.IFNode(v_reset=None), element_wise_function=lambda x, y: x + y
-            )
-            print(net)
-            x = torch.zeros([T])
-            x[0] = 1.5
-            for t in range(T):
-                print(t, f"x[t]={x[t]}, s[t]={net(x[t])}")
-
-            functional.reset_net(net)
-
-
-        * :ref:`中文 API <ElementWiseRecurrentContainer-cn>`
-
-        .. _ElementWiseRecurrentContainer-en:
-
-        :param sub_module: the contained module
+        :param sub_module: 被包含的模块
         :type sub_module: torch.nn.Module
-        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(x, y)``
+
+        :param element_wise_function: 用户自定义的逐元素函数，应该形如 ``z=f(x, y)``
         :type element_wise_function: Callable
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
+
+        ----
+
+        .. _ElementWiseRecurrentContainer.__init__-en:
+
+        * **English**
 
         A container that use a element-wise recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
         and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
@@ -250,7 +237,18 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
 
             The shape of inputs and outputs of ``sub_module`` must be the same.
 
-        Codes example:
+        :param sub_module: the contained module
+        :type sub_module: torch.nn.Module
+
+        :param element_wise_function: the user-defined element-wise function, which should have the format ``z=f(x, y)``
+        :type element_wise_function: Callable
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        ----
+
+        * **代码示例 | Example**
 
         .. code-block:: python
 
@@ -292,21 +290,15 @@ class LinearRecurrentContainer(base.MemoryModule):
         bias: bool = True,
         step_mode="s",
     ) -> None:
-        """
-        * :ref:`API in English <LinearRecurrentContainer-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <LinearRecurrentContainer.__init__-cn>` | :ref:`English <LinearRecurrentContainer.__init__-en>`
 
-        .. _LinearRecurrentContainer-cn:
+        ----
 
-        :param sub_module: 被包含的模块
-        :type sub_module: torch.nn.Module
-        :param in_features: 输入的特征数量
-        :type in_features: int
-        :param out_features: 输出的特征数量
-        :type out_features: int
-        :param bias: 若为 ``False``，则线性自连接不会带有可学习的偏执项
-        :type bias: bool
-        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
-        :type step_mode: str
+        .. _LinearRecurrentContainer.__init__-cn:
+
+        * **中文**
 
         使用线性层的自连接包装器。记 ``sub_module`` 的输入和输出为 :math:`i[t]` 和 :math:`y[t]` （注意 :math:`y[t]` 也是整个模块的输出），
         整个模块的输入记作 :math:`x[t]` ，则
@@ -323,41 +315,26 @@ class LinearRecurrentContainer(base.MemoryModule):
 
             自连接是由 ``torch.nn.Linear(in_features + out_features, in_features, bias)`` 实现的。
 
-        .. code-block:: python
-
-            in_features = 4
-            out_features = 2
-            T = 8
-            N = 2
-            net = LinearRecurrentContainer(
-                nn.Sequential(
-                    nn.Linear(in_features, out_features),
-                    neuron.LIFNode(),
-                ),
-                in_features,
-                out_features,
-            )
-            print(net)
-            x = torch.rand([T, N, in_features])
-            for t in range(T):
-                print(t, net(x[t]))
-
-            functional.reset_net(net)
-
-        * :ref:`中文 API <LinearRecurrentContainer-cn>`
-
-        .. _LinearRecurrentContainer-en:
-
-        :param sub_module: the contained module
+        :param sub_module: 被包含的模块
         :type sub_module: torch.nn.Module
-        :param in_features: size of each input sample
+
+        :param in_features: 输入的特征数量
         :type in_features: int
-        :param out_features: size of each output sample
+
+        :param out_features: 输出的特征数量
         :type out_features: int
-        :param bias: If set to ``False``, the linear recurrent layer will not learn an additive bias
+
+        :param bias: 若为 ``False``，则线性自连接不会带有可学习的偏执项
         :type bias: bool
-        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+
+        :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
+
+        ----
+
+        .. _LinearRecurrentContainer.__init__-en:
+
+        * **English**
 
         A container that use a linear recurrent connection. Denote the inputs and outputs of ``sub_module`` as :math:`i[t]`
         and :math:`y[t]` (Note that :math:`y[t]` is also the outputs of this module), and the inputs of this module as
@@ -376,6 +353,25 @@ class LinearRecurrentContainer(base.MemoryModule):
 
             The recurrent connection is implement by ``torch.nn.Linear(in_features + out_features, in_features, bias)``.
 
+        :param sub_module: the contained module
+        :type sub_module: torch.nn.Module
+
+        :param in_features: size of each input sample
+        :type in_features: int
+
+        :param out_features: size of each output sample
+        :type out_features: int
+
+        :param bias: If set to ``False``, the linear recurrent layer will not learn an additive bias
+        :type bias: bool
+
+        :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
+        :type step_mode: str
+
+        ----
+
+        * **代码示例 | Example**
+
         .. code-block:: python
 
             in_features = 4
@@ -396,7 +392,6 @@ class LinearRecurrentContainer(base.MemoryModule):
                 print(t, net(x[t]))
 
             functional.reset_net(net)
-
         """
         super().__init__()
         self.step_mode = step_mode
