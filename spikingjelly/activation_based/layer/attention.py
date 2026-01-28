@@ -1,16 +1,3 @@
-"""This module contains attention layers for deep SNNs.
-
-* Attention for convolutional SNNs
-    * :class:`TemporalWiseAttention`
-    * :class:`MultiDimensionalAttention`
-
-* Attention for Spiking Transformers
-    * :class:`SpikingSelfAttention`
-    * :class:`QKAttention`, :class:`TokenQKAttention`, :class:`ChannelQKAttention`
-
-For more information about Spiking Transformers, see :doc:`../tutorials/en/spikformer` .
-"""
-
 import torch
 import torch.nn as nn
 from einops import rearrange

@@ -1,9 +1,3 @@
-"""
-This module contains :class:`base.StepModule <spikingjelly.activation_based.base.StepModule>`
-wrappers for commonly used :class:`torch.nn.Module`. See :doc:`../tutorials/en/basic_concept`
-for more details.
-"""
-
 from typing import Optional, Union
 
 import torch

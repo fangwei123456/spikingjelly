@@ -1,5 +1,3 @@
-"""For more information about container, refer to :doc:`../tutorials/en/container` ."""
-
 import logging
 from typing import Callable
 
@@ -19,6 +17,16 @@ __all__ = [
     "ElementWiseRecurrentContainer",
     "LinearRecurrentContainer",
 ]
+
+def _check_step_mode(block: nn.Sequential, caller: str = "MultiStepContainer"):
+    for m in block:
+        assert not hasattr(m, "step_mode") or m.step_mode == "s"
+        if isinstance(m, base.StepModule):
+            if "m" in m.supported_step_mode():
+                logging.warning(
+                    f"{m} supports for step_mode == 'm', "
+                    f"which should not be contained by {caller}!"
+                )
 
 
 class MultiStepContainer(nn.Sequential, base.MultiStepModule):
@@ -46,20 +54,14 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
         Its constructor signature is the same as `torch.nn.Sequential`.
         """
         super().__init__(*args)
-        for m in self:
-            assert not hasattr(m, "step_mode") or m.step_mode == "s"
-            if isinstance(m, base.StepModule):
-                if "m" in m.supported_step_mode():
-                    logging.warning(
-                        f"{m} supports step_mode == 'm', which should not be contained by MultiStepContainer!"
-                    )
+        _check_step_mode(self, "MultiStepContainer")
 
     def forward(self, x_seq: Tensor):
         """
-        :param x_seq: ``shape=[T, batch_size, ...]``
+        :param x_seq: with shape ``[T, batch_size, ...]``
         :type x_seq: torch.Tensor
 
-        :return: y_seq with ``shape=[T, batch_size, ...]``
+        :return: y_seq with shape ``[T, batch_size, ...]``
         :rtype: torch.Tensor
         """
         return functional.multi_step_forward(x_seq, super().forward)
@@ -90,20 +92,14 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         Its constructor signature is the same as `torch.nn.Sequential`.
         """
         super().__init__(*args)
-        for m in self:
-            assert not hasattr(m, "step_mode") or m.step_mode == "s"
-            if isinstance(m, base.StepModule):
-                if "m" in m.supported_step_mode():
-                    logging.warning(
-                        f"{m} supports step_mode == 'm', which should not be contained by SeqToANNContainer!"
-                    )
+        _check_step_mode(self, "SeqToANNContainer")
 
     def forward(self, x_seq: Tensor):
         """
-        :param x_seq: shape=[T, batch_size, ...]
+        :param x_seq: with shape ``[T, batch_size, ...]``
         :type x_seq: torch.Tensor
 
-        :return: y_seq, shape=[T, batch_size, ...]
+        :return: y_seq with shape ``[T, batch_size, ...]``
         :rtype: torch.Tensor
         """
         return functional.seq_to_ann_forward(x_seq, super().forward)
@@ -111,21 +107,18 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
 
 class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
+        """
+        See :func:`spikingjelly.activation_based.functional.forward.t_last_multi_step_forward` .
+        """
         super().__init__(*args)
-        for m in self:
-            assert not hasattr(m, "step_mode") or m.step_mode == "s"
-            if isinstance(m, base.StepModule):
-                if "m" in m.supported_step_mode():
-                    logging.warning(
-                        f"{m} supports for step_mode == 's', which should not be contained by MultiStepContainer!"
-                    )
+        _check_step_mode(self, "TLastMultiStepContainer")
 
     def forward(self, x_seq: Tensor):
         """
-        :param x_seq: ``shape=[batch_size, ..., T]``
+        :param x_seq: shape ``[batch_size, ..., T]``
         :type x_seq: Tensor
 
-        :return: y_seq with ``shape=[batch_size, ..., T]``
+        :return: y_seq with shape ``[batch_size, ..., T]``
         :rtype: Tensor
         """
         return functional.t_last_seq_to_ann_forward(x_seq, super().forward)
@@ -134,40 +127,32 @@ class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
 class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
         """
-        Please refer to :class:`spikingjelly.activation_based.functional.t_last_seq_to_ann_forward` .
+        See :func:`spikingjelly.activation_based.functional.forward.t_last_seq_to_ann_forward` .
         """
         super().__init__(*args)
-        for m in self:
-            assert not hasattr(m, "step_mode") or m.step_mode == "s"
-            if isinstance(m, base.StepModule):
-                if "m" in m.supported_step_mode():
-                    logging.warning(
-                        f"{m} supports for step_mode == 's', which should not be contained by SeqToANNContainer!"
-                    )
+        _check_step_mode(self, "TLastSeqToANNContainer")
 
     def forward(self, x_seq: Tensor):
         """
-        :param x_seq: shape=[batch_size, ..., T]
+        :param x_seq: with shape ``[batch_size, ..., T]``
         :type x_seq: Tensor
 
-        :return: y_seq, shape=[batch_size, ..., T]
+        :return: y_seq with shape ``[batch_size, ..., T]``
         :rtype: Tensor
         """
         return functional.t_last_seq_to_ann_forward(x_seq, super().forward)
 
 
 class StepModeContainer(nn.Sequential, base.StepModule):
-    def __init__(self, stateful: bool, *args):
+    def __init__(self, stateful: bool, step_mode: str = "s", *args):
+        """
+        Call single-step forward, multi-step forward or seq-to-ANN forward according to
+        ``stateful`` and ``step_mode``.
+        """
         super().__init__(*args)
         self.stateful = stateful
-        for m in self:
-            assert not hasattr(m, "step_mode") or m.step_mode == "s"
-            if isinstance(m, base.StepModule):
-                if "m" in m.supported_step_mode():
-                    logging.warning(
-                        f"{m} supports for step_mode == 's', which should not be contained by StepModeContainer!"
-                    )
-        self.step_mode = "s"
+        _check_step_mode(self, "StepModeContainer")
+        self.step_mode = step_mode
 
     def forward(self, x: torch.Tensor):
         if self.step_mode == "s":
@@ -305,7 +290,7 @@ class LinearRecurrentContainer(base.MemoryModule):
 
         .. math::
 
-            i[t] = \\begin{pmatrix} x[t] \\\\ y[t-1]\\end{pmatrix} W^{T} + b
+            i[t] = \begin{pmatrix} x[t] \\ y[t-1]\end{pmatrix} W^{T} + b
 
         其中 :math:`W, b` 是线性层的权重和偏置项。默认 :math:`y[-1] = 0`。
 
@@ -342,7 +327,7 @@ class LinearRecurrentContainer(base.MemoryModule):
 
         .. math::
 
-            i[t] = \\begin{pmatrix} x[t] \\\\ y[t-1]\\end{pmatrix} W^{T} + b
+            i[t] = \begin{pmatrix} x[t] \\ y[t-1]\end{pmatrix} W^{T} + b
 
         where :math:`W, b` are the weight and bias of the linear connection. We set :math:`y[-1] = 0`.
 
