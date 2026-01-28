@@ -194,7 +194,7 @@ class PeriodicEncoder(StatefulEncoder):
 
 class LatencyEncoder(StatefulEncoder):
     def __init__(self, T: int, enc_function="linear", step_mode="s"):
-        """
+        r"""
         * :ref:`API in English <LatencyEncoder.__init__-en>`
 
         .. _LatencyEncoder.__init__-cn:
@@ -205,13 +205,14 @@ class LatencyEncoder(StatefulEncoder):
         :type enc_function: str
 
         延迟编码器，将 ``0 <= x <= 1`` 的输入转化为在 ``0 <= t_f <= T-1`` 时刻发放的脉冲。输入的强度越大，发放越早。
+
         当 ``enc_function == 'linear'``
             .. math::
                 t_f(x) = (T - 1)(1 - x)
 
         当 ``enc_function == 'log'``
             .. math::
-                t_f(x) = (T - 1) - ln(\\alpha * x + 1)
+                t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
         其中 :math:`\alpha` 满足 :math:`t_f(1) = T - 1`
 
@@ -235,6 +236,7 @@ class LatencyEncoder(StatefulEncoder):
 
             不要忘记调用reset，因为这个编码器是有状态的。
 
+        ----
 
         * :ref:`中文API <LatencyEncoder.__init__-cn>`
 
@@ -254,12 +256,13 @@ class LatencyEncoder(StatefulEncoder):
 
         If ``enc_function == 'log'``
             .. math::
-                t_f(x) = (T - 1) - ln(\\alpha * x + 1)
+                t_f(x) = (T - 1) - \text{ln}(\alpha * x + 1)
 
         where :math:`\alpha` satisfies :math:`t_f(1) = T - 1`
 
 
         Example:
+
         .. code-block:: python
 
             x = torch.rand(size=[8, 2])

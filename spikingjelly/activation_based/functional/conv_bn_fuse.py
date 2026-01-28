@@ -22,7 +22,7 @@ def fused_conv2d_weight_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
 
     * **中文**
 
-    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中 ``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
     本函数返回合并后的卷积的权重。
 
     .. note::
@@ -80,7 +80,7 @@ def fused_conv2d_bias_of_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
 
     * **中文**
 
-    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中 ``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
     本函数返回合并后的卷积的偏置项。
 
     .. note::
@@ -140,7 +140,7 @@ def scale_fused_conv2d_weight_of_convbn2d(
 
     * **中文**
 
-    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中 ``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
     本函数对 ``{Conv2d-BatchNorm2d}`` 模块整体的等效权重进行 ``weight = k * weight + b`` 的线性变换。
 
     .. note::
@@ -198,7 +198,7 @@ def scale_fused_conv2d_bias_of_convbn2d(
 
     * **中文**
 
-    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中 ``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
     本函数对 ``{Conv2d-BatchNorm2d}`` 模块整体的等效偏置项进行 ``bias = k * bias + b`` 的线性变换。
 
     .. note::
@@ -255,7 +255,7 @@ def fuse_convbn2d(conv2d: nn.Conv2d, bn2d: nn.BatchNorm2d):
 
     * **中文**
 
-    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
+    ``{Conv2d-BatchNorm2d}`` 模块可以合并为一个单个的 ``{Conv2d}``，其中 ``BatchNorm2d`` 的参数会被吸收进 ``Conv2d``。
     本函数对返回这个等效的合并后的 ``{Conv2d}``。
 
     .. note::

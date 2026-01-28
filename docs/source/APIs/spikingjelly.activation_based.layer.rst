@@ -5,7 +5,7 @@ spikingjelly.activation_based.layer package
 
    **API稳定性说明**
 
-   SpikingJelly `0.0.0.1.0` 对 ``layer`` 模块的内部实现进行了重构：原来的 ``layer.py`` 文件已被拆分并重组为 ``layer/`` 包，以提升代码的模块化程度和可维护性。
+   SpikingJelly ``0.0.0.1.0`` 对 ``layer`` 模块的内部实现进行了重构：原来的 ``layer.py`` 文件已被拆分并重组为 ``layer/`` 包，以提升代码的模块化程度和可维护性。
 
    **该改动不会影响对外公开的 API。** 我们强烈建议用户仍然通过 ``layer`` 这一顶层命名空间来访问相关功能，而不是从具体的内部子模块中进行导入。 ``layer`` 层级下的导入路径被视为稳定的公共接口；更深层的子模块仅作为内部实现细节，未来可能发生变化。
 
@@ -199,7 +199,7 @@ SpikingJelly 提供了多种适用于深度 SNN 的 **批归一化层变体** �
 
 ----
 
-SpikingJelly provide multiple **batch normalization variants** that are optimized for deep SNNs.
+SpikingJelly provides multiple **batch normalization variants** that are optimized for deep SNNs.
 
 Standard Batch Normalization
 -----------------------------
@@ -269,7 +269,7 @@ SpikingJelly 提供了适用于 SNN 的 **Dropout 实现**，支持步进模式�
 
 ----
 
-SpikingJelly provide **dropout implementations** suitable for SNNs with step mode support.
+SpikingJelly provides **dropout implementations** suitable for SNNs with step mode support.
 
 
 .. list-table::
@@ -319,9 +319,6 @@ SpikingJelly 的 **杂项模块** 提供了辅助层和其他实用工具。
 ----
 
 SpikingJelly's **miscellaneous module** provides auxiliary layers and other utilities.
-
-Layer Utilities
----------------
 
 .. list-table::
 

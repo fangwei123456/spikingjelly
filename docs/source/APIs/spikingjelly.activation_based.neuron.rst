@@ -1,11 +1,11 @@
-spikingjelly.activation_based.neuron module
+spikingjelly.activation_based.neuron package
 ===============================================
 
 .. note::
 
    **API稳定性说明**
 
-   SpikingJelly `0.0.0.1.0` 对 ``neuron`` 模块的内部实现进行了重构：原来的 ``neuron.py`` 文件已被拆分并重组为 ``neuron/`` 包，以提升代码的模块化程度和可维护性。
+   SpikingJelly ``0.0.0.1.0`` 对 ``neuron`` 模块的内部实现进行了重构：原来的 ``neuron.py`` 文件已被拆分并重组为 ``neuron/`` 包，以提升代码的模块化程度和可维护性。
 
    **该改动不会影响对外公开的 API。** 我们强烈建议用户仍然通过 ``neuron`` 这一顶层命名空间来访问相关功能，而不是从具体的内部子模块中进行导入。 ``neuron`` 层级下的导入路径被视为稳定的公共接口；更深层的子模块仅作为内部实现细节，未来可能发生变化。
 
