@@ -1,0 +1,216 @@
+"""
+Coarse memory access count
+
+Only the sizes of input & output tensors are taken into account. The detailed load and
+store counts depend on the specific backend implementation, so we do not take them into account.
+
+- unit: byte
+- the measured memory access count is a **lower bound** of the real memory access count
+
+"""
+from collections import defaultdict
+from typing import Any, Callable
+
+import torch
+aten = torch.ops.aten
+import torch.nn as nn
+
+from .base import BaseCounter
+
+__all__ = ["MemoryAccessCounter"]
+
+def _bytes(x: torch.Tensor):
+    return x.element_size() * x.numel() if torch.is_tensor(x) else 0
+
+
+def _memory_mm(args, kwargs, out):
+    """out = x @ y"""
+    x, y = args[:2]
+    _, k = x.shape
+    kk, _ = y.shape
+    if k != kk:
+        raise AssertionError(f"mm: inner dimensions mismatch [{x.shape} and {y.shape}]")
+    return _bytes(x) + _bytes(y) + _bytes(out)
+
+
+def _memory_addmm(args, kwargs, out):
+    """out = beta * bias + alpha * (x @ y)"""
+    bias, x, y = args[:3]
+    _, k = x.shape
+    kk, _ = y.shape
+    if k != kk:
+        raise AssertionError(f"addmm: inner dimensions mismatch [{x.shape} and {y.shape}]")
+
+    m = _bytes(x) + _bytes(y) + _bytes(out)
+    beta = kwargs.get("beta", 1.)
+    if beta != 0:
+        m += _bytes(bias)
+    return m
+
+
+def _memory_bmm(args, kwargs, out):
+    """Batch matrix multiply: out[b] = x[b] @ y[b]"""
+    x, y = args[:2]
+    b, _, k = x.shape
+    bb, kk, _ = y.shape
+    if b != bb or k != kk:
+        raise AssertionError(
+            f"bmm: batch or inner dimensions mismatch [{x.shape} and {y.shape}]"
+        )
+    return _bytes(x) + _bytes(y) + _bytes(out)
+
+
+def _memory_baddbmm(args, kwargs, out):
+    """out[b] = beta * b[b] + alpha * (x[b] @ y[b])"""
+    bias, x, y = args[:3]
+    b, m, k = x.shape
+    bb, kk, n = y.shape
+    if b != bb or k != kk:
+        raise AssertionError(
+            f"baddmm: batch or inner dimensions mismatch [{x.shape}, {y.shape}]"
+        )
+
+    m = _bytes(x) + _bytes(y) + _bytes(out)
+    beta = kwargs.get("beta", 1.)
+    if beta != 0:
+        m += _bytes(bias)
+    return m
+
+
+def _memory_convolution(args, kwargs, out):
+    x, w, bias = args[:3]
+    m = _bytes(x) + _bytes(w) + _bytes(out)
+    if bias is not None:
+        m += _bytes(bias)
+    return m
+
+
+def _memory_convolution_backward(args, kwargs, out):
+    """
+    Outputs (by output_mask):
+        0: grad_x
+        1: grad_weight
+        2: grad_bias
+    """
+    (
+        grad_out,
+        x,
+        w,
+        bias,
+        _stride,
+        _padding,
+        _dilation,
+        _transposed,
+        _output_padding,
+        _groups,
+        output_mask,
+    ) = args
+    m = _bytes(grad_out)
+
+    if output_mask[0]:  # grad_x
+        grad_x = out[0]
+        m += _bytes(w)
+        m += _bytes(grad_x)
+
+    if output_mask[1]:  # grad_weight
+        grad_weight = out[1]
+        m += _bytes(x)
+        m += _bytes(grad_weight)
+
+    if output_mask[2]:  # grad_bias
+        grad_bias = out[2]
+        m += _bytes(grad_bias)
+
+    return m
+
+
+def _memory_max_pool2d_with_indices(args, kwargs, out):
+    x = args[0]
+    y, indices = out
+    return _bytes(x) + _bytes(y) + _bytes(indices)
+
+
+def _memory_avg_pool2d(args, kwargs, out):
+    x = args[0]
+    return _bytes(x) + _bytes(out)
+
+
+def _memory_mean(args, kwargs, out):
+    x = args[0]
+    return _bytes(x) + _bytes(out)
+
+
+def _memory_element_wise_binary(args, kwargs, out):
+    x, y = args[:2]
+    return _bytes(x) + _bytes(y) + _bytes(out)
+
+
+def _memory_element_wise_unary(args, kwargs, out):
+    x = args[0]
+    return _bytes(x) + _bytes(out)
+
+
+def _memory_stack(args, kwargs, out):
+    tensor_list = args[0]
+    return sum(_bytes(x) for x in tensor_list) + _bytes(out)
+
+
+def _memory_clone(args, kwargs, out):
+    x = args[0]
+    return _bytes(x) + _bytes(out)
+
+
+def _memory_full_like(args, kwargs, out):
+    return _bytes(args[0])
+
+
+class MemoryAccessCounter(BaseCounter):
+    def __init__(
+        self,
+        extra_rules: dict[Any, Callable] = {},
+        extra_ignore_modules: list[nn.Module] = []
+    ):
+        self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
+        self.rules: dict[Any, Callable] = {
+            aten.mm.default: _memory_mm,
+            aten.addmm.default: _memory_addmm,
+            aten.bmm.default: _memory_bmm,
+            aten.baddbmm.default: _memory_baddbmm,
+            aten.convolution.default: _memory_convolution,
+            aten.convolution_backward.default: _memory_convolution_backward,
+            aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
+            aten.avg_pool2d.default: _memory_avg_pool2d,
+            aten.mean.dim: _memory_mean,
+            aten.add.Tensor: _memory_element_wise_binary,
+            aten.add.Scalar: _memory_element_wise_binary,
+            aten.sub.Tensor: _memory_element_wise_binary,
+            aten.sub.Scalar: _memory_element_wise_binary,
+            aten.neg.default: _memory_element_wise_unary,
+            aten.mul.Tensor: _memory_element_wise_binary,
+            aten.mul.Scalar: _memory_element_wise_binary,
+            aten.div.Tensor: _memory_element_wise_binary,
+            aten.div.Scalar: _memory_element_wise_binary,
+            aten.eq.Tensor: _memory_element_wise_binary,
+            aten.eq.Scalar: _memory_element_wise_binary,
+            aten.ne.Tensor: _memory_element_wise_binary,
+            aten.ne.Scalar: _memory_element_wise_binary,
+            aten.lt.Tensor: _memory_element_wise_binary,
+            aten.lt.Scalar: _memory_element_wise_binary,
+            aten.le.Tensor: _memory_element_wise_binary,
+            aten.le.Scalar: _memory_element_wise_binary,
+            aten.gt.Tensor: _memory_element_wise_binary,
+            aten.gt.Scalar: _memory_element_wise_binary,
+            aten.ge.Tensor: _memory_element_wise_binary,
+            aten.ge.Scalar: _memory_element_wise_binary,
+            aten.logical_and.default: _memory_element_wise_binary,
+            aten.logical_or.default: _memory_element_wise_binary,
+            aten.logical_xor.default: _memory_element_wise_binary,
+            aten.logical_not.default: _memory_element_wise_binary,
+            aten.stack.default: _memory_stack,
+            aten.clone.default: _memory_clone,
+            aten._to_copy.default: _memory_clone,
+            aten.full_like.default: _memory_full_like,
+        }
+        self.ignore_modules = []
+        self.rules.update(extra_rules)
+        self.ignore_modules.extend(extra_ignore_modules)

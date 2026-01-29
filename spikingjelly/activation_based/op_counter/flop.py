@@ -34,8 +34,8 @@ def _flop_mm(args, kwargs, out):
     return m * n * (2 * k - 1)
 
 def _flop_addmm(args, kwargs, out):
-    """out = beta * b + alpha * (x @ y)"""
-    b, x, y = args[:3]
+    """out = beta * bias + alpha * (x @ y)"""
+    bias, x, y = args[:3]
     m, k = x.shape
     kk, n = y.shape
     if k != kk:
@@ -50,24 +50,24 @@ def _flop_addmm(args, kwargs, out):
     if beta == 1:
         flops += m * n # add b to the m*n matrix
     elif beta != 0:
-        flops += b.numel() + m * n # scale b by beta, and add it to the m*n matrix
+        flops += bias.numel() + m * n # scale bias, and add it to the m*n matrix
     return flops
 
 def _flop_bmm(args, kwargs, out):
     """Batch matrix multiply: out[b] = x[b] @ y[b]"""
     x, y = args[:2]
-    b, m, l = x.shape
+    b, m, k = x.shape
     bb, kk, n = y.shape
-    if b != bb or l != kk:
+    if b != bb or k != kk:
         raise AssertionError(
             f"bmm: batch or inner dimensions mismatch [{x.shape} and {y.shape}]"
         )
-    return b * m * n * (2 * l - 1)
+    return b * m * n * (2 * k - 1)
 
 
 def _flop_baddbmm(args, kwargs, out):
-    """out[b] = beta * b[b] + alpha * (x[b] @ y[b])"""
-    b, x, y = args[:3]
+    """out[b] = beta * bias[b] + alpha * (x[b] @ y[b])"""
+    bias, x, y = args[:3]
     b, m, k = x.shape
     bb, kk, n = y.shape
     if b != bb or k != kk:
@@ -84,18 +84,17 @@ def _flop_baddbmm(args, kwargs, out):
     if beta == 1:
         flops += b * m * n # add b to the b*m*n matrix
     elif beta != 0:
-        flops += b.numel() + b * m * n  # scale b, then add it to the b*m*n matrix
+        flops += bias.numel() + b * m * n  # scale bias, then add it to the b*m*n matrix
     return flops
 
 
 def _flop_convolution(args, kwargs, out):
     """
-    args[0]: input, shape [B, C_in, ...]
+    args[0]: x, shape [B, C_in, ...]
     args[1]: weight, shape [C_out, C_in, *kernel_shape]
     args[2]: bias or None
     """
     x, w, bias = args[:3]
-    print(x.shape, w.shape, bias, out.shape)
     transposed = kwargs.get("transposed", False)
 
     b = x.shape[0]
@@ -113,7 +112,7 @@ def _flop_convolution(args, kwargs, out):
 def _flop_convolution_backward(args, kwargs, out):
     """
     Outputs (by output_mask):
-        0: grad_input
+        0: grad_x
         1: grad_weight
         2: grad_bias
     """
@@ -133,9 +132,9 @@ def _flop_convolution_backward(args, kwargs, out):
     flops = 0
 
     if output_mask[0]:
-        grad_input = out[0]
+        grad_x = out[0]
         flops += _flop_convolution(
-            [grad_out, w, bias], {"transposed": not transposed}, grad_input
+            [grad_out, w, None], {"transposed": not transposed}, grad_x
         )
 
     if output_mask[1]:
@@ -160,6 +159,20 @@ def _flop_convolution_backward(args, kwargs, out):
         flops += C_out * (B * _prod(spatial_shape) - 1)
 
     return flops
+
+
+def _flop_max_pool2d_with_indices(args, kwargs, out):
+    kernel_size = args[1]
+    y = out[0]
+    return y.numel() * (_prod(kernel_size) - 1) # K-1 * max
+
+def _flop_avg_pool2d(args, kwargs, out):
+    kernel_size = args[1]
+    return out.numel() * _prod(kernel_size) # K-1 * add, 1 * div
+
+def _flop_mean(args, kwargs, out):
+    x = args[0]
+    return x.numel()
 
 
 def _flop_add(args, kwargs, out):
@@ -189,6 +202,9 @@ class FlopCounter(BaseCounter):
             aten.baddbmm.default: _flop_baddbmm,
             aten.convolution.default: _flop_convolution,
             aten.convolution_backward.default: _flop_convolution_backward,
+            aten.max_pool2d_with_indices.default: _flop_max_pool2d_with_indices,
+            aten.avg_pool2d.default: _flop_avg_pool2d,
+            aten.mean.dim: _flop_mean,
             aten.add.Tensor: _flop_add,
             aten.add.Scalar: _flop_add,
             aten.sub.Tensor: _flop_add,

@@ -150,10 +150,6 @@ class DispatchCounterMode(TorchDispatchMode):
                     )
                 return True
 
-        if self.verbose:
-            print(
-                f"{_arrow} counted by {counter.__class__.__name__}"
-            )
         return False
 
     def __torch_dispatch__(self, func, types, args, kwargs):
@@ -169,7 +165,7 @@ class DispatchCounterMode(TorchDispatchMode):
                 continue
             value = counter.count(func, args, kwargs, out)
             if self.verbose:
-                print(f"{_arrow} + {value}")
+                print(f"{_arrow} + {value} [{counter.__class__.__name__}]")
             for parent in set(parent_names):
                 counter.record(parent, func, value) # add the count to every ancestor
 
