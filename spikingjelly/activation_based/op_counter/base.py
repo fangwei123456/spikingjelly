@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 _arrow = chr(0x2937)
 
 
+__all__ = ["ActiveModuleTracker", "BaseCounter", "DispatchCounterMode", "FunctionCounterMode"]
+
+
 class ActiveModuleTracker(ModuleTracker):
 
     def __init__(self):
@@ -88,7 +91,7 @@ class BaseCounter:
     def __init__(self):
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {}
-        self.ignore_modules = []
+        self.ignore_modules: list[nn.Module] = []
 
     def has_rule(self, func) -> bool:
         return func in self.rules
@@ -165,6 +168,8 @@ class DispatchCounterMode(TorchDispatchMode):
             if self.should_skip(counter, func):
                 continue
             value = counter.count(func, args, kwargs, out)
+            if self.verbose:
+                print(f"{_arrow} + {value}")
             for parent in set(parent_names):
                 counter.record(parent, func, value) # add the count to every ancestor
 
@@ -230,6 +235,8 @@ class FunctionCounterMode(TorchFunctionMode):
             if self.should_skip(counter, func):
                 continue
             value = counter.count(func, args, kwargs, out)
+            if self.verbose:
+                print(f"{_arrow} + {value}")
             for parent in set(parent_names):
                 counter.record(parent, func, value) # add the count to every ancestor
 

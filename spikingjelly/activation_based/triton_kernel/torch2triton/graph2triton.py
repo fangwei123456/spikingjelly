@@ -47,9 +47,18 @@ def _uw(arg) -> str:
 FX_TO_TRITON = {
     "add": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
     "add.Scalar": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
-    "add.Tensor": lambda args, kwargs: f"{_uw(args[0])} + {_uw(args[1])}",
+    "add.Tensor": lambda args, kwargs: (
+        f"{_uw(args[0])} + {_uw(args[1])}"
+        if kwargs.get("alpha", 1.) == 1.
+        else f"{_uw(args[0])} + ({kwargs['alpha']} * {_uw(args[1])})"
+    ),
     "sub": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
-    "sub.Tensor": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
+    "sub.Tensor": lambda args, kwargs: (
+        f"{_uw(args[0])} - {_uw(args[1])}"
+        if kwargs.get("alpha", 1.) == 1.
+        else f"{_uw(args[0])} - ({kwargs['alpha']} * {_uw(args[1])})"
+    ),
+    "sub.Scalar": lambda args, kwargs: f"{_uw(args[0])} - {_uw(args[1])}",
     "rsub.Scalar": lambda args, kwargs: f"{_uw(args[1])} - {_uw(args[0])}",
     "mul": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
     "mul.Tensor": lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])}",
