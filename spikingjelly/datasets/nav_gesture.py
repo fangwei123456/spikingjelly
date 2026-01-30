@@ -343,6 +343,56 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
 
 
 class NAVGestureSit(NAVGestureWalk):
+    def __init__(
+        self,
+        root: str,
+        data_type: str = "event",
+        frames_number: Optional[int] = None,
+        split_by: Optional[str] = None,
+        duration: Optional[int] = None,
+        custom_integrate_function: Optional[Callable] = None,
+        custom_integrated_frames_dir_name: Optional[str] = None,
+        transform: Optional[Callable] = None,
+        target_transform: Optional[Callable] = None,
+    ):
+        """
+        **API Language:**
+        :ref:`中文 <NAVGestureSit.__init__-cn>` | :ref:`English <NAVGestureSit.__init__-en>`
+
+        ----
+
+        .. _NAVGestureSit.__init__-cn:
+
+        * **中文**
+
+        Nav Gesture 数据集，由 `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_ 提出。
+
+        有关参数的更多详细信息，请参考 :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
+
+        ----
+
+        .. _NAVGestureSit.__init__-en:
+
+        * **English**
+
+        The Nav Gesture dataset, which is proposed by
+        `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
+
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
+        """
+        super().__init__(
+            root,
+            None,
+            data_type,
+            frames_number,
+            split_by,
+            duration,
+            custom_integrate_function,
+            custom_integrated_frames_dir_name,
+            transform,
+            target_transform,
+        )
+
     @classmethod
     def resource_url_md5(cls) -> list:
         return [

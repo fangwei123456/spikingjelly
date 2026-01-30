@@ -18,7 +18,11 @@ __all__ = ["FlexSNKernel", "FlexSN"]
 
 class FlexSNKernel:
     def __init__(
-        self, core: Callable, num_inputs: int, num_states: int, num_outputs: int,
+        self,
+        core: Callable,
+        num_inputs: int,
+        num_states: int,
+        num_outputs: int,
         example_inputs: Optional[Tuple[torch.Tensor]] = None,
         requires_grad: Optional[Tuple[bool]] = None,
     ):
@@ -122,10 +126,10 @@ class FlexSNKernel:
             core_str, core_name, info=self.info
         )
 
-    def __call__(self, *args): # args: [*input_seqs, *states]
+    def __call__(self, *args):  # args: [*input_seqs, *states]
         return triton_kernel.flexsn.FlexSNFunction.apply(
             self.f_inf, self.f_fwd, self.f_bwd, self.info, *args
-        ) # [*output_seqs, *state_seqs]
+        )  # [*output_seqs, *state_seqs]
 
 
 class FlexSN(base.MemoryModule):
@@ -270,7 +274,9 @@ class FlexSN(base.MemoryModule):
         self.backend = backend
         self.store_state_seqs = store_state_seqs
 
-        self.kernel = FlexSNKernel(core, num_inputs, num_states, num_outputs, example_inputs, requires_grad)
+        self.kernel = FlexSNKernel(
+            core, num_inputs, num_states, num_outputs, example_inputs, requires_grad
+        )
         # register states as memory buffers
         self.register_memory("states", None)
 

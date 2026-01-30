@@ -18,6 +18,7 @@ spikingjelly.activation\_based package
 
    spikingjelly.activation_based.functional
    spikingjelly.activation_based.monitor
+   spikingjelly.activation_based.op_counter
    spikingjelly.activation_based.learning
    spikingjelly.activation_based.quantize
 

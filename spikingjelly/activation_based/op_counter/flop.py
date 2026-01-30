@@ -1,14 +1,8 @@
-"""
-FLOP definition:
-
-- 1 multiply = 1 FLOP
-- 1 add = 1 FLOP
-- element-wise ops are counted
-"""
 from collections import defaultdict
 from typing import Any, Callable
 
 import torch
+
 aten = torch.ops.aten
 import torch.nn as nn
 
@@ -16,6 +10,7 @@ from .base import BaseCounter
 
 
 __all__ = ["FlopCounter"]
+
 
 def _prod(dims):
     p = 1
@@ -33,25 +28,29 @@ def _flop_mm(args, kwargs, out):
         raise AssertionError(f"mm: inner dimensions mismatch [{x.shape} and {y.shape}]")
     return m * n * (2 * k - 1)
 
+
 def _flop_addmm(args, kwargs, out):
     """out = beta * bias + alpha * (x @ y)"""
     bias, x, y = args[:3]
     m, k = x.shape
     kk, n = y.shape
     if k != kk:
-        raise AssertionError(f"addmm: inner dimensions mismatch [{x.shape} and {y.shape}]")
+        raise AssertionError(
+            f"addmm: inner dimensions mismatch [{x.shape} and {y.shape}]"
+        )
 
     alpha = kwargs.get("alpha", 1)
     beta = kwargs.get("beta", 1)
 
-    flops = m * n * (2 * k - 1) # matmul; 2k-1 flops for each output element
+    flops = m * n * (2 * k - 1)  # matmul; 2k-1 flops for each output element
     if alpha != 1:
-        flops += m * n # scale by alpha
+        flops += m * n  # scale by alpha
     if beta == 1:
-        flops += m * n # add b to the m*n matrix
+        flops += m * n  # add b to the m*n matrix
     elif beta != 0:
-        flops += bias.numel() + m * n # scale bias, and add it to the m*n matrix
+        flops += bias.numel() + m * n  # scale bias, and add it to the m*n matrix
     return flops
+
 
 def _flop_bmm(args, kwargs, out):
     """Batch matrix multiply: out[b] = x[b] @ y[b]"""
@@ -78,11 +77,11 @@ def _flop_baddbmm(args, kwargs, out):
     alpha = kwargs.get("alpha", 1)
     beta = kwargs.get("beta", 1)
 
-    flops = b * m * n * (2 * k - 1) # batched matmul
+    flops = b * m * n * (2 * k - 1)  # batched matmul
     if alpha != 1:
-        flops += b * m * n # scale by alpha
+        flops += b * m * n  # scale by alpha
     if beta == 1:
-        flops += b * m * n # add b to the b*m*n matrix
+        flops += b * m * n  # add b to the b*m*n matrix
     elif beta != 0:
         flops += bias.numel() + b * m * n  # scale bias, then add it to the b*m*n matrix
     return flops
@@ -103,7 +102,7 @@ def _flop_convolution(args, kwargs, out):
     spatial_shape = x.shape[2:] if transposed else out.shape[2:]
     flops_per_position = 2 * c_in * _prod(kernel_shape)
     flops = flops_per_position * _prod(spatial_shape) * c_out * b
-    flops -= out.numel() # for each output element, the first add can be avoided
+    flops -= out.numel()  # for each output element, the first add can be avoided
     if bias is not None:
         flops += out.numel()
     return flops
@@ -164,11 +163,13 @@ def _flop_convolution_backward(args, kwargs, out):
 def _flop_max_pool2d_with_indices(args, kwargs, out):
     kernel_size = args[1]
     y = out[0]
-    return y.numel() * (_prod(kernel_size) - 1) # K-1 * max
+    return y.numel() * (_prod(kernel_size) - 1)  # K-1 * max
+
 
 def _flop_avg_pool2d(args, kwargs, out):
     kernel_size = args[1]
-    return out.numel() * _prod(kernel_size) # K-1 * add, 1 * div
+    return out.numel() * _prod(kernel_size)  # K-1 * add, 1 * div
+
 
 def _flop_mean(args, kwargs, out):
     x = args[0]
@@ -176,8 +177,8 @@ def _flop_mean(args, kwargs, out):
 
 
 def _flop_add(args, kwargs, out):
-    alpha = kwargs.get("alpha", 1.)
-    if alpha == 1.:
+    alpha = kwargs.get("alpha", 1.0)
+    if alpha == 1.0:
         return out.numel()
     else:
         nb = args[1].numel() if torch.is_tensor(args[1]) else 1
@@ -192,8 +193,94 @@ class FlopCounter(BaseCounter):
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = []
+        extra_ignore_modules: list[nn.Module] = [],
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <FlopCounter.__init__-cn>` | :ref:`English <FlopCounter.__init__-en>`
+
+        ----
+
+        .. _FlopCounter.__init__-cn:
+
+        * **中文**
+
+        浮点运算计数器，用于计算深度神经网络中的浮点运算次数。
+
+        **FLOP（Floating Point Operations）** 是一个衡量计算复杂度的常用指标：
+
+        - 1 次乘法 = 1 FLOP；1 次加法 = 1 FLOP；......
+        - 逐元素操作的FLOP也会纳入考量。
+
+        ``FlopCounter`` 应与 :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>` 搭配使用。
+
+        .. warning::
+
+            目前，``FlopCounter`` 支持的 aten 操作类型有限。查看源代码以获取操作列表。如需添加新操作，
+            可以使用 ``extra_rules`` 参数；也欢迎提交 pull request 来完善默认的 :attr:`rules` ！
+
+        :param extra_rules: 额外的操作规则，格式为 ``{aten_op: func}`` ，
+            其中 ``func`` 是一个函数，接受 ``(args, kwargs, out)`` 并返回计数值
+        :type extra_rules: dict[Any, Callable]
+
+        :param extra_ignore_modules: 额外需要忽略的模块列表，这些模块中的操作不会被计数
+        :type extra_ignore_modules: list[torch.nn.Module]
+
+        ----
+
+        .. _FlopCounter.__init__-en:
+
+        * **English**
+
+        FLOP counter for calculating the number of floating-point operations in deep networks.
+
+        FLOP (Floating Point Operations) is a common metric for measuring computational complexity:
+
+        - 1 multiplication = 1 FLOP; 1 addition = 1 FLOP; ......
+        - Element-wise operations are also considered.
+
+        ``FlopCounter`` should be used with :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>` .
+
+        .. warning::
+
+            Currently, ``FlopCounter`` supports a limited number of aten operations.
+            See the source code for the operation list.
+            If you want to add new operations, use the ``extra_rules`` parameter.
+            Welcome to submit a pull request to improve the default :attr:`rules` !
+
+        :param extra_rules: additional operation rules, format as ``{aten_op: func}``,
+            where ``func`` is a function that takes ``(args, kwargs, out)`` and returns the count value
+        :type extra_rules: dict[Any, Callable]
+
+        :param extra_ignore_modules: additional list of modules to ignore.
+            Operations within these modules will not be counted
+        :type extra_ignore_modules: list[torch.nn.Module]
+
+        ----
+
+        * **代码示例 | Example**
+
+        .. code-block:: python
+
+            from spikingjelly.activation_based.op_counter import (
+                FlopCounter,
+                DispatchCounterMode,
+            )
+            import torch
+            import torch.nn as nn
+
+            model = nn.Sequential(nn.Linear(100, 50), nn.ReLU(), nn.Linear(50, 10))
+            x = torch.randn(32, 100)
+
+            flop_counter = FlopCounter()
+
+            with DispatchCounterMode([flop_counter]):
+                output = model(x)
+
+            # Get FLOP counts
+            total_flops = flop_counter.get_total()
+            print(f"Total FLOPs: {total_flops}")
+        """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {
             aten.mm.default: _flop_mm,

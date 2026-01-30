@@ -18,6 +18,7 @@ __all__ = [
     "LinearRecurrentContainer",
 ]
 
+
 def _check_step_mode(block: nn.Sequential, caller: str = "MultiStepContainer"):
     for m in block:
         assert not hasattr(m, "step_mode") or m.step_mode == "s"
