@@ -15,6 +15,9 @@ def _bytes(x: torch.Tensor):
     return x.element_size() * x.numel() if torch.is_tensor(x) else 0
 
 
+def _memory_null(args, kwargs, out):
+    return 0
+
 def _memory_mm(args, kwargs, out):
     """out = x @ y"""
     x, y = args[:2]
@@ -124,6 +127,11 @@ def _memory_max_pool2d_with_indices(args, kwargs, out):
     return _bytes(x) + _bytes(y) + _bytes(indices)
 
 
+def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
+    grad_output, indices = args[0], args[1]
+    grad_x = out
+    return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
+
 def _memory_avg_pool2d(args, kwargs, out):
     x = args[0]
     return _bytes(x) + _bytes(out)
@@ -155,7 +163,51 @@ def _memory_clone(args, kwargs, out):
 
 
 def _memory_full_like(args, kwargs, out):
-    return _bytes(args[0])
+    return _bytes(out)
+
+
+def _memory_select_backward(args, kwargs, out):
+    return _bytes(args[0]) + _bytes(out)
+
+
+def _memory_native_batch_norm(args, kwargs, out):
+    x, mean, var, gamma, beta, train = args[:6]
+    m = _bytes(x) + _bytes(mean) + _bytes(var) + _bytes(gamma) + _bytes(beta)
+    if train:
+        m += _bytes(out[0]) + _bytes(out[1]) + _bytes(out[2]) # write x, mean, var
+    else:
+        m += _bytes(out[0]) # write only x
+    return m
+
+
+def _memory_native_batch_norm_backward(args, kwargs, out):
+    grad_output, x, gamma, running_mean, running_var, saved_mean, saved_invstd = args[:7]
+    train, output_mask = args[-3], args[-1]
+    n = grad_output.numel()
+    c = gamma.numel()
+
+    m = 0
+    if train:
+        if output_mask[0]:  # grad_input
+            m += _bytes(grad_output)
+            m += _bytes(x) + _bytes(saved_mean) +  _bytes(saved_invstd)
+            m += _bytes(gamma)
+            # grad_gamma and grad_beta has been computed!
+        elif output_mask[1]:  # grad_gamma
+            m += _bytes(grad_output)
+            m += _bytes(x) + _bytes(saved_mean) +  _bytes(saved_invstd)
+        elif output_mask[2]:  # grad_beta
+            m += _bytes(grad_output)
+    else:
+        if output_mask[0]:  # grad_input
+            m += _bytes(grad_output) + _bytes(saved_invstd) + _bytes(gamma)
+        if output_mask[1]: # grad_gamma
+            m += _bytes(x) + _bytes(saved_mean)
+            if not output_mask[0]:
+                m += _bytes(saved_invstd) + _bytes(grad_output)
+        if output_mask[2] and not output_mask[0] and not output_mask[1]:
+            m += _bytes(grad_output)
+    return m
 
 
 class MemoryAccessCounter(BaseCounter):
@@ -248,18 +300,34 @@ class MemoryAccessCounter(BaseCounter):
             aten.baddbmm.default: _memory_baddbmm,
             aten.convolution.default: _memory_convolution,
             aten.convolution_backward.default: _memory_convolution_backward,
+            aten.native_batch_norm.default: _memory_native_batch_norm,
+            aten.native_batch_norm_backward.default: _memory_native_batch_norm_backward,
             aten.max_pool2d_with_indices.default: _memory_max_pool2d_with_indices,
+            aten.max_pool2d_with_indices_backward.default: _memory_max_pool2d_with_indices_backward,
             aten.avg_pool2d.default: _memory_avg_pool2d,
+            aten.sum.default: _memory_mean,
+            aten.sum.dim_IntList: _memory_mean,
             aten.mean.dim: _memory_mean,
             aten.add.Tensor: _memory_element_wise_binary,
+            aten.add_.Tensor: _memory_element_wise_binary,
             aten.add.Scalar: _memory_element_wise_binary,
+            aten.add_.Scalar: _memory_element_wise_binary,
             aten.sub.Tensor: _memory_element_wise_binary,
+            aten.sub_.Tensor: _memory_element_wise_binary,
             aten.sub.Scalar: _memory_element_wise_binary,
+            aten.sub_.Scalar: _memory_element_wise_binary,
+            aten.rsub.Tensor: _memory_element_wise_binary,
+            aten.rsub.Scalar: _memory_element_wise_binary,
             aten.neg.default: _memory_element_wise_unary,
+            aten.neg_.default: _memory_element_wise_unary,
             aten.mul.Tensor: _memory_element_wise_binary,
+            aten.mul_.Tensor: _memory_element_wise_binary,
             aten.mul.Scalar: _memory_element_wise_binary,
+            aten.mul_.Scalar: _memory_element_wise_binary,
             aten.div.Tensor: _memory_element_wise_binary,
+            aten.div_.Tensor: _memory_element_wise_binary,
             aten.div.Scalar: _memory_element_wise_binary,
+            aten.div_.Scalar: _memory_element_wise_binary,
             aten.eq.Tensor: _memory_element_wise_binary,
             aten.eq.Scalar: _memory_element_wise_binary,
             aten.ne.Tensor: _memory_element_wise_binary,
@@ -276,10 +344,19 @@ class MemoryAccessCounter(BaseCounter):
             aten.logical_or.default: _memory_element_wise_binary,
             aten.logical_xor.default: _memory_element_wise_binary,
             aten.logical_not.default: _memory_element_wise_binary,
+            aten.sigmoid_.default: _memory_element_wise_unary,
             aten.stack.default: _memory_stack,
             aten.clone.default: _memory_clone,
             aten._to_copy.default: _memory_clone,
             aten.full_like.default: _memory_full_like,
+            aten.ones_like.default: _memory_full_like,
+            aten.view.default: _memory_null,
+            aten.empty.memory_format: _memory_null,
+            aten.select.int: _memory_null, # return a view
+            aten.select_backward.default: _memory_select_backward, # involve load store
+            aten.detach.default: _memory_null,
+            aten.t.default: _memory_null,
+            aten.expand.default: _memory_null,
         }
         self.ignore_modules = []
         self.rules.update(extra_rules)
