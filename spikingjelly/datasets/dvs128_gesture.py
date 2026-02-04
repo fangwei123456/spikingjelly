@@ -367,7 +367,7 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
-        fpath = download_root / "DVSGesture.tar.gz"
+        fpath = download_root / "DvsGesture.tar.gz"
         print(f"Extract [{fpath}] to [{extract_root}].")
         extract_archive(fpath, extract_root)
 
