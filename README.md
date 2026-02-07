@@ -46,9 +46,11 @@ In the latest version (Github version),
 - `FlexSN` is available for converting PyTorch spiking neuronal dynamics to Triton kernels;
 - `SpikingSelfAttention` and `QKAttention` are available;
 - `nir_exchange` is available;
+- `op_counter` is available;
 - `spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional` and `spikingjelly.datasets` are refactored;
-- Dataset implementations are refactored.
-- Docs and tutorials are updated.
+- Dataset implementations are refactored;
+- Docs and tutorials are updated;
+- Conv-bn fusion functions in `spikingjelly.activation_based.functional` are deprecated; use PyTorch's [`fuse_conv_bn_eval`](https://docs.pytorch.org/docs/stable/generated/torch.nn.utils.fuse_conv_bn_eval.html) instead.
 
 **Planned**
 

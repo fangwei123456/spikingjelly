@@ -46,9 +46,11 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 - 已添加`FlexSN`，可将PyTorch神经元动力学转换到Triton内核；
 - 已添加`SpikingSelfAttention`和`QKAttention`；
 - 已添加`nir_exchange`；
+- 已添加`op_counter`；
 - 已重构`spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional`和`spikingjelly.datasets`；
-- 已重构数据集的实现。
-- 已更新文档和教程。
+- 已重构数据集的实现；
+- 已更新文档和教程；
+- `spikingjelly.activation_based.functional`中的卷积-批归一化融合函数已被弃用；用户可使用PyTorch的[`fuse_conv_bn_eval`](https://docs.pytorch.org/docs/stable/generated/torch.nn.utils.fuse_conv_bn_eval.html)来实现这一功能。
 
 **计划**
 

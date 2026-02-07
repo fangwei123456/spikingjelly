@@ -1,6 +1,12 @@
 spikingjelly.activation_based.functional package
 ==================================================
 
+.. warning::
+
+  卷积-批归一化融合函数已弃用。用户可以使用 `PyTorch的fuse_conv_bn_eval <https://docs.pytorch.org/docs/stable/generated/torch.nn.utils.fuse_conv_bn_eval.html>`_ 来实现相同的功能。
+
+  Functions for conv-bn fusion have been deprecated. Use `PyTorch's fuse_conv_bn_eval <https://docs.pytorch.org/docs/stable/generated/torch.nn.utils.fuse_conv_bn_eval.html>`_ to achieve the same functionality.
+
 .. note::
 
    **API稳定性说明**
@@ -99,33 +105,6 @@ Loss Functions
    :hidden:
 
    spikingjelly.activation_based.functional.loss
-
-Conv-BN Fusion Functions
-++++++++++++++++++++++++++++++++
-
-SpikingJelly 提供了将 **卷积层和批归一化层融合** 的工具。这些函数可以计算融合后的权重和偏置，加速卷积 SNN 的推理，使硬件部署成为可能。
-
-----
-
-SpikingJelly provides tools for **fusing convolution with batch normalization**. These functions can compute the fused weights and biases, accelerating the inference process of Convolutional SNNs, and make hardware deployment possible.
-
-.. list-table::
-
-   * - :func:`fused_conv2d_weight_of_convbn2d <spikingjelly.activation_based.functional.conv_bn_fuse.fused_conv2d_weight_of_convbn2d>`
-     - Compute fused weight for Conv2d-BN2d fusion.
-   * - :func:`fused_conv2d_bias_of_convbn2d <spikingjelly.activation_based.functional.conv_bn_fuse.fused_conv2d_bias_of_convbn2d>`
-     - Compute fused bias for Conv2d-BN2d fusion.
-   * - :func:`scale_fused_conv2d_weight_of_convbn2d <spikingjelly.activation_based.functional.conv_bn_fuse.scale_fused_conv2d_weight_of_convbn2d>`
-     - Scale the fused weight for Conv2d-BN2d fusion.
-   * - :func:`scale_fused_conv2d_bias_of_convbn2d <spikingjelly.activation_based.functional.conv_bn_fuse.scale_fused_conv2d_bias_of_convbn2d>`
-     - Scale the fused bias for Conv2d-BN2d fusion.
-   * - :func:`fuse_convbn2d <spikingjelly.activation_based.functional.conv_bn_fuse.fuse_convbn2d>`
-     - Fuse Conv2d-BN2d.
-
-.. toctree::
-   :hidden:
-
-   spikingjelly.activation_based.functional.conv_bn_fuse
 
 Online Learning Pipelines
 +++++++++++++++++++++++++++++++
