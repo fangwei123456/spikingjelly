@@ -690,7 +690,6 @@ class PopSpikeEncoderRandom(nn.Module):
 
 
 class PopEncoder(nn.Module):
-
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         r"""
         **API Language:**

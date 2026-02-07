@@ -18,6 +18,7 @@ def _bytes(x: torch.Tensor):
 def _memory_null(args, kwargs, out):
     return 0
 
+
 def _memory_mm(args, kwargs, out):
     """out = x @ y"""
     x, y = args[:2]
@@ -132,6 +133,7 @@ def _memory_max_pool2d_with_indices_backward(args, kwargs, out):
     grad_x = out
     return _bytes(grad_output) + _bytes(indices) + _bytes(grad_x)
 
+
 def _memory_avg_pool2d(args, kwargs, out):
     x = args[0]
     return _bytes(x) + _bytes(out)
@@ -174,34 +176,33 @@ def _memory_native_batch_norm(args, kwargs, out):
     x, mean, var, gamma, beta, train = args[:6]
     m = _bytes(x) + _bytes(mean) + _bytes(var) + _bytes(gamma) + _bytes(beta)
     if train:
-        m += _bytes(out[0]) + _bytes(out[1]) + _bytes(out[2]) # write x, mean, var
+        m += _bytes(out[0]) + _bytes(out[1]) + _bytes(out[2])  # write x, mean, var
     else:
-        m += _bytes(out[0]) # write only x
+        m += _bytes(out[0])  # write only x
     return m
 
 
 def _memory_native_batch_norm_backward(args, kwargs, out):
-    grad_output, x, gamma, running_mean, running_var, saved_mean, saved_invstd = args[:7]
+    grad_output, x, gamma = args[:3]
+    saved_mean, saved_invstd = args[5:7]
     train, output_mask = args[-3], args[-1]
-    n = grad_output.numel()
-    c = gamma.numel()
 
     m = 0
     if train:
         if output_mask[0]:  # grad_input
             m += _bytes(grad_output)
-            m += _bytes(x) + _bytes(saved_mean) +  _bytes(saved_invstd)
+            m += _bytes(x) + _bytes(saved_mean) + _bytes(saved_invstd)
             m += _bytes(gamma)
             # grad_gamma and grad_beta has been computed!
         elif output_mask[1]:  # grad_gamma
             m += _bytes(grad_output)
-            m += _bytes(x) + _bytes(saved_mean) +  _bytes(saved_invstd)
+            m += _bytes(x) + _bytes(saved_mean) + _bytes(saved_invstd)
         elif output_mask[2]:  # grad_beta
             m += _bytes(grad_output)
     else:
         if output_mask[0]:  # grad_input
             m += _bytes(grad_output) + _bytes(saved_invstd) + _bytes(gamma)
-        if output_mask[1]: # grad_gamma
+        if output_mask[1]:  # grad_gamma
             m += _bytes(x) + _bytes(saved_mean)
             if not output_mask[0]:
                 m += _bytes(saved_invstd) + _bytes(grad_output)
@@ -352,8 +353,8 @@ class MemoryAccessCounter(BaseCounter):
             aten.ones_like.default: _memory_full_like,
             aten.view.default: _memory_null,
             aten.empty.memory_format: _memory_null,
-            aten.select.int: _memory_null, # return a view
-            aten.select_backward.default: _memory_select_backward, # involve load store
+            aten.select.int: _memory_null,  # return a view
+            aten.select_backward.default: _memory_select_backward,  # involve load store
             aten.detach.default: _memory_null,
             aten.t.default: _memory_null,
             aten.expand.default: _memory_null,

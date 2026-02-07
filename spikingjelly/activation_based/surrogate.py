@@ -19,57 +19,95 @@ curly_bracket_r = "}"
 
 @torch.jit.script
 def heaviside(x: torch.Tensor):
-    """
-    * :ref:`API in English <heaviside.__init__-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <heaviside.__init__-cn>` | :ref:`English <heaviside.__init__-en>`
+
+    ----
+
     .. _heaviside.__init__-cn:
 
-    :param x: 输入tensor
-    :return: 输出tensor
+    * **中文**
 
     heaviside阶跃函数，定义为
 
     .. math::
         g(x) =
-        \\begin{cases}
-        1, & x \\geq 0 \\\\
-        0, & x < 0 \\\\
-        \\end{cases}
+        \begin{cases}
+        1, & x \geq 0 \\
+        0, & x < 0 \\
+        \end{cases}
 
     阅读 `HeavisideStepFunction <https://mathworld.wolfram.com/HeavisideStepFunction.html>`_ 以获得更多信息。
 
-    * :ref:`中文API <heaviside.__init__-cn>`
+    :param x: 输入tensor
+    :return: 输出tensor
+
+    ----
+
     .. _heaviside.__init__-en:
 
-    :param x: the input tensor
-    :return: the output tensor
+    * **English**
 
     The heaviside function, which is defined by
 
     .. math::
         g(x) =
-        \\begin{cases}
-        1, & x \\geq 0 \\\\
-        0, & x < 0 \\\\
-        \\end{cases}
+        \begin{cases}
+        1, & x \geq 0 \\
+        0, & x < 0 \\
+        \end{cases}
 
     For more information, see `HeavisideStepFunction <https://mathworld.wolfram.com/HeavisideStepFunction.html>`_.
 
+    :param x: the input tensor
+    :return: the output tensor
     """
     return (x >= 0).to(x)
 
 
 def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
-    """
-    :param primitive_function: 梯度替代函数的原函数
-    :type primitive_function: callable
-    :param spiking_function: 梯度替代函数
-    :type spiking_function: callable
+    r"""
+    **API Language:**
+    :ref:`中文 <check_manual_grad.__init__-cn>` | :ref:`English <check_manual_grad.__init__-en>`
+
+    ----
+
+    .. _check_manual_grad.__init__-cn:
+
+    * **中文**
 
     梯度替代函数的反向传播一般是手写的，可以用此函数去检查手写梯度是否正确。
 
-    此函数检查梯度替代函数spiking_function的反向传播，与原函数primitive_function的反向传播结果是否一致。“一致”被定义为，两者的误差不超过eps。
+    此函数检查梯度替代函数spiking_function的反向传播，与原函数primitive_function的反向传播结果是否一致。
+    "一致"被定义为，两者的误差不超过eps。
 
-    示例代码：
+    :param primitive_function: 梯度替代函数的原函数
+    :type primitive_function: callable
+
+    :param spiking_function: 梯度替代函数
+    :type spiking_function: callable
+
+    ----
+
+    .. _check_manual_grad.__init__-en:
+
+    * **English**
+
+    The manual gradient of surrogate gradient functions is usually written by hand, and this function can be used to check if the manual gradient is correct.
+
+    This function checks if the backward pass of surrogate function spiking_function is consistent with the backward pass of the primitive function primitive_function.
+    "Consistency" is defined as the error between the two not exceeding eps.
+
+    :param primitive_function: the primitive function of surrogate gradient
+    :type primitive_function: callable
+
+    :param spiking_function: the surrogate function
+    :type spiking_function: callable
+
+    ----
+
+    * **代码示例 | Example**
 
     .. code-block:: python
 
@@ -129,9 +167,10 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
 def plot_surrogate_function(surrogate_function):
     import matplotlib.pyplot as plt
     import scienceplots
+    W, H = plt.rcParams["figure.figsize"]
 
     plt.style.use(["science", "muted", "grid"])
-    fig = plt.figure(dpi=200)
+    fig = plt.figure(dpi=200, figsize=(W, H))
     x = torch.arange(-2.5, 2.5, 0.001)
     plt.plot(x.data, heaviside(x), label="Heaviside", linestyle="-.")
 
@@ -153,6 +192,7 @@ def plot_surrogate_function(surrogate_function):
     plt.ylabel("Output")
     plt.grid(linestyle="--")
     plt.savefig(f"./{surrogate_function.__class__.__name__}.pdf", bbox_inches="tight")
+    plt.savefig(f"./{surrogate_function.__class__.__name__}.svg", bbox_inches="tight")
     plt.show()
 
 
@@ -251,70 +291,81 @@ class piecewise_quadratic(torch.autograd.Function):
 
 class PiecewiseQuadratic(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
-        """
-        * :ref:`API in English <PiecewiseQuadratic.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <PiecewiseQuadratic.__init__-cn>` | :ref:`English <PiecewiseQuadratic.__init__-en>`
+
+        ----
+
         .. _PiecewiseQuadratic.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
+
 
         反向传播时使用分段二次函数的梯度（三角形函数）的脉冲发放函数。反向传播为
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            0, & |x| > \\frac{1}{\\alpha} \\\\
-            -\\alpha^2|x|+\\alpha, & |x| \\leq \\frac{1}{\\alpha}
-            \\end{cases}
+            \begin{cases}
+            0, & |x| > \frac{1}{\alpha} \\
+            -\alpha^2|x|+\alpha, & |x| \leq \frac{1}{\alpha}
+            \end{cases}
 
         对应的原函数为
 
         .. math::
             g(x) =
-            \\begin{cases}
-            0, & x < -\\frac{1}{\\alpha} \\\\
-            -\\frac{1}{2}\\alpha^2|x|x + \\alpha x + \\frac{1}{2}, & |x| \\leq \\frac{1}{\\alpha}  \\\\
-            1, & x > \\frac{1}{\\alpha} \\\\
-            \\end{cases}
+            \begin{cases}
+            0, & x < -\frac{1}{\alpha} \\
+            -\frac{1}{2}\alpha^2|x|x + \alpha x + \frac{1}{2}, & |x| \leq \frac{1}{\alpha}  \\
+            1, & x > \frac{1}{\alpha} \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
         该函数在文章 [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_ 中使用。
 
-        * :ref:`中文API <PiecewiseQuadratic.__init__-cn>`
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。
+            若为 ``False`` 则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _PiecewiseQuadratic.__init__-en:
 
-        :param alpha: parameter to control smoothness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The piecewise quadratic surrogate spiking function. The gradient is defined by
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            0, & |x| > \\frac{1}{\\alpha} \\\\
-            -\\alpha^2|x|+\\alpha, & |x| \\leq \\frac{1}{\\alpha}
-            \\end{cases}
+            \begin{cases}
+            0, & |x| > \frac{1}{\alpha} \\
+            -\alpha^2|x|+\alpha, & |x| \leq \frac{1}{\alpha}
+            \end{cases}
 
         The primitive function is defined by
 
         .. math::
             g(x) =
-            \\begin{cases}
-            0, & x < -\\frac{1}{\\alpha} \\\\
-            -\\frac{1}{2}\\alpha^2|x|x + \\alpha x + \\frac{1}{2}, & |x| \\leq \\frac{1}{\\alpha}  \\\\
-            1, & x > \\frac{1}{\\alpha} \\\\
-            \\end{cases}
+            \begin{cases}
+            0, & x < -\frac{1}{\alpha} \\
+            -\frac{1}{2}\alpha^2|x|x + \alpha x + \frac{1}{2}, & |x| \leq \frac{1}{\alpha}  \\
+            1, & x > \frac{1}{\alpha} \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseQuadratic.*
             :width: 100%
 
         The function is used in [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
 
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -357,59 +408,70 @@ class piecewise_exp(torch.autograd.Function):
 
 class PiecewiseExp(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
-        """
-        * :ref:`API in English <PiecewiseExp.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <PiecewiseExp.__init__-cn>` | :ref:`English <PiecewiseExp.__init__-en>`
+
+        ----
+
         .. _PiecewiseExp.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         反向传播时使用分段指数函数的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2}e^{-\\alpha |x|}
+            g'(x) = \frac{\alpha}{2}e^{-\alpha |x|}
 
         对应的原函数为
 
         .. math::
             g(x) =
-            \\begin{cases}
-            \\frac{1}{2}e^{\\alpha x}, & x < 0 \\\\
-            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0
-            \\end{cases}
+            \begin{cases}
+            \frac{1}{2}e^{\alpha x}, & x < 0 \\
+            1 - \frac{1}{2}e^{-\alpha x}, & x \geq 0
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseExp.*
             :width: 100%
 
         该函数在文章 [#SLAYER]_ [#neftci2019surrogate]_ 中使用。
 
-        * :ref:`中文API <PiecewiseExp.__init__-cn>`
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _PiecewiseExp.__init__-en:
 
-        :param alpha: parameter to control smoothness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The piecewise exponential surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2}e^{-\\alpha |x|}
+            g'(x) = \frac{\alpha}{2}e^{-\alpha |x|}
 
         The primitive function is defined by
 
         .. math::
             g(x) =
-            \\begin{cases}
-            \\frac{1}{2}e^{\\alpha x}, & x < 0 \\\\
-            1 - \\frac{1}{2}e^{-\\alpha x}, & x \\geq 0
-            \\end{cases}
+            \begin{cases}
+            \frac{1}{2}e^{\alpha x}, & x < 0 \\
+            1 - \frac{1}{2}e^{-\alpha x}, & x \geq 0
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseExp.*
             :width: 100%
 
         The function is used in [#SLAYER]_ [#neftci2019surrogate]_ .
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -461,51 +523,62 @@ class sigmoid(torch.autograd.Function):
 
 class Sigmoid(SurrogateFunctionBase):
     def __init__(self, alpha=4.0, spiking=True):
-        """
-        * :ref:`API in English <Sigmoid.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Sigmoid.__init__-cn>` | :ref:`English <Sigmoid.__init__-en>`
+
+        ----
+
         .. _Sigmoid.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         反向传播时使用sigmoid的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
+            g'(x) = \alpha * (1 - \mathrm{sigmoid} (\alpha x)) \mathrm{sigmoid} (\alpha x)
 
         对应的原函数为
 
         .. math::
-            g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
+            g(x) = \mathrm{sigmoid}(\alpha x) = \frac{1}{1+e^{-\alpha x}}
 
         .. image:: ../_static/API/activation_based/surrogate/Sigmoid.*
             :width: 100%
 
         该函数在文章 [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ 中使用。
 
-        * :ref:`中文API <Sigmoid.__init__-cn>`
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _Sigmoid.__init__-en:
 
-        :param alpha: parameter to control smoothness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The sigmoid surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x)
+            g'(x) = \alpha * (1 - \mathrm{sigmoid} (\alpha x)) \mathrm{sigmoid} (\alpha x)
 
         The primitive function is defined by
 
         .. math::
-            g(x) = \\mathrm{sigmoid}(\\alpha x) = \\frac{1}{1+e^{-\\alpha x}}
+            g(x) = \mathrm{sigmoid}(\alpha x) = \frac{1}{1+e^{-\alpha x}}
 
         .. image:: ../_static/API/activation_based/surrogate/Sigmoid.*
             :width: 100%
 
         The function is used in  [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ .
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -579,52 +652,63 @@ class soft_sign(torch.autograd.Function):
 
 class SoftSign(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
-        """
-        * :ref:`API in English <SoftSign.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <SoftSign.__init__-cn>` | :ref:`English <SoftSign.__init__-en>`
+
+        ----
+
         .. _SoftSign.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         反向传播时使用soft sign的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}} = \\frac{1}{2\\alpha(\\frac{1}{\\alpha} + |x|)^{2}}
+            g'(x) = \frac{\alpha}{2(1 + |\alpha x|)^{2}} = \frac{1}{2\alpha(\frac{1}{\alpha} + |x|)^{2}}
 
         对应的原函数为
 
         .. math::
-            g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
-            = \\frac{1}{2} (\\frac{x}{\\frac{1}{\\alpha} + |x|} + 1)
+            g(x) = \frac{1}{2} (\frac{\alpha x}{1 + |\alpha x|} + 1)
+            = \frac{1}{2} (\frac{x}{\frac{1}{\alpha} + |x|} + 1)
 
         .. image:: ../_static/API/activation_based/surrogate/SoftSign.*
             :width: 100%
 
         该函数在文章 [#SuperSpike]_ [#neftci2019surrogate]_ 中使用。
 
-        * :ref:`中文API <SoftSign.__init__-cn>`
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _SoftSign.__init__-en:
 
-        :param alpha: parameter to control smoothness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The soft sign surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2(1 + |\\alpha x|)^{2}}
+            g'(x) = \frac{\alpha}{2(1 + |\alpha x|)^{2}}
 
         The primitive function is defined by
 
         .. math::
-            g(x) = \\frac{1}{2} (\\frac{\\alpha x}{1 + |\\alpha x|} + 1)
+            g(x) = \frac{1}{2} (\frac{\alpha x}{1 + |\alpha x|} + 1)
 
         .. image:: ../_static/API/activation_based/surrogate/SoftSign.*
             :width: 100%
 
-        The function is used in [#SuperSpike]_ [#neftci2019surrogate]_ .
+        The function is used in [#SuperSpike]_ [#neftci2019surrogate]_.
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
         assert alpha > 0, "alpha must be lager than 0"
@@ -663,23 +747,42 @@ class super_spike(torch.autograd.Function):
 
 class SuperSpike(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
-        """
-        * :ref:`API in English <SuperSpike.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <SuperSpike.__init__-cn>` | :ref:`English <SuperSpike.__init__-en>`
+
+        ----
+
         .. _SuperSpike.__init__-cn:
+
+        * **中文**
 
         `SuperSpike: Supervised learning in multi-layer spiking neural networks <https://arxiv.org/abs/1705.11146>`_ 提出的反向传播时使用SuperSpike的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{(1 + (|x|))^2}
+            g'(x) = \frac{\alpha}{(1 + (|x|))^{2}}
 
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
 
-        * :ref:`中文API <SuperSpike.__init__-cn>`
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _SuperSpike.__init__-en:
+
+        * **English**
 
         The SuperSpike surrogate spiking function proposed by `SuperSpike: Supervised learning in multi-layer spiking neural networks <https://arxiv.org/abs/1705.11146>`_. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{(1 + (|x|))^2}
+            g'(x) = \frac{\alpha}{(1 + (|x|))^{2}}
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -734,38 +837,62 @@ class atan(torch.autograd.Function):
 
 class ATan(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
-        """
-        * :ref:`API in English <ATan.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <ATan.__init__-cn>` | :ref:`English <ATan.__init__-en>`
+
+        ----
+
         .. _ATan.__init__-cn:
+
+        * **中文**
 
         反向传播时使用反正切函数arc tangent的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
+            g'(x) = \frac{\alpha}{2(1 + (\frac{\pi}{2}\alpha x)^{2})}
 
         对应的原函数为
 
         .. math::
-            g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
+            g(x) = \frac{1}{\pi} \arctan(\frac{\pi}{2}\alpha x) + \frac{1}{2}
 
         .. image:: ../_static/API/activation_based/surrogate/ATan.*
             :width: 100%
 
-        * :ref:`中文API <ATan.__init__-cn>`
+        该函数在文章 [#Huh2018]_ [#huh2018gradient]_ 中使用。
+
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _ATan.__init__-en:
+
+        * **English**
 
         The arc tangent surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{2(1 + (\\frac{\\pi}{2}\\alpha x)^2)}
+            g'(x) = \frac{\alpha}{2(1 + (\frac{\pi}{2}\alpha x)^{2})}
 
         The primitive function is defined by
 
         .. math::
-            g(x) = \\frac{1}{\\pi} \\arctan(\\frac{\\pi}{2}\\alpha x) + \\frac{1}{2}
+            g(x) = \frac{1}{\pi} \arctan(\frac{\pi}{2}\alpha x) + \frac{1}{2}
 
         .. image:: ../_static/API/activation_based/surrogate/ATan.*
             :width: 100%
+
+        The function is used in [#Huh2018]_ [#huh2018gradient]_.
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -843,13 +970,15 @@ class nonzero_sign_log_abs(torch.autograd.Function):
 
 class NonzeroSignLogAbs(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
-        """
-        * :ref:`API in English <LogAbs.__init__-en>`
-        .. _LogAbs.__init__-cn:
+        r"""
+        **API Language:**
+        :ref:`中文 <NonzeroSignLogAbs.__init__-cn>` | :ref:`English <NonzeroSignLogAbs.__init__-en>`
 
-        :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        ----
+
+        .. _NonzeroSignLogAbs.__init__-cn:
+
+        * **中文**
 
         .. warning::
             原函数的输出范围并不是(0, 1)。它的优势是反向传播的计算量特别小。
@@ -857,32 +986,37 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         反向传播时使用NonzeroSignLogAbs的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{1 + |\\alpha x|} = \\frac{1}{\\frac{1}{\\alpha} + |x|}
+            g'(x) = \frac{\alpha}{1 + |\alpha x|} = \frac{1}{\frac{1}{\alpha} + |x|}
 
         对应的原函数为
 
         .. math::
-            g(x) = \\mathrm{NonzeroSign}(x) \\log (|\\alpha x| + 1)
+            g(x) = \mathrm{NonzeroSign}(x) \log (|\alpha x| + 1)
 
         其中
 
             .. math::
-                \\mathrm{NonzeroSign}(x) =
-                \\begin{cases}
-                1, & x \\geq 0 \\\\
-                -1, & x < 0 \\\\
-                \\end{cases}
+                \mathrm{NonzeroSign}(x) =
+                \begin{cases}
+                1, & x \geq 0 \\
+                -1, & x < 0 \\
+                \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
-        * :ref:`中文API <LogAbs.__init__-cn>`
-        .. _LogAbs.__init__-en:
+        该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#SuperSpike]_ 中使用。
 
-        :param alpha: parameter to control smoothness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
+        .. _NonzeroSignLogAbs.__init__-en:
+
+        * **English**
 
         .. admonition:: Warning
             :class: warning
@@ -893,25 +1027,32 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         The NonzeroSignLogAbs surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{1 + |\\alpha x|} = \\frac{1}{\\frac{1}{\\alpha} + |x|}
+            g'(x) = \frac{\alpha}{1 + |\alpha x|} = \frac{1}{\frac{1}{\alpha} + |x|}
 
         The primitive function is defined by
 
         .. math::
-            g(x) = \\mathrm{NonzeroSign}(x) \\log (|\\alpha x| + 1)
+            g(x) = \mathrm{NonzeroSign}(x) \log (|\alpha x| + 1)
 
         where
 
         .. math::
-            \\mathrm{NonzeroSign}(x) =
-            \\begin{cases}
-            1, & x \\geq 0 \\\\
-            -1, & x < 0 \\\\
-            \\end{cases}
+            \mathrm{NonzeroSign}(x) =
+            \begin{cases}
+            1, & x \geq 0 \\
+            -1, & x < 0 \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
 
+        The function is used in [#yin2017algorithm]_ [#STBP]_ [#SuperSpike]_.
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -953,63 +1094,74 @@ class erf(torch.autograd.Function):
 
 class Erf(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
-        """
-        * :ref:`API in English <Erf.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Erf.__init__-cn>` | :ref:`English <Erf.__init__-en>`
+
+        ----
+
         .. _Erf.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度的平滑程度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         反向传播时使用高斯误差函数(erf)的梯度的脉冲发放函数。反向传播为
 
         .. math::
-            g'(x) = \\frac{\\alpha}{\\sqrt{\\pi}}e^{-\\alpha^2x^2}
+            g'(x) = \frac{\alpha}{\sqrt{\pi}}e^{-\alpha^{2}x^{2}}
 
         对应的原函数为
 
         .. math::
             :nowrap:
 
-            \\begin{split}
-            g(x) &= \\frac{1}{2}(1-\\text{erf}(-\\alpha x)) \\\\
-            &= \\frac{1}{2} \\text{erfc}(-\\alpha x) \\\\
-            &= \\frac{1}{\\sqrt{\\pi}}\\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
-            \\end{split}
+            \begin{split}
+            g(x) &= \frac{1}{2}(1-\text{erf}(-\alpha x)) \\
+            &= \frac{1}{2} \text{erfc}(-\alpha x) \\
+            &= \frac{1}{\sqrt{\pi}}\int_{-\infty}^{\alpha x}e^{-t^{2}}dt
+            \end{split}
 
         .. image:: ../_static/API/activation_based/surrogate/Erf.*
             :width: 100%
 
         该函数在文章 [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_ 中使用。
 
-        * :ref:`中文API <Erf.__init__-cn>`
+        :param alpha: 控制反向传播时梯度的平滑程度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _Erf.__init__-en:
 
-        :param alpha: parameter to control smoothness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The Gaussian error (erf) surrogate spiking function. The gradient is defined by
 
         .. math::
-            g'(x) = \\frac{\\alpha}{\\sqrt{\\pi}}e^{-\\alpha^2x^2}
+            g'(x) = \frac{\alpha}{\sqrt{\pi}}e^{-\alpha^{2}x^{2}}
 
         The primitive function is defined by
 
         .. math::
             :nowrap:
 
-            \\begin{split}
-            g(x) &= \\frac{1}{2}(1-\\text{erf}(-\\alpha x)) \\\\
-            &= \\frac{1}{2} \\text{erfc}(-\\alpha x) \\\\
-            &= \\frac{1}{\\sqrt{\\pi}}\\int_{-\\infty}^{\\alpha x}e^{-t^2}dt
-            \\end{split}
+            \begin{split}
+            g(x) &= \frac{1}{2}(1-\text{erf}(-\alpha x)) \\
+            &= \frac{1}{2} \text{erfc}(-\alpha x) \\
+            &= \frac{1}{\sqrt{\pi}}\int_{-\infty}^{\alpha x}e^{-t^{2}}dt
+            \end{split}
 
         .. image:: ../_static/API/activation_based/surrogate/Erf.*
             :width: 100%
 
         The function is used in [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_.
+
+        :param alpha: parameter to control smoothness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -1058,71 +1210,84 @@ class piecewise_leaky_relu(torch.autograd.Function):
 
 class PiecewiseLeakyReLU(MultiArgsSurrogateFunctionBase):
     def __init__(self, w=1.0, c=0.01, spiking=True):
-        """
-        * :ref:`API in English <PiecewiseLeakyReLU.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <PiecewiseLeakyReLU.__init__-cn>` | :ref:`English <PiecewiseLeakyReLU.__init__-en>`
+
+        ----
+
         .. _PiecewiseLeakyReLU.__init__-cn:
 
-        :param w: ``-w <= x <= w`` 时反向传播的梯度为 ``1 / 2w``
-        :param c: ``x > w`` 或 ``x < -w`` 时反向传播的梯度为 ``c``
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         分段线性的近似脉冲发放函数。梯度为
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            \\frac{1}{2w}, & -w \\leq x \\leq w \\\\
+            \begin{cases}
+            \frac{1}{2w}, & -w \leq x \leq w \\
             c, & x < -w ~or~ x > w
-            \\end{cases}
+            \end{cases}
 
         对应的原函数为
 
         .. math::
             g(x) =
-            \\begin{cases}
-            cx + cw, & x < -w \\\\
-            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
-            cx - cw + 1, & x > w \\\\
-            \\end{cases}
+            \begin{cases}
+            cx + cw, & x < -w \\
+            \frac{1}{2w}x + \frac{1}{2}, & -w \leq x \leq w \\
+            cx - cw + 1, & x > w \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
         该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_ 中使用。
 
-        * :ref:`中文API <PiecewiseLeakyReLU.__init__-cn>`
+        :param w: ``-w <= x <= w`` 时反向传播的梯度为 ``1 / 2w``
+
+        :param c: ``x > w`` 或 ``x < -w`` 时反向传播的梯度为 ``c``
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _PiecewiseLeakyReLU.__init__-en:
 
-        :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
-        :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The piecewise surrogate spiking function. The gradient is defined by
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            \\frac{1}{2w}, & -w \\leq x \\leq w \\\\
+            \begin{cases}
+            \frac{1}{2w}, & -w \leq x \leq w \\
             c, & x < -w ~or~ x > w
-            \\end{cases}
+            \end{cases}
 
         The primitive function is defined by
 
         .. math::
             g(x) =
-            \\begin{cases}
-            cx + cw, & x < -w \\\\
-            \\frac{1}{2w}x + \\frac{1}{2}, & -w \\leq x \\leq w \\\\
+            \begin{cases}
+            cx + cw, & x < -w \\
+            \frac{1}{2w}x + \frac{1}{2}, & -w \leq x \leq w \\
             cx - cw + 1, & x > w
-            \\end{cases}
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/PiecewiseLeakyReLU.*
             :width: 100%
 
         The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
+
+        :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
+
+        :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(spiking)
         assert w > 0.0
@@ -1276,49 +1441,6 @@ class SquarewaveFourierSeries(MultiArgsSurrogateFunctionBase):
         """
         return code
 
-    # import torch
-    # from spikingjelly.activation_based import surrogate
-    # from matplotlib import pyplot as plt
-    # plt.style.use(['science', 'muted', 'grid'])
-    # fig = plt.figure(dpi=200, figsize=(6, 4))
-    # x = torch.arange(-2.5, 2.5, 0.001)
-    # plt.plot(x.data, surrogate.heaviside(x), label='Heaviside', linestyle='-.')
-    #
-    # c_list = []
-    # for n in [2, 4, 8]:
-    #     surrogate_function = surrogate.SquarewaveFourierSeries(n=n, T_period=8, spiking=False)
-    #     y = surrogate_function(x)
-    #     plt.plot(x.data, y.data, label=f'Primitive, $n={n}$')
-    #     c_list.append(plt.gca().lines[-1].get_color())
-    #
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title(f'SquarewaveFourierSeries surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # # plt.grid(linestyle='--')
-    # plt.savefig('./docs/source/_static/API/activation_based/surrogate/SquarewaveFourierSeries1.pdf')
-    # plt.savefig('./docs/source/_static/API/activation_based/surrogate/SquarewaveFourierSeries1.svg')
-    # plt.clf()
-    # for i, n in enumerate([2, 4, 8]):
-    #     surrogate_function = surrogate.SquarewaveFourierSeries(n=n, T_period=8, spiking=True)
-    #     x = x.detach()
-    #     x.requires_grad_(True)
-    #     y = surrogate_function(x)
-    #     z = y.sum()
-    #     z.backward()
-    #     plt.plot(x.data, x.grad, label=f'Gradient, $n={n}$', c=c_list[i])
-    #     x.grad.zero_()
-    #
-    # plt.xlim(-2, 2)
-    # plt.legend()
-    # plt.title(f'SquarewaveFourierSeries surrogate function')
-    # plt.xlabel('Input')
-    # plt.ylabel('Output')
-    # # plt.grid(linestyle='--')
-    # plt.savefig('./docs/source/_static/API/activation_based/surrogate/SquarewaveFourierSeries2.pdf')
-    # plt.savefig('./docs/source/_static/API/activation_based/surrogate/SquarewaveFourierSeries2.svg')
-
 
 class s2nn(torch.autograd.Function):
     @staticmethod
@@ -1341,62 +1463,74 @@ class s2nn(torch.autograd.Function):
 
 class S2NN(MultiArgsSurrogateFunctionBase):
     def __init__(self, alpha=4.0, beta=1.0, spiking=True):
-        """
-        * :ref:`API in English <S2NN.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <S2NN.__init__-cn>` | :ref:`English <S2NN.__init__-en>`
+
+        ----
+
         .. _S2NN.__init__-cn:
 
-        :param alpha: 控制 ``x < 0`` 时梯度的参数
-        :param beta: 控制 ``x >= 0`` 时梯度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         `S2NN: Time Step Reduction of Spiking Surrogate Gradients for Training Energy Efficient Single-Step Neural Networks <https://arxiv.org/abs/2201.10879>`_ 提出的S2NN替代函数。反向传播为
 
         .. math::
-            g'(x) = \\begin{cases}
-                \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\\\frac{beta}{(x + 1)}, x \\ge 0
-            \\end{cases}
+            g'(x) = \begin{cases}
+                \alpha * (1 - \mathrm{sigmoid} (\alpha x)) \mathrm{sigmoid} (\alpha x), x < 0 \\
+                \frac{\beta}{(x + 1)}, x \ge 0
+            \end{cases}
 
         对应的原函数为
 
         .. math::
-            g(x) = \\begin{cases}
-                \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta \\mathrm{ln}(x + 1) + 1, x \\ge 0
-            \\end{cases}
+            g(x) = \begin{cases}
+                \mathrm{sigmoid} (\alpha x), x < 0 \\
+                \beta \mathrm{ln}(x + 1) + 1, x \ge 0
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/S2NN.*
             :width: 100%
 
+        :param alpha: 控制 ``x < 0`` 时梯度的参数
 
-        * :ref:`中文API <S2NN.__init__-cn>`
+        :param beta: 控制 ``x >= 0`` 时梯度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _S2NN.__init__-en:
 
-        :param alpha: the param that controls the gradient when ``x < 0``
-        :param beta: the param that controls the gradient when ``x >= 0``
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The S2NN surrogate spiking function, which is proposed by `S2NN: Time Step Reduction of Spiking Surrogate Gradients for Training Energy Efficient Single-Step Neural Networks <https://arxiv.org/abs/2201.10879>`_. The gradient is defined by
 
         .. math::
-            g'(x) = \\begin{cases}
-                \\alpha * (1 - \\mathrm{sigmoid} (\\alpha x)) \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta (x + 1), x \\ge 0
-            \\end{cases}
+            g'(x) = \begin{cases}
+                \alpha * (1 - \mathrm{sigmoid} (\alpha x)) \mathrm{sigmoid} (\alpha x), x < 0 \\
+                \frac{\beta}{x + 1}, x \ge 0
+            \end{cases}
 
         The primitive function is defined by
 
         .. math::
-            g(x) = \\begin{cases}
-                \\mathrm{sigmoid} (\\alpha x), x < 0 \\\\
-                \\beta \\mathrm{ln}(x + 1) + 1, x \\ge 0
-            \\end{cases}
+            g(x) = \begin{cases}
+                \mathrm{sigmoid} (\alpha x), x < 0 \\
+                \beta \mathrm{ln}(x + 1) + 1, x \ge 0
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/S2NN.*
             :width: 100%
+
+        :param alpha: the param that controls the gradient when ``x < 0``
+
+        :param beta: the param that controls the gradient when ``x >= 0``
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(spiking)
         self.alpha = alpha
@@ -1479,59 +1613,70 @@ class q_pseudo_spike(torch.autograd.Function):
 
 class QPseudoSpike(SurrogateFunctionBase):
     def __init__(self, alpha=2.0, spiking=True):
-        """
-        * :ref:`API in English <QPseudoSpike.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <QPseudoSpike.__init__-cn>` | :ref:`English <QPseudoSpike.__init__-en>`
+
+        ----
+
         .. _QPseudoSpike.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度函数尾部厚度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         `Surrogate Gradients Design <https://arxiv.org/abs/2202.00282>`_ 提出的 :math:`q`-PseudoSpike替代函数。反向传播为
 
         .. math::
-            g'(x) = (1+\\frac{2|x|}{\\alpha-1})^{-\\alpha}
+            g'(x) = (1+\frac{2|x|}{\alpha-1})^{-\alpha}
 
-        其中 :math:`\\alpha>1` 对应原文中的 :math:`q`。
+        其中 :math:`\alpha>1` 对应原文中的 :math:`q`。
 
         对应的原函数为
 
         .. math::
             g(x) =
-            \\begin{cases}
-            \\frac{1}{2}(1-\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x < 0 \\\\
-            1 - \\frac{1}{2}(1+\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x \\geq 0.
-            \\end{cases}
+            \begin{cases}
+            \frac{1}{2}(1-\frac{2x}{\alpha-1})^{1-\alpha}, & x < 0 \\
+            1 - \frac{1}{2}(1+\frac{2x}{\alpha-1})^{1-\alpha}, & x \geq 0.
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/QPseudoSpike.*
             :width: 100%
 
-        * :ref:`中文API <QPseudoSpike.__init__-cn>`
+        :param alpha: 控制反向传播时梯度函数尾部厚度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _QPseudoSpike.__init__-en:
 
-        :param alpha: parameter to control tail fatness of gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
         The :math:`q`-PseudoSpike surrogate spiking function, which is first proposed in `Surrogate Gradients Design <https://arxiv.org/abs/2202.00282>`_. The gradient is defined by
 
         .. math::
-            g'(x) = (1+\\frac{2|x|}{\\alpha-1})^{-\\alpha}
+            g'(x) = (1+\frac{2|x|}{\alpha-1})^{-\alpha}
 
-        where :math:`\\alpha>1` corresponds to :math:`q` in paper.
+        where :math:`\alpha>1` corresponds to :math:`q` in paper.
 
         The primitive function is defined by
 
         .. math::
             g(x) =
-            \\begin{cases}
-            \\frac{1}{2}(1-\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x < 0 \\\\
-            1 - \\frac{1}{2}(1+\\frac{2x}{\\alpha-1})^{1-\\alpha}, & x \\geq 0.
-            \\end{cases}
+            \begin{cases}
+            \frac{1}{2}(1-\frac{2x}{\alpha-1})^{1-\alpha}, & x < 0 \\
+            1 - \frac{1}{2}(1+\frac{2x}{\alpha-1})^{1-\alpha}, & x \geq 0.
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/QPseudoSpike.*
             :width: 100%
+
+        :param alpha: parameter to control tail fatness of gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -1604,72 +1749,88 @@ class leaky_k_relu(torch.autograd.Function):
 
 class LeakyKReLU(MultiArgsSurrogateFunctionBase):
     def __init__(self, spiking=True, leak: float = 0.0, k: float = 1.0):
-        """
-        * :ref:`API in English <LeakyKReLU.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <LeakyKReLU.__init__-cn>` | :ref:`English <LeakyKReLU.__init__-en>`
+
+        ----
+
         .. _LeakyKReLU.__init__-cn:
 
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
-        :type spiking: bool
-        :param leak: gradient when ``x < 0``
-        :type leak: float
-        :param k: gradient when ``x >= 0 ``
-        :type k: float
+        * **中文**
 
         反向传播时使用LeakyKReLU的梯度的脉冲发放函数。反向传播为
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            k, & x \\geq 0 \\\\
-            leak, & x < 0 \\\\
-            \\end{cases}
+            \begin{cases}
+            k, & x \geq 0 \\
+            leak, & x < 0 \\
+            \end{cases}
 
         对应的原函数为
 
         .. math::
             g(x) =
-            \\begin{cases}
-            k \\cdot x, & x \\geq 0 \\\\
-            leak \\cdot x, & x < 0 \\\\
-            \\end{cases}
+            \begin{cases}
+            k \cdot x, & x \geq 0 \\
+            leak \cdot x, & x < 0 \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/LeakyKReLU.*
             :width: 100%
 
-        * :ref:`中文API <LeakyKReLU.__init__-cn>`
-        .. _LeakyKReLU.__init__-en:
+        该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#superSpike]_ 中使用。
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
         :type spiking: bool
+
         :param leak: ``x < 0`` 时的梯度值
         :type leak: float
+
         :param k: ``x >= 0 `` 时的梯度值
         :type k: float
+
+        ----
+
+        .. _LeakyKReLU.__init__-en:
+
+        * **English**
 
         The LeakyKReLU surrogate spiking function. The gradient is defined by
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            k, & x \\geq 0 \\\\
-            leak, & x < 0 \\\\
-            \\end{cases}
+            \begin{cases}
+            k, & x \geq 0 \\
+            leak, & x < 0 \\
+            \end{cases}
 
         The primitive function is defined by
 
         .. math::
             g(x) =
-            \\begin{cases}
-            k \\cdot x, & x \\geq 0 \\\\
-            leak \\cdot x, & x < 0 \\\\
-            \\end{cases}
+            \begin{cases}
+            k \cdot x, & x \geq 0 \\
+            leak \cdot x, & x < 0 \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/LeakyKReLU.*
             :width: 100%
 
+        The function is used in [#yin2017algorithm]_ [#STBP]_ [#superSpike]_.
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+
+        :param leak: gradient when ``x < 0``
+        :type leak: float
+
+        :param k: gradient when ``x >= 0 ``
+        :type k: float
         """
         super().__init__(spiking, leak, k)
         self.leak = leak
@@ -1824,67 +1985,82 @@ class log_tailed_relu(torch.autograd.Function):
 
 class LogTailedReLU(SurrogateFunctionBase):
     def __init__(self, alpha=0.0, spiking=True):
-        """
-        * :ref:`API in English <LogTailedReLU.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <LogTailedReLU.__init__-cn>` | :ref:`English <LogTailedReLU.__init__-en>`
+
+        ----
+
         .. _LogTailedReLU.__init__-cn:
 
-        :param alpha: 控制反向传播时梯度的参数
-        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
-            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        * **中文**
 
         `Deep Learning with Low Precision by Half-wave Gaussian Quantization <https://arxiv.org/abs/1702.00953>`_ 提出的 Log-tailed ReLU替代函数。反向传播为
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            \\alpha, & x \\leq 0 \\\\
-            1, & 0 < x \\leq 0 \\\\
-            \\frac{1}{x}, x > 1 \\\\
-            \\end{cases}
+            \begin{cases}
+            \alpha, & x \leq 0 \\
+            1, & 0 < x \leq 0 \\
+            \frac{1}{x}, x > 1 \\
+            \end{cases}
 
         对应的原函数为
 
         .. math::
             g(x) =
-            \\begin{cases}
-            \\alpha x, & x \\leq 0 \\\\
-            x, & 0 < x \\leq 0 \\\\
-            log(x), x > 1 \\\\
-            \\end{cases}
+            \begin{cases}
+            \alpha x, & x \leq 0 \\
+            x, & 0 < x \leq 0 \\
+            log(x), x > 1 \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/LogTailedReLU.*
             :width: 100%
 
-        * :ref:`中文API <LogTailedReLU.__init__-cn>`
+        该函数在文章 [#STBP]_ [#huh2018gradient]_ [#neftci2019surrogate]_ 中使用。
+
+        :param alpha: 控制反向传播时梯度的参数
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+
+        ----
+
         .. _LogTailedReLU.__init__-en:
 
-        :param alpha: parameter to control gradient
-        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
-            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
-            using the primitive function of the surrogate gradient function used in backward propagation
+        * **English**
 
-        The Log-tailed ReLU surrogate spiking function, which is first proposed in `Deep Learning with Low Precision by `Half-wave Gaussian Quantization <https://arxiv.org/abs/1702.00953>`_. The gradient is defined by
+        The Log-tailed ReLU surrogate spiking function, which is first proposed in `Deep Learning with Low Precision by Half-wave Gaussian Quantization <https://arxiv.org/abs/1702.00953>`_. The gradient is defined by
 
         .. math::
             g'(x) =
-            \\begin{cases}
-            \\alpha, & x \\leq 0 \\\\
-            1, & 0 < x \\leq 0 \\\\
-            \\frac{1}{x}, x > 1 \\\\
-            \\end{cases}
+            \begin{cases}
+            \alpha, & x \leq 0 \\
+            1, & 0 < x \leq 0 \\
+            \frac{1}{x}, x > 1 \\
+            \end{cases}
 
         The primitive function is defined by
 
         .. math::
             g(x) =
-            \\begin{cases}
-            \\alpha x, & x \\leq 0 \\\\
-            x, & 0 < x \\leq 0 \\\\
-            log(x), x > 1 \\\\
-            \\end{cases}
+            \begin{cases}
+            \alpha x, & x \leq 0 \\
+            x, & 0 < x \leq 0 \\
+            log(x), x > 1 \\
+            \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/LogTailedReLU.*
             :width: 100%
+
+        The function is used in [#STBP]_ [#huh2018gradient]_ [#neftci2019surrogate]_.
+
+        :param alpha: parameter to control gradient
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
         """
         super().__init__(alpha, spiking)
 
@@ -1959,33 +2135,23 @@ class LogTailedReLU(SurrogateFunctionBase):
         )
 
 
-@torch.jit.script
-def deterministic_pass_backward(
-    grad_output: torch.Tensor, x: torch.Tensor, alpha: float
-):
-    return grad_output, None
-
-
 class deterministic_pass(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, x, alpha):
-        if x.requires_grad:
-            ctx.save_for_backward(x)
-            ctx.alpha = alpha
+    def forward(ctx, x):
         return heaviside(x)
 
     @staticmethod
     def backward(ctx, grad_output):
-        return deterministic_pass_backward(grad_output, ctx.saved_tensors[0], ctx.alpha)
+        return grad_output
 
 
 class DeterministicPass(SurrogateFunctionBase):
-    def __init__(self, alpha=1.0, spiking=True):
-        super().__init__(alpha, spiking)
+    def __init__(self, spiking=True):
+        super().__init__(0., spiking)
 
     @staticmethod
     def spiking_function(x, alpha):
-        return deterministic_pass.apply(x, alpha)
+        return deterministic_pass.apply(x)
 
     @staticmethod
     @torch.jit.script
@@ -1994,7 +2160,35 @@ class DeterministicPass(SurrogateFunctionBase):
 
     @staticmethod
     def backward(grad_output, x, alpha):
-        return deterministic_pass_backward(grad_output, x, alpha)[0]
+        return grad_output
+
+
+class poisson_pass(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, x):
+        return torch.bernoulli(x).float()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        return grad_output
+
+
+class PoissonPass(SurrogateFunctionBase):
+    def __init__(self, spiking=True):
+        super().__init__(0., spiking)
+
+    @staticmethod
+    def spiking_function(x, alpha):
+        return poisson_pass.apply(x)
+
+    @staticmethod
+    @torch.jit.script
+    def primitive_function(x: torch.Tensor, alpha: float):
+        return x
+
+    @staticmethod
+    def backward(grad_output, x, alpha):
+        return grad_output
 
 
 @torch.jit.script
@@ -2031,17 +2225,6 @@ class Rect(SurrogateFunctionBase):
     @staticmethod
     def backward(grad_output, x, alpha):
         return rect_backward(grad_output, x, alpha)[0]
-
-
-class poisson_pass(torch.autograd.Function):
-    @staticmethod
-    def forward(ctx, x):
-        return torch.bernoulli(x).float()
-
-    @staticmethod
-    def backward(ctx, grad_output):
-        grad_input = grad_output.clone()
-        return grad_input
 
 
 _has_cuda_ = [

@@ -18,8 +18,10 @@ def _prod(dims):
         p *= v
     return p
 
+
 def _flop_null(args, kwargs, out):
     return 0
+
 
 def _flop_mm(args, kwargs, out):
     """out = x @ y"""
@@ -200,21 +202,22 @@ def _flop_element_wise(args, kwargs, out):
 def _flop_sigmoid(args, kwargs, out):
     return 4 * out.numel()
 
+
 def _flop_native_batch_norm(args, kwargs, out):
     x, train = args[0], args[5]
     n, c = x.numel(), x.shape[1]
     flops = 0
     if train:
-        flops += n # batch mean
-        flops += 3*n - c # batch var
-        flops += 2*c # sqrt(var + eps)
-        flops += 2*n # x - mean / std
-        flops += 2*n # * gamma, + beta
-        flops += 6*c # (1-momentum)*stat + momentum*stat, stat in [mean, var]
+        flops += n  # batch mean
+        flops += 3 * n - c  # batch var
+        flops += 2 * c  # sqrt(var + eps)
+        flops += 2 * n  # x - mean / std
+        flops += 2 * n  # * gamma, + beta
+        flops += 6 * c  # (1-momentum)*stat + momentum*stat, stat in [mean, var]
     else:
-        flops += 2*c # sqrt(var + eps)
-        flops += 2*n # x - mean / std
-        flops += 2*n # * gamma, + beta
+        flops += 2 * c  # sqrt(var + eps)
+        flops += 2 * n  # x - mean / std
+        flops += 2 * n  # * gamma, + beta
     return flops
 
 
@@ -226,22 +229,26 @@ def _flop_native_batch_norm_backward(args, kwargs, out):
     flops = 0
     if train:
         if output_mask[0]:  # grad_input
-            flops += 2*n # x_hat = (x - mean) * invstd
-            flops += n - c # term1: sum(grad_output) per channel (grad_beta)
-            flops += 2*n - c # term2: sum(grad_output * x_hat) per channel (grad_gamma)
-            flops += 5*n + 2*c # invstd*gamma/n * (grad_output*n - term1 - term2*x_hat)
+            flops += 2 * n  # x_hat = (x - mean) * invstd
+            flops += n - c  # term1: sum(grad_output) per channel (grad_beta)
+            flops += (
+                2 * n - c
+            )  # term2: sum(grad_output * x_hat) per channel (grad_gamma)
+            flops += (
+                5 * n + 2 * c
+            )  # invstd*gamma/n * (grad_output*n - term1 - term2*x_hat)
         if output_mask[1] and not output_mask[0]:  # grad_gamma
-            flops += 2*n # x_hat
-            flops += 2*n - c
-        if output_mask[2] and not output_mask[0]: # grad_beta
+            flops += 2 * n  # x_hat
+            flops += 2 * n - c
+        if output_mask[2] and not output_mask[0]:  # grad_beta
             flops = flops + n - c
     else:
         if output_mask[0]:  # grad_input
-            flops += 2*n # grad_output * saved_invstd * gamma
-        if output_mask[1]: # grad_gamma
-            flops += 2*n # x_hat = (x - mean) / std
-            flops += 2*n - c
-        if output_mask[2]: # grad_beta
+            flops += 2 * n  # grad_output * saved_invstd * gamma
+        if output_mask[1]:  # grad_gamma
+            flops += 2 * n  # x_hat = (x - mean) / std
+            flops += 2 * n - c
+        if output_mask[2]:  # grad_beta
             flops += n - c
     return flops
 
