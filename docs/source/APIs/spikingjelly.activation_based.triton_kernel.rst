@@ -1,6 +1,26 @@
 spikingjelly.activation\_based.triton\_kernel package
 =====================================================
 
+.. note::
+
+    Developers should **decide whether Triton backend is available** by:
+
+    .. code:: python
+
+        try:
+            import triton
+        except ImportError:
+            triton = None
+
+        if triton is not None:
+            # Triton backend is available
+            ...
+        else:
+            # Triton backend is not available
+            ...
+
+    :class:`MemoryModule <spikingjelly.activation_based.base.MemoryModule>` encapsulates this logic.
+
 Predefined Neuron Kernels
 ----------------------------------
 

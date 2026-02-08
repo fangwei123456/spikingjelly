@@ -16,8 +16,8 @@ except BaseException as e:
     logging.info(
         f"spikingjelly.activation_based.triton_kernel.torch2triton.graph2triton: {e}"
     )
-    triton = dummy.DummyTriton
-    tl = None
+    triton = dummy.DummyImport()
+    tl = dummy.DummyImport()
 
 from ..triton_utils import type_str_dict
 from ..triton_utils import ensure_cleanup_tmp_python_files

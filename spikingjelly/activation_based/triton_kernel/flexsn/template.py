@@ -5,7 +5,7 @@ except BaseException as e:
     from .. import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.template: {e}")
-    triton = dummy.DummyTriton
+    triton = dummy.DummyImport()
 
 from ..torch2triton import compile_triton_code_str
 from .info import FlexSNInfo

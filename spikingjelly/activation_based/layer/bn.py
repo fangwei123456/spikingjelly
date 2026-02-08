@@ -6,6 +6,7 @@ from torch import Tensor
 from torch.nn.modules.batchnorm import _BatchNorm
 
 from .. import base, functional
+from ..functional.memopt.checkpointing import in_gc_1st_forward
 
 
 __all__ = [
@@ -67,16 +68,23 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
     def extra_repr(self):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
+    def super_forward(self, x: Tensor):
+        original_momentum = self.momentum
+        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        out = super().forward(x)
+        self.momentum = original_momentum
+        return out
+
     def forward(self, x: Tensor):
         if self.step_mode == "s":
-            return super().forward(x)
+            return self.super_forward(x)
 
         elif self.step_mode == "m":
             if x.dim() != 4 and x.dim() != 3:
                 raise ValueError(
                     f"expected x with shape [T, N, C, L] or [T, N, C], but got x with shape {x.shape}!"
                 )
-            return functional.seq_to_ann_forward(x, super().forward)
+            return functional.seq_to_ann_forward(x, self.super_forward)
 
 
 class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
@@ -121,16 +129,23 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
     def extra_repr(self):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
+    def super_forward(self, x: Tensor):
+        original_momentum = self.momentum
+        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        out = super().forward(x)
+        self.momentum = original_momentum
+        return out
+
     def forward(self, x: Tensor):
         if self.step_mode == "s":
-            return super().forward(x)
+            return self.super_forward(x)
 
         elif self.step_mode == "m":
             if x.dim() != 5:
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            return functional.seq_to_ann_forward(x, super().forward)
+            return functional.seq_to_ann_forward(x, self.super_forward)
 
 
 class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
@@ -175,16 +190,23 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
     def extra_repr(self):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
+    def super_forward(self, x: Tensor):
+        original_momentum = self.momentum
+        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        out = super().forward(x)
+        self.momentum = original_momentum
+        return out
+
     def forward(self, x: Tensor):
         if self.step_mode == "s":
-            return super().forward(x)
+            return self.super_forward(x)
 
         elif self.step_mode == "m":
             if x.dim() != 6:
                 raise ValueError(
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
-            return functional.seq_to_ann_forward(x, super().forward)
+            return functional.seq_to_ann_forward(x, self.super_forward)
 
 
 class NeuNorm(base.MemoryModule):
@@ -304,8 +326,15 @@ class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
         assert self.affine, "ThresholdDependentBatchNorm needs to set `affine = True`!"
         torch.nn.init.constant_(self.weight, alpha * v_th)
 
+    def super_forward(self, x: Tensor):
+        original_momentum = self.momentum
+        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        out = super().forward(x)
+        self.momentum = original_momentum
+        return out
+
     def forward(self, x_seq):
-        return functional.seq_to_ann_forward(x_seq, super().forward)
+        return functional.seq_to_ann_forward(x_seq, self.super_forward)
 
 
 class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
@@ -479,8 +508,15 @@ class _TemporalEffectiveBatchNormBase(_BatchNorm, base.MultiStepModule):
         self.step_mode = "m"
         self.scale = nn.Parameter(torch.ones([T]))
 
+    def super_forward(self, x: torch.Tensor):
+        original_momentum = self.momentum
+        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        out = super().forward(x)
+        self.momentum = original_momentum
+        return out
+
     def forward(self, x_seq: torch.Tensor):
-        y_seq = functional.seq_to_ann_forward(x_seq, super().forward)
+        y_seq = functional.seq_to_ann_forward(x_seq, self.super_forward)
         return y_seq * self.scale.view(-1, *[1 for _ in range(y_seq.dim() - 1)])
 
 
@@ -690,7 +726,12 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
 
     def single_step_forward(self, x: torch.Tensor):
         self.t = self.t + 1
-        return self.bn_list[self.t](x)
+        f = self.bn_list[self.t]
+        original_momentum = f.momentum
+        f.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        out = f(x)
+        f.momentum = original_momentum
+        return out
 
 
 class BatchNormThroughTime1d(_BatchNormThroughTimeBase):

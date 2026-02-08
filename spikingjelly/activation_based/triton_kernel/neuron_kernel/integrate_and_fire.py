@@ -13,8 +13,8 @@ except BaseException as e:
     logging.info(
         f"spikingjelly.activation_based.triton_kernel.neuron_kernel.integrate_and_file: {e}"
     )
-    triton = dummy.DummyTriton
-    tl = None
+    triton = dummy.DummyImport()
+    tl = dummy.DummyImport()
 
 from ..triton_utils import type_dict, contiguous_and_device_guard
 from ..triton_utils import amp_custom_fwd, amp_custom_bwd, convert_and_store

@@ -39,8 +39,8 @@ except BaseException as e:
     from . import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.triton_utils: {e}")
-    triton = dummy.DummyTriton
-    tl = None
+    triton = dummy.DummyImport()
+    tl = dummy.DummyImport()
     type_dict = {}
     type_str_dict = {}
 
