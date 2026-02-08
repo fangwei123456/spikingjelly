@@ -167,6 +167,7 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
 def plot_surrogate_function(surrogate_function):
     import matplotlib.pyplot as plt
     import scienceplots
+
     W, H = plt.rcParams["figure.figsize"]
 
     plt.style.use(["science", "muted", "grid"])
@@ -2147,7 +2148,7 @@ class deterministic_pass(torch.autograd.Function):
 
 class DeterministicPass(SurrogateFunctionBase):
     def __init__(self, spiking=True):
-        super().__init__(0., spiking)
+        super().__init__(0.0, spiking)
 
     @staticmethod
     def spiking_function(x, alpha):
@@ -2175,7 +2176,7 @@ class poisson_pass(torch.autograd.Function):
 
 class PoissonPass(SurrogateFunctionBase):
     def __init__(self, spiking=True):
-        super().__init__(0., spiking)
+        super().__init__(0.0, spiking)
 
     @staticmethod
     def spiking_function(x, alpha):
