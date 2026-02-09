@@ -17,6 +17,7 @@ __all__ = ["bit_spike_compress", "bit_spike_decompress"]
 
 @triton.autotune(
     configs=[triton.Config({"BLOCK_SIZE": b}) for b in [64, 128, 256]],
+    key=[],
     restore_value=["s_seq_compressed_ptr"]
 )
 @triton.jit
@@ -51,6 +52,7 @@ def _bit_spike_compress_triton(
 
 @triton.autotune(
     configs=[triton.Config({"BLOCK_SIZE": b}) for b in [64, 128, 256]],
+    key=[],
     restore_value=["s_seq_decompressed_ptr"]
 )
 @triton.jit
