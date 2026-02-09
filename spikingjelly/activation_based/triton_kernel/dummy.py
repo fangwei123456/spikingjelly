@@ -2,6 +2,7 @@ class DummyImport:
     """
     Dummy class as an import placeholder.
     """
+
     def __getattr__(self, name):
         return DummyImport()
 
@@ -16,4 +17,3 @@ class DummyImport:
 
     def __repr__(self):
         return "<DummyImport>"
-

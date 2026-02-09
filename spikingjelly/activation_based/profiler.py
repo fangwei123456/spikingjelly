@@ -14,8 +14,13 @@ import torch.optim as optim
 KB = 1024.0
 MB = 1024.0 * 1024.0
 
-__all__ = ["BaseProfiler", "HookProfiler", "CategoryMemoryProfiler", 
-"LayerWiseMemoryProfiler", "LayerWiseFPCUDATimeProfiler", "LayerWiseBPCUDATimeProfiler"
+__all__ = [
+    "BaseProfiler",
+    "HookProfiler",
+    "CategoryMemoryProfiler",
+    "LayerWiseMemoryProfiler",
+    "LayerWiseFPCUDATimeProfiler",
+    "LayerWiseBPCUDATimeProfiler",
 ]
 
 

@@ -15,10 +15,11 @@ from .triton_utils import contiguous_and_device_guard
 
 __all__ = ["bit_spike_compress", "bit_spike_decompress"]
 
+
 @triton.autotune(
     configs=[triton.Config({"BLOCK_SIZE": b}) for b in [64, 128, 256]],
     key=[],
-    restore_value=["s_seq_compressed_ptr"]
+    restore_value=["s_seq_compressed_ptr"],
 )
 @triton.jit
 def _bit_spike_compress_triton(
@@ -46,14 +47,13 @@ def _bit_spike_compress_triton(
         s_seq = s_seq.to(tl.uint8)
         s_seq_compressed = s_seq_compressed | (s_seq << i)
 
-    tl.store(
-        s_seq_compressed_ptr + store_offsets, s_seq_compressed, mask=store_mask
-    )
+    tl.store(s_seq_compressed_ptr + store_offsets, s_seq_compressed, mask=store_mask)
+
 
 @triton.autotune(
     configs=[triton.Config({"BLOCK_SIZE": b}) for b in [64, 128, 256]],
     key=[],
-    restore_value=["s_seq_decompressed_ptr"]
+    restore_value=["s_seq_decompressed_ptr"],
 )
 @triton.jit
 def _bit_spike_decompress_triton(

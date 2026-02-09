@@ -9,6 +9,7 @@ from spikingjelly.activation_based.profiler import (
     LayerWiseFPCUDATimeProfiler,
 )
 
+
 def _create_test_model():
     net = nn.Sequential(
         layer.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),
@@ -19,7 +20,7 @@ def _create_test_model():
         layer.AdaptiveAvgPool2d((1, 1)),
         layer.Flatten(),
         layer.Linear(64, 10),
-        neuron.IFNode()
+        neuron.IFNode(),
     )
     functional.set_step_mode(net, "m")
     return net
@@ -38,6 +39,7 @@ def test_context_manager_basic():
         functional.reset_net(net)
         results = prof.export()
     return results
+
 
 def test_layer_wise_profiling():
     net = _create_test_model().cuda()
@@ -76,6 +78,7 @@ def test_time_profiling():
                 functional.reset_net(net)
     results = prof.export(output=True)
 
+
 def test_exception_safety():
     net = _create_test_model().cuda()
 
@@ -95,6 +98,7 @@ def test_exception_safety():
             loss.backward()
     print(f"len(prof.hooks)={len(prof.hooks)}")
     assert len(prof.hooks) == 0
+
 
 if __name__ == "__main__":
     if not torch.cuda.is_available():

@@ -19,6 +19,7 @@ else:
         "spikingjelly.activation_based.triton_kernel.compress: "
         "Use PyTorch backend for bit spike compression"
     )
+
     def bit_spike_compress(s_seq: torch.Tensor) -> torch.Tensor:
         s_seq = s_seq.to(dtype=torch.bool).reshape(-1)
         compressed_shape = (s_seq.numel() + 7) // 8
@@ -32,9 +33,7 @@ else:
                 s_seq_compressed[:sliced_len] |= sliced << i
         return s_seq_compressed
 
-    def bit_spike_decompress(
-        s_seq_compressed: torch.Tensor, shape
-    ) -> torch.Tensor:
+    def bit_spike_decompress(s_seq_compressed: torch.Tensor, shape) -> torch.Tensor:
         decompressed_len = shape.numel()
         s_seq_decompressed = torch.zeros(
             decompressed_len, dtype=torch.bool, device=s_seq_compressed.device
