@@ -605,3 +605,89 @@ class MemoryModule(nn.Module, StepModule):
         replica = super()._replicate_for_data_parallel()
         replica._memories = self._memories.copy()
         return replica
+
+
+def named_memories(module: nn.Module, prefix: str = "") -> Generator:
+    r"""
+    **API Language:**
+    :ref:`中文 <named_memories-cn>` | :ref:`English <named_memories-en>`
+
+    ----
+
+    .. _named_memories-cn:
+
+    * **中文**
+
+    递归地生成模块树中的所有状态变量。类似于 ``named_parameters()`` 方法。
+
+    :param module: 目标模块
+    :type module: torch.nn.Module
+
+    :param prefix: 名称前缀
+    :type prefix: str
+
+    :return: 状态变量名称和值的生成器
+    :rtype: Generator
+
+    ----
+
+    .. _named_memories-en:
+
+    * **English**
+
+    Recursively yield all memory variables in a module tree. Similar to ``named_parameters()`` .
+
+    :param module: the target module
+    :type module: torch.nn.Module
+
+    :param prefix: name prefix
+    :type prefix: str
+
+    :return: a generator of memory variable names and values
+    :rtype: Generator
+    """
+    if isinstance(module, MemoryModule):
+        for name, value in module.named_memories():
+            full_name = f"{prefix}.{name}" if prefix else name
+            yield full_name, value
+
+    for child_name, child in module.named_children():
+        child_prefix = f"{prefix}.{child_name}" if prefix else child_name
+        yield from named_memories(child, prefix=child_prefix)
+
+
+def memories(module: nn.Module) -> Generator:
+    r"""
+    **API Language:**
+    :ref:`中文 <memories-cn>` | :ref:`English <memories-en>`
+
+    ----
+
+    .. _memories-cn:
+
+    * **中文**
+
+    递归地生成模块树中的所有状态变量值。类似于 ``parameters()`` 方法。
+
+    :param module: 目标模块
+    :type module: nn.Module
+
+    :return: 状态变量值的生成器
+    :rtype: Generator
+
+    ----
+
+    .. _memories-en:
+
+    * **English**
+
+    Recursively yield all memory variables in a module tree. Similar to ``parameters()`` .
+
+    :param module: the target module
+    :type module: nn.Module
+
+    :return: a generator of memory variable values
+    :rtype: Generator
+    """
+    for _, value in named_memories(module):
+        yield value

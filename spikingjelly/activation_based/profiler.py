@@ -1,7 +1,7 @@
 import abc
 import gc
 import inspect
-from typing import Tuple
+from typing import Tuple, Optional
 from collections import defaultdict
 import time
 from pathlib import Path
@@ -52,13 +52,33 @@ def _cuda_tensors():
 
 
 class BaseProfiler(abc.ABC):
-    """For profiling memory / time usage."""
-
     def __init__(self, models: Tuple[nn.Module]):
-        """Constructing a profiler.
+        r"""
+        **API Language:**
+        :ref:`中文 <BaseProfiler.__init__-cn>` | :ref:`English <BaseProfiler.__init__-en>`
 
-        Args:
-            models (Tuple[Module]): a tuple of targeting nn.Module
+        ----
+
+        .. _BaseProfiler.__init__-cn:
+
+        * **中文**
+
+        分析器的基类。欲实现新的分析器，需实现 :meth:`export` 和 :meth:`close` 方法。
+
+        :param models: 目标神经网络模块元组
+        :type models: Tuple[nn.Module]
+
+        ----
+
+        .. _BaseProfiler.__init__-en:
+
+        * **English**
+
+        The base class of profilers.
+        To implement a new profiler, you need to implement the :meth:`export` and :meth:`close` methods.
+
+        :param models: a tuple of target neural network modules
+        :type models: Tuple[nn.Module]
         """
         if isinstance(models, nn.Module):
             models = (models,)
@@ -69,6 +89,26 @@ class BaseProfiler(abc.ABC):
 
     @abc.abstractmethod
     def export(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <BaseProfiler.export-cn>` | :ref:`English <BaseProfiler.export-en>`
+
+        ----
+
+        .. _BaseProfiler.export-cn:
+
+        * **中文**
+
+        导出分析结果。
+
+        ----
+
+        .. _BaseProfiler.export-en:
+
+        * **English**
+
+        Export profiling results.
+        """
         pass
 
     @abc.abstractmethod
@@ -97,6 +137,64 @@ class CategoryMemoryProfiler(BaseProfiler):
         optimizers: Tuple[optim.Optimizer],
         log_path="snn_memory.prof.txt",
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <CategoryMemoryProfiler.__init__-cn>` | :ref:`English <CategoryMemoryProfiler.__init__-en>`
+
+        ----
+
+        .. _CategoryMemoryProfiler.__init__-cn:
+
+        * **中文**
+
+        类别内存分析器。
+
+        调用 :meth:`export` 方法时，该分析器将输出当前时刻权重、缓冲区（buffer）、梯度、优化器状态和激活值等数据占据的显存大小。
+
+        :param models: 目标神经网络模块元组
+        :type models: Tuple[nn.Module]
+
+        :param optimizers: 优化器元组
+        :type optimizers: Tuple[optim.Optimizer]
+
+        :param log_path: 日志文本文件路径
+        :type log_path: str
+
+        ----
+
+        .. _CategoryMemoryProfiler.__init__-en:
+
+        * **English**
+
+        Category memory profiler.
+
+        When :meth:`export` is called, this profiler will output the memory usage of weights, buffers, gradients,
+        optimizer states and activations.
+
+        :param models: a tuple of target neural network modules
+        :type models: Tuple[nn.Module]
+
+        :param optimizers: a tuple of optimizers
+        :type optimizers: Tuple[optim.Optimizer]
+
+        :param log_path: path to the log text file
+        :type log_path: str
+
+        ----
+
+        * **代码示例 | Example**
+
+        .. code-block:: python
+
+            with CategoryMemoryProfiler((net,), (optimizer,)) as prof:
+                x = torch.randn(32, 10)
+                y = net(x)
+                loss = y.sum()
+                results = prof.export()
+                loss.backward()
+                results = prof.export()
+                optimizer.step()
+        """
         super().__init__(models)
 
         if isinstance(optimizers, optim.Optimizer):
@@ -160,6 +258,44 @@ class CategoryMemoryProfiler(BaseProfiler):
         return memory_usage
 
     def export(self, depth=2, output: bool = True, *args, **kwargs):
+        r"""
+        **API Language:**
+        :ref:`中文 <CategoryMemoryProfiler.export-cn>` | :ref:`English <CategoryMemoryProfiler.export-en>`
+
+        ----
+
+        .. _CategoryMemoryProfiler.export-cn:
+
+        * **中文**
+
+        导出类别内存分析结果。
+
+        :param depth: 调用栈深度，用于在输出文本中显示当前处于那个函数调用的内部
+        :type depth: int
+
+        :param output: 是否输出到控制台和文件
+        :type output: bool
+
+        :return: 总内存信息和分类内存统计信息
+        :rtype: Tuple[dict, defaultdict]
+
+        ----
+
+        .. _CategoryMemoryProfiler.export-en:
+
+        * **English**
+
+        Export category memory profiling results.
+
+        :param depth: call stack depth. Used to show which function is currently in
+        :type depth: int
+
+        :param output: whether to output to console and file
+        :type output: bool
+
+        :return: total memory info and category-wise memory statistics
+        :rtype: Tuple[dict, defaultdict]
+        """
         memory_usage = self._get_memory_stats()
 
         total_mem = {}
@@ -194,7 +330,7 @@ class CategoryMemoryProfiler(BaseProfiler):
             with open(self.log_path, "a") as f:
                 f.write(out_str)
 
-        return memory_usage, total_mem
+        return total_mem, memory_usage
 
     def close(self):
         pass
@@ -209,6 +345,64 @@ class HookProfiler(BaseProfiler):
         instances: Tuple[nn.Module] = (nn.Module,),
         log_path: str = "prof.txt",
     ):
+        """
+        **API Language:**
+        :ref:`中文 <HookProfiler.__init__-cn>` | :ref:`English <HookProfiler.__init__-en>`
+
+        ----
+
+        .. _HookProfiler.__init__-cn:
+
+        * **中文**
+
+        需注册钩子函数的分析器基类。
+
+        :param models: 目标神经网络模块元组
+        :type models: Tuple[nn.Module]
+
+        :param model_names: 模型名称元组。应与 ``models`` 一一对应，用于显示结果
+        :type model_names: Tuple[str]
+
+        :param search_mode: 搜索模式元组。应与 ``models`` 一一对应，用于指定对那些模块添加钩子。
+            若 ``search_mode[i] == "self"``，则对 ``models[i]`` 添加钩子。
+            若 ``search_mode[i] == "submodules"``，则对 ``models[i]`` 的所有子模块添加钩子。
+            若 ``search_mode[i] == "direct_children"``，则对 ``models[i]`` 的直接子模块添加钩子。
+        :type search_mode: Tuple[str]
+
+        :param instances: 目标模块类型元组。只有类型匹配的模块才会被添加钩子。默认为 ``nn.Module`` 。
+        :type instances: Tuple[nn.Module]
+
+        :param log_path: 日志文本文件路径
+        :type log_path: str
+
+        ----
+
+        .. _HookProfiler.__init__-en:
+
+        * **English**
+
+        Base class for profilers that register hook functions.
+
+        :param models: target neural network modules
+        :type models: Tuple[nn.Module]
+
+        :param model_names: model names. Should have the same length as ``models``.
+        :type model_names: Tuple[str]
+
+        :param search_mode: search mode. Should have the same length as ``models``. Used to
+            specify which modules to add hooks to.
+            If ``search_mode[i] == "self"``, add hooks to ``models[i]``.
+            If ``search_mode[i] == "submodules"``, add hooks to all submodules of ``models[i]``.
+            If ``search_mode[i] == "direct_children"``, then add hooks to all direct children of ``models[i]``.
+        :type search_mode: Tuple[str]
+
+        :param instances: target module types. Only modules of the specified type will be added hooks.
+            Default is ``nn.Module``.
+        :type instances: Tuple[nn.Module]
+
+        :param log_path: path to the log text file
+        :type log_path: str
+        """
         super().__init__(models)
 
         if model_names is None:
@@ -292,6 +486,112 @@ class LayerWiseMemoryProfiler(HookProfiler):
         data_path="layer_memory.prof.pt",
         device: str = "cuda",
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <LayerWiseMemoryProfiler.__init__-cn>` | :ref:`English <LayerWiseMemoryProfiler.__init__-en>`
+
+        ----
+
+        .. _LayerWiseMemoryProfiler.__init__-cn:
+
+        * **中文**
+
+        逐层显存分析器。
+
+        对于每个目标模块，该分析器将记录以下显存使用情况：
+
+        - 前向传播开始前
+        - 前向传播结束后
+        - 前向传播期间的峰值
+        - 前向传播显存变化量：峰值显存减去开始前显存
+        - 反向传播开始前
+        - 反向传播结束后
+        - 反向传播期间的峰值
+        - 反向传播显存变化量：峰值显存减去开始前显存
+
+        :param models: 目标神经网络模块元组
+        :type models: Tuple[nn.Module]
+
+        :param model_names: 模型名称元组。应与 ``models`` 一一对应，用于显示结果
+        :type model_names: Tuple[str]
+
+        :param search_mode: 搜索模式元组。应与 ``models`` 一一对应，用于指定对那些模块添加钩子。
+            若 ``search_mode[i] == "self"``，则对 ``models[i]`` 添加钩子。
+            若 ``search_mode[i] == "submodules"``，则对 ``models[i]`` 的所有子模块添加钩子。
+            若 ``search_mode[i] == "direct_children"``，则对 ``models[i]`` 的直接子模块添加钩子。
+        :type search_mode: Tuple[str]
+
+        :param instances: 目标模块类型元组。只有类型匹配的模块才会被添加钩子。默认为 ``nn.Module`` 。
+        :type instances: Tuple[nn.Module]
+
+        :param log_path: 日志文本文件路径
+        :type log_path: str
+
+        :param data_path: 输出数据文件路径
+        :type data_path: str
+
+        :param device: 设备名称
+        :type device: str
+
+        ----
+
+        .. _LayerWiseMemoryProfiler.__init__-en:
+
+        * **English**
+
+        Layer-wise memory profiler.
+
+        For each target module, this profiler records the following memory usage:
+
+        - before forward propagation starts
+        - after forward propagation ends
+        - the peak during forward propagation
+        - the change in memory usage during forward propagation: peak memory usage minus start memory
+        - before backward propagation starts
+        - after backward propagation ends
+        - the peak during backward propagation
+        - the change in memory usage during backward propagation: peak memory usage minus start memory
+
+        :param models: target neural network modules
+        :type models: Tuple[nn.Module]
+
+        :param model_names: model names. Should have the same length as ``models``.
+        :type model_names: Tuple[str]
+
+        :param search_mode: search mode. Should have the same length as ``models``. Used to
+            specify which modules to add hooks to.
+            If ``search_mode[i] == "self"``, add hooks to ``models[i]``.
+            If ``search_mode[i] == "submodules"``, add hooks to all submodules of ``models[i]``.
+            If ``search_mode[i] == "direct_children"``, then add hooks to all direct children of ``models[i]``.
+        :type search_mode: Tuple[str]
+
+        :param instances: target module types. Only modules of the specified type will be added hooks.
+            Default is ``nn.Module``.
+        :type instances: Tuple[nn.Module]
+
+        :param log_path: path to the log text file
+        :type log_path: str
+
+        :param data_path: path to the output data file
+        :type data_path: str
+
+        :param device: device name
+        :type device: str
+
+        ----
+
+        * **代码示例 | Example**
+
+        .. code-block:: python
+
+            with LayerWiseMemoryProfiler((net,)) as prof:
+                x = torch.randn(32, 10)
+                y = net(x)
+                loss = y.sum()
+                loss.backward()
+
+            results = prof.export()
+        """
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.device = device
 
@@ -370,7 +670,67 @@ class LayerWiseMemoryProfiler(HookProfiler):
                     )
                     self.hooks += [h1, h2, h3, h4]
 
-    def export(self, depth=2, sort_by=None, output: bool = True, *args, **kwargs):
+    def export(
+        self,
+        depth=2,
+        sort_by: Optional[str] = None,
+        output: bool = True,
+        *args,
+        **kwargs,
+    ):
+        r"""
+        **API Language:**
+        :ref:`中文 <LayerWiseMemoryProfiler.export-cn>` | :ref:`English <LayerWiseMemoryProfiler.export-en>`
+
+        ----
+
+        .. _LayerWiseMemoryProfiler.export-cn:
+
+        * **中文**
+
+        导出分层内存分析结果。
+
+        :param depth: 调用栈深度，用于在输出中显示当前处于哪个函数内部
+        :type depth: int
+
+        :param sort_by: 排序字段。将按照所选字段从大到小顺序排列所有目标模块。可选字段为 ``"name"``,
+            ``"forward_start_memory"``, ``"forward_end_memory"``, ``"forward_peak_memory"``,
+            ``"forward_delta_memory"``, ``"backward_start_memory"``, ``"backward_end_memory"``,
+            ``"backward_peak_memory"``, ``"backward_delta_memory"`` 。默认为 ``None``，即
+            不额外排序，而是按照前向传播执行的拓扑顺序。
+        :type sort_by: Optional[str]
+
+        :param output: 是否输出到控制台和文件
+        :type output: bool
+
+        :return: 分层内存统计结果
+        :rtype: list
+
+        ----
+
+        .. _LayerWiseMemoryProfiler.export-en:
+
+        * **English**
+
+        Export layer-wise memory profiling results.
+
+        :param depth: call stack depth. Used to show which function is currently in
+        :type depth: int
+
+        :param sort_by: sorting field. The results will be sorted in descending order
+            according to the selected field. Available fields are ``"name"``,
+            ``"forward_start_memory"``, ``"forward_end_memory"``, ``"forward_peak_memory"``,
+            ``"forward_delta_memory"``, ``"backward_start_memory"``, ``"backward_end_memory"``,
+            ``"backward_peak_memory"``, ``"backward_delta_memory"`` . Default is ``None``,
+            which means sorted according to the topological order of forward propagation.
+        :type sort_by: str
+
+        :param output: whether to output to console and file
+        :type output: bool
+
+        :return: layer-wise memory statistics
+        :rtype: list
+        """
         results = []
         for name in self.forward_peak_memory.keys():
             f_start = self.forward_start_memory[name]
@@ -454,6 +814,104 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
         warmup: int = 10,
         log_path="layer_time_fp.prof.txt",
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <LayerWiseFPCUDATimeProfiler.__init__-cn>` | :ref:`English <LayerWiseFPCUDATimeProfiler.__init__-en>`
+
+        ----
+
+        .. _LayerWiseFPCUDATimeProfiler.__init__-cn:
+
+        * **中文**
+
+        逐层前向传播CUDA时间分析器。
+
+        对于每个目标模块，该分析器将测量前向传播的时间消耗。测量过程如下：
+
+        1. 在模块前向传播开始前记录CUDA事件
+        2. 在模块前向传播结束后记录CUDA事件
+        3. 计算两个事件之间的时间差作为该模块的前向传播时间
+        4. 重复多次测量以获得平均时间
+
+        前 ``warmup`` 次测量将被忽略，以消除冷启动效应。
+
+        :param models: 目标神经网络模块元组
+        :type models: Tuple[nn.Module]
+
+        :param model_names: 模型名称元组。应与 ``models`` 一一对应，用于显示结果
+        :type model_names: Tuple[str]
+
+        :param search_mode: 搜索模式元组。应与 ``models`` 一一对应，用于指定对那些模块添加钩子。
+            若 ``search_mode[i] == "self"``，则对 ``models[i]`` 添加钩子。
+            若 ``search_mode[i] == "submodules"``，则对 ``models[i]`` 的所有子模块添加钩子。
+            若 ``search_mode[i] == "direct_children"``，则对 ``models[i]`` 的直接子模块添加钩子。
+        :type search_mode: Tuple[str]
+
+        :param instances: 目标模块类型元组。只有类型匹配的模块才会被添加钩子。默认为 ``nn.Module`` 。
+        :type instances: Tuple[nn.Module]
+
+        :param warmup: 预热迭代次数。前 ``warmup`` 次测量结果将被忽略，以消除冷启动效应。
+        :type warmup: int
+
+        :param log_path: 日志文本文件路径
+        :type log_path: str
+
+        ----
+
+        .. _LayerWiseFPCUDATimeProfiler.__init__-en:
+
+        * **English**
+
+        Layer-wise forward propagation CUDA time profiler.
+
+        For each target module, this profiler measures the time consumption of forward propagation.
+        The measurement process is as follows:
+
+        1. Record a CUDA event before the module's forward propagation starts
+        2. Record a CUDA event after the module's forward propagation ends
+        3. Calculate the time difference between the two events as the forward propagation time of this module
+        4. Repeat measurements multiple times to obtain average time
+
+        The first ``warmup`` measurements will be ignored to eliminate cold start effects.
+
+        :param models: target neural network modules
+        :type models: Tuple[nn.Module]
+
+        :param model_names: model names. Should have the same length as ``models``.
+        :type model_names: Tuple[str]
+
+        :param search_mode: search mode. Should have the same length as ``models``. Used to
+            specify which modules to add hooks to.
+            If ``search_mode[i] == "self"``, add hooks to ``models[i]``.
+            If ``search_mode[i] == "submodules"``, add hooks to all submodules of ``models[i]``.
+            If ``search_mode[i] == "direct_children"``, then add hooks to all direct children of ``models[i]``.
+        :type search_mode: Tuple[str]
+
+        :param instances: target module types. Only modules of the specified type will
+            be added hooks. Default is ``nn.Module``.
+        :type instances: Tuple[nn.Module]
+
+        :param warmup: number of warmup iterations. The first ``warmup`` measurement
+            results will be ignored to eliminate cold start effects.
+        :type warmup: int
+
+        :param log_path: path to the log text file
+        :type log_path: str
+
+        ----
+
+        * **代码示例 | Example**
+
+        .. code-block:: python
+
+            with LayerWiseFPCUDATimeProfiler((net,)) as prof:
+                net.eval()
+                with torch.no_grad():
+                    for _ in range(10):
+                        x = torch.randn(32, 10)
+                        _ = net(x)
+            results = prof.export()
+        """
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.warmup = warmup
         self.result = defaultdict(list)
@@ -495,6 +953,38 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
                     self.hooks += [pre_handle, post_handle]
 
     def export(self, output: bool = True, *args, **kwargs):
+        r"""
+        **API Language:**
+        :ref:`中文 <LayerWiseFPCUDATimeProfiler.export-cn>` | :ref:`English <LayerWiseFPCUDATimeProfiler.export-en>`
+
+        ----
+
+        .. _LayerWiseFPCUDATimeProfiler.export-cn:
+
+        * **中文**
+
+        导出分层前向传播时间分析结果。
+
+        :param output: 是否输出到控制台和文件
+        :type output: bool
+
+        :return: 时间统计结果
+        :rtype: list
+
+        ----
+
+        .. _LayerWiseFPCUDATimeProfiler.export-en:
+
+        * **English**
+
+        Export layer-wise forward propagation time profiling results.
+
+        :param output: whether to output to console and file
+        :type output: bool
+
+        :return: time statistics
+        :rtype: list
+        """
         table = []
         for name in self.result.keys():
             forward_time = self.result[name][self.warmup :]
@@ -526,6 +1016,105 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
         warmup: int = 10,
         log_path="layer_time_bp.prof.txt",
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <LayerWiseBPCUDATimeProfiler.__init__-cn>` | :ref:`English <LayerWiseBPCUDATimeProfiler.__init__-en>`
+
+        ----
+
+        .. _LayerWiseBPCUDATimeProfiler.__init__-cn:
+
+        * **中文**
+
+        逐层反向传播CUDA时间分析器。
+
+        对于每个目标模块，该分析器将测量反向传播的时间消耗。测量过程如下：
+
+        1. 在模块反向传播开始前记录CUDA事件
+        2. 在模块反向传播结束后记录CUDA事件
+        3. 计算两个事件之间的时间差作为该模块的反向传播时间
+        4. 重复多次测量以获得平均时间
+
+        前 ``warmup`` 次测量将被忽略，以消除冷启动效应。
+
+        :param models: 目标神经网络模块元组
+        :type models: Tuple[nn.Module]
+
+        :param model_names: 模型名称元组。应与 ``models`` 一一对应，用于显示结果
+        :type model_names: Tuple[str]
+
+        :param search_mode: 搜索模式元组。应与 ``models`` 一一对应，用于指定对那些模块添加钩子。
+            若 ``search_mode[i] == "self"``，则对 ``models[i]`` 添加钩子。
+            若 ``search_mode[i] == "submodules"``，则对 ``models[i]`` 的所有子模块添加钩子。
+            若 ``search_mode[i] == "direct_children"``，则对 ``models[i]`` 的直接子模块添加钩子。
+        :type search_mode: Tuple[str]
+
+        :param instances: 目标模块类型元组。只有类型匹配的模块才会被添加钩子。默认为 ``nn.Module`` 。
+        :type instances: Tuple[nn.Module]
+
+        :param warmup: 预热迭代次数。前 ``warmup`` 次测量结果将被忽略，以消除冷启动效应。
+        :type warmup: int
+
+        :param log_path: 日志文本文件路径
+        :type log_path: str
+
+        ----
+
+        .. _LayerWiseBPCUDATimeProfiler.__init__-en:
+
+        * **English**
+
+        Layer-wise backward propagation CUDA time profiler.
+
+        For each target module, this profiler measures the time consumption of backward propagation.
+        The measurement process is as follows:
+
+        1. Record a CUDA event before the module's backward propagation starts
+        2. Record a CUDA event after the module's backward propagation ends
+        3. Calculate the time difference between the two events as the backward propagation time of this module
+        4. Repeat measurements multiple times to obtain average time
+
+        The first ``warmup`` measurements will be ignored to eliminate cold start effects.
+
+        :param models: target neural network modules
+        :type models: Tuple[nn.Module]
+
+        :param model_names: model names. Should have the same length as ``models``.
+        :type model_names: Tuple[str]
+
+        :param search_mode: search mode. Should have the same length as ``models``. Used to
+            specify which modules to add hooks to.
+            If ``search_mode[i] == "self"``, add hooks to ``models[i]``.
+            If ``search_mode[i] == "submodules"``, add hooks to all submodules of ``models[i]``.
+            If ``search_mode[i] == "direct_children"``, then add hooks to all direct children of ``models[i]``.
+        :type search_mode: Tuple[str]
+
+        :param instances: target module types. Only modules of the specified type will
+            be added hooks. Default is ``nn.Module``.
+        :type instances: Tuple[nn.Module]
+
+        :param warmup: number of warmup iterations. The first ``warmup`` measurement
+            results will be ignored to eliminate cold start effects.
+        :type warmup: int
+
+        :param log_path: path to the log text file
+        :type log_path: str
+
+        ----
+
+        * **代码示例 | Example**
+
+        .. code-block:: python
+
+            with LayerWiseBPCUDATimeProfiler((net,)) as prof:
+                for _ in range(10):
+                    x = torch.randn(32, 10, requires_grad=True)
+                    y = net(x)
+                    loss = y.sum()
+                    loss.backward()
+                    functional.reset_net(net)
+            results = prof.export()
+        """
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.warmup = warmup
         self.result = defaultdict(list)
@@ -569,6 +1158,38 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
                     self.hooks += [h_pre, h_post]
 
     def export(self, output: bool = True, *args, **kwargs):
+        r"""
+        **API Language:**
+        :ref:`中文 <LayerWiseBPCUDATimeProfiler.export-cn>` | :ref:`English <LayerWiseBPCUDATimeProfiler.export-en>`
+
+        ----
+
+        .. _LayerWiseBPCUDATimeProfiler.export-cn:
+
+        * **中文**
+
+        导出分层反向传播时间分析结果。
+
+        :param output: 是否输出到控制台和文件
+        :type output: bool
+
+        :return: 时间统计结果
+        :rtype: list
+
+        ----
+
+        .. _LayerWiseBPCUDATimeProfiler.export-en:
+
+        * **English**
+
+        Export layer-wise backward propagation time profiling results.
+
+        :param output: whether to output to console and file
+        :type output: bool
+
+        :return: time statistics
+        :rtype: list
+        """
         table = []
         for name in self.result.keys():
             bp_times = self.result[name][self.warmup :]
