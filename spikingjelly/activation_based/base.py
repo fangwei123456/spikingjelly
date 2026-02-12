@@ -1,7 +1,7 @@
 import copy
 import logging
 from abc import abstractmethod
-from typing import Tuple, Generator
+from typing import Tuple, Generator, Optional, Callable
 
 import torch
 import torch.nn as nn
@@ -37,7 +37,7 @@ def check_backend_library(backend: str):
 
     检查某个后端的python库是否已经安装。若未安装则此函数会报 ``ImportError`` 。
 
-    :param backend: ``'torch'``, ``'cupy'``, ``'triton'``或 ``'lava'``
+    :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` 或 ``'lava'``
     :type backend: str
 
     ----
@@ -400,6 +400,10 @@ class MemoryModule(nn.Module, StepModule):
         将变量存入用于保存有状态变量（例如脉冲神经元的膜电位）的字典中。这个变量将被初始化为 ``value`` 。
         每次调用 ``self.reset()`` 函数后， ``self.name`` 都会被重置为 ``value`` 。
 
+        .. warning::
+
+            若状态变量是个 ``torch.Tensor`` ，则 **不应对其做原地修改操作** 。
+
         :param name: 状态变量的名字
         :type name: str
         :param value: 状态变量的初始与重制值
@@ -414,6 +418,10 @@ class MemoryModule(nn.Module, StepModule):
         Register the state variable to memory dict, which saves stateful variables (e.g.,
         the membrane potential of a spiking neuron). The variable will be initialized as
         ``value`` . ``self.name`` will be set to ``value`` after calling ``self.reset()`` .
+
+        .. warning::
+
+            **Do not modify the state variable in-place** if it's a ``torch.Tensor`` .
 
         :param name: state variable's name
         :type name: str
@@ -691,3 +699,238 @@ def memories(module: nn.Module) -> Generator:
     """
     for _, value in named_memories(module):
         yield value
+
+
+def extract_memories(module: nn.Module) -> list:
+    r"""
+    **API Language:**
+    :ref:`中文 <extract_memories-cn>` | :ref:`English <extract_memories-en>`
+
+    ----
+
+    .. _extract_memories-cn:
+
+    * **中文**
+
+    提取模块中所有的状态变量值并返回列表。
+
+    :param module: 目标模块
+    :type module: torch.nn.Module
+
+    :return: 状态变量值的列表
+    :rtype: list
+
+    ----
+
+    .. _extract_memories-en:
+
+    * **English**
+
+    Extract all memory variable values from the module and return as a list.
+
+    :param module: the target module
+    :type module: torch.nn.Module
+
+    :return: a list of memory variable values
+    :rtype: list
+    """
+    return [m for m in memories(module)]
+
+
+def load_memories(module: nn.Module, memory_list: list):
+    r"""
+    **API Language:**
+    :ref:`中文 <load_memories-cn>` | :ref:`English <load_memories-en>`
+
+    ----
+
+    .. _load_memories-cn:
+
+    * **中文**
+
+    将状态变量列表加载到模块中。
+
+    :param module: 目标模块
+    :type module: torch.nn.Module
+
+    :param memory_list: 状态变量值列表
+    :type memory_list: list
+
+    ----
+
+    .. _load_memories-en:
+
+    * **English**
+
+    Load memory variables from a list into the module.
+
+    :param module: the target module
+    :type module: torch.nn.Module
+
+    :param memory_list: list of memory variable values
+    :type memory_list: list
+    """
+
+    def _assign_memory_by_name(module: nn.Module, name: str, value):
+        parts = name.split(".")
+        obj = module
+        for p in parts[:-1]:
+            obj = getattr(obj, p)
+        setattr(obj, parts[-1], value)
+
+    named = list(named_memories(module))
+
+    if len(named) != len(memory_list):
+        raise ValueError(
+            f"Memory length mismatch: model has {len(named)} memories "
+            f"but list contains {len(memory_list)}"
+        )
+
+    for (name, _), value in zip(named, memory_list):
+        _assign_memory_by_name(module, name, value)
+
+
+def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
+    r"""
+    **API Language:**
+    :ref:`中文 <to_functional_forward-cn>` | :ref:`English <to_functional_forward-en>`
+
+    ----
+
+    .. _to_functional_forward-cn:
+
+    * **中文**
+
+    给定一个可能包含隐式状态变量（记忆，memory）的模块，获取其显式状态的前向传播函数。
+
+    对于包含状态的模块，返回的函数签名为 ``(*inputs, *states) -> (*outputs, *new_states)`` ，
+    其中：
+
+    - ``inputs`` 为原始 ``forward`` 所需的常规输入参数；
+    - ``states`` 为当前模块中所有状态变量的值，其顺序与 ``extract_memories(module)`` 一致；
+    - ``outputs`` 为原始 ``forward`` 的输出结果；
+    - ``new_states`` 为执行前向传播后更新得到的状态变量。
+
+    若模块中不存在任何状态变量，则直接返回 ``module.forward`` 本身。
+
+    .. note::
+
+        该函数通过在调用过程中 **临时替换模块内部状态** 的方式实现功能转换，
+        并在执行结束后 **恢复原始状态** ，
+        因此对模块本身不产生副作用。
+
+    .. warning::
+
+        如果某个状态变量为 ``torch.Tensor`` ，则其不应在 ``module.forward`` 中被原地修改。否则，
+        会导致输入给前向传播函数的状态变量被修改，导致意想不到的错误。
+
+    :param module: 目标模块
+    :type module: torch.nn.Module
+
+    :param fn: 含隐式状态的前向传播函数。若为 ``None`` ，则默认使用 ``module.forward`` 。
+           该参数可用于指定特殊的前向传播函数（如， ``module`` 的父类的 ``forward`` ）。默认值
+           为 ``None`` 。
+    :type fn: Optional[Callable]
+
+    :return: 带有显式输入输出状态的前向传播函数
+    :rtype: Callable
+
+    ----
+
+    .. _to_functional_forward-en:
+
+    * **English**
+
+    Given a module that may contain implicit state variables, get the forward function
+    with explicit state variables.
+
+    For a stateful module, the returned function has the following signature
+    ``(*inputs, *states) -> (*outputs, *new_states)``
+    where:
+
+    - ``inputs`` are the regular input arguments required by the original ``forward``;
+    - ``states`` are the current memory variable values, in the same order as
+      returned by ``extract_memories(module)``;
+    - ``outputs`` are the outputs of the original ``forward`` method;
+    - ``new_states`` are the updated memory variables after the forward pass.
+
+    If the module does not contain any memory variables, ``module.forward`` is returned directly.
+
+    .. note::
+
+        The conversion is implemented by **temporarily loading the provided states** into
+        the module, executing the original forward pass, extracting the updated states,
+        and finally **restoring the original internal states**. Therefore, this operation
+        has no side effects on the module itself.
+
+    .. warning::
+
+        If a state variable is a ``torch.Tensor``, it should not be modified in-place
+        in ``module.forward``. Otherwise, the provided states will be modified,
+        which may lead to unexpected errors.
+
+    :param module: the target module
+    :type module: torch.nn.Module
+
+    :param fn: the forward function to be used. If ``None``, ``module.forward`` is used
+           by default. This argument can be used to explicitly specify another forward
+           function (e.g., the ``forward`` method of ``module``'s parent class).
+           Defaults to ``None``.
+    :type fn: Optional[Callable]
+
+    :return: a functional-style forward function with explicit and flattened states
+    :rtype: Callable
+
+    ----
+
+    * **代码示例 | Example**
+
+    .. code:: python
+
+        import torch
+        import torch.nn as nn
+        from spikingjelly.activation_based import base
+
+        class StatefulModule(base.MemoryModule):
+            def __init__(self):
+                super().__init__()
+                self.register_memory("counter", torch.tensor(0.0))
+                self.linear = nn.Linear(10, 5)
+
+            def single_step_forward(self, x):
+                self.counter = self.counter + 1.0
+                return self.linear(x)
+
+        module = StatefulModule()
+        f_forward = base.to_functional_forward(module)
+        x = torch.randn(3, 10)
+        initial_state = torch.tensor(0.0)
+        output, new_state = f_forward(x, initial_state)
+
+        assert torch.equal(output, module.linear(x))
+        assert torch.equal(new_state, initial_state + 1.0)
+    """
+    num_states = len(list(named_memories(module)))
+    if fn is None:
+        fn = module.forward
+
+    if num_states == 0:  # stateless
+        return fn
+
+    def functional_forward(*args):
+        inputs = args[:-num_states]
+        states = args[-num_states:]
+        original_states = extract_memories(module)
+        load_memories(module, states)
+
+        try:
+            outputs = fn(*inputs)
+            new_states = extract_memories(module)
+        finally:
+            load_memories(module, original_states)
+
+        if not isinstance(outputs, tuple):
+            outputs = (outputs,)
+        return (*outputs, *new_states)
+
+    return functional_forward
