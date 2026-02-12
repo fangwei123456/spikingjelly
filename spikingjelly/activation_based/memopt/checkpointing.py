@@ -8,8 +8,7 @@ import torch.nn as nn
 import torch.autograd as autograd
 
 from .compress import *
-from ...profiler import *
-from ... import base
+from .. import base
 
 __all__ = [
     "in_gc_1st_forward",
@@ -263,8 +262,8 @@ def input_compressed_gc(f_forward, x_compressor: BaseSpikeCompressor, x_seq, *ar
 
         import torch
         import torch.nn as nn
-        from spikingjelly.activation_based.functional import input_compressed_gc
-        from spikingjelly.activation_based.functional import NullSpikeCompressor
+        from spikingjelly.activation_based.memopt import input_compressed_gc
+        from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
         def simple_forward(x, weight):
             return torch.matmul(x, weight.t())
@@ -334,8 +333,8 @@ def to_gc_function(
     .. code-block:: python
 
         import torch
-        from spikingjelly.activation_based.functional import to_gc_function
-        from spikingjelly.activation_based.functional import NullSpikeCompressor
+        from spikingjelly.activation_based.memopt import to_gc_function
+        from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
         x = torch.randn(5, 3, requires_grad=True)
         weight = torch.randn(4, 3, requires_grad=True)
@@ -404,8 +403,8 @@ class GCContainer(nn.Sequential):
 
             import torch
             import torch.nn as nn
-            from spikingjelly.activation_based.functional import GCContainer
-            from spikingjelly.activation_based.functional import NullSpikeCompressor
+            from spikingjelly.activation_based.memopt import GCContainer
+            from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
             container = GCContainer(
                 NullSpikeCompressor(),
@@ -504,8 +503,8 @@ class TCGCContainer(GCContainer):
 
         import torch
         import torch.nn as nn
-        from spikingjelly.activation_based.functional import TCGCContainer
-        from spikingjelly.activation_based.functional import NullSpikeCompressor
+        from spikingjelly.activation_based.memopt import TCGCContainer
+        from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
         # Basic usage
         tc_container = TCGCContainer(

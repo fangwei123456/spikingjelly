@@ -22,7 +22,7 @@ if triton is not None:
         "spikingjelly.activation_based.triton_kernel.compress: "
         "Use Triton backend for bit spike compression"
     )
-    from ...triton_kernel import bit_spike_compress, bit_spike_decompress
+    from ..triton_kernel import bit_spike_compress, bit_spike_decompress
 else:
     logging.info(
         "spikingjelly.activation_based.triton_kernel.compress: "
@@ -207,9 +207,7 @@ class NullSpikeCompressor(BaseSpikeCompressor):
         .. code-block:: python
 
             import torch
-            from spikingjelly.activation_based.functional.memopt.compress import (
-                NullSpikeCompressor,
-            )
+            from spikingjelly.activation_based.memopt.compress import NullSpikeCompressor
 
             compressor = NullSpikeCompressor()
             x = torch.randn(32, 10)
@@ -261,9 +259,7 @@ class BooleanSpikeCompressor(BaseSpikeCompressor):
         .. code-block:: python
 
             import torch
-            from spikingjelly.activation_based.functional.memopt.compress import (
-                BooleanSpikeCompressor,
-            )
+            from spikingjelly.activation_based.memopt.compress import BooleanSpikeCompressor
 
             compressor = BooleanSpikeCompressor()
             spikes = torch.randint(0, 2, (32, 100)).float()
@@ -316,9 +312,7 @@ class Uint8SpikeCompressor(BaseSpikeCompressor):
         .. code-block:: python
 
             import torch
-            from spikingjelly.activation_based.functional.memopt.compress import (
-                Uint8SpikeCompressor,
-            )
+            from spikingjelly.activation_based.memopt.compress import Uint8SpikeCompressor
 
             compressor = Uint8SpikeCompressor()
             x = torch.randn(32, 10)
@@ -374,9 +368,7 @@ class BitSpikeCompressor(BaseSpikeCompressor):
         .. code-block:: python
 
             import torch
-            from spikingjelly.activation_based.functional.memopt.compress import (
-                BitSpikeCompressor,
-            )
+            from spikingjelly.activation_based.memopt.compress import BitSpikeCompressor
 
             compressor = BitSpikeCompressor()
             spikes = torch.randint(0, 2, (32, 1000)).float()
@@ -438,9 +430,7 @@ class SparseSpikeCompressor(BaseSpikeCompressor):
         .. code-block:: python
 
             import torch
-            from spikingjelly.activation_based.functional.memopt.compress import (
-                SparseSpikeCompressor,
-            )
+            from spikingjelly.activation_based.memopt.compress import SparseSpikeCompressor
 
             compressor = SparseSpikeCompressor()
             spikes = (torch.rand(32, 1000) < 0.04).float()

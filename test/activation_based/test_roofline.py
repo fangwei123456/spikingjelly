@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 
 from spikingjelly.activation_based import neuron, op_counter, functional
 from spikingjelly.activation_based.model.sew_resnet import sew_resnet18

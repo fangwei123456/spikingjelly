@@ -1,10 +1,9 @@
 import copy
 
-import pytest
 import torch
 import torch.nn as nn
 
-from spikingjelly.activation_based.functional.memopt.checkpointing import (
+from spikingjelly.activation_based.memopt.checkpointing import (
     in_gc_1st_forward,
     query_autocast,
     input_compressed_gc,
@@ -15,7 +14,7 @@ from spikingjelly.activation_based.functional.memopt.checkpointing import (
     _separate_args,
     _combine_args,
 )
-from spikingjelly.activation_based.functional.memopt.compress import (
+from spikingjelly.activation_based.memopt.compress import (
     BaseSpikeCompressor,
     NullSpikeCompressor,
 )
