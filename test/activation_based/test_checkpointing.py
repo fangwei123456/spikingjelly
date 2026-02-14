@@ -172,23 +172,27 @@ def test_gc_container():
     layer1 = nn.Linear(10, 20)
     layer2 = nn.ReLU()
     container = GCContainer(compressor, layer1, layer2)
+    x = torch.randn(3, 10, requires_grad=True)
+    result = container(x)
+    expected = layer2(layer1(x))
+    repr_str = container.extra_repr()
     assert len(container) == 2
     assert container[0] == layer1
     assert container[1] == layer2
     assert isinstance(container.x_compressor, NullSpikeCompressor)
+    assert torch.allclose(result, expected)
+    assert result.requires_grad
+    assert "x_compressor=NullSpikeCompressor" in repr_str
 
     container_null = GCContainer(None, layer1)
     assert isinstance(container_null.x_compressor, NullSpikeCompressor)
 
-    x = torch.randn(3, 10, requires_grad=True)
-    result = container(x)
-    expected = layer2(layer1(x))
-    assert torch.allclose(result, expected)
-    assert result.requires_grad
-
-    repr_str = container.extra_repr()
-    assert "x_compressor=NullSpikeCompressor" in repr_str
-
+    container_stateful = GCContainer(
+        compressor, neuron.IFNode(step_mode="m"),
+    )
+    result = container_stateful(x)
+    assert len(container_stateful) == 1
+    assert isinstance(container_stateful[0], neuron.IFNode)
 
 def test_tcgc_container():
     """Test TCGCContainer module."""

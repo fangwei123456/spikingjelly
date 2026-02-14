@@ -420,16 +420,26 @@ class GCContainer(nn.Sequential):
         self.x_compressor = (
             NullSpikeCompressor() if x_compressor is None else x_compressor
         )
-        self.f_forward = base.to_functional_forward(
-            self, fn=super().forward
-        )  # avoid infinite recursion
+        self.f_forward = base.to_functional_forward(self, fn=self.super_forward)
         self.num_states = len(list(base.memories(self)))
         self._forward = (
             self.stateless_forward if self.num_states == 0 else self.stateful_forward
         )
 
+    def super_forward(self, input):
+        """
+        The same as ``nn.Sequential.forward`` .
+
+        We have to explicitly specify and use this function in ``__init__`` instead of
+        using ``super().forward`` in order to avoid infinite recursion in multiprocess
+        scenarios!!
+        """
+        for module in self:
+            input = module(input)
+        return input
+
     def stateless_forward(self, x, *args):
-        return input_compressed_gc(super().forward, self.x_compressor, x, *args)
+        return input_compressed_gc(self.super_forward, self.x_compressor, x, *args)
 
     def stateful_forward(self, x, *args):
         states = base.extract_memories(self)
@@ -533,24 +543,17 @@ class TCGCContainer(GCContainer):
         self.n_seq_inputs = n_seq_inputs
         self.n_outputs = n_outputs
 
-    def forward(self, x_seq: torch.Tensor, *args) -> torch.Tensor:
-        x_seqs = torch.chunk(x_seq, self.n_chunk, dim=0)  # single primary input
-        out_seq = []
-        for xc in x_seqs:
-            yc = super().forward(xc, *args)  # single tensor output
-            out_seq.append(yc)
-        return torch.cat(out_seq, dim=0)
-
     def forward(self, x_seq: torch.Tensor, *args):
+        n_chunk = min(self.n_chunk, x_seq.shape[0])  # n_chunk should not exceed T
         seq_inputs = args[: self.n_seq_inputs - 1]
         other_inputs = args[self.n_seq_inputs - 1 :]
 
-        chunked = [torch.chunk(x_seq, self.n_chunk, dim=0)] + [
-            torch.chunk(seq, self.n_chunk, dim=0) for seq in seq_inputs
+        chunked = [torch.chunk(x_seq, n_chunk, dim=0)] + [
+            torch.chunk(seq, n_chunk, dim=0) for seq in seq_inputs
         ]
         outputs_per_chunk = [[] for _ in range(self.n_outputs)]
 
-        for i in range(self.n_chunk):
+        for i in range(n_chunk):
             current_inputs = [c[i] for c in chunked] + list(other_inputs)
             outs = super().forward(*current_inputs)
             if not isinstance(outs, tuple):

@@ -149,9 +149,6 @@ def test_to_functional_forward_stateless():
 
     module = StatelessModule()
     func_forward = base.to_functional_forward(module)
-    assert func_forward == module.forward
-
-    # Test that it works normally
     x = torch.randn(3, 10)
     result1 = func_forward(x)
     result2 = module(x)

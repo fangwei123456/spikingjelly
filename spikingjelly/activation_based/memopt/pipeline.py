@@ -12,7 +12,7 @@ import torch.distributed as dist
 from ..profiler import *
 from .. import functional
 from . import compress
-from .compress import BaseSpikeCompressor, BitSpikeCompressor, NullSpikeCompressor
+from .compress import BitSpikeCompressor, NullSpikeCompressor
 from .checkpointing import GCContainer, TCGCContainer
 
 
@@ -64,10 +64,27 @@ def resolve_device() -> str:
         return "cuda"
 
 
+def _dummy_input_to_device(dummy_input, device):
+    if isinstance(dummy_input, torch.Tensor):
+        return dummy_input.to(device)
+    elif isinstance(dummy_input, (tuple, list)):
+        return type(dummy_input)(
+            _dummy_input_to_device(t, device) for t in dummy_input
+        )
+    elif isinstance(dummy_input, dict):
+        return {
+            k: _dummy_input_to_device(v, device)
+            for k, v in dummy_input.items()
+        }
+    else:
+        # Non-tensor inputs (e.g., None, int, etc.)
+        return dummy_input
+
+
 def _probe_binary_inputs(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
-    dummy_input: Union[torch.Tensor, tuple],
+    dummy_input: tuple,
     n_trials: int = 5,
 ) -> Dict[nn.Module, bool]:
     """Run dummy forward and record whether target modules receive binary inputs."""
@@ -114,12 +131,7 @@ def _probe_binary_inputs(
     with torch.no_grad():
         for _ in range(n_trials):
             new_input = _generate_input_like(dummy_input)
-            if isinstance(new_input, (tuple, list)):
-                _ = net(*new_input)
-            elif isinstance(new_input, dict):
-                _ = net(**new_input)
-            else:
-                _ = net(new_input)
+            _ = net(*new_input)
             functional.reset_net(net)
 
     net.train(is_training)
@@ -131,12 +143,12 @@ def _probe_binary_inputs(
 def _apply_gc(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
-    dummy_input: Optional[Union[torch.Tensor, tuple]] = None,
+    dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
     device: str = "cuda",
 ) -> nn.Module:
     net = net.to(device)
-    dummy_input = dummy_input.to(device)
+    dummy_input = _dummy_input_to_device(dummy_input, device)
 
     is_binary_input = {}
     if compress_x and dummy_input is not None:
@@ -170,7 +182,7 @@ def _apply_gc(
     return net
 
 
-def _dummy_train_step(net: nn.Module, dummy_input: Union[torch.Tensor, tuple]):
+def _dummy_train_step(net: nn.Module, dummy_input: Union[tuple]):
     net.train()
     net.zero_grad(set_to_none=True)
 
@@ -194,7 +206,7 @@ def _dummy_train_step(net: nn.Module, dummy_input: Union[torch.Tensor, tuple]):
             return dummy_input
 
     dummy_input = _prepare_dummy_input(dummy_input)
-    out = net(dummy_input)
+    out = net(*dummy_input)
 
     def _calculate_loss(out):
         if isinstance(out, torch.Tensor):
@@ -204,7 +216,7 @@ def _dummy_train_step(net: nn.Module, dummy_input: Union[torch.Tensor, tuple]):
             for t in out:
                 l = l + _calculate_loss(out)
             return l
-        elif isinstance(dummy_input, dict):
+        elif isinstance(out, dict):
             l = 0.
             for t in out.values():
                 l = l + _calculate_loss(out)
@@ -215,23 +227,6 @@ def _dummy_train_step(net: nn.Module, dummy_input: Union[torch.Tensor, tuple]):
     loss = _calculate_loss(out)
     loss.backward()
     functional.reset_net(net)
-
-
-def _dummy_input_to_device(dummy_input, device):
-    if isinstance(dummy_input, torch.Tensor):
-        return dummy_input.to(device)
-    elif isinstance(dummy_input, (tuple, list)):
-        return type(dummy_input)(
-            _dummy_input_to_device(t, device) for t in dummy_input
-        )
-    elif isinstance(dummy_input, dict):
-        return {
-            k: _dummy_input_to_device(v, device)
-            for k, v in dummy_input.items()
-        }
-    else:
-        # Non-tensor inputs (e.g., None, int, etc.)
-        return dummy_input
 
 
 def _train_memory_profile_worker(net, dummy_input, q, device):
@@ -264,7 +259,7 @@ def _train_memory_profile(net, dummy_input, ctx, device):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_memory_profile_worker,
-        args=(copy.deepcopy(net).cpu(), _dummy_input_to_device("cpu"), q, device),
+        args=(copy.deepcopy(net).cpu(), _dummy_input_to_device(dummy_input, "cpu"), q, device),
     )
     p.start()
     results = q.get()
@@ -321,7 +316,7 @@ def _inference_time_profile_worker(net, dummy_input, q, device, N=50):
         instances=(GCContainer,),
     ) as prof:
         for _ in range(N):
-            _ = net(dummy_input)
+            _ = net(*dummy_input)
             functional.reset_net(net)
     results = prof.export(output=False)
     prof.close()
@@ -396,7 +391,12 @@ def _temporally_split_gc_container(block: GCContainer, factor: int = 2):
 
     x_compressor = block.x_compressor
     n_chunk = getattr(block, "n_chunk", 1)
-    return TCGCContainer(x_compressor, *block, n_chunk=n_chunk * factor) # TODO: support n_seq_inputs and n_outputs
+    n_seq_inputs = getattr(block[0], "n_seq_inputs", 1)
+    n_outputs = getattr(block[-1], "n_outputs", 1)
+    return TCGCContainer(x_compressor, *block, n_chunk=n_chunk * factor,
+        n_seq_inputs=n_seq_inputs,
+        n_outputs=n_outputs,
+    )
 
 
 def _unwrap_gc_container(block: GCContainer) -> nn.Module:
@@ -413,11 +413,10 @@ def _cprint(verbose, *args, **kwargs):
         print(*args, **kwargs)
 
 
-# TODO: check this function
 def memory_optimization(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
-    dummy_input: torch.Tensor = None,
+    dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
     level: int = 0,
     verbose: bool = False,
@@ -441,8 +440,8 @@ def memory_optimization(
     Args:
         net (nn.Module): the model to be optimized.
         instance (type or tuple of types): module classes to wrap.
-        dummy_input (Tensor, optional): input for memory profiling, required
-            if level > 1.
+        dummy_input (tuple, optional): input for memory profiling, required
+            if level > 1. Should be wrapped by a tuple.
         compress_x (bool): whether to apply input spike compression.
         level (int): optimization level:
             0 - no optimization

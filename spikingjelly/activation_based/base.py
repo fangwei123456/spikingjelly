@@ -790,6 +790,32 @@ def load_memories(module: nn.Module, memory_list: list):
         _assign_memory_by_name(module, name, value)
 
 
+class _FunctionalForward:
+    def __init__(self, module: nn.Module, fn: Optional[Callable] = None):
+        self.module = module
+        self.fn = fn if fn is not None else module.forward
+        self.num_states = len(list(named_memories(module)))
+
+    def __call__(self, *args):
+        if self.num_states == 0: # stateless
+            return self.fn(*args)
+
+        inputs = args[:-self.num_states]
+        states = args[-self.num_states:]
+        original_states = extract_memories(self.module)
+        load_memories(self.module, states)
+
+        try:
+            outputs = self.fn(*inputs)
+            new_states = extract_memories(self.module)
+        finally:
+            load_memories(self.module, original_states)
+
+        if not isinstance(outputs, tuple):
+            outputs = (outputs,)
+        return (*outputs, *new_states)
+
+
 def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     r"""
     **API Language:**
@@ -910,27 +936,4 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
         assert torch.equal(output, module.linear(x))
         assert torch.equal(new_state, initial_state + 1.0)
     """
-    num_states = len(list(named_memories(module)))
-    if fn is None:
-        fn = module.forward
-
-    if num_states == 0:  # stateless
-        return fn
-
-    def functional_forward(*args):
-        inputs = args[:-num_states]
-        states = args[-num_states:]
-        original_states = extract_memories(module)
-        load_memories(module, states)
-
-        try:
-            outputs = fn(*inputs)
-            new_states = extract_memories(module)
-        finally:
-            load_memories(module, original_states)
-
-        if not isinstance(outputs, tuple):
-            outputs = (outputs,)
-        return (*outputs, *new_states)
-
-    return functional_forward
+    return _FunctionalForward(module, fn)
