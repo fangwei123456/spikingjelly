@@ -9,10 +9,20 @@ from spikingjelly.activation_based import neuron
 @pytest.mark.parametrize("v_reset", [0.0, -0.2])
 def test_lif(tau, detach_reset, v_threshold, v_reset):
     lif = neuron.LIFNode(
-        tau, detach_reset=detach_reset, v_threshold=v_threshold, v_reset=v_reset, step_mode="m", backend="torch"
+        tau,
+        detach_reset=detach_reset,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        step_mode="m",
+        backend="torch",
     )
     lif_triton = neuron.LIFNode(
-        tau, detach_reset=detach_reset, v_threshold=v_threshold, v_reset=v_reset, step_mode="m", backend="triton"
+        tau,
+        detach_reset=detach_reset,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        step_mode="m",
+        backend="triton",
     )
 
     # test forward and backward equality
@@ -23,7 +33,9 @@ def test_lif(tau, detach_reset, v_threshold, v_reset):
     out1 = lif(x1)
     out2 = lif_triton(x2)
     print(out1.mean().item(), out2.mean().item())
-    assert torch.allclose(out1, out2, atol=1e-6), f"Forward outputs are not close: {out1} vs {out2}"
+    assert torch.allclose(out1, out2, atol=1e-6), (
+        f"Forward outputs are not close: {out1} vs {out2}"
+    )
 
     out1.sum().backward()
     out2.sum().backward()
@@ -37,10 +49,20 @@ def test_lif(tau, detach_reset, v_threshold, v_reset):
 @pytest.mark.parametrize("v_reset", [0.0, -0.2])
 def test_plif(decay_input, detach_reset, v_threshold, v_reset):
     lif = neuron.ParametricLIFNode(
-        decay_input=decay_input, detach_reset=detach_reset, v_threshold=v_threshold, v_reset=v_reset, step_mode="m", backend="torch"
+        decay_input=decay_input,
+        detach_reset=detach_reset,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        step_mode="m",
+        backend="torch",
     )
     lif_triton = neuron.ParametricLIFNode(
-        decay_input=decay_input,detach_reset=detach_reset, v_threshold=v_threshold, v_reset=v_reset, step_mode="m", backend="triton"
+        decay_input=decay_input,
+        detach_reset=detach_reset,
+        v_threshold=v_threshold,
+        v_reset=v_reset,
+        step_mode="m",
+        backend="triton",
     )
 
     # test forward and backward equality
@@ -51,7 +73,9 @@ def test_plif(decay_input, detach_reset, v_threshold, v_reset):
     out1 = lif(x1)
     out2 = lif_triton(x2)
     print(out1.mean().item(), out2.mean().item())
-    assert torch.allclose(out1, out2, atol=1e-6), f"Forward outputs are not close: {out1} vs {out2}"
+    assert torch.allclose(out1, out2, atol=1e-6), (
+        f"Forward outputs are not close: {out1} vs {out2}"
+    )
 
     out1.sum().backward()
     out2.sum().backward()

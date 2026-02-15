@@ -17,6 +17,7 @@ spikingjelly.activation\_based package
    :caption: Functions and Utilities
 
    spikingjelly.activation_based.functional
+   spikingjelly.activation_based.memopt
    spikingjelly.activation_based.monitor
    spikingjelly.activation_based.op_counter
    spikingjelly.activation_based.learning

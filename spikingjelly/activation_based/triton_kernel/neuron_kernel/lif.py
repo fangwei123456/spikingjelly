@@ -131,7 +131,7 @@ def _multistep_lif_backward_kernel(
     tau,
     v_threshold,
     v_reset,
-    alpha, # for surrogate function
+    alpha,  # for surrogate function
     T: tl.constexpr,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,

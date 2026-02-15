@@ -131,7 +131,7 @@ def _multistep_plif_backward_kernel(
     r_tau,
     v_threshold,
     v_reset,
-    alpha, # for surrogate gradient
+    alpha,  # for surrogate gradient
     T: tl.constexpr,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,

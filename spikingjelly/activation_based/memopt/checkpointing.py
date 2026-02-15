@@ -84,7 +84,7 @@ def query_autocast() -> Tuple[str, torch.dtype, bool]:
     查询当前自动混合精度设置。
 
     :return: 一个包含 ``(设备类型, 数据类型, 是否启用)`` 的元组。如果 ``is_enabled == False`` ，
-        ``device_type`` 和 ``dtype`` 将分别设置为 ``"cpu"`` 和 ``torch.get_autocast_dtype("cpu")`` 
+        ``device_type`` 和 ``dtype`` 将分别设置为 ``"cpu"`` 和 ``torch.get_autocast_dtype("cpu")``
     :rtype: Tuple[str, torch.dtype, bool]
 
     ----
@@ -146,7 +146,7 @@ class InputCompressedGC(autograd.Function):
             x_compressor.compress(x_seq), *args
         )
         ctx.input_args = input_args  # (x_seq_compressed, *args), whose tensor -> None
-        ctx.save_for_backward(*tensor_args) # tensors in (x_seq_compressed, *args)
+        ctx.save_for_backward(*tensor_args)  # tensors in (x_seq_compressed, *args)
         ctx.tensor_args_indices = tensor_args_indices  # idx of tensors in input_args
 
         # save RNG states
@@ -265,8 +265,10 @@ def input_compressed_gc(f_forward, x_compressor: BaseSpikeCompressor, x_seq, *ar
         from spikingjelly.activation_based.memopt import input_compressed_gc
         from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
+
         def simple_forward(x, weight):
             return torch.matmul(x, weight.t())
+
 
         x = torch.randn(5, 3, requires_grad=True)
         weight = torch.randn(4, 3, requires_grad=True)
@@ -340,20 +342,25 @@ def to_gc_function(
         weight = torch.randn(4, 3, requires_grad=True)
         compressor = NullSpikeCompressor()
 
+
         # Usage 1: as decorator
         @to_gc_function(compressor)
         def decorated_forward(x, weight):
             return torch.matmul(x, weight.t())
 
+
         result1 = decorated_forward(x, weight)
+
 
         # Usage 2: as conversion function
         def simple_forward(x, weight):
             return torch.matmul(x, weight.t())
 
+
         converted_forward = to_gc_function(compressor, simple_forward)
         result2 = converted_forward(x, weight)
     """
+
     def decorator_function(forward_fn):
         @functools.wraps(forward_fn)
         def wrapped_f_forward(x_seq, *args):
@@ -407,10 +414,7 @@ class GCContainer(nn.Sequential):
             from spikingjelly.activation_based.memopt import NullSpikeCompressor
 
             container = GCContainer(
-                NullSpikeCompressor(),
-                nn.Linear(10, 20),
-                nn.ReLU(),
-                nn.Linear(20, 5)
+                NullSpikeCompressor(), nn.Linear(10, 20), nn.ReLU(), nn.Linear(20, 5)
             )
 
             x = torch.randn(3, 10, requires_grad=True)
@@ -522,7 +526,7 @@ class TCGCContainer(GCContainer):
             nn.Linear(10, 20),
             nn.ReLU(),
             nn.Linear(20, 5),
-            n_chunk=4
+            n_chunk=4,
         )
         x_seq = torch.randn(8, 3, 10, requires_grad=True)  # T=8
         result = tc_container(x_seq)

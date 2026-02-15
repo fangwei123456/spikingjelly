@@ -16,19 +16,51 @@ from .compress import BitSpikeCompressor, NullSpikeCompressor
 from .checkpointing import GCContainer, TCGCContainer
 
 
-__all__ = ["resolve_device", "memory_optimization"]
+__all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimization"]
 
 
 def resolve_device() -> str:
-    """Resolve the logical device for the current process.
+    r"""
+    **API Language:**
+    :ref:`中文 <resolve_device-cn>` | :ref:`English <resolve_device-en>`
+
+    ----
+
+    .. _resolve_device-cn:
+
+    * **中文**
+
+    解析当前进程的逻辑设备。
+
+    优先级：
+
+    1. 若CUDA不可用，则返回 ``"cpu"``
+    2. 环境变量 ``LOCAL_RANK`` / ``SLURM_LOCALID`` / ``OMPI_COMM_WORLD_LOCAL_RANK``
+    3. 如果 torch.distributed 已初始化，则使用 ``rank % ngpus``
+    4. ``torch.cuda.current_device()``
+    5. 回退到 ``"cuda"``
+
+    :return: 设备字符串，例如 ``"cpu"`` 或 ``"cuda:0"``
+    :rtype: str
+
+    ----
+
+    .. _resolve_device-en:
+
+    * **English**
+
+    Resolve the logical device for the current process.
 
     Priority:
 
-    #. If no cuda available -> cpu
-    #. LOCAL_RANK / SLURM_LOCALID / OMPI_COMM_WORLD_LOCAL_RANK env
-    #. If torch.distributed initialized -> use rank % ngpus
-    #. torch.cuda.current_device()
-    #. fallback to cuda
+    1. If CUDA is not available, return ``"cpu"``
+    2. Environment variables ``LOCAL_RANK`` / ``SLURM_LOCALID`` / ``OMPI_COMM_WORLD_LOCAL_RANK``
+    3. If ``torch.distributed`` is initialized, use ``rank % ngpus``
+    4. ``torch.cuda.current_device()``
+    5. Fallback to ``"cuda"``
+
+    :return: device string, e.g., ``"cpu"`` or ``"cuda:0"``
+    :rtype: str
     """
     if not torch.cuda.is_available():
         return "cpu"
@@ -68,14 +100,9 @@ def _dummy_input_to_device(dummy_input, device):
     if isinstance(dummy_input, torch.Tensor):
         return dummy_input.to(device)
     elif isinstance(dummy_input, (tuple, list)):
-        return type(dummy_input)(
-            _dummy_input_to_device(t, device) for t in dummy_input
-        )
+        return type(dummy_input)(_dummy_input_to_device(t, device) for t in dummy_input)
     elif isinstance(dummy_input, dict):
-        return {
-            k: _dummy_input_to_device(v, device)
-            for k, v in dummy_input.items()
-        }
+        return {k: _dummy_input_to_device(v, device) for k, v in dummy_input.items()}
     else:
         # Non-tensor inputs (e.g., None, int, etc.)
         return dummy_input
@@ -114,14 +141,9 @@ def _probe_binary_inputs(
         if isinstance(dummy_input, torch.Tensor):
             return _generate_tensor_like(dummy_input)
         elif isinstance(dummy_input, (tuple, list)):
-            return type(dummy_input)(
-                _generate_input_like(t) for t in dummy_input
-            )
+            return type(dummy_input)(_generate_input_like(t) for t in dummy_input)
         elif isinstance(dummy_input, dict):
-            return {
-                k: _generate_input_like(v)
-                for k, v in dummy_input.items()
-            }
+            return {k: _generate_input_like(v) for k, v in dummy_input.items()}
         else:
             # Non-tensor inputs (e.g., None, int, etc.)
             return dummy_input
@@ -140,13 +162,69 @@ def _probe_binary_inputs(
     return dict(is_binary)
 
 
-def _apply_gc(
+def apply_gc(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
     device: str = "cuda",
 ) -> nn.Module:
+    r"""
+    **API Language:**
+    :ref:`中文 <_apply_gc-cn>` | :ref:`English <_apply_gc-en>`
+
+    ----
+
+    .. _apply_gc-cn:
+
+    * **中文**
+
+    对网络中的制定模块应用带输入压缩的梯度检查点（GC）。
+
+    :param net: 目标神经网络模块
+    :type net: torch.nn.Module
+
+    :param instance: 要应用 GC 的模块类型或类型元组
+    :type instance: Union[type, Tuple[type]]
+
+    :param dummy_input: 用于探测输入的虚拟输入数据
+    :type dummy_input: Optional[tuple]
+
+    :param compress_x: 是否压缩输入数据
+    :type compress_x: bool
+
+    :param device: 设备类型，例如 "cuda" 或 "cpu"
+    :type device: str
+
+    :return: 应用 GC 后的网络模块
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _apply_gc-en:
+
+    * **English**
+
+    Apply gradient checkpointing (GC) with input compression to the specified network module.
+
+    :param net: Target neural network module
+    :type net: torch.nn.Module
+
+    :param instance: Module type or tuple of types to apply GC
+    :type instance: Union[type, Tuple[type]]
+
+    :param dummy_input: Dummy input data for probing inputs
+    :type dummy_input: Optional[tuple]
+
+    :param compress_x: Whether to compress input data
+    :type compress_x: bool
+
+    :param device: Device type, e.g., "cuda" or "cpu"
+    :type device: str
+
+    :return: Network module with GC applied
+    :rtype: torch.nn.Module
+    """
     is_binary_input = {}
     if compress_x and dummy_input is not None:
         net = net.to(device)
@@ -181,19 +259,31 @@ def _apply_gc(
 
 
 def _save_bn_states(net: nn.Module):
-    bn_modules = [m for m in net.modules() if isinstance(m, nn.modules.batchnorm._BatchNorm)]
+    bn_modules = [
+        m for m in net.modules() if isinstance(m, nn.modules.batchnorm._BatchNorm)
+    ]
     saved_bn_states = []
     for m in bn_modules:
-        saved_bn_states.append({
-            "running_mean": m.running_mean.clone() if m.running_mean is not None else None,
-            "running_var": m.running_var.clone() if m.running_var is not None else None,
-            "num_batches_tracked": m.num_batches_tracked.clone() if m.num_batches_tracked is not None else None,
-        })
+        saved_bn_states.append(
+            {
+                "running_mean": m.running_mean.clone()
+                if m.running_mean is not None
+                else None,
+                "running_var": m.running_var.clone()
+                if m.running_var is not None
+                else None,
+                "num_batches_tracked": m.num_batches_tracked.clone()
+                if m.num_batches_tracked is not None
+                else None,
+            }
+        )
     return saved_bn_states
 
 
 def _load_bn_states(net: nn.Module, saved_bn_states: list):
-    bn_modules = [m for m in net.modules() if isinstance(m, nn.modules.batchnorm._BatchNorm)]
+    bn_modules = [
+        m for m in net.modules() if isinstance(m, nn.modules.batchnorm._BatchNorm)
+    ]
     for m, state in zip(bn_modules, saved_bn_states):
         if state["running_mean"] is not None:
             m.running_mean.copy_(state["running_mean"])
@@ -209,24 +299,21 @@ def _load_bn_states(net: nn.Module, saved_bn_states: list):
             m.num_batches_tracked = None
 
 
-def _dummy_train_step(net: nn.Module, dummy_input: Union[tuple], restore_bn: bool=False):
+def _dummy_train_step(
+    net: nn.Module, dummy_input: Union[tuple], restore_bn: bool = False
+):
     net.train()
     net.zero_grad(set_to_none=True)
     if restore_bn:
         saved_bn_states = _save_bn_states(net)
 
-    def _prepare_dummy_input(dummy_input): # clone, detach, requires grad
+    def _prepare_dummy_input(dummy_input):  # clone, detach, requires grad
         if isinstance(dummy_input, torch.Tensor):
             return dummy_input.clone().detach().requires_grad_(True)
         elif isinstance(dummy_input, (tuple, list)):
-            return type(dummy_input)(
-                _prepare_dummy_input(t) for t in dummy_input
-            )
+            return type(dummy_input)(_prepare_dummy_input(t) for t in dummy_input)
         elif isinstance(dummy_input, dict):
-            return {
-                k: _prepare_dummy_input(v)
-                for k, v in dummy_input.items()
-            }
+            return {k: _prepare_dummy_input(v) for k, v in dummy_input.items()}
         else:
             # Non-tensor inputs (e.g., None, int, etc.)
             return dummy_input
@@ -242,7 +329,7 @@ def _dummy_train_step(net: nn.Module, dummy_input: Union[tuple], restore_bn: boo
         elif isinstance(out, dict):
             return sum(_calculate_loss(t) for t in out.values())
         else:
-            return 0.
+            return 0.0
 
     loss = _calculate_loss(out)
     loss.backward()
@@ -283,7 +370,12 @@ def _train_memory_profile(net, dummy_input, ctx, device):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_memory_profile_worker,
-        args=(copy.deepcopy(net).cpu(), _dummy_input_to_device(dummy_input, "cpu"), q, device),
+        args=(
+            copy.deepcopy(net).cpu(),
+            _dummy_input_to_device(dummy_input, "cpu"),
+            q,
+            device,
+        ),
     )
     p.start()
     results = q.get()
@@ -317,7 +409,12 @@ def _train_peak_memory(net, dummy_input, ctx, device):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_peak_memory_worker,
-        args=(copy.deepcopy(net).cpu(), _dummy_input_to_device(dummy_input, "cpu"), q, device),
+        args=(
+            copy.deepcopy(net).cpu(),
+            _dummy_input_to_device(dummy_input, "cpu"),
+            q,
+            device,
+        ),
     )
     p.start()
     results = q.get()
@@ -333,12 +430,15 @@ def _inference_time_profile_worker(net, dummy_input, q, device, N=50):
     dummy_input = _dummy_input_to_device(dummy_input, device)
 
     net.eval()
-    with torch.no_grad(), LayerWiseFPCUDATimeProfiler(
-        (net,),
-        model_names=("net",),
-        search_mode=("submodules",),
-        instances=(GCContainer,),
-    ) as prof:
+    with (
+        torch.no_grad(),
+        LayerWiseFPCUDATimeProfiler(
+            (net,),
+            model_names=("net",),
+            search_mode=("submodules",),
+            instances=(GCContainer,),
+        ) as prof,
+    ):
         for _ in range(N):
             _ = net(*dummy_input)
             functional.reset_net(net)
@@ -351,7 +451,12 @@ def _inference_time_profile(net, dummy_input, ctx, device):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_inference_time_profile_worker,
-        args=(copy.deepcopy(net).cpu(), _dummy_input_to_device(dummy_input, "cpu"), q, device),
+        args=(
+            copy.deepcopy(net).cpu(),
+            _dummy_input_to_device(dummy_input, "cpu"),
+            q,
+            device,
+        ),
         kwargs={"N": 50},
     )
     p.start()
@@ -360,16 +465,46 @@ def _inference_time_profile(net, dummy_input, ctx, device):
     return results
 
 
-def _get_module_and_parent(
+def get_module_and_parent(
     net: nn.Module, module_name: str
 ) -> Tuple[nn.Module, nn.Module, str]:
-    """
-    Given a dotted module path (e.g., 'layer1.0.conv1', not including the
-    top-level module name), return (target_module, parent_module, child_name).
+    r"""
+    **API Language:**
+    :ref:`中文 <_get_module_and_parent-cn>` | :ref:`English <_get_module_and_parent-en>`
 
-    Example:
-        m, parent, child_name = get_module_and_parent(net, "layer1.0.conv1")
-        # parent.child_name == m
+    ----
+
+    .. _get_module_and_parent-cn:
+
+    * **中文**
+
+    根据模块路径（例如 ``"layer1.0.conv1"`` ，不包括顶层模块名称）返回目标模块、父模块以及目标模块的名称。
+
+    :param net: 神经网络模型
+    :type net: nn.Module
+
+    :param module_name: 模块路径字符串
+    :type module_name: str
+
+    :return: 目标模块、父模块和目标模块名称
+    :rtype: Tuple[nn.Module, nn.Module, str]
+
+    ----
+
+    .. _get_module_and_parent-en:
+
+    * **English**
+
+    Given a module path (e.g., ``“layer1.0.conv1"`` , excluding the top-level module name), return the target module, parent module, and target module name.
+
+    :param net: Neural network model
+    :type net: nn.Module
+
+    :param module_name: Module path string
+    :type module_name: str
+
+    :return: target module, parent module, and target module name
+    :rtype: Tuple[nn.Module, nn.Module, str]
     """
     module_name = module_name.split(" ")[-1]
     parts = module_name.split(".")
@@ -388,7 +523,7 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
         sub_blocks = block
     elif len(block) == 1 and hasattr(block[0], "__spatial_split__"):
         sub_blocks = block[0].__spatial_split__()
-    else: # not split-able
+    else:  # not split-able
         return None
     x_compressor = block.x_compressor
 
@@ -417,7 +552,10 @@ def _temporally_split_gc_container(block: GCContainer, factor: int = 2):
     n_chunk = getattr(block, "n_chunk", 1)
     n_seq_inputs = getattr(block[0], "n_seq_inputs", 1)
     n_outputs = getattr(block[-1], "n_outputs", 1)
-    return TCGCContainer(x_compressor, *block, n_chunk=n_chunk * factor,
+    return TCGCContainer(
+        x_compressor,
+        *block,
+        n_chunk=n_chunk * factor,
         n_seq_inputs=n_seq_inputs,
         n_outputs=n_outputs,
     )
@@ -446,47 +584,89 @@ def memory_optimization(
     verbose: bool = False,
     temporal_split_factor: int = 2,
 ):
-    """Memory optimization using gradient checkpointing and spike compression.
+    r"""
+    **API Language:**
+    :ref:`中文 <memory_optimization-cn>` | :ref:`English <memory_optimization-en>`
 
-    This function progressively transforms the given network by wrapping
-    specified layers in `GCContainer`s and applying several optimization
-    strategies (in increasing order of aggressiveness):
-    - Level 0: No optimization.
-    - Level 1: Wrap matching modules in `GCContainer` for layer-wise
-      gradient checkpointing (GC), with optional input compression.
-    - Level 2: Recursively split heavy `GCContainer`s into multiple
-      sub-containers along the spatial (layer-wise) dimension, if supported.
-    - Level 3: Further split heavy `GCContainer`s along the temporal
-      dimension (chunking the time axis), if supported.
-    - Level 4: Greedily unwrap some `GCContainer`s to reduce training time cost
-      if doing so does not increase the memory footprint.
+    ----
 
-    Args:
-        net (nn.Module): the model to be optimized.
-        instance (type or tuple of types): module classes to wrap.
-        dummy_input (tuple, optional): input for memory profiling, required
-            if level > 1. Should be wrapped by a tuple.
-        compress_x (bool): whether to apply input spike compression.
-        level (int): optimization level:
-            0 - no optimization
-            1 - layer-wise GC
-            2 - add spatial splitting
-            3 - add temporal splitting
-            4 - greedily disable GC
-        verbose (bool): whether to print logs.
-        temporal_split_factor (int): factor to increase the number of chunks
-            when splitting temporally.
+    .. _memory_optimization-cn:
 
-    Returns:
-        nn.Module: the optimized model.
+    * **中文**
 
-    Notes:
-        To support spatial splitting (level 2), modules must implement:
-            __spatial_split__() -> List[nn.Module]
+    使用梯度检查点和脉冲压缩进行训练显存优化。
 
-        To support temporal splitting (level 3), modules must implement:
-            __tc_init_states__(x: Tensor) -> List[Tensor]
-            __tc_forward__(x_chunk: Tensor, *states, *args) -> (y_chunk, *states)
+    此函数通过以下逐步优化策略转换给定的网络：
+
+    - ``level=0`` : 无优化。
+    - ``level=1`` : 将匹配的模块包装在 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 中以进行逐层梯度检查点（GC），可选输入压缩。
+    - ``level=2`` : 如果支持，则沿空间维度拆分显存消耗巨大的的 ``GCContainer`` 。
+    - ``level=3`` : 如果支持，则沿时间维度进一步显存消耗巨大的 ``GCContainer`` 。
+    - ``level=4`` : 如果不会增加内存占用，则贪婪地解包部分 ``GCContainer`` 以减少训练时间成本。
+
+    :param net: 要优化的模型
+    :type net: nn.Module
+
+    :param instance: 要包装的模块类或模块类元组
+    :type instance: Union[type, Tuple[type]]
+
+    :param dummy_input: 用于内存分析的输入， ``level > 1`` 时必需给出。需使用元组包装。
+    :type dummy_input: Optional[tuple]
+
+    :param compress_x: 是否应用输入脉冲压缩
+    :type compress_x: bool
+
+    :param level: 优化级别
+    :type level: int
+
+    :param verbose: 是否打印优化过程日志
+    :type verbose: bool
+
+    :param temporal_split_factor: 沿时间拆分检查点片段时所使用的倍增因子
+    :type temporal_split_factor: int
+
+    :return: 优化后的模型
+    :rtype: nn.Module
+
+    ----
+
+    .. _memory_optimization-en:
+
+    * **English**
+
+    Memory optimization using gradient checkpointing and spike compression.
+
+    This function progressively transforms the given network by applying the following optimization strategies:
+
+    - ``level=0`` : no optimization.
+    - ``level=1`` : wrap matching modules in :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` for layer-wise gradient checkpointing (GC), with optional input compression.
+    - ``level=2`` : recursively split heavy ``GCContainer`` into multiple sub-containers along the spatial dimension, if supported.
+    - ``level=3`` : further split heavy ``GCContainer`` along the temporal dimension, if supported.
+    - ``level=4`` : greedily unwrap some ``GCContainer`` to reduce training time cost if doing so does not increase the memory footprint.
+
+    :param net: the model to be optimized
+    :type net: nn.Module
+
+    :param instance: module classes or tuple of classes to wrap
+    :type instance: Union[type, Tuple[type]]
+
+    :param dummy_input: input for memory profiling, required if ``level > 1`` . Should be wrapped by a tuple.
+    :type dummy_input: Optional[tuple]
+
+    :param compress_x: whether to apply input spike compression
+    :type compress_x: bool
+
+    :param level: optimization level
+    :type level: int
+
+    :param verbose: whether to print logs
+    :type verbose: bool
+
+    :param temporal_split_factor: factor to increase the number of chunks when splitting GC segments temporally
+    :type temporal_split_factor: int
+
+    :return: the optimized model
+    :rtype: nn.Module
     """
     st = time.time()
     ctx = mp.get_context("spawn")
@@ -495,7 +675,7 @@ def memory_optimization(
 
     if level > 0:
         _cprint(verbose, "Level 1: layer-wise GC with input spike compression")
-        net = _apply_gc(net, instance, dummy_input, compress_x, device)
+        net = apply_gc(net, instance, dummy_input, compress_x, device)
 
     if level > 1:  # spatial split
         if dummy_input is None:
@@ -510,7 +690,7 @@ def memory_optimization(
                 _cprint(verbose, "\tNo more GCContainers to split.")
                 break
             cb_name = results[0][0]  # GCContainer with the highest mem.
-            cb, parent, child_name = _get_module_and_parent(net, cb_name.split(" ")[-1])
+            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
 
             # try to spatially split the GCContainer
             # if not split-able, break
@@ -548,7 +728,7 @@ def memory_optimization(
                 _cprint(verbose, "\tNo more GCContainers to split.")
                 break
             cb_name = results[0][0]  # GCContainer with the highest mem.
-            cb, parent, child_name = _get_module_and_parent(net, cb_name.split(" ")[-1])
+            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
 
             # try to temporally split the GCContainer
             # if not split-able, break
@@ -583,7 +763,7 @@ def memory_optimization(
 
         for r in results:
             cb_name = r[0]
-            cb, parent, child_name = _get_module_and_parent(net, cb_name.split(" ")[-1])
+            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
 
             # try to unwrap the GCContainer
             ucb = _unwrap_gc_container(cb)
@@ -613,4 +793,4 @@ def memory_optimization(
 
     et = time.time()
     _cprint(verbose, f"Total time: {et - st:.2f}s")
-    return net.cpu() # must return a model on CPU
+    return net.cpu()  # must return a model on CPU

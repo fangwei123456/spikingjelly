@@ -9,9 +9,10 @@ from lightning_callbacks import *
 from models import VGGBlock
 
 
-
 class CIFAR10DVSLightningModule(ClassificationLightningModule):
-    def __init__(self, net: nn.Module, T: int, level: int, compress_x: bool, criterion: nn.Module):
+    def __init__(
+        self, net: nn.Module, T: int, level: int, compress_x: bool, criterion: nn.Module
+    ):
         net = memopt.memory_optimization(
             net,
             (VGGBlock,),

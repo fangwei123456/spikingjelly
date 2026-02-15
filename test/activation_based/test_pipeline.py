@@ -7,15 +7,21 @@ from spikingjelly.activation_based.memopt.pipeline import (
     memory_optimization,
     _dummy_input_to_device,
     _probe_binary_inputs,
-    _apply_gc,
+    apply_gc,
     _dummy_train_step,
-    _get_module_and_parent,
+    get_module_and_parent,
     _spatially_split_gc_container,
     _temporally_split_gc_container,
     _unwrap_gc_container,
 )
-from spikingjelly.activation_based.memopt.checkpointing import GCContainer, TCGCContainer
-from spikingjelly.activation_based.memopt.compress import NullSpikeCompressor, BitSpikeCompressor
+from spikingjelly.activation_based.memopt.checkpointing import (
+    GCContainer,
+    TCGCContainer,
+)
+from spikingjelly.activation_based.memopt.compress import (
+    NullSpikeCompressor,
+    BitSpikeCompressor,
+)
 
 
 def _create_simple_snn_model():
@@ -79,7 +85,7 @@ def test_probe_binary_inputs():
 
     # Test with binary inputs
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr('torch.all', lambda x, dim=None: torch.tensor(True))
+        mp.setattr("torch.all", lambda x, dim=None: torch.tensor(True))
         result = _probe_binary_inputs(net, (neuron.IFNode, neuron.LIFNode), dummy_input)
         assert isinstance(result, dict)
         # All modules should be marked as binary
@@ -88,7 +94,7 @@ def test_probe_binary_inputs():
 
     # Test with non-binary inputs
     with pytest.MonkeyPatch.context() as mp:
-        mp.setattr('torch.all', lambda x, dim=None: torch.tensor(False))
+        mp.setattr("torch.all", lambda x, dim=None: torch.tensor(False))
         result = _probe_binary_inputs(net, (neuron.IFNode, neuron.LIFNode), dummy_input)
         assert isinstance(result, dict)
         # All modules should be marked as non-binary
@@ -102,7 +108,9 @@ def test_apply_gc():
     dummy_input = (torch.randn(4, 8, 1, 28, 28),)
 
     # Test basic GC application
-    optimized_net = _apply_gc(net, (neuron.IFNode, neuron.LIFNode), dummy_input, device="cpu")
+    optimized_net = apply_gc(
+        net, (neuron.IFNode, neuron.LIFNode), dummy_input, device="cpu"
+    )
 
     # Check that neuron modules are wrapped in GCContainer
     neuron_modules_found = 0
@@ -119,22 +127,32 @@ def test_apply_gc_with_compression():
     dummy_input = (torch.randn(4, 8, 1, 28, 28),)
 
     # Test with compression enabled
-    optimized_net = _apply_gc(net, (neuron.IFNode, neuron.LIFNode), dummy_input, compress_x=True, device="cpu")
+    optimized_net = apply_gc(
+        net, (neuron.IFNode, neuron.LIFNode), dummy_input, compress_x=True, device="cpu"
+    )
 
     # Check that containers have appropriate compressors
     for module in optimized_net.modules():
         if isinstance(module, GCContainer):
-            assert isinstance(module.x_compressor, (BitSpikeCompressor, NullSpikeCompressor))
+            assert isinstance(
+                module.x_compressor, (BitSpikeCompressor, NullSpikeCompressor)
+            )
 
 
 def test_apply_gc_without_compression():
     """Test _apply_gc function without compression."""
     net = _create_simple_snn_model()
     dummy_input = (torch.randn(4, 8, 1, 28, 28),)
-    
+
     # Test with compression disabled
-    optimized_net = _apply_gc(net, (neuron.IFNode, neuron.LIFNode), dummy_input, compress_x=False, device="cpu")
-    
+    optimized_net = apply_gc(
+        net,
+        (neuron.IFNode, neuron.LIFNode),
+        dummy_input,
+        compress_x=False,
+        device="cpu",
+    )
+
     # Check that containers use NullSpikeCompressor
     for module in optimized_net.modules():
         if isinstance(module, GCContainer):
@@ -145,24 +163,24 @@ def test_dummy_train_step():
     """Test _dummy_train_step function."""
     net = _create_simple_snn_model()
     dummy_input = (torch.randn(4, 8, 1, 28, 28),)
-    
+
     # Test that the function runs without error
     _dummy_train_step(net, dummy_input)
-    
+
     # Check that network was reset
     for module in net.modules():
-        if hasattr(module, 'v'):
+        if hasattr(module, "v"):
             assert module.v == 0.0
 
 
 def test_get_module_and_parent():
     """Test _get_module_and_parent function."""
     net = _create_simple_snn_model()
-    
+
     # Test getting a specific module
     module_name = "1"  # IFNode
-    module, parent, child_name = _get_module_and_parent(net, module_name)
-    
+    module, parent, child_name = get_module_and_parent(net, module_name)
+
     assert isinstance(module, neuron.IFNode)
     assert parent is net
     assert child_name == "1"
@@ -213,11 +231,7 @@ def test_memory_optimization_level_0():
 
     # Test level 0 - should return original network
     optimized_net = memory_optimization(
-        net,
-        (neuron.IFNode, neuron.LIFNode),
-        dummy_input,
-        level=0,
-        verbose=True
+        net, (neuron.IFNode, neuron.LIFNode), dummy_input, level=0, verbose=True
     )
     assert optimized_net is net
 
@@ -229,9 +243,9 @@ def test_memory_optimization_level_1():
 
     # Test level 1 - basic gradient checkpointing
     optimized_net = memory_optimization(
-        net, 
-        (neuron.IFNode, neuron.LIFNode), 
-        dummy_input, 
+        net,
+        (neuron.IFNode, neuron.LIFNode),
+        dummy_input,
         level=1,
         verbose=True,
     )
@@ -250,7 +264,7 @@ def test_memory_optimization_missing_dummy_input():
             (neuron.IFNode, neuron.LIFNode),
             None,  # No dummy input
             level=2,
-            verbose=False
+            verbose=False,
         )
 
 

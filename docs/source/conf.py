@@ -126,6 +126,8 @@ autodoc_mock_imports = [
     "cupy",
     "nir",
     "nirtorch",
+    "lightning",
+    "jsonargparse",
 ]
 autoclass_content = "both"
 autodoc_member_order = "bysource"

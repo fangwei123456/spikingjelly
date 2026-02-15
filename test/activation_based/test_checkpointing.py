@@ -116,9 +116,7 @@ def test_input_compressed_gc():
     x = torch.randn(5, 3, requires_grad=True)
     weight = torch.randn(4, 3, requires_grad=True)
 
-    result = input_compressed_gc(
-        simple_forward_fn, NullSpikeCompressor(), x, weight
-    )
+    result = input_compressed_gc(simple_forward_fn, NullSpikeCompressor(), x, weight)
     expected = torch.matmul(x, weight.t())
 
     assert torch.allclose(result, expected)
@@ -188,11 +186,13 @@ def test_gc_container():
     assert isinstance(container_null.x_compressor, NullSpikeCompressor)
 
     container_stateful = GCContainer(
-        compressor, neuron.IFNode(step_mode="m"),
+        compressor,
+        neuron.IFNode(step_mode="m"),
     )
     result = container_stateful(x)
     assert len(container_stateful) == 1
     assert isinstance(container_stateful[0], neuron.IFNode)
+
 
 def test_tcgc_container():
     """Test TCGCContainer module."""
@@ -221,6 +221,7 @@ def test_tcgc_container():
 def test_integration():
     """Integration tests for checkpointing functionality."""
     compressor = MockCompressor()
+
     class SimpleNet(nn.Module):
         def __init__(self):
             super().__init__()

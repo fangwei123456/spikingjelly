@@ -33,6 +33,27 @@ DVS Gesture Classification
    :undoc-members:
    :show-inheritance:
 
+Optimizing Training Memory: Spiking VGG for CIFAR10-DVS
+---------------------------------------------------------------
+
+See the :doc:`tutorial <../tutorials/en/memopt>` and the `Github repo <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_ for more details.
+
+.. automodule:: spikingjelly.activation_based.examples.memopt.data_module
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.examples.memopt.models
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+.. automodule:: spikingjelly.activation_based.examples.memopt.lightning_modules
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+
 Speech Commands
 -------------------------------------------------------------
 

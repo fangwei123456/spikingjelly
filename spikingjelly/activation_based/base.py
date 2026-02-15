@@ -797,11 +797,11 @@ class _FunctionalForward:
         self.num_states = len(list(named_memories(module)))
 
     def __call__(self, *args):
-        if self.num_states == 0: # stateless
+        if self.num_states == 0:  # stateless
             return self.fn(*args)
 
-        inputs = args[:-self.num_states]
-        states = args[-self.num_states:]
+        inputs = args[: -self.num_states]
+        states = args[-self.num_states :]
         original_states = extract_memories(self.module)
         load_memories(self.module, states)
 

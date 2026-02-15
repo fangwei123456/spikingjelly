@@ -125,7 +125,7 @@ def _multistep_if_backward_kernel(
     grad_v_init_ptr,
     v_threshold,
     v_reset,
-    alpha, # for surrogate function
+    alpha,  # for surrogate function
     T: tl.constexpr,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
@@ -319,7 +319,7 @@ class MultiStepIFNodePTT(autograd.Function):
         v_threshold: float,
         v_reset: float,
         detach_reset: bool,
-        sg_fn
+        sg_fn,
     ):
         soft_reset = v_reset is None
         v_reset = v_reset if v_reset is not None else 0.0

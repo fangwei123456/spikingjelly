@@ -6,6 +6,7 @@ from torch.utils.data.dataloader import DataLoader
 import torchvision.transforms as transforms
 from spikingjelly.datasets import CIFAR10DVSTEBNSplit
 
+
 class Cutout:
     """Randomly mask out one or more patches from an image.
     Args:
@@ -53,6 +54,7 @@ class Cutout:
 
         return img
 
+
 class CIFAR10DVSNDA:
     def __init__(self, M=1, N=2):
         self.M = M
@@ -94,8 +96,20 @@ class CIFAR10DVSDataModule(L.LightningDataModule):
         self.num_workers = num_workers
 
     def prepare_data(self):
-        CIFAR10DVSTEBNSplit(self.data_dir, train=True, data_type="frame", frames_number=self.T, split_by="number")
-        CIFAR10DVSTEBNSplit(self.data_dir, train=False, data_type="frame", frames_number=self.T, split_by="number")
+        CIFAR10DVSTEBNSplit(
+            self.data_dir,
+            train=True,
+            data_type="frame",
+            frames_number=self.T,
+            split_by="number",
+        )
+        CIFAR10DVSTEBNSplit(
+            self.data_dir,
+            train=False,
+            data_type="frame",
+            frames_number=self.T,
+            split_by="number",
+        )
 
     def setup(self, stage: str):
         self.train_set = CIFAR10DVSTEBNSplit(
@@ -104,15 +118,17 @@ class CIFAR10DVSDataModule(L.LightningDataModule):
             data_type="frame",
             frames_number=self.T,
             split_by="number",
-            transform=transforms.Compose([
-                transforms.Lambda(lambda x: torch.tensor(x, dtype=torch.float32)),
-                transforms.RandomResizedCrop(
-                    128, scale=(0.7, 1.0), interpolation=PIL.Image.NEAREST
-                ),
-                transforms.Resize(size=(48, 48)),
-                transforms.RandomHorizontalFlip(p=0.5),
-                CIFAR10DVSNDA(M=1, N=2),
-            ])
+            transform=transforms.Compose(
+                [
+                    transforms.Lambda(lambda x: torch.tensor(x, dtype=torch.float32)),
+                    transforms.RandomResizedCrop(
+                        128, scale=(0.7, 1.0), interpolation=PIL.Image.NEAREST
+                    ),
+                    transforms.Resize(size=(48, 48)),
+                    transforms.RandomHorizontalFlip(p=0.5),
+                    CIFAR10DVSNDA(M=1, N=2),
+                ]
+            ),
         )
         self.test_set = CIFAR10DVSTEBNSplit(
             self.data_dir,
@@ -120,10 +136,12 @@ class CIFAR10DVSDataModule(L.LightningDataModule):
             data_type="frame",
             frames_number=self.T,
             split_by="number",
-            transform=transforms.Compose([
-                transforms.Lambda(lambda x: torch.tensor(x, dtype=torch.float32)),
-                transforms.Resize(size=(48, 48)),
-            ])
+            transform=transforms.Compose(
+                [
+                    transforms.Lambda(lambda x: torch.tensor(x, dtype=torch.float32)),
+                    transforms.Resize(size=(48, 48)),
+                ]
+            ),
         )
 
     def train_dataloader(self):
