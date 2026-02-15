@@ -147,11 +147,10 @@ def _apply_gc(
     compress_x: bool = True,
     device: str = "cuda",
 ) -> nn.Module:
-    net = net.to(device)
-    dummy_input = _dummy_input_to_device(dummy_input, device)
-
     is_binary_input = {}
     if compress_x and dummy_input is not None:
+        net = net.to(device)
+        dummy_input = _dummy_input_to_device(dummy_input, device)
         is_binary_input = _probe_binary_inputs(net, instance, dummy_input)
 
     def _get_compressor(module: nn.Module, is_binary_input: bool):
@@ -178,18 +177,45 @@ def _apply_gc(
                 _replace(child)
 
     _replace(net)
-    net = net.cpu()
     return net
 
 
-def _dummy_train_step(net: nn.Module, dummy_input: Union[tuple]):
+def _save_bn_states(net: nn.Module):
+    bn_modules = [m for m in net.modules() if isinstance(m, nn.modules.batchnorm._BatchNorm)]
+    saved_bn_states = []
+    for m in bn_modules:
+        saved_bn_states.append({
+            "running_mean": m.running_mean.clone() if m.running_mean is not None else None,
+            "running_var": m.running_var.clone() if m.running_var is not None else None,
+            "num_batches_tracked": m.num_batches_tracked.clone() if m.num_batches_tracked is not None else None,
+        })
+    return saved_bn_states
+
+
+def _load_bn_states(net: nn.Module, saved_bn_states: list):
+    bn_modules = [m for m in net.modules() if isinstance(m, nn.modules.batchnorm._BatchNorm)]
+    for m, state in zip(bn_modules, saved_bn_states):
+        if state["running_mean"] is not None:
+            m.running_mean.copy_(state["running_mean"])
+        else:
+            m.running_mean = None
+        if state["running_var"] is not None:
+            m.running_var.copy_(state["running_var"])
+        else:
+            m.running_var = None
+        if state["num_batches_tracked"] is not None:
+            m.num_batches_tracked.copy_(state["num_batches_tracked"])
+        else:
+            m.num_batches_tracked = None
+
+
+def _dummy_train_step(net: nn.Module, dummy_input: Union[tuple], restore_bn: bool=False):
     net.train()
     net.zero_grad(set_to_none=True)
+    if restore_bn:
+        saved_bn_states = _save_bn_states(net)
 
-    def _prepare_dummy_input(dummy_input):
-        """
-        Clone, detach, requires grad.
-        """
+    def _prepare_dummy_input(dummy_input): # clone, detach, requires grad
         if isinstance(dummy_input, torch.Tensor):
             return dummy_input.clone().detach().requires_grad_(True)
         elif isinstance(dummy_input, (tuple, list)):
@@ -212,21 +238,19 @@ def _dummy_train_step(net: nn.Module, dummy_input: Union[tuple]):
         if isinstance(out, torch.Tensor):
             return out.sum()
         elif isinstance(out, (tuple, list)):
-            l = 0.
-            for t in out:
-                l = l + _calculate_loss(out)
-            return l
+            return sum(_calculate_loss(t) for t in out)
         elif isinstance(out, dict):
-            l = 0.
-            for t in out.values():
-                l = l + _calculate_loss(out)
-            return l
+            return sum(_calculate_loss(t) for t in out.values())
         else:
             return 0.
 
     loss = _calculate_loss(out)
     loss.backward()
+    net.zero_grad(set_to_none=True)
     functional.reset_net(net)
+
+    if restore_bn:
+        _load_bn_states(net, saved_bn_states)
 
 
 def _train_memory_profile_worker(net, dummy_input, q, device):
@@ -582,6 +606,11 @@ def memory_optimization(
                 )
                 peak_allocated = new_peak_allocated  # update the peak memory
 
+    # Warm up in the main process to avoid 1st-time overhead
+    net = net.to(device)
+    dummy_input = _dummy_input_to_device(dummy_input, device)
+    _dummy_train_step(net, dummy_input, restore_bn=True)
+
     et = time.time()
     _cprint(verbose, f"Total time: {et - st:.2f}s")
-    return net
+    return net.cpu() # must return a model on CPU

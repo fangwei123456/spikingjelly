@@ -3,14 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 from .cuda_kernel.auto_cuda import cfunction
-
-try:
-    from .triton_kernel.torch2triton import compile_triton_code_str
-except BaseException as e:
-    import logging
-
-    logging.info(f"spikingjelly.activation_based.surrogate: {e}")
-    compile_triton_code_str = None
+from . import triton_kernel
 
 tab4_str = "\t\t\t\t"  # used for aligning code
 curly_bracket_l = "{"
@@ -499,16 +492,6 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return grad_output * (1.0 - sgax) * sgax * alpha, None
 
 
-sigmoid_backward_triton_template = """
-@triton.jit
-def sigmoid_surrogate_{alpha_str}(h):
-    # triton's exp() supports only fp32 and fp64, so we must convert it to fp32!
-    sg = tl.sigmoid(h.to(tl.float32) * {alpha})
-    sg = {alpha} * sg * (1. - sg)
-    return sg.to(h.dtype)
-"""
-
-
 class sigmoid(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
@@ -625,12 +608,7 @@ class Sigmoid(SurrogateFunctionBase):
         return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
     def triton_codes(self):
-        alpha_str = str(self.alpha).replace(".", "_")
-        code_str = sigmoid_backward_triton_template.format(
-            alpha=self.alpha, alpha_str=alpha_str
-        ).strip()
-        kernel_name = f"sigmoid_surrogate_{alpha_str}"
-        return compile_triton_code_str(code_str, kernel_name)
+        return triton_kernel.sigmoid_surrogate_kernel
 
 
 @torch.jit.script
@@ -814,15 +792,6 @@ def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return a / (1 + ax * ax) * grad_output, None
 
 
-atan_backward_triton_template = """
-@triton.jit
-def atan_surrogate_{alpha_str}(h):
-    sg = 3.141592653589793 * h * {alpha} / 2.
-    sg = {alpha} / 2. / tl.fma(sg, sg, 1.)
-    return sg.to(h.dtype)
-"""
-
-
 class atan(torch.autograd.Function):
     @staticmethod
     def forward(ctx, x, alpha):
@@ -938,13 +907,7 @@ class ATan(SurrogateFunctionBase):
         return cfunction.atan_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
     def triton_codes(self):
-        alpha_str = str(self.alpha).replace(".", "_")
-        code_str = atan_backward_triton_template.format(
-            alpha=self.alpha,
-            alpha_str=alpha_str,
-        ).strip()
-        kernel_name = f"atan_surrogate_{alpha_str}"
-        return compile_triton_code_str(code_str, kernel_name)
+        return triton_kernel.atan_surrogate_kernel
 
 
 @torch.jit.script

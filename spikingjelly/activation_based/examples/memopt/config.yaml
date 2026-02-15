@@ -2,41 +2,47 @@ seed_everything: 2026
 
 trainer:
   deterministic: False
-  max_epochs: 300
+  max_epochs: 100
   precision: 32
   num_sanity_val_steps: 0
   default_root_dir: ./ # training logs will be saved at `./lightning_logs`
 
 model:
   net:
-    class_path: models.SequentialCIFARNet
+    class_path: models.CIFAR10DVSVGG
     init_args:
-      channels: 128
-      num_classes: 10
-      tau: 2.0
+      dropout: 0.25
+      tau: 1.333
       decay_input: False
       detach_reset: True
       surrogate_function:
         class_path: spikingjelly.activation_based.surrogate.ATan
       backend: "triton"
   level: 4
+  T: 10
   compress_x: True
   criterion:
-    class_path: torch.nn.CrossEntropyLoss
+    class_path: loss.TETLoss
+    init_args:
+      base_criterion:
+        class_path: torch.nn.CrossEntropyLoss
+      mean: 1.0
+      tet_lambda: 1e-3
 
 data:
-  data_dir: /export/home/data_allenyolk/CIFAR-10
-  batch_size: 128
+  data_dir: /export/home/data_allenyolk/CIFAR10DVS
+  T: 10
+  batch_size: 32
   num_workers: 4
-  num_classes: 10
 
 optimizer:
   class_path: torch.optim.SGD
   init_args:
     lr: 0.1
     momentum: 0.9
+    weight_decay: 5e-4
 
 lr_scheduler:
   class_path: torch.optim.lr_scheduler.CosineAnnealingLR
   init_args:
-    T_max: 300
+    T_max: 100

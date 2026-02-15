@@ -1,5 +1,3 @@
-from typing import Callable
-
 import torch
 from torch import autograd
 
@@ -127,11 +125,12 @@ def _multistep_if_backward_kernel(
     grad_v_init_ptr,
     v_threshold,
     v_reset,
+    alpha, # for surrogate function
     T: tl.constexpr,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
     dtype: tl.constexpr,  # grad_s_seq.dtype; might != h_seq or s_seq.dtype
-    sg_fn: tl.constexpr,
+    sg_kernel: tl.constexpr,
     soft_reset: tl.constexpr,
     detach_reset: tl.constexpr,
 ):
@@ -169,7 +168,7 @@ def _multistep_if_backward_kernel(
         )
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero")
 
-        sg = sg_fn(h - v_threshold)
+        sg = sg_kernel(h - v_threshold, alpha)
         grad_v_combined = grad_v + grad_v_acc
         if soft_reset:
             if detach_reset:
@@ -279,7 +278,7 @@ def multistep_if_backward(
     h_seq: torch.Tensor,
     v_threshold: float,
     v_reset: float,
-    sg_fn: Callable,
+    sg_fn,
     soft_reset: bool,
     detach_reset: bool,
 ):
@@ -298,10 +297,11 @@ def multistep_if_backward(
         grad_v_init,
         v_threshold,
         v_reset,
+        sg_fn.alpha,
         T=T,
         NCL=NCL,
         dtype=type_dict[dtype],
-        sg_fn=sg_fn,
+        sg_kernel=sg_fn.triton_codes(),
         soft_reset=soft_reset,
         detach_reset=detach_reset,
     )
@@ -319,7 +319,7 @@ class MultiStepIFNodePTT(autograd.Function):
         v_threshold: float,
         v_reset: float,
         detach_reset: bool,
-        sg_fn: Callable,
+        sg_fn
     ):
         soft_reset = v_reset is None
         v_reset = v_reset if v_reset is not None else 0.0

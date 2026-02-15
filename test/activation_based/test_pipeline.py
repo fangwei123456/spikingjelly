@@ -272,6 +272,8 @@ def test_memory_optimization_integration():
     )
     print(optimized_net)
 
+    optimized_net = optimized_net.to("cuda")
+    dummy_input = tuple(x.to("cuda") for x in dummy_input)
     optimized_net.eval()
     with torch.no_grad():
         output = optimized_net(*dummy_input)

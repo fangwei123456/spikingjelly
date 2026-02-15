@@ -69,10 +69,11 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def super_forward(self, x: Tensor):
-        original_momentum = self.momentum
-        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        original_track_running_stats = self.track_running_stats
+        if in_gc_1st_forward():
+            self.track_running_stats = False
         out = super().forward(x)
-        self.momentum = original_momentum
+        self.track_running_stats = original_track_running_stats
         return out
 
     def forward(self, x: Tensor):
@@ -130,10 +131,11 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def super_forward(self, x: Tensor):
-        original_momentum = self.momentum
-        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        original_track_running_stats = self.track_running_stats
+        if in_gc_1st_forward():
+            self.track_running_stats = False
         out = super().forward(x)
-        self.momentum = original_momentum
+        self.track_running_stats = original_track_running_stats
         return out
 
     def forward(self, x: Tensor):
@@ -191,10 +193,11 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
         return super().extra_repr() + f", step_mode={self.step_mode}"
 
     def super_forward(self, x: Tensor):
-        original_momentum = self.momentum
-        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        original_track_running_stats = self.track_running_stats
+        if in_gc_1st_forward():
+            self.track_running_stats = False
         out = super().forward(x)
-        self.momentum = original_momentum
+        self.track_running_stats = original_track_running_stats
         return out
 
     def forward(self, x: Tensor):
@@ -327,10 +330,11 @@ class _ThresholdDependentBatchNormBase(_BatchNorm, base.MultiStepModule):
         torch.nn.init.constant_(self.weight, alpha * v_th)
 
     def super_forward(self, x: Tensor):
-        original_momentum = self.momentum
-        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        original_track_running_stats = self.track_running_stats
+        if in_gc_1st_forward():
+            self.track_running_stats = False
         out = super().forward(x)
-        self.momentum = original_momentum
+        self.track_running_stats = original_track_running_stats
         return out
 
     def forward(self, x_seq):
@@ -509,10 +513,11 @@ class _TemporalEffectiveBatchNormBase(_BatchNorm, base.MultiStepModule):
         self.scale = nn.Parameter(torch.ones([T]))
 
     def super_forward(self, x: torch.Tensor):
-        original_momentum = self.momentum
-        self.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        original_track_running_stats = self.track_running_stats
+        if in_gc_1st_forward():
+            self.track_running_stats = False
         out = super().forward(x)
-        self.momentum = original_momentum
+        self.track_running_stats = original_track_running_stats
         return out
 
     def forward(self, x_seq: torch.Tensor):
@@ -727,10 +732,11 @@ class _BatchNormThroughTimeBase(base.MemoryModule):
     def single_step_forward(self, x: torch.Tensor):
         self.t = self.t + 1
         f = self.bn_list[self.t]
-        original_momentum = f.momentum
-        f.momentum = 0.0 if in_gc_1st_forward() else original_momentum
+        original_track_running_stats = f.track_running_stats
+        if in_gc_1st_forward():
+            f.track_running_stats = False
         out = f(x)
-        f.momentum = original_momentum
+        f.track_running_stats = original_track_running_stats
         return out
 
 

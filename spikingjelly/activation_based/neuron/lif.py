@@ -212,9 +212,6 @@ class LIFNode(BaseNode):
         self.tau = tau
         self.decay_input = decay_input
 
-        if self.backend == "triton":
-            self.surrogate_function_triton = self.surrogate_function.triton_codes()
-
     @property
     def supported_backends(self):
         if self.step_mode == "s":
@@ -598,7 +595,7 @@ class LIFNode(BaseNode):
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
-                    self.surrogate_function_triton,
+                    self.surrogate_function,
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -619,7 +616,7 @@ class LIFNode(BaseNode):
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
-                    self.surrogate_function_triton,
+                    self.surrogate_function,
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq

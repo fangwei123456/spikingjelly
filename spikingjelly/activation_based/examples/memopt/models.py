@@ -1,64 +1,45 @@
 import torch
 import torch.nn as nn
-from spikingjelly.activation_based import layer, surrogate, functional, neuron
+from spikingjelly.activation_based import layer, neuron, surrogate, functional
 
 
-class ConvBNNeuron(nn.Module):
+class VGGBlock(nn.Module):
     def __init__(
         self,
-        in_channels,
-        out_channels,
-        preceding_avg_pool: bool = False,
+        in_plane,
+        out_plane,
+        kernel_size,
+        stride,
+        padding,
+        preceding_avg_pool=False,
         **kwargs,
     ):
         super().__init__()
-        conv = [layer.AvgPool1d(2, 2)] if preceding_avg_pool else []
-        conv += [
-            layer.Conv1d(in_channels, out_channels, kernel_size=3, padding=1, bias=True)
+        proj_bn = []
+        if preceding_avg_pool:
+            proj_bn.append(layer.AvgPool2d(2))
+        proj_bn += [
+            layer.Conv2d(in_plane, out_plane, kernel_size, stride, padding),
+            layer.BatchNorm2d(out_plane),
         ]
-        self.conv = nn.Sequential(*conv)
-
-        self.bn_neuron = nn.Sequential(
-            layer.BatchNorm1d(out_channels),
-            neuron.LIFNode(**kwargs),
-        )
-
-    def forward(self, x_seq):
-        return self.bn_neuron(self.conv(x_seq))
-
-    def __spatial_split__(self):
-        return self.conv, self.bn_neuron
-
-
-class AvgPoolFlattenLinearNeuron(nn.Module):
-    def __init__(self, channels: int, **kwargs):
-        super().__init__()
-        self.fc = nn.Sequential(
-            layer.AvgPool1d(2, 2),
-            layer.Flatten(start_dim=-2),
-            layer.Linear(channels * 8, channels * 8 // 4),
-        )
+        self.proj_bn = nn.Sequential(*proj_bn)
         self.neuron = neuron.LIFNode(**kwargs)
 
     def forward(self, x_seq):
-        return self.neuron(self.fc(x_seq))
+        return self.neuron(self.proj_bn(x_seq))
 
     def __spatial_split__(self):
-        return self.fc, self.neuron
+        return self.proj_bn, self.neuron
 
 
-class SequentialCIFARNet(nn.Module):
-    def __init__(self,
-        channels: int=128,
-        num_classes=10,
-        tau: float = 2.0,
-        decay_input: bool = False,
-        detach_reset: bool = True,
-        surrogate_function=surrogate.ATan(),
-        backend: str = "triton",
+class CIFAR10DVSVGG(nn.Module):
+    def __init__(
+        self, dropout: float=0.25, tau: float=1.333,
+        decay_input: bool=False, detach_reset: bool=True,
+        surrogate_function=surrogate.ATan(), backend="triton",
     ):
         super().__init__()
-        neuron_kwargs = {
+        kwargs = {
             "tau": tau,
             "decay_input": decay_input,
             "detach_reset": detach_reset,
@@ -66,38 +47,34 @@ class SequentialCIFARNet(nn.Module):
             "backend": backend,
             "step_mode": "m",
         }
-        self.channels = channels
-        self.num_classes = num_classes
+        self.features = nn.Sequential(
+            VGGBlock(2, 64, 3, 1, 1, False, **kwargs),
+            VGGBlock(64, 128, 3, 1, 1, False, **kwargs),
+            VGGBlock(128, 256, 3, 1, 1, True, **kwargs),
+            VGGBlock(256, 256, 3, 1, 1,  False, **kwargs),
+            VGGBlock(256, 512, 3, 1, 1,  True, **kwargs),
+            VGGBlock(512, 512, 3, 1, 1, False, **kwargs),
+            VGGBlock(512, 512, 3, 1, 1,  True, **kwargs),
+            VGGBlock(512, 512, 3, 1, 1,  False, **kwargs),
+            layer.AvgPool2d(2),
+        )
+        self.features[0].x_compressor = "NullSpikeCompressor"
+        d = int(48 / 2 / 2 / 2 / 2)
+        l = [nn.Dropout(dropout)] if dropout > 0 else []
+        l.append(nn.Linear(512 * d * d, 10))
+        self.classifier = nn.Sequential(*l)
 
-        conv = []
-        for i in range(2):
-            for j in range(3):
-                if len(conv) == 0:
-                    in_channels = 3
-                else:
-                    in_channels = channels
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
 
-                conv_block = ConvBNNeuron(
-                    in_channels,
-                    channels,
-                    preceding_avg_pool=(j == 0 and i != 0),
-                    **neuron_kwargs,
-                )
-                conv.append(conv_block)
+        functional.set_step_mode(self, "m")
 
-        self.conv = nn.Sequential(*conv)
-        self.conv[0].x_compressor = "NullSpikeCompressor" # explicitly specify
-
-        self.fc = AvgPoolFlattenLinearNeuron(channels, **neuron_kwargs)
-        self.decode = nn.Linear(channels * 8 // 4, num_classes)
-
-    def forward(self, x: torch.Tensor):
+    def forward(self, input):
         functional.reset_net(self)
-        # x.shape = [N, C, H, W]
-        x = x.permute(3, 0, 1, 2)
-        # x.shape = [T, N, Cin, L]
-        y = self.conv(x)
-        y = self.fc(y)  # [T, N, C']
-        y = y.mean(dim=0)  # [N, C']
-        y = self.decode(y)
-        return y
+        # input.shape = [N, T, C, H, W]
+        input = input.transpose(0, 1).contiguous()  # [T, N, C, H, W]
+        x = self.features(input)
+        x = torch.flatten(x, 2)  # [T, N, D]
+        x = self.classifier(x)
+        return x

@@ -3,44 +3,42 @@ from lightning.pytorch.cli import LightningCLI
 from lightning.pytorch import callbacks
 from spikingjelly.activation_based import functional, memopt
 
-from data_module import SCIFARDataModule
+from data_module import CIFAR10DVSDataModule
 from lightning_modules import ClassificationLightningModule
 from lightning_callbacks import *
-from models import ConvBNNeuron, AvgPoolFlattenLinearNeuron
+from models import VGGBlock
 
 
 
-class SCIFARLightningModule(ClassificationLightningModule):
-    def __init__(self, net: nn.Module, level: int, compress_x: bool, criterion: nn.Module):
-        functional.set_step_mode(net, "m")
+class CIFAR10DVSLightningModule(ClassificationLightningModule):
+    def __init__(self, net: nn.Module, T: int, level: int, compress_x: bool, criterion: nn.Module):
         net = memopt.memory_optimization(
             net,
-            (ConvBNNeuron, AvgPoolFlattenLinearNeuron),
-            dummy_input=(torch.rand(128, 3, 32, 32),),
+            (VGGBlock,),
+            dummy_input=(torch.zeros(32, T, 2, 48, 48),),
             compress_x=compress_x,
             level=level,
             verbose=True,
         )
-        super().__init__(
-            net, criterion, num_classes=net.num_classes, y_with_T=False
-        )
+        super().__init__(net, criterion, num_classes=10, y_with_T=True)
+        self.T = T
 
 
 def main():
     cli = LightningCLI(
-        SCIFARLightningModule,
-        SCIFARDataModule,
+        CIFAR10DVSLightningModule,
+        CIFAR10DVSDataModule,
         run=False,
         trainer_defaults={
             "logger": {
                 "class_path": "CSVLogger",
-                "init_args": {"save_dir": "./logs", "name": "SCIFAR"},
+                "init_args": {"save_dir": "./logs", "name": "CIFAR10DVS"},
             },
             "enable_model_summary": False,
             "enable_checkpointing": False,
         },
     )
-    assert cli.model.num_classes == cli.datamodule.num_classes
+    assert cli.model.T == cli.datamodule.T
     cli.trainer.callbacks += [
         callbacks.ModelSummary(max_depth=-1),
         callbacks.ModelCheckpoint(
