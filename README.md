@@ -40,11 +40,14 @@ We are actively maintaining and improving SpikingJelly. Below are our future pla
 
 **Highlights**
 
+Our new work [Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression](https://openreview.net/forum?id=nrBJ0Uvj7c) was recently accepted by **ICLR 2026**! The automatic training memory optimization tool is available in `spikingjelly.activation_based.memopt`. Read [the tutorial](https://spikingjelly.readthedocs.io/zh-cn/latest/tutorials/en/memopt.html) for more information.
+
 In the latest version (Github version),
 
 - `IFNode`, `LIFNode` and `ParametricLIFNode` are now equipped with [Triton](https://github.com/triton-lang/triton) backends;
 - `FlexSN` is available for converting PyTorch spiking neuronal dynamics to Triton kernels;
 - `SpikingSelfAttention` and `QKAttention` are available;
+- `memopt` is available;
 - `nir_exchange` is available;
 - `op_counter` is available;
 - `spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional` and `spikingjelly.datasets` are refactored;
@@ -64,7 +67,7 @@ We are going to release version `0.0.0.1.0` soon.
 Other long-term plans include:
 
 - [x] Add [NIR](https://github.com/neuromorphs/NIR) support.
-- [ ] Optimize training memory cost.
+- [x] Optimize training memory cost.
 - [ ] Accelerate on Huawei NPU.
 
 For early-stage experimental features, see our companion project [flashsnn](https://github.com/AllenYolk/flash-snn). New ideas are prototyped in flashsnn before merging into SpikingJelly.

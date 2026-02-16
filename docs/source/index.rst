@@ -268,11 +268,8 @@ SpikingJelly has been developed and maintained by multiple main developers over 
 
 The list of contributors can be found at `contributors <https://github.com/fangwei123456/spikingjelly/graphs/contributors>`_.
 
-API 文档 | API Docs
-##########################
-
 .. toctree::
-   :maxdepth: 2
+   :hidden:
 
    /APIs/spikingjelly
 

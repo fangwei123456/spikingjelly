@@ -10,13 +10,16 @@ import torch.multiprocessing as mp
 import torch.distributed as dist
 
 from ..profiler import *
-from .. import functional
+from .. import functional, neuron
 from . import compress
 from .compress import BitSpikeCompressor, NullSpikeCompressor
 from .checkpointing import GCContainer, TCGCContainer
 
 
 __all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimization"]
+
+TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
+
 
 
 def resolve_device() -> str:
@@ -545,8 +548,18 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
     return nn.Sequential(*l)
 
 
+def _cannot_temporally_split(block: GCContainer):
+    for m in block.modules():
+        if isinstance(m, tuple(TCGC_FORBIDDEN_MODULES)):
+            return True
+    return False
+
+
 def _temporally_split_gc_container(block: GCContainer, factor: int = 2):
     assert isinstance(block, GCContainer)
+
+    if _cannot_temporally_split(block):
+        return None
 
     x_compressor = block.x_compressor
     n_chunk = getattr(block, "n_chunk", 1)

@@ -40,11 +40,14 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 
 **版本亮点**
 
+我们的新工作 [Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression](https://openreview.net/forum?id=nrBJ0Uvj7c) 已被**ICLR 2026**接收！该工具已集成到`spikingjelly.activation_based.memopt`中。阅读[教程](https://spikingjelly.readthedocs.io/zh-cn/latest/tutorials/en/memopt.html) 以获取更多信息。
+
 在latest版本（Github版本）中，
 
 - 已添加`IFNode`，`LIFNode`和`ParametricLIFNode`的 [Triton](https://github.com/triton-lang/triton) 后端；
 - 已添加`FlexSN`，可将PyTorch神经元动力学转换到Triton内核；
 - 已添加`SpikingSelfAttention`和`QKAttention`；
+- 已添加`memopt`；
 - 已添加`nir_exchange`；
 - 已添加`op_counter`；
 - 已重构`spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional`和`spikingjelly.datasets`；
@@ -64,7 +67,7 @@ SpikingJelly的[文档](https://spikingjelly.readthedocs.io)使用中英双语�
 其他长期计划包括：
 
 - [x] 添加对[NIR](https://github.com/neuromorphs/NIR)的支持。
-- [ ] 优化训练时的显存开销。
+- [x] 优化训练时的显存开销。
 - [ ] 支持华为 NPU 加速。
 
 如果想尝试前沿实验性功能，请查看我们的配套项目[flashsnn](https://github.com/AllenYolk/flash-snn)。今后，新功能将先在 flashsnn中原型化，待技术成熟后再合并到SpikingJelly。
