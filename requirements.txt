@@ -23,3 +23,6 @@ SciencePlots
 # NIR Exchange
 # nir
 # nirtorch
+
+# lightning
+# jsonargparse[signatures]

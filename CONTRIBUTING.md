@@ -56,8 +56,7 @@ We highly suggest contributors to use [uv](https://docs.astral.sh/uv/) for envir
     - The argument `--group dev` installs all development and doc tools (e.g. sphinx).
     - To install optional dependencies, use the syntax `uv pip install --editable ".[triton]"`. See the `project.optional-dependencies` table in `pyproject.toml` for a list of optional dependencies.
 
-6. Manually install other development tools: `uv pip install pyclean pytest ...`
-7. Activate the virtual environment: `source .venv/bin/activate` .
+6. Activate the virtual environment: `source .venv/bin/activate` .
 
 You may want to directly sync your virtual environment through `uv sync --extra ...` . However, we discourage this because it locks your PyTorch version.
 
@@ -65,7 +64,7 @@ You may want to directly sync your virtual environment through `uv sync --extra 
 
 New code should be readable, **well-documented**, and maintainable. Public APIs should include clear docstrings. Please follow the docstring style of other modules in SpikingJelly.
 
-Please format your code before committing. 
+Please format your code before committing.
 
 1. Make sure that [uv](https://docs.astral.sh/uv/getting-started/installation/) is installed.
 2. Run `uv format` at the project root.

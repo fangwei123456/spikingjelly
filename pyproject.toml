@@ -52,7 +52,6 @@ lightning = ["lightning", "jsonargparse[signatures]"]
 [dependency-groups]
 dev = [
     "pytest",
-    "pyclean",
     "pydata-sphinx-theme>=0.16.1",
     "sphinx>=8.0.0",
 ]

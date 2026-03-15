@@ -3,7 +3,7 @@ import warnings
 
 import torch
 import torch.fx as fx
-from torch._functorch.aot_autograd import aot_function
+from functorch.compile import aot_function
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
