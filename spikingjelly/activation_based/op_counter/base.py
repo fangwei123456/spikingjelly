@@ -462,17 +462,6 @@ class DispatchCounterMode(TorchDispatchMode):
         return ret
 
     def _should_skip(self, counter, func) -> bool:
-        parent_names = self.module_tracker.parents
-        if not counter.has_rule(func):  # stats rule not defined
-            if self.strict:
-                raise NotImplementedError(
-                    f"DispatchCounterMode: {parent_names} - {resolve_name(func)}"
-                    f" not defined by {counter.__class__.__name__}"
-                )
-            if self.verbose:
-                print(f"{_arrow} not defined by {counter.__class__.__name__}")
-            return True
-
         active_modules = self.module_tracker.active_modules
         for am in active_modules:
             if isinstance(am, tuple(counter.ignore_modules)):  # inside a ignored module
@@ -482,6 +471,19 @@ class DispatchCounterMode(TorchDispatchMode):
                         f"inside {am.__class__.__name__}"
                     )
                 return True
+
+        parent_names = self.module_tracker.parents
+        if not counter.has_rule(func):  # stats rule not defined
+            if self.strict:
+                raise NotImplementedError(
+                    f"DispatchCounterMode: {parent_names} - {resolve_name(func)}"
+                    f" not defined by {counter.__class__.__name__}. "
+                    f"To disable this error, "
+                    f"set strict=False when initializing {counter.__class__.__name__}."
+                )
+            if self.verbose:
+                print(f"{_arrow} not defined by {counter.__class__.__name__}")
+            return True
 
         return False
 
@@ -585,7 +587,9 @@ class FunctionCounterMode(TorchFunctionMode):
             if self.strict:
                 raise NotImplementedError(
                     f"FunctionCounterMode: {parent_names} - {resolve_name(func)} "
-                    f"not defined by {counter.__class__.__name__}"
+                    f"not defined by {counter.__class__.__name__}. "
+                    f"To disable this error, "
+                    f"set strict=False when initializing {counter.__class__.__name__}."
                 )
             if self.verbose:
                 print(f"{_arrow} not defined by {counter.__class__.__name__}")

@@ -1,3 +1,6 @@
 from .base import *
 from .flop import *
 from .memory_access import *
+from .ac import *
+from .synop import *
+from .mac import *

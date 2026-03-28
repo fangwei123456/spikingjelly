@@ -2,13 +2,12 @@ from collections import defaultdict
 from typing import Any, Callable
 
 import torch
-
-aten = torch.ops.aten
 import torch.nn as nn
 
 from .base import BaseCounter
 
 
+aten = torch.ops.aten
 __all__ = ["FlopCounter"]
 
 
@@ -98,7 +97,7 @@ def _flop_convolution(args, kwargs, out):
     args[2]: bias or None
     """
     x, w, bias = args[:3]
-    transposed = kwargs.get("transposed", False)
+    transposed = args[6]
 
     b = x.shape[0]
     c_out, c_in, *kernel_shape = w.shape
@@ -206,18 +205,23 @@ def _flop_sigmoid(args, kwargs, out):
 def _flop_native_batch_norm(args, kwargs, out):
     x, train = args[0], args[5]
     n, c = x.numel(), x.shape[1]
+    has_affine = args[1] is not None
+    has_running_stats = args[3] is not None
     flops = 0
     if train:
         flops += n  # batch mean
-        flops += 3 * n - c  # batch var
+        flops += 2 * n + 2 * c  # batch var ; E[x^2] - E[x]^2
         flops += 2 * c  # sqrt(var + eps)
         flops += 2 * n  # x - mean / std
-        flops += 2 * n  # * gamma, + beta
-        flops += 6 * c  # (1-momentum)*stat + momentum*stat, stat in [mean, var]
+        if has_affine:
+            flops += 2 * n  # * gamma, + beta
+        if has_running_stats:
+            flops += 6 * c  # old + m * (new - old); mean and var
     else:
         flops += 2 * c  # sqrt(var + eps)
         flops += 2 * n  # x - mean / std
-        flops += 2 * n  # * gamma, + beta
+        if has_affine:
+            flops += 2 * n  # * gamma, + beta
     return flops
 
 

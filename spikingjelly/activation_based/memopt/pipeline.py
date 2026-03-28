@@ -21,7 +21,6 @@ __all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimi
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
 
 
-
 def resolve_device() -> str:
     r"""
     **API Language:**
