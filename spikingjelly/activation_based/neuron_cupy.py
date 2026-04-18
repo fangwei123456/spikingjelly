@@ -1,12 +1,13 @@
-# -*- coding: utf-8 -*-
+"""A neat implementation of CuPy-accelerated spiking neurons."""
+
 # @Time    : 2025/5/30 15:09
 # @Author  : if
 # @File    : neuron_cup.py
 import math
-import cupy as cp
-import numpy as np
 from typing import Callable
 
+import cupy as cp
+import numpy as np
 import torch
 import torch.nn as nn
 
@@ -93,6 +94,93 @@ class IFNode(nn.Module):
         detach_reset: bool = False,
         store_v_seq: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
+
+        ----
+
+        .. _IFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy 加速的 IF 神经元。神经元的充电、发放与重置动力学如下：
+
+        .. math::
+
+            H[t] &= V[t-1] + X[t] \\
+            S[t] &= \Theta(H[t] - V_{th}) \\
+            V[t] &= \begin{cases}
+                V_{reset}, & \text{硬重置},\ S[t] = 1 \\
+                H[t],      & \text{硬重置},\ S[t] = 0 \\
+                H[t] - S[t] \cdot V_{th}, & \text{软重置}
+            \end{cases}
+
+        其中 :math:`\Theta` 为阶跃函数，反向传播时使用代理梯度函数近似。
+
+        该模块须在 CUDA 设备上运行，输入张量形状为 ``[T, B, C, H, W]``，其中 ``T`` 为时间步数。
+
+        :param v_threshold: 阈值电压，默认值为 1.0
+        :type v_threshold: float
+
+        :param v_reset: 重置电压，默认值为 0.0。若为 ``None``，则使用软重置（减法重置）
+        :type v_reset: float
+
+        :param surrogate_function: 代理梯度函数，默认为 ``surrogate.Sigmoid()``，
+            支持 :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 和
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否在反向传播时分离重置项，默认为 False
+        :type detach_reset: bool
+
+        :param store_v_seq: 是否存储膜电压序列，默认为 False。若为 ``True``，``forward``
+            返回 ``(spike_seq, v_seq)``；否则仅返回 ``spike_seq``
+        :type store_v_seq: bool
+
+        ----
+
+        .. _IFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy-accelerated IF neuron.
+        The neuronal charge, fire, and reset dynamics are:
+
+        .. math::
+
+            H[t] &= V[t-1] + X[t] \\
+            S[t] &= \Theta(H[t] - V_{th}) \\
+            V[t] &= \begin{cases}
+                V_{reset}, & \text{hard reset},\ S[t] = 1 \\
+                H[t],      & \text{hard reset},\ S[t] = 0 \\
+                H[t] - S[t] \cdot V_{th}, & \text{soft reset}
+            \end{cases}
+
+        where :math:`\Theta` is the Heaviside step function, approximated during backpropagation
+        by the surrogate gradient function.
+
+        This module must run on a CUDA device. The expected input shape is ``[T, B, C, H, W]``,
+        where ``T`` is the number of time steps.
+
+        :param v_threshold: threshold voltage, defaults to 1.0
+        :type v_threshold: float
+
+        :param v_reset: reset voltage, defaults to 0.0. If ``None``, soft (subtractive) reset is used
+        :type v_reset: float
+
+        :param surrogate_function: surrogate function, defaults to ``surrogate.Sigmoid()``.
+            Supports :class:`~spikingjelly.activation_based.surrogate.Sigmoid` and
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether to detach reset, defaults to False
+        :type detach_reset: bool
+
+        :param store_v_seq: whether to store membrane voltage sequence, defaults to False.
+            If ``True``, ``forward`` returns ``(spike_seq, v_seq)``; otherwise returns ``spike_seq`` only
+        :type store_v_seq: bool
+        """
         super().__init__()
         self.v_th = v_threshold
         self.v_reset = v_reset
@@ -115,7 +203,7 @@ class IFNode(nn.Module):
                 math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
             )
         else:
-            raise f"Surrogate: Sigmoid | ATan, alpha: {self.alpha}"
+            raise NotImplementedError("Surrogate: Sigmoid | ATan, alpha: {self.alpha}")
         self.sn_apply = IFNodeCuPy.apply
 
     def extra_repr(self):
@@ -135,7 +223,7 @@ class IFNode(nn.Module):
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void IFNodeFPTTFLOATKernel(
-    float* __restrict__ inputs, 
+    float* __restrict__ inputs,
     float* __restrict__ spikes_seq,
     float* __restrict__ h_seq,
     float* __restrict__ v_seq,
@@ -157,10 +245,10 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(v[0]) = FETCH_FLOAT4(inputs[index]);
@@ -174,7 +262,7 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
         }
 
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + v[i];
         }
@@ -196,7 +284,7 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
         if self.hard_reset:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             spikes[i] = v[i] >= v_th;
             last_v[i] = spikes[i] > 0 ? v_reset : v[i];
@@ -209,7 +297,7 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
         {
             spikes[i] = v[i] >= v_th;
             last_v[i] = v[i] - spikes[i] * v_th;
-        }     
+        }
 """.replace("v_th", f"{self.v_th}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -239,7 +327,7 @@ extern "C" __global__ void IFNodeFPTTFLOATKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void IFNodeFPTTHALFKernel(
-    half* __restrict__ inputs, 
+    half* __restrict__ inputs,
     half* __restrict__ spikes_seq,
     half* __restrict__ h_seq,
     half* __restrict__ v_seq,
@@ -257,14 +345,14 @@ extern "C" __global__ void IFNodeFPTTHALFKernel(
 #pragma unroll
     for (int i = 0; i < 4; i++)
     {
-        last_v[i] = __float2half2_rn(0); 
+        last_v[i] = __float2half2_rn(0);
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(v[0]) = FETCH_FLOAT4(inputs[index]);
@@ -277,7 +365,7 @@ extern "C" __global__ void IFNodeFPTTHALFKernel(
                 ptr[i] = inputs[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
@@ -301,7 +389,7 @@ extern "C" __global__ void IFNodeFPTTHALFKernel(
         if self.hard_reset:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             spikes[i] = __hge2(v[i], __float2half2_rn(v_th));
             last_v[i] = v[i] * (__float2half2_rn(1.0f) - spikes[i]) + spikes[i] * __float2half2_rn(v_reset);
@@ -314,7 +402,7 @@ extern "C" __global__ void IFNodeFPTTHALFKernel(
         {
             spikes[i] = __hge2(v[i], __float2half2_rn(v_th));
             last_v[i] = v[i] - spikes[i] * __float2half2_rn(v_th);
-        }     
+        }
 """.replace("v_th", f"{self.v_th}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -350,10 +438,10 @@ extern "C" __global__ void IFNodeFPTTHALFKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void IFNodeBPTTFLOATKernel(
-    float* __restrict__ grad_spike_seq, 
-    float* __restrict__ grad_v_seq, 
-    float* __restrict__ h_seq, 
-    float* __restrict__ grad_x_seq, 
+    float* __restrict__ grad_spike_seq,
+    float* __restrict__ grad_v_seq,
+    float* __restrict__ h_seq,
+    float* __restrict__ grad_x_seq,
     const int numel, const int time_step)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -376,7 +464,7 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
     for (int t = time_step - 1; t >= 0; t--)
     {
         index = numel * t + idx;
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(h_seq[index]);
@@ -397,7 +485,7 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
         {
             var[i] = load[i] - v_th; // var = over_th | load = h
             grad_v_to_h[i] = var[i] < 0;
-        } 
+        }
 """.replace("v_th", f"{self.v_th}f")
         else:
             kernel_code += r"""
@@ -406,7 +494,7 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
         {
             var[i] = load[i] - v_th; // var = over_th | load = h
             grad_v_to_h[i] = 1.0f;
-        }  
+        }
 """.replace("v_th", f"{self.v_th}f")
 
         # surrogate_func
@@ -425,10 +513,10 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
         for (int i = 0; i < 4; i++)
         {
             var[i] = alpha / (4.0f + pai * var[i] * var[i]);  // var = grad_s_to_h
-        } 
+        }
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise NotImplementedError("Surrogate: [Sigmoid | ATan]")
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -451,13 +539,13 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
                 load[i] = grad_spike_seq[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
             var[i] = var[i] * load[i]; // var = grad_s_to_h(var) * grad_spike(load)
         }
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(grad_v_seq[index]);
@@ -502,10 +590,10 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void IFNodeBPTTHALFKernel(
-    half* __restrict__ grad_spike_seq, 
-    half* __restrict__ grad_v_seq, 
-    half* __restrict__ h_seq, 
-    half* __restrict__ grad_x_seq, 
+    half* __restrict__ grad_spike_seq,
+    half* __restrict__ grad_v_seq,
+    half* __restrict__ h_seq,
+    half* __restrict__ grad_x_seq,
     const int numel, const int time_step)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -528,7 +616,7 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
     for (int t = time_step - 1; t >= 0; t--)
     {
         index = numel * t + idx;
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(h_seq[index]);
@@ -550,7 +638,7 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
         {
             var[i] = load[i] - __float2half2_rn(v_th); // var = over_th
             grad_v_to_h[i] = __hle2(var[i], __float2half2_rn(0));
-        } 
+        }
 """.replace("v_th", f"{self.v_th}f")
         else:
             kernel_code += r"""
@@ -559,7 +647,7 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
         {
             var[i] = load[i] - __float2half2_rn(v_th); // var = over_th
             grad_v_to_h[i] = __float2half2_rn(1.0f);
-        }  
+        }
 """.replace("v_th", f"{self.v_th}f")
 
         # surrogate_func
@@ -578,10 +666,10 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
         for (int i = 0; i < 4; i++)
         {
             var[i] = __float2half2_rn(alpha) / (__float2half2_rn(4.0f) + __float2half2_rn(pai) * var[i] * var[i]);  // var = grad_s_to_h
-        } 
+        }
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise NotImplementedError("Surrogate: [Sigmoid | ATan]")
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -605,13 +693,13 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
                 ptr[i] = grad_spike_seq[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
             var[i] = var[i] * load[i]; // var = grad_s_to_h(var) * grad_spike(load)
         }
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(grad_v_seq[index]);
@@ -624,7 +712,7 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
                 ptr[i] = grad_v_seq[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
@@ -754,6 +842,108 @@ class LIFNode(nn.Module):
         detach_reset: bool = False,
         store_v_seq: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+
+        ----
+
+        .. _LIFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy 加速的 LIF 神经元。
+        当 ``decay_input=True`` 时，神经元的充电动力学为：
+
+        .. math::
+
+            H[t] = V[t-1] + \frac{1}{\tau}\left(X[t] - \left(V[t-1] - V_{reset}\right)\right)
+
+        当 ``decay_input=False`` 时：
+
+        .. math::
+
+            H[t] = V[t-1] + X[t] - \frac{1}{\tau}\left(V[t-1] - V_{reset}\right)
+
+        发放与重置动力学与 :class:`IFNode` 相同。
+
+        该模块须在 CUDA 设备上运行，输入张量形状为 ``[T, B, *]``，其中 ``T`` 为时间步数。
+
+        :param tau: 膜电位的时间常数，衰减因子为 :math:`1/\tau`
+        :type tau: float
+
+        :param decay_input: 若为 ``True``，输入电流乘以衰减因子 :math:`1/\tau`；
+            否则仅静息电位差进行衰减
+        :type decay_input: bool
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+
+        :param v_reset: 神经元的重置电压。若为 ``None``，则使用软重置（减法重置）
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用于近似脉冲函数梯度的代理函数，
+            支持 :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 和
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否在反向传播时将重置项从计算图中分离
+        :type detach_reset: bool
+
+        :param store_v_seq: 若为 ``True``，``forward`` 返回 ``(spike_seq, v_seq)``；
+            否则仅返回 ``spike_seq``
+        :type store_v_seq: bool
+
+        ----
+
+        .. _LIFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy-accelerated LIF neuron.
+        When ``decay_input=True``, the neuronal charge dynamics are:
+
+        .. math::
+
+            H[t] = V[t-1] + \frac{1}{\tau}\left(X[t] - \left(V[t-1] - V_{reset}\right)\right)
+
+        When ``decay_input=False``:
+
+        .. math::
+
+            H[t] = V[t-1] + X[t] - \frac{1}{\tau}\left(V[t-1] - V_{reset}\right)
+
+        The fire and reset dynamics are the same as :class:`IFNode`.
+
+        This module must run on a CUDA device. The expected input shape is ``[T, B, *]``,
+        where ``T`` is the number of time steps.
+
+        :param tau: membrane time constant; the decay factor is :math:`1/\tau`
+        :type tau: float
+
+        :param decay_input: if ``True``, input current is scaled by the decay factor
+            :math:`1/\tau`; otherwise only the resting potential difference decays
+        :type decay_input: bool
+
+        :param v_threshold: threshold voltage of the neuron
+        :type v_threshold: float
+
+        :param v_reset: reset voltage of the neuron. If ``None``, soft (subtractive) reset is used
+        :type v_reset: float
+
+        :param surrogate_function: surrogate gradient function for spike backpropagation;
+            supports :class:`~spikingjelly.activation_based.surrogate.Sigmoid` and
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether to detach the reset term from the computation graph
+            during backpropagation
+        :type detach_reset: bool
+
+        :param store_v_seq: if ``True``, ``forward`` returns ``(spike_seq, v_seq)``;
+            otherwise returns ``spike_seq`` only
+        :type store_v_seq: bool
+        """
         super().__init__()
         self.decay = 1.0 / tau
         self.decay_input = decay_input
@@ -779,7 +969,7 @@ class LIFNode(nn.Module):
                 math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
             )
         else:
-            raise f"Surrogate: Sigmoid | ATan, alpha: {self.alpha}"
+            raise NotImplementedError("Surrogate: Sigmoid | ATan, alpha: {self.alpha}")
         self.sn_apply = LIFNodeCuPy.apply
 
     def extra_repr(self):
@@ -799,7 +989,7 @@ class LIFNode(nn.Module):
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void LIFNodeFPTTFLOATKernel(
-    float* __restrict__ inputs, 
+    float* __restrict__ inputs,
     float* __restrict__ spikes_seq,
     float* __restrict__ h_seq,
     float* __restrict__ v_seq,
@@ -821,7 +1011,7 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
 
@@ -841,18 +1031,18 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
         if self.decay_input:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + (v[i] - (last_v[i] - v_reset)) * decay;
-        }     
+        }
 """.replace("decay", f"{self.decay}f").replace("v_reset", f"{self.v_reset}f")
         else:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + v[i] - (last_v[i] - v_reset) * decay;
-        }     
+        }
 """.replace("decay", f"{self.decay}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -873,7 +1063,7 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
         if self.hard_reset:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             spikes[i] = v[i] >= v_th;
             last_v[i] = spikes[i] > 0 ? v_reset : v[i];
@@ -886,7 +1076,7 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
         {
             spikes[i] = v[i] >= v_th;
             last_v[i] = v[i] - spikes[i] * v_th;
-        }     
+        }
 """.replace("v_th", f"{self.v_th}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -916,7 +1106,7 @@ extern "C" __global__ void LIFNodeFPTTFLOATKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void LIFNodeFPTTHALFKernel(
-    half* __restrict__ inputs, 
+    half* __restrict__ inputs,
     half* __restrict__ spikes_seq,
     half* __restrict__ h_seq,
     half* __restrict__ v_seq,
@@ -934,11 +1124,11 @@ extern "C" __global__ void LIFNodeFPTTHALFKernel(
 #pragma unroll
     for (int i = 0; i < 4; i++)
     {
-        last_v[i] = __float2half2_rn(0); 
+        last_v[i] = __float2half2_rn(0);
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
 
@@ -959,18 +1149,18 @@ extern "C" __global__ void LIFNodeFPTTHALFKernel(
         if self.decay_input:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + (v[i] - (last_v[i] - __float2half2_rn(v_reset))) * __float2half2_rn(decay);
-        }     
+        }
 """.replace("decay", f"{self.decay}f").replace("v_reset", f"{self.v_reset}f")
         else:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + v[i] - (last_v[i] - __float2half2_rn(v_reset)) * __float2half2_rn(decay);
-        }     
+        }
 """.replace("decay", f"{self.decay}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -991,7 +1181,7 @@ extern "C" __global__ void LIFNodeFPTTHALFKernel(
         if self.hard_reset:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             spikes[i] = __hge2(v[i], __float2half2_rn(v_th));
             last_v[i] = v[i] * (__float2half2_rn(1.0f) - spikes[i]) + spikes[i] * __float2half2_rn(v_reset);
@@ -1004,7 +1194,7 @@ extern "C" __global__ void LIFNodeFPTTHALFKernel(
         {
             spikes[i] = __hge2(v[i], __float2half2_rn(v_th));
             last_v[i] = v[i] - spikes[i] * __float2half2_rn(v_th);
-        }     
+        }
 """.replace("v_th", f"{self.v_th}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -1052,7 +1242,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
 
     bool isLegalIndex = idx + 3 < numel;
     int edgeIndex = numel - idx;
-    
+
     float load[4];
     float var[4], grad_v_to_h[4], grad_h[4];
 """
@@ -1060,12 +1250,12 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
         if self.decay_input:
             kernel_code += r"""
     const float grad_h_to_x = decay;
-    const float grad_h_next_to_v = 1.0f - decay;  
+    const float grad_h_next_to_v = 1.0f - decay;
 """.replace("decay", f"{self.decay}f")
         else:
             kernel_code += r"""
     const float grad_h_to_x = 1.0f;
-    const float grad_h_next_to_v = 1.0f - decay;  
+    const float grad_h_next_to_v = 1.0f - decay;
 """.replace("decay", f"{self.decay}f")
 
         kernel_code += r"""
@@ -1079,7 +1269,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
     for (int t = time_step - 1; t >= 0; t--)
     {
         index = numel * t + idx;
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(h_seq[index]);
@@ -1100,7 +1290,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
         {
             var[i] = load[i] - v_th; // var = over_th | load = h
             grad_v_to_h[i] = var[i] < 0;
-        } 
+        }
 """.replace("v_th", f"{self.v_th}f")
         else:
             kernel_code += r"""
@@ -1109,7 +1299,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
         {
             var[i] = load[i] - v_th; // var = over_th | load = h
             grad_v_to_h[i] = 1.0f;
-        }  
+        }
 """.replace("v_th", f"{self.v_th}f")
 
         # surrogate_func
@@ -1128,10 +1318,10 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
         for (int i = 0; i < 4; i++)
         {
             var[i] = alpha / (4.0f + pai * var[i] * var[i]);  // var = grad_s_to_h
-        } 
+        }
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise NotImplementedError("Surrogate: [Sigmoid | ATan]")
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -1139,7 +1329,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
         for (int i = 0; i < 4; i++)
         {
             grad_v_to_h[i] += (v_reset - load[i]) * var[i]; // var = grad_s_to_h
-        } 
+        }
 """.replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -1154,13 +1344,13 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
                 load[i] = grad_spike_seq[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
             var[i] = var[i] * load[i]; // var = grad_s_to_h(var) * grad_spike(load)
         }
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(grad_v_seq[index]);
@@ -1172,7 +1362,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
                 load[i] = grad_v_seq[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
@@ -1206,10 +1396,10 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void LIFNodeBPTTHALFKernel(
-    half* __restrict__ grad_spike_seq, 
-    half* __restrict__ grad_v_seq, 
-    half* __restrict__ h_seq, 
-    half* __restrict__ grad_x_seq, 
+    half* __restrict__ grad_spike_seq,
+    half* __restrict__ grad_v_seq,
+    half* __restrict__ h_seq,
+    half* __restrict__ grad_x_seq,
     const int numel, const int time_step)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -1226,12 +1416,12 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         if self.decay_input:
             kernel_code += r"""
     const half2 grad_h_to_x = __float2half2_rn(decay);
-    const half2 grad_h_next_to_v = __float2half2_rn(1.0f) - __float2half2_rn(decay);  
+    const half2 grad_h_next_to_v = __float2half2_rn(1.0f) - __float2half2_rn(decay);
 """.replace("decay", f"{self.decay}f")
         else:
             kernel_code += r"""
     const half2 grad_h_to_x = __float2half2_rn(1.0f);
-    const half2 grad_h_next_to_v = __float2half2_rn(1.0f) - __float2half2_rn(decay);  
+    const half2 grad_h_next_to_v = __float2half2_rn(1.0f) - __float2half2_rn(decay);
 """.replace("decay", f"{self.decay}f")
 
         kernel_code += r"""
@@ -1245,7 +1435,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
     for (int t = time_step - 1; t >= 0; t--)
     {
         index = numel * t + idx;
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(h_seq[index]);
@@ -1267,7 +1457,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         {
             var[i] = load[i] - __float2half2_rn(v_th); // var = over_th
             grad_v_to_h[i] = __hle2(var[i], __float2half2_rn(0));
-        } 
+        }
 """.replace("v_th", f"{self.v_th}")
         else:
             kernel_code += r"""
@@ -1276,7 +1466,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         {
             var[i] = load[i] - __float2half2_rn(v_th); // var = over_th
             grad_v_to_h[i] = __float2half2_rn(1.0f);
-        }  
+        }
 """.replace("v_th", f"{self.v_th}")
 
         # surrogate_func
@@ -1295,10 +1485,10 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         for (int i = 0; i < 4; i++)
         {
             var[i] = __float2half2_rn(alpha) / (__float2half2_rn(4.0f) + __float2half2_rn(pai) * var[i] * var[i]);  // var = grad_s_to_h
-        } 
+        }
 """.replace("alpha", f"{self.alpha}").replace("pai", f"{self.pai}")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise NotImplementedError("Surrogate: [Sigmoid | ATan]")
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -1306,7 +1496,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         for (int i = 0; i < 4; i++)
         {
             grad_v_to_h[i] += (v_reset - load[i]) * var[i]; // var = grad_s_to_h
-        } 
+        }
 """.replace("v_reset", f"{self.v_reset}")
 
         kernel_code += r"""
@@ -1327,7 +1517,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         {
             var[i] = var[i] * load[i]; // var = grad_s_to_h(var) * grad_spike(load)
         }
-        
+
         if (isLegalIndex)
         {
             FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(grad_v_seq[index]);
@@ -1340,7 +1530,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
                 ptr[i] = grad_v_seq[index + i];
             }
         }
-        
+
 #pragma unroll
         for (int i = 0; i < 4; i++)
         {
@@ -1376,7 +1566,7 @@ void LIFNodeBPTTKernel(
     float * grad_x_seq, float * h_seq, int numel, int N)
 {
     const int index = blockIdx.x * blockDim.x + threadIdx.x;
-    
+
     if (index < N)
     {
         const int dt = N;
@@ -1523,6 +1713,103 @@ class ParametricLIFNode(nn.Module):
         detach_reset: bool = False,
         store_v_seq: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
+
+        ----
+
+        .. _ParametricLIFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy 加速的参数化 LIF 神经元。
+        该神经元与 :class:`LIFNode` 的动力学相同，但时间常数 :math:`\tau` 为可学习参数。
+        内部将 :math:`\tau` 表示为参数 :math:`w`，满足：
+
+        .. math::
+
+            \tau = \frac{1}{\mathrm{sigmoid}(w)}, \quad w = -\ln(\tau - 1)
+
+        梯度通过 :math:`w` 传播，使 :math:`\tau` 在训练中自适应调整。
+
+        该模块须在 CUDA 设备上运行，输入张量形状为 ``[T, B, *]``，其中 ``T`` 为时间步数。
+
+        :param init_tau: 时间常数的初始值，必须大于 1.0，默认为 2.0
+        :type init_tau: float
+
+        :param decay_input: 若为 ``True``，输入电流乘以衰减因子 :math:`1/\tau`；
+            否则仅静息电位差进行衰减，默认为 True
+        :type decay_input: bool
+
+        :param v_threshold: 神经元的阈值电压，默认为 1.0
+        :type v_threshold: float
+
+        :param v_reset: 神经元的重置电压，默认为 0.0。若为 ``None``，则使用软重置（减法重置）
+        :type v_reset: float
+
+        :param surrogate_function: 反向传播时用于近似脉冲函数梯度的代理函数，
+            支持 :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 和
+            :class:`~spikingjelly.activation_based.surrogate.ATan`，
+            默认为 ``surrogate.Sigmoid()``
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否在反向传播时将重置项从计算图中分离，默认为 False
+        :type detach_reset: bool
+
+        :param store_v_seq: 若为 ``True``，``forward`` 返回 ``(spike_seq, v_seq)``；
+            否则仅返回 ``spike_seq``，默认为 False
+        :type store_v_seq: bool
+
+        ----
+
+        .. _ParametricLIFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy-accelerated Parametric LIF neuron.
+        The dynamics are identical to :class:`LIFNode`, but the time constant :math:`\tau` is a
+        learnable parameter. Internally, :math:`\tau` is reparameterized as:
+
+        .. math::
+
+            \tau = \frac{1}{\mathrm{sigmoid}(w)}, \quad w = -\ln(\tau - 1)
+
+        Gradients flow through :math:`w`, allowing :math:`\tau` to be learned during training.
+
+        This module must run on a CUDA device. The expected input shape is ``[T, B, *]``,
+        where ``T`` is the number of time steps.
+
+        :param init_tau: initial value of the time constant; must be greater than 1.0,
+            defaults to 2.0
+        :type init_tau: float
+
+        :param decay_input: if ``True``, input current is scaled by the decay factor
+            :math:`1/\tau`; otherwise only the resting potential difference decays,
+            defaults to True
+        :type decay_input: bool
+
+        :param v_threshold: threshold voltage of the neuron, defaults to 1.0
+        :type v_threshold: float
+
+        :param v_reset: reset voltage of the neuron, defaults to 0.0.
+            If ``None``, soft (subtractive) reset is used
+        :type v_reset: float
+
+        :param surrogate_function: surrogate gradient function for spike backpropagation;
+            supports :class:`~spikingjelly.activation_based.surrogate.Sigmoid` and
+            :class:`~spikingjelly.activation_based.surrogate.ATan`,
+            defaults to ``surrogate.Sigmoid()``
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether to detach the reset term from the computation graph
+            during backpropagation, defaults to False
+        :type detach_reset: bool
+
+        :param store_v_seq: if ``True``, ``forward`` returns ``(spike_seq, v_seq)``;
+            otherwise returns ``spike_seq`` only, defaults to False
+        :type store_v_seq: bool
+        """
         super().__init__()
         init_w = -math.log(init_tau - 1.0)
         self.w = nn.Parameter(
@@ -1551,7 +1838,7 @@ class ParametricLIFNode(nn.Module):
                 math.pi * math.pi * surrogate_function.alpha * surrogate_function.alpha
             )
         else:
-            raise f"Surrogate: Sigmoid | ATan, alpha: {self.alpha}"
+            raise NotImplementedError("Surrogate: Sigmoid | ATan, alpha: {self.alpha}")
         self.sn_apply = PLIFNodeCuPy.apply
 
     def extra_repr(self):
@@ -1596,7 +1883,7 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
 
@@ -1616,18 +1903,18 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
         if self.decay_input:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + (v[i] - (last_v[i] - v_reset)) * decay;
-        }     
+        }
 """.replace("v_reset", f"{self.v_reset}f")
         else:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + v[i] - (last_v[i] - v_reset) * decay;
-        }     
+        }
 """.replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -1648,7 +1935,7 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
         if self.hard_reset:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             spikes[i] = v[i] >= v_th;
             last_v[i] = spikes[i] > 0 ? v_reset : v[i];
@@ -1661,7 +1948,7 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
         {
             spikes[i] = v[i] >= v_th;
             last_v[i] = v[i] - spikes[i] * v_th;
-        }     
+        }
 """.replace("v_th", f"{self.v_th}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -1691,10 +1978,10 @@ extern "C" __global__ void PLIFNodeFPTTFLOATKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void PLIFNodeFPTTHALFKernel(
-    half* __restrict__ inputs, 
+    half* __restrict__ inputs,
     half* __restrict__ spikes_seq,
     half* __restrict__ h_seq,
-    half* __restrict__ v_seq, 
+    half* __restrict__ v_seq,
     float decay, int numel, int time_step)
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
@@ -1709,11 +1996,11 @@ extern "C" __global__ void PLIFNodeFPTTHALFKernel(
 #pragma unroll
     for (int i = 0; i < 4; i++)
     {
-        last_v[i] = __float2half2_rn(0); 
+        last_v[i] = __float2half2_rn(0);
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
 
@@ -1734,18 +2021,18 @@ extern "C" __global__ void PLIFNodeFPTTHALFKernel(
         if self.decay_input:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + (v[i] - (last_v[i] - __float2half2_rn(v_reset))) * __float2half2_rn(decay);
-        }     
+        }
 """.replace("v_reset", f"{self.v_reset}f")
         else:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = last_v[i] + v[i] - (last_v[i] - __float2half2_rn(v_reset)) * __float2half2_rn(decay);
-        }     
+        }
 """.replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -1766,7 +2053,7 @@ extern "C" __global__ void PLIFNodeFPTTHALFKernel(
         if self.hard_reset:
             kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             spikes[i] = __hge2(v[i], __float2half2_rn(v_th));
             last_v[i] = v[i] * (__float2half2_rn(1.0f) - spikes[i]) + spikes[i] * __float2half2_rn(v_reset);
@@ -1779,7 +2066,7 @@ extern "C" __global__ void PLIFNodeFPTTHALFKernel(
         {
             spikes[i] = __hge2(v[i], __float2half2_rn(v_th));
             last_v[i] = v[i] - spikes[i] * __float2half2_rn(v_th);
-        }     
+        }
 """.replace("v_th", f"{self.v_th}f").replace("v_reset", f"{self.v_reset}f")
 
         kernel_code += r"""
@@ -1822,10 +2109,10 @@ extern "C" __global__ void PLIFNodeBPTTFLOATKernel(
     float *__restrict__ grad_x_seq,
     float *__restrict__ grad_tau_seq,
     const float decay, const int numel, const int time_step)
-{ 
+{
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
     idx = idx << 2;
-    
+
     int lane_id = threadIdx.x % 32;
     int warp_id = threadIdx.x / 32;
 
@@ -1842,12 +2129,12 @@ extern "C" __global__ void PLIFNodeBPTTFLOATKernel(
         if self.decay_input:
             kernel_code += r"""
     const float grad_h_to_x = decay;
-    const float grad_h_next_to_v = 1.0f - decay;  
+    const float grad_h_next_to_v = 1.0f - decay;
 """
         else:
             kernel_code += r"""
     const float grad_h_to_x = 1.0f;
-    const float grad_h_next_to_v = 1.0f - decay;  
+    const float grad_h_next_to_v = 1.0f - decay;
 """
 
         kernel_code += r"""
@@ -1865,7 +2152,7 @@ extern "C" __global__ void PLIFNodeBPTTFLOATKernel(
         for (int t = time_step - 1; t >= 0; t--)
         {
             index = numel * t + idx;
-            
+
             if (isLegalIndex)
             {
                 FETCH_FLOAT4(h[0]) = FETCH_FLOAT4(h_seq[index]);
@@ -1919,7 +2206,7 @@ extern "C" __global__ void PLIFNodeBPTTFLOATKernel(
             }
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise NotImplementedError("Surrogate: [Sigmoid | ATan]")
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -1936,7 +2223,7 @@ extern "C" __global__ void PLIFNodeBPTTFLOATKernel(
             {
                 var[i] = var[i] * load[i]; // var = grad_s_to_h * grad_spike
             }
-            
+
             if (isLegalIndex)
             {
                 FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(grad_v_seq[index]);
@@ -2064,12 +2351,12 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
 {
     int idx = blockDim.x * blockIdx.x + threadIdx.x;
     idx = idx << 3;
-    
+
     int lane_id = threadIdx.x % 32;
     int warp_id = threadIdx.x / 32;
-    
+
      __shared__ float smem[8];
-        
+
     bool isLegalIndex = idx + 7 < numel;
     int edgeIndex = numel - idx;
 
@@ -2081,12 +2368,12 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
         if self.decay_input:
             kernel_code += r"""
     const half2 grad_h_to_x = __float2half2_rn(decay);
-    const half2 grad_h_next_to_v = __float2half2_rn(1.0f - decay);  
+    const half2 grad_h_next_to_v = __float2half2_rn(1.0f - decay);
 """
         else:
             kernel_code += r"""
     const half2 grad_h_to_x = __float2half2_rn(1.0f);
-    const half2 grad_h_next_to_v = __float2half2_rn(1.0f - decay);  
+    const half2 grad_h_next_to_v = __float2half2_rn(1.0f - decay);
 """
 
         kernel_code += r"""
@@ -2104,7 +2391,7 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
         for (int t = time_step - 1; t >= 0; t--)
         {
             index = numel * t + idx;
-            
+
             if (isLegalIndex)
             {
                 FETCH_FLOAT4(h[0]) = FETCH_FLOAT4(h_seq[index]);
@@ -2129,7 +2416,7 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
             {
                 var[i] = h[i] - __float2half2_rn(v_th); // var = over_th | load = h
                 grad_v_to_h[i] = __hle2(var[i], __float2half2_rn(0));
-            } 
+            }
 """.replace("v_th", f"{self.v_th}f")
         else:
             kernel_code += r"""
@@ -2138,7 +2425,7 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
             {
                 var[i] = load[i] - __float2half2_rn(v_th); // var = over_th
                 grad_v_to_h[i] = __float2half2_rn(1.0f);
-            }  
+            }
 """.replace("v_th", f"{self.v_th}f")
 
         # surrogate_func
@@ -2157,10 +2444,10 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
             for (int i = 0; i < 4; i++)
             {
                 var[i] = __float2half2_rn(alpha) / (__float2half2_rn(4.0f) + __float2half2_rn(pai) * var[i] * var[i]);  // var = grad_s_to_h
-            }  
+            }
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise NotImplementedError("Surrogate: [Sigmoid | ATan]")
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -2177,7 +2464,7 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
             {
                 var[i] = var[i] * load[i]; // var = grad_s_to_h * grad_spike
             }
-            
+
             if (isLegalIndex)
             {
                 FETCH_FLOAT4(load[0]) = FETCH_FLOAT4(grad_v_seq[index]);
@@ -2385,6 +2672,81 @@ class ILIFNode(nn.Module):
         *args,
         **kwargs,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
+
+        ----
+
+        .. _ILIFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy 加速的 ILIF 神经元。
+        该神经元的充电、发放与重置动力学如下：
+
+        .. math::
+
+            H[t] &= \left(V[t-1] - S[t-1]\right) \cdot \text{decay} + X[t] \\
+            V[t] &= \text{clamp}\left(H[t],\ \text{min\_value},\ \text{max\_value}\right) \\
+            S[t] &= \text{round}\left(V[t]\right)
+
+        其中脉冲输出 :math:`S[t]` 为整数值（而非二值 0/1），由对膜电位 :math:`V[t]` 四舍五入得到。
+        ``decay`` 控制膜电位的衰减速度，``min_value`` 和 ``max_value`` 对膜电位进行截断。
+
+        该模块须在 CUDA 设备上运行，输入张量形状为 ``[T, B, *]``，其中 ``T`` 为时间步数。
+
+        :param decay: 膜电位衰减系数，取值范围 ``(0, 1]``，默认为 0.25
+        :type decay: float
+
+        :param min_value: 膜电位的下限截断值，默认为 0.0
+        :type min_value: float
+
+        :param max_value: 膜电位的上限截断值，默认为 4.0
+        :type max_value: float
+
+        :param store_v_seq: 若为 ``True``，将中间膜电位序列保存至 ``self.v_seq``
+            供外部访问，不影响 ``forward`` 的返回值，默认为 False
+        :type store_v_seq: bool
+
+        ----
+
+        .. _ILIFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy-accelerated Integer LIF neuron.
+        The neuronal charge, fire, and reset dynamics are:
+
+        .. math::
+
+            H[t] &= \left(V[t-1] - S[t-1]\right) \cdot \text{decay} + X[t] \\
+            V[t] &= \text{clamp}\left(H[t],\ \text{min\_value},\ \text{max\_value}\right) \\
+            S[t] &= \text{round}\left(V[t]\right)
+
+        Unlike standard LIF neurons, the spike output :math:`S[t]` is an integer value (not
+        binary 0/1), obtained by rounding the membrane potential :math:`V[t]`. ``decay``
+        controls the membrane potential leak rate, while ``min_value`` and ``max_value`` clamp
+        the potential.
+
+        This module must run on a CUDA device. The expected input shape is ``[T, B, *]``,
+        where ``T`` is the number of time steps.
+
+        :param decay: membrane potential decay coefficient in the range ``(0, 1]``,
+            defaults to 0.25
+        :type decay: float
+
+        :param min_value: lower clamp bound for the membrane potential, defaults to 0.0
+        :type min_value: float
+
+        :param max_value: upper clamp bound for the membrane potential, defaults to 4.0
+        :type max_value: float
+
+        :param store_v_seq: if ``True``, saves the intermediate membrane potential
+            sequence to ``self.v_seq`` for external inspection; does not affect the
+            return value of ``forward``, defaults to False
+        :type store_v_seq: bool
+        """
         super().__init__()
         self.decay = decay
         self.min_value = float(min_value)
@@ -2410,8 +2772,8 @@ class ILIFNode(nn.Module):
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
-    float* __restrict__ inputs, 
-    float* __restrict__ spikes_seq, 
+    float* __restrict__ inputs,
+    float* __restrict__ spikes_seq,
     float* __restrict__ h_seq,
     int numel, int time_step)
 {
@@ -2432,7 +2794,7 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
         if (isLegalIndex)
@@ -2450,7 +2812,7 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
         # neuron charge
         kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = (last_v[i] - spikes[i]) * decay + v[i];
             last_v[i] = v[i];
@@ -2473,8 +2835,8 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
 
         kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
-        {      
+        for (int i = 0; i < 4; i++)
+        {
             v[i] = max(v[i], min_value);
             v[i] = min(v[i], max_value);
             spikes[i] = floor(v[i] + 0.5f);
@@ -2508,8 +2870,8 @@ extern "C" __global__ void ILIFNodeFPTTFLOATKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void ILIFNodeFPTTHALFKernel(
-    half* __restrict__ inputs, 
-    half* __restrict__ spikes_seq, 
+    half* __restrict__ inputs,
+    half* __restrict__ spikes_seq,
     half* __restrict__ h_seq,
     int numel, int time_step)
 {
@@ -2530,7 +2892,7 @@ extern "C" __global__ void ILIFNodeFPTTHALFKernel(
     }
 
     int index;
-    for (int t = 0; t < time_step; t++) 
+    for (int t = 0; t < time_step; t++)
     {
         index = idx + numel * t;
         if (isLegalIndex)
@@ -2549,11 +2911,11 @@ extern "C" __global__ void ILIFNodeFPTTHALFKernel(
         # neuron charge
         kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
+        for (int i = 0; i < 4; i++)
         {
             v[i] = (last_v[i] - spikes[i]) * __float2half2_rn(decay) + v[i];
             last_v[i] = v[i];
-        }     
+        }
 """.replace("decay", f"{self.decay}f")
 
         kernel_code += r"""
@@ -2573,8 +2935,8 @@ extern "C" __global__ void ILIFNodeFPTTHALFKernel(
 
         kernel_code += r"""
 #pragma unroll
-        for (int i = 0; i < 4; i++) 
-        {      
+        for (int i = 0; i < 4; i++)
+        {
             v[i] = __hmax2(v[i], __float2half2_rn(min_value));
             v[i] = __hmin2(v[i], __float2half2_rn(max_value));
             v[i] += __float2half2_rn(0.5f);
@@ -2614,8 +2976,8 @@ extern "C" __global__ void ILIFNodeFPTTHALFKernel(
 #define FETCH_FLOAT4(pointer) (reinterpret_cast<float4*>(&(pointer))[0])
 
 extern "C" __global__ void ILIFNodeBPTTFLOATKernel(
-    float* __restrict__ grad_spike_seq, 
-    float* __restrict__ h_seq, 
+    float* __restrict__ grad_spike_seq,
+    float* __restrict__ h_seq,
     float* __restrict__ grad_x_seq,
     const int numel, const int time_step)
 {
@@ -2632,7 +2994,7 @@ extern "C" __global__ void ILIFNodeBPTTFLOATKernel(
 """
 
         kernel_code += r"""
-    const float grad_h_next_to_v = decay;  
+    const float grad_h_next_to_v = decay;
 """.replace("decay", f"{self.decay}f")
 
         kernel_code += r"""
@@ -2664,7 +3026,7 @@ extern "C" __global__ void ILIFNodeBPTTFLOATKernel(
         kernel_code += r"""
 #pragma unroll
         for (int i = 0; i < 4; i++)
-        {     
+        {
             if (h[i] < min_value || h[i] > max_value)
             { grad_spike[i] = 0; }
         }
@@ -2702,8 +3064,8 @@ extern "C" __global__ void ILIFNodeBPTTFLOATKernel(
 
 #include <cuda_fp16.h>
 extern "C" __global__ void ILIFNodeBPTTHALFKernel(
-    half* __restrict__ grad_spike_seq, 
-    half* __restrict__ h_seq, 
+    half* __restrict__ grad_spike_seq,
+    half* __restrict__ h_seq,
     half* __restrict__ grad_x_seq,
     const int numel, const int time_step)
 {
@@ -2719,7 +3081,7 @@ extern "C" __global__ void ILIFNodeBPTTHALFKernel(
 """
 
         kernel_code += r"""
-    const half2 grad_h_next_to_v = __float2half2_rn(decay);  
+    const half2 grad_h_next_to_v = __float2half2_rn(decay);
 """.replace("decay", f"{self.decay}f")
 
         kernel_code += r"""
@@ -2756,7 +3118,7 @@ extern "C" __global__ void ILIFNodeBPTTHALFKernel(
 #pragma unroll
         for (int i = 0; i < 8; i++)
         {   // var = grad_s_to_h
-            if (h_ptr[i] < __float2half_rn(min_value) || h_ptr[i] > __float2half_rn(max_value)) 
+            if (h_ptr[i] < __float2half_rn(min_value) || h_ptr[i] > __float2half_rn(max_value))
             { s_ptr[i] = __float2half_rn(0); }
         }
 """.replace("min_value", f"{self.min_value}f").replace(
@@ -2766,7 +3128,7 @@ extern "C" __global__ void ILIFNodeBPTTHALFKernel(
         kernel_code += r"""
 #pragma unroll
         for (int i = 0; i < 4; i++)
-        {     
+        {
             grad_h[i] = grad_h[i] * grad_h_next_to_v + grad_spike[i];
         }
 

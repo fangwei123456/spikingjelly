@@ -2,7 +2,6 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor
 
-
 __all__ = [
     "kernel_dot_product",
     "spike_similar_loss",
@@ -312,7 +311,7 @@ def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     """
     # x_seq.shape = [T, N, C, *]
     x_seq = x_seq.transpose(0, 1).transpose(1, 2)  # [N, C, T, *]
-    N, C, T = x_seq.shape[0], x_seq.shape[1], x_seq.shape[2]
+    T = x_seq.shape[2]
     if x_seq.dim() == 3:
         # x_seq.shape = [N, C, T]
         # target.shape = [N]

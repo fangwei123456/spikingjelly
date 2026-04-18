@@ -1346,8 +1346,8 @@ class SquarewaveFourierSeries(SurrogateFunctionBase):
         super().__init__(spiking=spiking, n=n, T_period=T_period)
 
     @staticmethod
-    def spiking_function(x: torch.Tensor, w, c):
-        return squarewave_fourier_series.apply(x, w, c)
+    def spiking_function(x: torch.Tensor, n, T_period):
+        return squarewave_fourier_series.apply(x, n, T_period)
 
     @staticmethod
     def primitive_function(x: torch.Tensor, n: int, T_period: float):

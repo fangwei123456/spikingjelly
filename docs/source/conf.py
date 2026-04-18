@@ -127,6 +127,7 @@ autodoc_mock_imports = [
     "nir",
     "nirtorch",
     "lightning",
+    "torchmetrics",
     "jsonargparse",
 ]
 autoclass_content = "both"
