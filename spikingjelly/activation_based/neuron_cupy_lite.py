@@ -83,6 +83,63 @@ class IFNode(nn.Module):
         detach_reset: bool = False,
         store_v_seq: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <IFNode.__init__-cn>` | :ref:`English <IFNode.__init__-en>`
+
+        ----
+
+        .. _IFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy Lite IF 神经元。该实现运行于 CUDA，输入张量形状为
+        ``[T, B, C, H, W]``。
+
+        :param v_threshold: 阈值电压，默认值为 1.0
+        :type v_threshold: float
+
+        :param v_reset: 重置电压，默认值为 0.0。若为 ``None``，使用软重置
+        :type v_reset: float
+
+        :param surrogate_function: 代理梯度函数，支持
+            :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 和
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否在反向传播时分离重置项
+        :type detach_reset: bool
+
+        :param store_v_seq: 为 API 兼容保留；Lite 实现当前 ``forward`` 仅返回 ``spike_seq``
+        :type store_v_seq: bool
+
+        ----
+
+        .. _IFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy Lite IF neuron. This implementation runs on CUDA and
+        expects input shape ``[T, B, C, H, W]``.
+
+        :param v_threshold: threshold voltage, defaults to 1.0
+        :type v_threshold: float
+
+        :param v_reset: reset voltage, defaults to 0.0. If ``None``, soft reset is used
+        :type v_reset: float
+
+        :param surrogate_function: surrogate gradient function; supports
+            :class:`~spikingjelly.activation_based.surrogate.Sigmoid` and
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether to detach reset in backward
+        :type detach_reset: bool
+
+        :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
+            returns ``spike_seq`` only
+        :type store_v_seq: bool
+        """
         super().__init__()
         self.v_th = v_threshold
         self.v_reset = v_reset
@@ -684,6 +741,76 @@ class LIFNode(nn.Module):
         detach_reset: bool = False,
         store_v_seq: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <LIFNode.__init__-cn>` | :ref:`English <LIFNode.__init__-en>`
+
+        ----
+
+        .. _LIFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy Lite LIF 神经元。其充电动力学与标准 LIF 一致：
+        ``tau`` 控制衰减因子 ``1 / tau``，并支持 ``decay_input`` 两种更新形式。
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+
+        :param decay_input: 是否对输入项施加衰减
+        :type decay_input: bool
+
+        :param v_threshold: 阈值电压
+        :type v_threshold: float
+
+        :param v_reset: 重置电压。若为 ``None``，使用软重置
+        :type v_reset: float
+
+        :param surrogate_function: 代理梯度函数，支持
+            :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 和
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否在反向传播时分离重置项
+        :type detach_reset: bool
+
+        :param store_v_seq: 为 API 兼容保留；Lite 实现当前 ``forward`` 仅返回 ``spike_seq``
+        :type store_v_seq: bool
+
+        ----
+
+        .. _LIFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy Lite LIF neuron. The charging dynamics follow standard
+        LIF equations, where ``tau`` controls the decay factor ``1 / tau`` and
+        ``decay_input`` switches the update form.
+
+        :param tau: membrane time constant
+        :type tau: float
+
+        :param decay_input: whether to decay the input term
+        :type decay_input: bool
+
+        :param v_threshold: threshold voltage
+        :type v_threshold: float
+
+        :param v_reset: reset voltage. If ``None``, soft reset is used
+        :type v_reset: float
+
+        :param surrogate_function: surrogate gradient function; supports
+            :class:`~spikingjelly.activation_based.surrogate.Sigmoid` and
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether to detach reset in backward
+        :type detach_reset: bool
+
+        :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
+            returns ``spike_seq`` only
+        :type store_v_seq: bool
+        """
         super().__init__()
         self.decay = 1.0 / tau
         self.decay_input = decay_input
@@ -1371,6 +1498,76 @@ class ParametricLIFNode(nn.Module):
         detach_reset: bool = False,
         store_v_seq: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <ParametricLIFNode.__init__-cn>` | :ref:`English <ParametricLIFNode.__init__-en>`
+
+        ----
+
+        .. _ParametricLIFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy Lite 参数化 LIF 神经元。该神经元与 LIFNode 的动力学一致，
+        但时间常数 ``tau`` 是可学习参数，并使用 ``w = -ln(tau - 1)`` 重参数化。
+
+        :param init_tau: 时间常数初值，必须大于 1.0
+        :type init_tau: float
+
+        :param decay_input: 是否对输入项施加衰减
+        :type decay_input: bool
+
+        :param v_threshold: 阈值电压
+        :type v_threshold: float
+
+        :param v_reset: 重置电压。若为 ``None``，使用软重置
+        :type v_reset: float
+
+        :param surrogate_function: 代理梯度函数，支持
+            :class:`~spikingjelly.activation_based.surrogate.Sigmoid` 和
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: 是否在反向传播时分离重置项
+        :type detach_reset: bool
+
+        :param store_v_seq: 为 API 兼容保留；Lite 实现当前 ``forward`` 仅返回 ``spike_seq``
+        :type store_v_seq: bool
+
+        ----
+
+        .. _ParametricLIFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy Lite Parametric LIF neuron. The dynamics are the same
+        as LIFNode, but ``tau`` is learnable and reparameterized by
+        ``w = -ln(tau - 1)``.
+
+        :param init_tau: initial time constant, must be larger than 1.0
+        :type init_tau: float
+
+        :param decay_input: whether to decay the input term
+        :type decay_input: bool
+
+        :param v_threshold: threshold voltage
+        :type v_threshold: float
+
+        :param v_reset: reset voltage. If ``None``, soft reset is used
+        :type v_reset: float
+
+        :param surrogate_function: surrogate gradient function; supports
+            :class:`~spikingjelly.activation_based.surrogate.Sigmoid` and
+            :class:`~spikingjelly.activation_based.surrogate.ATan`
+        :type surrogate_function: Callable
+
+        :param detach_reset: whether to detach reset in backward
+        :type detach_reset: bool
+
+        :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
+            returns ``spike_seq`` only
+        :type store_v_seq: bool
+        """
         super().__init__()
         init_w = -math.log(init_tau - 1.0)
         self.w = nn.Parameter(
@@ -2201,6 +2398,54 @@ class ILIFNode(nn.Module):
         *args,
         **kwargs,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <ILIFNode.__init__-cn>` | :ref:`English <ILIFNode.__init__-en>`
+
+        ----
+
+        .. _ILIFNode.__init__-cn:
+
+        * **中文**
+
+        初始化 CuPy Lite 整数 LIF 神经元。该神经元输出为整数脉冲（由膜电位四舍五入得到），
+        并通过 ``min_value`` 与 ``max_value`` 对膜电位进行截断。
+
+        :param decay: 膜电位衰减系数，通常在 ``(0, 1]`` 内
+        :type decay: float
+
+        :param min_value: 膜电位下界
+        :type min_value: float
+
+        :param max_value: 膜电位上界
+        :type max_value: float
+
+        :param store_v_seq: 为 API 兼容保留；Lite 实现当前 ``forward`` 仅返回 ``spike_seq``
+        :type store_v_seq: bool
+
+        ----
+
+        .. _ILIFNode.__init__-en:
+
+        * **English**
+
+        Initialize the CuPy Lite Integer LIF neuron. It emits integer spikes
+        (rounded from membrane potential) and clamps membrane potential by
+        ``min_value`` and ``max_value``.
+
+        :param decay: membrane decay coefficient, usually in ``(0, 1]``
+        :type decay: float
+
+        :param min_value: lower bound of membrane potential
+        :type min_value: float
+
+        :param max_value: upper bound of membrane potential
+        :type max_value: float
+
+        :param store_v_seq: kept for API compatibility; Lite ``forward`` currently
+            returns ``spike_seq`` only
+        :type store_v_seq: bool
+        """
         super().__init__()
         self.decay = decay
         self.min_value = float(min_value)
