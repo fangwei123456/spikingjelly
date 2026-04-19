@@ -3,14 +3,25 @@ https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
-from typing import Callable
-import functools
-import contextlib
-from packaging import version
-from pathlib import Path
-import threading
 import atexit
+import contextlib
+import functools
+import threading
+from pathlib import Path
+from typing import Callable
+
 import torch
+from packaging import version
+
+from . import dummy
+
+try:
+    from torch.library import triton_op
+
+    _USE_TRITON_OP = True
+except BaseException:
+    triton_op = dummy.DummyImport()
+    _USE_TRITON_OP = False
 
 try:
     import triton
@@ -36,7 +47,6 @@ try:
         type_str_dict[torch.bfloat16] = "tl.bfloat16"
 except BaseException as e:
     import logging
-    from . import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.triton_utils: {e}")
     triton = dummy.DummyImport()
@@ -52,6 +62,18 @@ def convert_and_store(pointer, value, boundary_check):
     # This function manually converts dtype and then stores the data.
     value = value.to(pointer.dtype.element_ty.element_ty)
     tl.store(pointer, value, boundary_check=boundary_check)
+
+
+def register_op(opname: str, mutates_args=()):
+    if _USE_TRITON_OP:
+        return triton_op(opname, mutates_args=mutates_args)
+    return torch.library.custom_op(opname, mutates_args=mutates_args)
+
+
+def wrap_triton(kernel):
+    if _USE_TRITON_OP:
+        return torch.library.wrap_triton(kernel)
+    return kernel
 
 
 def contiguous_and_device_guard(f: Callable) -> Callable:
@@ -110,7 +132,7 @@ def cleanup_tmp_python_files():
     for f in Path("/tmp").glob("*.py"):
         try:
             f.unlink(missing_ok=True)
-        except BaseException as e:
+        except BaseException:
             pass  # ignore the errors
 
 

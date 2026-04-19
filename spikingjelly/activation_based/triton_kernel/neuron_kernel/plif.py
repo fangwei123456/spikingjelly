@@ -1,22 +1,22 @@
 import torch
-from torch import autograd
+
+from ..surrogate_kernel import get_sg_kernel
+from ..triton_utils import convert_and_store, register_op, type_dict, wrap_triton
 
 try:
     import triton
     import triton.language as tl
 except BaseException as e:
     import logging
+
     from .. import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.neuron_kernel.plif: {e}")
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 
-from ..triton_utils import type_dict, contiguous_and_device_guard
-from ..triton_utils import amp_custom_fwd, amp_custom_bwd, convert_and_store
 
-
-__all__ = ["MultiStepParametricLIFNodePTT"]
+__all__ = ["plif_multi_step"]
 
 
 @triton.autotune(
@@ -243,7 +243,8 @@ def _multistep_plif_backward_kernel(
     convert_and_store(grad_r_tau_ptrs, grad_r_tau_acc, boundary_check=(1,))
 
 
-def multistep_plif_inference(
+@register_op("sj::multistep_plif_cell_inference")
+def multistep_plif_cell_inference(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -251,33 +252,39 @@ def multistep_plif_inference(
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
-):
+) -> tuple[torch.Tensor, torch.Tensor]:
+    x_seq = x_seq.contiguous()
+    v_init = v_init.contiguous()
+
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
-    s_seq, v_seq = torch.empty_like(x_seq), torch.empty_like(x_seq)
+    s_seq = torch.empty_like(x_seq)
+    v_seq = torch.empty_like(x_seq)
     dtype = x_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    _multistep_plif_forward_kernel[grid](
-        x_seq,
-        v_init,
-        s_seq,
-        v_seq,
-        v_seq,
-        r_tau.item(),
-        v_threshold,
-        v_reset,
-        T=T,
-        NCL=NCL,
-        dtype=type_dict[dtype],
-        decay_input=decay_input,
-        soft_reset=soft_reset,
-        save_intermediates=False,
-    )
+    with torch.cuda.device(x_seq.device.index):
+        wrap_triton(_multistep_plif_forward_kernel)[grid](
+            x_seq,
+            v_init,
+            s_seq,
+            v_seq,  # dummy
+            v_seq,
+            r_tau.item(),
+            v_threshold,
+            v_reset,
+            T=T,
+            NCL=NCL,
+            dtype=type_dict[dtype],
+            decay_input=decay_input,
+            soft_reset=soft_reset,
+            save_intermediates=False,
+        )
     return s_seq, v_seq
 
 
-def multistep_plif_forward(
+@torch.library.register_fake("sj::multistep_plif_cell_inference")
+def _multistep_plif_cell_inference_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     r_tau: torch.Tensor,
@@ -286,45 +293,106 @@ def multistep_plif_forward(
     v_reset: float,
     soft_reset: bool,
 ):
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+    )
+
+
+@register_op("sj::multistep_plif_cell")
+def multistep_plif_cell(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    r_tau: torch.Tensor,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    sg_type: str,
+    sg_alpha: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    x_seq = x_seq.contiguous()
+    v_init = v_init.contiguous()
+
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
-    s_seq, v_seq = torch.empty_like(x_seq), torch.empty_like(x_seq)
+    s_seq = torch.empty_like(x_seq)
+    v_seq = torch.empty_like(x_seq)
     h_seq = torch.empty_like(x_seq)
     dtype = x_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    _multistep_plif_forward_kernel[grid](
-        x_seq,
-        v_init,
-        s_seq,
-        h_seq,
-        v_seq,
-        r_tau.item(),
-        v_threshold,
-        v_reset,
-        T=T,
-        NCL=NCL,
-        dtype=type_dict[dtype],
-        decay_input=decay_input,
-        soft_reset=soft_reset,
-        save_intermediates=True,
-    )
+    with torch.cuda.device(x_seq.device.index):
+        wrap_triton(_multistep_plif_forward_kernel)[grid](
+            x_seq,
+            v_init,
+            s_seq,
+            h_seq,
+            v_seq,
+            r_tau.item(),
+            v_threshold,
+            v_reset,
+            T=T,
+            NCL=NCL,
+            dtype=type_dict[dtype],
+            decay_input=decay_input,
+            soft_reset=soft_reset,
+            save_intermediates=True,
+        )
     return s_seq, v_seq, h_seq
 
 
-def multistep_plif_backward(
-    grad_s_seq: torch.Tensor,
-    grad_v_seq: torch.Tensor,
-    h_seq: torch.Tensor,
-    v_init_v_seq: torch.Tensor,
+@torch.library.register_fake("sj::multistep_plif_cell")
+def _multistep_plif_cell_fake(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
     r_tau: torch.Tensor,
+    decay_input: bool,
     v_threshold: float,
     v_reset: float,
-    sg_fn,
-    decay_input: bool,
     soft_reset: bool,
     detach_reset: bool,
+    sg_type: str,
+    sg_alpha: float,
 ):
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+    )
+
+
+def _plif_setup_context(ctx, inputs, output):
+    (
+        v_init,
+        r_tau,
+        decay_input,
+        v_threshold,
+        v_reset,
+        soft_reset,
+        detach_reset,
+        sg_type,
+        sg_alpha,
+    ) = inputs[1:]
+    _, v_seq, h_seq = output
+    v_init_v_seq = torch.cat([v_init.unsqueeze(0), v_seq], dim=0)
+    ctx.save_for_backward(h_seq, v_init_v_seq, r_tau)
+    ctx.decay_input = decay_input
+    ctx.v_threshold = v_threshold
+    ctx.v_reset = v_reset
+    ctx.soft_reset = soft_reset
+    ctx.detach_reset = detach_reset
+    ctx.sg_type = sg_type
+    ctx.sg_alpha = sg_alpha
+
+
+def _plif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
+    h_seq, v_init_v_seq, r_tau = ctx.saved_tensors
+    grad_s_seq = grad_s_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
+    v_init_v_seq = v_init_v_seq.contiguous()
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
     grad_x_seq = torch.empty_like(grad_s_seq)
@@ -333,82 +401,72 @@ def multistep_plif_backward(
     dtype = grad_s_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    _multistep_plif_backward_kernel[grid](
-        grad_s_seq,
-        grad_v_seq,
-        h_seq,
-        v_init_v_seq,
-        grad_x_seq,
-        grad_v_init,
-        grad_r_tau,
-        r_tau.item(),
-        v_threshold,
-        v_reset,
-        sg_fn.alpha,
-        T=T,
-        NCL=NCL,
-        dtype=type_dict[dtype],
-        sg_kernel=sg_fn.triton_codes(),
-        decay_input=decay_input,
-        soft_reset=soft_reset,
-        detach_reset=detach_reset,
-    )
-    return grad_x_seq, grad_v_init, grad_r_tau.sum()
-
-
-class MultiStepParametricLIFNodePTT(autograd.Function):
-    @staticmethod
-    @contiguous_and_device_guard
-    @amp_custom_fwd
-    def forward(
-        ctx,
-        x_seq: torch.Tensor,
-        v_init: torch.Tensor,
-        r_tau: torch.Tensor,
-        decay_input: bool,
-        v_threshold: float,
-        v_reset: float,
-        detach_reset: bool,
-        sg_fn,
-    ):
-        soft_reset = v_reset is None
-        v_reset = v_reset if v_reset is not None else 0.0
-        if any(ctx.needs_input_grad):
-            s_seq, v_seq, h_seq = multistep_plif_forward(
-                x_seq, v_init, r_tau, decay_input, v_threshold, v_reset, soft_reset
-            )
-            v_init_v_seq = torch.cat([v_init.unsqueeze(0), v_seq], dim=0)
-            ctx.save_for_backward(h_seq, v_init_v_seq, r_tau)
-            ctx.decay_input = decay_input
-            ctx.v_threshold = v_threshold
-            ctx.v_reset = v_reset
-            ctx.soft_reset = soft_reset
-            ctx.detach_reset = detach_reset
-            ctx.sg_fn = sg_fn
-        else:
-            s_seq, v_seq = multistep_plif_inference(
-                x_seq, v_init, r_tau, decay_input, v_threshold, v_reset, soft_reset
-            )
-        return s_seq, v_seq
-
-    @staticmethod
-    @contiguous_and_device_guard
-    @amp_custom_bwd
-    def backward(ctx, grad_s_seq: torch.Tensor, grad_v_seq: torch.Tensor):
-        h_seq = ctx.saved_tensors[0]
-        v_init_v_seq = ctx.saved_tensors[1]
-        r_tau = ctx.saved_tensors[2]
-        grad_x_seq, grad_v_init, grad_r_tau = multistep_plif_backward(
+    with torch.cuda.device(grad_s_seq.device.index):
+        wrap_triton(_multistep_plif_backward_kernel)[grid](
             grad_s_seq,
             grad_v_seq,
             h_seq,
             v_init_v_seq,
-            r_tau,
+            grad_x_seq,
+            grad_v_init,
+            grad_r_tau,
+            r_tau.item(),
             ctx.v_threshold,
             ctx.v_reset,
-            ctx.sg_fn,
-            ctx.decay_input,
-            ctx.soft_reset,
-            ctx.detach_reset,
+            ctx.sg_alpha,
+            T=T,
+            NCL=NCL,
+            dtype=type_dict[dtype],
+            sg_kernel=get_sg_kernel(ctx.sg_type),
+            decay_input=ctx.decay_input,
+            soft_reset=ctx.soft_reset,
+            detach_reset=ctx.detach_reset,
         )
-        return (grad_x_seq, grad_v_init, grad_r_tau, None, None, None, None, None)
+    grad_r_tau = grad_r_tau.sum()
+    return grad_x_seq, grad_v_init, grad_r_tau, None, None, None, None, None, None, None
+
+
+torch.library.register_autograd(
+    "sj::multistep_plif_cell", _plif_backward, setup_context=_plif_setup_context
+)
+
+
+def plif_multi_step(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    r_tau: torch.Tensor,
+    decay_input: bool,
+    v_threshold: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    sg_type: str,
+    sg_alpha: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    need_grad = torch.is_grad_enabled() and (
+        x_seq.requires_grad or v_init.requires_grad or r_tau.requires_grad
+    )
+    if need_grad:
+        s_seq, v_seq, _ = multistep_plif_cell(
+            x_seq,
+            v_init,
+            r_tau,
+            decay_input,
+            v_threshold,
+            v_reset,
+            soft_reset,
+            detach_reset,
+            sg_type,
+            sg_alpha,
+        )
+    else:
+        s_seq, v_seq = multistep_plif_cell_inference(
+            x_seq,
+            v_init,
+            r_tau,
+            decay_input,
+            v_threshold,
+            v_reset,
+            soft_reset,
+        )
+    return s_seq, v_seq

@@ -1,11 +1,16 @@
+from typing import Optional
+
 import torch
-from torch import autograd
+
+from ..surrogate_kernel import get_sg_kernel
+from ..triton_utils import convert_and_store, register_op, type_dict, wrap_triton
 
 try:
     import triton
     import triton.language as tl
 except BaseException as e:
     import logging
+
     from .. import dummy
 
     logging.info(
@@ -14,11 +19,7 @@ except BaseException as e:
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 
-from ..triton_utils import type_dict, contiguous_and_device_guard
-from ..triton_utils import amp_custom_fwd, amp_custom_bwd, convert_and_store
-
-
-__all__ = ["MultiStepIFNodePTT"]
+__all__ = ["if_multi_step"]
 
 
 @triton.autotune(
@@ -125,7 +126,7 @@ def _multistep_if_backward_kernel(
     grad_v_init_ptr,
     v_threshold,
     v_reset,
-    alpha,  # for surrogate function
+    sg_alpha,
     T: tl.constexpr,
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
@@ -168,7 +169,7 @@ def _multistep_if_backward_kernel(
         )
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero")
 
-        sg = sg_kernel(h - v_threshold, alpha)
+        sg = sg_kernel(h - v_threshold, sg_alpha)
         grad_v_combined = grad_v + grad_v_acc
         if soft_reset:
             if detach_reset:
@@ -211,147 +212,199 @@ def _multistep_if_backward_kernel(
     convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
 
 
-def multistep_if_inference(
+@register_op("sj::multistep_if_cell_inference")
+def multistep_if_cell_inference(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
-):
+) -> tuple[torch.Tensor, torch.Tensor]:
+    x_seq = x_seq.contiguous()
+    v_init = v_init.contiguous()
+
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
-    s_seq, v_seq = torch.empty_like(x_seq), torch.empty_like(x_seq)
+    s_seq = torch.empty_like(x_seq)
+    v_seq = torch.empty_like(x_seq)
     dtype = x_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    _multistep_if_forward_kernel[grid](
-        x_seq,
-        v_init,
-        s_seq,
-        v_seq,  # dummy
-        v_seq,
-        v_threshold,
-        v_reset,
-        T=T,
-        NCL=NCL,
-        dtype=type_dict[dtype],
-        soft_reset=soft_reset,
-        save_intermediates=False,
-    )
+    with torch.cuda.device(x_seq.device.index):
+        wrap_triton(_multistep_if_forward_kernel)[grid](
+            x_seq,
+            v_init,
+            s_seq,
+            v_seq,  # dummy
+            v_seq,
+            v_threshold,
+            v_reset,
+            T=T,
+            NCL=NCL,
+            dtype=type_dict[dtype],
+            soft_reset=soft_reset,
+            save_intermediates=False,
+        )
     return s_seq, v_seq
 
 
-def multistep_if_forward(
+@torch.library.register_fake("sj::multistep_if_cell_inference")
+def _multistep_if_cell_inference_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
     v_reset: float,
     soft_reset: bool,
 ):
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+    )
+
+
+@register_op("sj::multistep_if_cell")
+def multistep_if_cell(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    v_threshold: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    sg_type: str,
+    sg_alpha: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    x_seq = x_seq.contiguous()
+    v_init = v_init.contiguous()
+
     T = x_seq.shape[0]
     NCL = x_seq[0].numel()
-    s_seq, v_seq = torch.empty_like(x_seq), torch.empty_like(x_seq)
+    s_seq = torch.empty_like(x_seq)
+    v_seq = torch.empty_like(x_seq)
     h_seq = torch.empty_like(x_seq)
     dtype = x_seq.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    _multistep_if_forward_kernel[grid](
-        x_seq,
-        v_init,
-        s_seq,
-        h_seq,
-        v_seq,
-        v_threshold,
-        v_reset,
-        T=T,
-        NCL=NCL,
-        dtype=type_dict[dtype],
-        soft_reset=soft_reset,
-        save_intermediates=True,
-    )
+    with torch.cuda.device(x_seq.device.index):
+        wrap_triton(_multistep_if_forward_kernel)[grid](
+            x_seq,
+            v_init,
+            s_seq,
+            h_seq,
+            v_seq,
+            v_threshold,
+            v_reset,
+            T=T,
+            NCL=NCL,
+            dtype=type_dict[dtype],
+            soft_reset=soft_reset,
+            save_intermediates=True,
+        )
     return s_seq, v_seq, h_seq
 
 
-def multistep_if_backward(
-    grad_s_seq: torch.Tensor,
-    grad_v_seq: torch.Tensor,
-    h_seq: torch.Tensor,
+@torch.library.register_fake("sj::multistep_if_cell")
+def _multistep_if_cell_fake(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
     v_threshold: float,
     v_reset: float,
-    sg_fn,
     soft_reset: bool,
     detach_reset: bool,
+    sg_type: str,
+    sg_alpha: float,
 ):
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+    )
+
+
+def _setup_context(ctx, inputs, outputs):
+    v_threshold, v_reset, soft_reset, detach_reset, sg_type, sg_alpha = inputs[2:]
+    h_seq = outputs[2]
+    ctx.save_for_backward(h_seq)
+    ctx.v_threshold = v_threshold
+    ctx.v_reset = v_reset
+    ctx.soft_reset = soft_reset
+    ctx.detach_reset = detach_reset
+    ctx.sg_type = sg_type
+    ctx.sg_alpha = sg_alpha
+
+
+def _if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
+    (h_seq,) = ctx.saved_tensors
+    if h_seq.numel() == 0:
+        raise RuntimeError("backward called without saved intermediates")
+
+    grad_s_seq = grad_s_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
     T = grad_s_seq.shape[0]
     NCL = grad_s_seq[0].numel()
     grad_x_seq = torch.empty_like(grad_s_seq)
     grad_v_init = torch.empty_like(grad_v_seq[0])
     dtype = grad_s_seq.dtype
+    if dtype not in type_dict:
+        raise NotImplementedError(dtype)
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
-    _multistep_if_backward_kernel[grid](
-        grad_s_seq,
-        grad_v_seq,
-        h_seq,
-        grad_x_seq,
-        grad_v_init,
-        v_threshold,
-        v_reset,
-        sg_fn.alpha,
-        T=T,
-        NCL=NCL,
-        dtype=type_dict[dtype],
-        sg_kernel=sg_fn.triton_codes(),
-        soft_reset=soft_reset,
-        detach_reset=detach_reset,
-    )
-    return grad_x_seq, grad_v_init
-
-
-class MultiStepIFNodePTT(autograd.Function):
-    @staticmethod
-    @contiguous_and_device_guard
-    @amp_custom_fwd
-    def forward(
-        ctx,
-        x_seq: torch.Tensor,
-        v_init: torch.Tensor,
-        v_threshold: float,
-        v_reset: float,
-        detach_reset: bool,
-        sg_fn,
-    ):
-        soft_reset = v_reset is None
-        v_reset = v_reset if v_reset is not None else 0.0
-        if any(ctx.needs_input_grad):
-            s_seq, v_seq, h_seq = multistep_if_forward(
-                x_seq, v_init, v_threshold, v_reset, soft_reset
-            )
-            ctx.save_for_backward(h_seq)
-            ctx.v_threshold = v_threshold
-            ctx.v_reset = v_reset
-            ctx.soft_reset = soft_reset
-            ctx.detach_reset = detach_reset
-            ctx.sg_fn = sg_fn
-        else:
-            s_seq, v_seq = multistep_if_inference(
-                x_seq, v_init, v_threshold, v_reset, soft_reset
-            )
-        return s_seq, v_seq
-
-    @staticmethod
-    @contiguous_and_device_guard
-    @amp_custom_bwd
-    def backward(ctx, grad_s_seq: torch.Tensor, grad_v_seq: torch.Tensor):
-        h_seq = ctx.saved_tensors[0]
-        grad_x_seq, grad_v_init = multistep_if_backward(
+    with torch.cuda.device(grad_s_seq.device.index):
+        wrap_triton(_multistep_if_backward_kernel)[grid](
             grad_s_seq,
             grad_v_seq,
             h_seq,
+            grad_x_seq,
+            grad_v_init,
             ctx.v_threshold,
             ctx.v_reset,
-            ctx.sg_fn,
-            ctx.soft_reset,
-            ctx.detach_reset,
+            ctx.sg_alpha,
+            T=T,
+            NCL=NCL,
+            dtype=type_dict[dtype],
+            sg_kernel=get_sg_kernel(ctx.sg_type),
+            soft_reset=ctx.soft_reset,
+            detach_reset=ctx.detach_reset,
         )
-        return grad_x_seq, grad_v_init, None, None, None, None
+    return grad_x_seq, grad_v_init, None, None, None, None, None, None
+
+
+torch.library.register_autograd(
+    "sj::multistep_if_cell", _if_backward, setup_context=_setup_context
+)
+
+
+def if_multi_step(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    v_threshold: float,
+    v_reset: Optional[float],
+    detach_reset: bool,
+    sg_type: str,
+    sg_alpha: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    soft_reset = v_reset is None
+    v_reset = v_reset if v_reset is not None else 0.0
+    need_grad = torch.is_grad_enabled() and (
+        x_seq.requires_grad or v_init.requires_grad
+    )
+    if need_grad:
+        s_seq, v_seq, _ = multistep_if_cell(
+            x_seq,
+            v_init,
+            v_threshold,
+            v_reset,
+            soft_reset,
+            detach_reset,
+            sg_type,
+            sg_alpha,
+        )
+    else:
+        s_seq, v_seq = multistep_if_cell_inference(
+            x_seq,
+            v_init,
+            v_threshold,
+            v_reset,
+            soft_reset,
+        )
+    return s_seq, v_seq
