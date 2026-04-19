@@ -29,7 +29,8 @@ class MPBNBaseNode(BaseNode):
         bn_min_momentum: float = 0.005,
     ):
         r"""
-        * :ref:`API in English <MPBNBaseNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <MPBNBaseNode.__init__-cn>` | :ref:`English <MPBNBaseNode.__init__-en>`
 
         ----
 
@@ -330,7 +331,8 @@ class MPBNLIFNode(MPBNBaseNode):
         bn_min_momentum: float = 0.005,
     ):
         r"""
-        * :ref:`API in English <MPBNLIFNode.__init__-en>`
+        **API Language:**
+        :ref:`中文 <MPBNLIFNode.__init__-cn>` | :ref:`English <MPBNLIFNode.__init__-en>`
 
         ----
 
@@ -352,7 +354,7 @@ class MPBNLIFNode(MPBNBaseNode):
         :param decay_input: 输入是否参与衰减
         :type decay_input: bool
 
-        其余参数与 :class:`MPBNBaseNode <spikingjelly.activation_based.neuron.base_node.MPBNBaseNode>` 相同。
+        其余参数与 :class:`MPBNBaseNode` 相同。
 
         ----
 
@@ -375,7 +377,7 @@ class MPBNLIFNode(MPBNBaseNode):
         :param decay_input: whether the input current is decayed
         :type decay_input: bool
 
-        Other parameters are the same as :class:`MPBNBaseNode <spikingjelly.activation_based.neuron.base_node.MPBNBaseNode>`.
+        Other parameters are the same as :class:`MPBNBaseNode`.
         """
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(
