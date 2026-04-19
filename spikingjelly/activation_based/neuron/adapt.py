@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Optional
 import logging
 
 import torch
@@ -26,7 +26,7 @@ class AdaptBaseNode(BaseNode):
         tau_w: float = 2.0,
         a: float = 0.0,
         b: float = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",
@@ -222,7 +222,7 @@ class IzhikevichNode(AdaptBaseNode):
         tau_w: float = 2.0,
         a: float = 0.0,
         b: float = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",

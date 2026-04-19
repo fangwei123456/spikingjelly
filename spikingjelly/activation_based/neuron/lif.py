@@ -1,10 +1,10 @@
-from typing import Callable, Optional
 import logging
+from typing import Optional
 
 import torch
 
 from .. import surrogate
-from .base_node import SimpleBaseNode, BaseNode, NonSpikingBaseNode
+from .base_node import BaseNode, NonSpikingBaseNode, SimpleBaseNode
 
 try:
     from ..cuda_kernel.auto_cuda import neuron_kernel as ac_neuron_kernel
@@ -31,7 +31,7 @@ class SimpleLIFNode(SimpleBaseNode):
         decay_input: bool,
         v_threshold: float = 1.0,
         v_reset: float = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
     ):
@@ -86,7 +86,7 @@ class LIFNode(BaseNode):
         decay_input: bool = True,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",
@@ -128,7 +128,7 @@ class LIFNode(BaseNode):
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: 是否将 reset 过程的计算图分离
         :type detach_reset: bool
@@ -178,7 +178,7 @@ class LIFNode(BaseNode):
         :type v_reset: Optional[float]
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
@@ -587,7 +587,8 @@ class LIFNode(BaseNode):
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = triton_kernel.MultiStepLIFNodePTT.apply(
+                sg_alpha = self._get_triton_sg_alpha()
+                spike_seq, v_seq = triton_kernel.multistep_lif(
                     x_seq,
                     self.v,
                     self.decay_input,
@@ -595,7 +596,8 @@ class LIFNode(BaseNode):
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
-                    self.surrogate_function,
+                    type(self.surrogate_function).__name__,
+                    sg_alpha,
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -608,7 +610,8 @@ class LIFNode(BaseNode):
             self.v_float_to_tensor(x_seq[0])
 
             if self.backend == "triton":
-                spike_seq, v_seq = triton_kernel.MultiStepLIFNodePTT.apply(
+                sg_alpha = self._get_triton_sg_alpha()
+                spike_seq, v_seq = triton_kernel.multistep_lif(
                     x_seq,
                     self.v,
                     self.decay_input,
@@ -616,7 +619,8 @@ class LIFNode(BaseNode):
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
-                    self.surrogate_function,
+                    type(self.surrogate_function).__name__,
+                    sg_alpha,
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq

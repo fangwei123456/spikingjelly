@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Union, Iterable, Optional, Callable
+from typing import Union, Iterable, Optional
 import math
 
 import torch
@@ -233,7 +233,7 @@ class NoisyBaseNode(nn.Module, base.MultiStepModule):
         beta: float = 0.0,
         v_threshold: float = 0.5,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -349,7 +349,7 @@ class NoisyCUBALIFNode(NoisyBaseNode):
         beta: float = 0.0,
         v_threshold: float = 0.5,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         super().__init__(
             num_node,
@@ -385,7 +385,7 @@ class NoisyILCBaseNode(nn.Module, base.MultiStepModule):
         beta: float = 0.0,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -517,7 +517,7 @@ class NoisyILCCUBALIFNode(NoisyILCBaseNode):
         beta: float = 0.0,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         super().__init__(
             act_dim,

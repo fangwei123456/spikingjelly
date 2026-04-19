@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Optional
 
 import torch
 
@@ -16,7 +16,7 @@ class OTTTLIFNode(LIFNode):
         decay_input: bool = False,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = None,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = True,
         step_mode="s",
         backend="torch",
@@ -52,7 +52,7 @@ class OTTTLIFNode(LIFNode):
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: 是否将 reset 过程的计算图分离。
             该参数在本模块中不起作用，仅为保持代码接口统一而保留
@@ -102,7 +102,7 @@ class OTTTLIFNode(LIFNode):
 
         :param surrogate_function: the function used to compute surrogate gradients
             of the Heaviside step function in backward propagation
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: whether to detach the computation graph of the reset
             operation in backward propagation. This parameter has no effect in
@@ -273,7 +273,7 @@ class SLTTLIFNode(LIFNode):
         decay_input: bool = True,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = True,
         step_mode="s",
         backend="torch",
@@ -310,7 +310,7 @@ class SLTTLIFNode(LIFNode):
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: 是否将 reset 过程的计算图分离。
             该参数在本模块中不起作用，仅为保持代码接口统一而保留
@@ -360,7 +360,7 @@ class SLTTLIFNode(LIFNode):
 
         :param surrogate_function: the function used to compute surrogate gradients
             of the Heaviside step function in backward propagation
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: whether to detach the computation graph of the reset
             operation in backward propagation. This parameter has no effect in

@@ -23,7 +23,7 @@ class GatedLIFNode(base.MemoryModule):
         init_tau: float = 0.25,
         init_v_threshold: float = 0.5,
         init_conduct: float = 0.5,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         step_mode="m",
         backend="torch",
     ):
@@ -66,7 +66,7 @@ class GatedLIFNode(base.MemoryModule):
         :type init_conduct: float
 
         :param surrogate_function: 反向传播中用于计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param step_mode: 步进模式，仅支持 ``'m'`` （多步）
         :type step_mode: str
@@ -112,7 +112,7 @@ class GatedLIFNode(base.MemoryModule):
         :type init_conduct: float
 
         :param surrogate_function: surrogate function used to compute spike gradients during backpropagation
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param step_mode: step mode, only `'m'` (multi-step) is supported
         :type step_mode: str
@@ -276,7 +276,7 @@ class KLIFNode(BaseNode):
         decay_input: bool = True,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",
@@ -353,7 +353,7 @@ class KLIFNode(BaseNode):
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播中用于近似阶跃函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: 是否在反向传播时将 reset 过程从计算图中分离
         :type detach_reset: bool
@@ -440,7 +440,7 @@ class KLIFNode(BaseNode):
 
         :param surrogate_function: surrogate function used to approximate the gradient
             of the Heaviside step function during backpropagation
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: whether to detach the reset operation from the computation graph
         :type detach_reset: bool
@@ -544,7 +544,7 @@ class CUBALIFNode(BaseNode):
         v_decay: float = 0.75,
         v_threshold: float = 0.5,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         """
         CUrrent-BAsed LIF neuron.
@@ -567,7 +567,7 @@ class CUBALIFNode(BaseNode):
         :type v_reset: Optional[float]
 
         :param surrogate_function: surrogate function used to compute spike gradients during backpropagation
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
         """
         super().__init__(v_threshold, v_reset, surrogate_function)
 

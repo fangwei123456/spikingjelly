@@ -43,7 +43,7 @@ class PSN(nn.Module, base.MultiStepModule):
         :type T: int
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         ----
 
@@ -68,7 +68,7 @@ class PSN(nn.Module, base.MultiStepModule):
         :type T: int
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
         """
         super().__init__()
         self.T = T
@@ -147,7 +147,7 @@ class MaskedPSN(base.MemoryModule):
         :type lambda_init: float
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
@@ -194,7 +194,7 @@ class MaskedPSN(base.MemoryModule):
         :type lambda_init: float
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
@@ -327,7 +327,7 @@ class SlidingPSN(base.MemoryModule):
         :type exp_init: bool
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param step_mode: 步进模式，可以为 `'s'` (单步) 或 `'m'` (多步)
         :type step_mode: str
@@ -361,7 +361,7 @@ class SlidingPSN(base.MemoryModule):
         :type exp_init: bool
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str

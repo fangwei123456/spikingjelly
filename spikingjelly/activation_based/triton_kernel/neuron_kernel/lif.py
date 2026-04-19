@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 
 from ..surrogate_kernel import get_sg_kernel
@@ -16,7 +18,7 @@ except BaseException as e:
     tl = dummy.DummyImport()
 
 
-__all__ = ["lif_multi_step"]
+__all__ = ["multistep_lif"]
 
 
 @triton.autotune(
@@ -220,8 +222,8 @@ def _multistep_lif_backward_kernel(
     convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
 
 
-@register_op("sj::multistep_lif_cell_inference")
-def multistep_lif_cell_inference(
+@register_op("sj::multistep_lif_inference")
+def multistep_lif_inference(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay_input: bool,
@@ -260,8 +262,8 @@ def multistep_lif_cell_inference(
     return s_seq, v_seq
 
 
-@torch.library.register_fake("sj::multistep_lif_cell_inference")
-def _multistep_lif_cell_inference_fake(
+@torch.library.register_fake("sj::multistep_lif_inference")
+def _multistep_lif_inference_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay_input: bool,
@@ -276,8 +278,8 @@ def _multistep_lif_cell_inference_fake(
     )
 
 
-@register_op("sj::multistep_lif_cell")
-def multistep_lif_cell(
+@register_op("sj::multistep_lif_forward")
+def multistep_lif_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay_input: bool,
@@ -320,8 +322,8 @@ def multistep_lif_cell(
     return s_seq, v_seq, h_seq
 
 
-@torch.library.register_fake("sj::multistep_lif_cell")
-def _multistep_lif_cell_fake(
+@torch.library.register_fake("sj::multistep_lif_forward")
+def _multistep_lif_forward_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay_input: bool,
@@ -340,7 +342,7 @@ def _multistep_lif_cell_fake(
     )
 
 
-def _lif_setup_context(ctx, inputs, output):
+def _setup_context(ctx, inputs, output):
     (
         decay_input,
         tau,
@@ -363,7 +365,7 @@ def _lif_setup_context(ctx, inputs, output):
     ctx.sg_alpha = sg_alpha
 
 
-def _lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
+def _multistep_lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     (h_seq,) = ctx.saved_tensors
     grad_s_seq = grad_s_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
@@ -398,27 +400,30 @@ def _lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
 
 
 torch.library.register_autograd(
-    "sj::multistep_lif_cell", _lif_backward, setup_context=_lif_setup_context
+    "sj::multistep_lif_forward",
+    _multistep_lif_backward,
+    setup_context=_setup_context,
 )
 
 
-def lif_multi_step(
+def multistep_lif(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     decay_input: bool,
     tau: float,
     v_threshold: float,
-    v_reset: float,
-    soft_reset: bool,
+    v_reset: Optional[float],
     detach_reset: bool,
     sg_type: str,
     sg_alpha: float,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    soft_reset = v_reset is None
+    v_reset = v_reset if v_reset is not None else 0.0
     need_grad = torch.is_grad_enabled() and (
         x_seq.requires_grad or v_init.requires_grad
     )
     if need_grad:
-        s_seq, v_seq, _ = multistep_lif_cell(
+        s_seq, v_seq, _ = multistep_lif_forward(
             x_seq,
             v_init,
             decay_input,
@@ -431,7 +436,7 @@ def lif_multi_step(
             sg_alpha,
         )
     else:
-        s_seq, v_seq = multistep_lif_cell_inference(
+        s_seq, v_seq = multistep_lif_inference(
             x_seq,
             v_init,
             decay_input,

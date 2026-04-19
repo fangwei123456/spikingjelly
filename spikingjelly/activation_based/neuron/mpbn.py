@@ -1,4 +1,4 @@
-from typing import Callable, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -15,7 +15,7 @@ class MPBNBaseNode(BaseNode):
         self,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",
@@ -317,7 +317,7 @@ class MPBNLIFNode(MPBNBaseNode):
         decay_input: bool = False,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",

@@ -1,11 +1,10 @@
 from abc import abstractmethod
-from typing import Callable, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
 
-from .. import surrogate, base
-
+from .. import base, surrogate
 
 __all__ = [
     "SimpleBaseNode",
@@ -19,7 +18,7 @@ class SimpleBaseNode(base.MemoryModule):
         self,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
     ):
@@ -83,7 +82,7 @@ class BaseNode(base.MemoryModule):
         self,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Sigmoid(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Sigmoid(),
         detach_reset: bool = False,
         step_mode="s",
         backend="torch",
@@ -109,7 +108,7 @@ class BaseNode(base.MemoryModule):
         :type v_reset: Optional[float]
 
         :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: 是否将reset过程的计算图分离
         :type detach_reset: bool
@@ -142,7 +141,7 @@ class BaseNode(base.MemoryModule):
         :type v_reset: Optional[float]
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
-        :type surrogate_function: Callable
+        :type surrogate_function: surrogate.SurrogateFunctionBase
 
         :param detach_reset: whether detach the computation graph of reset in backward
         :type detach_reset: bool
@@ -188,6 +187,33 @@ class BaseNode(base.MemoryModule):
         # used for cupy backend
         self.forward_kernel = None
         self.backward_kernel = None
+
+    def _get_triton_sg_alpha(self) -> float:
+        if not hasattr(self.surrogate_function, "alpha"):
+            raise TypeError(
+                f"{type(self).__name__} with backend='triton' requires "
+                "surrogate_function.alpha, but got "
+                f"{type(self.surrogate_function).__name__} without 'alpha'. "
+                "Please use a surrogate function with alpha "
+                "(e.g., surrogate.Sigmoid / surrogate.ATan), "
+                "or switch backend to 'torch' or 'cupy'."
+            )
+
+        alpha = self.surrogate_function.alpha
+        if isinstance(alpha, torch.Tensor):
+            if alpha.numel() != 1:
+                raise TypeError(
+                    "surrogate_function.alpha must be a scalar for Triton backend, "
+                    f"but got tensor with shape={tuple(alpha.shape)}."
+                )
+            alpha = alpha.item()
+
+        if not isinstance(alpha, (int, float)):
+            raise TypeError(
+                "surrogate_function.alpha must be a real scalar for Triton backend, "
+                f"but got {type(alpha).__name__}."
+            )
+        return float(alpha)
 
     @property
     def store_v_seq(self):

@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Callable, Optional
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -17,7 +17,7 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
         dec_pop_dim,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -76,7 +76,7 @@ class ILCIFNode(ILCBaseNode):
         dec_pop_dim,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
 
@@ -92,7 +92,7 @@ class ILCLIFNode(ILCBaseNode):
         v_decay: float = 0.75,
         v_threshold: float = 1.0,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
 
@@ -111,7 +111,7 @@ class ILCCUBALIFNode(ILCBaseNode):
         v_decay: float = 0.75,
         v_threshold: float = 0.5,
         v_reset: Optional[float] = 0.0,
-        surrogate_function: Callable = surrogate.Rect(),
+        surrogate_function: surrogate.SurrogateFunctionBase = surrogate.Rect(),
     ):
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
 

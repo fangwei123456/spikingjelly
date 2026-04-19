@@ -19,7 +19,7 @@ except BaseException as e:
     triton = dummy.DummyImport()
     tl = dummy.DummyImport()
 
-__all__ = ["if_multi_step"]
+__all__ = ["multistep_if"]
 
 
 @triton.autotune(
@@ -212,8 +212,8 @@ def _multistep_if_backward_kernel(
     convert_and_store(grad_v_init_ptrs, grad_v_acc, boundary_check=(1,))
 
 
-@register_op("sj::multistep_if_cell_inference")
-def multistep_if_cell_inference(
+@register_op("sj::multistep_if_inference")
+def multistep_if_inference(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
@@ -248,8 +248,8 @@ def multistep_if_cell_inference(
     return s_seq, v_seq
 
 
-@torch.library.register_fake("sj::multistep_if_cell_inference")
-def _multistep_if_cell_inference_fake(
+@torch.library.register_fake("sj::multistep_if_inference")
+def _multistep_if_inference_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
@@ -262,8 +262,8 @@ def _multistep_if_cell_inference_fake(
     )
 
 
-@register_op("sj::multistep_if_cell")
-def multistep_if_cell(
+@register_op("sj::multistep_if_forward")
+def multistep_if_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
@@ -302,8 +302,8 @@ def multistep_if_cell(
     return s_seq, v_seq, h_seq
 
 
-@torch.library.register_fake("sj::multistep_if_cell")
-def _multistep_if_cell_fake(
+@torch.library.register_fake("sj::multistep_if_forward")
+def _multistep_if_forward_fake(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
@@ -332,7 +332,7 @@ def _setup_context(ctx, inputs, outputs):
     ctx.sg_alpha = sg_alpha
 
 
-def _if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
+def _multistep_if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
     (h_seq,) = ctx.saved_tensors
     if h_seq.numel() == 0:
         raise RuntimeError("backward called without saved intermediates")
@@ -370,11 +370,11 @@ def _if_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
 
 
 torch.library.register_autograd(
-    "sj::multistep_if_cell", _if_backward, setup_context=_setup_context
+    "sj::multistep_if_forward", _multistep_if_backward, setup_context=_setup_context
 )
 
 
-def if_multi_step(
+def multistep_if(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_threshold: float,
@@ -389,7 +389,7 @@ def if_multi_step(
         x_seq.requires_grad or v_init.requires_grad
     )
     if need_grad:
-        s_seq, v_seq, _ = multistep_if_cell(
+        s_seq, v_seq, _ = multistep_if_forward(
             x_seq,
             v_init,
             v_threshold,
@@ -400,7 +400,7 @@ def if_multi_step(
             sg_alpha,
         )
     else:
-        s_seq, v_seq = multistep_if_cell_inference(
+        s_seq, v_seq = multistep_if_inference(
             x_seq,
             v_init,
             v_threshold,
