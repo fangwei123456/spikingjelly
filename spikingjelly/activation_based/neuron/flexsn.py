@@ -399,22 +399,42 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         elif self.backend == "inductor":
-            from ..triton_kernel.flex_sn_inductor import flex_sn_scan
+            # Dynamo cannot currently lift our HigherOrderOperator. Under
+            # ``torch.compile`` we call ``eager_scan`` directly so the Python
+            # time loop gets unrolled into an FX graph that Inductor can
+            # lower. Outside compilation we keep the HOP as the entry point
+            # (clean boundary; enables a future single-node Inductor lowering
+            # — see design_flexsn_inductor.md M3.b). The HOP symbol must
+            # stay out of the compiled branch — even a ``flex_sn_scan is None``
+            # check makes Dynamo resolve it and fail with "unsupported HOP".
+            from ..triton_kernel.flex_sn_inductor import eager_scan
 
-            if flex_sn_scan is None:
+            if eager_scan is None:
                 raise RuntimeError(
                     "FlexSN inductor backend is unavailable: "
-                    "flex_sn_scan failed to import. "
+                    "eager_scan failed to import. "
                     "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
                 )
-            result_seqs = flex_sn_scan(
-                self.core,
-                self.num_inputs,
-                self.num_states,
-                self.num_outputs,
-                *args,
-                *self.states,
-            )
+            if torch.compiler.is_compiling():
+                result_seqs = eager_scan(
+                    self.core,
+                    self.num_inputs,
+                    self.num_states,
+                    self.num_outputs,
+                    *args,
+                    *self.states,
+                )
+            else:
+                from ..triton_kernel.flex_sn_inductor import flex_sn_scan
+
+                result_seqs = flex_sn_scan(
+                    self.core,
+                    self.num_inputs,
+                    self.num_states,
+                    self.num_outputs,
+                    *args,
+                    *self.states,
+                )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
             self.states = [v[-1] for v in state_seqs]

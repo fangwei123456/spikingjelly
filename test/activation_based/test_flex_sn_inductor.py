@@ -314,6 +314,104 @@ def test_aot_function_traces_fwd_bwd(rng):
     assert x.grad is not None and v0.grad is not None
 
 
+# -------------------------------------------------------------------------
+# M3.a: end-to-end torch.compile integration tests
+#
+# On the dev machine Inductor emits C++ (no CUDA); on the target GPU host
+# the same pipeline emits Triton. These tests only check correctness and
+# that the fullgraph=True path is unbroken — performance is M4 scope.
+# -------------------------------------------------------------------------
+
+
+def test_compile_fullgraph_forward_matches_eager(rng):
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core, num_inputs=1, num_states=1, num_outputs=1,
+            step_mode="m", backend="inductor",
+        )
+
+    eager_out = make_neuron()(x_eager)
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
+def test_compile_fullgraph_backward_matches_eager(rng):
+    T, N = 5, 8
+    x_eager = torch.randn(T, N, generator=rng, requires_grad=True)
+    x_compiled = x_eager.detach().clone().requires_grad_(True)
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core, num_inputs=1, num_states=1, num_outputs=1,
+            step_mode="m", backend="inductor",
+        )
+
+    make_neuron()(x_eager).sum().backward()
+
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_fn(x_compiled).sum().backward()
+
+    torch.testing.assert_close(x_compiled.grad, x_eager.grad)
+
+
+def test_compile_fuses_surrounding_linear_layers(rng):
+    """Linear -> FlexSN -> Linear must compile under fullgraph=True.
+    On GPU this is the case Inductor fuses into a single kernel stack;
+    here we only validate correctness vs. eager."""
+    T, N = 4, 8
+
+    class Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.pre = torch.nn.Linear(N, N)
+            self.neuron = FlexSN(
+                core=_differentiable_lif_core,
+                num_inputs=1, num_states=1, num_outputs=1,
+                step_mode="m", backend="inductor",
+            )
+            self.post = torch.nn.Linear(N, N)
+
+        def forward(self, x):
+            pre = self.pre(x)
+            spikes = self.neuron(pre)
+            return self.post(spikes)
+
+    torch.manual_seed(0)
+    eager_net = Net()
+    torch.manual_seed(0)
+    compiled_net = torch.compile(Net(), fullgraph=True)
+
+    x_e = torch.randn(T, N, generator=rng)
+    x_c = x_e.detach().clone()
+    torch.testing.assert_close(compiled_net(x_c), eager_net(x_e))
+
+
+def test_compile_captures_core_ops_in_fx_graph(rng):
+    """Verify that the compiled forward graph contains T unrolled copies of
+    the core_fn's aten ops — the unrolled shape Inductor expects to lower.
+    """
+    from torch._dynamo import explain
+
+    T, N = 4, 8
+    x = torch.randn(T, N, generator=rng)
+    neuron = FlexSN(
+        core=_differentiable_lif_core, num_inputs=1, num_states=1, num_outputs=1,
+        step_mode="m", backend="inductor",
+    )
+
+    explanation = explain(neuron)(x)
+    assert explanation.graph_break_count == 0, (
+        f"Expected no graph breaks, got {explanation.graph_break_count}:\n"
+        f"{explanation.break_reasons}"
+    )
+
+
 def test_aot_function_backward_numerical_match(rng):
     """AOTAutograd-compiled backward must produce the same gradients as
     the eager backward."""

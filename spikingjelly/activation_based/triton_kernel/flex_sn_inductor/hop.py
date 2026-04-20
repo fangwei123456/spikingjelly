@@ -76,13 +76,20 @@ class FlexSNScan(HigherOrderOperator):
 flex_sn_scan = FlexSNScan()
 
 
-def _eager_scan(
+def eager_scan(
     core_fn: Callable,
     num_inputs: int,
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
 ) -> Tuple[torch.Tensor, ...]:
+    """Plain-Python scan loop reused by both the HOP eager impl and the
+    Dynamo-friendly path in :class:`FlexSN` (see ``backend="inductor"``).
+
+    Dynamo cannot enter a :class:`HigherOrderOperator` today; calling this
+    helper directly under ``torch.compile`` lets Dynamo trace the unrolled
+    loop into an FX graph that Inductor can lower normally.
+    """
     expected = num_inputs + num_states
     if len(flat_args) != expected:
         raise ValueError(
@@ -128,11 +135,11 @@ def _eager_scan(
     return (*output_seqs, *state_seqs)
 
 
-flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(_eager_scan)
+flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
 # HOPs route every tensor call through the Autograd dispatch key even when
-# ``requires_grad=False``. Re-entering ``_eager_scan`` from Autograd is
+# ``requires_grad=False``. Re-entering ``eager_scan`` from Autograd is
 # correct: the inner ``core_fn`` invocations build a standard per-timestep
 # autograd graph which is chained via ``torch.stack``/indexing, giving a
 # full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
 # graph natively by unrolling; see module docstring.
-flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(_eager_scan)
+flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
