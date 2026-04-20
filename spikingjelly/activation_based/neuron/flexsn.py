@@ -274,15 +274,18 @@ class FlexSN(base.MemoryModule):
         self.backend = backend
         self.store_state_seqs = store_state_seqs
 
-        self.kernel = FlexSNKernel(
-            core, num_inputs, num_states, num_outputs, example_inputs, requires_grad
-        )
+        if backend == "triton":
+            self.kernel = FlexSNKernel(
+                core, num_inputs, num_states, num_outputs, example_inputs, requires_grad
+            )
+        else:
+            self.kernel = None
         # register states as memory buffers
         self.register_memory("states", None)
 
     @property
     def supported_backends(self):
-        return ("triton", "torch")
+        return ("triton", "torch", "inductor")
 
     @property
     def store_state_seqs(self):
@@ -394,6 +397,33 @@ class FlexSN(base.MemoryModule):
             if self.store_state_seqs:
                 self.state_seqs = state_seqs
             return output_seqs
+
+        elif self.backend == "inductor":
+            from ..triton_kernel.flex_sn_inductor import flex_sn_scan
+
+            if flex_sn_scan is None:
+                raise RuntimeError(
+                    "FlexSN inductor backend is unavailable: "
+                    "flex_sn_scan failed to import. "
+                    "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+                )
+            result_seqs = flex_sn_scan(
+                self.core,
+                self.num_inputs,
+                self.num_states,
+                self.num_outputs,
+                *args,
+                *self.states,
+            )
+            output_seqs = list(result_seqs[: self.num_outputs])
+            state_seqs = list(result_seqs[self.num_outputs :])
+            self.states = [v[-1] for v in state_seqs]
+            if self.store_state_seqs:
+                self.state_seqs = state_seqs
+            return output_seqs
+
+        else:
+            raise ValueError(f"Unsupported backend: {self.backend}")
 
     def forward(self, *args):
         if self.states is None:
