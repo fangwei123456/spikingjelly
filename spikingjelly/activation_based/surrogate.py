@@ -238,9 +238,6 @@ class SurrogateFunctionBase(nn.Module):
         # new version
         raise NotImplementedError
 
-    def triton_codes(self):
-        raise NotImplementedError
-
 
 def piecewise_quadratic_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
@@ -594,9 +591,6 @@ class Sigmoid(SurrogateFunctionBase):
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.sigmoid_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
 
-    def triton_codes(self):
-        return triton_kernel.sigmoid_surrogate_kernel
-
 
 def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     return grad_output / (2 * alpha * (1 / alpha + x.abs()).pow_(2)), None
@@ -895,9 +889,6 @@ class ATan(SurrogateFunctionBase):
 
     def cuda_codes(self, y: str, x: str, dtype: str):
         return cfunction.atan_backward(y=y, x=x, alpha=self.alpha, dtype=dtype)
-
-    def triton_codes(self):
-        return triton_kernel.atan_surrogate_kernel
 
 
 def nonzero_sign_log_abs_backward(

@@ -188,33 +188,6 @@ class BaseNode(base.MemoryModule):
         self.forward_kernel = None
         self.backward_kernel = None
 
-    def _get_triton_sg_alpha(self) -> float:
-        if not hasattr(self.surrogate_function, "alpha"):
-            raise TypeError(
-                f"{type(self).__name__} with backend='triton' requires "
-                "surrogate_function.alpha, but got "
-                f"{type(self.surrogate_function).__name__} without 'alpha'. "
-                "Please use a surrogate function with alpha "
-                "(e.g., surrogate.Sigmoid / surrogate.ATan), "
-                "or switch backend to 'torch' or 'cupy'."
-            )
-
-        alpha = self.surrogate_function.alpha
-        if isinstance(alpha, torch.Tensor):
-            if alpha.numel() != 1:
-                raise TypeError(
-                    "surrogate_function.alpha must be a scalar for Triton backend, "
-                    f"but got tensor with shape={tuple(alpha.shape)}."
-                )
-            alpha = alpha.item()
-
-        if not isinstance(alpha, (int, float)):
-            raise TypeError(
-                "surrogate_function.alpha must be a real scalar for Triton backend, "
-                f"but got {type(alpha).__name__}."
-            )
-        return float(alpha)
-
     @property
     def store_v_seq(self):
         return self._store_v_seq
