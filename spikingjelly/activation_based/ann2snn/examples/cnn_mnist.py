@@ -1,10 +1,11 @@
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torchvision
-from spikingjelly.activation_based import ann2snn
 from tqdm import tqdm
+
+from spikingjelly.activation_based import ann2snn
 from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn
-import numpy as np
-import matplotlib.pyplot as plt
 
 
 def val(net, device, data_loader, T=None):
@@ -42,9 +43,6 @@ def main():
     dataset_dir = "G:/Dataset/mnist"
     batch_size = 100
     T = 50
-    # 训练参数
-    lr = 1e-3
-    epochs = 10
 
     model = mnist_cnn.CNN().to(device)
     train_data_dataset = torchvision.datasets.MNIST(
@@ -134,7 +132,7 @@ def main():
     mode_five_accs = val(snn_model, device, test_data_loader, T=T)
     print("SNN accuracy (simulation %d time-steps): %.4f" % (T, mode_five_accs[-1]))
 
-    fig = plt.figure()
+    plt.figure()
     plt.plot(np.arange(0, T), mode_max_accs, label="mode: max")
     plt.plot(np.arange(0, T), mode_robust_accs, label="mode: 99.9%")
     plt.plot(np.arange(0, T), mode_two_accs, label="mode: 1.0/2")

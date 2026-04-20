@@ -1,2 +1,4 @@
 from spikingjelly.activation_based.ann2snn.converter import Converter
 from spikingjelly.activation_based.ann2snn.utils import download_url
+
+__all__ = ["Converter", "download_url"]

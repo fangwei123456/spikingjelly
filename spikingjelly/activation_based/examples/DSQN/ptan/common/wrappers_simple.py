@@ -2,9 +2,10 @@
 Simple wrappers
 """
 
+import collections
+
 import gym
 import numpy as np
-import collections
 
 
 class FrameStack1D(gym.Wrapper):
@@ -19,7 +20,6 @@ class FrameStack1D(gym.Wrapper):
         super(FrameStack1D, self).__init__(env)
         self.k = k
         self.frames = collections.deque([], maxlen=k)
-        shp = env.observation_space.shape
         self.observation_space = gym.spaces.Box(
             low=np.min(env.observation_space.low),
             high=np.max(env.observation_space.high),

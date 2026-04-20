@@ -1,21 +1,24 @@
+import argparse
 import logging
 
 logging.getLogger().setLevel(logging.INFO)
+
+import os
+
+import h5py
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 from torchvision import transforms
+
 from spikingjelly.activation_based import (
+    encoding,
     functional,
     lava_exchange,
-    surrogate,
-    encoding,
     neuron,
+    surrogate,
 )
-import torch.nn.functional as F
-import os
-import argparse
-import h5py
 
 
 def export_hdf5(net, filename):

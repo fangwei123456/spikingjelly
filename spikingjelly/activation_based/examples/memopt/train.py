@@ -1,12 +1,16 @@
+import torch
 import torch.nn as nn
-from lightning.pytorch.cli import LightningCLI
-from lightning.pytorch import callbacks
-from spikingjelly.activation_based import memopt
-
 from data_module import CIFAR10DVSDataModule
+from lightning.pytorch import callbacks
+from lightning.pytorch.cli import LightningCLI
+from lightning_callbacks import (
+    GlobalMeanBatchTimeCallback,
+    PeakMemoryTillNowCallback,
+    SamplePerSecondCallback,
+)
 from lightning_modules import ClassificationLightningModule
-from lightning_callbacks import *
 from models import VGGBlock
+from spikingjelly.activation_based import memopt
 
 
 class CIFAR10DVSLightningModule(ClassificationLightningModule):

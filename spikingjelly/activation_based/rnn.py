@@ -1,8 +1,10 @@
+import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from spikingjelly.activation_based import surrogate
-import math
 
 
 def directional_rnn_cell_forward(
@@ -466,7 +468,6 @@ class SpikingRNNBase(nn.Module):
         """
         # x.shape=[T, batch_size, input_size]
         # states states_num 个 [num_layers * num_directions, batch, hidden_size]
-        T = x.shape[0]
         batch_size = x.shape[1]
 
         if isinstance(states, tuple):
@@ -478,8 +479,8 @@ class SpikingRNNBase(nn.Module):
                 states_list = states
             else:
                 raise TypeError
-        elif states == None:
-            if self.bidirectional == True:
+        elif states is None:
+            if self.bidirectional:
                 states_list = torch.zeros(
                     size=[
                         self.states_num(),

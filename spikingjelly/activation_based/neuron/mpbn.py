@@ -6,7 +6,6 @@ import torch.nn as nn
 from .. import surrogate
 from .base_node import BaseNode
 
-
 __all__ = ["MPBNBaseNode", "MPBNLIFNode"]
 
 
@@ -288,7 +287,7 @@ class MPBNBaseNode(BaseNode):
     ):
         # "re-parameterize" threshold to enable TTA capability
         if isinstance(self.vbn, nn.Identity):
-            if self.fold_bn == True:
+            if self.fold_bn:
                 print(
                     "Re-parameterization has already been done in this neuron, skipping..."
                 )

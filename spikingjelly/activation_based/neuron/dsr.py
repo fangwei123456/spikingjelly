@@ -1,12 +1,11 @@
 import math
 
 import torch
+import torch.distributed as dist
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.distributed as dist
 
 from .. import base
-
 
 __all__ = ["DSRIFNode", "DSRLIFNode"]
 
@@ -202,7 +201,7 @@ class DSRIFNode(base.MemoryModule):
                 if v_threshold_grad.is_cuda and torch.cuda.device_count() != 1:
                     try:
                         dist.all_reduce(v_threshold_grad, op=dist.ReduceOp.SUM)
-                    except:
+                    except Exception:
                         raise RuntimeWarning(
                             "Something wrong with the `all_reduce` operation when summing up the gradient of v_threshold from multiple gpus. Better check the gpu status and try DistributedDataParallel."
                         )
@@ -453,7 +452,7 @@ class DSRLIFNode(base.MemoryModule):
             if v_threshold_grad.is_cuda and torch.cuda.device_count() != 1:
                 try:
                     dist.all_reduce(v_threshold_grad, op=dist.ReduceOp.SUM)
-                except:
+                except Exception:
                     raise RuntimeWarning(
                         "Something wrong with the `all_reduce` operation when summing up the gradient of v_threshold from multiple gpus. Better check the gpu status and try DistributedDataParallel."
                     )

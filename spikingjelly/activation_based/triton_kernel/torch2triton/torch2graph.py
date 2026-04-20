@@ -74,7 +74,7 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple):
             i.requires_grad = False  # for inference
 
     # feed the fake inputs
-    ys = f(*example_inputs)
+    _ = f(*example_inputs)
     return _optimize_graph(collector.fwd_graph)
 
 

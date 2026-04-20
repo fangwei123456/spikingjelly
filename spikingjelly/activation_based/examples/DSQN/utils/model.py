@@ -1,7 +1,5 @@
 import torch.nn as nn
-
-
-from spikingjelly.activation_based import layer, neuron, surrogate
+from spikingjelly.activation_based import functional, layer, neuron, surrogate
 
 
 # Deep Reinforcement Learning with Spiking Q-learning

@@ -42,28 +42,26 @@ Confusion matrix of TEST set after training (50 epochs):
 +--------------+---------+-------+--------+------+---------+------+--------+------+--------+-------+------+-------+---------+
 """
 
+import argparse
+import math
+import time
+from typing import Optional
+
+import numpy as np
 import torch
+import torchvision.transforms
+from scipy.signal import savgol_filter
+from sklearn.metrics import confusion_matrix
 from torch import Tensor, nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-import torchvision.transforms
 from torchaudio.transforms import Spectrogram
-from spikingjelly.activation_based import neuron, surrogate
-
-from spikingjelly.datasets.speechcommands import SPEECHCOMMANDS
-from spikingjelly.activation_based.functional import reset_net
-from scipy.signal import savgol_filter
-
-from sklearn.metrics import confusion_matrix
-
-import numpy as np
-
-import math
-import time
-import argparse
-from typing import Optional
 from tqdm import tqdm
+
+from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based.functional import reset_net
+from spikingjelly.datasets.speechcommands import SPEECHCOMMANDS
 
 label_dict = {
     "yes": 0,
@@ -105,7 +103,7 @@ f_min = 20
 delta_order = 0
 size = 16000
 try:
-    import cupy
+    import cupy  # noqa
 
     backend = "cupy"
 except ModuleNotFoundError:
