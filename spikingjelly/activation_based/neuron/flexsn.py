@@ -280,6 +280,24 @@ class FlexSN(base.MemoryModule):
             )
         else:
             self.kernel = None
+
+        if backend == "inductor" and torch.cuda.is_available():
+            try:
+                from ..triton_kernel.flex_sn_inductor.kernel import build_inference_kernel
+                self._inductor_scan_kernel, self._inductor_scan_info = (
+                    build_inference_kernel(core, num_inputs, num_states, num_outputs)
+                )
+            except Exception as e:
+                logging.warning(
+                    "FlexSN: could not build inductor scan kernel (%s); "
+                    "falling back to eager_scan for all paths." % e
+                )
+                self._inductor_scan_kernel = None
+                self._inductor_scan_info = None
+        else:
+            self._inductor_scan_kernel = None
+            self._inductor_scan_info = None
+
         # register states as memory buffers
         self.register_memory("states", None)
 
@@ -399,42 +417,52 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         elif self.backend == "inductor":
-            # Dynamo cannot currently lift our HigherOrderOperator. Under
-            # ``torch.compile`` we call ``eager_scan`` directly so the Python
-            # time loop gets unrolled into an FX graph that Inductor can
-            # lower. Outside compilation we keep the HOP as the entry point
-            # (clean boundary; enables a future single-node Inductor lowering
-            # — see design_flexsn_inductor.md M3.b). The HOP symbol must
-            # stay out of the compiled branch — even a ``flex_sn_scan is None``
-            # check makes Dynamo resolve it and fail with "unsupported HOP".
-            from ..triton_kernel.flex_sn_inductor import eager_scan
+            # M3.b: no-grad path uses the pre-built single Triton scan kernel
+            # (one launch, tl.static_range(T) — fixes T=32 perf regression).
+            # Training path keeps eager_scan so BPTT backward is correct.
+            _no_grad = not torch.is_grad_enabled() or not any(
+                a.requires_grad for a in (*args, *self.states)
+            )
+            if _no_grad and self._inductor_scan_kernel is not None and args[0].is_cuda:
+                from ..triton_kernel.flexsn.wrapper import flexsn_inference
 
-            if eager_scan is None:
-                raise RuntimeError(
-                    "FlexSN inductor backend is unavailable: "
-                    "eager_scan failed to import. "
-                    "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
-                )
-            if torch.compiler.is_compiling():
-                result_seqs = eager_scan(
-                    self.core,
-                    self.num_inputs,
-                    self.num_states,
-                    self.num_outputs,
-                    *args,
-                    *self.states,
+                result_seqs = flexsn_inference(
+                    self._inductor_scan_kernel,
+                    self._inductor_scan_info,
+                    *(a.contiguous() for a in args),
+                    *(s.contiguous() for s in self.states),
                 )
             else:
-                from ..triton_kernel.flex_sn_inductor import flex_sn_scan
+                # Training / fallback path: eager_scan for correct backward.
+                # The HOP symbol must stay out of the compiled branch.
+                from ..triton_kernel.flex_sn_inductor import eager_scan
 
-                result_seqs = flex_sn_scan(
-                    self.core,
-                    self.num_inputs,
-                    self.num_states,
-                    self.num_outputs,
-                    *args,
-                    *self.states,
-                )
+                if eager_scan is None:
+                    raise RuntimeError(
+                        "FlexSN inductor backend is unavailable: "
+                        "eager_scan failed to import. "
+                        "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+                    )
+                if torch.compiler.is_compiling():
+                    result_seqs = eager_scan(
+                        self.core,
+                        self.num_inputs,
+                        self.num_states,
+                        self.num_outputs,
+                        *args,
+                        *self.states,
+                    )
+                else:
+                    from ..triton_kernel.flex_sn_inductor import flex_sn_scan
+
+                    result_seqs = flex_sn_scan(
+                        self.core,
+                        self.num_inputs,
+                        self.num_states,
+                        self.num_outputs,
+                        *args,
+                        *self.states,
+                    )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
             self.states = [v[-1] for v in state_seqs]
