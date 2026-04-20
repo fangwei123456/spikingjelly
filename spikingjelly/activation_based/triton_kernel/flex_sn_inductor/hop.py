@@ -1,8 +1,24 @@
 """FlexSN time-step scan as a HigherOrderOperator.
 
-M1 scope: the HOP plus an eager CompositeExplicitAutograd implementation
-(a plain Python time-step loop). Inductor lowering and AOTAutograd glue are
-added in M2 / M3.
+Current scope (M1 + M2):
+
+* HOP definition with an eager Python time-step loop impl.
+* Eager autograd works via the natural computation graph (``x[t]`` indexing
+  and ``torch.stack`` are differentiable, so the per-step ``core_fn`` graph
+  is correctly chained through time). Verified with ``gradcheck``.
+* AOTAutograd tracing (``torch.fx.experimental.proxy_tensor.make_fx`` /
+  ``torch._functorch.aot_autograd.aot_function``) works out of the box by
+  unrolling the scan into T copies of ``core_fn``'s aten ops. This is the
+  input format Inductor expects.
+
+Deferred to M3:
+
+* A Dynamo ``VariableBuilder`` so ``torch.compile(model, fullgraph=True)``
+  can lift the HOP directly. Today the HOP is unsupported by Dynamo and
+  users must either wrap the scan in ``torch.compiler.disable`` or use
+  the lower-level ``aot_function`` API.
+* An Inductor lowering that preserves the scan as a single node and emits
+  a ``tl.static_range`` time loop (vs. the current unrolled-aten path).
 
 Usage::
 
@@ -114,6 +130,9 @@ def _eager_scan(
 
 flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(_eager_scan)
 # HOPs route every tensor call through the Autograd dispatch key even when
-# ``requires_grad=False``; reuse the eager impl to cover that path. Proper
-# autograd (saving activations, building a backward graph) is M2 scope.
+# ``requires_grad=False``. Re-entering ``_eager_scan`` from Autograd is
+# correct: the inner ``core_fn`` invocations build a standard per-timestep
+# autograd graph which is chained via ``torch.stack``/indexing, giving a
+# full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
+# graph natively by unrolling; see module docstring.
 flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(_eager_scan)
