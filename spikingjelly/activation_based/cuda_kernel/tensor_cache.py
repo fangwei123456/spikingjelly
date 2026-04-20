@@ -95,17 +95,51 @@ class DataTypeConvertCUDACode:
 
 def float_spike_to_bool(spike: torch.Tensor):
     """
-    :param spike: a spike tensor whose ``dtype=torch.float`` or ``dtype=torch.half`` and all elements are 0 or 1
+    **API Language:**
+    :ref:`中文 <float_spike_to_bool-cn>` | :ref:`English <float_spike_to_bool-en>`
+
+    ----
+
+    .. _float_spike_to_bool-cn:
+
+    * **中文**
+
+    将浮点脉冲张量 ``spike`` 压缩为 ``torch.uint8`` 张量。压缩后的每个元素保存原始
+    脉冲中的8个元素（二值位打包）。
+
+    :param spike: 浮点脉冲张量， ``dtype`` 必须为 ``torch.float`` 或 ``torch.half`` ，
+        且元素取值为0或1
     :type spike: torch.Tensor
-    :return: (spike_b, s_dtype, s_shape, s_padding)
-        spike_b: a compressed spike tensor with ``dtype=torch.uint8`` and each element stores 8 spikes
-        s_dtype: the dtype of the original spike
-        s_shape: the shape of the original spike
-        s_padding: the number of padding elements
+
+    :return: ``(spike_b, s_dtype, s_shape, s_padding)``
+
+        - ``spike_b``: 压缩后的张量， ``dtype=torch.uint8`` ，每个元素保存8个脉冲
+        - ``s_dtype``: 原始脉冲张量的数据类型
+        - ``s_shape``: 原始脉冲张量的形状
+        - ``s_padding``: 为对齐到8的倍数所填充的元素数量
     :rtype: tuple
 
-    Compress a float/half spike tensor ``spike`` to an uint8 tensor ``spike_b``. Each element in ``spike_b``
-    represents 8 elements of ``spike``.
+    ----
+
+    .. _float_spike_to_bool-en:
+
+    * **English**
+
+    Compress a floating-point spike tensor ``spike`` into a ``torch.uint8`` tensor.
+    Each element in the compressed tensor stores 8 binary spikes (bit packing).
+
+    :param spike: Spike tensor whose ``dtype`` is ``torch.float`` or ``torch.half``,
+        and all elements are 0 or 1
+    :type spike: torch.Tensor
+
+    :return: ``(spike_b, s_dtype, s_shape, s_padding)``
+
+        - ``spike_b``: Compressed spike tensor with ``dtype=torch.uint8`` and each
+          element storing 8 spikes
+        - ``s_dtype``: Dtype of the original spike tensor
+        - ``s_shape``: Shape of the original spike tensor
+        - ``s_padding``: Number of padded elements used for 8-element alignment
+    :rtype: tuple
     """
     s_dtype = spike.dtype
     if s_dtype == torch.float:
@@ -156,15 +190,58 @@ def bool_spike_to_float(
     spike_b: torch.Tensor, s_dtype: torch.dtype, s_shape: torch.Size, s_padding: int = 0
 ):
     """
-    :param spike_b: a compressed spike tensor with ``dtype=torch.uint8`` and each element stores 8 spikes
+    **API Language:**
+    :ref:`中文 <bool_spike_to_float-cn>` | :ref:`English <bool_spike_to_float-en>`
+
+    ----
+
+    .. _bool_spike_to_float-cn:
+
+    * **中文**
+
+    将压缩后的 ``torch.uint8`` 脉冲张量解压为原始浮点脉冲张量，
+    并按 ``s_shape`` 恢复形状。
+
+    :param spike_b: 压缩后的脉冲张量， ``dtype=torch.uint8`` ，
+        每个元素保存8个脉冲
     :type spike_b: torch.Tensor
-    :param s_dtype: the dtype of the original spike
+
+    :param s_dtype: 原始脉冲张量的数据类型
     :type s_dtype: torch.dtype
-    :param s_shape: the shape of the original spike
+
+    :param s_shape: 原始脉冲张量的形状
     :type s_shape: torch.Size
-    :param s_padding: the number of padding elements
+
+    :param s_padding: 压缩时为对齐到8的倍数而填充的元素数量
     :type s_padding: int
-    :return: the original tensor
+
+    :return: 解压并恢复形状后的原始脉冲张量
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _bool_spike_to_float-en:
+
+    * **English**
+
+    Decompress a packed ``torch.uint8`` spike tensor back to the original
+    floating-point spike tensor and reshape it with ``s_shape``.
+
+    :param spike_b: Compressed spike tensor with ``dtype=torch.uint8`` and each
+        element storing 8 spikes
+    :type spike_b: torch.Tensor
+
+    :param s_dtype: Dtype of the original spike tensor
+    :type s_dtype: torch.dtype
+
+    :param s_shape: Shape of the original spike tensor
+    :type s_shape: torch.Size
+
+    :param s_padding: Number of padded elements used for 8-element alignment
+        during compression
+    :type s_padding: int
+
+    :return: The decompressed spike tensor restored to ``s_shape``
     :rtype: torch.Tensor
     """
     device_id = spike_b.get_device()

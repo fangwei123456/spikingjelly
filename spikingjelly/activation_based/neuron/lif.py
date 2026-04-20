@@ -587,7 +587,6 @@ class LIFNode(BaseNode):
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
-                sg_alpha = self._get_triton_sg_alpha()
                 spike_seq, v_seq = triton_kernel.multistep_lif(
                     x_seq,
                     self.v,
@@ -596,8 +595,7 @@ class LIFNode(BaseNode):
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
-                    type(self.surrogate_function).__name__,
-                    sg_alpha,
+                    self.surrogate_function,
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
@@ -610,7 +608,6 @@ class LIFNode(BaseNode):
             self.v_float_to_tensor(x_seq[0])
 
             if self.backend == "triton":
-                sg_alpha = self._get_triton_sg_alpha()
                 spike_seq, v_seq = triton_kernel.multistep_lif(
                     x_seq,
                     self.v,
@@ -619,8 +616,7 @@ class LIFNode(BaseNode):
                     self.v_threshold,
                     self.v_reset,
                     self.detach_reset,
-                    type(self.surrogate_function).__name__,
-                    sg_alpha,
+                    self.surrogate_function,
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq

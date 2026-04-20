@@ -2,7 +2,7 @@ from typing import Optional
 
 import torch
 
-from ..surrogate_kernel import get_sg_kernel
+from ..surrogate_kernel import resolve_sg_triton_id_and_alpha, sg_triton
 from ..triton_utils import convert_and_store, register_op, type_dict, wrap_triton
 
 try:
@@ -138,7 +138,7 @@ def _multistep_lif_backward_kernel(
     NCL: tl.constexpr,
     BLOCK_NCL: tl.constexpr,
     dtype: tl.constexpr,  # grad_s_seq.dtype; might != h_seq or s_seq.dtype
-    sg_kernel: tl.constexpr,
+    sg_triton_id: tl.constexpr,
     decay_input: tl.constexpr,
     soft_reset: tl.constexpr,
     detach_reset: tl.constexpr,
@@ -178,7 +178,7 @@ def _multistep_lif_backward_kernel(
         )
         h = tl.load(h_ptrs, boundary_check=(1,), padding_option="zero")
 
-        sg = sg_kernel(h - v_threshold, sg_alpha)
+        sg = sg_triton(h - v_threshold, sg_alpha, sg_triton_id)
         grad_v_acc = grad_v + grad_v_acc
         if soft_reset:
             if detach_reset:
@@ -288,7 +288,7 @@ def multistep_lif_forward(
     v_reset: float,
     soft_reset: bool,
     detach_reset: bool,
-    sg_type: str,
+    sg_triton_id: int,
     sg_alpha: float,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     x_seq = x_seq.contiguous()
@@ -332,7 +332,7 @@ def _multistep_lif_forward_fake(
     v_reset: float,
     soft_reset: bool,
     detach_reset: bool,
-    sg_type: str,
+    sg_triton_id: int,
     sg_alpha: float,
 ):
     return (
@@ -350,7 +350,7 @@ def _setup_context(ctx, inputs, output):
         v_reset,
         soft_reset,
         detach_reset,
-        sg_type,
+        sg_triton_id,
         sg_alpha,
     ) = inputs[2:]
     h_seq = output[2]
@@ -361,7 +361,7 @@ def _setup_context(ctx, inputs, output):
     ctx.v_reset = v_reset
     ctx.soft_reset = soft_reset
     ctx.detach_reset = detach_reset
-    ctx.sg_type = sg_type
+    ctx.sg_triton_id = sg_triton_id
     ctx.sg_alpha = sg_alpha
 
 
@@ -391,7 +391,7 @@ def _multistep_lif_backward(ctx, grad_s_seq, grad_v_seq, grad_h_seq):
             T=T,
             NCL=NCL,
             dtype=type_dict[dtype],
-            sg_kernel=get_sg_kernel(ctx.sg_type),
+            sg_triton_id=ctx.sg_triton_id,
             decay_input=ctx.decay_input,
             soft_reset=ctx.soft_reset,
             detach_reset=ctx.detach_reset,
@@ -414,8 +414,7 @@ def multistep_lif(
     v_threshold: float,
     v_reset: Optional[float],
     detach_reset: bool,
-    sg_type: str,
-    sg_alpha: float,
+    surrogate_function,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     soft_reset = v_reset is None
     v_reset = v_reset if v_reset is not None else 0.0
@@ -423,6 +422,7 @@ def multistep_lif(
         x_seq.requires_grad or v_init.requires_grad
     )
     if need_grad:
+        sg_triton_id, sg_alpha = resolve_sg_triton_id_and_alpha(surrogate_function)
         s_seq, v_seq, _ = multistep_lif_forward(
             x_seq,
             v_init,
@@ -432,7 +432,7 @@ def multistep_lif(
             v_reset,
             soft_reset,
             detach_reset,
-            sg_type,
+            sg_triton_id,
             sg_alpha,
         )
     else:
