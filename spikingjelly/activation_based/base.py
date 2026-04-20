@@ -20,7 +20,7 @@ except BaseException as e:
 
 try:
     import lava.lib.dl.slayer as slayer
-except BaseException as e:
+except BaseException:
     slayer = None
 
 

@@ -146,9 +146,9 @@ def get_flexsn_inference_kernel(
         [f"v{i}_seq_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = f", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
-    autotune_restore += f", "
-    autotune_restore += f", ".join([f'"v{i}_seq_ptr"' for i in range(num_states)])
+    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
+    autotune_restore += ", "
+    autotune_restore += ", ".join([f'"v{i}_seq_ptr"' for i in range(num_states)])
 
     init_state_loads = "".join(
         [
@@ -306,9 +306,9 @@ def get_flexsn_backward_kernel(
         [f"grad_v{i}_init_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = f", ".join([f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)])
-    autotune_restore += f", "
-    autotune_restore += f", ".join([f'"grad_v{i}_init_ptr"' for i in range(num_states)])
+    autotune_restore = ", ".join([f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)])
+    autotune_restore += ", "
+    autotune_restore += ", ".join([f'"grad_v{i}_init_ptr"' for i in range(num_states)])
 
     init_state_loads = f"\n{INDENTATION}".join(
         [

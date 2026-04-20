@@ -1,9 +1,5 @@
 from matplotlib import pyplot as plt
 import numpy as np
-from spikingjelly import visualizing
-import torch
-import torch.nn as nn
-import torchvision
 
 
 def plot_log(csv_file, title, x_label, y_label, figsize=(12, 8), plot_max=False):

@@ -195,15 +195,12 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
 
     force_custom = os.environ["SJ_FORCE_CUSTOM_OP"] == "1"
     kind = os.environ["SJ_NODE_KIND"]
-
     if force_custom:
-        import torch.library as torch_library
-
-        if hasattr(torch_library, "triton_op"):
-            delattr(torch_library, "triton_op")
+        os.environ["SJ_USE_TRITON_OP"] = "0"
+    else:
+        os.environ["SJ_USE_TRITON_OP"] = "1"
 
     from spikingjelly.activation_based import neuron, surrogate
-    from spikingjelly.activation_based.triton_kernel import triton_utils
 
     torch.manual_seed(20260419)
     torch.cuda.manual_seed_all(20260419)
@@ -247,8 +244,12 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
     y = node(x)
     y.sum().backward()
 
+    v = os.getenv("SJ_USE_TRITON_OP")
+    env_enabled = True if v is None else v.strip().lower() not in ("0", "false")
+    use_triton_op = bool(env_enabled and hasattr(torch.library, "triton_op"))
+
     payload = {
-        "use_triton_op": bool(triton_utils._USE_TRITON_OP),
+        "use_triton_op": use_triton_op,
         "out": y.detach().cpu().tolist(),
         "x_grad": x.grad.detach().cpu().tolist(),
     }
@@ -264,6 +265,7 @@ def _run_subprocess_path(kind: str, force_custom_op: bool) -> dict:
     env = os.environ.copy()
     env["SJ_NODE_KIND"] = kind
     env["SJ_FORCE_CUSTOM_OP"] = "1" if force_custom_op else "0"
+    env["SJ_USE_TRITON_OP"] = "0" if force_custom_op else "1"
 
     try:
         completed = subprocess.run(

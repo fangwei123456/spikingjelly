@@ -62,9 +62,9 @@ if __name__ == "__main__":
         )
     plt.title(title, fontsize=fontsize)
     plt.legend(frameon=True, fontsize=fontsize)
-    plt.savefig(os.path.join(root, f"rsnn_train_acc.pdf"))
-    plt.savefig(os.path.join(root, f"rsnn_train_acc.svg"))
-    plt.savefig(os.path.join(root, f"rsnn_train_acc.png"))
+    plt.savefig(os.path.join(root, "rsnn_train_acc.pdf"))
+    plt.savefig(os.path.join(root, "rsnn_train_acc.svg"))
+    plt.savefig(os.path.join(root, "rsnn_train_acc.png"))
     plt.clf()
 
     title = "Test curves on Sequential FashionMNIST"
@@ -93,6 +93,6 @@ if __name__ == "__main__":
         )
     plt.title(title, fontsize=fontsize)
     plt.legend(frameon=True, fontsize=fontsize)
-    plt.savefig(os.path.join(root, f"rsnn_test_acc.pdf"))
-    plt.savefig(os.path.join(root, f"rsnn_test_acc.svg"))
-    plt.savefig(os.path.join(root, f"rsnn_test_acc.png"))
+    plt.savefig(os.path.join(root, "rsnn_test_acc.pdf"))
+    plt.savefig(os.path.join(root, "rsnn_test_acc.svg"))
+    plt.savefig(os.path.join(root, "rsnn_test_acc.png"))

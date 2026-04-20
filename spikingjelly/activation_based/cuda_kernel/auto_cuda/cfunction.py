@@ -292,7 +292,7 @@ def piecewise_leaky_relu_backward(y: str, x: str, w: float, c: float, dtype: str
     )
 
     codes += if_else(
-        z=y, x=w_inv, y=c, mask=f"piecewise_leaky_relu_backward__mask", dtype=dtype
+        z=y, x=w_inv, y=c, mask="piecewise_leaky_relu_backward__mask", dtype=dtype
     )
 
     return codes
@@ -312,14 +312,14 @@ def s2nn_backward(y: str, x: str, alpha: float, beta: float, dtype: str):
 
     codes += if_else(
         z=y,
-        x=f"s2nn_backward__sgax",
+        x="s2nn_backward__sgax",
         y=div(
             z=None,
             x=constant(None, beta, dtype),
             y=add(z=None, x=x, y=constant(None, 1.0, dtype), dtype=dtype),
             dtype=dtype,
         ),
-        mask=f"s2nn_backward__mask",
+        mask="s2nn_backward__mask",
         dtype=dtype,
     )
     return codes
@@ -349,7 +349,7 @@ def leaky_k_relu_backward(y: str, x: str, leak: float, k: float, dtype: str):
         y=constant(None, 0.0, dtype),
         dtype=dtype,
     )
-    codes += if_else(z=y, x=k, y=leak, mask=f"leaky_k_relu_backward__mask", dtype=dtype)
+    codes += if_else(z=y, x=k, y=leak, mask="leaky_k_relu_backward__mask", dtype=dtype)
     return codes
 
 

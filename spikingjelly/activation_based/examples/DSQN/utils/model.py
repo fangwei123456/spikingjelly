@@ -1,7 +1,5 @@
-import torch
 import torch.nn as nn
 
-import math
 
 from spikingjelly.activation_based import layer, neuron, surrogate
 

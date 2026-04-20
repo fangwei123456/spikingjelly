@@ -716,12 +716,12 @@ class Trainer:
                 if save_max_test_acc1:
                     utils.save_on_master(
                         checkpoint,
-                        os.path.join(pt_dir, f"checkpoint_max_test_acc1.pth"),
+                        os.path.join(pt_dir, "checkpoint_max_test_acc1.pth"),
                     )
                 if model_ema and save_max_ema_test_acc1:
                     utils.save_on_master(
                         checkpoint,
-                        os.path.join(pt_dir, f"checkpoint_max_ema_test_acc1.pth"),
+                        os.path.join(pt_dir, "checkpoint_max_ema_test_acc1.pth"),
                     )
 
                 if utils.is_main_process() and epoch > 0:

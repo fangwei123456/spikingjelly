@@ -2,7 +2,6 @@ import torch
 import torch.nn.functional as F
 import torchvision.transforms
 from torchvision.datasets import FashionMNIST
-from matplotlib import pyplot as plt
 
 
 train_set = FashionMNIST(

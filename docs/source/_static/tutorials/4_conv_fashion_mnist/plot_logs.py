@@ -1,6 +1,5 @@
 from matplotlib import pyplot as plt
 import numpy as np
-from spikingjelly.activation_based.examples.conv_fashion_mnist import Net
 from spikingjelly import visualizing
 import torch
 import torch.nn as nn

@@ -1,7 +1,5 @@
 import torch
 import torchvision
-import torch.nn as nn
-import spikingjelly
 from spikingjelly.activation_based import ann2snn
 from tqdm import tqdm
 from spikingjelly.activation_based.ann2snn.sample_models import mnist_cnn

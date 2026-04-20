@@ -4,7 +4,8 @@ import torch.nn.functional as F
 import torchvision.datasets
 from spikingjelly.activation_based import neuron, surrogate, layer, functional
 from torch.cuda import amp
-import os, argparse
+import os
+import argparse
 from torch.utils.tensorboard import SummaryWriter
 import time
 import datetime

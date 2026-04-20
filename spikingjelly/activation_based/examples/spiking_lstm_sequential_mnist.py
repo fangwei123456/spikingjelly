@@ -1,13 +1,12 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
 from spikingjelly.activation_based import rnn
 from torch.utils.tensorboard import SummaryWriter
 import sys
 
 if sys.platform != "win32":
-    import readline
+    pass
 import torchvision
 import tqdm
 

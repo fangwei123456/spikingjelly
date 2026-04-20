@@ -290,7 +290,7 @@ class NeuronBPKernel(base.CKernel1D):
                     )
                     core_codes.append(
                         cfunction.mul(
-                            z=f"temp_var",
+                            z="temp_var",
                             x="temp_var",
                             y="grad_s_to_h",
                             dtype=self.dtype,
@@ -298,7 +298,7 @@ class NeuronBPKernel(base.CKernel1D):
                     )
                     core_codes.append(
                         cfunction.add(
-                            z=f"grad_v_next_to_h",
+                            z="grad_v_next_to_h",
                             x="temp_var",
                             y="grad_v_next_to_h",
                             dtype=self.dtype,
@@ -322,7 +322,7 @@ class NeuronBPKernel(base.CKernel1D):
                     )
                     core_codes.append(
                         cfunction.sub(
-                            z=f"grad_v_next_to_h",
+                            z="grad_v_next_to_h",
                             x="grad_v_next_to_h",
                             y="temp_var",
                             dtype=self.dtype,

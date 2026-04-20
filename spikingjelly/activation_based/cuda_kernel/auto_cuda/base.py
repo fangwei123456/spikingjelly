@@ -8,7 +8,6 @@ except BaseException as e:
     cupy = None
 
 import torch
-import torch.nn.functional as F
 import sys
 import logging
 

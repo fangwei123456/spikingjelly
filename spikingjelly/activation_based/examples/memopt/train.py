@@ -1,7 +1,7 @@
 import torch.nn as nn
 from lightning.pytorch.cli import LightningCLI
 from lightning.pytorch import callbacks
-from spikingjelly.activation_based import functional, memopt
+from spikingjelly.activation_based import memopt
 
 from data_module import CIFAR10DVSDataModule
 from lightning_modules import ClassificationLightningModule

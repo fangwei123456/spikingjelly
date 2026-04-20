@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from spikingjelly.activation_based import surrogate, layer
+from spikingjelly.activation_based import surrogate
 import math
 
 

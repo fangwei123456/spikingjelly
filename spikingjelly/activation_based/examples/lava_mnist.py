@@ -13,7 +13,6 @@ from spikingjelly.activation_based import (
     neuron,
 )
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
 import os
 import argparse
 import h5py

@@ -14,7 +14,7 @@ __all__ = [
 
 try:
     import triton
-except BaseException as e:
+except BaseException:
     triton = None
 
 if triton is not None:
