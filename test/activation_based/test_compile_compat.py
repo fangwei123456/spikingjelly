@@ -265,13 +265,20 @@ def _run_subprocess_path(kind: str, force_custom_op: bool) -> dict:
     env["SJ_NODE_KIND"] = kind
     env["SJ_FORCE_CUSTOM_OP"] = "1" if force_custom_op else "0"
 
-    completed = subprocess.run(
-        [sys.executable, "-c", _SUBPROCESS_SCRIPT],
-        check=True,
-        capture_output=True,
-        text=True,
-        env=env,
-    )
+    try:
+        completed = subprocess.run(
+            [sys.executable, "-c", _SUBPROCESS_SCRIPT],
+            check=True,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=300,
+        )
+    except subprocess.TimeoutExpired as e:
+        pytest.fail(
+            "Subprocess probe timed out while running _SUBPROCESS_SCRIPT "
+            f"for kind={kind}, force_custom_op={force_custom_op}: {e}"
+        )
 
     for line in reversed(completed.stdout.splitlines()):
         if line.startswith("JSON_RESULT="):

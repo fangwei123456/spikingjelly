@@ -4,7 +4,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from . import triton_kernel
 from .cuda_kernel.auto_cuda import cfunction
 
 tab4_str = "\t\t\t\t"  # used for aligning code

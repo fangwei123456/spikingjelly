@@ -1,5 +1,7 @@
 import torch
 
+from .. import surrogate
+
 try:
     import triton
     import triton.language as tl
@@ -19,9 +21,9 @@ __all__ = [
     "resolve_sg_triton_id_and_alpha",
 ]
 
-SG_TRITON_IDS: dict = {
-    "Sigmoid": 0,
-    "ATan": 1,
+SG_TRITON_IDS: dict[type[surrogate.SurrogateFunctionBase], int] = {
+    surrogate.Sigmoid: 0,
+    surrogate.ATan: 1,
 }
 
 
@@ -39,19 +41,23 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
 
 def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
-    sg_type = type(surrogate_function).__name__
-    try:
-        sg_triton_id = SG_TRITON_IDS[sg_type]
-    except KeyError as e:
+    sg_type = type(surrogate_function)
+    sg_triton_id = None
+    for supported_type, candidate_id in SG_TRITON_IDS.items():
+        if isinstance(surrogate_function, supported_type):
+            sg_triton_id = candidate_id
+            break
+    if sg_triton_id is None:
+        supported_names = tuple(t.__name__ for t in SG_TRITON_IDS)
         raise NotImplementedError(
             f"Triton backend only supports surrogate functions "
-            f"{tuple(SG_TRITON_IDS.keys())}, but got {sg_type}."
-        ) from e
+            f"{supported_names}, but got {sg_type.__name__}."
+        )
 
     if not hasattr(surrogate_function, "alpha"):
         raise TypeError(
             "Triton backend requires surrogate_function.alpha, but got "
-            f"{sg_type} without 'alpha'. Please use a surrogate function with alpha "
+            f"{sg_type.__name__} without 'alpha'. Please use a surrogate function with alpha "
             "(e.g., surrogate.Sigmoid / surrogate.ATan)."
         )
 

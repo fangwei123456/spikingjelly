@@ -418,11 +418,11 @@ def multistep_lif(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     soft_reset = v_reset is None
     v_reset = v_reset if v_reset is not None else 0.0
-    sg_triton_id, sg_alpha = resolve_sg_triton_id_and_alpha(surrogate_function)
     need_grad = torch.is_grad_enabled() and (
         x_seq.requires_grad or v_init.requires_grad
     )
     if need_grad:
+        sg_triton_id, sg_alpha = resolve_sg_triton_id_and_alpha(surrogate_function)
         s_seq, v_seq, _ = multistep_lif_forward(
             x_seq,
             v_init,
