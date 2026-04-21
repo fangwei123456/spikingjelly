@@ -69,9 +69,13 @@ FX_TO_TRITON = {
     "bitwise_and.Tensor": lambda args, kwargs: f"{_uw(args[0])} & {_uw(args[1])}",
     "bitwise_or.Tensor": lambda args, kwargs: f"{_uw(args[0])} | {_uw(args[1])}",
     "bitwise_not.default": lambda args, kwargs: f"~{_uw(args[0])}",
-    "logical_and.default": lambda args, kwargs: f"{_uw(args[0])} & {_uw(args[1])}",
-    "logical_or.default": lambda args, kwargs: f"{_uw(args[0])} | {_uw(args[1])}",
-    "logical_not.default": lambda args, kwargs: f"~{_uw(args[0])}",
+    # logical_* follow ATen truthiness: non-zero = True; bitwise ops would give
+    # wrong results for numeric inputs (e.g. logical_not(2) → False, but ~2 = -3)
+    "logical_and.default": lambda args,
+    kwargs: f"({_uw(args[0])} != 0) & ({_uw(args[1])} != 0)",
+    "logical_or.default": lambda args,
+    kwargs: f"({_uw(args[0])} != 0) | ({_uw(args[1])} != 0)",
+    "logical_not.default": lambda args, kwargs: f"({_uw(args[0])} == 0)",
     "eq.Tensor": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
     "eq.Scalar": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
     "ge.Tensor": lambda args, kwargs: f"{_uw(args[0])} >= {_uw(args[1])}",
@@ -192,8 +196,11 @@ FX_TO_TRITON = {
     "clamp_max.default": lambda args, kwargs: f"tl.minimum({_uw(args[0])}, {_uw(args[1])})",
     # ---------- misc ----------
     "clone.default": lambda args, kwargs: f"{_uw(args[0])}",
-    "zeros_like.default": lambda args, kwargs: f"{_uw(args[0])} * 0.0",
-    "ones_like.default": lambda args, kwargs: f"{_uw(args[0])} * 0.0 + 1.0",
+    # Use tl.full to avoid propagating NaN/Inf from input values
+    "zeros_like.default": lambda args,
+    kwargs: f"tl.full({_uw(args[0])}.shape, 0, {_uw(args[0])}.dtype)",
+    "ones_like.default": lambda args,
+    kwargs: f"tl.full({_uw(args[0])}.shape, 1, {_uw(args[0])}.dtype)",
     # masked_fill(tensor, mask, value): fill where mask=True with value
     "masked_fill.Scalar": lambda args,
     kwargs: f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})",

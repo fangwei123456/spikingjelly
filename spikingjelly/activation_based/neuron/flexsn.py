@@ -282,29 +282,44 @@ class FlexSN(base.MemoryModule):
             self.kernel = None
 
         if backend == "inductor" and torch.cuda.is_available():
-            from ..triton_kernel.flex_sn_inductor.kernel import (
-                build_inference_kernel, build_training_kernels,
-            )
             try:
-                self._inductor_scan_kernel, self._inductor_scan_info = (
-                    build_inference_kernel(core, num_inputs, num_states, num_outputs)
+                from ..triton_kernel.flex_sn_inductor.kernel import (
+                    build_inference_kernel, build_training_kernels,
                 )
             except Exception as e:
                 logging.warning(
-                    "FlexSN: could not build inductor inference kernel (%s); "
-                    "inference falls back to eager_scan." % e
+                    "FlexSN: could not import inductor kernel builders (%s); "
+                    "falling back to eager_scan/flex_sn_scan for all paths." % e
                 )
+                build_inference_kernel = None
+                build_training_kernels = None
+            if build_inference_kernel is not None:
+                try:
+                    self._inductor_scan_kernel, self._inductor_scan_info = (
+                        build_inference_kernel(core, num_inputs, num_states, num_outputs)
+                    )
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not build inductor inference kernel (%s); "
+                        "inference falls back to eager_scan." % e
+                    )
+                    self._inductor_scan_kernel = None
+                    self._inductor_scan_info = None
+                try:
+                    self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
+                        build_training_kernels(core, num_inputs, num_states, num_outputs)
+                    )
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not build inductor training kernels (%s); "
+                        "training falls back to eager_scan." % e
+                    )
+                    self._inductor_fwd_kernel = None
+                    self._inductor_bwd_kernel = None
+                    self._inductor_train_info = None
+            else:
                 self._inductor_scan_kernel = None
                 self._inductor_scan_info = None
-            try:
-                self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
-                    build_training_kernels(core, num_inputs, num_states, num_outputs)
-                )
-            except Exception as e:
-                logging.warning(
-                    "FlexSN: could not build inductor training kernels (%s); "
-                    "training falls back to eager_scan." % e
-                )
                 self._inductor_fwd_kernel = None
                 self._inductor_bwd_kernel = None
                 self._inductor_train_info = None

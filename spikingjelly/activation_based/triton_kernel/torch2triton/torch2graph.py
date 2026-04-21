@@ -115,6 +115,13 @@ def generate_forward_and_backward_graph(
 
     # feed the fake inputs
     ys = f(*example_inputs)
+    # Normalise to tuple so iteration always walks outputs, not tensor dimensions
+    if isinstance(ys, torch.Tensor):
+        ys = (ys,)
+    elif not isinstance(ys, (list, tuple)):
+        raise ValueError(
+            f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}"
+        )
     # choose a differentiable Tensor in ys as the starting point of .backward()
     # (some outputs, e.g. spike signals from comparisons, have no grad_fn)
     o = None

@@ -54,9 +54,10 @@ def build_inference_kernel(
     graph = traced.graph
 
     # Generate Triton function source for the per-step body.
-    # Sanitize __name__: lambdas produce "<lambda>" which is not a valid
-    # Python identifier — replace non-alphanumeric characters with "_".
-    safe_name = "".join(c if c.isalnum() else "_" for c in core_fn.__name__)
+    # Sanitize name: lambdas → "<lambda>", functools.partial → no __name__.
+    # Replace every non-alphanumeric character (including < > space) with "_".
+    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
+    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
     core_name = f"{safe_name}_inductor_scan"
     core_str, core_name = generate_triton_code_str(graph, core_name)
 
@@ -76,12 +77,17 @@ def _diff_mask(
     example_inputs: Tuple[torch.Tensor, ...],
 ) -> List[bool]:
     """Return which of core_fn's outputs are differentiable."""
-    ex = [t.clone().detach().requires_grad_(True) for t in example_inputs]
-    try:
-        with torch.enable_grad():
-            outs = core_fn(*ex)
-    except Exception:
-        return [True] * (num_outputs + num_states)
+    # Only float/complex tensors support requires_grad; skip int/bool inputs.
+    ex = []
+    for t in example_inputs:
+        probe = t.clone().detach()
+        if probe.is_floating_point() or probe.is_complex():
+            probe.requires_grad_(True)
+        ex.append(probe)
+    with torch.enable_grad():
+        outs = core_fn(*ex)
+    if isinstance(outs, torch.Tensor):
+        outs = (outs,)
     return [
         isinstance(o, torch.Tensor) and (o.requires_grad or o.grad_fn is not None)
         for o in outs
@@ -100,6 +106,11 @@ def _make_bwd_shim(bwd_fn_name: str, n_saved: int, num_outputs: int, num_states:
     """
     all_grads = (["gs_" + str(i) for i in range(num_outputs)] +
                  ["gv_" + str(i) for i in range(num_states)])
+    if len(diff_mask) != len(all_grads):
+        raise ValueError(
+            f"diff_mask length {len(diff_mask)} != "
+            f"num_outputs+num_states {len(all_grads)}"
+        )
     shim_args = ["sv_" + str(i) for i in range(n_saved)] + all_grads
     fwd_call  = (["sv_" + str(i) for i in range(n_saved)] +
                  [name for name, d in zip(all_grads, diff_mask) if d])
@@ -153,7 +164,8 @@ def build_training_kernels(
     mask = _diff_mask(core_fn, num_outputs, num_states, example_inputs)
     n_saved = len(info.c2k_return_mapping)
 
-    safe_name = "".join(c if c.isalnum() else "_" for c in core_fn.__name__)
+    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
+    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
     core_name = safe_name + "_inductor_train"
 
     # Forward kernel — saves intermediates needed by backward

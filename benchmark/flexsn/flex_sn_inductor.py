@@ -175,7 +175,7 @@ def main() -> None:
         print(
             "Warning: PYTORCH_JIT != 0. "
             "The triton backend requires PYTORCH_JIT=0.\n"
-            "Run with:  PYTORCH_JIT=0 python flex_sn_inductor.py",
+            "Run with:  PYTORCH_JIT=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py",
             file=sys.stderr,
         )
 
