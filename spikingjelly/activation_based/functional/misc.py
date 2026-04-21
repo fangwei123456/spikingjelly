@@ -268,7 +268,6 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
             nn.init.kaiming_normal_(m.weight, a=math.sqrt(5))
 
 
-@torch.jit.script
 def delay(x_seq: torch.Tensor, delay_steps: int):
     """
     **API Language:**

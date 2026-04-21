@@ -184,7 +184,6 @@ class OTTTLIFNode(LIFNode):
                 )
 
     @staticmethod
-    @torch.jit.script
     def track_trace(spike: torch.Tensor, trace: torch.Tensor, tau: float):
         with torch.no_grad():
             trace = trace * (1.0 - 1.0 / tau) + spike

@@ -1,5 +1,7 @@
 import logging
+import operator as _op
 import torch
+import torch.fx as _fx
 import re
 import sys
 
@@ -58,135 +60,111 @@ class VarNode:
 
 
 def analyse_graph(custom_fun, requires_grad: tuple):
-    graph: torch.Graph = torch.jit.script(custom_fun).graph
+    # Map from torch.fx operator targets to aten-style kind strings
+    _FX_TO_KIND = {
+        _op.add: "aten::add",
+        _op.sub: "aten::sub",
+        _op.mul: "aten::mul",
+        _op.truediv: "aten::div",
+    }
+
+    annotations = custom_fun.__annotations__
+    assert len(annotations) >= 2  # at least x and v_last (plus optional 'return')
+
+    gm = _fx.symbolic_trace(custom_fun)
+    graph = gm.graph
 
     logging.debug(f"\ngraph = {graph}")
-    # 生成 输入 中间 输出 节点
     assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
-    # python >= 3.6时，字典默认是有序的
-    # key是VarNode.debug_name，value是VarNode
+
     input_nodes = {}
     output_nodes = {}
     inter_nodes = {}
+    _fx_to_var = {}
+    _const_id = [0]
 
-    assert custom_fun.__annotations__.__len__() >= 2
-    for i, (item, name) in enumerate(
-        zip(graph.inputs(), custom_fun.__annotations__.keys())
-    ):
-        # 要求custom_fun一定是custom_fun(x: torch.Tensor, v_last: torch.Tensor, ...)的形式
-        if i == 0:
-            assert str(item.type()) == "Tensor" and name == "x"
-        elif i == 1:
-            assert str(item.type()) == "Tensor" and name == "v_last"
+    def _make_const(value):
+        _const_id[0] += 1
+        cname = f"const_{_const_id[0]}"
+        instance = "int" if isinstance(value, int) else "float"
+        var = VarNode(prefix="inter", name=cname, instance=instance, value=value)
+        inter_nodes[cname] = var
+        return var
 
-        # 用python函数中的name覆盖掉jit自动生成的name
-        # 仅包括输入。中间变量的命名仍然是jit设置的，不会被更改
-        item.setDebugName(name)
-
-        node = VarNode(prefix="input", name=item.debugName(), instance=item.type())
-        if node.instance == "Tensor" and requires_grad[i]:
-            node.requires_grad = True
-
-        logging.debug(f"\ninput node [{i}] = {node}")
-        assert node not in input_nodes
-        input_nodes[node.debug_name] = node
-
-    for i, item in enumerate(graph.outputs()):
-        if i == 0:
-            assert str(item.type()) == "Tensor"
-            item.setDebugName("h")
-
-        elif i > 0:
-            raise NotImplementedError(
-                "For the moment, we only support for single output!"
-            )
-
-        node = VarNode(prefix="output", name=item.debugName(), instance=item.type())
-
-        logging.debug(f"\noutput node [{i}] = {node}")
-        assert node not in output_nodes
-        output_nodes[node.debug_name] = node
+    def _resolve(arg):
+        if isinstance(arg, _fx.Node):
+            return _fx_to_var[arg]
+        if isinstance(arg, (int, float)):
+            return _make_const(arg)
+        raise NotImplementedError(f"unsupported arg type: {type(arg)}")
 
     cmds = []
-    # cmds的元素是一个元组，为 (output, fun, inputs)
-    # 这里的output是VarNode，fun是str，inputs是(VarNode)
-    for node in graph.nodes():
-        # item: torch.Note
-        fun = node.kind()
-        if fun == "prim::Constant":
-            item = node.output()
-            assert (
-                item.debugName() not in input_nodes
-                and item.debugName() not in output_nodes
-            )
+    ph_idx = 0
 
-            i_node = VarNode(
-                prefix="inter", name=item.debugName(), instance=item.type()
-            )
-            value = None
-
-            # 从命令中提取出常数值
-            if i_node.instance == "int":
-                pattern = re.compile(r".*prim::Constant\[value=([0-9]+)\]")
-                m = pattern.match(str(node))
-                value = int(m.groups()[0])
-
-            elif i_node.instance == "float":
-                pattern = re.compile(r".*prim::Constant\[value=([0-9\.]+)\]")
-                m = pattern.match(str(node))
-                value = float(m.groups()[0])
-
+    for fx_node in graph.nodes:
+        if fx_node.op == "placeholder":
+            name = fx_node.name
+            ann = annotations.get(name)
+            if ann is torch.Tensor:
+                inst = "Tensor"
+            elif ann is float:
+                inst = "float"
+            elif ann is int:
+                inst = "int"
             else:
-                raise NotImplementedError
+                inst = str(ann)
 
-            i_node.value = value
-            assert i_node.debug_name not in input_nodes
-            assert i_node.debug_name not in output_nodes
-            if i_node.debug_name not in inter_nodes:
-                inter_nodes[i_node.debug_name] = i_node
+            if ph_idx == 0:
+                assert inst == "Tensor" and name == "x"
+            elif ph_idx == 1:
+                assert inst == "Tensor" and name == "v_last"
 
-            cmds.append((i_node, fun, ()))
+            var = VarNode(prefix="input", name=name, instance=inst)
+            if inst == "Tensor" and ph_idx < len(requires_grad) and requires_grad[ph_idx]:
+                var.requires_grad = True
 
-        else:
-            inputs = []
+            logging.debug(f"\ninput node [{ph_idx}] = {var}")
+            input_nodes[name] = var
+            _fx_to_var[fx_node] = var
+            ph_idx += 1
 
-            for item in node.inputs():
-                if item.debugName() in input_nodes:
-                    i_node = input_nodes[item.debugName()]
+        elif fx_node.op == "call_function":
+            target = fx_node.target
+            if target not in _FX_TO_KIND:
+                raise NotImplementedError(f"unsupported operation: {target}")
+            kind = _FX_TO_KIND[target]
 
-                elif item.debugName() in output_nodes:
-                    i_node = output_nodes[item.debugName()]
+            var = VarNode(prefix="inter", name=fx_node.name, instance="Tensor")
+            inter_nodes[fx_node.name] = var
+            _fx_to_var[fx_node] = var
 
-                else:
-                    # 只有既不为输入node也不为输出node的node，才会被视作中间node
-                    if item.debugName() in inter_nodes:
-                        i_node = inter_nodes[item.debugName()]
-                    else:
-                        i_node = VarNode(
-                            prefix="inter", name=item.debugName(), instance=item.type()
-                        )
-                        inter_nodes[i_node.debug_name] = i_node
+            in_vars = tuple(_resolve(a) for a in fx_node.args)
+            # aten::add/sub require a trailing alpha=1 constant for compatibility with
+            # gen_forward_codes / gen_backward_codes which expect (x, y, alpha) inputs
+            if kind in ("aten::add", "aten::sub") and len(in_vars) == 2:
+                in_vars = in_vars + (_make_const(1),)
 
-                inputs.append(i_node)
+            cmds.append((var, kind, in_vars))
 
-            item = node.output()
-            if item.debugName() in input_nodes:
-                i_node = input_nodes[item.debugName()]
+        elif fx_node.op == "output":
+            ret = fx_node.args[0]
+            if not isinstance(ret, _fx.Node):
+                raise NotImplementedError(f"unsupported output type: {type(ret)}")
+            assert str(ret.type) == "<class 'torch.Tensor'>", \
+                "For the moment, we only support for single Tensor output!"
 
-            elif item.debugName() in output_nodes:
-                i_node = output_nodes[item.debugName()]
+            h_var = VarNode(prefix="output", name="h", instance="Tensor")
+            output_nodes["h"] = h_var
+            logging.debug(f"\noutput node [0] = {h_var}")
 
-            else:
-                # 只有既不为输入node也不为输出node的node，才会被视作中间node
-                if item.debugName() in inter_nodes:
-                    i_node = inter_nodes[item.debugName()]
-                else:
-                    i_node = VarNode(
-                        prefix="inter", name=item.debugName(), instance=item.type()
-                    )
-                    inter_nodes[i_node.debug_name] = i_node
-
-            cmds.append((i_node, fun, tuple(inputs)))
+            src = _fx_to_var[ret]
+            for i, (out, fun, ins) in enumerate(cmds):
+                if out is src:
+                    cmds[i] = (h_var, fun, ins)
+                    break
+            if src.debug_name in inter_nodes:
+                del inter_nodes[src.debug_name]
+            _fx_to_var[ret] = h_var
 
     for i, node in enumerate(inter_nodes.values()):
         logging.debug(f"\ninter node [{i}] = {node}")

@@ -420,7 +420,6 @@ class MPBNLIFNode(MPBNBaseNode):
                 )
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_decay_input_reset0(
         x: torch.Tensor, v: torch.Tensor, tau: float
     ):
@@ -428,7 +427,6 @@ class MPBNLIFNode(MPBNBaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float
     ):
@@ -436,7 +434,6 @@ class MPBNLIFNode(MPBNBaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_no_decay_input_reset0(
         x: torch.Tensor, v: torch.Tensor, tau: float
     ):
@@ -444,7 +441,6 @@ class MPBNLIFNode(MPBNBaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_no_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float
     ):

@@ -8,7 +8,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 from torch.autograd import Function
-from torch.jit import script
 from torch.nn.functional import interpolate
 
 from ...activation_based import layer
@@ -78,7 +77,6 @@ OPS = {
 }
 
 
-@script
 def dSpike_backward(grad_output: Tensor, x: Tensor, alpha: float):
     mask = x.abs() > 0.5
     const = alpha / (2.0 * tanh(alpha / 2.0))

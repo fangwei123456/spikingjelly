@@ -242,7 +242,6 @@ class LIFNode(BaseNode):
                 )
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_decay_input_reset0(
         x: torch.Tensor, v: torch.Tensor, tau: float
     ):
@@ -250,7 +249,6 @@ class LIFNode(BaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float
     ):
@@ -258,7 +256,6 @@ class LIFNode(BaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_no_decay_input_reset0(
         x: torch.Tensor, v: torch.Tensor, tau: float
     ):
@@ -266,7 +263,6 @@ class LIFNode(BaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_no_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float
     ):
@@ -274,7 +270,6 @@ class LIFNode(BaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_single_step_forward_hard_reset_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, tau: float
     ):
@@ -284,7 +279,6 @@ class LIFNode(BaseNode):
         return spike, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_single_step_forward_hard_reset_no_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, tau: float
     ):
@@ -294,7 +288,6 @@ class LIFNode(BaseNode):
         return spike, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_single_step_forward_soft_reset_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
     ):
@@ -304,7 +297,6 @@ class LIFNode(BaseNode):
         return spike, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_single_step_forward_soft_reset_no_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
     ):
@@ -314,7 +306,6 @@ class LIFNode(BaseNode):
         return spike, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_hard_reset_decay_input(
         x_seq: torch.Tensor,
         v: torch.Tensor,
@@ -331,7 +322,6 @@ class LIFNode(BaseNode):
         return spike_seq, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_hard_reset_decay_input_with_v_seq(
         x_seq: torch.Tensor,
         v: torch.Tensor,
@@ -350,7 +340,6 @@ class LIFNode(BaseNode):
         return spike_seq, v, v_seq
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_hard_reset_no_decay_input(
         x_seq: torch.Tensor,
         v: torch.Tensor,
@@ -367,7 +356,6 @@ class LIFNode(BaseNode):
         return spike_seq, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_hard_reset_no_decay_input_with_v_seq(
         x_seq: torch.Tensor,
         v: torch.Tensor,
@@ -386,7 +374,6 @@ class LIFNode(BaseNode):
         return spike_seq, v, v_seq
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_soft_reset_decay_input(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
     ):
@@ -399,7 +386,6 @@ class LIFNode(BaseNode):
         return spike_seq, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_soft_reset_decay_input_with_v_seq(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
     ):
@@ -414,7 +400,6 @@ class LIFNode(BaseNode):
         return spike_seq, v, v_seq
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_soft_reset_no_decay_input(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
     ):
@@ -427,7 +412,6 @@ class LIFNode(BaseNode):
         return spike_seq, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_soft_reset_no_decay_input_with_v_seq(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
     ):

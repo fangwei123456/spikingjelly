@@ -11,7 +11,6 @@ Compared with ``backend="triton"`` (the in-house FX→Triton transpiler), the
 Inductor path:
 
 * Requires no manual op-mapping table — most PyTorch ops inside ``core`` just work.
-* Does **not** require ``PYTORCH_JIT=0``.
 * Integrates with ``torch.compile``, enabling cross-layer fusion with surrounding modules.
 * Ships dedicated Triton kernels for both inference and training,
   matching or exceeding ``backend="triton"`` throughput.
@@ -133,11 +132,6 @@ Backend Comparison
      - CUDA
      - CUDA
      -
-   * - Requires PYTORCH_JIT=0
-     - No
-     - Yes
-     - No
-     -
    * - Requires torch.compile
      - No
      - No
@@ -173,7 +167,7 @@ the FlexSN template generates a single Triton scan kernel with a
 kernel launch regardless of T.
 
 **Training (without torch.compile)**: at initialisation time, ``aot_function``
-traces both the forward and backward of ``core`` (no ``PYTORCH_JIT=0`` required)
+traces both the forward and backward of ``core``
 and compiles dedicated Triton forward and backward scan kernels, each with a
 ``tl.static_range(T)`` time loop — one kernel launch per direction regardless of T.
 On SpikingVGG-16-BN (T=4, B=64, CIFAR-10) this is ~12% faster than LIFNode triton
@@ -200,7 +194,7 @@ When to Use Each Backend
      - No constraints
    * - CUDA inference, max throughput
      - ``"inductor"``
-     - Single-kernel scan, no PYTORCH_JIT=0
+     - Single-kernel scan
    * - CUDA training
      - ``"inductor"`` + ``torch.compile()`` (optional)
      - Single-kernel fwd+bwd scan; compile (no fullgraph) adds ~28% speedup

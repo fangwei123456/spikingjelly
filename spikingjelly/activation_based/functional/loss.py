@@ -237,7 +237,6 @@ def spike_similar_loss(
         raise NotImplementedError
 
 
-@torch.jit.script
 def temporal_efficient_training_cross_entropy(x_seq: Tensor, target: Tensor):
     """
     **API Language:**

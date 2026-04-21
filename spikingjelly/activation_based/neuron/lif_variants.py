@@ -479,7 +479,6 @@ class KLIFNode(BaseNode):
         return ("torch",)
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor
     ):
@@ -488,7 +487,6 @@ class KLIFNode(BaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_no_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor
     ):
