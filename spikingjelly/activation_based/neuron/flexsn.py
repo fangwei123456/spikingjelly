@@ -497,13 +497,17 @@ class FlexSN(base.MemoryModule):
                 # CPU / training kernel unavailable: eager_scan fallback
                 from ..triton_kernel.flex_sn_inductor import eager_scan
 
+                # eager_scan and flex_sn_scan are both None when the whole
+                # flex_sn_inductor module fails to import; check once here
+                # so both branches get a clear RuntimeError instead of
+                # a confusing TypeError: 'NoneType' is not callable.
+                if eager_scan is None:
+                    raise RuntimeError(
+                        "FlexSN inductor backend is unavailable: "
+                        "eager_scan failed to import. "
+                        "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+                    )
                 if torch.compiler.is_compiling():
-                    if eager_scan is None:
-                        raise RuntimeError(
-                            "FlexSN inductor backend is unavailable: "
-                            "eager_scan failed to import. "
-                            "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
-                        )
                     result_seqs = eager_scan(
                         self.core,
                         self.num_inputs,
