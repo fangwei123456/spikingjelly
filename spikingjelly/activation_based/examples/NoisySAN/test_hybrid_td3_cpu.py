@@ -2,7 +2,6 @@ import numpy as np
 import torch
 import gym
 import pickle
-import os
 
 from spikingjelly.activation_based import functional
 

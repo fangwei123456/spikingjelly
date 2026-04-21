@@ -2,12 +2,11 @@ from collections import defaultdict
 from typing import Any, Callable
 
 import torch
-
-aten = torch.ops.aten
 import torch.nn as nn
 
 from .base import BaseCounter
 
+aten = torch.ops.aten
 __all__ = ["MemoryAccessCounter"]
 
 

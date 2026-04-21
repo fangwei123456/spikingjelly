@@ -1,22 +1,23 @@
+import argparse
 import datetime
 import os
+import random
+import sys
 import time
 import warnings
-from .tv_ref_classify import presets, transforms, utils
+
+import numpy as np
 import torch
 import torch.utils.data
 import torchvision
-from .tv_ref_classify.sampler import RASampler
 from torch import nn
 from torch.utils.data.dataloader import default_collate
-from torchvision.transforms.functional import InterpolationMode
-import random
-import numpy as np
 from torch.utils.tensorboard import SummaryWriter
-import sys
-import argparse
-from .. import functional
+from torchvision.transforms.functional import InterpolationMode
 
+from .. import functional
+from .tv_ref_classify import presets, transforms, utils
+from .tv_ref_classify.sampler import RASampler
 
 try:
     from torchvision import prototype
@@ -206,11 +207,7 @@ class Trainer:
     def load_CIFAR10(self, args):
         # Data loading code
         print("Loading data")
-        val_resize_size, val_crop_size, train_crop_size = (
-            args.val_resize_size,
-            args.val_crop_size,
-            args.train_crop_size,
-        )
+        train_crop_size = args.train_crop_size
         interpolation = InterpolationMode(args.interpolation)
 
         print("Loading training data")
@@ -716,12 +713,12 @@ class Trainer:
                 if save_max_test_acc1:
                     utils.save_on_master(
                         checkpoint,
-                        os.path.join(pt_dir, f"checkpoint_max_test_acc1.pth"),
+                        os.path.join(pt_dir, "checkpoint_max_test_acc1.pth"),
                     )
                 if model_ema and save_max_ema_test_acc1:
                     utils.save_on_master(
                         checkpoint,
-                        os.path.join(pt_dir, f"checkpoint_max_ema_test_acc1.pth"),
+                        os.path.join(pt_dir, "checkpoint_max_ema_test_acc1.pth"),
                     )
 
                 if utils.is_main_process() and epoch > 0:

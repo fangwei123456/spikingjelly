@@ -275,8 +275,8 @@ class ESImageNet(NeuromorphicDatasetFolder):
         else:
             # not reachable
             raise NotImplementedError(
-                f"Please specify the frames number or duration or "
-                f"custom integrate function."
+                "Please specify the frames number or duration or "
+                "custom integrate function."
             )
 
     @classmethod

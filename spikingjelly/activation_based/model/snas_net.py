@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
-import numpy as np
-from ...activation_based import functional, layer, surrogate, neuron
+from ...activation_based import layer, surrogate, neuron
 import argparse
 
 

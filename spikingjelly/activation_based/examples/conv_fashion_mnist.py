@@ -213,7 +213,7 @@ def main():
                     for i in range(label.shape[0]):
                         vs_dir_i = os.path.join(vs_dir, f"{i}")
                         os.mkdir(vs_dir_i)
-                        to_pil_img(img[i]).save(os.path.join(vs_dir_i, f"input.png"))
+                        to_pil_img(img[i]).save(os.path.join(vs_dir_i, "input.png"))
                         for t in range(net.T):
                             print(f"saving {i}-th sample with t={t}...")
                             # spike_seq.shape = [T, N, C, H, W]

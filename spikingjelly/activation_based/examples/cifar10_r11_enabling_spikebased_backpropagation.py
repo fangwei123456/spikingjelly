@@ -18,7 +18,7 @@ from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.transforms as transforms
 
-from spikingjelly.activation_based import functional, layer
+from spikingjelly.activation_based import layer
 
 from tqdm import tqdm
 import math

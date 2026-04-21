@@ -1,14 +1,14 @@
-from typing import Optional, Callable, Tuple
-import threading
 import contextlib
 import functools
+import threading
+from typing import Callable, Optional, Tuple
 
 import torch
-import torch.nn as nn
 import torch.autograd as autograd
+import torch.nn as nn
 
-from .compress import *
 from .. import base
+from .compress import BaseSpikeCompressor, NullSpikeCompressor
 
 __all__ = [
     "in_gc_1st_forward",

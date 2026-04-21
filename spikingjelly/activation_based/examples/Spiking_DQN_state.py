@@ -4,7 +4,6 @@ import random
 import numpy as np
 from collections import namedtuple
 from itertools import count
-import matplotlib
 import matplotlib.pyplot as plt
 
 import torch

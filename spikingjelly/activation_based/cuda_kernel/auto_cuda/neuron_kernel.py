@@ -264,7 +264,7 @@ class NeuronBPTTKernel(base.CKernel2D):
                     )
                     core_codes.append(
                         cfunction.mul(
-                            z=f"temp_var",
+                            z="temp_var",
                             x="temp_var",
                             y="grad_s_to_h",
                             dtype=self.dtype,
@@ -272,7 +272,7 @@ class NeuronBPTTKernel(base.CKernel2D):
                     )
                     core_codes.append(
                         cfunction.add(
-                            z=f"grad_v_to_h",
+                            z="grad_v_to_h",
                             x="temp_var",
                             y="grad_v_to_h",
                             dtype=self.dtype,
@@ -296,7 +296,7 @@ class NeuronBPTTKernel(base.CKernel2D):
                     )
                     core_codes.append(
                         cfunction.sub(
-                            z=f"grad_v_to_h",
+                            z="grad_v_to_h",
                             x="grad_v_to_h",
                             y="temp_var",
                             dtype=self.dtype,
@@ -306,7 +306,7 @@ class NeuronBPTTKernel(base.CKernel2D):
         core_codes.append(self.grad_h_next_to_v())
         core_codes.append(
             cfunction.mul(
-                z=f"grad_h", x="grad_h", y="grad_h_next_to_v", dtype=self.dtype
+                z="grad_h", x="grad_h", y="grad_h_next_to_v", dtype=self.dtype
             )
         )
         core_codes.append(
@@ -805,7 +805,7 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
         super().__init__(surrogate_function, hard_reset, detach_reset, dtype)
         self.decay_input = decay_input
         self.add_param(ctype=f"const {dtype} *", cname="decay")
-        self.add_param(ctype=f"float *", cname="grad_decay")
+        self.add_param(ctype="float *", cname="grad_decay")
         # float to avoid overflow
         self.add_param(ctype=f"const {dtype} *", cname="v_v_seq")
 

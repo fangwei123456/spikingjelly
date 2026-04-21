@@ -1,18 +1,19 @@
-import torch.nn as nn
-import torch.nn.functional as F
-from torch.nn.utils.fusion import *
-from torch.autograd import Function
-from torch import Tensor
+import argparse
 from collections import namedtuple
-from ...activation_based import layer
-from ..neuron import LIFNode
-from torch.nn.functional import interpolate
-from ..surrogate import SurrogateFunctionBase, heaviside
 from math import tanh
-from torch.jit import script
 
 import numpy as np
-import argparse
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+from torch import Tensor
+from torch.autograd import Function
+from torch.jit import script
+from torch.nn.functional import interpolate
+
+from ...activation_based import layer
+from ..neuron import LIFNode
+from ..surrogate import SurrogateFunctionBase, heaviside
 
 
 ### Components ###
@@ -30,22 +31,22 @@ def network_layer_to_space(net_arch):
 
     Convert network level sample rate like [0,0,1,1,1,2,2,2] to network architecture.
     """
-    for i, layer in enumerate(net_arch):
+    for i, net_layer in enumerate(net_arch):
         if i == 0:
             space = np.zeros((1, 4, 3))
-            space[0][layer][0] = 1
-            prev = layer
+            space[0][net_layer][0] = 1
+            prev = net_layer
         else:
-            if layer == prev + 1:
+            if net_layer == prev + 1:
                 sample = 0
-            elif layer == prev:
+            elif net_layer == prev:
                 sample = 1
-            elif layer == prev - 1:
+            elif net_layer == prev - 1:
                 sample = 2
             space1 = np.zeros((1, 4, 3))
-            space1[0][layer][sample] = 1
+            space1[0][net_layer][sample] = 1
             space = np.concatenate([space, space1], axis=0)
-            prev = layer
+            prev = net_layer
     return space
 
 
@@ -516,7 +517,6 @@ class Cell(nn.Module):
             interpolate = layer.SeqToANNContainer(Nearest([s1.shape[3], s1.shape[4]]))
 
             s0 = interpolate(s0)
-        device = prev_input.device
 
         states = [s0, s1]
 
@@ -560,7 +560,6 @@ class newFeature(nn.Module):
         self._filter_multiplier = args.fea_filter_multiplier
 
         f_initial = int(self._filter_multiplier)
-        half_f_initial = int(f_initial / 2)
         self._num_end = self._filter_multiplier * self._block_multiplier
         self.stem0 = SearchSpikingConv2d_stem(
             frame_rate,
@@ -697,7 +696,6 @@ class SpikeDHS(nn.Module):
 
         """
         super(SpikeDHS, self).__init__()
-        p = 0.0
         network_path_fea = [0, 0, 1, 1, 1, 2, 2, 2]
         network_path_fea = np.array(network_path_fea)
         network_arch_fea = network_layer_to_space(network_path_fea)

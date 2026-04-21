@@ -2,7 +2,6 @@ import gym
 import torch
 import random
 import collections
-from torch.autograd import Variable
 
 import numpy as np
 

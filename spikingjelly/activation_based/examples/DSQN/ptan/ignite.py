@@ -1,5 +1,4 @@
 import ptan
-import enum
 import time
 from typing import Optional
 from ignite.engine import Engine, State

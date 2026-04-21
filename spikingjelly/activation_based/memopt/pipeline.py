@@ -1,20 +1,19 @@
-from typing import Optional, Tuple, Union, Dict
 import copy
-import time
 import os
+import time
 from collections import defaultdict
+from typing import Dict, Optional, Tuple, Union
 
 import torch
-import torch.nn as nn
-import torch.multiprocessing as mp
 import torch.distributed as dist
+import torch.multiprocessing as mp
+import torch.nn as nn
 
-from ..profiler import *
 from .. import functional, neuron
+from ..profiler import LayerWiseFPCUDATimeProfiler, LayerWiseMemoryProfiler
 from . import compress
-from .compress import BitSpikeCompressor, NullSpikeCompressor
 from .checkpointing import GCContainer, TCGCContainer
-
+from .compress import BitSpikeCompressor, NullSpikeCompressor
 
 __all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimization"]
 
@@ -302,10 +301,13 @@ def _load_bn_states(net: nn.Module, saved_bn_states: list):
 
 
 def _dummy_train_step(
-    net: nn.Module, dummy_input: Union[tuple], restore_bn: bool = False
+    net: nn.Module,
+    dummy_input: Union[torch.Tensor, tuple, list, dict],
+    restore_bn: bool = False,
 ):
     net.train()
     net.zero_grad(set_to_none=True)
+    saved_bn_states = []
     if restore_bn:
         saved_bn_states = _save_bn_states(net)
 
@@ -684,6 +686,7 @@ def memory_optimization(
     ctx = mp.get_context("spawn")
     device = resolve_device()
     _cprint(verbose, f"Optimizing memory on device {device}")
+    peak_allocated = -1.0
 
     if level > 0:
         _cprint(verbose, "Level 1: layer-wise GC with input spike compression")

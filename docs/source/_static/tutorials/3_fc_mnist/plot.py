@@ -1,6 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from spikingjelly.activation_based import neuron, encoding, functional
 from spikingjelly import visualizing
 
 T = 100

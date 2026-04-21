@@ -1,12 +1,10 @@
 import gym
-import math
 import random
 import numpy as np
 
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
 from torch.distributions import Normal
 
 from torch.utils.tensorboard import SummaryWriter

@@ -462,7 +462,7 @@ extern "C" __global__ void IFNodeBPTTFLOATKernel(
         } 
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise "Surrogate: [Sigmoid | ATan]"
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -601,7 +601,7 @@ extern "C" __global__ void IFNodeBPTTHALFKernel(
         } 
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise "Surrogate: [Sigmoid | ATan]"
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -1180,7 +1180,7 @@ extern "C" __global__ void LIFNodeBPTTFLOATKernel(
         } 
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise "Surrogate: [Sigmoid | ATan]"
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -1333,7 +1333,7 @@ extern "C" __global__ void LIFNodeBPTTHALFKernel(
         } 
 """.replace("alpha", f"{self.alpha}").replace("pai", f"{self.pai}")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise "Surrogate: [Sigmoid | ATan]"
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -1961,7 +1961,7 @@ extern "C" __global__ void PLIFNodeBPTTFLOATKernel(
             }
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise "Surrogate: [Sigmoid | ATan]"
 
         if not self.detach_reset:
             kernel_code += r"""
@@ -2189,7 +2189,7 @@ extern "C" __global__ void PLIFNodeBPTTHALFKernel(
             }  
 """.replace("alpha", f"{self.alpha}f").replace("pai", f"{self.pai}f")
         else:
-            raise f"Surrogate: [Sigmoid | ATan]"
+            raise "Surrogate: [Sigmoid | ATan]"
 
         if not self.detach_reset:
             kernel_code += r"""
