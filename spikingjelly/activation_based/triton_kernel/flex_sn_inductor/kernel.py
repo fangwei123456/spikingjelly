@@ -47,7 +47,9 @@ def build_inference_kernel(
             torch.zeros(1, device="cuda") for _ in range(num_inputs + num_states)
         )
     else:
-        example_inputs = tuple(x.detach().to("cuda") for x in example_inputs)
+        # .clone() breaks aliasing: in-place ops inside core_fn during tracing
+        # must not silently mutate the caller's original buffers.
+        example_inputs = tuple(x.detach().to("cuda").clone() for x in example_inputs)
 
     # Trace core_fn to an aten-level FX graph (no PYTORCH_JIT=0 needed).
     traced = make_fx(core_fn)(*example_inputs)
@@ -154,10 +156,20 @@ def build_training_kernels(
             torch.zeros(1, device="cuda") for _ in range(num_inputs + num_states)
         )
     else:
-        example_inputs = tuple(x.detach().to("cuda") for x in example_inputs)
+        # .clone() breaks aliasing so tracing cannot mutate the caller's buffers.
+        example_inputs = tuple(x.detach().to("cuda").clone() for x in example_inputs)
+
+    # Build requires_grad mask: only float/complex tensors support autograd.
+    # Passing the mask prevents generate_forward_and_backward_graph from calling
+    # requires_grad_(True) on int/bool inputs, which would error during tracing.
+    requires_grad = tuple(
+        t.is_floating_point() or t.is_complex() for t in example_inputs
+    )
 
     # Trace forward AND backward (aot_function, no PYTORCH_JIT=0 needed)
-    fwd_graph, bwd_graph = generate_forward_and_backward_graph(core_fn, example_inputs)
+    fwd_graph, bwd_graph = generate_forward_and_backward_graph(
+        core_fn, example_inputs, requires_grad=requires_grad
+    )
     info = extract_info(fwd_graph, num_inputs, num_states, num_outputs)
 
     # Determine which outputs have gradients in the AOT backward graph
