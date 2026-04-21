@@ -125,9 +125,17 @@ def analyse_graph(custom_fun, requires_grad: tuple):
                 inst = str(ann)
 
             if ph_idx == 0:
-                assert inst == "Tensor" and name == "x"
+                if inst != "Tensor" or name != "x":
+                    raise ValueError(
+                        f"First parameter of custom_fun must be 'x: torch.Tensor', "
+                        f"got '{name}: {ann}'"
+                    )
             elif ph_idx == 1:
-                assert inst == "Tensor" and name == "v_last"
+                if inst != "Tensor" or name != "v_last":
+                    raise ValueError(
+                        f"Second parameter of custom_fun must be 'v_last: torch.Tensor', "
+                        f"got '{name}: {ann}'"
+                    )
 
             var = VarNode(prefix="input", name=name, instance=inst)
             if inst == "Tensor" and ph_idx < len(requires_grad) and requires_grad[ph_idx]:
@@ -186,6 +194,14 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             if src.debug_name in inter_nodes:
                 del inter_nodes[src.debug_name]
             _fx_to_var[ret] = h_var
+
+            # If no cmd was renamed to produce h_var (e.g. the function directly
+            # returns an input placeholder without any computation), insert a
+            # synthetic identity operation so gen_forward_codes emits a valid
+            # 'float output_h = <input>;' declaration instead of referencing an
+            # undeclared variable.
+            if not any(out is h_var for out, _, _ in cmds):
+                cmds.append((h_var, "aten::add", (src, _make_const(0.0), _make_const(1))))
 
     for i, node in enumerate(inter_nodes.values()):
         logging.debug(f"\ninter node [{i}] = {node}")
@@ -440,11 +456,11 @@ def gen_backward_codes(
                     if y.cu_var_bp not in code_block_nodes:
                         code_block_nodes[y.cu_var_bp] = y
                         codes += "                 "
-                        codes += f"float {y.cu_var_bp} = {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                        codes += f"float {y.cu_var_bp} = {z.cu_var_bp} * {alpha.cu_var};\n"
                     else:
                         codes += "                 "
                         codes += (
-                            f"{y.cu_var_bp} += {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                            f"{y.cu_var_bp} += {z.cu_var_bp} * {alpha.cu_var};\n"
                         )
 
         elif fun == "aten::sub":
@@ -481,11 +497,11 @@ def gen_backward_codes(
                     if y.cu_var_bp not in code_block_nodes:
                         code_block_nodes[y.cu_var_bp] = y
                         codes += "                 "
-                        codes += f"float {y.cu_var_bp} = - {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                        codes += f"float {y.cu_var_bp} = - {z.cu_var_bp} * {alpha.cu_var};\n"
                     else:
                         codes += "                 "
                         codes += (
-                            f"{y.cu_var_bp} += - {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                            f"{y.cu_var_bp} += - {z.cu_var_bp} * {alpha.cu_var};\n"
                         )
 
         elif fun == "aten::mul":
