@@ -17,8 +17,8 @@ English version: :doc:`../en/flexsn_inductor`
    :class: warning
 
    * 目前仅支持 CUDA 设备。
-   * ``core`` 中的算子需在 ``FX_TO_TRITON`` 映射表内（add/sub/mul/div/比较/sigmoid 等常见逐元素算子），
-     否则自动回退 ``eager_scan``（日志中会有提示）。
+   * ``core`` 中的算子需在 ``FX_TO_TRITON`` 映射表内，不在表内的算子自动回退 ``eager_scan``（日志中会有提示）。
+     支持的算子见下方 :ref:`算子覆盖 <flexsn-inductor-op-coverage>` 一节。
    * 训练时 ``core`` 应使用 surrogate gradient（如 :class:`spikingjelly.activation_based.surrogate.Sigmoid`）
      而非硬阈值，否则梯度为零。
 
@@ -187,3 +187,43 @@ English version: :doc:`../en/flexsn_inductor`
    * - 跨层融合
      - ``"inductor"`` + ``torch.compile``
      - 外层 Linear/Conv 可与 FlexSN 联合编译
+
+.. _flexsn-inductor-op-coverage:
+
+算子覆盖
+--------
+
+``FX_TO_TRITON`` 映射表目前覆盖以下 ATen 算子（推理和训练路径均支持）：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - 类别
+     - 算子
+   * - 四则运算
+     - ``add``、``sub``、``mul``、``div``、``reciprocal``、``neg``、``rsub``
+   * - 超越函数
+     - ``exp``、``log``、``log2``、``sqrt``、``rsqrt``、``tanh``、``sin``、``cos``、``erf``
+   * - 取整
+     - ``floor``、``ceil``、``round``
+   * - 激活 / 阈值
+     - ``relu``、``sigmoid``、``sign``/``sgn``、``abs``
+   * - 比较
+     - ``eq``、``ne``、``ge``、``le``、``gt``、``lt``
+   * - 逻辑位运算
+     - ``logical_and``/``or``/``not``、``bitwise_and``/``or``/``not``
+   * - 二元数学
+     - ``minimum``、``maximum``、``pow``、``fmod``
+   * - clamp
+     - ``clamp``、``clamp_min``、``clamp_max``
+   * - 类型 / 构造
+     - ``_to_copy``（类型转换）、``scalar_tensor``、``zeros_like``、``ones_like``
+   * - 条件选择
+     - ``where``、``masked_fill``
+   * - 反向专用
+     - ``sigmoid_backward``、``tanh_backward``、``threshold_backward``
+   * - 杂项
+     - ``clone``、``detach``、``spike_fn``
+
+不在表内的算子（如矩阵运算、复杂控制流等）会触发 ``eager_scan`` fallback 并输出 WARNING 日志。

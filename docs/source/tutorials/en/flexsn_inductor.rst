@@ -20,9 +20,9 @@ Inductor path:
    :class: warning
 
    * Only CUDA devices are supported.
-   * Ops inside ``core`` must be in the ``FX_TO_TRITON`` table (common
-     element-wise ops: add/sub/mul/div, comparisons, sigmoid, type casts, etc.).
-     Unsupported ops fall back to ``eager_scan`` with a log warning.
+   * Ops inside ``core`` must be in the ``FX_TO_TRITON`` table.
+     Unsupported ops fall back to ``eager_scan`` with a WARNING log.
+     See :ref:`Op Coverage <flexsn-inductor-op-coverage-en>` below for the full list.
    * For training, ``core`` should use a surrogate gradient
      (e.g. :class:`spikingjelly.activation_based.surrogate.Sigmoid`) instead
      of a hard threshold — hard thresholds yield zero gradients by design.
@@ -197,3 +197,45 @@ When to Use Each Backend
    * - Cross-layer fusion
      - ``"inductor"`` + ``torch.compile``
      - Surrounding Linear/Conv compiled jointly with FlexSN
+
+.. _flexsn-inductor-op-coverage-en:
+
+Op Coverage
+-----------
+
+The ``FX_TO_TRITON`` table currently covers the following ATen ops
+(supported for both inference and training):
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 80
+
+   * - Category
+     - Ops
+   * - Arithmetic
+     - ``add``, ``sub``, ``mul``, ``div``, ``reciprocal``, ``neg``, ``rsub``
+   * - Transcendentals
+     - ``exp``, ``log``, ``log2``, ``sqrt``, ``rsqrt``, ``tanh``, ``sin``, ``cos``, ``erf``
+   * - Rounding
+     - ``floor``, ``ceil``, ``round``
+   * - Activation / threshold
+     - ``relu``, ``sigmoid``, ``sign`` / ``sgn``, ``abs``
+   * - Comparisons
+     - ``eq``, ``ne``, ``ge``, ``le``, ``gt``, ``lt``
+   * - Logic / bitwise
+     - ``logical_and`` / ``or`` / ``not``, ``bitwise_and`` / ``or`` / ``not``
+   * - Binary math
+     - ``minimum``, ``maximum``, ``pow``, ``fmod``
+   * - Clamp
+     - ``clamp``, ``clamp_min``, ``clamp_max``
+   * - Type / construction
+     - ``_to_copy`` (type cast), ``scalar_tensor``, ``zeros_like``, ``ones_like``
+   * - Selection
+     - ``where``, ``masked_fill``
+   * - Backward-only
+     - ``sigmoid_backward``, ``tanh_backward``, ``threshold_backward``
+   * - Misc
+     - ``clone``, ``detach``, ``spike_fn``
+
+Ops not in this table (e.g. matrix ops, complex control flow) trigger
+``eager_scan`` fallback with a WARNING log.
