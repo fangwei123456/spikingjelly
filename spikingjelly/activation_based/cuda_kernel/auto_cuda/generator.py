@@ -213,9 +213,7 @@ def gen_forward_codes(
     for item in cmds:
         output, fun, inputs = item
         codes += "                  "
-        if fun == "prim::Constant":
-            gen_cmd = "\n"
-        elif fun in ["aten::add", "aten::sub"]:
+        if fun in ["aten::add", "aten::sub"]:
             # z = x + y * alpha
             x, y, alpha = inputs
             z = output
@@ -388,9 +386,7 @@ def gen_backward_codes(
         codes += "\n"
         codes += "                 "
         codes += f"// {cuda_cmds[cmds.__len__() - 1 - i]}"
-        if fun == "prim::Constant":
-            codes += "\n"
-        elif fun == "aten::add":
+        if fun == "aten::add":
             # z = x + y * alpha
             x, y, alpha = inputs
             z = output
