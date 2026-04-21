@@ -72,7 +72,7 @@ def analyse_graph(custom_fun, requires_grad: tuple):
     # 'from __future__ import annotations' (PEP 563), unlike __annotations__.
     try:
         annotations = typing.get_type_hints(custom_fun)
-    except Exception:
+    except (NameError, AttributeError):
         annotations = custom_fun.__annotations__
     assert len(annotations) >= 2  # at least x and v_last (plus optional 'return')
 
@@ -110,6 +110,11 @@ def analyse_graph(custom_fun, requires_grad: tuple):
         if fx_node.op == "placeholder":
             name = fx_node.name
             ann = annotations.get(name)
+            if ann is None:
+                raise TypeError(
+                    f"Parameter '{name}' of custom_fun must have a type annotation "
+                    "(torch.Tensor, float, or int)."
+                )
             if ann is torch.Tensor:
                 inst = "Tensor"
             elif ann is float:
@@ -147,7 +152,7 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             # aten::add/sub require a trailing alpha=1 constant for compatibility with
             # gen_forward_codes / gen_backward_codes which expect (x, y, alpha) inputs
             if kind in ("aten::add", "aten::sub") and len(in_vars) == 2:
-                in_vars = in_vars + (_make_const(1),)
+                in_vars = (*in_vars, _make_const(1))
 
             cmds.append((var, kind, in_vars))
 
