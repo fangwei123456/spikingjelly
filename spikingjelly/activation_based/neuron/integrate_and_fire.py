@@ -178,7 +178,6 @@ class IFNode(BaseNode):
         self.v = self.v + x
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_single_step_forward_hard_reset(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
     ):
@@ -188,7 +187,6 @@ class IFNode(BaseNode):
         return spike, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_single_step_forward_soft_reset(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float
     ):
@@ -198,7 +196,6 @@ class IFNode(BaseNode):
         return spike, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_hard_reset(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
     ):
@@ -211,7 +208,6 @@ class IFNode(BaseNode):
         return spike_seq, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_hard_reset_with_v_seq(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
     ):
@@ -226,7 +222,6 @@ class IFNode(BaseNode):
         return spike_seq, v, v_seq
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_soft_reset(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float
     ):
@@ -239,7 +234,6 @@ class IFNode(BaseNode):
         return spike_seq, v
 
     @staticmethod
-    @torch.jit.script
     def jit_eval_multi_step_forward_soft_reset_with_v_seq(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float
     ):

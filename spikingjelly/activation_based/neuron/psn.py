@@ -222,7 +222,6 @@ class MaskedPSN(base.MemoryModule):
         self.register_buffer("mask1", mask1)
 
     @staticmethod
-    @torch.jit.script
     def gen_masked_weight(
         lambda_: torch.Tensor,
         mask0: torch.Tensor,

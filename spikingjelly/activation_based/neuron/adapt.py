@@ -59,7 +59,6 @@ class AdaptBaseNode(BaseNode):
         self.b = b
 
     @staticmethod
-    @torch.jit.script
     def jit_neuronal_adaptation(
         w: torch.Tensor, tau_w: float, a: float, v_rest: float, v: torch.Tensor
     ):
@@ -91,7 +90,6 @@ class AdaptBaseNode(BaseNode):
         )
 
     @staticmethod
-    @torch.jit.script
     def jit_hard_reset(
         v: torch.Tensor,
         w: torch.Tensor,
@@ -105,7 +103,6 @@ class AdaptBaseNode(BaseNode):
         return v, w
 
     @staticmethod
-    @torch.jit.script
     def jit_soft_reset(
         v: torch.Tensor,
         w: torch.Tensor,

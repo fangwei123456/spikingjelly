@@ -1,5 +1,4 @@
 from typing import Callable, Optional, Tuple, List
-import os
 import logging
 
 import torch
@@ -45,12 +44,6 @@ class FlexSNKernel:
         ``num_inputs`` 个输入序列，``states`` 是 ``num_states`` 个初始状态；返回值为 ``[*output_seqs, *state_seqs]`` ，
         其中 ``output_seqs`` 是 ``num_outputs`` 个输出序列，``state_seqs`` 是 ``num_states`` 个状态序列。
 
-        .. admonition:: 警告
-            :class: warning
-
-            使用 ``FlexSNKernel`` 需要禁用 ``torch.jit``。请在运行脚本前设置环境变量 ``PYTORCH_JIT=0``。
-            参见: https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging 。
-
         阅读 :class:`FlexSN` 文档以获取参数的详细信息。
 
         ----
@@ -69,23 +62,9 @@ class FlexSNKernel:
         ``[*output_seqs, *state_seqs]`` , where ``output_seqs`` is a list of output sequences, and
         ``state_seqs`` is a list of state sequences.
 
-        .. admonition:: Warning
-            :class: warning
-
-            ``FlexSNKernel`` requires ``torch.jit`` to be disabled. Please set the env var
-            ``PYTORCH_JIT=0``. See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging .
-
         For detailed information about arguments, refer to :class:`FlexSN`.
         """
         super().__init__()
-        jit_disabled = os.environ.get("PYTORCH_JIT", "1") == "0"
-        if not jit_disabled:
-            raise RuntimeError(
-                "FlexSNKernel requires torch.jit to be disabled. "
-                "Please set the env var PYTORCH_JIT=0 before running your script. "
-                "See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging ."
-            )
-
         if example_inputs is None:
             example_inputs = [
                 torch.randn([1], device="cuda") for _ in range(num_inputs + num_states)
@@ -159,12 +138,6 @@ class FlexSN(base.MemoryModule):
         ``FlexSN`` 在 :class:`FlexSNKernel` 的基础上，进一步实现了其他 SpikingJelly 神经元的功能。
         实例化后，``FlexSN`` 对象输入和输出的语义与其他 SpikingJelly 神经元一致，取决于步进模式 ``step_mode`` 。
 
-        .. admonition:: 警告
-            :class: warning
-
-            使用 FlexSN 需要禁用 ``torch.jit``。请在运行脚本前设置环境变量 ``PYTORCH_JIT=0``。
-            参见: https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging 。
-
         :param core: 描述单步前向推理的函数，签名应为 ``[*inputs, *states] -> [*outputs, *updated_states]``，
             其中输入与输出均为张量。“inputs”和“outputs”的数量任意，需用 ``num_inputs`` 和 ``num_outputs`` 指明。
             “states”的数量任意，与“updated_states”数量一致，且需用 ``num_states`` 指明。
@@ -211,12 +184,6 @@ class FlexSN(base.MemoryModule):
         and further implements other features of SpikingJelly neurons. The input / output
         semantics of a ``FlexSN`` object is similar to those of other SpikingJelly neurons,
         depending on ``step_mode`` .
-
-        .. admonition:: Warning
-            :class: warning
-
-            FlexSN requires ``torch.jit`` to be disabled. Please set the env var
-            ``PYTORCH_JIT=0``. See https://docs.pytorch.org/docs/2.8/jit.html#disable-jit-for-debugging .
 
         :param core: a function describing the single-step inference dynamics of
             the spiking neuron. Its signature should be ``[*inputs, *states] -> [*outputs, *updated_states]``,

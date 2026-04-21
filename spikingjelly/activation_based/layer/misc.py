@@ -162,7 +162,6 @@ class SynapseFilter(base.MemoryModule):
         return f"tau={tau}, learnable={self.learnable}, step_mode={self.step_mode}"
 
     @staticmethod
-    @torch.jit.script
     def js_single_step_forward_learnable(
         x: torch.Tensor, w: torch.Tensor, out_i: torch.Tensor
     ):
@@ -171,7 +170,6 @@ class SynapseFilter(base.MemoryModule):
         return out_i
 
     @staticmethod
-    @torch.jit.script
     def js_single_step_forward(x: torch.Tensor, tau: float, out_i: torch.Tensor):
         inv_tau = 1.0 / tau
         out_i = out_i - (1.0 - x) * out_i * inv_tau + x

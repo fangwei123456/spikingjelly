@@ -200,13 +200,11 @@ class BaseNode(base.MemoryModule):
                 self.register_memory("v_seq", None)
 
     @staticmethod
-    @torch.jit.script
     def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
         v = (1.0 - spike) * v + spike * v_reset
         return v
 
     @staticmethod
-    @torch.jit.script
     def jit_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
         v = v - spike * v_threshold
         return v

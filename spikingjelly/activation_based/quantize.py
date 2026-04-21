@@ -11,7 +11,6 @@ class round_atgf(torch.autograd.Function):
         return grad_output
 
 
-@torch.jit.ignore
 def round(x: torch.Tensor):
     r"""
     **API Language:**
@@ -58,7 +57,6 @@ class ceil_atgf(torch.autograd.Function):
         return grad_output
 
 
-@torch.jit.ignore
 def ceil(x: torch.Tensor):
     r"""
     **API Language:**
@@ -105,7 +103,6 @@ class floor_atgf(torch.autograd.Function):
         return grad_output
 
 
-@torch.jit.ignore
 def floor(x: torch.Tensor):
     r"""
     **API Language:**
@@ -142,7 +139,6 @@ def floor(x: torch.Tensor):
     return floor_atgf.apply(x)
 
 
-@torch.jit.script
 def clamp_backward(
     grad_output: torch.Tensor, x: torch.Tensor, min_value: float, max_value: float
 ):
@@ -170,7 +166,6 @@ class clamp_atgf(torch.autograd.Function):
         )
 
 
-@torch.jit.ignore
 def clamp(x: torch.Tensor, min_value: float, max_value: float):
     r"""
     **API Language:**
@@ -233,7 +228,6 @@ def clamp(x: torch.Tensor, min_value: float, max_value: float):
     return clamp_atgf.apply(x, min_value, max_value)
 
 
-@torch.jit.script
 def step_quantize_forward(x: torch.Tensor, step: float):
     return torch.round_(x / step) * step
 
@@ -248,7 +242,6 @@ class step_quantize_atgf(torch.autograd.Function):
         return grad_output, None
 
 
-@torch.jit.ignore
 def step_quantize(x: torch.Tensor, step: float):
     r"""
     **API Language:**
@@ -301,7 +294,6 @@ def step_quantize(x: torch.Tensor, step: float):
     return step_quantize_atgf.apply(x, step)
 
 
-@torch.jit.script
 def k_bit_quantize_forward(x: torch.Tensor, k: int):
     c = float(1 << k) - 1.0
     x = x * c
@@ -319,7 +311,6 @@ class k_bit_quantize_atgf(torch.autograd.Function):
         return grad_output, None
 
 
-@torch.jit.ignore
 def k_bit_quantize(x: torch.Tensor, k: int):
     r"""
     **API Language:**
@@ -436,7 +427,6 @@ def affine_k_bit_quantize(x: torch.Tensor, k: int, w: torch.Tensor, b: torch.Ten
     return w * k_bit_quantize(x, k) + b
 
 
-@torch.jit.script
 def clamp_by_linear(x: torch.Tensor, eps: float = 1e-5):
     r"""
     **API Language:**
