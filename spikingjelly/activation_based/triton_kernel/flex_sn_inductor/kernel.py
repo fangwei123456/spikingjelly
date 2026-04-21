@@ -162,6 +162,13 @@ def build_training_kernels(
 
     # Determine which outputs have gradients in the AOT backward graph
     mask = _diff_mask(core_fn, num_outputs, num_states, example_inputs)
+    expected = num_outputs + num_states
+    if len(mask) != expected:
+        raise ValueError(
+            f"core_fn returned {len(mask)} values but "
+            f"num_outputs+num_states={expected}; "
+            f"ensure core_fn returns exactly (*outputs, *updated_states)."
+        )
     n_saved = len(info.c2k_return_mapping)
 
     raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
@@ -174,7 +181,7 @@ def build_training_kernels(
 
     # Backward kernel — wrap with shim if non-differentiable outputs exist
     bwd_str, bwd_name = generate_triton_code_str(bwd_graph, core_name + "_bwd")
-    if sum(mask) < num_outputs + num_states:
+    if sum(mask) < expected:
         shim_code, bwd_call_name = _make_bwd_shim(
             bwd_name, n_saved, num_outputs, num_states, mask
         )
