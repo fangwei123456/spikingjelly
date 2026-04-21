@@ -463,9 +463,11 @@ class MemoryModule(nn.Module, StepModule):
                 and cur.dtype == rv.dtype
                 and cur.device == rv.device
             ):
-                cur.copy_(rv)  # in-place: reuse existing allocation
+                # detach_() breaks any stale autograd graph before in-place copy
+                cur.detach_().copy_(rv)
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
-                cur.fill_(rv)  # in-place fill with scalar reset value
+                # detach_() prevents stale grad_fn from triggering a second backward
+                cur.detach_().fill_(rv)
             else:
                 self._memories[key] = copy.deepcopy(rv)
 

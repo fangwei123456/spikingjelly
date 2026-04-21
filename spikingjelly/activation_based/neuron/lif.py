@@ -425,6 +425,39 @@ class LIFNode(BaseNode):
             v_seq[t] = v
         return spike_seq, v, v_seq
 
+    @staticmethod
+    def _eval_multi_step_forward(
+        x_seq: torch.Tensor,
+        v: torch.Tensor,
+        v_threshold: float,
+        v_reset,
+        tau: float,
+        decay_input: bool,
+        store_v_seq: bool,
+    ):
+        """Unified fallback for all 4 LIF variants (CPU or unsupported surrogate).
+
+        Replaces the 8 separate ``jit_eval_multi_step_forward_*`` methods.
+        """
+        T = x_seq.shape[0]
+        spike_seq = torch.zeros_like(x_seq)
+        v_seq = torch.zeros_like(x_seq) if store_v_seq else None
+        soft_reset = v_reset is None
+        _vr = 0.0 if soft_reset else v_reset
+        for t in range(T):
+            if decay_input:
+                v = v + (x_seq[t] - (v - _vr)) / tau
+            else:
+                v = v - (v - _vr) / tau + x_seq[t]
+            spike = (v >= v_threshold).to(x_seq)
+            v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
+            spike_seq[t] = spike
+            if store_v_seq:
+                v_seq[t] = v
+        if store_v_seq:
+            return spike_seq, v, v_seq
+        return spike_seq, v
+
     def single_step_forward(self, x: torch.Tensor):
         if self.training:
             if self.backend == "torch":
@@ -516,6 +549,23 @@ class LIFNode(BaseNode):
     def multi_step_forward(self, x_seq: torch.Tensor):
         if self.training:
             if self.backend == "torch":
+                # On GPU with a supported surrogate, use the unified Triton kernel
+                # (much faster than the Python for loop in super()).
+                # Falls back to the Python loop for CPU or custom surrogates.
+                if x_seq.is_cuda:
+                    self.v_float_to_tensor(x_seq[0])
+                    try:
+                        spike_seq, v_seq = triton_kernel.multistep_lif(
+                            x_seq, self.v, self.decay_input, self.tau,
+                            self.v_threshold, self.v_reset,
+                            self.detach_reset, self.surrogate_function,
+                        )
+                        if self.store_v_seq:
+                            self.v_seq = v_seq
+                        self.v = v_seq[-1].clone()
+                        return spike_seq
+                    except (NotImplementedError, AttributeError, TypeError):
+                        pass  # unsupported surrogate or no Triton → Python loop
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
                 hard_reset = self.v_reset is not None
@@ -591,77 +641,33 @@ class LIFNode(BaseNode):
         else:
             self.v_float_to_tensor(x_seq[0])
 
-            if self.backend == "triton":
-                spike_seq, v_seq = triton_kernel.multistep_lif(
-                    x_seq,
-                    self.v,
-                    self.decay_input,
-                    self.tau,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
-                )
-                if self.store_v_seq:
-                    self.v_seq = v_seq
-                self.v = v_seq[-1].clone()
-                return spike_seq
+            # All backends: try Triton on GPU first (unified kernel covers all
+            # soft/hard reset × decay_input variants via tl.constexpr).
+            # Falls back to the unified Python loop for CPU or custom surrogates.
+            if x_seq.is_cuda:
+                try:
+                    spike_seq, v_seq = triton_kernel.multistep_lif(
+                        x_seq, self.v, self.decay_input, self.tau,
+                        self.v_threshold, self.v_reset,
+                        self.detach_reset, self.surrogate_function,
+                    )
+                    if self.store_v_seq:
+                        self.v_seq = v_seq
+                    self.v = v_seq[-1].clone()
+                    return spike_seq
+                except (NotImplementedError, AttributeError, TypeError):
+                    pass  # unsupported surrogate or no Triton → Python loop
 
-            # torch & cupy backend:
-            if self.v_reset is None:
-                if self.decay_input:
-                    if self.store_v_seq:
-                        spike_seq, self.v, self.v_seq = (
-                            self.jit_eval_multi_step_forward_soft_reset_decay_input_with_v_seq(
-                                x_seq, self.v, self.v_threshold, self.tau
-                            )
-                        )
-                    else:
-                        spike_seq, self.v = (
-                            self.jit_eval_multi_step_forward_soft_reset_decay_input(
-                                x_seq, self.v, self.v_threshold, self.tau
-                            )
-                        )
-                else:
-                    if self.store_v_seq:
-                        spike_seq, self.v, self.v_seq = (
-                            self.jit_eval_multi_step_forward_soft_reset_no_decay_input_with_v_seq(
-                                x_seq, self.v, self.v_threshold, self.tau
-                            )
-                        )
-                    else:
-                        spike_seq, self.v = (
-                            self.jit_eval_multi_step_forward_soft_reset_no_decay_input(
-                                x_seq, self.v, self.v_threshold, self.tau
-                            )
-                        )
+            # CPU or unsupported surrogate: unified Python fallback
+            # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
+            out = self._eval_multi_step_forward(
+                x_seq, self.v, self.v_threshold, self.v_reset,
+                self.tau, self.decay_input, self.store_v_seq,
+            )
+            if self.store_v_seq:
+                spike_seq, self.v, self.v_seq = out
             else:
-                if self.decay_input:
-                    if self.store_v_seq:
-                        spike_seq, self.v, self.v_seq = (
-                            self.jit_eval_multi_step_forward_hard_reset_decay_input_with_v_seq(
-                                x_seq, self.v, self.v_threshold, self.v_reset, self.tau
-                            )
-                        )
-                    else:
-                        spike_seq, self.v = (
-                            self.jit_eval_multi_step_forward_hard_reset_decay_input(
-                                x_seq, self.v, self.v_threshold, self.v_reset, self.tau
-                            )
-                        )
-                else:
-                    if self.store_v_seq:
-                        spike_seq, self.v, self.v_seq = (
-                            self.jit_eval_multi_step_forward_hard_reset_no_decay_input_with_v_seq(
-                                x_seq, self.v, self.v_threshold, self.v_reset, self.tau
-                            )
-                        )
-                    else:
-                        spike_seq, self.v = (
-                            self.jit_eval_multi_step_forward_hard_reset_no_decay_input(
-                                x_seq, self.v, self.v_threshold, self.v_reset, self.tau
-                            )
-                        )
+                spike_seq, self.v = out
             return spike_seq
 
 
