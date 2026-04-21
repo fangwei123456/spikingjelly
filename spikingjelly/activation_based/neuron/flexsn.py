@@ -444,9 +444,15 @@ class FlexSN(base.MemoryModule):
                     *(a.contiguous() for a in args),
                     *(s.contiguous() for s in self.states),
                 )
-            elif (not _no_grad and self._inductor_fwd_kernel is not None
-                  and args[0].is_cuda):
-                # Training path: Triton forward + backward scan kernels (BPTT)
+            elif (not _no_grad
+                  and self._inductor_fwd_kernel is not None
+                  and args[0].is_cuda
+                  and not torch.compiler.is_compiling()):
+                # Training outside torch.compile: single Triton fwd+bwd scan kernels.
+                # Inside torch.compile the Triton kernel objects are not traceable by
+                # Dynamo (contiguous_and_device_guard does isinstance checks on them);
+                # use eager_scan in that case so Dynamo can unroll the time loop into
+                # an FX graph that Inductor compiles with standard autograd backward.
                 from ..triton_kernel.flexsn.wrapper import FlexSNFunction
 
                 result_seqs = FlexSNFunction.apply(
@@ -458,7 +464,9 @@ class FlexSN(base.MemoryModule):
                     *(s.contiguous() for s in self.states),
                 )
             else:
-                # Fallback: eager_scan (CPU, or kernels unavailable)
+                # torch.compile + training → eager_scan so Dynamo traces the time
+                # loop into a compilable FX graph with correct autograd backward.
+                # Also used as CPU / kernel-unavailable fallback.
                 from ..triton_kernel.flex_sn_inductor import eager_scan
 
                 if eager_scan is None:
