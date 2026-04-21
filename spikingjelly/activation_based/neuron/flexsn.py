@@ -296,7 +296,7 @@ class FlexSN(base.MemoryModule):
             if build_inference_kernel is not None:
                 try:
                     self._inductor_scan_kernel, self._inductor_scan_info = (
-                        build_inference_kernel(core, num_inputs, num_states, num_outputs)
+                        build_inference_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
                 except Exception as e:
                     logging.warning(
@@ -307,7 +307,7 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_info = None
                 try:
                     self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
-                        build_training_kernels(core, num_inputs, num_states, num_outputs)
+                        build_training_kernels(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
                 except Exception as e:
                     logging.warning(
@@ -497,13 +497,13 @@ class FlexSN(base.MemoryModule):
                 # CPU / training kernel unavailable: eager_scan fallback
                 from ..triton_kernel.flex_sn_inductor import eager_scan
 
-                if eager_scan is None:
-                    raise RuntimeError(
-                        "FlexSN inductor backend is unavailable: "
-                        "eager_scan failed to import. "
-                        "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
-                    )
                 if torch.compiler.is_compiling():
+                    if eager_scan is None:
+                        raise RuntimeError(
+                            "FlexSN inductor backend is unavailable: "
+                            "eager_scan failed to import. "
+                            "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+                        )
                     result_seqs = eager_scan(
                         self.core,
                         self.num_inputs,
