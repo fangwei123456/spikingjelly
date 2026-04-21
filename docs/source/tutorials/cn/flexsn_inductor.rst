@@ -76,10 +76,13 @@ English version: :doc:`../en/flexsn_inductor`
     out.sum().backward()        # BPTT via Triton fwd+bwd 核
     print(x.grad.shape)         # [8, 64, 512]
 
-    # 也可套 torch.compile：Dynamo 追踪时间循环，Inductor 编译
-    model = torch.compile(neuron, fullgraph=True)
-    out = model(x)
-    out.sum().backward()
+.. admonition:: 训练时不要套 torch.compile
+   :class: warning
+
+   训练路径已内置 Triton 单核正/反向扫描（``tl.static_range(T)``），性能最优。
+   套 ``torch.compile`` 后 Dynamo 无法追踪 Triton 内核调用，会回退到
+   ``eager_scan`` 展开 T 步，T=32 时训练耗时反而增加约 50%。
+   ``torch.compile`` 仅对**推理**的跨层融合有额外收益。
 
 内核分发策略
 ------------
@@ -97,7 +100,7 @@ English version: :doc:`../en/flexsn_inductor`
    * - 训练 + CUDA + 在 ``torch.compile`` **外**
      - Triton FlexSNFunction（专用 fwd+bwd 核，BPTT）
    * - 训练 + CUDA + 在 ``torch.compile`` **内**
-     - ``eager_scan``（Dynamo 追踪 for 循环，Inductor 编译，标准 autograd backward）
+     - ``eager_scan``（Dynamo 展开 T 步，**比 compile 外慢约 50%**，不推荐）
    * - CPU 或 kernel 不可用
      - ``eager_scan`` / ``flex_sn_scan`` HOP fallback
 
@@ -155,12 +158,14 @@ English version: :doc:`../en/flexsn_inductor`
 **推理**：初始化时通过 ``make_fx`` 追踪 ``core``，使用 FlexSN 模板生成带
 ``tl.static_range(T)`` 时间循环的单个 Triton 扫描内核，每次推理只触发一次 kernel launch。
 
-**训练**：初始化时通过 ``aot_function`` 同时追踪正向和反向计算图（无需 ``PYTORCH_JIT=0``），
-生成专用的 Triton 正向核（保存中间值）和反向核（时间逆序扫描）。
-对于非可微输出（如硬阈值脉冲），自动生成 shim wrapper 适配 AOT backward 的调用签名。
+**训练（不套 torch.compile）**：初始化时通过 ``aot_function`` 同时追踪正向和反向计算图
+（无需 ``PYTORCH_JIT=0``），生成专用的 Triton 正向核（保存中间值）和反向核（时间逆序扫描），
+两者均含 ``tl.static_range(T)`` 时间循环，每方向只触发一次 kernel launch。
+在 SpikingVGG-16-BN（T=4, B=64, CIFAR-10）训练基准中，比 LIFNode triton 快约 12%，
+比纯 PyTorch 快约 45%。
 
-在 SpikingVGG-16-BN（T=4, B=64, CIFAR-10）训练基准中，FlexSN inductor
-比 LIFNode triton 快约 12%，比纯 PyTorch 快约 45%。
+**训练时不应套 ``torch.compile``**：Dynamo 无法追踪 ``FlexSNFunction`` 内部的 Triton 调用，
+会回退到 ``eager_scan`` 展开 T 步，实测 T=32 时耗时增加约 50%。
 
 使用建议
 --------
@@ -178,15 +183,12 @@ English version: :doc:`../en/flexsn_inductor`
    * - CUDA 推理，追求极致性能
      - ``"inductor"``
      - 单核 scan，无需 PYTORCH_JIT=0
-   * - CUDA 训练，无 torch.compile
-     - ``"inductor"``
-     - Triton fwd+bwd 核，快于 triton
-   * - CUDA 训练 + torch.compile
-     - ``"inductor"``
-     - 兼容；compile 下走 eager_scan + Inductor 编译
-   * - 跨层融合
+   * - CUDA 训练
+     - ``"inductor"``（**不套** ``torch.compile``）
+     - Triton 单核 fwd+bwd，快于 triton；compile 反而慢 ~50%
+   * - 推理 + 跨层融合
      - ``"inductor"`` + ``torch.compile``
-     - 外层 Linear/Conv 可与 FlexSN 联合编译
+     - 单核 scan + 与外层 Conv/Linear 联合编译
 
 .. _flexsn-inductor-op-coverage:
 

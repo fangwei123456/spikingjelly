@@ -81,10 +81,15 @@ Use a surrogate gradient to make spike signals differentiable:
     out.sum().backward()        # BPTT via dedicated Triton fwd+bwd kernels
     print(x.grad.shape)         # [8, 64, 512]
 
-    # Also works under torch.compile: Dynamo unrolls the loop, Inductor compiles
-    model = torch.compile(neuron, fullgraph=True)
-    out = model(x)
-    out.sum().backward()
+.. admonition:: Do not wrap training with torch.compile
+   :class: warning
+
+   The training path already uses a single Triton forward+backward scan kernel
+   with a ``tl.static_range(T)`` time loop — it is already optimal.
+   Under ``torch.compile``, Dynamo cannot trace the Triton kernel call inside
+   ``FlexSNFunction`` and falls back to ``eager_scan``, which unrolls T steps
+   into separate ops.  At T=32 this increases training time by ~50%.
+   Use ``torch.compile`` only for **inference** (cross-layer fusion).
 
 Kernel Dispatch Strategy
 ------------------------
@@ -102,7 +107,7 @@ Kernel Dispatch Strategy
    * - Training + CUDA + **outside** ``torch.compile``
      - Triton FlexSNFunction (dedicated fwd+bwd kernels, BPTT)
    * - Training + CUDA + **inside** ``torch.compile``
-     - ``eager_scan`` (Dynamo unrolls loop, Inductor compiles, autograd backward)
+     - ``eager_scan`` (Dynamo unrolls T steps — **~50% slower**, not recommended)
    * - CPU or kernels unavailable
      - ``eager_scan`` / ``flex_sn_scan`` HOP fallback
 
@@ -162,15 +167,17 @@ the FlexSN template generates a single Triton scan kernel with a
 ``tl.static_range(T)`` time loop. Every inference call triggers exactly one
 kernel launch regardless of T.
 
-**Training**: at initialisation time, ``aot_function`` traces both the forward
-and backward of ``core`` (no ``PYTORCH_JIT=0`` required) and compiles dedicated
-Triton forward and backward scan kernels. For non-differentiable outputs (e.g.
-hard-threshold spikes), a shim wrapper is generated automatically to match the
-AOT backward signature. Under ``torch.compile``, the training path uses
-``eager_scan`` so Dynamo can trace the time loop into an FX graph.
+**Training (without torch.compile)**: at initialisation time, ``aot_function``
+traces both the forward and backward of ``core`` (no ``PYTORCH_JIT=0`` required)
+and compiles dedicated Triton forward and backward scan kernels, each with a
+``tl.static_range(T)`` time loop — one kernel launch per direction regardless of T.
+On SpikingVGG-16-BN (T=4, B=64, CIFAR-10) this is ~12% faster than LIFNode triton
+and ~45% faster than the pure PyTorch baseline.
 
-On SpikingVGG-16-BN (T=4, B=64, CIFAR-10) FlexSN inductor is ~12% faster than
-LIFNode triton and ~45% faster than the pure PyTorch baseline.
+**Do not wrap training with torch.compile**: Dynamo cannot trace the Triton kernel
+call inside ``FlexSNFunction`` and falls back to ``eager_scan``, unrolling T steps
+into separate ops.  At T=32 training time increases by ~50% compared to the
+no-compile path.
 
 When to Use Each Backend
 ------------------------
@@ -188,15 +195,12 @@ When to Use Each Backend
    * - CUDA inference, max throughput
      - ``"inductor"``
      - Single-kernel scan, no PYTORCH_JIT=0
-   * - CUDA training, no torch.compile
-     - ``"inductor"``
-     - Triton fwd+bwd kernels, faster than triton
-   * - CUDA training + torch.compile
-     - ``"inductor"``
-     - Compatible; compile uses eager_scan + Inductor
-   * - Cross-layer fusion
+   * - CUDA training
+     - ``"inductor"`` (**without** ``torch.compile``)
+     - Single-kernel fwd+bwd scan; compile adds ~50% overhead
+   * - Inference + cross-layer fusion
      - ``"inductor"`` + ``torch.compile``
-     - Surrounding Linear/Conv compiled jointly with FlexSN
+     - Single-kernel scan + joint compilation with surrounding Conv/Linear
 
 .. _flexsn-inductor-op-coverage-en:
 
