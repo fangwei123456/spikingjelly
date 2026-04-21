@@ -76,13 +76,15 @@ English version: :doc:`../en/flexsn_inductor`
     out.sum().backward()        # BPTT via Triton fwd+bwd 核
     print(x.grad.shape)         # [8, 64, 512]
 
-.. admonition:: 训练时不要套 torch.compile
-   :class: warning
+.. admonition:: 训练时推荐套 torch.compile（无 fullgraph）
+   :class: tip
 
-   训练路径已内置 Triton 单核正/反向扫描（``tl.static_range(T)``），性能最优。
-   套 ``torch.compile`` 后 Dynamo 无法追踪 Triton 内核调用，会回退到
-   ``eager_scan`` 展开 T 步，T=32 时训练耗时反而增加约 50%。
-   ``torch.compile`` 仅对**推理**的跨层融合有额外收益。
+   训练路径已内置 ``@torch._dynamo.disable`` 包装。套 ``torch.compile()``（不加
+   ``fullgraph=True``）时，Dynamo 在 FlexSN 处产生 graph break，FlexSN 仍使用
+   Triton 单核正/反向扫描，而前后的 Conv/Linear 层被 Inductor 编译加速。
+   实测整体比不加 compile 快约 28%（RTX 4090，T=32）。
+
+   ``torch.compile(fullgraph=True)`` 会报错，去掉 ``fullgraph=True`` 即可。
 
 内核分发策略
 ------------
@@ -97,10 +99,9 @@ English version: :doc:`../en/flexsn_inductor`
      - 路径
    * - 推理（no grad）+ CUDA
      - Triton 单核 scan（``tl.static_range(T)``，1 次 launch）
-   * - 训练 + CUDA + 在 ``torch.compile`` **外**
-     - Triton FlexSNFunction（专用 fwd+bwd 核，BPTT）
-   * - 训练 + CUDA + 在 ``torch.compile`` **内**
-     - ``eager_scan``（Dynamo 展开 T 步，**比 compile 外慢约 50%**，不推荐）
+   * - 训练 + CUDA（含 torch.compile 内外）
+     - ``@torch._dynamo.disable`` 包装的 Triton FlexSNFunction；compile 下产生
+       graph break，FlexSN 仍用 Triton 核，周围层被 Inductor 编译
    * - CPU 或 kernel 不可用
      - ``eager_scan`` / ``flex_sn_scan`` HOP fallback
 
@@ -164,8 +165,10 @@ English version: :doc:`../en/flexsn_inductor`
 在 SpikingVGG-16-BN（T=4, B=64, CIFAR-10）训练基准中，比 LIFNode triton 快约 12%，
 比纯 PyTorch 快约 45%。
 
-**训练时不应套 ``torch.compile``**：Dynamo 无法追踪 ``FlexSNFunction`` 内部的 Triton 调用，
-会回退到 ``eager_scan`` 展开 T 步，实测 T=32 时耗时增加约 50%。
+**训练（套或不套 ``torch.compile``）**：FlexSNFunction 经 ``@torch._dynamo.disable``
+包装，``torch.compile()``（不含 ``fullgraph=True``）下 Dynamo 在此处产生 graph break，
+FlexSN 继续使用 Triton 单核扫描，周围层由 Inductor 编译，整体比不加 compile 快约 28%。
+``torch.compile(fullgraph=True)`` 会报错，移除该选项即可。
 
 使用建议
 --------
@@ -184,8 +187,8 @@ English version: :doc:`../en/flexsn_inductor`
      - ``"inductor"``
      - 单核 scan，无需 PYTORCH_JIT=0
    * - CUDA 训练
-     - ``"inductor"``（**不套** ``torch.compile``）
-     - Triton 单核 fwd+bwd，快于 triton；compile 反而慢 ~50%
+     - ``"inductor"`` + ``torch.compile()``（可选）
+     - Triton 单核 fwd+bwd；compile 下 graph break，周围层编译加速 ~28%
    * - 推理 + 跨层融合
      - ``"inductor"`` + ``torch.compile``
      - 单核 scan + 与外层 Conv/Linear 联合编译
