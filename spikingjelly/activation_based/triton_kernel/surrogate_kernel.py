@@ -59,8 +59,10 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
         sg = alpha / 2.0 * tl.exp(-alpha * tl.abs(h.to(tl.float32)))
 
     elif sg_triton_id == 4:  # SoftSign:  1 / (2 * alpha * (1/alpha + |h|)^2)
-        denom = 2.0 * alpha * (1.0 / alpha + tl.abs(h.to(tl.float32)))
-        sg = 1.0 / (denom * denom)
+        # Only (1/alpha + |h|) is squared; 2*alpha is a linear scale factor.
+        # Previous: denom = 2α*(1/α+|h|), sg = 1/denom² → off by factor 2α.
+        temp = 1.0 / alpha + tl.abs(h.to(tl.float32))
+        sg = 1.0 / (2.0 * alpha * temp * temp)
 
     elif sg_triton_id == 5:  # SuperSpike:  alpha / (|h| + 1)^2
         denom = tl.abs(h.to(tl.float32)) + 1.0

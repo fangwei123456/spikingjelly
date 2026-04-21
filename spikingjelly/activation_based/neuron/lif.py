@@ -564,7 +564,7 @@ class LIFNode(BaseNode):
                             self.v_seq = v_seq
                         self.v = v_seq[-1].clone()
                         return spike_seq
-                    except (NotImplementedError, AttributeError, TypeError):
+                    except (NotImplementedError, AttributeError, TypeError, KeyError):
                         pass  # unsupported surrogate or no Triton → Python loop
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
@@ -642,7 +642,7 @@ class LIFNode(BaseNode):
             self.v_float_to_tensor(x_seq[0])
 
             # All backends: try Triton on GPU first (unified kernel covers all
-            # soft/hard reset × decay_input variants via tl.constexpr).
+            # soft/hard reset x decay_input variants via tl.constexpr).
             # Falls back to the unified Python loop for CPU or custom surrogates.
             if x_seq.is_cuda:
                 try:

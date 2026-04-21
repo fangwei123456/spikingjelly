@@ -466,8 +466,11 @@ class MemoryModule(nn.Module, StepModule):
                 # detach_() breaks any stale autograd graph before in-place copy
                 cur.detach_().copy_(rv)
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
-                # detach_() prevents stale grad_fn from triggering a second backward
-                cur.detach_().fill_(rv)
+                # Restore to the scalar reset value so v_float_to_tensor() can
+                # detect a float on the next forward and re-create a correctly
+                # shaped/device tensor.  Do NOT fill in-place: that would keep
+                # a tensor with a potentially stale grad_fn in the registry.
+                self._memories[key] = rv
             else:
                 self._memories[key] = copy.deepcopy(rv)
 
