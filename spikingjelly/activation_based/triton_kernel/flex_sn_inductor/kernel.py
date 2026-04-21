@@ -54,7 +54,10 @@ def build_inference_kernel(
     graph = traced.graph
 
     # Generate Triton function source for the per-step body.
-    core_name = f"{core_fn.__name__}_inductor_scan"
+    # Sanitize __name__: lambdas produce "<lambda>" which is not a valid
+    # Python identifier — replace non-alphanumeric characters with "_".
+    safe_name = "".join(c if c.isalnum() else "_" for c in core_fn.__name__)
+    core_name = f"{safe_name}_inductor_scan"
     core_str, core_name = generate_triton_code_str(graph, core_name)
 
     # Extract metadata: arg/return names, output/state counts.
@@ -150,7 +153,8 @@ def build_training_kernels(
     mask = _diff_mask(core_fn, num_outputs, num_states, example_inputs)
     n_saved = len(info.c2k_return_mapping)
 
-    core_name = core_fn.__name__ + "_inductor_train"
+    safe_name = "".join(c if c.isalnum() else "_" for c in core_fn.__name__)
+    core_name = safe_name + "_inductor_train"
 
     # Forward kernel — saves intermediates needed by backward
     fwd_str, fwd_name = generate_triton_code_str(fwd_graph, core_name + "_fwd")
