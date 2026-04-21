@@ -291,10 +291,11 @@ def get_flexsn_backward_kernel(
     kernel_input_signature += f",\n{INDENTATION}".join(
         [f"grad_v{i}_seq_ptr" for i in range(num_states)]
     )
-    kernel_input_signature += f",\n{INDENTATION}"
-    kernel_input_signature += f",\n{INDENTATION}".join(
-        [f"res{i}_b_seq_ptr" for i in range(n)]
-    )
+    if n > 0:
+        kernel_input_signature += f",\n{INDENTATION}"
+        kernel_input_signature += f",\n{INDENTATION}".join(
+            [f"res{i}_b_seq_ptr" for i in range(n)]
+        )
     # res{i}_b slightly different from res{i}_f in the forward kernel
     # as res{i}_b might be from s{i} or v{i}
 
@@ -338,11 +339,12 @@ def get_flexsn_backward_kernel(
     lhs = ", ".join([f"grad_x{i}" for i in range(num_inputs)])
     lhs += ", "
     lhs += ", ".join([f"grad_v{i}_accumulate" for i in range(num_states)])
-    core_args = ", ".join([f"res{i}_b" for i in range(n)])
-    core_args += ", "
-    core_args += ", ".join([f"grad_s{i}" for i in range(num_outputs)])
-    core_args += ", "
-    core_args += ", ".join([f"grad_v{i}_accumulate" for i in range(num_states)])
+    _core_args_parts = []
+    if n > 0:
+        _core_args_parts += [f"res{i}_b" for i in range(n)]
+    _core_args_parts += [f"grad_s{i}" for i in range(num_outputs)]
+    _core_args_parts += [f"grad_v{i}_accumulate" for i in range(num_states)]
+    core_args = ", ".join(_core_args_parts)
     computes += f"\n{INDENTATION}{INDENTATION}{lhs} = {core_name}({core_args})"
 
     tail = f"\n{INDENTATION}".join(
