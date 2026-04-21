@@ -1,5 +1,6 @@
 import logging
 import operator as _op
+import typing
 import torch
 import torch.fx as _fx
 import sys
@@ -67,7 +68,12 @@ def analyse_graph(custom_fun, requires_grad: tuple):
         _op.truediv: "aten::div",
     }
 
-    annotations = custom_fun.__annotations__
+    # typing.get_type_hints() resolves string annotations produced by
+    # 'from __future__ import annotations' (PEP 563), unlike __annotations__.
+    try:
+        annotations = typing.get_type_hints(custom_fun)
+    except Exception:
+        annotations = custom_fun.__annotations__
     assert len(annotations) >= 2  # at least x and v_last (plus optional 'return')
 
     gm = _fx.symbolic_trace(custom_fun)
@@ -161,10 +167,17 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             logging.debug(f"\noutput node [0] = {h_var}")
 
             src = _fx_to_var[ret]
+            # Replace src with h_var everywhere in cmds — both as a cmd's
+            # output and inside any cmd's in_vars.  Updating only the output
+            # position would leave stale references to src in in_vars of cmds
+            # that happen to consume the output node's value (e.g. dead-code
+            # operations that follow the return expression in the source).
+            # Those stale references would produce undeclared CUDA identifiers.
             for i, (out, fun, ins) in enumerate(cmds):
-                if out is src:
-                    cmds[i] = (h_var, fun, ins)
-                    break
+                new_out = h_var if out is src else out
+                new_ins = tuple(h_var if v is src else v for v in ins)
+                if new_out is not out or new_ins != ins:
+                    cmds[i] = (new_out, fun, new_ins)
             if src.debug_name in inter_nodes:
                 del inter_nodes[src.debug_name]
             _fx_to_var[ret] = h_var
