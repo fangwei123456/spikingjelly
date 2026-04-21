@@ -454,7 +454,20 @@ class MemoryModule(nn.Module, StepModule):
         Reset all stateful variables to their reset values.
         """
         for key in self._memories.keys():
-            self._memories[key] = copy.deepcopy(self._memories_rv[key])
+            cur = self._memories[key]
+            rv = self._memories_rv[key]
+            if (
+                isinstance(cur, torch.Tensor)
+                and isinstance(rv, torch.Tensor)
+                and cur.shape == rv.shape
+                and cur.dtype == rv.dtype
+                and cur.device == rv.device
+            ):
+                cur.copy_(rv)  # in-place: reuse existing allocation
+            elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
+                cur.fill_(rv)  # in-place fill with scalar reset value
+            else:
+                self._memories[key] = copy.deepcopy(rv)
 
     def set_reset_value(self, name: str, value):
         """
