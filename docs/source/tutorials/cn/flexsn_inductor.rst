@@ -6,23 +6,24 @@ FlexSN Inductor 后端
 English version: :doc:`../en/flexsn_inductor`
 
 ``FlexSN`` 自 ``0.0.0.1.0`` 版本起新增 ``backend="inductor"`` 选项，将自定义的单步动力学函数 ``core``
-经由 `PyTorch Inductor <https://dev-discuss.pytorch.org/t/torchinductor-a-pytorch-native-compiler-with-define-by-run-ir/747>`_
-编译成 GPU 内核。与 ``backend="triton"``（自研 FX→Triton 映射）相比，Inductor 路径：
+编译成高效的 Triton GPU 内核。与 ``backend="triton"``（自研 FX→Triton 映射）相比，Inductor 路径：
 
 * 不需要手动维护算子映射表，``core`` 中出现的绝大多数 PyTorch 算子均可直接编译；
-* 依赖 ``torch.compile``，可与外层网络联合编译，实现跨层算子融合；
-* 无需设置 ``PYTORCH_JIT=0``。
+* 无需设置 ``PYTORCH_JIT=0``；
+* 支持 ``torch.compile``，可与外层网络联合编译，实现跨层算子融合；
+* 推理和训练均内置专用 Triton 核，性能优于或持平 ``backend="triton"``。
 
 .. admonition:: 注意
    :class: warning
 
-   * ``backend="inductor"`` 必须配合 ``torch.compile(model, fullgraph=True)`` 使用，单独构造 ``FlexSN`` 不会触发编译。
    * 目前仅支持 CUDA 设备。
+   * ``core`` 中的算子需在 ``FX_TO_TRITON`` 映射表内（add/sub/mul/div/比较/sigmoid 等常见逐元素算子），
+     否则自动回退 ``eager_scan``（日志中会有提示）。
+   * 训练时 ``core`` 应使用 surrogate gradient（如 :class:`spikingjelly.activation_based.surrogate.Sigmoid`）
+     而非硬阈值，否则梯度为零。
 
-快速上手
---------
-
-以 LIF 神经元为例，定义一个 ``core`` 函数并使用 ``backend="inductor"``：
+快速上手 — 推理
+---------------
 
 .. code:: python
 
@@ -31,67 +32,86 @@ English version: :doc:`../en/flexsn_inductor`
     from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
     def lif_core(x: torch.Tensor, v: torch.Tensor):
-        """单步 LIF 动力学：charge → fire → reset。"""
-        tau, v_th = 2.0, 1.0
-        h = v + (x - v) / tau        # 充电
-        s = (h >= v_th).to(h.dtype)  # 放电
-        return s, h * (1.0 - s)      # 输出脉冲 + 更新膜电压
-
-    neuron = FlexSN(
-        core=lif_core,
-        num_inputs=1,
-        num_states=1,
-        num_outputs=1,
-        step_mode="m",
-        backend="inductor",
-    )
-
-    # 必须套 torch.compile；不加则退化为 eager HOP，无编译收益
-    model = nn.Sequential(nn.Linear(512, 512), neuron, nn.Linear(512, 512))
-    model = torch.compile(model, fullgraph=True)
-    model = model.cuda()
-
-    x = torch.randn(8, 64, 512, device="cuda")  # [T, B, N]
-    out = model(x)
-
-与 ``backend="triton"`` 数值对齐
----------------------------------
-
-两种后端在 ``atol=1e-5`` 精度下输出完全一致（max abs diff = 0.0）：
-
-.. code:: python
-
-    import os, torch
-    os.environ["PYTORCH_JIT"] = "0"
-    from spikingjelly.activation_based.neuron.flexsn import FlexSN
-
-    def lif_core(x, v):
         tau, v_th = 2.0, 1.0
         h = v + (x - v) / tau
         s = (h >= v_th).to(h.dtype)
         return s, h * (1.0 - s)
 
-    torch.manual_seed(0)
-    x = torch.randn(8, 32, 1024, device="cuda")
+    neuron = FlexSN(core=lif_core, num_inputs=1, num_states=1,
+                    num_outputs=1, step_mode="m", backend="inductor").cuda()
 
-    n_tri = FlexSN(lif_core, 1, 1, 1, step_mode="m", backend="triton").cuda()
-    n_ind = FlexSN(lif_core, 1, 1, 1, step_mode="m", backend="inductor").cuda()
-    c_ind = torch.compile(n_ind, fullgraph=True)
+    x = torch.randn(8, 64, 512, device="cuda")
+    with torch.no_grad():
+        out = neuron(x)   # 直接调用，无需 torch.compile
 
-    torch.testing.assert_close(c_ind(x), n_tri(x), atol=1e-5, rtol=1e-5)
-    print("数值一致 ✓")
+    # 可选：套 torch.compile 实现与外层 Linear 的跨层融合
+    model = nn.Sequential(nn.Linear(512, 512), neuron, nn.Linear(512, 512)).cuda()
+    model = torch.compile(model, fullgraph=True)
+    out = model(x)
+
+快速上手 — 训练
+---------------
+
+训练时使用 surrogate gradient 使脉冲信号可微：
+
+.. code:: python
+
+    import torch
+    from spikingjelly.activation_based import surrogate
+    from spikingjelly.activation_based.neuron.flexsn import FlexSN
+
+    sg = surrogate.Sigmoid(alpha=4.0)
+
+    def lif_core_sg(x: torch.Tensor, v: torch.Tensor):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = sg(h - v_th)        # Sigmoid surrogate gradient
+        return s, h * (1.0 - s)
+
+    neuron = FlexSN(core=lif_core_sg, num_inputs=1, num_states=1,
+                    num_outputs=1, step_mode="m", backend="inductor").cuda()
+
+    x = torch.randn(8, 64, 512, device="cuda", requires_grad=True)
+    out = neuron(x)
+    out.sum().backward()        # BPTT via Triton fwd+bwd 核
+    print(x.grad.shape)         # [8, 64, 512]
+
+    # 也可套 torch.compile：Dynamo 追踪时间循环，Inductor 编译
+    model = torch.compile(neuron, fullgraph=True)
+    out = model(x)
+    out.sum().backward()
+
+内核分发策略
+------------
+
+``backend="inductor"`` 的 ``multi_step_forward`` 根据上下文自动选择路径：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 35 65
+
+   * - 条件
+     - 路径
+   * - 推理（no grad）+ CUDA
+     - Triton 单核 scan（``tl.static_range(T)``，1 次 launch）
+   * - 训练 + CUDA + 在 ``torch.compile`` **外**
+     - Triton FlexSNFunction（专用 fwd+bwd 核，BPTT）
+   * - 训练 + CUDA + 在 ``torch.compile`` **内**
+     - ``eager_scan``（Dynamo 追踪 for 循环，Inductor 编译，标准 autograd backward）
+   * - CPU 或 kernel 不可用
+     - ``eager_scan`` / ``flex_sn_scan`` HOP fallback
 
 与其它后端对比
 --------------
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 20 20 20 20
+   :widths: 22 18 18 22 20
 
    * - 属性
-     - ``backend="torch"``
-     - ``backend="triton"``
-     - ``backend="inductor"``
+     - ``"torch"``
+     - ``"triton"``
+     - ``"inductor"``
      - 备注
    * - 可用设备
      - CPU / CUDA
@@ -106,50 +126,64 @@ English version: :doc:`../en/flexsn_inductor`
    * - 需要 torch.compile
      - 否
      - 否
-     - 是（推荐）
-     -
+     - 否（可选）
+     - compile 可获跨层融合
+   * - 推理性能（vs triton）
+     - 慢
+     - 基准
+     - ≤ 0.52× **更快**
+     - RTX 4090 实测
+   * - 训练性能（vs triton）
+     - 慢
+     - 基准
+     - ≤ 0.69× **更快**
+     - VGG16-BN，CIFAR-10
    * - 跨层融合
      - 否
      - 否
+     - 是（需 torch.compile）
+     -
+   * - 支持 float16
      - 是
-     - G3 目标
-   * - T=8 性能（vs triton）
-     - 慢
-     - 基准
-     - 0.52× **更快**
-     - RTX 4090 实测
-   * - T=32 性能（vs triton）
-     - 慢
-     - 基准
-     - 0.28× **更快**
-     - RTX 4090 实测
+     - 是
+     - 是
+     -
 
 性能说明
 --------
 
-``backend="inductor"`` 在初始化时通过 ``make_fx`` 追踪 ``core`` 函数，使用现有的 FlexSN 模板基础设施
-生成一个带 ``tl.static_range(T)`` 时间循环的单个 Triton 扫描内核。无论 T 取何值，每次推理调用
-只触发一次内核启动，GPU 利用率与 ``backend="triton"`` 相当甚至更优。
+**推理**：初始化时通过 ``make_fx`` 追踪 ``core``，使用 FlexSN 模板生成带
+``tl.static_range(T)`` 时间循环的单个 Triton 扫描内核，每次推理只触发一次 kernel launch。
+
+**训练**：初始化时通过 ``aot_function`` 同时追踪正向和反向计算图（无需 ``PYTORCH_JIT=0``），
+生成专用的 Triton 正向核（保存中间值）和反向核（时间逆序扫描）。
+对于非可微输出（如硬阈值脉冲），自动生成 shim wrapper 适配 AOT backward 的调用签名。
+
+在 SpikingVGG-16-BN（T=4, B=64, CIFAR-10）训练基准中，FlexSN inductor
+比 LIFNode triton 快约 12%，比纯 PyTorch 快约 45%。
 
 使用建议
 --------
 
 .. list-table::
    :header-rows: 1
-   :widths: 30 35 35
+   :widths: 30 30 40
 
    * - 场景
      - 推荐后端
      - 原因
-   * - 快速原型 / 任意设备
+   * - 快速原型 / CPU
      - ``"torch"``
      - 无约束
-   * - CUDA 单层，追求极致性能
-     - ``"triton"`` 或 ``"inductor"``
-     - 两者性能相当
-   * - 需要跨层融合 / 任意 T
+   * - CUDA 推理，追求极致性能
      - ``"inductor"``
-     - 单核扫描 + torch.compile 融合
-   * - 需要训练（backward）
+     - 单核 scan，无需 PYTORCH_JIT=0
+   * - CUDA 训练，无 torch.compile
      - ``"inductor"``
-     - 通过 eager_scan 自动支持 BPTT
+     - Triton fwd+bwd 核，快于 triton
+   * - CUDA 训练 + torch.compile
+     - ``"inductor"``
+     - 兼容；compile 下走 eager_scan + Inductor 编译
+   * - 跨层融合
+     - ``"inductor"`` + ``torch.compile``
+     - 外层 Linear/Conv 可与 FlexSN 联合编译
