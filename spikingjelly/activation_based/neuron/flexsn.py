@@ -283,20 +283,31 @@ class FlexSN(base.MemoryModule):
 
         if backend == "inductor" and torch.cuda.is_available():
             try:
-                from ..triton_kernel.flex_sn_inductor.kernel import build_inference_kernel
+                from ..triton_kernel.flex_sn_inductor.kernel import (
+                    build_inference_kernel, build_training_kernels,
+                )
                 self._inductor_scan_kernel, self._inductor_scan_info = (
                     build_inference_kernel(core, num_inputs, num_states, num_outputs)
                 )
+                self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
+                    build_training_kernels(core, num_inputs, num_states, num_outputs)
+                )
             except Exception as e:
                 logging.warning(
-                    "FlexSN: could not build inductor scan kernel (%s); "
+                    "FlexSN: could not build inductor kernels (%s); "
                     "falling back to eager_scan for all paths." % e
                 )
                 self._inductor_scan_kernel = None
                 self._inductor_scan_info = None
+                self._inductor_fwd_kernel = None
+                self._inductor_bwd_kernel = None
+                self._inductor_train_info = None
         else:
             self._inductor_scan_kernel = None
             self._inductor_scan_info = None
+            self._inductor_fwd_kernel = None
+            self._inductor_bwd_kernel = None
+            self._inductor_train_info = None
 
         # register states as memory buffers
         self.register_memory("states", None)
@@ -424,6 +435,7 @@ class FlexSN(base.MemoryModule):
                 a.requires_grad for a in (*args, *self.states)
             )
             if _no_grad and self._inductor_scan_kernel is not None and args[0].is_cuda:
+                # Inference fast path: single tl.static_range(T) kernel
                 from ..triton_kernel.flexsn.wrapper import flexsn_inference
 
                 result_seqs = flexsn_inference(
@@ -432,9 +444,21 @@ class FlexSN(base.MemoryModule):
                     *(a.contiguous() for a in args),
                     *(s.contiguous() for s in self.states),
                 )
+            elif (not _no_grad and self._inductor_fwd_kernel is not None
+                  and args[0].is_cuda):
+                # Training path: Triton forward + backward scan kernels (BPTT)
+                from ..triton_kernel.flexsn.wrapper import FlexSNFunction
+
+                result_seqs = FlexSNFunction.apply(
+                    self._inductor_scan_kernel,
+                    self._inductor_fwd_kernel,
+                    self._inductor_bwd_kernel,
+                    self._inductor_train_info,
+                    *(a.contiguous() for a in args),
+                    *(s.contiguous() for s in self.states),
+                )
             else:
-                # Training / fallback path: eager_scan for correct backward.
-                # The HOP symbol must stay out of the compiled branch.
+                # Fallback: eager_scan (CPU, or kernels unavailable)
                 from ..triton_kernel.flex_sn_inductor import eager_scan
 
                 if eager_scan is None:
