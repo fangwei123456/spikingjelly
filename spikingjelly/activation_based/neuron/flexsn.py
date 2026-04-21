@@ -330,6 +330,24 @@ class FlexSN(base.MemoryModule):
             self._inductor_bwd_kernel = None
             self._inductor_train_info = None
 
+        # Pre-create a @torch._dynamo.disable-wrapped training scan so that
+        # torch.compile (without fullgraph=True) creates a safe graph break
+        # here instead of replacing the Triton kernels with the slow eager_scan.
+        if backend == "inductor" and self._inductor_fwd_kernel is not None:
+            from ..triton_kernel.flexsn.wrapper import FlexSNFunction as _FSF
+            _inf_k = self._inductor_scan_kernel
+            _fwd_k = self._inductor_fwd_kernel
+            _bwd_k = self._inductor_bwd_kernel
+            _info  = self._inductor_train_info
+
+            @torch._dynamo.disable
+            def _disabled_triton_scan(*_args):
+                return _FSF.apply(_inf_k, _fwd_k, _bwd_k, _info, *_args)
+
+            self._triton_scan_disabled = _disabled_triton_scan
+        else:
+            self._triton_scan_disabled = None
+
         # register states as memory buffers
         self.register_memory("states", None)
 
@@ -466,28 +484,17 @@ class FlexSN(base.MemoryModule):
                     *(s.contiguous() for s in self.states),
                 )
             elif (not _no_grad
-                  and self._inductor_fwd_kernel is not None
-                  and args[0].is_cuda
-                  and not torch.compiler.is_compiling()):
-                # Training outside torch.compile: single Triton fwd+bwd scan kernels.
-                # Inside torch.compile the Triton kernel objects are not traceable by
-                # Dynamo (contiguous_and_device_guard does isinstance checks on them);
-                # use eager_scan in that case so Dynamo can unroll the time loop into
-                # an FX graph that Inductor compiles with standard autograd backward.
-                from ..triton_kernel.flexsn.wrapper import FlexSNFunction
-
-                result_seqs = FlexSNFunction.apply(
-                    self._inductor_scan_kernel,
-                    self._inductor_fwd_kernel,
-                    self._inductor_bwd_kernel,
-                    self._inductor_train_info,
+                  and self._triton_scan_disabled is not None
+                  and args[0].is_cuda):
+                # Training: @torch._dynamo.disable-wrapped Triton fwd+bwd scan.
+                # Under torch.compile (no fullgraph) Dynamo creates a graph break
+                # here; surrounding layers are still compiled, FlexSN stays fast.
+                result_seqs = self._triton_scan_disabled(
                     *(a.contiguous() for a in args),
                     *(s.contiguous() for s in self.states),
                 )
             else:
-                # torch.compile + training → eager_scan so Dynamo traces the time
-                # loop into a compilable FX graph with correct autograd backward.
-                # Also used as CPU / kernel-unavailable fallback.
+                # CPU / training kernel unavailable: eager_scan fallback
                 from ..triton_kernel.flex_sn_inductor import eager_scan
 
                 if eager_scan is None:
