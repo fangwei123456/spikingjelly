@@ -74,7 +74,18 @@ def analyse_graph(custom_fun, requires_grad: tuple):
         annotations = typing.get_type_hints(custom_fun)
     except (NameError, AttributeError):
         annotations = custom_fun.__annotations__
-    assert len(annotations) >= 2  # at least x and v_last (plus optional 'return')
+    n_params = sum(1 for k in annotations if k != "return")
+    if n_params < 2:
+        raise ValueError(
+            "custom_fun must have at least two parameters: 'x: torch.Tensor' and "
+            "'v_last: torch.Tensor'."
+        )
+    if len(requires_grad) != n_params:
+        raise ValueError(
+            f"requires_grad has {len(requires_grad)} entries but custom_fun has "
+            f"{n_params} parameters; they must have the same length to avoid "
+            "silently dropping gradients for trailing inputs."
+        )
 
     gm = _fx.symbolic_trace(custom_fun)
     graph = gm.graph
