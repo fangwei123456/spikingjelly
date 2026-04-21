@@ -29,6 +29,7 @@
 
     /tutorials/en/cupy_neuron
     /tutorials/en/triton_flexsn
+    /tutorials/en/flexsn_inductor
     /tutorials/en/memopt
     /tutorials/en/train_large_scale_snn
     /tutorials/en/spikformer
