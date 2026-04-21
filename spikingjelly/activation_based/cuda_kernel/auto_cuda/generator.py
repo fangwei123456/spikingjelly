@@ -156,7 +156,7 @@ def analyse_graph(custom_fun, requires_grad: tuple):
 
             cmds.append((var, kind, in_vars))
 
-        elif fx_node.op in ("call_method", "get_attr"):
+        elif fx_node.op in ("call_method", "call_module", "get_attr"):
             raise NotImplementedError(
                 f"fx node op '{fx_node.op}' (target={fx_node.target!r}) is not supported. "
                 "custom_fun must use only Python arithmetic operators (+, -, *, /) on its arguments."
