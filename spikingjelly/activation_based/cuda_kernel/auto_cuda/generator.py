@@ -314,6 +314,8 @@ def gen_forward_codes(
                 param = (node.name, "const float *")
             elif node.instance == "float":
                 param = (node.name, "const float &")
+            elif node.instance == "int":
+                param = (node.name, "const int &")
             else:
                 raise NotImplementedError
             params.append(param)
@@ -498,7 +500,8 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{x.cu_var_bp} += {z.cu_var_bp} * {y.cu_var};\n"
-                input_bp_nodes[y.name] = y
+                if y.value is None:  # constants are inlined via cu_var; no CUDA param needed
+                    input_bp_nodes[y.name] = y
             if y.requires_grad:
                 if y.cu_var_bp not in code_block_nodes:
                     code_block_nodes[y.cu_var_bp] = y
@@ -507,7 +510,8 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{y.cu_var_bp} += {z.cu_var_bp} * {x.cu_var};\n"
-                input_bp_nodes[x.name] = x
+                if x.value is None:
+                    input_bp_nodes[x.name] = x
 
         elif fun == "aten::div":
             # z = x / y
@@ -521,7 +525,8 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{x.cu_var_bp} += {z.cu_var_bp} / {y.cu_var};\n"
-                input_bp_nodes[y.name] = y
+                if y.value is None:
+                    input_bp_nodes[y.name] = y
             if y.requires_grad:
                 if y.cu_var_bp not in code_block_nodes:
                     code_block_nodes[y.cu_var_bp] = y
@@ -530,8 +535,10 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{y.cu_var_bp} += - {z.cu_var_bp} * {x.cu_var} / ({y.cu_var} * {y.cu_var});\n"
-                input_bp_nodes[x.name] = x
-                input_bp_nodes[y.name] = y
+                if x.value is None:
+                    input_bp_nodes[x.name] = x
+                if y.value is None:
+                    input_bp_nodes[y.name] = y
 
     for i, node in enumerate(input_bp_nodes):
         logging.debug(f"\ninput bp node [{i}] = {node}")
@@ -571,6 +578,8 @@ def gen_backward_codes(
                 cuda_params[node.name] = "const float *"
             elif node.instance == "float":
                 cuda_params[node.name] = "const float &"
+            elif node.instance == "int":
+                cuda_params[node.name] = "const int &"
             else:
                 raise NotImplementedError(node)
 
