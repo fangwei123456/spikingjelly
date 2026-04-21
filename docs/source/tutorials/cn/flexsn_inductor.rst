@@ -18,7 +18,6 @@ English version: :doc:`../en/flexsn_inductor`
 
    * ``backend="inductor"`` 必须配合 ``torch.compile(model, fullgraph=True)`` 使用，单独构造 ``FlexSN`` 不会触发编译。
    * 目前仅支持 CUDA 设备。
-   * 当前实现（M3.a）将时间循环展开为 ``T`` 个独立算子序列供 Inductor 编译，在 T 较大（≥32）时性能落后于 ``backend="triton"``。 M3.b（单节点时间 scan 内核）正在开发中。
 
 快速上手
 --------
@@ -117,23 +116,20 @@ English version: :doc:`../en/flexsn_inductor`
    * - T=8 性能（vs triton）
      - 慢
      - 基准
-     - 0.87× **更快**
+     - 0.52× **更快**
      - RTX 4090 实测
    * - T=32 性能（vs triton）
      - 慢
      - 基准
-     - 2.04× **更慢**
-     - M3.b 待修复
+     - 0.28× **更快**
+     - RTX 4090 实测
 
 性能说明
 --------
 
-当前实现将时间循环展开为 ``T`` 个连续 aten 算子序列，Inductor 会为每步生成独立的 Triton 内核。
-在 T 较小（≤ 8）时，Inductor 内核间的融合收益超过了展开带来的开销；
-在 T 较大（≥ 32）时，内核 launch 次数随 T 线性增长，导致性能落后于 ``backend="triton"`` 的单核扫描方案。
-
-计划中的 M3.b 将为 ``flex_sn_scan`` 注册一个 Inductor 单节点 lowering，
-生成带 ``tl.static_range(T)`` 时间循环的单个 Triton 内核，从根本上消除这一差距。
+``backend="inductor"`` 在初始化时通过 ``make_fx`` 追踪 ``core`` 函数，使用现有的 FlexSN 模板基础设施
+生成一个带 ``tl.static_range(T)`` 时间循环的单个 Triton 扫描内核。无论 T 取何值，每次推理调用
+只触发一次内核启动，GPU 利用率与 ``backend="triton"`` 相当甚至更优。
 
 使用建议
 --------
@@ -148,12 +144,12 @@ English version: :doc:`../en/flexsn_inductor`
    * - 快速原型 / 任意设备
      - ``"torch"``
      - 无约束
-   * - CUDA 单层 / T ≥ 16
-     - ``"triton"``
-     - 性能更稳
-   * - 需要跨层融合 / T ≤ 8
+   * - CUDA 单层，追求极致性能
+     - ``"triton"`` 或 ``"inductor"``
+     - 两者性能相当
+   * - 需要跨层融合 / 任意 T
      - ``"inductor"``
-     - 融合收益 > 展开开销
-   * - T ≥ 16 + 跨层融合
-     - 等待 M3.b
-     - 两者兼顾
+     - 单核扫描 + torch.compile 融合
+   * - 需要训练（backward）
+     - ``"inductor"``
+     - 通过 eager_scan 自动支持 BPTT

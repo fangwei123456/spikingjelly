@@ -21,9 +21,6 @@ Inductor path:
    * ``backend="inductor"`` must be used with ``torch.compile(model, fullgraph=True)``.
      Instantiating ``FlexSN`` alone does not trigger compilation.
    * Only CUDA devices are supported.
-   * The current implementation (M3.a) unrolls the time loop into ``T`` operator
-     sequences. Performance lags behind ``backend="triton"`` for large T (≥ 32).
-     M3.b (single-node time-scan kernel) is under development.
 
 Quick Start
 -----------
@@ -122,26 +119,22 @@ Backend Comparison
    * - T=8 perf (vs triton)
      - slow
      - baseline
-     - 0.87× **faster**
+     - 0.52× **faster**
      - RTX 4090 measured
    * - T=32 perf (vs triton)
      - slow
      - baseline
-     - 2.04× **slower**
-     - M3.b fix pending
+     - 0.28× **faster**
+     - RTX 4090 measured
 
 Performance Notes
 -----------------
 
-The current implementation unrolls the time loop into ``T`` consecutive aten
-operator sequences. Inductor generates a separate Triton kernel per timestep.
-For small T (≤ 8), cross-step kernel fusion offsets the unrolling overhead.
-For large T (≥ 32), the number of kernel launches grows linearly with T,
-making it slower than ``backend="triton"``'s single-kernel scan.
-
-M3.b will register a single-node Inductor lowering for ``flex_sn_scan`` that
-emits one Triton kernel with a ``tl.static_range(T)`` time loop, eliminating
-this gap entirely.
+At initialisation time, ``backend="inductor"`` traces ``core`` with ``make_fx``
+and uses the existing FlexSN template infrastructure to build a single Triton
+scan kernel with a ``tl.static_range(T)`` time loop. Every inference call
+triggers exactly one kernel launch regardless of T, matching or exceeding
+the throughput of ``backend="triton"``.
 
 When to Use Each Backend
 ------------------------
@@ -156,12 +149,12 @@ When to Use Each Backend
    * - Prototyping / any device
      - ``"torch"``
      - No constraints
-   * - CUDA single layer / T ≥ 16
-     - ``"triton"``
-     - Consistently fast
-   * - Cross-layer fusion / T ≤ 8
+   * - CUDA single layer, max performance
+     - ``"triton"`` or ``"inductor"``
+     - Comparable throughput
+   * - Cross-layer fusion / any T
      - ``"inductor"``
-     - Fusion gain > unroll overhead
-   * - T ≥ 16 + cross-layer fusion
-     - Wait for M3.b
-     - Best of both worlds
+     - Single-kernel scan + torch.compile fusion
+   * - Training (backward)
+     - ``"inductor"``
+     - BPTT supported via eager_scan
