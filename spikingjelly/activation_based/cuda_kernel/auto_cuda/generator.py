@@ -2,7 +2,6 @@ import logging
 import operator as _op
 import torch
 import torch.fx as _fx
-import re
 import sys
 
 
@@ -37,9 +36,9 @@ class VarNode:
         # 如果value非空，表明其是一个常数值，直接返回数值即可，例如 value = 0.1 返回 '0.1f'
         if self.value is not None:
             if self.instance == "int":
-                return self.name
+                return str(int(self.value))
             elif self.instance == "float":
-                return self.name + "f"
+                return f"{float(self.value)}f"
             else:
                 raise ValueError(self.instance)
 
@@ -150,8 +149,6 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             ret = fx_node.args[0]
             if not isinstance(ret, _fx.Node):
                 raise NotImplementedError(f"unsupported output type: {type(ret)}")
-            assert str(ret.type) == "<class 'torch.Tensor'>", \
-                "For the moment, we only support for single Tensor output!"
 
             h_var = VarNode(prefix="output", name="h", instance="Tensor")
             output_nodes["h"] = h_var
