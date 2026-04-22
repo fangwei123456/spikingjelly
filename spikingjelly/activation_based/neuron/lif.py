@@ -552,7 +552,7 @@ class LIFNode(BaseNode):
                 # On GPU with a supported surrogate, use the unified Triton kernel
                 # (much faster than the Python for loop in super()).
                 # Falls back to the Python loop for CPU or custom surrogates.
-                if x_seq.is_cuda:
+                if x_seq.is_cuda and getattr(self.surrogate_function, 'spiking', True):
                     self.v_float_to_tensor(x_seq[0])
                     try:
                         spike_seq, v_seq = triton_kernel.multistep_lif(
@@ -565,7 +565,7 @@ class LIFNode(BaseNode):
                         self.v = v_seq[-1].clone()
                         return spike_seq
                     except (NotImplementedError, AttributeError, TypeError, KeyError):
-                        pass  # unsupported surrogate or no Triton → Python loop
+                        pass  # unsupported surrogate / dtype / no Triton → Python loop
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
                 hard_reset = self.v_reset is not None
@@ -643,8 +643,9 @@ class LIFNode(BaseNode):
 
             # All backends: try Triton on GPU first (unified kernel covers all
             # soft/hard reset x decay_input variants via tl.constexpr).
-            # Falls back to the unified Python loop for CPU or custom surrogates.
-            if x_seq.is_cuda:
+            # Falls back to the unified Python loop for CPU, custom surrogates,
+            # or when spiking=False (Triton always emits hard spikes).
+            if x_seq.is_cuda and getattr(self.surrogate_function, 'spiking', True):
                 try:
                     spike_seq, v_seq = triton_kernel.multistep_lif(
                         x_seq, self.v, self.decay_input, self.tau,
@@ -655,8 +656,8 @@ class LIFNode(BaseNode):
                         self.v_seq = v_seq
                     self.v = v_seq[-1].clone()
                     return spike_seq
-                except (NotImplementedError, AttributeError, TypeError):
-                    pass  # unsupported surrogate or no Triton → Python loop
+                except (NotImplementedError, AttributeError, TypeError, KeyError):
+                    pass  # unsupported surrogate / dtype / no Triton → Python loop
 
             # CPU or unsupported surrogate: unified Python fallback
             # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
