@@ -471,11 +471,9 @@ class MemoryModule(nn.Module, StepModule):
                 except RuntimeError:
                     self._memories[key] = rv.detach().clone()
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
-                # Scalar reset values should return to scalar semantics so the
-                # next forward can materialize them to the new runtime shape.
-                self._memories[key] = torch.as_tensor(
-                    rv, dtype=cur.dtype, device=cur.device
-                )
+                # Preserve Python-scalar sentinel semantics so the next forward
+                # can materialize a fresh tensor with the new runtime shape.
+                self._memories[key] = copy.deepcopy(rv)
             else:
                 self._memories[key] = copy.deepcopy(rv)
 

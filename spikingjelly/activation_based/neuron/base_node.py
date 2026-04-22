@@ -351,7 +351,7 @@ class BaseNode(base.MemoryModule):
     def v_float_to_tensor(self, x: torch.Tensor):
         if isinstance(self.v, float):
             v_init = self.v
-            self.v = torch.full_like(x, v_init)
+            self.v = torch.full_like(x, v_init, requires_grad=False)
         elif isinstance(self.v, torch.Tensor):
             if self.v.shape != x.shape:
                 self.v = torch.full_like(
