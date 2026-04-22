@@ -93,10 +93,16 @@ class ThroughputValue:
 
         Windowed statistics stored in ``deque`` remain local to each rank.
         """
-        t = reduce_across_processes([self.total_samples, self.total_time])
-        t = t.tolist()
-        self.total_samples = t[0]
-        self.total_time = t[1]
+        if not is_dist_avail_and_initialized():
+            return
+
+        samples = torch.tensor(self.total_samples, device="cuda")
+        elapsed = torch.tensor(self.total_time, device="cuda")
+        dist.barrier()
+        dist.all_reduce(samples, op=dist.ReduceOp.SUM)
+        dist.all_reduce(elapsed, op=dist.ReduceOp.MAX)
+        self.total_samples = samples.item()
+        self.total_time = elapsed.item()
 
     @property
     def median(self):

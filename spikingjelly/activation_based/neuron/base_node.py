@@ -355,7 +355,9 @@ class BaseNode(base.MemoryModule):
         elif isinstance(self.v, torch.Tensor):
             if self.v.shape != x.shape:
                 self.v = torch.full_like(
-                    x, self.v_reset if self.v_reset is not None else 0.0
+                    x,
+                    self.v_reset if self.v_reset is not None else 0.0,
+                    requires_grad=False,
                 )
             elif self.v.dtype != x.dtype or self.v.device != x.device:
                 self.v = self.v.to(dtype=x.dtype, device=x.device)

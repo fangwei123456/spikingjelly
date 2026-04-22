@@ -31,6 +31,11 @@ def _validate_scan_backend_contract(
 ):
     if num_inputs + num_states == 0:
         raise ValueError("FlexSN requires at least one input or state tensor.")
+    if num_inputs == 0:
+        raise ValueError(
+            "FlexSN triton/inductor scan backends require at least one input "
+            "sequence to derive T."
+        )
 
     if example_inputs is None:
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -64,6 +69,14 @@ def _validate_scan_backend_contract(
                 "per-step output and updated state to have the same shape as "
                 f"the first example tensor {tuple(seq_template.shape)}, but "
                 f"return #{i} has shape {tuple(tensor.shape)}."
+            )
+        if tensor.dtype != seq_template.dtype or tensor.device != seq_template.device:
+            raise ValueError(
+                "FlexSN triton/inductor scan backends currently require every "
+                "per-step output and updated state to match the first example "
+                f"tensor's dtype/device ({seq_template.dtype}, "
+                f"{seq_template.device}), but return #{i} is "
+                f"({tensor.dtype}, {tensor.device})."
             )
 
 
