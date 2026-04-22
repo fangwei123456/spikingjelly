@@ -270,6 +270,27 @@ class LIFNode(BaseNode):
         return v
 
     @staticmethod
+    def _eval_single_step_forward(
+        x: torch.Tensor,
+        v: torch.Tensor,
+        v_threshold: float,
+        v_reset,
+        tau: float,
+        decay_input: bool,
+    ):
+        """Unified single-step eval forward (replaces the 4 jit_eval_single_step_* methods)."""
+        soft_reset = v_reset is None
+        _vr = 0.0 if soft_reset else v_reset
+        if decay_input:
+            v = v + (x - (v - _vr)) / tau
+        else:
+            v = v - (v - _vr) / tau + x
+        spike = (v >= v_threshold).to(x)
+        v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
+        return spike, v
+
+    # ---------- kept for subclass backward-compatibility ----------
+    @staticmethod
     def jit_eval_single_step_forward_hard_reset_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float, tau: float
     ):
@@ -304,126 +325,6 @@ class LIFNode(BaseNode):
         spike = (v >= v_threshold).to(x)
         v = v - spike * v_threshold
         return spike, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_hard_reset_decay_input(
-        x_seq: torch.Tensor,
-        v: torch.Tensor,
-        v_threshold: float,
-        v_reset: float,
-        tau: float,
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + (x_seq[t] - (v - v_reset)) / tau
-            spike = (v >= v_threshold).to(x_seq)
-            v = v_reset * spike + (1.0 - spike) * v
-            spike_seq[t] = spike
-        return spike_seq, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_hard_reset_decay_input_with_v_seq(
-        x_seq: torch.Tensor,
-        v: torch.Tensor,
-        v_threshold: float,
-        v_reset: float,
-        tau: float,
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        v_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + (x_seq[t] - (v - v_reset)) / tau
-            spike = (v >= v_threshold).to(x_seq)
-            v = v_reset * spike + (1.0 - spike) * v
-            spike_seq[t] = spike
-            v_seq[t] = v
-        return spike_seq, v, v_seq
-
-    @staticmethod
-    def jit_eval_multi_step_forward_hard_reset_no_decay_input(
-        x_seq: torch.Tensor,
-        v: torch.Tensor,
-        v_threshold: float,
-        v_reset: float,
-        tau: float,
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v - (v - v_reset) / tau + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v_reset * spike + (1.0 - spike) * v
-            spike_seq[t] = spike
-        return spike_seq, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_hard_reset_no_decay_input_with_v_seq(
-        x_seq: torch.Tensor,
-        v: torch.Tensor,
-        v_threshold: float,
-        v_reset: float,
-        tau: float,
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        v_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v - (v - v_reset) / tau + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v_reset * spike + (1.0 - spike) * v
-            spike_seq[t] = spike
-            v_seq[t] = v
-        return spike_seq, v, v_seq
-
-    @staticmethod
-    def jit_eval_multi_step_forward_soft_reset_decay_input(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + (x_seq[t] - v) / tau
-            spike = (v >= v_threshold).to(x_seq)
-            v = v - spike * v_threshold
-            spike_seq[t] = spike
-        return spike_seq, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_soft_reset_decay_input_with_v_seq(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        v_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + (x_seq[t] - v) / tau
-            spike = (v >= v_threshold).to(x_seq)
-            v = v - spike * v_threshold
-            spike_seq[t] = spike
-            v_seq[t] = v
-        return spike_seq, v, v_seq
-
-    @staticmethod
-    def jit_eval_multi_step_forward_soft_reset_no_decay_input(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v * (1.0 - 1.0 / tau) + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v - spike * v_threshold
-            spike_seq[t] = spike
-        return spike_seq, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_soft_reset_no_decay_input_with_v_seq(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, tau: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        v_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v * (1.0 - 1.0 / tau) + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v - spike * v_threshold
-            spike_seq[t] = spike
-            v_seq[t] = v
-        return spike_seq, v, v_seq
 
     @staticmethod
     def _eval_multi_step_forward(
@@ -525,32 +426,9 @@ class LIFNode(BaseNode):
 
         else:
             self.v_float_to_tensor(x)
-            if self.v_reset is None:
-                if self.decay_input:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_soft_reset_decay_input(
-                            x, self.v, self.v_threshold, self.tau
-                        )
-                    )
-                else:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_soft_reset_no_decay_input(
-                            x, self.v, self.v_threshold, self.tau
-                        )
-                    )
-            else:
-                if self.decay_input:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_hard_reset_decay_input(
-                            x, self.v, self.v_threshold, self.v_reset, self.tau
-                        )
-                    )
-                else:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_hard_reset_no_decay_input(
-                            x, self.v, self.v_threshold, self.v_reset, self.tau
-                        )
-                    )
+            spike, self.v = self._eval_single_step_forward(
+                x, self.v, self.v_threshold, self.v_reset, self.tau, self.decay_input,
+            )
             return spike
 
     def multi_step_forward(self, x_seq: torch.Tensor):

@@ -178,6 +178,41 @@ class IFNode(BaseNode):
         self.v = self.v + x
 
     @staticmethod
+    def _eval_single_step_forward(
+        x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset,
+        tau: float = None, decay_input: bool = None,
+    ):
+        """Unified single-step eval (replaces jit_eval_single_step_forward_*)."""
+        v = v + x
+        spike = (v >= v_threshold).to(x)
+        v = (v - spike * v_threshold) if v_reset is None else (v_reset * spike + (1.0 - spike) * v)
+        return spike, v
+
+    @staticmethod
+    def _eval_multi_step_forward(
+        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset,
+        tau: float = None, decay_input: bool = None, store_v_seq: bool = False,
+        spiking: bool = True, surrogate_fn=None,
+    ):
+        """Unified multi-step eval (replaces jit_eval_multi_step_forward_*)."""
+        T = x_seq.shape[0]
+        spike_seq = torch.zeros_like(x_seq)
+        v_seq = torch.zeros_like(x_seq) if store_v_seq else None
+        soft_reset = v_reset is None
+        _vr = 0.0 if soft_reset else v_reset
+        for t in range(T):
+            v = v + x_seq[t]
+            spike = (v >= v_threshold).to(x_seq)
+            v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
+            spike_seq[t] = spike
+            if store_v_seq:
+                v_seq[t] = v
+        if store_v_seq:
+            return spike_seq, v, v_seq
+        return spike_seq, v
+
+    # kept for subclass backward-compatibility
+    @staticmethod
     def jit_eval_single_step_forward_hard_reset(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
     ):
@@ -194,58 +229,6 @@ class IFNode(BaseNode):
         spike = (v >= v_threshold).to(x)
         v = v - spike * v_threshold
         return spike, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_hard_reset(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v_reset * spike + (1.0 - spike) * v
-            spike_seq[t] = spike
-        return spike_seq, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_hard_reset_with_v_seq(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        v_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v_reset * spike + (1.0 - spike) * v
-            spike_seq[t] = spike
-            v_seq[t] = v
-        return spike_seq, v, v_seq
-
-    @staticmethod
-    def jit_eval_multi_step_forward_soft_reset(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v - spike * v_threshold
-            spike_seq[t] = spike
-        return spike_seq, v
-
-    @staticmethod
-    def jit_eval_multi_step_forward_soft_reset_with_v_seq(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float
-    ):
-        spike_seq = torch.zeros_like(x_seq)
-        v_seq = torch.zeros_like(x_seq)
-        for t in range(x_seq.shape[0]):
-            v = v + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
-            v = v - spike * v_threshold
-            spike_seq[t] = spike
-            v_seq[t] = v
-        return spike_seq, v, v_seq
 
     def multi_step_forward(self, x_seq: torch.Tensor):
         if self.training:
@@ -336,28 +319,14 @@ class IFNode(BaseNode):
                 return spike_seq
 
             # torch & cupy backend:
-            if self.v_reset is None:
-                if self.store_v_seq:
-                    spike_seq, self.v, self.v_seq = (
-                        self.jit_eval_multi_step_forward_soft_reset_with_v_seq(
-                            x_seq, self.v, self.v_threshold
-                        )
-                    )
-                else:
-                    spike_seq, self.v = self.jit_eval_multi_step_forward_soft_reset(
-                        x_seq, self.v, self.v_threshold
-                    )
+            out = self._eval_multi_step_forward(
+                x_seq, self.v, self.v_threshold, self.v_reset,
+                store_v_seq=self.store_v_seq,
+            )
+            if self.store_v_seq:
+                spike_seq, self.v, self.v_seq = out
             else:
-                if self.store_v_seq:
-                    spike_seq, self.v, self.v_seq = (
-                        self.jit_eval_multi_step_forward_hard_reset_with_v_seq(
-                            x_seq, self.v, self.v_threshold, self.v_reset
-                        )
-                    )
-                else:
-                    spike_seq, self.v = self.jit_eval_multi_step_forward_hard_reset(
-                        x_seq, self.v, self.v_threshold, self.v_reset
-                    )
+                spike_seq, self.v = out
             return spike_seq
 
     def single_step_forward(self, x: torch.Tensor):
@@ -417,14 +386,9 @@ class IFNode(BaseNode):
 
         else:
             self.v_float_to_tensor(x)
-            if self.v_reset is None:
-                spike, self.v = self.jit_eval_single_step_forward_soft_reset(
-                    x, self.v, self.v_threshold
-                )
-            else:
-                spike, self.v = self.jit_eval_single_step_forward_hard_reset(
-                    x, self.v, self.v_threshold, self.v_reset
-                )
+            spike, self.v = self._eval_single_step_forward(
+                x, self.v, self.v_threshold, self.v_reset,
+            )
             return spike
 
 
