@@ -1,3 +1,18 @@
+"""Opaque custom ops for FlexSN inductor kernels.
+
+This module is the bridge between FlexSN's per-layer Triton kernels and
+``torch.compile``:
+
+* Triton kernels and metadata are stored in a Python-side registry and
+  referenced from graphs by a lightweight integer handle.
+* Forward and backward are exposed as opaque ``torch.library`` custom ops so
+  Dynamo / AOTAutograd no longer trace into Python kernel objects or Triton
+  launcher internals.
+* Tensor inputs/outputs are passed as ``list[Tensor]`` because FlexSN has a
+  variable number of inputs, outputs, and states while ``custom_op`` does not
+  support ``*args`` schemas.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
