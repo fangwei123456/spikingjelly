@@ -454,7 +454,30 @@ class MemoryModule(nn.Module, StepModule):
         Reset all stateful variables to their reset values.
         """
         for key in self._memories.keys():
-            self._memories[key] = copy.deepcopy(self._memories_rv[key])
+            cur = self._memories[key]
+            rv = self._memories_rv[key]
+            if (
+                isinstance(cur, torch.Tensor)
+                and isinstance(rv, torch.Tensor)
+                and cur.shape == rv.shape
+                and cur.dtype == rv.dtype
+                and cur.device == rv.device
+            ):
+                # detach_() breaks stale autograd graphs before in-place copy.
+                # Falls back to deepcopy when cur is a view tensor
+                # (detach_() raises RuntimeError on views).
+                try:
+                    cur.detach_().copy_(rv)
+                except RuntimeError:
+                    self._memories[key] = rv.detach().clone()
+            elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
+                # Restore to the scalar reset value so v_float_to_tensor() can
+                # detect a float on the next forward and re-create a correctly
+                # shaped/device tensor.  Do NOT fill in-place: that would keep
+                # a tensor with a potentially stale grad_fn in the registry.
+                self._memories[key] = rv
+            else:
+                self._memories[key] = copy.deepcopy(rv)
 
     def set_reset_value(self, name: str, value):
         """
