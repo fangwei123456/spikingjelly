@@ -81,12 +81,18 @@ class ThroughputValue:
         self.fmt = fmt
 
     def update(self, samples, elapsed_time):
+        if elapsed_time <= 0:
+            return
         throughput = samples / elapsed_time
         self.deque.append(throughput)
         self.total_samples += samples
         self.total_time += elapsed_time
 
     def synchronize_between_processes(self):
+        """Synchronize cumulative samples/time across ranks.
+
+        Windowed statistics stored in ``deque`` remain local to each rank.
+        """
         t = reduce_across_processes([self.total_samples, self.total_time])
         t = t.tolist()
         self.total_samples = t[0]

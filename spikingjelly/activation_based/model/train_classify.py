@@ -111,6 +111,7 @@ class Trainer:
                 f"{compile_options!r}; retrying without options. "
                 f"Original error: {e}",
                 RuntimeWarning,
+                stacklevel=2,
             )
             compile_kwargs.pop("options", None)
             return torch.compile(model, **compile_kwargs)

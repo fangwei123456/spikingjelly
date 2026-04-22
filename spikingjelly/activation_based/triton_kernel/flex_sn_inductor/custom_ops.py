@@ -91,12 +91,9 @@ def _make_seq_tensor_list_like(xs: list[torch.Tensor], n: int) -> list[torch.Ten
 def _make_seq_outputs_like(
     info: FlexSNInfo, flat_args: list[torch.Tensor], n: int
 ) -> list[torch.Tensor]:
-    if info.num_inputs > 0 and flat_args:
-        seq_template = flat_args[0]
-    elif flat_args:
-        seq_template = flat_args[0].unsqueeze(0)
-    else:
+    if not flat_args:
         raise ValueError("Expected at least one FlexSN argument tensor.")
+    seq_template = flat_args[0]
     return [seq_template.new_empty(seq_template.shape) for _ in range(n)]
 
 

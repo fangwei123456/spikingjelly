@@ -112,10 +112,6 @@ class Conv1d(nn.Conv1d, base.StepModule):
                     f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
                 )
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape = [x.shape[0], x.shape[1]]
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
@@ -188,9 +184,6 @@ class Conv2d(nn.Conv2d, base.StepModule):
                 )
             y_shape = [x.shape[0], x.shape[1]]
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             y_shape.extend(y.shape[1:])
             x = y.view(y_shape)
 
@@ -263,10 +256,6 @@ class Conv3d(nn.Conv3d, base.StepModule):
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape = [x.shape[0], x.shape[1]]
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
@@ -394,10 +383,6 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
                     f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
                 )
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape = [x.shape[0], x.shape[1]]
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
@@ -472,9 +457,6 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
                 )
             y_shape = [x.shape[0], x.shape[1]]
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             y_shape.extend(y.shape[1:])
             x = y.view(y_shape)
 
@@ -549,10 +531,6 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape = [x.shape[0], x.shape[1]]
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
@@ -912,12 +890,7 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
                 )
             t, n = x.shape[0], x.shape[1]
             out = super().forward(x.flatten(0, 1))
-            if isinstance(out, tuple):
-                y, indices = out
-                y_shape = [t, n, *y.shape[1:]]
-                x = (y.view(y_shape), indices.view(y_shape))
-            else:
-                x = out.view(t, n, *out.shape[1:])
+            x = out.view(t, n, *out.shape[1:])
 
         return x
 
@@ -977,10 +950,6 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
             y = super().forward(x.flatten(0, 1))
-            if isinstance(y, tuple):
-                y_shape = [x.shape[0], x.shape[1]]
-                y_shape.extend(y[0].shape[1:])
-                return y[0].view(y_shape), y[1].view(y_shape)
             x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
