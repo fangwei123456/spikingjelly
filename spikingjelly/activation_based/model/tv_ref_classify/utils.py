@@ -97,7 +97,11 @@ class ThroughputValue:
         if not is_dist_avail_and_initialized():
             return
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        backend = dist.get_backend()
+        if backend == "nccl":
+            device = torch.device("cuda", torch.cuda.current_device())
+        else:
+            device = torch.device("cpu")
         samples = torch.tensor(self.total_samples, device=device, dtype=torch.float64)
         elapsed = torch.tensor(self.total_time, device=device, dtype=torch.float64)
         dist.barrier()
