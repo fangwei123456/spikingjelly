@@ -127,7 +127,7 @@ class Trainer:
         metric_logger = utils.MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value}"))
         metric_logger.add_meter(
-            "img/s", utils.SmoothedValue(window_size=10, fmt="{value}")
+            "img/s", utils.SmoothedValue(window_size=10, fmt="{global_avg:.3f}")
         )
 
         header = f"Epoch: [{epoch}]"
@@ -181,7 +181,7 @@ class Trainer:
             metric_logger.acc5.global_avg,
         )
         print(
-            f"Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={metric_logger.meters['img/s']}"
+            f"Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={metric_logger.meters['img/s'].global_avg:.3f}"
         )
         return train_loss, train_acc1, train_acc5
 

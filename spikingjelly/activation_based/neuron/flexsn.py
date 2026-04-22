@@ -247,11 +247,15 @@ class FlexSN(base.MemoryModule):
             )
         else:
             self.kernel = None
+        register_flexsn_kernel_handle = None
 
         if backend == "inductor" and torch.cuda.is_available():
             try:
                 from ..triton_kernel.flex_sn_inductor.kernel import (
                     build_inference_kernel, build_training_kernels,
+                )
+                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                    register_flexsn_kernel_handle,
                 )
             except Exception as e:
                 logging.warning(
@@ -260,6 +264,7 @@ class FlexSN(base.MemoryModule):
                 )
                 build_inference_kernel = None
                 build_training_kernels = None
+                register_flexsn_kernel_handle = None
             if build_inference_kernel is not None:
                 try:
                     self._inductor_scan_kernel, self._inductor_scan_info = (
@@ -296,24 +301,21 @@ class FlexSN(base.MemoryModule):
             self._inductor_fwd_kernel = None
             self._inductor_bwd_kernel = None
             self._inductor_train_info = None
-
-        # Pre-create a @torch._dynamo.disable-wrapped training scan so that
-        # torch.compile (without fullgraph=True) creates a safe graph break
-        # here instead of replacing the Triton kernels with the slow eager_scan.
-        if backend == "inductor" and self._inductor_fwd_kernel is not None:
-            from ..triton_kernel.flexsn.wrapper import FlexSNFunction as _FSF
-            _inf_k = self._inductor_scan_kernel
-            _fwd_k = self._inductor_fwd_kernel
-            _bwd_k = self._inductor_bwd_kernel
-            _info  = self._inductor_train_info
-
-            @torch._dynamo.disable
-            def _disabled_triton_scan(*_args):
-                return _FSF.apply(_inf_k, _fwd_k, _bwd_k, _info, *_args)
-
-            self._triton_scan_disabled = _disabled_triton_scan
-        else:
-            self._triton_scan_disabled = None
+        self._inductor_handle = None
+        self._inductor_inference_available = self._inductor_scan_kernel is not None
+        self._inductor_training_available = self._inductor_fwd_kernel is not None
+        if (
+            backend == "inductor"
+            and register_flexsn_kernel_handle is not None
+            and (self._inductor_inference_available or self._inductor_training_available)
+        ):
+            self._inductor_handle = register_flexsn_kernel_handle(
+                inference_kernel=self._inductor_scan_kernel,
+                inference_info=self._inductor_scan_info,
+                forward_kernel=self._inductor_fwd_kernel,
+                backward_kernel=self._inductor_bwd_kernel,
+                training_info=self._inductor_train_info,
+            )
 
         # register states as memory buffers
         self.register_memory("states", None)
@@ -434,66 +436,48 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         elif self.backend == "inductor":
-            # M3.b: no-grad path uses the pre-built single Triton scan kernel
-            # (one launch, tl.static_range(T) — fixes T=32 perf regression).
-            # Training path keeps eager_scan so BPTT backward is correct.
             _no_grad = not torch.is_grad_enabled() or not any(
                 a.requires_grad for a in (*args, *self.states)
             )
-            if _no_grad and self._inductor_scan_kernel is not None and args[0].is_cuda:
-                # Inference fast path: single tl.static_range(T) kernel
-                from ..triton_kernel.flexsn.wrapper import flexsn_inference
+            flat_args = [*(a.contiguous() for a in args), *(s.contiguous() for s in self.states)]
+            if self._inductor_handle is not None and args[0].is_cuda:
+                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                    flexsn_inductor_inference,
+                    flexsn_inductor_training,
+                )
 
-                result_seqs = flexsn_inference(
-                    self._inductor_scan_kernel,
-                    self._inductor_scan_info,
-                    *(a.contiguous() for a in args),
-                    *(s.contiguous() for s in self.states),
-                )
-            elif (not _no_grad
-                  and self._triton_scan_disabled is not None
-                  and args[0].is_cuda):
-                # Training: @torch._dynamo.disable-wrapped Triton fwd+bwd scan.
-                # Under torch.compile (no fullgraph) Dynamo creates a graph break
-                # here; surrounding layers are still compiled, FlexSN stays fast.
-                result_seqs = self._triton_scan_disabled(
-                    *(a.contiguous() for a in args),
-                    *(s.contiguous() for s in self.states),
-                )
+                if _no_grad and self._inductor_inference_available:
+                    result_seqs = flexsn_inductor_inference(
+                        self._inductor_handle, flat_args
+                    )
+                elif (not _no_grad) and self._inductor_training_available:
+                    result_seqs = flexsn_inductor_training(
+                        self._inductor_handle, flat_args
+                    )
+                    result_seqs = result_seqs[: self.num_outputs + self.num_states]
+                else:
+                    result_seqs = None
             else:
-                # CPU / training kernel unavailable: eager_scan fallback
-                from ..triton_kernel.flex_sn_inductor import eager_scan
+                result_seqs = None
 
-                # eager_scan and flex_sn_scan are both None when the whole
-                # flex_sn_inductor module fails to import; check once here
-                # so both branches get a clear RuntimeError instead of
-                # a confusing TypeError: 'NoneType' is not callable.
+            if result_seqs is None:
+                from ..triton_kernel.flex_sn_inductor import eager_scan, flex_sn_scan
+
                 if eager_scan is None:
                     raise RuntimeError(
                         "FlexSN inductor backend is unavailable: "
                         "eager_scan failed to import. "
                         "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
                     )
-                if torch.compiler.is_compiling():
-                    result_seqs = eager_scan(
-                        self.core,
-                        self.num_inputs,
-                        self.num_states,
-                        self.num_outputs,
-                        *args,
-                        *self.states,
-                    )
-                else:
-                    from ..triton_kernel.flex_sn_inductor import flex_sn_scan
-
-                    result_seqs = flex_sn_scan(
-                        self.core,
-                        self.num_inputs,
-                        self.num_states,
-                        self.num_outputs,
-                        *args,
-                        *self.states,
-                    )
+                scan_impl = flex_sn_scan if flex_sn_scan is not None else eager_scan
+                result_seqs = scan_impl(
+                    self.core,
+                    self.num_inputs,
+                    self.num_states,
+                    self.num_outputs,
+                    *args,
+                    *self.states,
+                )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
             self.states = [v[-1] for v in state_seqs]
