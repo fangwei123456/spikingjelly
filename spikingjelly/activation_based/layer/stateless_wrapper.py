@@ -181,7 +181,10 @@ class Conv2d(nn.Conv2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
 
         return x
 
@@ -449,7 +452,10 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
 
         return x
 
@@ -688,7 +694,10 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
 
         return x
 
@@ -862,7 +871,10 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
 
         return x
 
@@ -1017,7 +1029,10 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
 
         return x
 
@@ -1143,7 +1158,10 @@ class Flatten(nn.Flatten, base.StepModule):
             x = super().forward(x)
 
         elif self.step_mode == "m":
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
         return x
 
 

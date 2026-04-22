@@ -351,7 +351,16 @@ class BaseNode(base.MemoryModule):
     def v_float_to_tensor(self, x: torch.Tensor):
         if isinstance(self.v, float):
             v_init = self.v
-            self.v = torch.full_like(x.data, v_init)
+            self.v = torch.full_like(x, v_init)
+        elif (
+            isinstance(self.v, torch.Tensor)
+            and (
+                self.v.shape != x.shape
+                or self.v.dtype != x.dtype
+                or self.v.device != x.device
+            )
+        ):
+            self.v = torch.full_like(x, self.v_reset if self.v_reset is not None else 0.0)
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):

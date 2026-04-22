@@ -48,8 +48,8 @@ class DSQN(nn.Module):
             functional.set_backend(self.network, backend="cupy")
 
     def forward(self, x):
-        x_seq = x.unsqueeze(0).repeat(
-            self.T, 1, 1, 1, 1
+        x_seq = x.unsqueeze(0).expand(
+            self.T, -1, -1, -1, -1
         )  # [N, C, H, W] -> [T, N, C, H, W]
 
         if "mem" in self.dec_type:

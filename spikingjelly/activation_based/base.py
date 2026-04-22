@@ -471,11 +471,12 @@ class MemoryModule(nn.Module, StepModule):
                 except RuntimeError:
                     self._memories[key] = rv.detach().clone()
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
-                # Restore to the scalar reset value so v_float_to_tensor() can
-                # detect a float on the next forward and re-create a correctly
-                # shaped/device tensor.  Do NOT fill in-place: that would keep
-                # a tensor with a potentially stale grad_fn in the registry.
-                self._memories[key] = rv
+                # Keep tensor states as tensors across resets so Dynamo does not
+                # re-specialize on float -> Tensor transitions. Rebuild a fresh
+                # tensor instead of mutating the old one in-place because state
+                # tensors can come from compiled graph outputs / CUDAGraph
+                # captures, whose storages must not be reused after later runs.
+                self._memories[key] = torch.full_like(cur, rv)
             else:
                 self._memories[key] = copy.deepcopy(rv)
 
