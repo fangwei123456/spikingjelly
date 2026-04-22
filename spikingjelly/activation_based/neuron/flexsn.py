@@ -22,6 +22,50 @@ def _as_tuple(outputs):
     return tuple(outputs)
 
 
+def _is_compiling() -> bool:
+    compiler = getattr(torch, "compiler", None)
+    is_compiling = getattr(compiler, "is_compiling", None)
+    if callable(is_compiling):
+        return is_compiling()
+
+    dynamo = getattr(torch, "_dynamo", None)
+    is_compiling = getattr(dynamo, "is_compiling", None)
+    if callable(is_compiling):
+        return is_compiling()
+
+    return False
+
+
+def _run_hop_scan(
+    core: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+):
+    from ..triton_kernel.flex_sn_inductor import eager_scan, flex_sn_scan
+
+    if eager_scan is None:
+        raise RuntimeError(
+            "FlexSN HOP backend is unavailable: eager_scan failed to import. "
+            "See logs from "
+            "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+        )
+
+    if _is_compiling() or flex_sn_scan is None:
+        scan_impl = eager_scan
+    else:
+        scan_impl = flex_sn_scan
+
+    return scan_impl(
+        core,
+        num_inputs,
+        num_states,
+        num_outputs,
+        *flat_args,
+    )
+
+
 def _validate_scan_backend_contract(
     core: Callable,
     num_inputs: int,
@@ -230,8 +274,8 @@ class FlexSN(base.MemoryModule):
         :param step_mode: 步进模式。Triton 内核仅在 ``"m"`` 模式下可用。默认 ``"m"``。
         :type step_mode: str
 
-        :param backend: 使用的后端。``"triton"`` 仅在 ``step_mode="m"`` 时可用；``"torch"`` 始终可用。
-            默认 ``"triton"``。
+        :param backend: 使用的后端。``"triton"``、``"inductor"`` 和 ``"hop"`` 仅在
+            ``step_mode="m"`` 时可用；``"torch"`` 始终可用。默认 ``"triton"``。
         :type backend: str
 
         :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
@@ -287,8 +331,9 @@ class FlexSN(base.MemoryModule):
             mode. Defaults to ``"m"``.
         :type step_mode: str
 
-        :param backend: backend to use. ``"triton"`` is available only when
-            ``step_mode="m"``. ``"torch"`` is always available. Defaults to ``"triton"``.
+        :param backend: backend to use. ``"triton"``, ``"inductor"``, and
+            ``"hop"`` are available only when ``step_mode="m"``. ``"torch"``
+            is always available. Defaults to ``"triton"``.
         :type backend: str
 
         :param store_state_seqs: whether to store the state sequences. If ``True``,
@@ -306,7 +351,7 @@ class FlexSN(base.MemoryModule):
         self.backend = backend
         self.store_state_seqs = store_state_seqs
 
-        if backend in ("triton", "inductor"):
+        if backend in ("triton", "inductor", "hop"):
             _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
@@ -435,7 +480,7 @@ class FlexSN(base.MemoryModule):
 
     @property
     def supported_backends(self):
-        return ("triton", "torch", "inductor")
+        return ("triton", "torch", "inductor", "hop")
 
     @property
     def store_state_seqs(self):
@@ -548,6 +593,22 @@ class FlexSN(base.MemoryModule):
                 self.state_seqs = state_seqs
             return output_seqs
 
+        elif self.backend == "hop":
+            result_seqs = _run_hop_scan(
+                self.core,
+                self.num_inputs,
+                self.num_states,
+                self.num_outputs,
+                *args,
+                *self.states,
+            )
+            output_seqs = list(result_seqs[: self.num_outputs])
+            state_seqs = list(result_seqs[self.num_outputs :])
+            self.states = [v[-1] for v in state_seqs]
+            if self.store_state_seqs:
+                self.state_seqs = state_seqs
+            return output_seqs
+
         elif self.backend == "inductor":
             _no_grad = not torch.is_grad_enabled() or not any(
                 a.requires_grad for a in (*args, *self.states)
@@ -576,19 +637,7 @@ class FlexSN(base.MemoryModule):
                 result_seqs = None
 
             if result_seqs is None:
-                from ..triton_kernel.flex_sn_inductor import eager_scan, flex_sn_scan
-
-                if eager_scan is None:
-                    raise RuntimeError(
-                        "FlexSN inductor backend is unavailable: "
-                        "eager_scan failed to import. "
-                        "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
-                    )
-                if torch.compiler.is_compiling() or flex_sn_scan is None:
-                    scan_impl = eager_scan
-                else:
-                    scan_impl = flex_sn_scan
-                result_seqs = scan_impl(
+                result_seqs = _run_hop_scan(
                     self.core,
                     self.num_inputs,
                     self.num_states,

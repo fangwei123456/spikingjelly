@@ -9,6 +9,8 @@ so these tests do not require a CUDA GPU.
 """
 from __future__ import annotations
 
+import sys
+
 import pytest
 import torch
 
@@ -82,6 +84,37 @@ def test_inductor_backend_matches_torch_backend(rng, T, shape):
     torch.testing.assert_close(inductor_out, torch_out)
     assert len(inductor_neuron.states) == 1
     torch.testing.assert_close(inductor_neuron.states[0], torch_neuron.states[0])
+
+
+@pytest.mark.parametrize("T", [1, 4, 16])
+@pytest.mark.parametrize("shape", [(8,), (4, 8)])
+def test_hop_backend_matches_torch_backend(rng, T, shape):
+    x = torch.randn((T, *shape), generator=rng)
+
+    torch_neuron = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+    hop_neuron = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        example_inputs=(torch.zeros(shape), torch.zeros(shape)),
+    )
+
+    torch_out = torch_neuron(x)
+    hop_out = hop_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
+    assert len(hop_neuron.states) == 1
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
 
 
 def test_inductor_backend_store_state_seqs(rng):
@@ -358,6 +391,32 @@ def test_compile_fullgraph_backward_matches_eager(rng):
     compiled_fn(x_compiled).sum().backward()
 
     torch.testing.assert_close(x_compiled.grad, x_eager.grad)
+
+
+def test_compile_fullgraph_hop_backend_matches_eager(rng):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_out = make_neuron()(x_eager)
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
 
 
 def test_compile_fuses_surrounding_linear_layers(rng):
