@@ -3,6 +3,7 @@ import datetime
 import errno
 import hashlib
 import os
+import statistics
 import time
 from collections import defaultdict, deque, OrderedDict
 
@@ -96,8 +97,10 @@ class ThroughputValue:
         if not is_dist_avail_and_initialized():
             return
 
-        samples = torch.tensor(self.total_samples, device="cuda")
-        elapsed = torch.tensor(self.total_time, device="cuda")
+        samples = torch.tensor(
+            self.total_samples, device="cuda", dtype=torch.float64
+        )
+        elapsed = torch.tensor(self.total_time, device="cuda", dtype=torch.float64)
         dist.barrier()
         dist.all_reduce(samples, op=dist.ReduceOp.SUM)
         dist.all_reduce(elapsed, op=dist.ReduceOp.MAX)
@@ -108,15 +111,13 @@ class ThroughputValue:
     def median(self):
         if not self.deque:
             return 0.0
-        d = torch.tensor(list(self.deque))
-        return d.median().item()
+        return float(statistics.median(self.deque))
 
     @property
     def avg(self):
         if not self.deque:
             return 0.0
-        d = torch.tensor(list(self.deque), dtype=torch.float32)
-        return d.mean().item()
+        return sum(self.deque) / len(self.deque)
 
     @property
     def global_avg(self):

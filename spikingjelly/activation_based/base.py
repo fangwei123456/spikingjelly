@@ -473,7 +473,7 @@ class MemoryModule(nn.Module, StepModule):
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
                 # Preserve Python-scalar sentinel semantics so the next forward
                 # can materialize a fresh tensor with the new runtime shape.
-                self._memories[key] = copy.deepcopy(rv)
+                self._memories[key] = rv
             else:
                 self._memories[key] = copy.deepcopy(rv)
 
