@@ -15,10 +15,13 @@ import pytest
 import torch
 
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
+from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     flex_sn_scan,
     lowerable_scan,
     lowerable_scan_available,
+    lowerable_while_loop_scan,
+    lowerable_while_loop_available,
 )
 
 
@@ -262,28 +265,89 @@ def test_lowerable_scan_matches_manual_loop(rng):
     torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
 
 
-def test_lowerable_scan_traces_as_single_scan_node(rng):
-    if not callable(lowerable_scan_available) or not lowerable_scan_available():
-        pytest.skip("PyTorch scan HOP is unavailable in this environment")
-
-    if not hasattr(torch.fx.experimental, "proxy_tensor"):
-        pytest.skip("make_fx is unavailable in this environment")
-
-    from torch.fx.experimental.proxy_tensor import make_fx
+def test_lowerable_while_loop_matches_manual_loop(rng):
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
 
     T, N = 4, 8
     x = torch.randn((T, N), generator=rng)
     v0 = torch.zeros(N)
 
     with torch.no_grad():
-        gm = make_fx(lambda x, v: lowerable_scan(_lif_core, 1, 1, 1, x, v))(x, v0)
+        s_seq, v_seq = lowerable_while_loop_scan(_lif_core, 1, 1, 1, x, v0)
 
-    hop_targets = [
-        node.target
-        for node in gm.graph.nodes
-        if node.op == "call_function" and "scan" in str(node.target)
-    ]
-    assert len(hop_targets) == 1
+    expected_s, expected_v = [], []
+    v = v0.clone()
+    for t in range(T):
+        s, v = _lif_core(x[t], v)
+        expected_s.append(s)
+        expected_v.append(v)
+
+    torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
+    torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_compile_fullgraph_lowerable_while_loop_matches_eager(rng):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x_eager = torch.randn((T, N), generator=rng)
+    x_compiled = x_eager.detach().clone()
+    v0_eager = torch.zeros(N)
+    v0_compiled = v0_eager.detach().clone()
+
+    def run_scan(x, v0):
+        with torch.no_grad():
+            return lowerable_while_loop_scan(_lif_core, 1, 1, 1, x, v0)
+
+    eager_out = run_scan(x_eager, v0_eager)
+    compiled_out = torch.compile(run_scan, fullgraph=True)(x_compiled, v0_compiled)
+
+    for compiled_tensor, eager_tensor in zip(compiled_out, eager_out):
+        torch.testing.assert_close(compiled_tensor, eager_tensor)
+
+
+def test_compile_fullgraph_hop_backend_matches_eager_with_lowerable_while_loop(
+    rng, monkeypatch
+):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_out = make_neuron()(x_eager)
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
 
 
 # -------------------------------------------------------------------------
@@ -589,6 +653,104 @@ def test_compile_fuses_surrounding_linear_layers(rng):
     x_e = torch.randn(T, N, generator=rng)
     x_c = x_e.detach().clone()
     torch.testing.assert_close(compiled_net(x_c), eager_net(x_e))
+
+
+def test_compile_fuses_surrounding_linear_layers_with_hop_lowerable_while_loop(rng, monkeypatch):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+
+    class Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.pre = torch.nn.Linear(N, N)
+            self.neuron = FlexSN(
+                core=_differentiable_lif_core,
+                num_inputs=1,
+                num_states=1,
+                num_outputs=1,
+                step_mode="m",
+                backend="hop",
+                example_inputs=(torch.zeros(N), torch.zeros(N)),
+            )
+            self.post = torch.nn.Linear(N, N)
+
+        def forward(self, x):
+            pre = self.pre(x)
+            spikes = self.neuron(pre)
+            return self.post(spikes)
+
+    torch.manual_seed(0)
+    eager_net = Net().eval()
+    torch.manual_seed(0)
+    compiled_net = Net().eval()
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+    compiled_net = torch.compile(compiled_net, fullgraph=True)
+
+    x_e = torch.randn(T, N, generator=rng)
+    x_c = x_e.detach().clone()
+    with torch.no_grad():
+        eager_out = eager_net(x_e)
+        compiled_out = compiled_net(x_c)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
+def test_compile_spiking_vgg_hop_lowerable_while_loop_matches_eager(monkeypatch):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+    if not torch.cuda.is_available():
+        pytest.skip("SpikingVGG compile coverage is only exercised on CUDA")
+
+    def core(x, v):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = (h >= v_th).to(h.dtype)
+        return s, h * (1.0 - s)
+
+    def make_flexsn(**kwargs):
+        return FlexSN(
+            core=core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode=kwargs.get("step_mode", "m"),
+            backend="hop",
+        )
+
+    T, B, C, H, W = 4, 8, 3, 32, 32
+    torch.manual_seed(42)
+    x_eager = torch.randn((T, B, C, H, W), device="cuda")
+    x_compiled = x_eager.detach().clone()
+
+    torch.manual_seed(0)
+    model = spiking_vgg16_bn(
+        spiking_neuron=make_flexsn,
+        step_mode="m",
+    ).cuda().eval()
+
+    from spikingjelly.activation_based import functional as sj_functional
+    sj_functional.set_step_mode(model, "m")
+
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+
+    with torch.no_grad():
+        eager_out = model(x_eager)
+        compiled_model = torch.compile(model, fullgraph=True)
+        compiled_out = compiled_model(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out, atol=1e-5, rtol=1e-4)
 
 
 def test_compile_captures_core_ops_in_fx_graph(rng):

@@ -1,22 +1,56 @@
 """FlexSN time-step scan as a HigherOrderOperator.
 
-Current scope (M1 + M2):
+Current progress:
 
+M1:
 * HOP definition with an eager Python time-step loop impl.
 * Eager autograd works via the natural computation graph (``x[t]`` indexing
   and ``torch.stack`` are differentiable, so the per-step ``core_fn`` graph
   is correctly chained through time). Verified with ``gradcheck``.
+
+M2:
 * AOTAutograd tracing (``torch.fx.experimental.proxy_tensor.make_fx`` /
-  ``torch._functorch.aot_autograd.aot_function``) works out of the box by
-  unrolling the scan into T copies of ``core_fn``'s aten ops. This is the
-  input format Inductor expects.
+  ``torch._functorch.aot_autograd.aot_function``) works by unrolling the scan
+  into T copies of ``core_fn``'s aten ops.
 
-Deferred to M3:
+M3:
+* ``FlexSN(backend="hop")`` is available as an explicit backend.
+* Dynamo recognizes ``flex_sn_scan`` via a compatibility registration and can
+  rewrite the call into a HOP node with a traced ``GraphModule`` body.
+* ``torch.compile(fullgraph=True)`` for the HOP backend is verified on the
+  Linux CI/server environment, including tensor lifted freevars/closures.
 
-* A true Inductor lowering that keeps FlexSN as its own first-class HOP and
-  emits a time loop without relying on PyTorch's built-in scan decomposition.
-* Training/autograd support for the lowerable scan path. The built-in scan HOP
-  used here to avoid full unrolling is currently inference-oriented.
+M4:
+* ``lowerable_scan`` re-expresses the FlexSN step function through PyTorch's
+  built-in ``torch.ops.higher_order.scan`` when that API is available.
+* It is kept as an explicit experimental helper for investigating a
+  single-scan-node forward path instead of fully unrolling the body.
+* ``lowerable_while_loop_scan`` provides an alternative experimental forward
+  path based on ``torch.ops.higher_order.while_loop``. On the Linux validation
+  environment, its ``torch.compile(fullgraph=True) + no_grad`` path is working
+  after switching to fixed-shape queue carries instead of ``x[t]`` indexing.
+* The experimental while-loop path is wired into ``FlexSN(backend="hop")`` via
+  ``SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP=1`` for compile-time forward
+  evaluation, and has been validated on:
+  - a single FlexSN layer,
+  - ``Linear -> FlexSN -> Linear``,
+  - ``SpikingVGG`` forward inference.
+
+Current limitations:
+
+* The custom Dynamo registration in this file is still a compatibility shim,
+  not a true in-tree ``BaseHOP`` integration.
+* ``lowerable_scan`` is currently an experimental helper, not the default
+  compiled path. In the PyTorch versions we validate against, fake/proxy/export
+  handling for this out-of-tree scan shape is not yet stable enough to enable
+  it by default.
+* Training and autograd still use the existing eager/unrolled path.
+* The current while-loop lowering is functionally correct for the validated
+  forward ``no_grad`` cases, but it is not yet faster than the current
+  ``backend="inductor"`` custom-op compile path on the server benchmark.
+* A true first-class Inductor lowering for ``flex_sn_scan`` itself does not
+  exist yet; the current "less unrolled" path relies on PyTorch's built-in
+  scan / while_loop decomposition.
 
 Usage::
 
@@ -32,16 +66,24 @@ Captured tensor freevars from ``core_fn`` are appended after the
 ``[*inputs_seq, *init_states]`` segment when Dynamo rewrites the HOP call.
 """
 from __future__ import annotations
-
+import functools
 from typing import Callable, Tuple
 
 import torch
+import torch.utils._pytree as pytree
 from torch._ops import HigherOrderOperator
 
 try:
     from torch._higher_order_ops.scan import scan_op as _torch_scan_op
+    from torch._higher_order_ops.scan import wrap_combine_fn_flat as _wrap_scan_combine_fn_flat
 except Exception:
     _torch_scan_op = None
+    _wrap_scan_combine_fn_flat = None
+
+try:
+    from torch._higher_order_ops.while_loop import while_loop as _torch_while_loop
+except Exception:
+    _torch_while_loop = None
 
 
 class FlexSNScan(HigherOrderOperator):
@@ -84,7 +126,11 @@ flex_sn_scan = FlexSNScan()
 
 
 def lowerable_scan_available() -> bool:
-    return _torch_scan_op is not None
+    return _torch_scan_op is not None and _wrap_scan_combine_fn_flat is not None
+
+
+def lowerable_while_loop_available() -> bool:
+    return _torch_while_loop is not None
 
 
 def eager_scan(
@@ -158,10 +204,18 @@ def lowerable_scan(
 
     This path keeps the scan as a single higher-order op under tracing so
     downstream compilers can decompose it to a loop instead of unrolling the
-    body T times in the traced graph. It is currently intended for inference /
-    no-grad usage.
+    body T times in the traced graph. It is currently intended as an
+    experimental helper for investigation rather than a production default.
+
+    Notes:
+    * On the PyTorch versions we validate against, fake/proxy/export handling
+      for this out-of-tree scan pattern is still not stable enough to make this
+      the default compiled path.
+    * We mirror the internal ``scan`` frontend contract by routing through
+      ``wrap_combine_fn_flat`` with explicit tree specs for the flattened
+      inputs/states.
     """
-    if _torch_scan_op is None:
+    if _torch_scan_op is None or _wrap_scan_combine_fn_flat is None:
         raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
 
     expected = num_inputs + num_states
@@ -177,30 +231,182 @@ def lowerable_scan(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
-
-    def combine_fn(*args):
-        carry = args[:num_states]
-        step_inputs = args[num_states : num_states + num_inputs]
-        extra_inputs = args[num_states + num_inputs :]
-        results = core_fn(*step_inputs, *carry, *extra_inputs)
+    def combine_fn(carry, step_inputs):
+        carry = tuple(carry)
+        step_inputs = tuple(step_inputs)
+        results = core_fn(*step_inputs, *carry, *lifted_args)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "
                 f"expected num_outputs + num_states = {num_outputs + num_states}"
             )
-        outputs = results[:num_outputs]
-        next_states = results[num_outputs:]
-        return [*next_states, *outputs, *next_states]
+
+        outputs = list(results[:num_outputs])
+        next_states = list(results[num_outputs:])
+        return next_states, [*outputs, *next_states]
+
+    leaves_init = list(init_states)
+    leaves_xs = list(input_seqs)
+    _, spec_init = pytree.tree_flatten(leaves_init)
+    _, spec_xs = pytree.tree_flatten(leaves_xs)
+
+    wrapped_combine_fn = functools.partial(
+        _wrap_scan_combine_fn_flat,
+        combine_fn=combine_fn,
+        spec_init=spec_init,
+        spec_xs=spec_xs,
+        num_init_leaves=len(leaves_init),
+        num_inp_leaves=len(leaves_xs),
+    )
 
     result = _torch_scan_op(
-        combine_fn,
-        list(init_states),
-        list(input_seqs),
-        additional_inputs=lifted_args,
+        wrapped_combine_fn,
+        leaves_init,
+        leaves_xs,
+        additional_inputs=(),
     )
     result = tuple(result)
     return result[num_states:]
+
+
+def lowerable_while_loop_scan(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    """Run FlexSN scan through PyTorch's built-in ``while_loop`` HOP.
+
+    This is an explicit research helper for probing whether a first-class loop
+    representation is a better fit than the current unrolled scan path.
+    """
+    if _torch_while_loop is None:
+        raise RuntimeError("PyTorch while_loop HOP is unavailable in this environment")
+
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    input_seqs = tuple(flat_args[:num_inputs])
+    init_states = tuple(flat_args[num_inputs:expected])
+    lifted_args = tuple(flat_args[expected:])
+
+    def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.contiguous()
+
+    T = input_seqs[0].shape[0]
+    for i, x in enumerate(input_seqs):
+        if x.shape[0] != T:
+            raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
+
+    if T == 0:
+        empty_outputs = tuple(
+            state.new_empty((0, *state.shape)) for state in init_states[:num_outputs]
+        )
+        empty_states = tuple(
+            state.new_empty((0, *state.shape)) for state in init_states
+        )
+        return (*empty_outputs, *empty_states)
+
+    input_seqs = tuple(_ensure_contiguous(seq) for seq in input_seqs)
+    init_states = tuple(_ensure_contiguous(state) for state in init_states)
+
+    first_step_inputs = tuple(_ensure_contiguous(x[0]) for x in input_seqs)
+    first_results = core_fn(*first_step_inputs, *init_states, *lifted_args)
+    first_results = (
+        tuple(first_results)
+        if not isinstance(first_results, torch.Tensor)
+        else (first_results,)
+    )
+    if len(first_results) != num_outputs + num_states:
+        raise ValueError(
+            f"core returned {len(first_results)} values, "
+            f"expected num_outputs + num_states = {num_outputs + num_states}"
+        )
+
+    first_outputs = tuple(_ensure_contiguous(x) for x in first_results[:num_outputs])
+    first_states = tuple(_ensure_contiguous(x) for x in first_results[num_outputs:])
+    def _append_to_tail(buffer: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
+        return torch.cat((buffer[1:], _ensure_contiguous(value).unsqueeze(0)), dim=0).contiguous()
+
+    def _shift_input_queue(queue: torch.Tensor) -> torch.Tensor:
+        return torch.cat((queue[1:], queue[-1:].clone()), dim=0).contiguous()
+
+    output_buffers = tuple(
+        _append_to_tail(out.new_zeros((T, *out.shape)), out) for out in first_outputs
+    )
+    state_buffers = tuple(
+        _append_to_tail(state.new_zeros((T, *state.shape)), state)
+        for state in first_states
+    )
+    pending_inputs = tuple(
+        _shift_input_queue(seq) for seq in input_seqs
+    )
+
+    t0 = torch.tensor(1, dtype=torch.int64, device=first_outputs[0].device)
+
+    def cond_fn(t, *carry):
+        return t < T
+
+    def body_fn(t, *carry):
+        pending_seq_end = num_inputs
+        states_end = pending_seq_end + num_states
+        outputs_end = states_end + num_outputs
+
+        step_input_queues = carry[:pending_seq_end]
+        states = carry[pending_seq_end:states_end]
+        outputs_acc = carry[states_end:outputs_end]
+        states_acc = carry[outputs_end:]
+
+        step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
+        results = core_fn(*step_inputs, *states, *lifted_args)
+        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        outputs = tuple(_ensure_contiguous(x) for x in results[:num_outputs])
+        next_states = tuple(_ensure_contiguous(x) for x in results[num_outputs:])
+        next_pending_inputs = tuple(
+            _shift_input_queue(queue) for queue in step_input_queues
+        )
+        next_output_acc = tuple(
+            _append_to_tail(buf, out) for buf, out in zip(outputs_acc, outputs)
+        )
+        next_state_acc = tuple(
+            _append_to_tail(buf, state)
+            for buf, state in zip(states_acc, next_states)
+        )
+        return (
+            t + 1,
+            *next_pending_inputs,
+            *next_states,
+            *next_output_acc,
+            *next_state_acc,
+        )
+
+    final = _torch_while_loop(
+        cond_fn,
+        body_fn,
+        (
+            t0,
+            *pending_inputs,
+            *first_states,
+            *output_buffers,
+            *state_buffers,
+        ),
+    )
+    final = tuple(final)
+    pending_seq_end = 1 + num_inputs
+    states_end = pending_seq_end + num_states
+    outputs_end = states_end + num_outputs
+    final_output_buffers = final[states_end:outputs_end]
+    final_state_buffers = final[outputs_end:]
+    return (*final_output_buffers, *final_state_buffers)
 
 
 flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
