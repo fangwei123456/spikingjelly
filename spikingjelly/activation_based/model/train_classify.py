@@ -512,6 +512,10 @@ class Trainer:
 
     def main(self, args):
         set_deterministic(args.seed, args.disable_uda)
+        if args.workers > 0 and args.prefetch_factor < 1:
+            raise ValueError(
+                f"--prefetch-factor must be >= 1 when --workers > 0, but got {args.prefetch_factor}."
+            )
         if args.prototype and prototype is None:
             raise ImportError(
                 "The prototype module couldn't be found. Please install the latest torchvision nightly."

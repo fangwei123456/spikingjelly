@@ -100,11 +100,15 @@ class ThroughputValue:
 
     @property
     def median(self):
+        if not self.deque:
+            return 0.0
         d = torch.tensor(list(self.deque))
         return d.median().item()
 
     @property
     def avg(self):
+        if not self.deque:
+            return 0.0
         d = torch.tensor(list(self.deque), dtype=torch.float32)
         return d.mean().item()
 
@@ -116,10 +120,14 @@ class ThroughputValue:
 
     @property
     def max(self):
+        if not self.deque:
+            return 0.0
         return max(self.deque)
 
     @property
     def value(self):
+        if not self.deque:
+            return 0.0
         return self.deque[-1]
 
     def __str__(self):
