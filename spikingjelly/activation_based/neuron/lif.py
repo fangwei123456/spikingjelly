@@ -434,10 +434,14 @@ class LIFNode(BaseNode):
         tau: float,
         decay_input: bool,
         store_v_seq: bool,
+        spiking: bool = True,
+        surrogate_fn=None,
     ):
         """Unified fallback for all 4 LIF variants (CPU or unsupported surrogate).
 
-        Replaces the 8 separate ``jit_eval_multi_step_forward_*`` methods.
+        When *spiking* is False the surrogate primitive function is used to
+        compute a continuous spike value instead of the hard Heaviside threshold,
+        matching the behaviour of ``single_step_forward`` with ``spiking=False``.
         """
         T = x_seq.shape[0]
         spike_seq = torch.zeros_like(x_seq)
@@ -449,7 +453,10 @@ class LIFNode(BaseNode):
                 v = v + (x_seq[t] - (v - _vr)) / tau
             else:
                 v = v - (v - _vr) / tau + x_seq[t]
-            spike = (v >= v_threshold).to(x_seq)
+            if spiking:
+                spike = (v >= v_threshold).to(x_seq)
+            else:
+                spike = surrogate_fn(v - v_threshold)
             v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
             spike_seq[t] = spike
             if store_v_seq:
@@ -564,7 +571,7 @@ class LIFNode(BaseNode):
                             self.v_seq = v_seq
                         self.v = v_seq[-1].clone()
                         return spike_seq
-                    except (NotImplementedError, AttributeError, TypeError, KeyError):
+                    except (NotImplementedError, AttributeError, TypeError, KeyError, RuntimeError):
                         pass  # unsupported surrogate / dtype / no Triton → Python loop
                 return super().multi_step_forward(x_seq)
             elif self.backend == "cupy":
@@ -656,14 +663,19 @@ class LIFNode(BaseNode):
                         self.v_seq = v_seq
                     self.v = v_seq[-1].clone()
                     return spike_seq
-                except (NotImplementedError, AttributeError, TypeError, KeyError):
-                    pass  # unsupported surrogate / dtype / no Triton → Python loop
+                except (NotImplementedError, AttributeError, TypeError, KeyError, RuntimeError):
+                    pass  # unsupported surrogate / dtype / Triton launch failure → Python loop
 
             # CPU or unsupported surrogate: unified Python fallback
             # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
+            _spiking = getattr(self.surrogate_function, 'spiking', True)
             out = self._eval_multi_step_forward(
                 x_seq, self.v, self.v_threshold, self.v_reset,
                 self.tau, self.decay_input, self.store_v_seq,
+                spiking=_spiking,
+                # When spiking=False, SurrogateFunctionBase.forward() returns the
+                # primitive (smooth) function, so we can call it directly.
+                surrogate_fn=self.surrogate_function if not _spiking else None,
             )
             if self.store_v_seq:
                 spike_seq, self.v, self.v_seq = out

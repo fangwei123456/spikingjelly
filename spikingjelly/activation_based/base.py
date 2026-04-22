@@ -463,8 +463,13 @@ class MemoryModule(nn.Module, StepModule):
                 and cur.dtype == rv.dtype
                 and cur.device == rv.device
             ):
-                # detach_() breaks any stale autograd graph before in-place copy
-                cur.detach_().copy_(rv)
+                # detach_() breaks stale autograd graphs before in-place copy.
+                # Falls back to deepcopy when cur is a view tensor
+                # (detach_() raises RuntimeError on views).
+                try:
+                    cur.detach_().copy_(rv)
+                except RuntimeError:
+                    self._memories[key] = rv.detach().clone()
             elif isinstance(cur, torch.Tensor) and isinstance(rv, (int, float)):
                 # Restore to the scalar reset value so v_float_to_tensor() can
                 # detect a float on the next forward and re-create a correctly
