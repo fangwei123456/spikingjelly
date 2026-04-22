@@ -15,10 +15,16 @@ except BaseException as e:
 try:
     from ..triton_kernel.flex_sn_inductor import eager_scan as _flexsn_eager_scan
     from ..triton_kernel.flex_sn_inductor import flex_sn_scan as _flexsn_hop_scan
+    from ..triton_kernel.flex_sn_inductor import lowerable_scan as _flexsn_lowerable_scan
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_scan_available as _flexsn_lowerable_scan_available,
+    )
 except BaseException as e:
     logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
     _flexsn_eager_scan = None
     _flexsn_hop_scan = None
+    _flexsn_lowerable_scan = None
+    _flexsn_lowerable_scan_available = None
 
 
 __all__ = ["FlexSNKernel", "FlexSN"]
@@ -58,7 +64,17 @@ def _run_hop_scan(
             "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
         )
 
-    if _is_compiling() or _flexsn_hop_scan is None:
+    use_lowerable_scan = (
+        _is_compiling()
+        and _flexsn_lowerable_scan is not None
+        and callable(_flexsn_lowerable_scan_available)
+        and _flexsn_lowerable_scan_available()
+        and (not torch.is_grad_enabled())
+    )
+
+    if use_lowerable_scan:
+        scan_impl = _flexsn_lowerable_scan
+    elif _is_compiling() or _flexsn_hop_scan is None:
         scan_impl = _flexsn_eager_scan
     else:
         scan_impl = _flexsn_hop_scan

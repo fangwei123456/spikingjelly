@@ -17,6 +17,8 @@ import torch
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     flex_sn_scan,
+    lowerable_scan,
+    lowerable_scan_available,
 )
 
 
@@ -236,6 +238,52 @@ def test_hop_registers_with_dynamo():
 
     hop_var = TorchHigherOrderOperatorVariable.make(flex_sn_scan)
     assert hop_var.value is flex_sn_scan
+
+
+def test_lowerable_scan_matches_manual_loop(rng):
+    if not callable(lowerable_scan_available) or not lowerable_scan_available():
+        pytest.skip("PyTorch scan HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    v0 = torch.zeros(N)
+
+    with torch.no_grad():
+        s_seq, v_seq = lowerable_scan(_lif_core, 1, 1, 1, x, v0)
+
+    expected_s, expected_v = [], []
+    v = v0.clone()
+    for t in range(T):
+        s, v = _lif_core(x[t], v)
+        expected_s.append(s)
+        expected_v.append(v)
+
+    torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
+    torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_lowerable_scan_traces_as_single_scan_node(rng):
+    if not callable(lowerable_scan_available) or not lowerable_scan_available():
+        pytest.skip("PyTorch scan HOP is unavailable in this environment")
+
+    if not hasattr(torch.fx.experimental, "proxy_tensor"):
+        pytest.skip("make_fx is unavailable in this environment")
+
+    from torch.fx.experimental.proxy_tensor import make_fx
+
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    v0 = torch.zeros(N)
+
+    with torch.no_grad():
+        gm = make_fx(lambda x, v: lowerable_scan(_lif_core, 1, 1, 1, x, v))(x, v0)
+
+    hop_targets = [
+        node.target
+        for node in gm.graph.nodes
+        if node.op == "call_function" and "scan" in str(node.target)
+    ]
+    assert len(hop_targets) == 1
 
 
 # -------------------------------------------------------------------------

@@ -13,12 +13,10 @@ Current scope (M1 + M2):
 
 Deferred to M3:
 
-* A Dynamo ``VariableBuilder`` so ``torch.compile(model, fullgraph=True)``
-  can lift the HOP directly. Today the HOP is unsupported by Dynamo and
-  users must either wrap the scan in ``torch.compiler.disable`` or use
-  the lower-level ``aot_function`` API.
-* An Inductor lowering that preserves the scan as a single node and emits
-  a ``tl.static_range`` time loop (vs. the current unrolled-aten path).
+* A true Inductor lowering that keeps FlexSN as its own first-class HOP and
+  emits a time loop without relying on PyTorch's built-in scan decomposition.
+* Training/autograd support for the lowerable scan path. The built-in scan HOP
+  used here to avoid full unrolling is currently inference-oriented.
 
 Usage::
 
@@ -39,6 +37,11 @@ from typing import Callable, Tuple
 
 import torch
 from torch._ops import HigherOrderOperator
+
+try:
+    from torch._higher_order_ops.scan import scan_op as _torch_scan_op
+except Exception:
+    _torch_scan_op = None
 
 
 class FlexSNScan(HigherOrderOperator):
@@ -78,6 +81,10 @@ class FlexSNScan(HigherOrderOperator):
 
 
 flex_sn_scan = FlexSNScan()
+
+
+def lowerable_scan_available() -> bool:
+    return _torch_scan_op is not None
 
 
 def eager_scan(
@@ -138,6 +145,62 @@ def eager_scan(
     output_seqs = tuple(torch.stack(buf, dim=0) for buf in output_buffers)
     state_seqs = tuple(torch.stack(buf, dim=0) for buf in state_buffers)
     return (*output_seqs, *state_seqs)
+
+
+def lowerable_scan(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    """Run FlexSN scan through PyTorch's built-in ``scan`` HOP.
+
+    This path keeps the scan as a single higher-order op under tracing so
+    downstream compilers can decompose it to a loop instead of unrolling the
+    body T times in the traced graph. It is currently intended for inference /
+    no-grad usage.
+    """
+    if _torch_scan_op is None:
+        raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
+
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    input_seqs = flat_args[:num_inputs]
+    init_states = flat_args[num_inputs:expected]
+    lifted_args = tuple(flat_args[expected:])
+
+    def combine_fn(*args):
+        carry = args[:num_states]
+        step_inputs = args[num_states : num_states + num_inputs]
+        extra_inputs = args[num_states + num_inputs :]
+        results = core_fn(*step_inputs, *carry, *extra_inputs)
+        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        if len(results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(results)} values, "
+                f"expected num_outputs + num_states = {num_outputs + num_states}"
+            )
+        outputs = results[:num_outputs]
+        next_states = results[num_outputs:]
+        return [*next_states, *outputs, *next_states]
+
+    result = _torch_scan_op(
+        combine_fn,
+        list(init_states),
+        list(input_seqs),
+        additional_inputs=lifted_args,
+    )
+    result = tuple(result)
+    return result[num_states:]
 
 
 flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
