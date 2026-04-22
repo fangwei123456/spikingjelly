@@ -53,11 +53,6 @@ class Trainer:
     def get_data_to_device_kwargs(self, args):
         return {"non_blocking": not args.disable_pinmemory}
 
-    def format_input_tensor(self, args, x: torch.Tensor) -> torch.Tensor:
-        if getattr(args, "channels_last", False) and x.ndim == 4:
-            return x.contiguous(memory_format=torch.channels_last)
-        return x
-
     def cal_acc1_acc5(self, output, target):
         # define how to calculate acc1 and acc5
         acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
@@ -142,7 +137,6 @@ class Trainer:
         ):
             start_time = time.time()
             image = image.to(device, **data_to_device_kwargs)
-            image = self.format_input_tensor(args, image)
             target = target.to(device, **data_to_device_kwargs)
             with torch.cuda.amp.autocast(enabled=scaler is not None):
                 image = self.preprocess_train_sample(args, image)
@@ -202,7 +196,6 @@ class Trainer:
         with torch.inference_mode():
             for image, target in metric_logger.log_every(data_loader, -1, header):
                 image = image.to(device, **data_to_device_kwargs)
-                image = self.format_input_tensor(args, image)
                 target = target.to(device, **data_to_device_kwargs)
                 image = self.preprocess_test_sample(args, image)
                 output = self.process_model_output(args, model(image))
@@ -575,8 +568,6 @@ class Trainer:
         print("Creating model")
         model = self.load_model(args, num_classes)
         model.to(device)
-        if args.channels_last:
-            model.to(memory_format=torch.channels_last)
         print(model)
 
         if args.distributed and args.sync_bn:
@@ -1076,11 +1067,6 @@ class Trainer:
             "--disable-amp",
             action="store_true",
             help="not use automatic mixed precision training",
-        )
-        parser.add_argument(
-            "--channels-last",
-            action="store_true",
-            help="use channels_last memory format for 4D image tensors and conv-heavy models",
         )
         parser.add_argument(
             "--compile",
