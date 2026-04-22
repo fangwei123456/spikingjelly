@@ -1,3 +1,4 @@
+import copy
 from typing import Callable, Optional, Tuple, List
 import logging
 
@@ -389,6 +390,35 @@ class FlexSN(base.MemoryModule):
 
         # register states as memory buffers
         self.register_memory("states", None)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+
+        for key, value in self.__dict__.items():
+            if key == "_inductor_handle_finalizer":
+                continue
+            result.__dict__[key] = copy.deepcopy(value, memo)
+
+        handle = result.__dict__.get("_inductor_handle")
+        if handle is not None:
+            try:
+                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                    attach_flexsn_handle_finalizer,
+                    retain_owner_flexsn_kernel_handle,
+                )
+            except (ImportError, RuntimeError):
+                result._inductor_handle_finalizer = None
+            else:
+                retain_owner_flexsn_kernel_handle(handle)
+                result._inductor_handle_finalizer = attach_flexsn_handle_finalizer(
+                    result, handle
+                )
+        else:
+            result._inductor_handle_finalizer = None
+
+        return result
 
     @property
     def supported_backends(self):

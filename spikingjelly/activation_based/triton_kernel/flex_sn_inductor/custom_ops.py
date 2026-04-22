@@ -95,6 +95,12 @@ def retain_flexsn_kernel_handle(handle: int) -> None:
         bundle.active_refs += 1
 
 
+def retain_owner_flexsn_kernel_handle(handle: int) -> None:
+    with _KERNEL_REGISTRY_LOCK:
+        bundle = _lookup_kernel_handle(handle)
+        bundle.owner_refs += 1
+
+
 def release_flexsn_kernel_handle(handle: int) -> None:
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
