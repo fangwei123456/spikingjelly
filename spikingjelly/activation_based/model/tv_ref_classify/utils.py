@@ -69,6 +69,63 @@ class SmoothedValue:
         )
 
 
+class ThroughputValue:
+    """Track throughput as total_samples / total_time."""
+
+    def __init__(self, window_size=20, fmt=None):
+        if fmt is None:
+            fmt = "{global_avg:.4f}"
+        self.deque = deque(maxlen=window_size)
+        self.total_samples = 0.0
+        self.total_time = 0.0
+        self.fmt = fmt
+
+    def update(self, samples, elapsed_time):
+        throughput = samples / elapsed_time
+        self.deque.append(throughput)
+        self.total_samples += samples
+        self.total_time += elapsed_time
+
+    def synchronize_between_processes(self):
+        t = reduce_across_processes([self.total_samples, self.total_time])
+        t = t.tolist()
+        self.total_samples = t[0]
+        self.total_time = t[1]
+
+    @property
+    def median(self):
+        d = torch.tensor(list(self.deque))
+        return d.median().item()
+
+    @property
+    def avg(self):
+        d = torch.tensor(list(self.deque), dtype=torch.float32)
+        return d.mean().item()
+
+    @property
+    def global_avg(self):
+        if self.total_time == 0.0:
+            return 0.0
+        return self.total_samples / self.total_time
+
+    @property
+    def max(self):
+        return max(self.deque)
+
+    @property
+    def value(self):
+        return self.deque[-1]
+
+    def __str__(self):
+        return self.fmt.format(
+            median=self.median,
+            avg=self.avg,
+            global_avg=self.global_avg,
+            max=self.max,
+            value=self.value,
+        )
+
+
 class MetricLogger:
     def __init__(self, delimiter="\t"):
         self.meters = defaultdict(SmoothedValue)

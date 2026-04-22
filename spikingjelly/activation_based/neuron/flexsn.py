@@ -255,6 +255,7 @@ class FlexSN(base.MemoryModule):
                     build_inference_kernel, build_training_kernels,
                 )
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                    attach_flexsn_handle_finalizer,
                     register_flexsn_kernel_handle,
                 )
             except Exception as e:
@@ -264,6 +265,7 @@ class FlexSN(base.MemoryModule):
                 )
                 build_inference_kernel = None
                 build_training_kernels = None
+                attach_flexsn_handle_finalizer = None
                 register_flexsn_kernel_handle = None
             if build_inference_kernel is not None:
                 try:
@@ -316,6 +318,11 @@ class FlexSN(base.MemoryModule):
                 backward_kernel=self._inductor_bwd_kernel,
                 training_info=self._inductor_train_info,
             )
+            self._inductor_handle_finalizer = attach_flexsn_handle_finalizer(
+                self, self._inductor_handle
+            )
+        else:
+            self._inductor_handle_finalizer = None
 
         # register states as memory buffers
         self.register_memory("states", None)
@@ -440,7 +447,8 @@ class FlexSN(base.MemoryModule):
                 a.requires_grad for a in (*args, *self.states)
             )
             flat_args = [*(a.contiguous() for a in args), *(s.contiguous() for s in self.states)]
-            if self._inductor_handle is not None and args[0].is_cuda:
+            has_cuda_tensor = any(t.is_cuda for t in flat_args)
+            if self._inductor_handle is not None and has_cuda_tensor:
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
                     flexsn_inductor_inference,
                     flexsn_inductor_training,
@@ -469,7 +477,10 @@ class FlexSN(base.MemoryModule):
                         "eager_scan failed to import. "
                         "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
                     )
-                scan_impl = flex_sn_scan if flex_sn_scan is not None else eager_scan
+                if torch.compiler.is_compiling() or flex_sn_scan is None:
+                    scan_impl = eager_scan
+                else:
+                    scan_impl = flex_sn_scan
                 result_seqs = scan_impl(
                     self.core,
                     self.num_inputs,

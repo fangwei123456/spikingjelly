@@ -18,6 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from itertools import count
 from threading import Lock
+import weakref
 
 import torch
 
@@ -59,6 +60,21 @@ def register_flexsn_kernel_handle(
     return handle
 
 
+def unregister_flexsn_kernel_handle(handle: int) -> None:
+    with _KERNEL_REGISTRY_LOCK:
+        bundle = _KERNEL_REGISTRY.pop(handle, None)
+    if bundle is None:
+        return
+    for obj in (
+        bundle.inference_kernel,
+        bundle.forward_kernel,
+        bundle.backward_kernel,
+    ):
+        closer = getattr(obj, "close", None)
+        if callable(closer):
+            closer()
+
+
 def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
     try:
         return _KERNEL_REGISTRY[handle]
@@ -67,8 +83,21 @@ def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
 
 
 def _make_seq_tensor_list_like(xs: list[torch.Tensor], n: int) -> list[torch.Tensor]:
-    x_example = xs[0]
-    return [x_example.new_empty(x_example.shape) for _ in range(n)]
+    if not xs:
+        raise ValueError("Expected at least one template tensor.")
+    return [xs[min(i, len(xs) - 1)].new_empty(xs[min(i, len(xs) - 1)].shape) for i in range(n)]
+
+
+def _make_seq_outputs_like(
+    info: FlexSNInfo, flat_args: list[torch.Tensor], n: int
+) -> list[torch.Tensor]:
+    if info.num_inputs > 0 and flat_args:
+        seq_template = flat_args[0]
+    elif flat_args:
+        seq_template = flat_args[0].unsqueeze(0)
+    else:
+        raise ValueError("Expected at least one FlexSN argument tensor.")
+    return [seq_template.new_empty(seq_template.shape) for _ in range(n)]
 
 
 @torch.library.custom_op("sj::flexsn_inductor_inference", mutates_args=())
@@ -92,8 +121,10 @@ def _flexsn_inductor_inference_fake(
     bundle = _lookup_kernel_handle(handle)
     if bundle.inference_info is None:
         raise RuntimeError("FlexSN inference metadata is unavailable for this handle.")
-    return _make_seq_tensor_list_like(
-        flat_args, bundle.inference_info.num_outputs + bundle.inference_info.num_states
+    return _make_seq_outputs_like(
+        bundle.inference_info,
+        flat_args,
+        bundle.inference_info.num_outputs + bundle.inference_info.num_states,
     )
 
 
@@ -122,8 +153,10 @@ def _flexsn_inductor_training_fake(
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
-    return _make_seq_tensor_list_like(
-        flat_args, bundle.training_info.num_fwd_kernel_returns
+    return _make_seq_outputs_like(
+        bundle.training_info,
+        flat_args,
+        bundle.training_info.num_fwd_kernel_returns,
     )
 
 
@@ -155,13 +188,11 @@ def _flexsn_inductor_backward_fake(
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
-    seq_grads = _make_seq_tensor_list_like(
-        grad_outputs, bundle.training_info.num_inputs
-    )
-    state_example = grad_outputs[0][0]
+    seq_grads = _make_seq_tensor_list_like(grad_outputs, bundle.training_info.num_inputs)
+    state_offset = bundle.training_info.num_outputs
     state_grads = [
-        state_example.new_empty(state_example.shape)
-        for _ in range(bundle.training_info.num_states)
+        grad_outputs[state_offset + i][0].new_empty(grad_outputs[state_offset + i][0].shape)
+        for i in range(bundle.training_info.num_states)
     ]
     return [*seq_grads, *state_grads]
 
@@ -172,7 +203,7 @@ def _flexsn_training_setup_context(ctx, inputs, output):
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
     ctx.handle = handle
-    ctx.output_template = output[0]
+    ctx.output_templates = output[: bundle.training_info.num_outputs + bundle.training_info.num_states]
     saved = [output[i] for i in bundle.training_info.c2k_return_mapping]
     ctx.save_for_backward(*saved)
 
@@ -183,9 +214,10 @@ def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
         raise RuntimeError("FlexSN backward kernel is unavailable for this handle.")
 
     required_grads = bundle.training_info.num_outputs + bundle.training_info.num_states
-    zero = torch.zeros_like(ctx.output_template)
     grad_inputs = [
-        grad_out[i].contiguous() if grad_out[i] is not None else zero
+        grad_out[i].contiguous()
+        if grad_out[i] is not None
+        else torch.zeros_like(ctx.output_templates[i])
         for i in range(required_grads)
     ]
     saved = [tensor.contiguous() for tensor in ctx.saved_tensors]
@@ -204,3 +236,7 @@ torch.library.register_autograd(
     _flexsn_training_backward,
     setup_context=_flexsn_training_setup_context,
 )
+
+
+def attach_flexsn_handle_finalizer(owner, handle: int):
+    return weakref.finalize(owner, unregister_flexsn_kernel_handle, handle)

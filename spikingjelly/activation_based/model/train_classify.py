@@ -102,7 +102,16 @@ class Trainer:
 
         try:
             return torch.compile(model, **compile_kwargs)
-        except RuntimeError:
+        except RuntimeError as e:
+            compile_options = compile_kwargs.get("options")
+            if not compile_options:
+                raise
+            warnings.warn(
+                "torch.compile failed with backend options "
+                f"{compile_options!r}; retrying without options. "
+                f"Original error: {e}",
+                RuntimeWarning,
+            )
             compile_kwargs.pop("options", None)
             return torch.compile(model, **compile_kwargs)
 
@@ -126,9 +135,7 @@ class Trainer:
         model.train()
         metric_logger = utils.MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value}"))
-        metric_logger.add_meter(
-            "img/s", utils.SmoothedValue(window_size=10, fmt="{global_avg:.3f}")
-        )
+        metric_logger.add_meter("img/s", utils.ThroughputValue(fmt="{global_avg:.3f}"))
 
         header = f"Epoch: [{epoch}]"
         data_to_device_kwargs = self.get_data_to_device_kwargs(args)
@@ -171,7 +178,7 @@ class Trainer:
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
             metric_logger.meters["img/s"].update(
-                batch_size / (time.time() - start_time)
+                samples=batch_size, elapsed_time=time.time() - start_time
             )
         # gather the stats from all processes
         metric_logger.synchronize_between_processes()

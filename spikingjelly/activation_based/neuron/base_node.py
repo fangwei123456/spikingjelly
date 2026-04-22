@@ -352,15 +352,13 @@ class BaseNode(base.MemoryModule):
         if isinstance(self.v, float):
             v_init = self.v
             self.v = torch.full_like(x, v_init)
-        elif (
-            isinstance(self.v, torch.Tensor)
-            and (
-                self.v.shape != x.shape
-                or self.v.dtype != x.dtype
-                or self.v.device != x.device
-            )
-        ):
-            self.v = torch.full_like(x, self.v_reset if self.v_reset is not None else 0.0)
+        elif isinstance(self.v, torch.Tensor):
+            if self.v.shape != x.shape:
+                self.v = torch.full_like(
+                    x, self.v_reset if self.v_reset is not None else 0.0
+                )
+            elif self.v.dtype != x.dtype or self.v.device != x.device:
+                self.v = self.v.to(dtype=x.dtype, device=x.device)
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
