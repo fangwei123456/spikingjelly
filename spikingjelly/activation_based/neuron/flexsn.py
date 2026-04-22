@@ -37,7 +37,7 @@ def _validate_scan_backend_contract(
             torch.zeros(1, device=device) for _ in range(num_inputs + num_states)
         )
     else:
-        device = "cuda" if torch.cuda.is_available() else example_inputs[0].device
+        device = example_inputs[0].device
         example_inputs = tuple(x.detach().to(device).clone() for x in example_inputs)
 
     with torch.no_grad():
