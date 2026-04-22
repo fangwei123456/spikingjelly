@@ -136,6 +136,15 @@ def _make_seq_outputs_like(
     return [seq_template.new_empty(seq_template.shape) for _ in range(n)]
 
 
+def _template_spec(tensor: torch.Tensor):
+    return tuple(tensor.shape), tensor.dtype, tensor.device
+
+
+def _materialize_template(spec):
+    shape, dtype, device = spec
+    return torch.empty((), dtype=dtype, device=device).expand(shape)
+
+
 def _device_guard(tensors: list[torch.Tensor]):
     for tensor in tensors:
         if isinstance(tensor, torch.Tensor) and tensor.is_cuda:
@@ -242,6 +251,7 @@ def flexsn_inductor_backward(
     handle: int,
     grad_outputs: list[torch.Tensor],
     saved_tensors: list[torch.Tensor],
+    input_templates: list[torch.Tensor],
 ) -> list[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
     if bundle.backward_kernel is None or bundle.training_info is None:
@@ -254,14 +264,18 @@ def _flexsn_inductor_backward_fake(
     handle: int,
     grad_outputs: list[torch.Tensor],
     saved_tensors: list[torch.Tensor],
+    input_templates: list[torch.Tensor],
 ) -> list[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
-    seq_grads = _make_seq_tensor_list_like(grad_outputs, bundle.training_info.num_inputs)
-    state_offset = bundle.training_info.num_outputs
+    seq_grads = [
+        input_templates[i].new_empty(input_templates[i].shape)
+        for i in range(bundle.training_info.num_inputs)
+    ]
+    state_offset = bundle.training_info.num_inputs
     state_grads = [
-        grad_outputs[state_offset + i][0].new_empty(grad_outputs[state_offset + i][0].shape)
+        input_templates[state_offset + i].new_empty(input_templates[state_offset + i].shape)
         for i in range(bundle.training_info.num_states)
     ]
     return [*seq_grads, *state_grads]
@@ -273,8 +287,15 @@ def _flexsn_training_setup_context(ctx, inputs, output):
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
     retain_flexsn_kernel_handle(handle)
+    ctx._active_ref_finalizer = weakref.finalize(
+        ctx, release_active_flexsn_kernel_handle, handle
+    )
     ctx.handle = handle
-    ctx.output_templates = output[: bundle.training_info.num_outputs + bundle.training_info.num_states]
+    ctx.input_template_specs = [_template_spec(t) for t in inputs[1]]
+    ctx.output_template_specs = [
+        _template_spec(t)
+        for t in output[: bundle.training_info.num_outputs + bundle.training_info.num_states]
+    ]
     saved = [output[i] for i in bundle.training_info.c2k_return_mapping]
     ctx.save_for_backward(*saved)
 
@@ -288,15 +309,23 @@ def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
     grad_inputs = [
         grad_out[i]
         if grad_out[i] is not None
-        else torch.zeros_like(ctx.output_templates[i])
+        else torch.zeros(
+            ctx.output_template_specs[i][0],
+            dtype=ctx.output_template_specs[i][1],
+            device=ctx.output_template_specs[i][2],
+        )
         for i in range(required_grads)
     ]
+    input_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
     try:
+        if ctx._active_ref_finalizer.alive:
+            ctx._active_ref_finalizer.detach()
         grads = list(
             flexsn_inductor_backward(
                 ctx.handle,
                 grad_inputs,
                 list(ctx.saved_tensors),
+                input_templates,
             )
         )
     finally:

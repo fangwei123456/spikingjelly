@@ -304,8 +304,15 @@ class FlexSN(base.MemoryModule):
             self._inductor_bwd_kernel = None
             self._inductor_train_info = None
         self._inductor_handle = None
-        self._inductor_inference_available = self._inductor_scan_kernel is not None
-        self._inductor_training_available = self._inductor_fwd_kernel is not None
+        self._inductor_inference_available = (
+            self._inductor_scan_kernel is not None
+            and self._inductor_scan_info is not None
+        )
+        self._inductor_training_available = (
+            self._inductor_fwd_kernel is not None
+            and self._inductor_bwd_kernel is not None
+            and self._inductor_train_info is not None
+        )
         if (
             backend == "inductor"
             and register_flexsn_kernel_handle is not None
@@ -447,8 +454,9 @@ class FlexSN(base.MemoryModule):
                 a.requires_grad for a in (*args, *self.states)
             )
             flat_args = [*args, *self.states]
-            has_cuda_tensor = any(t.is_cuda for t in flat_args)
-            if self._inductor_handle is not None and has_cuda_tensor:
+            all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
+            same_device = len({t.device for t in flat_args}) == 1
+            if self._inductor_handle is not None and all_cuda and same_device:
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
                     flexsn_inductor_inference,
                     flexsn_inductor_training,
