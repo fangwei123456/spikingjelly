@@ -161,7 +161,6 @@ def _register_dynamo_hop() -> None:
         )
         from torch._dynamo.variables.higher_order_ops import (
             TorchHigherOrderOperatorVariable,
-            add_subgraph,
             make_attr,
             speculate_subgraph,
         )
@@ -173,6 +172,11 @@ def _register_dynamo_hop() -> None:
         return
 
     original_make = TorchHigherOrderOperatorVariable.make
+
+    install_subgraph = getattr(hop_vars, "add_subgraph", None)
+    if install_subgraph is None:
+        def install_subgraph(tx, source, name, gm):
+            return tx.output.install_subgraph(name, gm)
 
     class FlexSNScanHigherOrderVariable(TorchHigherOrderOperatorVariable):
         def call_function(self, tx, args, kwargs):
@@ -223,18 +227,31 @@ def _register_dynamo_hop() -> None:
             ]
             body_args = [*step_inputs, *flat_args[num_inputs:]]
 
-            graph_checkpoint, checkpoint = tx.output.graph, tx.copy_graphstate()
-            body_r, body_graph, body_lifted_freevars = speculate_subgraph(
-                tx,
-                body_fn,
-                body_args,
-                {},
-                graph_checkpoint,
-                checkpoint,
-                "flex_sn_scan",
-            )
+            if "source_target" in getattr(speculate_subgraph, "__code__").co_varnames:
+                body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+                    tx,
+                    body_fn,
+                    body_args,
+                    {},
+                    "flex_sn_scan",
+                    source_target=self.value,
+                )
+            else:
+                graph_checkpoint, checkpoint = tx.output.graph, tx.copy_graphstate()
+                body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+                    tx,
+                    body_fn,
+                    body_args,
+                    {},
+                    graph_checkpoint,
+                    checkpoint,
+                    "flex_sn_scan",
+                )
 
-            lifted_freevars = tuple(body_lifted_freevars.keys())
+            if hasattr(body_lifted_freevars, "keys"):
+                lifted_freevars = tuple(body_lifted_freevars.keys())
+            else:
+                lifted_freevars = tuple(body_lifted_freevars)
             if lifted_freevars and not all(
                 isinstance(freevar, torch.fx.Proxy) for freevar in lifted_freevars
             ):
@@ -243,7 +260,7 @@ def _register_dynamo_hop() -> None:
                 )
 
             body_gm = torch.fx.GraphModule(tx.output.nn_modules, body_graph)
-            body_name = add_subgraph(tx, self.source, "flex_sn_scan_body", body_gm)
+            body_name = install_subgraph(tx, self.source, "flex_sn_scan_body", body_gm)
             body_node = make_attr(tx, body_name)
 
             proxy = tx.output.create_proxy(

@@ -481,6 +481,36 @@ def test_compile_fullgraph_hop_backend_matches_eager(rng):
     torch.testing.assert_close(compiled_out, eager_out)
 
 
+def test_compile_fullgraph_hop_backend_matches_eager_with_closure(rng):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+    bias = torch.randn(N, generator=rng)
+
+    def core_with_bias(x, v):
+        return _differentiable_lif_core(x + bias, v)
+
+    def make_neuron():
+        return FlexSN(
+            core=core_with_bias,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_out = make_neuron()(x_eager)
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
 def test_compile_fuses_surrounding_linear_layers(rng):
     """Linear -> FlexSN -> Linear must compile under fullgraph=True.
     On GPU this is the case Inductor fuses into a single kernel stack;

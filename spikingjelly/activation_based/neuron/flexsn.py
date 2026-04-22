@@ -12,6 +12,14 @@ except BaseException as e:
     logging.info(f"spikingjelly.activation_based.neuron: {e}")
     triton_kernel = None
 
+try:
+    from ..triton_kernel.flex_sn_inductor import eager_scan as _flexsn_eager_scan
+    from ..triton_kernel.flex_sn_inductor import flex_sn_scan as _flexsn_hop_scan
+except BaseException as e:
+    logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
+    _flexsn_eager_scan = None
+    _flexsn_hop_scan = None
+
 
 __all__ = ["FlexSNKernel", "FlexSN"]
 
@@ -43,19 +51,17 @@ def _run_hop_scan(
     num_outputs: int,
     *flat_args: torch.Tensor,
 ):
-    from ..triton_kernel.flex_sn_inductor import eager_scan, flex_sn_scan
-
-    if eager_scan is None:
+    if _flexsn_eager_scan is None:
         raise RuntimeError(
             "FlexSN HOP backend is unavailable: eager_scan failed to import. "
             "See logs from "
             "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
         )
 
-    if _is_compiling() or flex_sn_scan is None:
-        scan_impl = eager_scan
+    if _is_compiling() or _flexsn_hop_scan is None:
+        scan_impl = _flexsn_eager_scan
     else:
-        scan_impl = flex_sn_scan
+        scan_impl = _flexsn_hop_scan
 
     return scan_impl(
         core,
