@@ -180,7 +180,7 @@ class IFNode(BaseNode):
     @staticmethod
     def _eval_single_step_forward(
         x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset,
-        tau: float = None, decay_input: bool = None,
+        tau: Optional[float] = None, decay_input: Optional[bool] = None,
     ):
         """Unified single-step eval (replaces jit_eval_single_step_forward_*)."""
         v = v + x
@@ -191,8 +191,7 @@ class IFNode(BaseNode):
     @staticmethod
     def _eval_multi_step_forward(
         x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset,
-        tau: float = None, decay_input: bool = None, store_v_seq: bool = False,
-        spiking: bool = True, surrogate_fn=None,
+        tau: Optional[float] = None, decay_input: Optional[bool] = None, store_v_seq: bool = False,
     ):
         """Unified multi-step eval (replaces jit_eval_multi_step_forward_*)."""
         T = x_seq.shape[0]
