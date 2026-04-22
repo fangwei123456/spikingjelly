@@ -324,9 +324,11 @@ def test_triton_unsupported_surrogate_raises_not_implemented(kind):
     torch.manual_seed(20260419)
     torch.cuda.manual_seed_all(20260419)
 
-    node = _build_node(kind, "triton", surrogate.Erf(alpha=2.0)).cuda().train()
+    node = _build_node(
+        kind, "triton", surrogate.PiecewiseLeakyReLU(w=1.0, c=0.01)
+    ).cuda().train()
     x = torch.randn(6, 2, 9, device="cuda", requires_grad=True)
 
-    with pytest.raises(NotImplementedError, match="Sigmoid|ATan"):
+    with pytest.raises(NotImplementedError, match="PiecewiseLeakyReLU"):
         y = node(x)
         y.sum().backward()
