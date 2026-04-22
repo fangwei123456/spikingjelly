@@ -143,3 +143,129 @@ flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
 # full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
 # graph natively by unrolling; see module docstring.
 flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
+
+
+def _register_dynamo_hop() -> None:
+    try:
+        from torch._dynamo.variables import higher_order_ops as hop_vars
+        from torch._dynamo.variables.builder import wrap_fx_proxy
+        from torch._dynamo.variables.constant import ConstantVariable
+        from torch._dynamo.variables.functions import (
+            NestedUserFunctionVariable,
+            UserFunctionVariable,
+        )
+        from torch._dynamo.variables.higher_order_ops import (
+            TorchHigherOrderOperatorVariable,
+            add_subgraph,
+            make_attr,
+            speculate_subgraph,
+        )
+        from torch._dynamo.variables.tensor import TensorVariable
+    except Exception:
+        return
+
+    if getattr(TorchHigherOrderOperatorVariable.make, "_spikingjelly_flexsn_hop", False):
+        return
+
+    original_make = TorchHigherOrderOperatorVariable.make
+
+    class FlexSNScanHigherOrderVariable(TorchHigherOrderOperatorVariable):
+        def call_function(self, tx, args, kwargs):
+            if kwargs:
+                raise hop_vars.unimplemented("flex_sn_scan does not support kwargs")
+
+            if len(args) < 4:
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan expects body_fn, num_inputs, num_states, "
+                    "num_outputs, and tensor arguments"
+                )
+
+            body_fn = args[0]
+            if not isinstance(body_fn, (UserFunctionVariable, NestedUserFunctionVariable)):
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan expects a user-defined Python function body"
+                )
+
+            const_args = args[1:4]
+            if not all(isinstance(arg, ConstantVariable) for arg in const_args):
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan expects num_inputs/num_states/num_outputs to be constants"
+                )
+
+            num_inputs, num_states, num_outputs = [
+                arg.as_python_constant() for arg in const_args
+            ]
+            flat_args = args[4:]
+            expected = num_inputs + num_states
+            if len(flat_args) != expected:
+                raise hop_vars.unimplemented(
+                    f"flex_sn_scan expected {expected} tensor args, got {len(flat_args)}"
+                )
+            if num_inputs == 0:
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan requires at least one input sequence"
+                )
+            if not all(isinstance(arg, TensorVariable) for arg in flat_args):
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan only supports tensor inputs and states"
+                )
+
+            from torch._dynamo.variables.constant import ConstantVariable as _ConstantVariable
+
+            step_inputs = [
+                arg.call_method(tx, "__getitem__", [_ConstantVariable(0)], {})
+                for arg in flat_args[:num_inputs]
+            ]
+            body_args = [*step_inputs, *flat_args[num_inputs:]]
+
+            graph_checkpoint, checkpoint = tx.output.graph, tx.copy_graphstate()
+            body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+                tx,
+                body_fn,
+                body_args,
+                {},
+                graph_checkpoint,
+                checkpoint,
+                "flex_sn_scan",
+            )
+
+            if body_lifted_freevars:
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan with lifted freevars is not supported yet"
+                )
+
+            body_gm = torch.fx.GraphModule(tx.output.nn_modules, body_graph)
+            body_name = add_subgraph(tx, self.source, "flex_sn_scan_body", body_gm)
+            body_node = make_attr(tx, body_name)
+
+            proxy = tx.output.create_proxy(
+                "call_function",
+                self.value,
+                args=(
+                    body_node,
+                    num_inputs,
+                    num_states,
+                    num_outputs,
+                    *(arg.as_proxy() for arg in flat_args),
+                ),
+                kwargs={},
+            )
+            example_value = eager_scan(
+                body_gm,
+                num_inputs,
+                num_states,
+                num_outputs,
+                *(arg.as_proxy().node.meta["example_value"] for arg in flat_args),
+            )
+            return wrap_fx_proxy(tx=tx, proxy=proxy, example_value=example_value)
+
+    def patched_make(value, source=None, **kwargs):
+        if value is flex_sn_scan:
+            return FlexSNScanHigherOrderVariable(value, source, **kwargs)
+        return original_make(value, source=source, **kwargs)
+
+    patched_make._spikingjelly_flexsn_hop = True
+    TorchHigherOrderOperatorVariable.make = staticmethod(patched_make)
+
+
+_register_dynamo_hop()

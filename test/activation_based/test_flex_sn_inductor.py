@@ -176,6 +176,13 @@ def test_hop_rejects_mismatched_T():
         flex_sn_scan(two_input_core, 2, 1, 1, x1, x2, v0)
 
 
+def test_hop_registers_with_dynamo():
+    from torch._dynamo.variables.higher_order_ops import TorchHigherOrderOperatorVariable
+
+    hop_var = TorchHigherOrderOperatorVariable.make(flex_sn_scan)
+    assert hop_var.value is flex_sn_scan
+
+
 # -------------------------------------------------------------------------
 # M2: backward / autograd tests
 # -------------------------------------------------------------------------
