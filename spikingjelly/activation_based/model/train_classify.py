@@ -104,7 +104,13 @@ class Trainer:
             return torch.compile(model, **compile_kwargs)
         except RuntimeError as e:
             compile_options = compile_kwargs.get("options")
-            if not compile_options:
+            error_text = str(e).lower()
+            retryable_option_error = (
+                "options" in error_text
+                or "cudagraph" in error_text
+                or "config" in error_text
+            )
+            if not compile_options or not retryable_option_error:
                 raise
             warnings.warn(
                 "torch.compile failed with backend options "

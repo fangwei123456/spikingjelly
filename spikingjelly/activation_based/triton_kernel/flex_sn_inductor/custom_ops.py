@@ -121,17 +121,14 @@ def release_active_flexsn_kernel_handle(handle: int) -> None:
         _cleanup_kernel_handle(bundle)
 
 
-def _make_seq_tensor_list_like(xs: list[torch.Tensor], n: int) -> list[torch.Tensor]:
-    if not xs:
-        raise ValueError("Expected at least one template tensor.")
-    return [xs[min(i, len(xs) - 1)].new_empty(xs[min(i, len(xs) - 1)].shape) for i in range(n)]
-
-
 def _make_seq_outputs_like(
     info: FlexSNInfo, flat_args: list[torch.Tensor], n: int
 ) -> list[torch.Tensor]:
     if not flat_args:
         raise ValueError("Expected at least one FlexSN argument tensor.")
+    # The underlying FlexSN Triton wrappers allocate all sequence outputs with
+    # ``empty_like(flat_args[0])``. Keep fake tensors aligned with that runtime
+    # contract so Dynamo/AOTAutograd sees the same shapes during tracing.
     seq_template = flat_args[0]
     return [seq_template.new_empty(seq_template.shape) for _ in range(n)]
 

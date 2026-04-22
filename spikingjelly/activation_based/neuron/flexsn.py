@@ -15,6 +15,57 @@ except BaseException as e:
 __all__ = ["FlexSNKernel", "FlexSN"]
 
 
+def _as_tuple(outputs):
+    if isinstance(outputs, torch.Tensor):
+        return (outputs,)
+    return tuple(outputs)
+
+
+def _validate_scan_backend_contract(
+    core: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    example_inputs: Optional[Tuple[torch.Tensor, ...]],
+):
+    if num_inputs + num_states == 0:
+        raise ValueError("FlexSN requires at least one input or state tensor.")
+
+    if example_inputs is None:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        example_inputs = tuple(
+            torch.zeros(1, device=device) for _ in range(num_inputs + num_states)
+        )
+    else:
+        device = "cuda" if torch.cuda.is_available() else example_inputs[0].device
+        example_inputs = tuple(x.detach().to(device).clone() for x in example_inputs)
+
+    with torch.no_grad():
+        returns = _as_tuple(core(*example_inputs))
+
+    expected = num_outputs + num_states
+    if len(returns) != expected:
+        raise ValueError(
+            f"FlexSN core returned {len(returns)} values, but expected "
+            f"{expected} (= num_outputs + num_states)."
+        )
+
+    seq_template = example_inputs[0]
+    for i, tensor in enumerate(returns):
+        if not isinstance(tensor, torch.Tensor):
+            raise TypeError(
+                f"FlexSN core return #{i} is {type(tensor)!r}; "
+                "scan backends require tensor outputs."
+            )
+        if tensor.shape != seq_template.shape:
+            raise ValueError(
+                "FlexSN triton/inductor scan backends currently require every "
+                "per-step output and updated state to have the same shape as "
+                f"the first example tensor {tuple(seq_template.shape)}, but "
+                f"return #{i} has shape {tuple(tensor.shape)}."
+            )
+
+
 class FlexSNKernel:
     def __init__(
         self,
@@ -241,6 +292,11 @@ class FlexSN(base.MemoryModule):
         self.backend = backend
         self.store_state_seqs = store_state_seqs
 
+        if backend in ("triton", "inductor"):
+            _validate_scan_backend_contract(
+                core, num_inputs, num_states, num_outputs, example_inputs
+            )
+
         if backend == "triton":
             self.kernel = FlexSNKernel(
                 core, num_inputs, num_states, num_outputs, example_inputs, requires_grad
@@ -258,7 +314,7 @@ class FlexSN(base.MemoryModule):
                     attach_flexsn_handle_finalizer,
                     register_flexsn_kernel_handle,
                 )
-            except Exception as e:
+            except (ImportError, RuntimeError) as e:
                 logging.warning(
                     "FlexSN: could not import inductor kernel builders (%s); "
                     "falling back to eager_scan/flex_sn_scan for all paths." % e
