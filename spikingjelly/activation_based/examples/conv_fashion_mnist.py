@@ -42,8 +42,8 @@ class CSNN(nn.Module):
 
     def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
-        x_seq = x.unsqueeze(0).repeat(
-            self.T, 1, 1, 1, 1
+        x_seq = x.unsqueeze(0).expand(
+            self.T, -1, -1, -1, -1
         )  # [N, C, H, W] -> [T, N, C, H, W]
         x_seq = self.conv_fc(x_seq)
         fr = x_seq.mean(0)
@@ -195,8 +195,8 @@ def main():
                     img = img.to(args.device)
                     label = label.to(args.device)
                     # img.shape = [N, C, H, W]
-                    img_seq = img.unsqueeze(0).repeat(
-                        net.T, 1, 1, 1, 1
+                    img_seq = img.unsqueeze(0).expand(
+                        net.T, -1, -1, -1, -1
                     )  # [N, C, H, W] -> [T, N, C, H, W]
                     spike_seq = encoder(img_seq)
                     functional.reset_net(encoder)

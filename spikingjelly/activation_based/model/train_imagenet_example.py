@@ -6,14 +6,14 @@ from spikingjelly.activation_based.model import spiking_resnet, train_classify
 class SResNetTrainer(train_classify.Trainer):
     def preprocess_train_sample(self, args, x: torch.Tensor):
         # define how to process train sample before send it to model
-        return x.unsqueeze(0).repeat(
-            args.T, 1, 1, 1, 1
+        return x.unsqueeze(0).expand(
+            args.T, -1, -1, -1, -1
         )  # [N, C, H, W] -> [T, N, C, H, W]
 
     def preprocess_test_sample(self, args, x: torch.Tensor):
         # define how to process test sample before send it to model
-        return x.unsqueeze(0).repeat(
-            args.T, 1, 1, 1, 1
+        return x.unsqueeze(0).expand(
+            args.T, -1, -1, -1, -1
         )  # [N, C, H, W] -> [T, N, C, H, W]
 
     def process_model_output(self, args, y: torch.Tensor):

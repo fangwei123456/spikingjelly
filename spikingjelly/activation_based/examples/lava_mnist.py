@@ -144,7 +144,7 @@ def main():
             optimizer.zero_grad()
             img = img.to(args.device)
             label = label.to(args.device)
-            img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+            img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
             fr = net(encoder(img)).mean(0)
             loss = F.cross_entropy(fr, label)
@@ -167,7 +167,7 @@ def main():
             for img, label in test_data_loader:
                 img = img.to(args.device)
                 label = label.to(args.device)
-                img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+                img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
                 fr = net(encoder(img)).mean(0)
                 loss = F.cross_entropy(fr, label)
@@ -196,7 +196,7 @@ def main():
         for img, label in test_data_loader:
             img = img.to(args.device)
             label = label.to(args.device)
-            img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+            img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
             img = encoder(img)
             img = lava_exchange.TNX_to_NXT(img)
             fr = net_ladl(img).mean(-1)

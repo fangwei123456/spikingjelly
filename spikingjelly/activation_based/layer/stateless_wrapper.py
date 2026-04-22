@@ -111,7 +111,8 @@ class Conv1d(nn.Conv1d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -181,7 +182,10 @@ class Conv2d(nn.Conv2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            y = super().forward(x.flatten(0, 1))
+            y_shape.extend(y.shape[1:])
+            x = y.view(y_shape)
 
         return x
 
@@ -251,7 +255,8 @@ class Conv3d(nn.Conv3d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -377,7 +382,8 @@ class ConvTranspose1d(nn.ConvTranspose1d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -449,7 +455,10 @@ class ConvTranspose2d(nn.ConvTranspose2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            y = super().forward(x.flatten(0, 1))
+            y_shape.extend(y.shape[1:])
+            x = y.view(y_shape)
 
         return x
 
@@ -521,7 +530,8 @@ class ConvTranspose3d(nn.ConvTranspose3d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -629,7 +639,12 @@ class MaxPool1d(nn.MaxPool1d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, L], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            if isinstance(y, tuple):
+                y_shape = [x.shape[0], x.shape[1]]
+                y_shape.extend(y[0].shape[1:])
+                return y[0].view(y_shape), y[1].view(y_shape)
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -688,7 +703,13 @@ class MaxPool2d(nn.MaxPool2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            y = super().forward(x.flatten(0, 1))
+            if isinstance(y, tuple):
+                y_shape.extend(y[0].shape[1:])
+                return y[0].view(y_shape), y[1].view(y_shape)
+            y_shape.extend(y.shape[1:])
+            x = y.view(y_shape)
 
         return x
 
@@ -747,7 +768,12 @@ class MaxPool3d(nn.MaxPool3d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            if isinstance(y, tuple):
+                y_shape = [x.shape[0], x.shape[1]]
+                y_shape.extend(y[0].shape[1:])
+                return y[0].view(y_shape), y[1].view(y_shape)
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -862,7 +888,9 @@ class AvgPool2d(nn.AvgPool2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            t, n = x.shape[0], x.shape[1]
+            out = super().forward(x.flatten(0, 1))
+            x = out.view(t, n, *out.shape[1:])
 
         return x
 
@@ -921,7 +949,8 @@ class AvgPool3d(nn.AvgPool3d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, D, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y = super().forward(x.flatten(0, 1))
+            x = y.view(x.shape[0], x.shape[1], *y.shape[1:])
 
         return x
 
@@ -1017,7 +1046,10 @@ class AdaptiveAvgPool2d(nn.AdaptiveAvgPool2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
 
         return x
 
@@ -1143,7 +1175,10 @@ class Flatten(nn.Flatten, base.StepModule):
             x = super().forward(x)
 
         elif self.step_mode == "m":
-            x = functional.seq_to_ann_forward(x, super().forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = super().forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            x = x.view(y_shape)
         return x
 
 

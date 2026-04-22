@@ -3,6 +3,7 @@ import datetime
 import errno
 import hashlib
 import os
+import statistics
 import time
 from collections import defaultdict, deque, OrderedDict
 
@@ -57,6 +58,82 @@ class SmoothedValue:
 
     @property
     def value(self):
+        return self.deque[-1]
+
+    def __str__(self):
+        return self.fmt.format(
+            median=self.median,
+            avg=self.avg,
+            global_avg=self.global_avg,
+            max=self.max,
+            value=self.value,
+        )
+
+
+class ThroughputValue:
+    """Track throughput as total_samples / total_time."""
+
+    def __init__(self, window_size=20, fmt=None):
+        if fmt is None:
+            fmt = "{global_avg:.4f}"
+        self.deque = deque(maxlen=window_size)
+        self.total_samples = 0.0
+        self.total_time = 0.0
+        self.fmt = fmt
+
+    def update(self, samples, elapsed_time):
+        if elapsed_time <= 0:
+            return
+        throughput = samples / elapsed_time
+        self.deque.append(throughput)
+        self.total_samples += samples
+        self.total_time += elapsed_time
+
+    def synchronize_between_processes(self):
+        """Synchronize cumulative samples/time across ranks.
+
+        Windowed statistics stored in ``deque`` remain local to each rank.
+        """
+        if not is_dist_avail_and_initialized():
+            return
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        samples = torch.tensor(self.total_samples, device=device, dtype=torch.float64)
+        elapsed = torch.tensor(self.total_time, device=device, dtype=torch.float64)
+        dist.barrier()
+        dist.all_reduce(samples, op=dist.ReduceOp.SUM)
+        dist.all_reduce(elapsed, op=dist.ReduceOp.MAX)
+        self.total_samples = samples.item()
+        self.total_time = elapsed.item()
+
+    @property
+    def median(self):
+        if not self.deque:
+            return 0.0
+        return float(statistics.median(self.deque))
+
+    @property
+    def avg(self):
+        if not self.deque:
+            return 0.0
+        return sum(self.deque) / len(self.deque)
+
+    @property
+    def global_avg(self):
+        if self.total_time == 0.0:
+            return 0.0
+        return self.total_samples / self.total_time
+
+    @property
+    def max(self):
+        if not self.deque:
+            return 0.0
+        return max(self.deque)
+
+    @property
+    def value(self):
+        if not self.deque:
+            return 0.0
         return self.deque[-1]
 
     def __str__(self):
