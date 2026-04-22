@@ -446,7 +446,7 @@ class FlexSN(base.MemoryModule):
             _no_grad = not torch.is_grad_enabled() or not any(
                 a.requires_grad for a in (*args, *self.states)
             )
-            flat_args = [*(a.contiguous() for a in args), *(s.contiguous() for s in self.states)]
+            flat_args = [*args, *self.states]
             has_cuda_tensor = any(t.is_cuda for t in flat_args)
             if self._inductor_handle is not None and has_cuda_tensor:
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
