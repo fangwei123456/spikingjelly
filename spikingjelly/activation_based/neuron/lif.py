@@ -461,7 +461,9 @@ class LIFNode(BaseNode):
                         )
                         if self.store_v_seq:
                             self.v_seq = v_seq
-                        self.v = v_seq[-1].clone()
+                            self.v = v_seq[-1]
+                        else:
+                            self.v = v_seq[-1].clone()
                         return spike_seq
                     except (NotImplementedError, AttributeError, TypeError, KeyError) as e:
                         logging.debug("Falling back from Triton LIF kernel in training: %s", e)
@@ -527,7 +529,9 @@ class LIFNode(BaseNode):
                 v_seq = v_seq.reshape(x_seq.shape)
                 if self.store_v_seq:
                     self.v_seq = v_seq
-                self.v = v_seq[-1].clone()
+                    self.v = v_seq[-1]
+                else:
+                    self.v = v_seq[-1].clone()
                 return spike_seq
             elif self.backend == "triton":
                 self.v_float_to_tensor(x_seq[0])
@@ -543,7 +547,9 @@ class LIFNode(BaseNode):
                 )
                 if self.store_v_seq:
                     self.v_seq = v_seq
-                self.v = v_seq[-1].clone()
+                    self.v = v_seq[-1]
+                else:
+                    self.v = v_seq[-1].clone()
                 return spike_seq
             else:
                 raise ValueError(self.backend)
@@ -564,7 +570,9 @@ class LIFNode(BaseNode):
                     )
                     if self.store_v_seq:
                         self.v_seq = v_seq
-                    self.v = v_seq[-1].clone()
+                        self.v = v_seq[-1]
+                    else:
+                        self.v = v_seq[-1].clone()
                     return spike_seq
                 except (NotImplementedError, AttributeError, TypeError, KeyError) as e:
                     logging.debug("Falling back from Triton LIF kernel in eval: %s", e)
