@@ -97,10 +97,9 @@ class ThroughputValue:
         if not is_dist_avail_and_initialized():
             return
 
-        samples = torch.tensor(
-            self.total_samples, device="cuda", dtype=torch.float64
-        )
-        elapsed = torch.tensor(self.total_time, device="cuda", dtype=torch.float64)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        samples = torch.tensor(self.total_samples, device=device, dtype=torch.float64)
+        elapsed = torch.tensor(self.total_time, device=device, dtype=torch.float64)
         dist.barrier()
         dist.all_reduce(samples, op=dist.ReduceOp.SUM)
         dist.all_reduce(elapsed, op=dist.ReduceOp.MAX)
