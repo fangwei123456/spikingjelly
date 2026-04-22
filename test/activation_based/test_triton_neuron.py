@@ -3,6 +3,7 @@ import torch
 from spikingjelly.activation_based import neuron
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA required")
 @pytest.mark.parametrize("v_threshold", [1.0, 0.5])
 @pytest.mark.parametrize("v_reset", [0.0, -0.2])
 def test_if_eval_torch_auto_routes_to_triton(v_threshold, v_reset):
