@@ -29,6 +29,9 @@ Usage::
     # returns: (*output_seqs, *state_seqs) — each with shape [T, ...]
     result = flex_sn_scan(core_fn, num_inputs, num_states, num_outputs,
                          *inputs_seq, *init_states)
+
+Captured tensor freevars from ``core_fn`` are appended after the
+``[*inputs_seq, *init_states]`` segment when Dynamo rewrites the HOP call.
 """
 from __future__ import annotations
 
@@ -51,7 +54,8 @@ class FlexSNScan(HigherOrderOperator):
       partition the flat tensor args.
     * ``flat_args``: first ``num_inputs`` tensors are input sequences with
       leading time dim ``T``; the next ``num_states`` tensors are initial
-      states (no time dim).
+      states (no time dim); any remaining tensors are lifted freevars that are
+      passed through to ``core_fn`` unchanged at every time step.
 
     Return: ``num_outputs`` output sequences followed by ``num_states`` state
     sequences, all stacked along the leading time dim.
@@ -91,15 +95,16 @@ def eager_scan(
     loop into an FX graph that Inductor can lower normally.
     """
     expected = num_inputs + num_states
-    if len(flat_args) != expected:
+    if len(flat_args) < expected:
         raise ValueError(
-            f"flex_sn_scan expected {expected} tensor args "
+            f"flex_sn_scan expected at least {expected} tensor args "
             f"(num_inputs={num_inputs} + num_states={num_states}), "
             f"got {len(flat_args)}"
         )
 
     inputs_seq = flat_args[:num_inputs]
-    states = list(flat_args[num_inputs:])
+    states = list(flat_args[num_inputs:expected])
+    lifted_args = tuple(flat_args[expected:])
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -116,7 +121,7 @@ def eager_scan(
 
     for t in range(T):
         step_inputs = tuple(x[t] for x in inputs_seq)
-        results = core_fn(*step_inputs, *states)
+        results = core_fn(*step_inputs, *states, *lifted_args)
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "
@@ -229,9 +234,12 @@ def _register_dynamo_hop() -> None:
                 "flex_sn_scan",
             )
 
-            if body_lifted_freevars:
+            lifted_freevars = tuple(body_lifted_freevars.keys())
+            if lifted_freevars and not all(
+                isinstance(freevar, torch.fx.Proxy) for freevar in lifted_freevars
+            ):
                 raise hop_vars.unimplemented(
-                    "flex_sn_scan with lifted freevars is not supported yet"
+                    "flex_sn_scan only supports tensor lifted freevars"
                 )
 
             body_gm = torch.fx.GraphModule(tx.output.nn_modules, body_graph)
@@ -247,6 +255,7 @@ def _register_dynamo_hop() -> None:
                     num_states,
                     num_outputs,
                     *(arg.as_proxy() for arg in flat_args),
+                    *lifted_freevars,
                 ),
                 kwargs={},
             )
@@ -256,6 +265,7 @@ def _register_dynamo_hop() -> None:
                 num_states,
                 num_outputs,
                 *(arg.as_proxy().node.meta["example_value"] for arg in flat_args),
+                *(freevar.node.meta["example_value"] for freevar in lifted_freevars),
             )
             return wrap_fx_proxy(tx=tx, proxy=proxy, example_value=example_value)
 

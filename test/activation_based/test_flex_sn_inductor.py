@@ -56,6 +56,28 @@ def test_hop_matches_manual_loop(rng, T, shape):
     torch.testing.assert_close(v_seq, expected_v)
 
 
+def test_hop_matches_manual_loop_with_lifted_tensor(rng):
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    v0 = torch.zeros(N)
+    bias = torch.randn(N, generator=rng)
+
+    def core_with_bias(x_step, v, bias_term):
+        return _lif_core(x_step + bias_term, v)
+
+    s_seq, v_seq = flex_sn_scan(core_with_bias, 1, 1, 1, x, v0, bias)
+
+    expected_s, expected_v = [], []
+    v = v0.clone()
+    for t in range(T):
+        s, v = core_with_bias(x[t], v, bias)
+        expected_s.append(s)
+        expected_v.append(v)
+
+    torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
+    torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
 @pytest.mark.parametrize("T", [1, 4, 16])
 @pytest.mark.parametrize("shape", [(8,), (4, 8)])
 def test_inductor_backend_matches_torch_backend(rng, T, shape):
@@ -114,6 +136,39 @@ def test_hop_backend_matches_torch_backend(rng, T, shape):
 
     torch.testing.assert_close(hop_out, torch_out)
     assert len(hop_neuron.states) == 1
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
+
+
+def test_hop_backend_matches_torch_backend_with_closure(rng):
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    bias = torch.randn(N, generator=rng)
+
+    def core_with_bias(x_step, v):
+        return _lif_core(x_step + bias, v)
+
+    torch_neuron = FlexSN(
+        core=core_with_bias,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+    hop_neuron = FlexSN(
+        core=core_with_bias,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        example_inputs=(torch.zeros(N), torch.zeros(N)),
+    )
+
+    torch_out = torch_neuron(x)
+    hop_out = hop_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
     torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
 
 
