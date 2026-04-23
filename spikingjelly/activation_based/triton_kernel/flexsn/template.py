@@ -159,9 +159,9 @@ def get_flexsn_inference_kernel(
         [f"v{i}_seq_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
-    autotune_restore += ", "
-    autotune_restore += ", ".join([f'"v{i}_seq_ptr"' for i in range(num_states)])
+    restore_names = [f'"s{i}_seq_ptr"' for i in range(num_outputs)]
+    restore_names += [f'"v{i}_seq_ptr"' for i in range(num_states)]
+    autotune_restore = ", ".join(restore_names)
 
     init_state_loads = "".join(
         [
@@ -176,9 +176,10 @@ def get_flexsn_inference_kernel(
     stores = "".join([store_template.format(name=f"s{i}") for i in range(num_outputs)])
     stores += "".join([store_template.format(name=f"v{i}") for i in range(num_states)])
 
-    lhs = ", ".join([f"s{i}" for i in range(num_outputs)])
-    lhs += ", "
-    lhs += ", ".join([f"v{i}" for i in range(num_states)])
+    lhs_list = [f"s{i}" for i in range(num_outputs)] + [
+        f"v{i}" for i in range(num_states)
+    ]
+    lhs = ", ".join(lhs_list)
     core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
     core_args += ", "
     core_args += ", ".join([f"v{i}" for i in range(num_states)])
@@ -236,10 +237,9 @@ def get_flexsn_inference_final_state_kernel(
         [f"v{i}_final_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
-    if num_states > 0:
-        autotune_restore += ", "
-        autotune_restore += ", ".join([f'"v{i}_final_ptr"' for i in range(num_states)])
+    restore_names = [f'"s{i}_seq_ptr"' for i in range(num_outputs)]
+    restore_names += [f'"v{i}_final_ptr"' for i in range(num_states)]
+    autotune_restore = ", ".join(restore_names)
 
     init_state_loads = "".join(
         [init_state_load_template.format(name=f"v{i}") for i in range(num_states)]
@@ -251,9 +251,10 @@ def get_flexsn_inference_final_state_kernel(
         [final_state_store_template.format(name=f"v{i}") for i in range(num_states)]
     )
 
-    lhs = ", ".join([f"s{i}" for i in range(num_outputs)])
-    lhs += ", "
-    lhs += ", ".join([f"v{i}" for i in range(num_states)])
+    lhs_list = [f"s{i}" for i in range(num_outputs)] + [
+        f"v{i}" for i in range(num_states)
+    ]
+    lhs = ", ".join(lhs_list)
     core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
     core_args += ", "
     core_args += ", ".join([f"v{i}" for i in range(num_states)])

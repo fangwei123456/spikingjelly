@@ -61,11 +61,12 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
     from ..triton_kernel.flexsn.wrapper import flexsn_inference_final_state
 
     info = module._inductor_scan_final_state_info
-    device = None
+    device = getattr(module, "_inductor_scan_final_state_device", None)
     if isinstance(module.core, torch.nn.Module):
-        for tensor in [*module.core.parameters(), *module.core.buffers()]:
-            device = tensor.device
-            break
+        if device is None:
+            for tensor in [*module.core.parameters(), *module.core.buffers()]:
+                device = tensor.device
+                break
     if device is None:
         device = torch.device("cuda", torch.cuda.current_device())
     seq_template = torch.zeros((1, 1), device=device)
@@ -198,6 +199,22 @@ def _empty_multistep_outputs(
         return ref.new_empty((0, *ref.shape))
 
     return [_empty_output(i) for i in range(num_outputs)]
+
+
+def _infer_empty_output_templates(
+    core: Callable,
+    args: Tuple[torch.Tensor, ...],
+    states: List[torch.Tensor],
+    num_outputs: int,
+) -> List[torch.Tensor]:
+    step_inputs = tuple(arg.new_empty(arg.shape[1:]) for arg in args)
+    with torch.no_grad():
+        results = _as_tuple(core(*step_inputs, *states))
+    if len(results) < num_outputs:
+        raise ValueError(
+            f"FlexSN core returned {len(results)} values, expected at least {num_outputs} outputs."
+        )
+    return [result.new_empty((0, *result.shape)) for result in results[:num_outputs]]
 
 
 def _core_requires_grad(core: Callable) -> bool:
@@ -525,6 +542,9 @@ class FlexSN(base.MemoryModule):
         register_flexsn_kernel_handle = None
 
         if backend == "inductor" and torch.cuda.is_available():
+            self._inductor_scan_final_state_device = (
+                example_inputs[0].device if example_inputs is not None else None
+            )
             try:
                 from ..triton_kernel.flex_sn_inductor.kernel import (
                     build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,
@@ -591,6 +611,7 @@ class FlexSN(base.MemoryModule):
             self._inductor_scan_info = None
             self._inductor_scan_final_state_kernel = None
             self._inductor_scan_final_state_info = None
+            self._inductor_scan_final_state_device = None
             self._inductor_fwd_kernel = None
             self._inductor_bwd_kernel = None
             self._inductor_train_info = None
@@ -765,10 +786,17 @@ class FlexSN(base.MemoryModule):
 
     def multi_step_forward(self, *args):
         T = args[0].shape[0]
-        if T == 0:
+        if T == 0 and self.backend != "hop":
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
-            output_seqs = _empty_multistep_outputs(args, self.states, self.num_outputs)
+            if self.backend == "torch":
+                output_seqs = _infer_empty_output_templates(
+                    self.core, args, self.states, self.num_outputs
+                )
+            else:
+                output_seqs = _empty_multistep_outputs(
+                    args, self.states, self.num_outputs
+                )
             if self.store_state_seqs:
                 self.state_seqs = [
                     s.new_empty((0, *s.shape)) for s in self.states

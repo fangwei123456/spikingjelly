@@ -5,6 +5,7 @@ import linecache
 import os
 from pathlib import Path
 import hashlib
+import stat
 import sys
 import tempfile
 import threading
@@ -46,15 +47,23 @@ def _generate_hash(s: str, w: int = 8) -> str:
 
 def _codegen_cache_dir() -> Path:
     candidates = []
+    uid = getattr(os, "getuid", lambda: None)()
     try:
         candidates.append(Path.home() / ".spikingjelly" / "triton_codegen")
     except RuntimeError:
         pass
-    candidates.append(Path(tempfile.gettempdir()) / "spikingjelly_triton_codegen")
+    temp_suffix = f"_{uid}" if uid is not None else ""
+    candidates.append(
+        Path(tempfile.gettempdir()) / f"spikingjelly_triton_codegen{temp_suffix}"
+    )
     last_error = None
     for cache_dir in candidates:
         try:
-            cache_dir.mkdir(parents=True, exist_ok=True)
+            cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+            if uid is not None:
+                st = cache_dir.stat()
+                if st.st_uid != uid or stat.S_IMODE(st.st_mode) & 0o077:
+                    continue
             return cache_dir
         except OSError as e:
             last_error = e
@@ -314,18 +323,20 @@ def compile_triton_code_str(
         triton_code (str): The Triton code string to compile.
         kernel_name (str): The name of the Triton function to extract.
         verbose (bool, optional): If True, print the path to the temporary file. Defaults to False.
-        name_space (dict, optional): A namespace dictionary to use for `exec`. Defaults to {}.
+        name_space (dict | None, optional): Optional globals injected before execution.
+            When provided, it will be updated with symbols defined by the compiled module.
 
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
     """
-    cacheable = name_space is None
-    if name_space is None:
-        name_space = {"triton": triton, "tl": tl}
+    caller_namespace = name_space
+    cacheable = caller_namespace is None
+    if caller_namespace is None:
+        module_globals = {"triton": triton, "tl": tl}
     else:
-        name_space = dict(name_space)
-        name_space.setdefault("triton", triton)
-        name_space.setdefault("tl", tl)
+        module_globals = dict(caller_namespace)
+        module_globals.setdefault("triton", triton)
+        module_globals.setdefault("tl", tl)
 
     module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
     module_name = (
@@ -354,7 +365,7 @@ def compile_triton_code_str(
             if spec is None or spec.loader is None:
                 raise ImportError(f"Could not create import spec for {fpath}")
             module = importlib.util.module_from_spec(spec)
-            module.__dict__.update(name_space)
+            module.__dict__.update(module_globals)
             triton_module = sys.modules.get("triton")
             language_module = sys.modules.get("triton.language")
             restore_triton = triton_module is None
@@ -400,7 +411,8 @@ def compile_triton_code_str(
                     sys.modules.pop("triton.language", None)
                 if restore_triton:
                     sys.modules.pop("triton", None)
-    name_space.update(module.__dict__)
+    if caller_namespace is not None:
+        caller_namespace.update(module.__dict__)
     if kernel_name in module.__dict__:
         return module.__dict__[kernel_name]
     raise ValueError(f"Function {kernel_name} not found in compiled namespace")

@@ -603,6 +603,17 @@ def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | Non
         )
         if len(grads) != len(ctx.input_template_specs):
             grads = grads[: len(ctx.input_template_specs)]
+        explicit_state_start = bundle.training_info.num_inputs
+        for i in range(bundle.training_info.num_states):
+            final_grad = grad_out[bundle.training_info.num_outputs + i]
+            state_seq_shape = ctx.state_seq_template_specs[i][0]
+            grad_index = explicit_state_start + i
+            if (
+                final_grad is not None
+                and state_seq_shape[0] == 0
+                and grad_index < len(grads)
+            ):
+                grads[grad_index] = grads[grad_index] + final_grad
     finally:
         release_active_flexsn_kernel_handle(ctx.handle)
     return None, grads

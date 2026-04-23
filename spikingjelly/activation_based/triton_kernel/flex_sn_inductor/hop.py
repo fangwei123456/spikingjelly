@@ -125,6 +125,12 @@ class FlexSNScan(HigherOrderOperator):
 flex_sn_scan = FlexSNScan()
 
 
+def _as_tuple(outputs):
+    if isinstance(outputs, torch.Tensor):
+        return (outputs,)
+    return tuple(outputs)
+
+
 def lowerable_scan_available() -> bool:
     return _torch_scan_op is not None and _wrap_scan_combine_fn_flat is not None
 
@@ -170,19 +176,25 @@ def eager_scan(
             )
 
     if T == 0:
+        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in inputs_seq)
+        with torch.no_grad():
+            template_results = _as_tuple(core_fn(*step_inputs, *states, *lifted_args))
+        if len(template_results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(template_results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+
         def _empty_output(i: int) -> torch.Tensor:
-            if i < len(states):
-                ref = states[i]
-            elif states:
-                ref = states[-1]
-            elif lifted_args:
-                ref = lifted_args[min(i, len(lifted_args) - 1)]
-            else:
-                ref = inputs_seq[0].new_empty(inputs_seq[0].shape[1:])
+            ref = template_results[i]
             return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
-        empty_states = tuple(state.new_empty((0, *state.shape)) for state in states)
+        empty_states = tuple(
+            state.new_empty((0, *state.shape))
+            for state in template_results[num_outputs:]
+        )
         return (*empty_outputs, *empty_states)
 
     output_buffers = [[] for _ in range(num_outputs)]
@@ -247,19 +259,23 @@ def eager_scan_final_state(
             )
 
     if T == 0:
+        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in inputs_seq)
+        with torch.no_grad():
+            template_results = _as_tuple(core_fn(*step_inputs, *states, *lifted_args))
+        if len(template_results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(template_results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+
         def _empty_output(i: int) -> torch.Tensor:
-            if i < len(states):
-                ref = states[i]
-            elif states:
-                ref = states[-1]
-            elif lifted_args:
-                ref = lifted_args[min(i, len(lifted_args) - 1)]
-            else:
-                ref = inputs_seq[0].new_empty(inputs_seq[0].shape[1:])
+            ref = template_results[i]
             return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
-        return (*empty_outputs, *tuple(states))
+        final_states = tuple(template_results[num_outputs:])
+        return (*empty_outputs, *final_states)
 
     output_buffers = [[] for _ in range(num_outputs)]
 
