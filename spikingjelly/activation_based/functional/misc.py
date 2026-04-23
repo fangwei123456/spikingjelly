@@ -3,8 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 import math
+from torch import fx
+from torch.nn.utils.fusion import fuse_conv_bn_eval
 
-from .. import neuron
+from .. import base, layer, neuron
 
 
 __all__ = [
@@ -13,7 +15,129 @@ __all__ = [
     "first_spike_index",
     "kaiming_normal_conv_linear_weight",
     "delay",
+    "fuse_conv_bn_eval_modules",
 ]
+
+
+def _matches_module_pattern(pattern, node: fx.Node, modules) -> bool:
+    if len(node.args) == 0:
+        return False
+    nodes = (node.args[0], node)
+    for expected_type, current_node in zip(pattern, nodes):
+        if not isinstance(current_node, fx.Node):
+            return False
+        if current_node.op != "call_module":
+            return False
+        if not isinstance(current_node.target, str):
+            return False
+        if current_node.target not in modules:
+            return False
+        if type(modules[current_node.target]) is not expected_type:
+            return False
+    return True
+
+
+def _replace_node_module(
+    node: fx.Node, modules, new_module: torch.nn.Module
+) -> None:
+    def parent_name(target: str):
+        *parent, name = target.rsplit(".", 1)
+        return parent[0] if parent else "", name
+
+    assert isinstance(node.target, str)
+    parent, name = parent_name(node.target)
+    modules[node.target] = new_module
+    setattr(modules[parent], name, new_module)
+
+
+class _EvalFusionTracer(fx.Tracer):
+    def is_leaf_module(self, m: nn.Module, module_qualified_name: str) -> bool:
+        if isinstance(
+            m,
+            (
+                layer.Conv1d,
+                layer.Conv2d,
+                layer.Conv3d,
+                layer.BatchNorm1d,
+                layer.BatchNorm2d,
+                layer.BatchNorm3d,
+                base.StepModule,
+                base.MemoryModule,
+                neuron.BaseNode,
+            ),
+        ):
+            return True
+        return super().is_leaf_module(m, module_qualified_name)
+
+
+def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
+    """
+    **API Language:**
+    :ref:`中文 <fuse_conv_bn_eval_modules-cn>` | :ref:`English <fuse_conv_bn_eval_modules-en>`
+
+    ----
+
+    .. _fuse_conv_bn_eval_modules-cn:
+
+    * **中文**
+
+    将评估模式下模型中的相邻 ``Conv*`` 与 ``BatchNorm*`` 模块融合为单个卷积模块。
+    该函数同时支持原生 ``torch.nn`` 模块以及 SpikingJelly 的
+    :class:`spikingjelly.activation_based.layer.Conv1d`,
+    :class:`spikingjelly.activation_based.layer.Conv2d`,
+    :class:`spikingjelly.activation_based.layer.Conv3d`,
+    :class:`spikingjelly.activation_based.layer.BatchNorm1d`,
+    :class:`spikingjelly.activation_based.layer.BatchNorm2d`,
+    :class:`spikingjelly.activation_based.layer.BatchNorm3d`。
+
+    输入模型必须处于 ``eval()`` 模式。返回值是融合后的 ``fx.GraphModule``。
+
+    .. _fuse_conv_bn_eval_modules-en:
+
+    * **English**
+
+    Fuse adjacent ``Conv*`` and ``BatchNorm*`` modules in an evaluation-mode model
+    into a single convolution module. Both native ``torch.nn`` layers and
+    SpikingJelly activation-based ``layer.Conv*`` / ``layer.BatchNorm*`` wrappers
+    are supported.
+
+    The input model must be in ``eval()`` mode. The returned value is a fused
+    ``fx.GraphModule``.
+    """
+
+    if net.training:
+        raise ValueError("fuse_conv_bn_eval_modules only supports eval() models.")
+
+    tracer = _EvalFusionTracer()
+    graph = tracer.trace(net)
+    fx_model = fx.GraphModule(tracer.root, graph)
+    modules = dict(fx_model.named_modules())
+    patterns = [
+        (nn.Conv1d, nn.BatchNorm1d),
+        (nn.Conv2d, nn.BatchNorm2d),
+        (nn.Conv3d, nn.BatchNorm3d),
+        (layer.Conv1d, layer.BatchNorm1d),
+        (layer.Conv2d, layer.BatchNorm2d),
+        (layer.Conv3d, layer.BatchNorm3d),
+    ]
+
+    for pattern in patterns:
+        for node in list(fx_model.graph.nodes):
+            if not _matches_module_pattern(pattern, node, modules):
+                continue
+            if len(node.args[0].users) > 1:
+                continue
+            conv = modules[node.args[0].target]
+            bn = modules[node.target]
+            fused_conv = fuse_conv_bn_eval(conv, bn)
+            _replace_node_module(node.args[0], modules, fused_conv)
+            node.replace_all_uses_with(node.args[0])
+            fx_model.graph.erase_node(node)
+
+    fx_model.graph.lint()
+    fx_model.delete_all_unused_submodules()
+    fx_model.recompile()
+    return fx_model
 
 
 def set_threshold_margin(
