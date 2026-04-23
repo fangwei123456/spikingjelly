@@ -23,7 +23,12 @@ import weakref
 
 import torch
 
-from ..flexsn.wrapper import flexsn_backward, flexsn_forward, flexsn_inference
+from ..flexsn.wrapper import (
+    flexsn_backward,
+    flexsn_forward,
+    flexsn_inference,
+    flexsn_inference_final_state,
+)
 from ..flexsn.info import FlexSNInfo
 
 
@@ -31,6 +36,8 @@ from ..flexsn.info import FlexSNInfo
 class FlexSNKernelHandle:
     inference_kernel: object | None
     inference_info: FlexSNInfo | None
+    inference_final_state_kernel: object | None
+    inference_final_state_info: FlexSNInfo | None
     forward_kernel: object | None
     backward_kernel: object | None
     training_info: FlexSNInfo | None
@@ -47,6 +54,8 @@ def register_flexsn_kernel_handle(
     *,
     inference_kernel,
     inference_info,
+    inference_final_state_kernel,
+    inference_final_state_info,
     forward_kernel,
     backward_kernel,
     training_info,
@@ -56,6 +65,8 @@ def register_flexsn_kernel_handle(
         _KERNEL_REGISTRY[handle] = FlexSNKernelHandle(
             inference_kernel=inference_kernel,
             inference_info=inference_info,
+            inference_final_state_kernel=inference_final_state_kernel,
+            inference_final_state_info=inference_final_state_info,
             forward_kernel=forward_kernel,
             backward_kernel=backward_kernel,
             training_info=training_info,
@@ -74,6 +85,7 @@ def unregister_flexsn_kernel_handle(handle: int) -> None:
 def _cleanup_kernel_handle(bundle: FlexSNKernelHandle) -> None:
     for obj in (
         bundle.inference_kernel,
+        bundle.inference_final_state_kernel,
         bundle.forward_kernel,
         bundle.backward_kernel,
     ):
@@ -83,6 +95,13 @@ def _cleanup_kernel_handle(bundle: FlexSNKernelHandle) -> None:
 
 
 def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
+    if not isinstance(handle, int):
+        try:
+            handle = int(handle)
+        except Exception as exc:
+            raise TypeError(
+                f"Unsupported FlexSN kernel handle type: {type(handle)!r}"
+            ) from exc
     try:
         return _KERNEL_REGISTRY[handle]
     except KeyError as e:
@@ -187,6 +206,21 @@ def _flexsn_inductor_inference_impl(
         )
 
 
+def _flexsn_inductor_inference_final_state_impl(
+    bundle: FlexSNKernelHandle, flat_args: list[torch.Tensor]
+) -> list[torch.Tensor]:
+    args = _materialize_zero_state_args(bundle.inference_final_state_info, flat_args)
+    args = [arg.contiguous() for arg in args]
+    with _device_guard(args):
+        return list(
+            flexsn_inference_final_state(
+                bundle.inference_final_state_kernel,
+                bundle.inference_final_state_info,
+                *args,
+            )
+        )
+
+
 def _flexsn_inductor_training_impl(
     bundle: FlexSNKernelHandle, flat_args: list[torch.Tensor]
 ) -> list[torch.Tensor]:
@@ -228,6 +262,17 @@ def flexsn_inductor_inference(handle: int, flat_args: list[torch.Tensor]) -> lis
     return _flexsn_inductor_inference_impl(bundle, flat_args)
 
 
+@torch.library.custom_op("sj::flexsn_inductor_inference_final_state", mutates_args=())
+def flexsn_inductor_inference_final_state(handle: int, flat_args: list[torch.Tensor]) -> list[torch.Tensor]:
+    bundle = _lookup_kernel_handle(handle)
+    if (
+        bundle.inference_final_state_kernel is None
+        or bundle.inference_final_state_info is None
+    ):
+        raise RuntimeError("FlexSN inference-final-state kernel is unavailable for this handle.")
+    return _flexsn_inductor_inference_final_state_impl(bundle, flat_args)
+
+
 @torch.library.register_fake("sj::flexsn_inductor_inference")
 def _flexsn_inductor_inference_fake(
     handle: int, flat_args: list[torch.Tensor]
@@ -240,6 +285,31 @@ def _flexsn_inductor_inference_fake(
         flat_args,
         bundle.inference_info.num_outputs + bundle.inference_info.num_states,
     )
+
+
+@torch.library.register_fake("sj::flexsn_inductor_inference_final_state")
+def _flexsn_inductor_inference_final_state_fake(
+    handle: int, flat_args: list[torch.Tensor]
+) -> list[torch.Tensor]:
+    bundle = _lookup_kernel_handle(handle)
+    if bundle.inference_final_state_info is None:
+        raise RuntimeError(
+            "FlexSN inference-final-state metadata is unavailable for this handle."
+        )
+    seq_outputs = _make_seq_outputs_like(
+        bundle.inference_final_state_info,
+        flat_args,
+        bundle.inference_final_state_info.num_outputs,
+    )
+    if flat_args:
+        state_template = flat_args[0][0]
+    else:
+        raise ValueError("Expected at least one input tensor for FlexSN fake inference.")
+    final_states = [
+        state_template.new_empty(state_template.shape)
+        for _ in range(bundle.inference_final_state_info.num_states)
+    ]
+    return [*seq_outputs, *final_states]
 
 
 @torch.library.custom_op("sj::flexsn_inductor_training", mutates_args=())

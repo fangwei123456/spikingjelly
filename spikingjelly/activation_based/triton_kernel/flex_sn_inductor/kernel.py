@@ -2,6 +2,7 @@
 
 Two entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)
+* build_inference_final_state_kernel — inference path that returns final states only
 * build_training_kernels  — forward + backward kernels for full BPTT training
 """
 from __future__ import annotations
@@ -69,6 +70,36 @@ def build_inference_kernel(
     # Build the scan kernel: single tl.static_range(T) loop.
     kernel = get_flexsn_inference_kernel(core_str, core_name, info=info)
 
+    return kernel, info
+
+
+def build_inference_final_state_kernel(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
+):
+    from torch.fx.experimental.proxy_tensor import make_fx
+    from ..torch2triton import generate_triton_code_str
+    from ..flexsn import extract_info, get_flexsn_inference_final_state_kernel
+
+    if example_inputs is None:
+        example_inputs = tuple(
+            torch.zeros(1, device="cuda") for _ in range(num_inputs + num_states)
+        )
+    else:
+        example_inputs = tuple(x.detach().to("cuda").clone() for x in example_inputs)
+
+    traced = make_fx(core_fn)(*example_inputs)
+    graph = traced.graph
+
+    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
+    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
+    core_name = f"{safe_name}_inductor_scan_final_state"
+    core_str, core_name = generate_triton_code_str(graph, core_name)
+    info = extract_info(graph, num_inputs, num_states, num_outputs)
+    kernel = get_flexsn_inference_final_state_kernel(core_str, core_name, info=info)
     return kernel, info
 
 

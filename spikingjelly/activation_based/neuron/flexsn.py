@@ -39,6 +39,29 @@ except BaseException as e:
 __all__ = ["FlexSNKernel", "FlexSN"]
 
 
+def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
+    if (
+        module._inductor_scan_final_state_kernel is None
+        or module._inductor_scan_final_state_info is None
+    ):
+        return
+
+    from ..triton_kernel.flexsn.wrapper import flexsn_inference_final_state
+
+    info = module._inductor_scan_final_state_info
+    seq_template = torch.zeros((1, 1), device="cuda")
+    state_template = seq_template[0].clone()
+    warm_args = [seq_template.clone() for _ in range(info.num_inputs)]
+    warm_args.extend(state_template.clone() for _ in range(info.num_states))
+
+    with torch.no_grad():
+        flexsn_inference_final_state(
+            module._inductor_scan_final_state_kernel,
+            info,
+            *warm_args,
+        )
+
+
 def _as_tuple(outputs):
     if isinstance(outputs, torch.Tensor):
         return (outputs,)
@@ -418,7 +441,7 @@ class FlexSN(base.MemoryModule):
         if backend == "inductor" and torch.cuda.is_available():
             try:
                 from ..triton_kernel.flex_sn_inductor.kernel import (
-                    build_inference_kernel, build_training_kernels,
+                    build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,
                 )
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
                     attach_flexsn_handle_finalizer,
@@ -430,6 +453,7 @@ class FlexSN(base.MemoryModule):
                     "falling back to eager_scan/flex_sn_scan for all paths." % e
                 )
                 build_inference_kernel = None
+                build_inference_final_state_kernel = None
                 build_training_kernels = None
                 attach_flexsn_handle_finalizer = None
                 register_flexsn_kernel_handle = None
@@ -438,6 +462,9 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_kernel, self._inductor_scan_info = (
                         build_inference_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
+                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
+                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                    )
                 except Exception as e:
                     logging.warning(
                         "FlexSN: could not build inductor inference kernel (%s); "
@@ -445,6 +472,8 @@ class FlexSN(base.MemoryModule):
                     )
                     self._inductor_scan_kernel = None
                     self._inductor_scan_info = None
+                    self._inductor_scan_final_state_kernel = None
+                    self._inductor_scan_final_state_info = None
                 try:
                     self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
                         build_training_kernels(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
@@ -460,12 +489,16 @@ class FlexSN(base.MemoryModule):
             else:
                 self._inductor_scan_kernel = None
                 self._inductor_scan_info = None
+                self._inductor_scan_final_state_kernel = None
+                self._inductor_scan_final_state_info = None
                 self._inductor_fwd_kernel = None
                 self._inductor_bwd_kernel = None
                 self._inductor_train_info = None
         else:
             self._inductor_scan_kernel = None
             self._inductor_scan_info = None
+            self._inductor_scan_final_state_kernel = None
+            self._inductor_scan_final_state_info = None
             self._inductor_fwd_kernel = None
             self._inductor_bwd_kernel = None
             self._inductor_train_info = None
@@ -473,6 +506,10 @@ class FlexSN(base.MemoryModule):
         self._inductor_inference_available = (
             self._inductor_scan_kernel is not None
             and self._inductor_scan_info is not None
+        )
+        self._inductor_inference_final_state_available = (
+            self._inductor_scan_final_state_kernel is not None
+            and self._inductor_scan_final_state_info is not None
         )
         self._inductor_training_available = (
             self._inductor_fwd_kernel is not None
@@ -487,6 +524,8 @@ class FlexSN(base.MemoryModule):
             self._inductor_handle = register_flexsn_kernel_handle(
                 inference_kernel=self._inductor_scan_kernel,
                 inference_info=self._inductor_scan_info,
+                inference_final_state_kernel=self._inductor_scan_final_state_kernel,
+                inference_final_state_info=self._inductor_scan_final_state_info,
                 forward_kernel=self._inductor_fwd_kernel,
                 backward_kernel=self._inductor_bwd_kernel,
                 training_info=self._inductor_train_info,
@@ -494,6 +533,17 @@ class FlexSN(base.MemoryModule):
             self._inductor_handle_finalizer = attach_flexsn_handle_finalizer(
                 self, self._inductor_handle
             )
+            if self._inductor_inference_final_state_available:
+                try:
+                    _warmup_inductor_inference_final_state_kernel(self)
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not warm up inductor inference-final-state kernel (%s); "
+                        "falling back to the regular inference kernel for store_state_seqs=False." % e
+                    )
+                    self._inductor_scan_final_state_kernel = None
+                    self._inductor_scan_final_state_info = None
+                    self._inductor_inference_final_state_available = False
         else:
             self._inductor_handle_finalizer = None
 
@@ -677,13 +727,25 @@ class FlexSN(base.MemoryModule):
             if self._inductor_handle is not None and all_cuda and same_device:
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
                     flexsn_inductor_inference,
+                    flexsn_inductor_inference_final_state,
                     flexsn_inductor_training,
                 )
 
                 if _no_grad and self._inductor_inference_available:
-                    result_seqs = flexsn_inductor_inference(
-                        self._inductor_handle, flat_args
-                    )
+                    if (
+                        not self.store_state_seqs
+                        and self._inductor_inference_final_state_available
+                    ):
+                        result_seqs = flexsn_inductor_inference_final_state(
+                            self._inductor_handle, flat_args
+                        )
+                        output_seqs = list(result_seqs[: self.num_outputs])
+                        self.states = list(result_seqs[self.num_outputs :])
+                        return output_seqs
+                    else:
+                        result_seqs = flexsn_inductor_inference(
+                            self._inductor_handle, flat_args
+                        )
                 elif (not _no_grad) and self._inductor_training_available:
                     result_seqs = flexsn_inductor_training(
                         self._inductor_handle, flat_args

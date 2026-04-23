@@ -13,6 +13,7 @@ from .info import FlexSNInfo
 
 __all__ = [
     "get_flexsn_inference_kernel",
+    "get_flexsn_inference_final_state_kernel",
     "get_flexsn_forward_kernel",
     "get_flexsn_backward_kernel",
 ]
@@ -58,6 +59,18 @@ store_template = """
         )
         convert_and_store({name}_ptrs, {name}, boundary_check=(1,))
         # tl.store({name}_ptrs, {name}, boundary_check=(1,))
+"""
+
+final_state_store_template = """
+    {name}_final_ptrs = tl.make_block_ptr(
+        {name}_final_ptr,
+        shape=(1, NCL),
+        strides=(NCL, 1),
+        offsets=(0, ncl_offset),
+        block_shape=(1, BLOCK_NCL),
+        order=(1, 0)
+    )
+    convert_and_store({name}_final_ptrs, {name}, boundary_check=(1,))
 """
 
 load_template = """
@@ -189,6 +202,81 @@ def get_flexsn_inference_kernel(
     if verbose:
         print("=" * 40, core_name, "=" * 40)
         print("Generated flexsn inference kernel:")
+        print("```")
+        print(kernel_str)
+        print("```\n")
+        print(info)
+        print("=" * 40, "=" * len(core_name), "=" * 40)
+
+    kernel_exe = compile_triton_code_str(kernel_str, kernel_name, verbose)
+    return kernel_exe
+
+
+def get_flexsn_inference_final_state_kernel(
+    core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
+):
+    hash = core_name[-8:]
+    num_inputs = info.num_inputs
+    num_states = info.num_states
+    num_outputs = info.num_outputs
+
+    kernel_input_signature = f",\n{INDENTATION}".join(
+        [f"x{i}_seq_ptr" for i in range(num_inputs)]
+    )
+    kernel_input_signature += f",\n{INDENTATION}"
+    kernel_input_signature += f",\n{INDENTATION}".join(
+        [f"v{i}_init_ptr" for i in range(num_states)]
+    )
+
+    kernel_output_signature = f",\n{INDENTATION}".join(
+        [f"s{i}_seq_ptr" for i in range(num_outputs)]
+    )
+    kernel_output_signature += f",\n{INDENTATION}"
+    kernel_output_signature += f",\n{INDENTATION}".join(
+        [f"v{i}_final_ptr" for i in range(num_states)]
+    )
+
+    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
+    if num_states > 0:
+        autotune_restore += ", "
+        autotune_restore += ", ".join([f'"v{i}_final_ptr"' for i in range(num_states)])
+
+    init_state_loads = "".join(
+        [init_state_load_template.format(name=f"v{i}") for i in range(num_states)]
+    )
+
+    loads = "".join([load_template.format(name=f"x{i}") for i in range(num_inputs)])
+    stores = "".join([store_template.format(name=f"s{i}") for i in range(num_outputs)])
+    tail = "".join(
+        [final_state_store_template.format(name=f"v{i}") for i in range(num_states)]
+    )
+
+    lhs = ", ".join([f"s{i}" for i in range(num_outputs)])
+    lhs += ", "
+    lhs += ", ".join([f"v{i}" for i in range(num_states)])
+    core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
+    core_args += ", "
+    core_args += ", ".join([f"v{i}" for i in range(num_states)])
+
+    kernel_str = kernel_template.format(
+        core_str=core_str,
+        autotune_restore=autotune_restore,
+        kernel_type="inference_final_state",
+        hash=hash,
+        kernel_input_signature=kernel_input_signature,
+        kernel_output_signature=kernel_output_signature,
+        init_state_loads=init_state_loads,
+        loop_range="0, T, 1",
+        loads=loads,
+        computes=f"{lhs} = {core_name}({core_args})",
+        stores=stores,
+        tail=tail,
+    ).strip()
+    kernel_name = f"flexsn_inference_final_state_kernel_{hash}"
+
+    if verbose:
+        print("=" * 40, core_name, "=" * 40)
+        print("Generated flexsn inference-final-state kernel:")
         print("```")
         print(kernel_str)
         print("```\n")

@@ -15,7 +15,7 @@ from ..triton_utils import amp_custom_fwd, amp_custom_bwd
 from .info import FlexSNInfo
 
 
-__all__ = ["FlexSNFunction"]
+__all__ = ["flexsn_inference", "flexsn_inference_final_state", "flexsn_forward", "flexsn_backward", "FlexSNFunction"]
 
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
@@ -36,6 +36,28 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
         dtype=type_dict[dtype],
     )
     return tuple(outputs)
+
+
+def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
+    x_example = args[0]
+    T = x_example.shape[0]
+    NCL = x_example[0].numel()
+    dtype = x_example.dtype
+    output_seqs = [torch.empty_like(x_example) for _ in range(info.num_outputs)]
+    final_states = [
+        torch.empty_like(x_example[0]) for _ in range(info.num_states)
+    ]
+    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+
+    f[grid](
+        *args,
+        *output_seqs,
+        *final_states,
+        T=T,
+        NCL=NCL,
+        dtype=type_dict[dtype],
+    )
+    return tuple([*output_seqs, *final_states])
 
 
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:

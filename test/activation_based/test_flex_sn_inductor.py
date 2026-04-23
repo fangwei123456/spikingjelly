@@ -797,19 +797,19 @@ def test_inductor_compile_graph_elides_explicit_zero_state_init():
             backend="inductor",
         )
 
-    T, B, C, H, W = 4, 8, 3, 32, 32
+    T, N = 4, 8
     torch.manual_seed(42)
-    x = torch.randn((T, B, C, H, W), device="cuda")
-    model = spiking_vgg16_bn(
-        spiking_neuron=make_flexsn,
-        step_mode="m",
-    ).cuda().eval()
+    x = torch.randn((T, N), device="cuda")
+    neuron = make_flexsn(store_state_seqs=False).cuda().eval()
 
     with torch.no_grad():
-        explanation = explain(model)(x)
-    targets = [str(node.target) for node in explanation.graphs[0].graph.nodes]
+        explanation = explain(neuron)(x)
+    targets = [str(node.target) for graph in explanation.graphs for node in graph.graph.nodes]
 
-    assert any("sj.flexsn_inductor_inference.default" in target for target in targets)
+    assert any(
+        "sj.flexsn_inductor_inference_final_state.default" in target
+        for target in targets
+    )
     assert not any("zeros_like" in target for target in targets)
 
 
