@@ -39,6 +39,16 @@ class _NativeStepBlock(nn.Module):
         return x
 
 
+class _NoRunningStatsBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(3, 8, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(8, track_running_stats=False)
+
+    def forward(self, x):
+        return self.bn(self.conv(x))
+
+
 def test_fuse_conv_bn_eval_modules_matches_step_block():
     torch.manual_seed(0)
     model = _StepBlock().eval()
@@ -65,6 +75,17 @@ def test_fuse_conv_bn_eval_modules_matches_native_block():
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
     assert not any(isinstance(m, nn.BatchNorm2d) for m in fused.modules())
+
+
+def test_fuse_conv_bn_eval_modules_rejects_missing_running_stats():
+    model = _NoRunningStatsBlock().eval()
+
+    try:
+        functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+    except ValueError as e:
+        assert "track running stats" in str(e)
+    else:
+        raise AssertionError("Expected ValueError for BatchNorm without running stats")
 
 
 def test_pack_conv_bn_train_modules_matches_step_block():
@@ -144,3 +165,22 @@ def test_train_conv_bn_wrapper_packs_native_multistep_inputs():
     torch.testing.assert_close(
         wrapped.bn.weight.grad, model.bn.weight.grad, atol=1e-5, rtol=1e-4
     )
+
+
+def test_train_conv_bn_wrapper_keeps_conv_hooks_active():
+    torch.manual_seed(0)
+    model = _StepBlock().train()
+    wrapped = _TrainConvBnWrapper(copy.deepcopy(model.conv), copy.deepcopy(model.bn)).train()
+    x = torch.randn(4, 2, 3, 16, 16)
+    hook_calls = []
+
+    def hook(module, args, output):
+        hook_calls.append((args[0].shape, output.shape))
+
+    handle = wrapped.conv.register_forward_hook(hook)
+    try:
+        wrapped(x)
+    finally:
+        handle.remove()
+
+    assert hook_calls == [((8, 3, 16, 16), (8, 8, 16, 16))]

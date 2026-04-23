@@ -320,7 +320,11 @@ def compile_triton_code_str(
         triton.JITFunction: The compiled Triton JIT function.
     """
     if name_space is None:
-        name_space = {}
+        name_space = {"triton": triton, "tl": tl}
+    else:
+        name_space = dict(name_space)
+        name_space.setdefault("triton", triton)
+        name_space.setdefault("tl", tl)
     cacheable = len(name_space) == 0
 
     module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
@@ -360,14 +364,18 @@ def compile_triton_code_str(
                     triton if isinstance(triton, types.ModuleType) else types.ModuleType("triton")
                 )
                 if not isinstance(triton, types.ModuleType):
-                    triton_module.__dict__.update(getattr(triton, "__dict__", {}))
+                    triton_dict = getattr(triton, "__dict__", None)
+                    if isinstance(triton_dict, dict):
+                        triton_module.__dict__.update(triton_dict)
                 sys.modules["triton"] = triton_module
             if language_module is None:
                 language_module = (
                     tl if isinstance(tl, types.ModuleType) else types.ModuleType("triton.language")
                 )
                 if not isinstance(tl, types.ModuleType):
-                    language_module.__dict__.update(getattr(tl, "__dict__", {}))
+                    tl_dict = getattr(tl, "__dict__", None)
+                    if isinstance(tl_dict, dict):
+                        language_module.__dict__.update(tl_dict)
                 sys.modules["triton.language"] = language_module
             had_language_attr = hasattr(triton_module, "language")
             original_language = getattr(triton_module, "language", None)

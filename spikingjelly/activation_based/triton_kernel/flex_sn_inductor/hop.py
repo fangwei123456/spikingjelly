@@ -67,6 +67,7 @@ Captured tensor freevars from ``core_fn`` are appended after the
 """
 from __future__ import annotations
 import functools
+import warnings
 from typing import Callable, Tuple
 
 import torch
@@ -759,7 +760,13 @@ def _register_dynamo_hop() -> None:
             speculate_subgraph,
         )
         from torch._dynamo.variables.tensor import TensorVariable
-    except Exception:
+    except (ImportError, ModuleNotFoundError, AttributeError):
+        return
+    except Exception as e:
+        warnings.warn(
+            f"FlexSN HOP Dynamo registration failed unexpectedly: {e}",
+            stacklevel=2,
+        )
         return
 
     if getattr(TorchHigherOrderOperatorVariable.make, "_spikingjelly_flexsn_hop", False):

@@ -813,15 +813,7 @@ class FlexSN(base.MemoryModule):
 
         elif self.backend == "inductor":
             result_has_state_seqs = self.store_state_seqs
-            _no_grad = (not torch.is_grad_enabled()) and not (
-                any(
-                    a.requires_grad for a in (
-                        *args,
-                        *([] if self.states is None else self.states),
-                    )
-                )
-                or _core_requires_grad(self.core)
-            )
+            _no_grad = not torch.is_grad_enabled()
             use_implicit_zero_states = (
                 self.states is None and _no_grad and _can_elide_zero_state_inputs(self)
             )

@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
 import math
+from contextlib import contextmanager
 from torch import fx
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 
@@ -81,21 +82,29 @@ class _TrainConvBnWrapper(nn.Module):
         self.conv = conv
         self.bn = bn
 
+    @contextmanager
+    def _single_step_mode(self, module: nn.Module):
+        if isinstance(module, base.StepModule):
+            old_step_mode = module.step_mode
+            module.step_mode = "s"
+            try:
+                yield
+            finally:
+                module.step_mode = old_step_mode
+        else:
+            yield
+
     def _packed_forward(self, x: Tensor) -> Tensor:
         t, n = x.shape[:2]
         x = x.flatten(0, 1)
-        if isinstance(self.conv, nn.Conv1d):
-            x = nn.Conv1d.forward(self.conv, x)
-        elif isinstance(self.conv, nn.Conv2d):
-            x = nn.Conv2d.forward(self.conv, x)
-        elif isinstance(self.conv, nn.Conv3d):
-            x = nn.Conv3d.forward(self.conv, x)
-        else:
+        if not isinstance(self.conv, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
             raise TypeError(f"Unsupported packed conv type: {type(self.conv)!r}")
+        with self._single_step_mode(self.conv):
+            x = self.conv(x)
 
-        if isinstance(self.bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d)):
-            x = self.bn.super_forward(x)
-        else:
+        if not isinstance(self.bn, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+            raise TypeError(f"Unsupported packed batchnorm type: {type(self.bn)!r}")
+        with self._single_step_mode(self.bn):
             x = self.bn(x)
         return x.view(t, n, *x.shape[1:])
 
@@ -131,16 +140,16 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
 
     * **中文**
 
-    将评估模式下模型中的相邻 ``Conv*`` 与 ``BatchNorm*`` 模块融合为单个卷积模块。
+    将评估模式下模型中的相邻 ``Conv*`` 与 ``BatchNorm*`` 模块融合为单个卷积模块.
     该函数同时支持原生 ``torch.nn`` 模块以及 SpikingJelly 的
     :class:`spikingjelly.activation_based.layer.Conv1d`,
     :class:`spikingjelly.activation_based.layer.Conv2d`,
     :class:`spikingjelly.activation_based.layer.Conv3d`,
     :class:`spikingjelly.activation_based.layer.BatchNorm1d`,
     :class:`spikingjelly.activation_based.layer.BatchNorm2d`,
-    :class:`spikingjelly.activation_based.layer.BatchNorm3d`。
+    :class:`spikingjelly.activation_based.layer.BatchNorm3d`.
 
-    输入模型必须处于 ``eval()`` 模式。返回值是融合后的 ``fx.GraphModule``。
+    输入模型必须处于 ``eval()`` 模式; 返回值是融合后的 ``fx.GraphModule``.
 
     .. _fuse_conv_bn_eval_modules-en:
 
@@ -179,6 +188,14 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
                 continue
             conv = modules[node.args[0].target]
             bn = modules[node.target]
+            if (
+                getattr(bn, "track_running_stats", True) is False
+                or bn.running_mean is None
+                or bn.running_var is None
+            ):
+                raise ValueError(
+                    f"Cannot fuse {node.target}: BatchNorm must track running stats."
+                )
             fused_conv = fuse_conv_bn_eval(conv, bn)
             _replace_node_module(node.args[0], modules, fused_conv)
             node.replace_all_uses_with(node.args[0])
