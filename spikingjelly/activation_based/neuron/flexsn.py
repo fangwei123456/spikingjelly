@@ -469,6 +469,13 @@ class FlexSN(base.MemoryModule):
             _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
+        elif backend == "hop":
+            if num_inputs + num_states == 0:
+                raise ValueError("FlexSN requires at least one input or state tensor.")
+            if num_inputs == 0:
+                raise ValueError(
+                    "FlexSN HOP backend requires at least one input sequence to derive T."
+                )
 
         if backend == "triton":
             self.kernel = FlexSNKernel(

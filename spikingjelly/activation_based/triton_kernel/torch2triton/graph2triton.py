@@ -305,6 +305,7 @@ def compile_triton_code_str(
     """
     if name_space is None:
         name_space = {}
+    cacheable = len(name_space) == 0
 
     module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
     module_name = (
@@ -330,12 +331,13 @@ def compile_triton_code_str(
     linecache.checkcache(str(fpath))
 
     with _MODULE_CACHE_LOCK:
-        module = sys.modules.get(module_name)
+        module = sys.modules.get(module_name) if cacheable else None
         if module is None:
             spec = importlib.util.spec_from_file_location(module_name, fpath)
             if spec is None or spec.loader is None:
                 raise ImportError(f"Could not create import spec for {fpath}")
             module = importlib.util.module_from_spec(spec)
+            module.__dict__.update(name_space)
             triton_module = sys.modules.get("triton")
             language_module = sys.modules.get("triton.language")
             restore_triton = triton_module is None
@@ -355,11 +357,13 @@ def compile_triton_code_str(
                     language_module.__dict__.update(getattr(tl, "__dict__", {}))
                 sys.modules["triton.language"] = language_module
             triton_module.language = language_module
-            sys.modules[module_name] = module
+            if cacheable:
+                sys.modules[module_name] = module
             try:
                 spec.loader.exec_module(module)
             except BaseException:
-                sys.modules.pop(module_name, None)
+                if cacheable:
+                    sys.modules.pop(module_name, None)
                 raise
             finally:
                 if restore_language:
