@@ -1,7 +1,10 @@
 from typing import Tuple
-import tempfile
+import importlib.util
+import linecache
 from pathlib import Path
 import hashlib
+import sys
+import tempfile
 
 import torch
 import torch.fx as fx
@@ -32,6 +35,12 @@ __all__ = [
 def _generate_hash(s: str, w: int = 8) -> str:
     hasher = hashlib.sha256(s.encode("utf-8"))
     return hasher.hexdigest()[:w]
+
+
+def _codegen_cache_dir() -> Path:
+    cache_dir = Path(tempfile.gettempdir()) / "spikingjelly_triton_codegen"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 def _uw(arg) -> str:
@@ -288,26 +297,43 @@ def compile_triton_code_str(
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
     """
-    # create a temporary file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(triton_code)
-        fpath = Path(f.name)
-        if verbose:
-            print(f"Triton code `{kernel_name}` written to {fpath}")
-        # the file will not be deleted until the end of the program
-
-    name_space.update(
-        {
-            "triton": triton,
-            "tl": tl,
-            "__name__": "spikingjelly.activation_based.triton_kernel.codegen",
-        }
+    module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
+    module_name = (
+        "spikingjelly.activation_based.triton_kernel.codegen."
+        f"{kernel_name}_{module_hash}"
     )
-    with open(fpath, "r") as f:
-        code = compile(f.read(), fpath, "exec")
-        exec(code, name_space)  # name_space will be updated
+    fpath = _codegen_cache_dir() / f"{kernel_name}_{module_hash}.py"
 
-    if kernel_name in name_space:
-        return name_space[kernel_name]
+    if not fpath.exists() or fpath.read_text(encoding="utf-8") != triton_code:
+        fpath.write_text(triton_code, encoding="utf-8")
+    if verbose:
+        print(f"Triton code `{kernel_name}` written to {fpath}")
+
+    linecache.checkcache(str(fpath))
+
+    module = sys.modules.get(module_name)
+    if module is None:
+        spec = importlib.util.spec_from_file_location(module_name, fpath)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Could not create import spec for {fpath}")
+        module = importlib.util.module_from_spec(spec)
+        module.__dict__.update(
+            {
+                "triton": triton,
+                "tl": tl,
+            }
+        )
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
     else:
-        raise ValueError(f"Function {kernel_name} not found in compiled namespace")
+        module.__dict__.update(
+            {
+                "triton": triton,
+                "tl": tl,
+            }
+        )
+
+    name_space.update(module.__dict__)
+    if kernel_name in module.__dict__:
+        return module.__dict__[kernel_name]
+    raise ValueError(f"Function {kernel_name} not found in compiled namespace")
