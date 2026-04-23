@@ -376,7 +376,7 @@ class FlexSN(base.MemoryModule):
         :type step_mode: str
 
         :param backend: 使用的后端。``"triton"``、``"inductor"`` 和 ``"hop"`` 仅在
-            ``step_mode="m"`` 时可用；``"torch"`` 始终可用。默认 ``"triton"``。
+            ``step_mode="m"`` 时可用; ``"torch"`` 始终可用。默认 ``"triton"``。
         :type backend: str
 
         :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
@@ -682,7 +682,9 @@ class FlexSN(base.MemoryModule):
         if step_mode == "s":
             return [torch.zeros_like(args[0]) for _ in range(num_states)]
         elif step_mode == "m":
-            return [torch.zeros_like(args[0][0]) for _ in range(num_states)]
+            if args[0].shape[0] > 0:
+                return [torch.zeros_like(args[0][0]) for _ in range(num_states)]
+            return [args[0].new_zeros(args[0].shape[1:]) for _ in range(num_states)]
         else:
             raise ValueError(f"Unsupported step mode: {step_mode}")
 
@@ -695,6 +697,20 @@ class FlexSN(base.MemoryModule):
     def multi_step_forward(self, *args):
         if self.backend == "torch":
             T = args[0].shape[0]
+            if T == 0:
+                step_inputs = tuple(arg.new_empty(arg.shape[1:]) for arg in args)
+                with torch.no_grad():
+                    step_results = _as_tuple(self.core(*step_inputs, *self.states))
+                output_seqs = [
+                    y.new_empty((0, *y.shape))
+                    for y in step_results[: self.num_outputs]
+                ]
+                if self.store_state_seqs:
+                    self.state_seqs = [
+                        s.new_empty((0, *s.shape)) for s in step_results[self.num_outputs :]
+                    ]
+                return output_seqs
+
             output_seqs = [[] for _ in range(self.num_outputs)]
             if self.store_state_seqs:
                 state_seqs = [[] for _ in range(self.num_states)]
@@ -778,6 +794,7 @@ class FlexSN(base.MemoryModule):
                         result_seqs = flexsn_inductor_inference(
                             self._inductor_handle, flat_args
                         )
+                        result_has_state_seqs = True
                 elif (not _no_grad) and self._inductor_training_available:
                     if not self.store_state_seqs:
                         result_seqs = flexsn_inductor_training_final_state(
@@ -799,6 +816,7 @@ class FlexSN(base.MemoryModule):
             else:
                 result_seqs = None
 
+            result_has_state_seqs = self.store_state_seqs
             if result_seqs is None:
                 if self.states is None:
                     self.states = self.init_states(self.num_states, self.step_mode, *args)
@@ -811,11 +829,13 @@ class FlexSN(base.MemoryModule):
                     *args,
                     *self.states,
                 )
+                result_has_state_seqs = self.store_state_seqs
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
-            if self.store_state_seqs:
+            if result_has_state_seqs:
                 self.states = [v[-1] for v in state_seqs]
-                self.state_seqs = state_seqs
+                if self.store_state_seqs:
+                    self.state_seqs = state_seqs
             else:
                 self.states = state_seqs
             return output_seqs

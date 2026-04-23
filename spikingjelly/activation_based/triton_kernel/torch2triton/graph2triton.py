@@ -7,6 +7,7 @@ import hashlib
 import sys
 import tempfile
 import threading
+import types
 
 import torch
 import torch.fx as fx
@@ -286,7 +287,7 @@ def compile_triton_code_str(
     triton_code: str,
     kernel_name: str,
     verbose: bool = False,
-    name_space: dict = {},
+    name_space: dict | None = None,
 ):
     """Compile a Triton code string into a runnable Triton JIT function.
 
@@ -302,6 +303,9 @@ def compile_triton_code_str(
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
     """
+    if name_space is None:
+        name_space = {}
+
     module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
     module_name = (
         "spikingjelly.activation_based.triton_kernel.codegen."
@@ -328,14 +332,33 @@ def compile_triton_code_str(
             if spec is None or spec.loader is None:
                 raise ImportError(f"Could not create import spec for {fpath}")
             module = importlib.util.module_from_spec(spec)
-            module.__dict__.update(
-                {
-                    "triton": triton,
-                    "tl": tl,
-                }
-            )
+            triton_module = sys.modules.get("triton")
+            language_module = sys.modules.get("triton.language")
+            restore_triton = triton_module is None
+            restore_language = language_module is None
+            if triton_module is None:
+                triton_module = (
+                    triton if isinstance(triton, types.ModuleType) else types.ModuleType("triton")
+                )
+                if not isinstance(triton, types.ModuleType):
+                    triton_module.__dict__.update(getattr(triton, "__dict__", {}))
+                sys.modules["triton"] = triton_module
+            if language_module is None:
+                language_module = (
+                    tl if isinstance(tl, types.ModuleType) else types.ModuleType("triton.language")
+                )
+                if not isinstance(tl, types.ModuleType):
+                    language_module.__dict__.update(getattr(tl, "__dict__", {}))
+                sys.modules["triton.language"] = language_module
+            setattr(triton_module, "language", language_module)
             sys.modules[module_name] = module
-            spec.loader.exec_module(module)
+            try:
+                spec.loader.exec_module(module)
+            finally:
+                if restore_language:
+                    sys.modules.pop("triton.language", None)
+                if restore_triton:
+                    sys.modules.pop("triton", None)
         else:
             module.__dict__.update(
                 {

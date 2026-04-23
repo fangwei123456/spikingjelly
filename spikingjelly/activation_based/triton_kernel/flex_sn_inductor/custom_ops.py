@@ -192,6 +192,10 @@ def _extra_saved_return_indices(info: FlexSNInfo) -> list[int]:
     return [idx for idx in info.c2k_return_mapping if idx >= visible]
 
 
+def _final_state_saved_return_indices(info: FlexSNInfo) -> list[int]:
+    return [idx for idx in info.c2k_return_mapping if idx >= info.num_outputs]
+
+
 def _materialize_zero_state_args(
     info: FlexSNInfo, flat_args: list[torch.Tensor]
 ) -> list[torch.Tensor]:
@@ -266,9 +270,7 @@ def _flexsn_inductor_training_final_state_impl(
         full_returns[info.num_outputs : info.num_outputs + info.num_states]
     )
     final_states = [state_seq[-1] for state_seq in state_seqs]
-    extra_saved_tensors = [
-        full_returns[i] for i in _extra_saved_return_indices(info)
-    ]
+    extra_saved_tensors = [full_returns[i] for i in _final_state_saved_return_indices(info)]
     return [*visible_outputs, *final_states, *extra_saved_tensors]
 
 
@@ -411,7 +413,7 @@ def _flexsn_inductor_training_final_state_fake(
     extra_saved_tensors = _make_seq_outputs_like(
         bundle.training_info,
         flat_args,
-        len(_extra_saved_return_indices(bundle.training_info)),
+        len(_final_state_saved_return_indices(bundle.training_info)),
     )
     return [*seq_outputs, *final_states, *extra_saved_tensors]
 
@@ -500,12 +502,13 @@ def _flexsn_training_final_state_setup_context(ctx, inputs, output):
             _template_spec(t) for t in output[state_start:state_end]
         )
     ]
+    visible_outputs = bundle.training_info.num_outputs
     visible = bundle.training_info.num_outputs + bundle.training_info.num_states
     extra_saved = list(output[visible:])
     extra_saved_iter = iter(extra_saved)
     saved = []
     for idx in bundle.training_info.c2k_return_mapping:
-        if idx < visible:
+        if idx < visible_outputs:
             saved.append(output[idx])
         else:
             saved.append(next(extra_saved_iter))

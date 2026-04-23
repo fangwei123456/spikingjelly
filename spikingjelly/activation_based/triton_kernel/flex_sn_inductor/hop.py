@@ -228,6 +228,19 @@ def eager_scan_final_state(
                 f"input {i} has leading dim {x.shape[0]}, expected {T}"
             )
 
+    if T == 0:
+        def _empty_output(i: int) -> torch.Tensor:
+            if i < len(states):
+                ref = states[i]
+            elif states:
+                ref = states[-1]
+            else:
+                ref = inputs_seq[0].new_empty(inputs_seq[0].shape[1:])
+            return ref.new_empty((0, *ref.shape))
+
+        empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
+        return (*empty_outputs, *tuple(states))
+
     output_buffers = [[] for _ in range(num_outputs)]
 
     for t in range(T):
@@ -500,11 +513,12 @@ def lowerable_while_loop_scan(
             _shift_input_queue(queue) for queue in step_input_queues
         )
         next_output_acc = tuple(
-            _append_to_tail(buf, out) for buf, out in zip(outputs_acc, outputs)
+            _append_to_tail(buf, out)
+            for buf, out in zip(outputs_acc, outputs, strict=True)
         )
         next_state_acc = tuple(
             _append_to_tail(buf, state)
-            for buf, state in zip(states_acc, next_states)
+            for buf, state in zip(states_acc, next_states, strict=True)
         )
         return (
             t + 1,
@@ -633,7 +647,8 @@ def lowerable_while_loop_scan_final_state(
             _shift_input_queue(queue) for queue in step_input_queues
         )
         next_output_acc = tuple(
-            _append_to_tail(buf, out) for buf, out in zip(outputs_acc, outputs)
+            _append_to_tail(buf, out)
+            for buf, out in zip(outputs_acc, outputs, strict=True)
         )
         return (
             t + 1,
@@ -762,26 +777,14 @@ def _register_dynamo_hop() -> None:
             step_inputs = [_make_step_template(arg) for arg in flat_args[:num_inputs]]
             body_args = [*step_inputs, *flat_args[num_inputs:]]
 
-            if "source_target" in getattr(speculate_subgraph, "__code__").co_varnames:
-                _body_r, body_graph, body_lifted_freevars = speculate_subgraph(
-                    tx,
-                    body_fn,
-                    body_args,
-                    {},
-                    "flex_sn_scan",
-                    source_target=self.value,
-                )
-            else:
-                graph_checkpoint, checkpoint = tx.output.graph, tx.copy_graphstate()
-                _body_r, body_graph, body_lifted_freevars = speculate_subgraph(
-                    tx,
-                    body_fn,
-                    body_args,
-                    {},
-                    graph_checkpoint,
-                    checkpoint,
-                    "flex_sn_scan",
-                )
+            _body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+                tx,
+                body_fn,
+                body_args,
+                {},
+                "flex_sn_scan",
+                source_target=self.value,
+            )
 
             if hasattr(body_lifted_freevars, "keys"):
                 lifted_freevars = tuple(body_lifted_freevars.keys())
