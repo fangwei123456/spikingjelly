@@ -38,6 +38,16 @@ __all__ = [
 
 
 _MODULE_CACHE_LOCK = threading.Lock()
+_NAMESPACE_METADATA_KEYS = {
+    "__name__",
+    "__spec__",
+    "__loader__",
+    "__package__",
+    "__file__",
+    "__cached__",
+    "__builtins__",
+    "__doc__",
+}
 
 
 def _generate_hash(s: str, w: int = 8) -> str:
@@ -412,7 +422,12 @@ def compile_triton_code_str(
                 if restore_triton:
                     sys.modules.pop("triton", None)
     if caller_namespace is not None:
-        caller_namespace.update(module.__dict__)
+        exported_symbols = {
+            key: value
+            for key, value in module.__dict__.items()
+            if key not in _NAMESPACE_METADATA_KEYS
+        }
+        caller_namespace.update(exported_symbols)
     if kernel_name in module.__dict__:
         return module.__dict__[kernel_name]
     raise ValueError(f"Function {kernel_name} not found in compiled namespace")

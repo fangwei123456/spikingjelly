@@ -274,7 +274,7 @@ def eager_scan_final_state(
             return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
-        final_states = tuple(template_results[num_outputs:])
+        final_states = tuple(states)
         return (*empty_outputs, *final_states)
 
     output_buffers = [[] for _ in range(num_outputs)]
@@ -482,6 +482,8 @@ def lowerable_while_loop_scan(
     lifted_args = tuple(flat_args[expected:])
 
     def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.dim() >= 4:
+            return tensor.clone(memory_format=torch.contiguous_format)
         return tensor.contiguous()
 
     def _carry_device(*tensor_groups) -> torch.device:
@@ -648,6 +650,8 @@ def lowerable_while_loop_scan_final_state(
     lifted_args = tuple(flat_args[expected:])
 
     def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
+        if tensor.dim() >= 4:
+            return tensor.clone(memory_format=torch.contiguous_format)
         return tensor.contiguous()
 
     def _carry_device(*tensor_groups) -> torch.device:
@@ -662,15 +666,20 @@ def lowerable_while_loop_scan_final_state(
             raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
+        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
+        with torch.no_grad():
+            template_results = _as_tuple(
+                core_fn(*step_inputs, *init_states, *lifted_args)
+            )
+        if len(template_results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(template_results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+
         def _empty_output(i: int) -> torch.Tensor:
-            if i < len(init_states):
-                ref = init_states[i]
-            elif init_states:
-                ref = init_states[-1]
-            elif lifted_args:
-                ref = lifted_args[min(i, len(lifted_args) - 1)]
-            else:
-                ref = input_seqs[0].new_empty(input_seqs[0].shape[1:])
+            ref = template_results[i]
             return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(

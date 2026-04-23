@@ -526,6 +526,10 @@ class FlexSN(base.MemoryModule):
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
         elif backend == "hop":
+            if _flexsn_eager_scan is None:
+                raise ImportError(
+                    "FlexSN backend='hop' is unavailable: missing _flexsn_eager_scan."
+                )
             if num_inputs + num_states == 0:
                 raise ValueError("FlexSN requires at least one input or state tensor.")
             if num_inputs == 0:
@@ -834,6 +838,7 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         elif self.backend == "hop":
+            state_args = [state.contiguous() for state in self.states]
             result_seqs = _run_hop_scan(
                 self.core,
                 self.num_inputs,
@@ -841,7 +846,7 @@ class FlexSN(base.MemoryModule):
                 self.num_outputs,
                 self.store_state_seqs,
                 *args,
-                *self.states,
+                *state_args,
             )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_results = list(result_seqs[self.num_outputs :])
@@ -916,6 +921,7 @@ class FlexSN(base.MemoryModule):
             if result_seqs is None:
                 if self.states is None:
                     self.states = self.init_states(self.num_states, self.step_mode, *args)
+                state_args = [state.contiguous() for state in self.states]
                 result_seqs = _run_hop_scan(
                     self.core,
                     self.num_inputs,
@@ -923,7 +929,7 @@ class FlexSN(base.MemoryModule):
                     self.num_outputs,
                     self.store_state_seqs,
                     *args,
-                    *self.states,
+                    *state_args,
                 )
                 result_has_state_seqs = self.store_state_seqs
             output_seqs = list(result_seqs[: self.num_outputs])

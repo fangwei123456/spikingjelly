@@ -861,8 +861,8 @@ def test_compile_spiking_vgg_hop_lowerable_while_loop_matches_eager(monkeypatch)
     def core(x, v):
         tau, v_th = 2.0, 1.0
         h = v + (x - v) / tau
-        s = (h >= v_th).to(h.dtype)
-        return s, h * (1.0 - s)
+        s = (h >= v_th).to(h.dtype).contiguous()
+        return s, (h * (1.0 - s)).contiguous()
 
     def make_flexsn(**kwargs):
         return FlexSN(
@@ -880,20 +880,27 @@ def test_compile_spiking_vgg_hop_lowerable_while_loop_matches_eager(monkeypatch)
     x_compiled = x_eager.detach().clone()
 
     torch.manual_seed(0)
-    model = spiking_vgg16_bn(
+    eager_model = spiking_vgg16_bn(
+        spiking_neuron=make_flexsn,
+        step_mode="m",
+    ).cuda().eval()
+    torch.manual_seed(0)
+    compiled_model = spiking_vgg16_bn(
         spiking_neuron=make_flexsn,
         step_mode="m",
     ).cuda().eval()
 
     from spikingjelly.activation_based import functional as sj_functional
-    sj_functional.set_step_mode(model, "m")
+    sj_functional.set_step_mode(eager_model, "m")
+    sj_functional.set_step_mode(compiled_model, "m")
 
     monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
 
-    with torch.no_grad():
-        eager_out = model(x_eager)
-        compiled_model = torch.compile(model, fullgraph=True)
-        compiled_out = compiled_model(x_compiled)
+    with torch.backends.cudnn.flags(enabled=False):
+        with torch.no_grad():
+            eager_out = eager_model(x_eager)
+            compiled_model = torch.compile(compiled_model, fullgraph=True)
+            compiled_out = compiled_model(x_compiled)
 
     torch.testing.assert_close(compiled_out, eager_out, atol=1e-5, rtol=1e-4)
 
