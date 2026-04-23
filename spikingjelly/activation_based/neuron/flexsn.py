@@ -795,6 +795,7 @@ class FlexSN(base.MemoryModule):
                     self.num_inputs,
                     self.num_states,
                     self.num_outputs,
+                    self.store_state_seqs,
                     *args,
                     *self.states,
                 )
