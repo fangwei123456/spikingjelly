@@ -62,11 +62,14 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
 
     info = module._inductor_scan_final_state_info
     device = getattr(module, "_inductor_scan_final_state_device", None)
+    if device is not None and device.type != "cuda":
+        device = None
     if isinstance(module.core, torch.nn.Module):
         if device is None:
             for tensor in [*module.core.parameters(), *module.core.buffers()]:
-                device = tensor.device
-                break
+                if tensor.device.type == "cuda":
+                    device = tensor.device
+                    break
     if device is None:
         device = torch.device("cuda", torch.cuda.current_device())
     seq_template = torch.zeros((1, 1), device=device)
@@ -546,9 +549,9 @@ class FlexSN(base.MemoryModule):
         register_flexsn_kernel_handle = None
 
         if backend == "inductor" and torch.cuda.is_available():
-            self._inductor_scan_final_state_device = (
-                example_inputs[0].device if example_inputs is not None else None
-            )
+            self._inductor_scan_final_state_device = None
+            if example_inputs is not None and example_inputs[0].device.type == "cuda":
+                self._inductor_scan_final_state_device = example_inputs[0].device
             try:
                 from ..triton_kernel.flex_sn_inductor.kernel import (
                     build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,

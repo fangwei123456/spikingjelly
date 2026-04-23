@@ -498,22 +498,28 @@ def lowerable_while_loop_scan(
             raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
+        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
+        with torch.no_grad():
+            template_results = _as_tuple(
+                core_fn(*step_inputs, *init_states, *lifted_args)
+            )
+        if len(template_results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(template_results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+
         def _empty_output(i: int) -> torch.Tensor:
-            if i < len(init_states):
-                ref = init_states[i]
-            elif init_states:
-                ref = init_states[-1]
-            elif lifted_args:
-                ref = lifted_args[min(i, len(lifted_args) - 1)]
-            else:
-                return input_seqs[0].new_empty((0, *input_seqs[0].shape[1:]))
+            ref = template_results[i]
             return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(
             _empty_output(i) for i in range(num_outputs)
         )
         empty_states = tuple(
-            state.new_empty((0, *state.shape)) for state in init_states
+            state.new_empty((0, *state.shape))
+            for state in template_results[num_outputs:]
         )
         return (*empty_outputs, *empty_states)
 

@@ -55,6 +55,10 @@ def _generate_hash(s: str, w: int = 8) -> str:
     return hasher.hexdigest()[:w]
 
 
+def _has_real_triton_runtime() -> bool:
+    return isinstance(triton, types.ModuleType) and isinstance(tl, types.ModuleType)
+
+
 def _codegen_cache_dir() -> Path:
     candidates = []
     uid = getattr(os, "getuid", lambda: None)()
@@ -339,6 +343,12 @@ def compile_triton_code_str(
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
     """
+    if not _has_real_triton_runtime():
+        raise ImportError(
+            "compile_triton_code_str requires a real Triton installation; "
+            "the imported triton/tl modules are unavailable."
+        )
+
     caller_namespace = name_space
     cacheable = caller_namespace is None
     if caller_namespace is None:
@@ -381,23 +391,11 @@ def compile_triton_code_str(
             restore_triton = triton_module is None
             restore_language = language_module is None
             if triton_module is None:
-                triton_module = (
-                    triton if isinstance(triton, types.ModuleType) else types.ModuleType("triton")
-                )
-                if not isinstance(triton, types.ModuleType):
-                    triton_dict = getattr(triton, "__dict__", None)
-                    if isinstance(triton_dict, dict):
-                        triton_module.__dict__.update(triton_dict)
-                sys.modules["triton"] = triton_module
+                sys.modules["triton"] = triton
+                triton_module = triton
             if language_module is None:
-                language_module = (
-                    tl if isinstance(tl, types.ModuleType) else types.ModuleType("triton.language")
-                )
-                if not isinstance(tl, types.ModuleType):
-                    tl_dict = getattr(tl, "__dict__", None)
-                    if isinstance(tl_dict, dict):
-                        language_module.__dict__.update(tl_dict)
-                sys.modules["triton.language"] = language_module
+                sys.modules["triton.language"] = tl
+                language_module = tl
             had_language_attr = hasattr(triton_module, "language")
             original_language = getattr(triton_module, "language", None)
             triton_module.language = language_module
