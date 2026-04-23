@@ -138,7 +138,7 @@ def flexsn_{kernel_type}_kernel_{hash}(
 def get_flexsn_inference_kernel(
     core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
 ):
-    hash = core_name[-8:]
+    kernel_hash = core_name[-8:]
     num_inputs = info.num_inputs
     num_states = info.num_states
     num_outputs = info.num_outputs
@@ -187,7 +187,7 @@ def get_flexsn_inference_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="inference",
-        hash=hash,
+        hash=kernel_hash,
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
@@ -197,7 +197,7 @@ def get_flexsn_inference_kernel(
         stores=stores,
         tail="",
     ).strip()
-    kernel_name = f"flexsn_inference_kernel_{hash}"
+    kernel_name = f"flexsn_inference_kernel_{kernel_hash}"
 
     if verbose:
         print("=" * 40, core_name, "=" * 40)
@@ -215,7 +215,7 @@ def get_flexsn_inference_kernel(
 def get_flexsn_inference_final_state_kernel(
     core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
 ):
-    hash = core_name[-8:]
+    kernel_hash = core_name[-8:]
     num_inputs = info.num_inputs
     num_states = info.num_states
     num_outputs = info.num_outputs
@@ -262,7 +262,7 @@ def get_flexsn_inference_final_state_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="inference_final_state",
-        hash=hash,
+        hash=kernel_hash,
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
@@ -272,7 +272,7 @@ def get_flexsn_inference_final_state_kernel(
         stores=stores,
         tail=tail,
     ).strip()
-    kernel_name = f"flexsn_inference_final_state_kernel_{hash}"
+    kernel_name = f"flexsn_inference_final_state_kernel_{kernel_hash}"
 
     if verbose:
         print("=" * 40, core_name, "=" * 40)
@@ -293,7 +293,7 @@ def get_flexsn_forward_kernel(
     info: FlexSNInfo,
     verbose: bool = False,
 ):
-    hash = core_name[-8:]
+    kernel_hash = core_name[-8:]
     num_inputs = info.num_inputs
     num_states = info.num_states
     fwd_kernel_returns = info.fwd_kernel_returns  # unique
@@ -333,7 +333,7 @@ def get_flexsn_forward_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="forward",
-        hash=hash,
+        hash=kernel_hash,
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
@@ -343,7 +343,7 @@ def get_flexsn_forward_kernel(
         stores=stores,
         tail="",
     ).strip()
-    kernel_name = f"flexsn_forward_kernel_{hash}"
+    kernel_name = f"flexsn_forward_kernel_{kernel_hash}"
 
     if verbose:
         print("=" * 40, core_name, "=" * 40)
@@ -364,7 +364,7 @@ def get_flexsn_backward_kernel(
     info: FlexSNInfo,
     verbose: bool = False,
 ):
-    hash = core_name[-8:]
+    kernel_hash = core_name[-8:]
     num_outputs = info.num_outputs
     num_inputs = info.num_inputs
     num_states = info.num_states
@@ -446,7 +446,7 @@ def get_flexsn_backward_kernel(
         core_str=core_str,
         autotune_restore=autotune_restore,
         kernel_type="backward",
-        hash=hash,
+        hash=kernel_hash,
         kernel_input_signature=kernel_input_signature,
         kernel_output_signature=kernel_output_signature,
         init_state_loads=init_state_loads,
@@ -456,7 +456,7 @@ def get_flexsn_backward_kernel(
         stores=stores,
         tail=tail,
     ).strip()
-    kernel_name = f"flexsn_backward_kernel_{hash}"
+    kernel_name = f"flexsn_backward_kernel_{kernel_hash}"
 
     if verbose:
         print("=" * 40, core_name, "=" * 40)

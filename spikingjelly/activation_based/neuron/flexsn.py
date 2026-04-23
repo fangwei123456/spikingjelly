@@ -813,9 +813,11 @@ class FlexSN(base.MemoryModule):
                 )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
-            self.states = [v[-1] for v in state_seqs]
             if self.store_state_seqs:
+                self.states = [v[-1] for v in state_seqs]
                 self.state_seqs = state_seqs
+            else:
+                self.states = state_seqs
             return output_seqs
 
         else:

@@ -427,8 +427,14 @@ def lowerable_while_loop_scan(
             raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
+        def _empty_output(i: int) -> torch.Tensor:
+            if init_states:
+                ref = init_states[i % len(init_states)]
+                return ref.new_empty((0, *ref.shape))
+            return input_seqs[0].new_empty((0, *input_seqs[0].shape[1:]))
+
         empty_outputs = tuple(
-            state.new_empty((0, *state.shape)) for state in init_states[:num_outputs]
+            _empty_output(i) for i in range(num_outputs)
         )
         empty_states = tuple(
             state.new_empty((0, *state.shape)) for state in init_states
@@ -561,8 +567,17 @@ def lowerable_while_loop_scan_final_state(
             raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
+        def _empty_output(i: int) -> torch.Tensor:
+            if i < len(init_states):
+                ref = init_states[i]
+            elif init_states:
+                ref = init_states[-1]
+            else:
+                ref = input_seqs[0].new_empty(input_seqs[0].shape[1:])
+            return ref.new_empty((0, *ref.shape))
+
         empty_outputs = tuple(
-            state.new_empty((0, *state.shape)) for state in init_states[:num_outputs]
+            _empty_output(i) for i in range(num_outputs)
         )
         return (*empty_outputs, *init_states)
 
@@ -733,7 +748,7 @@ def _register_dynamo_hop() -> None:
             body_args = [*step_inputs, *flat_args[num_inputs:]]
 
             if "source_target" in getattr(speculate_subgraph, "__code__").co_varnames:
-                body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+                _body_r, body_graph, body_lifted_freevars = speculate_subgraph(
                     tx,
                     body_fn,
                     body_args,
@@ -743,7 +758,7 @@ def _register_dynamo_hop() -> None:
                 )
             else:
                 graph_checkpoint, checkpoint = tx.output.graph, tx.copy_graphstate()
-                body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+                _body_r, body_graph, body_lifted_freevars = speculate_subgraph(
                     tx,
                     body_fn,
                     body_args,

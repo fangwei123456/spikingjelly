@@ -312,7 +312,7 @@ def test_compile_fullgraph_lowerable_while_loop_matches_eager(rng):
     eager_out = run_scan(x_eager, v0_eager)
     compiled_out = torch.compile(run_scan, fullgraph=True)(x_compiled, v0_compiled)
 
-    for compiled_tensor, eager_tensor in zip(compiled_out, eager_out):
+    for compiled_tensor, eager_tensor in zip(compiled_out, eager_out, strict=True):
         torch.testing.assert_close(compiled_tensor, eager_tensor)
 
 
@@ -411,11 +411,12 @@ def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerab
     eager_neuron = make_neuron()
     eager_out = eager_neuron(x_eager)
     monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
-    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_neuron = make_neuron()
+    compiled_fn = torch.compile(compiled_neuron, fullgraph=True)
     compiled_out = compiled_fn(x_compiled)
 
     torch.testing.assert_close(compiled_out, eager_out)
-    torch.testing.assert_close(compiled_fn._orig_mod.states[0], eager_neuron.states[0])
+    torch.testing.assert_close(compiled_neuron.states[0], eager_neuron.states[0])
 
 
 # -------------------------------------------------------------------------

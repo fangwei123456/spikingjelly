@@ -490,8 +490,15 @@ def _flexsn_training_final_state_setup_context(ctx, inputs, output):
     ]
     if bundle.training_info.num_inputs == 0:
         raise RuntimeError("FlexSN training requires at least one input sequence.")
-    seq_shape, seq_dtype, seq_device = ctx.input_template_specs[0]
-    ctx.state_seq_template_spec = (seq_shape, seq_dtype, seq_device)
+    seq_len = ctx.input_template_specs[0][0][0]
+    state_start = bundle.training_info.num_outputs
+    state_end = state_start + bundle.training_info.num_states
+    ctx.state_seq_template_specs = [
+        ((seq_len, *state_shape), state_dtype, state_device)
+        for state_shape, state_dtype, state_device in (
+            _template_spec(t) for t in output[state_start:state_end]
+        )
+    ]
     visible = bundle.training_info.num_outputs + bundle.training_info.num_states
     extra_saved = list(output[visible:])
     extra_saved_iter = iter(extra_saved)
@@ -557,9 +564,11 @@ def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | Non
                 )
             )
 
-    state_seq_shape, state_seq_dtype, state_seq_device = ctx.state_seq_template_spec
     state_grads = []
     for i in range(bundle.training_info.num_states):
+        state_seq_shape, state_seq_dtype, state_seq_device = (
+            ctx.state_seq_template_specs[i]
+        )
         final_grad = grad_out[bundle.training_info.num_outputs + i]
         seq_grad = torch.zeros(
             state_seq_shape,

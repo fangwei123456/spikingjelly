@@ -97,16 +97,12 @@ class ThroughputValue:
         if not is_dist_avail_and_initialized():
             return
 
-        backend = dist.get_backend()
-        if backend == "nccl":
-            device = torch.device("cuda", torch.cuda.current_device())
-        else:
-            device = torch.device("cpu")
-        samples = torch.tensor(self.total_samples, device=device, dtype=torch.float64)
-        elapsed = torch.tensor(self.total_time, device=device, dtype=torch.float64)
-        dist.barrier()
-        dist.all_reduce(samples, op=dist.ReduceOp.SUM)
-        dist.all_reduce(elapsed, op=dist.ReduceOp.MAX)
+        samples = reduce_across_processes(
+            self.total_samples, op=dist.ReduceOp.SUM, dtype=torch.float64
+        )
+        elapsed = reduce_across_processes(
+            self.total_time, op=dist.ReduceOp.MAX, dtype=torch.float64
+        )
         self.total_samples = samples.item()
         self.total_time = elapsed.item()
 
@@ -510,12 +506,17 @@ def store_model_weights(model, checkpoint_path, checkpoint_key="model", strict=T
     return output_path
 
 
-def reduce_across_processes(val):
+def reduce_across_processes(val, op=dist.ReduceOp.SUM, dtype=None):
     if not is_dist_avail_and_initialized():
         # nothing to sync, but we still convert to tensor for consistency with the distributed case.
-        return torch.tensor(val)
+        return torch.tensor(val, dtype=dtype)
 
-    t = torch.tensor(val, device="cuda")
+    backend = dist.get_backend()
+    if backend == "nccl":
+        device = torch.device("cuda", torch.cuda.current_device())
+    else:
+        device = torch.device("cpu")
+    t = torch.tensor(val, device=device, dtype=dtype)
     dist.barrier()
-    dist.all_reduce(t)
+    dist.all_reduce(t, op=op)
     return t

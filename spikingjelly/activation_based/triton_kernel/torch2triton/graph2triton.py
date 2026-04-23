@@ -1,10 +1,12 @@
 from typing import Tuple
 import importlib.util
 import linecache
+import os
 from pathlib import Path
 import hashlib
 import sys
 import tempfile
+import threading
 
 import torch
 import torch.fx as fx
@@ -30,6 +32,9 @@ __all__ = [
     "generate_triton_code_str",
     "compile_triton_code_str",
 ]
+
+
+_MODULE_CACHE_LOCK = threading.Lock()
 
 
 def _generate_hash(s: str, w: int = 8) -> str:
@@ -305,33 +310,39 @@ def compile_triton_code_str(
     fpath = _codegen_cache_dir() / f"{kernel_name}_{module_hash}.py"
 
     if not fpath.exists() or fpath.read_text(encoding="utf-8") != triton_code:
-        fpath.write_text(triton_code, encoding="utf-8")
+        with tempfile.NamedTemporaryFile(
+            "w", encoding="utf-8", dir=fpath.parent, delete=False, suffix=".tmp"
+        ) as tmp_file:
+            tmp_file.write(triton_code)
+            tmp_path = Path(tmp_file.name)
+        os.replace(tmp_path, fpath)
     if verbose:
         print(f"Triton code `{kernel_name}` written to {fpath}")
 
     linecache.checkcache(str(fpath))
 
-    module = sys.modules.get(module_name)
-    if module is None:
-        spec = importlib.util.spec_from_file_location(module_name, fpath)
-        if spec is None or spec.loader is None:
-            raise ImportError(f"Could not create import spec for {fpath}")
-        module = importlib.util.module_from_spec(spec)
-        module.__dict__.update(
-            {
-                "triton": triton,
-                "tl": tl,
-            }
-        )
-        sys.modules[module_name] = module
-        spec.loader.exec_module(module)
-    else:
-        module.__dict__.update(
-            {
-                "triton": triton,
-                "tl": tl,
-            }
-        )
+    with _MODULE_CACHE_LOCK:
+        module = sys.modules.get(module_name)
+        if module is None:
+            spec = importlib.util.spec_from_file_location(module_name, fpath)
+            if spec is None or spec.loader is None:
+                raise ImportError(f"Could not create import spec for {fpath}")
+            module = importlib.util.module_from_spec(spec)
+            module.__dict__.update(
+                {
+                    "triton": triton,
+                    "tl": tl,
+                }
+            )
+            sys.modules[module_name] = module
+            spec.loader.exec_module(module)
+        else:
+            module.__dict__.update(
+                {
+                    "triton": triton,
+                    "tl": tl,
+                }
+            )
 
     name_space.update(module.__dict__)
     if kernel_name in module.__dict__:
