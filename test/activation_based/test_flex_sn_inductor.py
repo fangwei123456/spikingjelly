@@ -773,6 +773,46 @@ def test_compile_captures_core_ops_in_fx_graph(rng):
     )
 
 
+def test_inductor_compile_graph_elides_explicit_zero_state_init():
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if not torch.cuda.is_available():
+        pytest.skip("inductor custom-op graph coverage is exercised on CUDA")
+
+    from torch._dynamo import explain
+
+    def core(x, v):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = (h >= v_th).to(h.dtype)
+        return s, h * (1.0 - s)
+
+    def make_flexsn(**kwargs):
+        return FlexSN(
+            core=core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode=kwargs.get("step_mode", "m"),
+            backend="inductor",
+        )
+
+    T, B, C, H, W = 4, 8, 3, 32, 32
+    torch.manual_seed(42)
+    x = torch.randn((T, B, C, H, W), device="cuda")
+    model = spiking_vgg16_bn(
+        spiking_neuron=make_flexsn,
+        step_mode="m",
+    ).cuda().eval()
+
+    with torch.no_grad():
+        explanation = explain(model)(x)
+    targets = [str(node.target) for node in explanation.graphs[0].graph.nodes]
+
+    assert any("sj.flexsn_inductor_inference.default" in target for target in targets)
+    assert not any("zeros_like" in target for target in targets)
+
+
 def test_aot_function_backward_numerical_match(rng):
     """AOTAutograd-compiled backward must produce the same gradients as
     the eager backward."""

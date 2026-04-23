@@ -155,10 +155,28 @@ def _device_guard(tensors: list[torch.Tensor]):
     return contextlib.nullcontext()
 
 
+def _materialize_zero_state_args(
+    info: FlexSNInfo, flat_args: list[torch.Tensor]
+) -> list[torch.Tensor]:
+    if len(flat_args) == info.num_inputs:
+        # In the common reset-before-forward path, FlexSN initial states are
+        # zero tensors matching the per-step input shape. Materialize them
+        # inside the opaque custom op so compile graphs do not need explicit
+        # ``zeros_like`` nodes in front of every neuron layer.
+        if info.num_inputs == 0:
+            raise ValueError("FlexSN custom ops require at least one input sequence.")
+        seq0 = flat_args[0]
+        state_template = seq0[0]
+        zero_states = [torch.zeros_like(state_template) for _ in range(info.num_states)]
+        return [*flat_args, *zero_states]
+    return flat_args
+
+
 def _flexsn_inductor_inference_impl(
     bundle: FlexSNKernelHandle, flat_args: list[torch.Tensor]
 ) -> list[torch.Tensor]:
-    args = [arg.contiguous() for arg in flat_args]
+    args = _materialize_zero_state_args(bundle.inference_info, flat_args)
+    args = [arg.contiguous() for arg in args]
     with _device_guard(args):
         return list(
             flexsn_inference(
@@ -172,7 +190,8 @@ def _flexsn_inductor_inference_impl(
 def _flexsn_inductor_training_impl(
     bundle: FlexSNKernelHandle, flat_args: list[torch.Tensor]
 ) -> list[torch.Tensor]:
-    args = [arg.contiguous() for arg in flat_args]
+    args = _materialize_zero_state_args(bundle.training_info, flat_args)
+    args = [arg.contiguous() for arg in args]
     with _device_guard(args):
         return list(
             flexsn_forward(
@@ -272,6 +291,11 @@ def _flexsn_inductor_backward_fake(
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
+    if len(input_templates) == bundle.training_info.num_inputs:
+        return [
+            input_templates[i].new_empty(input_templates[i].shape)
+            for i in range(bundle.training_info.num_inputs)
+        ]
     seq_grads = [
         input_templates[i].new_empty(input_templates[i].shape)
         for i in range(bundle.training_info.num_inputs)
@@ -331,6 +355,8 @@ def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
                 input_templates,
             )
         )
+        if len(grads) != len(ctx.input_template_specs):
+            grads = grads[: len(ctx.input_template_specs)]
     finally:
         release_active_flexsn_kernel_handle(ctx.handle)
     return None, grads
