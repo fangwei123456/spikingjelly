@@ -817,7 +817,7 @@ def _register_dynamo_hop() -> None:
         return
     except Exception as e:
         warnings.warn(
-            f"FlexSN HOP Dynamo registration failed unexpectedly: {e}",
+            f"FlexSN HOP Dynamo registration failed unexpectedly: {type(e).__name__}: {e}",
             stacklevel=2,
         )
         return

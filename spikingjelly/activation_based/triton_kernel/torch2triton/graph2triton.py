@@ -76,8 +76,15 @@ def _codegen_cache_dir() -> Path:
             cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             if uid is not None:
                 st = cache_dir.stat()
-                if st.st_uid != uid or stat.S_IMODE(st.st_mode) & 0o077:
+                mode = stat.S_IMODE(st.st_mode)
+                if (
+                    st.st_uid != uid
+                    or not (mode & stat.S_IWUSR)
+                    or (mode & 0o022)
+                ):
                     continue
+            with tempfile.NamedTemporaryFile(dir=cache_dir, delete=True):
+                pass
             return cache_dir
         except OSError as e:
             last_error = e

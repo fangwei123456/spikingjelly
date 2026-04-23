@@ -49,6 +49,30 @@ class _NoRunningStatsBlock(nn.Module):
         return self.bn(self.conv(x))
 
 
+class _SharedEvalConvBnBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(3, 8, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(8)
+
+    def forward(self, x):
+        a = self.bn(self.conv(x))
+        b = self.bn(self.conv(x))
+        return a + b
+
+
+class _SharedTrainConvBnBlock(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(3, 8, kernel_size=3, stride=1, padding=1, bias=False)
+        self.bn = nn.BatchNorm2d(8)
+
+    def forward(self, x):
+        a = self.bn(self.conv(x))
+        b = self.bn(self.conv(x))
+        return a + b
+
+
 def test_fuse_conv_bn_eval_modules_matches_step_block():
     torch.manual_seed(0)
     model = _StepBlock().eval()
@@ -86,6 +110,20 @@ def test_fuse_conv_bn_eval_modules_rejects_missing_running_stats():
         assert "track running stats" in str(e)
     else:
         raise AssertionError("Expected ValueError for BatchNorm without running stats")
+
+
+def test_fuse_conv_bn_eval_modules_handles_shared_conv_bn_pairs():
+    torch.manual_seed(0)
+    model = _SharedEvalConvBnBlock().eval()
+    x = torch.randn(2, 3, 16, 16)
+
+    with torch.no_grad():
+        y_ref = model(x)
+        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        y_fused = fused(x)
+
+    torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
+    assert not any(isinstance(m, nn.BatchNorm2d) for m in fused.modules())
 
 
 def test_pack_conv_bn_train_modules_matches_step_block():
@@ -184,3 +222,22 @@ def test_train_conv_bn_wrapper_keeps_conv_hooks_active():
         handle.remove()
 
     assert hook_calls == [((8, 3, 16, 16), (8, 8, 16, 16))]
+
+
+def test_pack_conv_bn_train_modules_handles_shared_conv_bn_pairs():
+    torch.manual_seed(0)
+    model = _SharedTrainConvBnBlock().train()
+    packed = functional.pack_conv_bn_train_modules(copy.deepcopy(model))
+    x = torch.randn(2, 3, 16, 16, requires_grad=True)
+    x_packed = x.detach().clone().requires_grad_(True)
+
+    y_ref = model(x)
+    y_packed = packed(x_packed)
+    torch.testing.assert_close(y_packed, y_ref, atol=1e-5, rtol=1e-4)
+
+    loss_ref = y_ref.square().mean()
+    loss_packed = y_packed.square().mean()
+    loss_ref.backward()
+    loss_packed.backward()
+
+    torch.testing.assert_close(x_packed.grad, x.grad, atol=1e-5, rtol=1e-4)

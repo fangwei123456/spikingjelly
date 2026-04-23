@@ -52,6 +52,21 @@ def _replace_node_module(
     setattr(modules[parent], name, new_module)
 
 
+def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
+    pair_to_nodes = {}
+    for pattern in patterns:
+        for node in list(fx_model.graph.nodes):
+            if not _matches_module_pattern(pattern, node, modules):
+                continue
+            conv_node = node.args[0]
+            assert isinstance(conv_node, fx.Node)
+            if len(conv_node.users) > 1:
+                continue
+            pair = (conv_node.target, node.target)
+            pair_to_nodes.setdefault(pair, []).append(node)
+    return pair_to_nodes
+
+
 class _EvalFusionTracer(fx.Tracer):
     def is_leaf_module(self, m: nn.Module, module_qualified_name: str) -> bool:
         if isinstance(
@@ -180,24 +195,24 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
         (layer.Conv3d, layer.BatchNorm3d),
     ]
 
-    for pattern in patterns:
-        for node in list(fx_model.graph.nodes):
-            if not _matches_module_pattern(pattern, node, modules):
-                continue
-            if len(node.args[0].users) > 1:
-                continue
-            conv = modules[node.args[0].target]
-            bn = modules[node.target]
-            if (
-                getattr(bn, "track_running_stats", True) is False
-                or bn.running_mean is None
-                or bn.running_var is None
-            ):
-                raise ValueError(
-                    f"Cannot fuse {node.target}: BatchNorm must track running stats."
-                )
-            fused_conv = fuse_conv_bn_eval(conv, bn)
-            _replace_node_module(node.args[0], modules, fused_conv)
+    for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
+        fx_model, modules, patterns
+    ).items():
+        conv = modules[conv_target]
+        bn = modules[bn_target]
+        if (
+            getattr(bn, "track_running_stats", True) is False
+            or bn.running_mean is None
+            or bn.running_var is None
+        ):
+            raise ValueError(
+                f"Cannot fuse {bn_target}: BatchNorm must track running stats."
+            )
+        fused_conv = fuse_conv_bn_eval(conv, bn)
+        conv_node = matched_nodes[0].args[0]
+        assert isinstance(conv_node, fx.Node)
+        _replace_node_module(conv_node, modules, fused_conv)
+        for node in matched_nodes:
             node.replace_all_uses_with(node.args[0])
             fx_model.graph.erase_node(node)
 
@@ -259,22 +274,24 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
         (layer.Conv3d, layer.BatchNorm3d),
     ]
 
-    for pattern in patterns:
-        for node in list(fx_model.graph.nodes):
-            if not _matches_module_pattern(pattern, node, modules):
-                continue
-            if len(node.args[0].users) > 1:
-                continue
-            conv = modules[node.args[0].target]
-            bn = modules[node.target]
-            if (
-                isinstance(conv, (layer.Conv1d, layer.Conv2d, layer.Conv3d))
-                and isinstance(bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d))
-                and getattr(conv, "step_mode", None) != getattr(bn, "step_mode", None)
-            ):
-                continue
-            packed = _TrainConvBnWrapper(conv, bn)
-            _replace_node_module(node.args[0], modules, packed)
+    for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
+        fx_model, modules, patterns
+    ).items():
+        conv = modules[conv_target]
+        bn = modules[bn_target]
+        if (
+            isinstance(conv, (layer.Conv1d, layer.Conv2d, layer.Conv3d))
+            and isinstance(
+                bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d)
+            )
+            and getattr(conv, "step_mode", None) != getattr(bn, "step_mode", None)
+        ):
+            continue
+        packed = _TrainConvBnWrapper(conv, bn)
+        conv_node = matched_nodes[0].args[0]
+        assert isinstance(conv_node, fx.Node)
+        _replace_node_module(conv_node, modules, packed)
+        for node in matched_nodes:
             node.replace_all_uses_with(node.args[0])
             fx_model.graph.erase_node(node)
 
