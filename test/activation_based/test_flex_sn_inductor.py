@@ -381,6 +381,36 @@ def test_hop_backend_store_state_seqs_false_matches_torch_backend(rng):
     torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
 
 
+def test_hop_backend_zero_length_sequence_matches_torch_backend():
+    x = torch.randn(0, 8)
+
+    hop_neuron = FlexSN(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(8), torch.zeros(8)),
+    )
+    torch_neuron = FlexSN(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        store_state_seqs=False,
+    )
+
+    hop_out = hop_neuron(x)
+    torch_out = torch_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
+
+
 def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerable_while_loop(
     rng, monkeypatch
 ):

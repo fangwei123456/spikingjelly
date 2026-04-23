@@ -726,9 +726,9 @@ def _register_dynamo_hop() -> None:
             ]
             flat_args = args[4:]
             expected = num_inputs + num_states
-            if len(flat_args) != expected:
+            if len(flat_args) < expected:
                 raise hop_vars.unimplemented(
-                    f"flex_sn_scan expected {expected} tensor args, got {len(flat_args)}"
+                    f"flex_sn_scan expected at least {expected} tensor args, got {len(flat_args)}"
                 )
             if num_inputs == 0:
                 raise hop_vars.unimplemented(
@@ -741,10 +741,25 @@ def _register_dynamo_hop() -> None:
 
             from torch._dynamo.variables.constant import ConstantVariable as _ConstantVariable
 
-            step_inputs = [
-                arg.call_method(tx, "__getitem__", [_ConstantVariable(0)], {})
-                for arg in flat_args[:num_inputs]
-            ]
+            def _make_step_template(arg: TensorVariable):
+                example_value = arg.as_proxy().node.meta["example_value"]
+                if example_value.shape[0] > 0:
+                    return arg.call_method(tx, "__getitem__", [_ConstantVariable(0)], {})
+
+                shape_without_t = tuple(example_value.shape[1:])
+                proxy = tx.output.create_proxy(
+                    "call_function",
+                    torch.ops.aten.new_empty.default,
+                    args=(arg.as_proxy(), shape_without_t),
+                    kwargs={},
+                )
+                return wrap_fx_proxy(
+                    tx=tx,
+                    proxy=proxy,
+                    example_value=example_value.new_empty(shape_without_t),
+                )
+
+            step_inputs = [_make_step_template(arg) for arg in flat_args[:num_inputs]]
             body_args = [*step_inputs, *flat_args[num_inputs:]]
 
             if "source_target" in getattr(speculate_subgraph, "__code__").co_varnames:

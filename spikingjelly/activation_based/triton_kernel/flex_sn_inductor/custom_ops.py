@@ -203,8 +203,9 @@ def _materialize_zero_state_args(
         if info.num_inputs == 0:
             raise ValueError("FlexSN custom ops require at least one input sequence.")
         seq0 = flat_args[0]
-        state_template = seq0[0]
-        zero_states = [torch.zeros_like(state_template) for _ in range(info.num_states)]
+        zero_states = [
+            seq0.new_zeros(seq0.shape[1:]) for _ in range(info.num_states)
+        ]
         return [*flat_args, *zero_states]
     return flat_args
 
