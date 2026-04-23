@@ -538,6 +538,11 @@ def lowerable_while_loop_scan(
         step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
         results = core_fn(*step_inputs, *states, *lifted_args)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        if len(results) != len(first_results):
+            raise ValueError(
+                f"core returned {len(results)} values at runtime, "
+                f"expected {len(first_results)}"
+            )
         outputs = tuple(_ensure_contiguous(x) for x in results[:num_outputs])
         next_states = tuple(_ensure_contiguous(x) for x in results[num_outputs:])
         next_pending_inputs = tuple(
@@ -545,11 +550,11 @@ def lowerable_while_loop_scan(
         )
         next_output_acc = tuple(
             _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs)
+            for buf, out in zip(outputs_acc, outputs, strict=True)
         )
         next_state_acc = tuple(
             _append_to_tail(buf, state)
-            for buf, state in zip(states_acc, next_states)
+            for buf, state in zip(states_acc, next_states, strict=True)
         )
         return (
             t + 1,
@@ -684,6 +689,11 @@ def lowerable_while_loop_scan_final_state(
         step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
         results = core_fn(*step_inputs, *states, *lifted_args)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        if len(results) != len(first_results):
+            raise ValueError(
+                f"core returned {len(results)} values at runtime, "
+                f"expected {len(first_results)}"
+            )
         outputs = tuple(_ensure_contiguous(x) for x in results[:num_outputs])
         next_states = tuple(_ensure_contiguous(x) for x in results[num_outputs:])
         next_pending_inputs = tuple(
@@ -691,7 +701,7 @@ def lowerable_while_loop_scan_final_state(
         )
         next_output_acc = tuple(
             _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs)
+            for buf, out in zip(outputs_acc, outputs, strict=True)
         )
         return (
             t + 1,

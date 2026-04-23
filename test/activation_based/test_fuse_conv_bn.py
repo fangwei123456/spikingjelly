@@ -46,7 +46,7 @@ def test_fuse_conv_bn_eval_modules_matches_step_block():
 
     with torch.no_grad():
         y_ref = model(x)
-        fused = functional.fuse_conv_bn_eval_modules(model)
+        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
         y_fused = fused(x)
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)

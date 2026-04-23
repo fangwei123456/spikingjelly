@@ -176,6 +176,25 @@ def _last_state_or_current(
     return current_state if state_seq.shape[0] == 0 else state_seq[-1]
 
 
+def _core_requires_grad(core: Callable) -> bool:
+    if isinstance(core, torch.nn.Module):
+        for tensor in [*core.parameters(), *core.buffers()]:
+            if tensor.requires_grad:
+                return True
+
+    closure = getattr(core, "__closure__", None)
+    if closure is None:
+        return False
+    for cell in closure:
+        try:
+            cell_value = cell.cell_contents
+        except ValueError:
+            continue
+        if isinstance(cell_value, torch.Tensor) and cell_value.requires_grad:
+            return True
+    return False
+
+
 def _validate_scan_backend_contract(
     core: Callable,
     num_inputs: int,
@@ -790,11 +809,14 @@ class FlexSN(base.MemoryModule):
 
         elif self.backend == "inductor":
             result_has_state_seqs = self.store_state_seqs
-            _no_grad = not torch.is_grad_enabled() or not any(
-                a.requires_grad for a in (
-                    *args,
-                    *([] if self.states is None else self.states),
+            _no_grad = (not torch.is_grad_enabled()) and not (
+                any(
+                    a.requires_grad for a in (
+                        *args,
+                        *([] if self.states is None else self.states),
+                    )
                 )
+                or _core_requires_grad(self.core)
             )
             use_implicit_zero_states = (
                 self.states is None and _no_grad and _can_elide_zero_state_inputs(self)
@@ -880,7 +902,11 @@ class FlexSN(base.MemoryModule):
             raise ValueError(f"Unsupported backend: {self.backend}")
 
     def forward(self, *args):
-        can_elide = _can_elide_zero_state_inputs(self) and not torch.is_grad_enabled()
+        can_elide = (
+            self.step_mode == "m"
+            and _can_elide_zero_state_inputs(self)
+            and not torch.is_grad_enabled()
+        )
         if self.states is None and not can_elide:
             self.states = self.init_states(self.num_states, self.step_mode, *args)
         output = super().forward(*args)
