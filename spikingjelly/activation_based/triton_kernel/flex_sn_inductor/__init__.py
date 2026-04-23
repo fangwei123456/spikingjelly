@@ -3,9 +3,12 @@ try:
         flex_sn_scan,
         FlexSNScan,
         eager_scan,
+        eager_scan_final_state,
         lowerable_scan,
+        lowerable_scan_final_state,
         lowerable_scan_available,
         lowerable_while_loop_scan,
+        lowerable_while_loop_scan_final_state,
         lowerable_while_loop_available,
     )
 except BaseException as e:
@@ -15,7 +18,10 @@ except BaseException as e:
     flex_sn_scan = None
     FlexSNScan = None
     eager_scan = None
+    eager_scan_final_state = None
     lowerable_scan = None
+    lowerable_scan_final_state = None
     lowerable_scan_available = None
     lowerable_while_loop_scan = None
+    lowerable_while_loop_scan_final_state = None
     lowerable_while_loop_available = None

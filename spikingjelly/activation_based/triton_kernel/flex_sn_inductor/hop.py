@@ -193,6 +193,61 @@ def eager_scan(
     return (*output_seqs, *state_seqs)
 
 
+def eager_scan_final_state(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    """Variant of :func:`eager_scan` that returns output sequences followed by
+    final states only.
+
+    This is used by :class:`FlexSN` when ``store_state_seqs=False`` so the HOP
+    backend does not materialize full state sequences only to discard them.
+    """
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+
+    inputs_seq = flat_args[:num_inputs]
+    states = list(flat_args[num_inputs:expected])
+    lifted_args = tuple(flat_args[expected:])
+
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    T = inputs_seq[0].shape[0]
+    for i, x in enumerate(inputs_seq):
+        if x.shape[0] != T:
+            raise ValueError(
+                f"input {i} has leading dim {x.shape[0]}, expected {T}"
+            )
+
+    output_buffers = [[] for _ in range(num_outputs)]
+
+    for t in range(T):
+        step_inputs = tuple(x[t] for x in inputs_seq)
+        results = core_fn(*step_inputs, *states, *lifted_args)
+        if len(results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+        outputs = results[:num_outputs]
+        states = list(results[num_outputs:])
+        for i, y in enumerate(outputs):
+            output_buffers[i].append(y)
+
+    output_seqs = tuple(torch.stack(buf, dim=0) for buf in output_buffers)
+    return (*output_seqs, *tuple(states))
+
+
 def lowerable_scan(
     core_fn: Callable,
     num_inputs: int,
@@ -268,6 +323,70 @@ def lowerable_scan(
     )
     result = tuple(result)
     return result[num_states:]
+
+
+def lowerable_scan_final_state(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    if _torch_scan_op is None or _wrap_scan_combine_fn_flat is None:
+        raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
+
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    input_seqs = flat_args[:num_inputs]
+    init_states = flat_args[num_inputs:expected]
+    lifted_args = tuple(flat_args[expected:])
+
+    def combine_fn(carry, step_inputs):
+        carry = tuple(carry)
+        step_inputs = tuple(step_inputs)
+        results = core_fn(*step_inputs, *carry, *lifted_args)
+        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        if len(results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(results)} values, "
+                f"expected num_outputs + num_states = {num_outputs + num_states}"
+            )
+        outputs = list(results[:num_outputs])
+        next_states = list(results[num_outputs:])
+        return next_states, outputs
+
+    leaves_init = list(init_states)
+    leaves_xs = list(input_seqs)
+    _, spec_init = pytree.tree_flatten(leaves_init)
+    _, spec_xs = pytree.tree_flatten(leaves_xs)
+
+    wrapped_combine_fn = functools.partial(
+        _wrap_scan_combine_fn_flat,
+        combine_fn=combine_fn,
+        spec_init=spec_init,
+        spec_xs=spec_xs,
+        num_init_leaves=len(leaves_init),
+        num_inp_leaves=len(leaves_xs),
+    )
+
+    result = _torch_scan_op(
+        wrapped_combine_fn,
+        leaves_init,
+        leaves_xs,
+        additional_inputs=(),
+    )
+    result = tuple(result)
+    final_states = result[:num_states]
+    output_seqs = result[num_states:]
+    return (*output_seqs, *final_states)
 
 
 def lowerable_while_loop_scan(
@@ -407,6 +526,123 @@ def lowerable_while_loop_scan(
     final_output_buffers = final[states_end:outputs_end]
     final_state_buffers = final[outputs_end:]
     return (*final_output_buffers, *final_state_buffers)
+
+
+def lowerable_while_loop_scan_final_state(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    if _torch_while_loop is None:
+        raise RuntimeError("PyTorch while_loop HOP is unavailable in this environment")
+
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    input_seqs = tuple(flat_args[:num_inputs])
+    init_states = tuple(flat_args[num_inputs:expected])
+    lifted_args = tuple(flat_args[expected:])
+
+    def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.contiguous()
+
+    T = input_seqs[0].shape[0]
+    for i, x in enumerate(input_seqs):
+        if x.shape[0] != T:
+            raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
+
+    if T == 0:
+        empty_outputs = tuple(
+            state.new_empty((0, *state.shape)) for state in init_states[:num_outputs]
+        )
+        return (*empty_outputs, *init_states)
+
+    input_seqs = tuple(_ensure_contiguous(seq) for seq in input_seqs)
+    init_states = tuple(_ensure_contiguous(state) for state in init_states)
+
+    first_step_inputs = tuple(_ensure_contiguous(x[0]) for x in input_seqs)
+    first_results = core_fn(*first_step_inputs, *init_states, *lifted_args)
+    first_results = (
+        tuple(first_results)
+        if not isinstance(first_results, torch.Tensor)
+        else (first_results,)
+    )
+    if len(first_results) != num_outputs + num_states:
+        raise ValueError(
+            f"core returned {len(first_results)} values, "
+            f"expected num_outputs + num_states = {num_outputs + num_states}"
+        )
+
+    first_outputs = tuple(_ensure_contiguous(x) for x in first_results[:num_outputs])
+    first_states = tuple(_ensure_contiguous(x) for x in first_results[num_outputs:])
+
+    def _append_to_tail(buffer: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
+        return torch.cat((buffer[1:], _ensure_contiguous(value).unsqueeze(0)), dim=0).contiguous()
+
+    def _shift_input_queue(queue: torch.Tensor) -> torch.Tensor:
+        return torch.cat((queue[1:], queue[-1:].clone()), dim=0).contiguous()
+
+    output_buffers = tuple(
+        _append_to_tail(out.new_zeros((T, *out.shape)), out) for out in first_outputs
+    )
+    pending_inputs = tuple(_shift_input_queue(seq) for seq in input_seqs)
+
+    t0 = torch.tensor(1, dtype=torch.int64, device=first_outputs[0].device)
+
+    def cond_fn(t, *carry):
+        return t < T
+
+    def body_fn(t, *carry):
+        pending_seq_end = num_inputs
+        states_end = pending_seq_end + num_states
+
+        step_input_queues = carry[:pending_seq_end]
+        states = carry[pending_seq_end:states_end]
+        outputs_acc = carry[states_end:]
+
+        step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
+        results = core_fn(*step_inputs, *states, *lifted_args)
+        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        outputs = tuple(_ensure_contiguous(x) for x in results[:num_outputs])
+        next_states = tuple(_ensure_contiguous(x) for x in results[num_outputs:])
+        next_pending_inputs = tuple(
+            _shift_input_queue(queue) for queue in step_input_queues
+        )
+        next_output_acc = tuple(
+            _append_to_tail(buf, out) for buf, out in zip(outputs_acc, outputs)
+        )
+        return (
+            t + 1,
+            *next_pending_inputs,
+            *next_states,
+            *next_output_acc,
+        )
+
+    final = _torch_while_loop(
+        cond_fn,
+        body_fn,
+        (
+            t0,
+            *pending_inputs,
+            *first_states,
+            *output_buffers,
+        ),
+    )
+    final = tuple(final)
+    pending_seq_end = 1 + num_inputs
+    states_end = pending_seq_end + num_states
+    final_states = final[pending_seq_end:states_end]
+    final_output_buffers = final[states_end:]
+    return (*final_output_buffers, *final_states)
 
 
 flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)

@@ -350,6 +350,74 @@ def test_compile_fullgraph_hop_backend_matches_eager_with_lowerable_while_loop(
     torch.testing.assert_close(compiled_out, eager_out)
 
 
+def test_hop_backend_store_state_seqs_false_matches_torch_backend(rng):
+    T, N = 4, 8
+    x = torch.randn(T, N, generator=rng)
+
+    hop_neuron = FlexSN(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(N), torch.zeros(N)),
+    )
+    torch_neuron = FlexSN(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        store_state_seqs=False,
+    )
+
+    hop_out = hop_neuron(x)
+    torch_out = torch_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
+
+
+def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerable_while_loop(
+    rng, monkeypatch
+):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            store_state_seqs=False,
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_neuron = make_neuron()
+    eager_out = eager_neuron(x_eager)
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+    torch.testing.assert_close(compiled_fn._orig_mod.states[0], eager_neuron.states[0])
+
+
 # -------------------------------------------------------------------------
 # M2: backward / autograd tests
 # -------------------------------------------------------------------------

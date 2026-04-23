@@ -15,10 +15,19 @@ except BaseException as e:
 
 try:
     from ..triton_kernel.flex_sn_inductor import eager_scan as _flexsn_eager_scan
+    from ..triton_kernel.flex_sn_inductor import (
+        eager_scan_final_state as _flexsn_eager_scan_final_state,
+    )
     from ..triton_kernel.flex_sn_inductor import flex_sn_scan as _flexsn_hop_scan
     from ..triton_kernel.flex_sn_inductor import lowerable_scan as _flexsn_lowerable_scan
     from ..triton_kernel.flex_sn_inductor import (
+        lowerable_scan_final_state as _flexsn_lowerable_scan_final_state,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
         lowerable_while_loop_scan as _flexsn_lowerable_while_loop_scan,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
     )
     from ..triton_kernel.flex_sn_inductor import (
         lowerable_scan_available as _flexsn_lowerable_scan_available,
@@ -29,10 +38,13 @@ try:
 except BaseException as e:
     logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
     _flexsn_eager_scan = None
+    _flexsn_eager_scan_final_state = None
     _flexsn_hop_scan = None
     _flexsn_lowerable_scan = None
+    _flexsn_lowerable_scan_final_state = None
     _flexsn_lowerable_scan_available = None
     _flexsn_lowerable_while_loop_scan = None
+    _flexsn_lowerable_while_loop_scan_final_state = None
     _flexsn_lowerable_while_loop_available = None
 
 
@@ -87,6 +99,7 @@ def _run_hop_scan(
     num_inputs: int,
     num_states: int,
     num_outputs: int,
+    store_state_seqs: bool,
     *flat_args: torch.Tensor,
 ):
     if _flexsn_eager_scan is None:
@@ -114,11 +127,25 @@ def _run_hop_scan(
     )
 
     if use_lowerable_while_loop:
-        scan_impl = _flexsn_lowerable_while_loop_scan
+        scan_impl = (
+            _flexsn_lowerable_while_loop_scan
+            if store_state_seqs
+            else _flexsn_lowerable_while_loop_scan_final_state
+        )
     elif use_lowerable_scan:
-        scan_impl = _flexsn_lowerable_scan
+        scan_impl = (
+            _flexsn_lowerable_scan
+            if store_state_seqs
+            else _flexsn_lowerable_scan_final_state
+        )
     elif _is_compiling() or _flexsn_hop_scan is None:
-        scan_impl = _flexsn_eager_scan
+        scan_impl = (
+            _flexsn_eager_scan
+            if store_state_seqs
+            else _flexsn_eager_scan_final_state
+        )
+    elif not store_state_seqs:
+        scan_impl = _flexsn_eager_scan_final_state
     else:
         scan_impl = _flexsn_hop_scan
 
@@ -700,14 +727,18 @@ class FlexSN(base.MemoryModule):
                 self.num_inputs,
                 self.num_states,
                 self.num_outputs,
+                self.store_state_seqs,
                 *args,
                 *self.states,
             )
             output_seqs = list(result_seqs[: self.num_outputs])
-            state_seqs = list(result_seqs[self.num_outputs :])
-            self.states = [v[-1] for v in state_seqs]
+            state_results = list(result_seqs[self.num_outputs :])
             if self.store_state_seqs:
+                state_seqs = state_results
+                self.states = [v[-1] for v in state_seqs]
                 self.state_seqs = state_seqs
+            else:
+                self.states = state_results
             return output_seqs
 
         elif self.backend == "inductor":
