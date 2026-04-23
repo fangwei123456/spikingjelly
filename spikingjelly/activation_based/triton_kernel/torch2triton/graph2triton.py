@@ -372,7 +372,15 @@ def compile_triton_code_str(
         ) as tmp_file:
             tmp_file.write(triton_code)
             tmp_path = Path(tmp_file.name)
-        os.replace(tmp_path, fpath)
+        try:
+            os.replace(tmp_path, fpath)
+            try:
+                os.chmod(fpath, 0o600)
+            except OSError:
+                pass
+        except BaseException:
+            tmp_path.unlink(missing_ok=True)
+            raise
     if verbose:
         print(f"Triton code `{kernel_name}` written to {fpath}")
 

@@ -896,7 +896,7 @@ def _register_dynamo_hop() -> None:
             step_inputs = [_make_step_template(arg) for arg in flat_args[:num_inputs]]
             body_args = [*step_inputs, *flat_args[num_inputs:]]
 
-            _body_r, body_graph, body_lifted_freevars = speculate_subgraph(
+            _body_r, body_graph, body_lifted_freevars, _parent_proxy_map = speculate_subgraph(
                 tx,
                 body_fn,
                 body_args,
