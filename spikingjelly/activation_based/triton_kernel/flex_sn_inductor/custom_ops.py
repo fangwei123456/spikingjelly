@@ -183,6 +183,15 @@ def _device_guard(tensors: list[torch.Tensor]):
     return contextlib.nullcontext()
 
 
+def _visible_fwd_return_count(info: FlexSNInfo) -> int:
+    return info.num_outputs + info.num_states
+
+
+def _extra_saved_return_indices(info: FlexSNInfo) -> list[int]:
+    visible = _visible_fwd_return_count(info)
+    return [idx for idx in info.c2k_return_mapping if idx >= visible]
+
+
 def _materialize_zero_state_args(
     info: FlexSNInfo, flat_args: list[torch.Tensor]
 ) -> list[torch.Tensor]:
@@ -256,8 +265,10 @@ def _flexsn_inductor_training_final_state_impl(
         full_returns[info.num_outputs : info.num_outputs + info.num_states]
     )
     final_states = [state_seq[-1] for state_seq in state_seqs]
-    saved_tensors = [full_returns[i] for i in info.c2k_return_mapping]
-    return [*visible_outputs, *final_states, *saved_tensors]
+    extra_saved_tensors = [
+        full_returns[i] for i in _extra_saved_return_indices(info)
+    ]
+    return [*visible_outputs, *final_states, *extra_saved_tensors]
 
 
 def _flexsn_inductor_backward_impl(
@@ -396,12 +407,12 @@ def _flexsn_inductor_training_final_state_fake(
         state_template.new_empty(state_template.shape)
         for _ in range(bundle.training_info.num_states)
     ]
-    saved_tensors = _make_seq_outputs_like(
+    extra_saved_tensors = _make_seq_outputs_like(
         bundle.training_info,
         flat_args,
-        len(bundle.training_info.c2k_return_mapping),
+        len(_extra_saved_return_indices(bundle.training_info)),
     )
-    return [*seq_outputs, *final_states, *saved_tensors]
+    return [*seq_outputs, *final_states, *extra_saved_tensors]
 
 
 @torch.library.custom_op("sj::flexsn_inductor_backward", mutates_args=())
@@ -482,7 +493,15 @@ def _flexsn_training_final_state_setup_context(ctx, inputs, output):
     seq_shape, seq_dtype, seq_device = ctx.input_template_specs[0]
     ctx.state_seq_template_spec = (seq_shape, seq_dtype, seq_device)
     visible = bundle.training_info.num_outputs + bundle.training_info.num_states
-    ctx.save_for_backward(*list(output[visible:]))
+    extra_saved = list(output[visible:])
+    extra_saved_iter = iter(extra_saved)
+    saved = []
+    for idx in bundle.training_info.c2k_return_mapping:
+        if idx < visible:
+            saved.append(output[idx])
+        else:
+            saved.append(next(extra_saved_iter))
+    ctx.save_for_backward(*saved)
 
 
 def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
