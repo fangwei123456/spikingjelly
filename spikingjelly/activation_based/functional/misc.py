@@ -54,6 +54,7 @@ def _replace_node_module(
 
 def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
     pair_to_nodes = {}
+    conv_to_bn_targets = {}
     for pattern in patterns:
         for node in list(fx_model.graph.nodes):
             if not _matches_module_pattern(pattern, node, modules):
@@ -64,7 +65,21 @@ def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
                 continue
             pair = (conv_node.target, node.target)
             pair_to_nodes.setdefault(pair, []).append(node)
-    return pair_to_nodes
+            conv_to_bn_targets.setdefault(conv_node.target, set()).add(node.target)
+
+    ambiguous_conv_targets = {
+        conv_target
+        for conv_target, bn_targets in conv_to_bn_targets.items()
+        if len(bn_targets) > 1
+    }
+    if not ambiguous_conv_targets:
+        return pair_to_nodes
+
+    return {
+        pair: matched_nodes
+        for pair, matched_nodes in pair_to_nodes.items()
+        if pair[0] not in ambiguous_conv_targets
+    }
 
 
 class _EvalFusionTracer(fx.Tracer):
