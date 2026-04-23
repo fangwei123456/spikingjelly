@@ -452,6 +452,30 @@ def lowerable_scan_final_state(
     return (*output_seqs, *final_states)
 
 
+def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
+    if tensor.dim() >= 4:
+        return tensor.clone(memory_format=torch.contiguous_format)
+    return tensor.contiguous()
+
+
+def _carry_device(*tensor_groups) -> torch.device:
+    for group in tensor_groups:
+        for tensor in group:
+            return tensor.device
+    return torch.device("cpu")
+
+
+def _append_to_tail(buffer: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
+    return torch.cat(
+        (buffer[1:], _ensure_contiguous(value).unsqueeze(0)),
+        dim=0,
+    ).contiguous()
+
+
+def _shift_input_queue(queue: torch.Tensor) -> torch.Tensor:
+    return torch.cat((queue[1:], queue[-1:].clone()), dim=0).contiguous()
+
+
 def lowerable_while_loop_scan(
     core_fn: Callable,
     num_inputs: int,
@@ -480,17 +504,6 @@ def lowerable_while_loop_scan(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-
-    def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
-        if tensor.dim() >= 4:
-            return tensor.clone(memory_format=torch.contiguous_format)
-        return tensor.contiguous()
-
-    def _carry_device(*tensor_groups) -> torch.device:
-        for group in tensor_groups:
-            for tensor in group:
-                return tensor.device
-        return torch.device("cpu")
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -541,12 +554,6 @@ def lowerable_while_loop_scan(
 
     first_outputs = tuple(_ensure_contiguous(x) for x in first_results[:num_outputs])
     first_states = tuple(_ensure_contiguous(x) for x in first_results[num_outputs:])
-    def _append_to_tail(buffer: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
-        return torch.cat((buffer[1:], _ensure_contiguous(value).unsqueeze(0)), dim=0).contiguous()
-
-    def _shift_input_queue(queue: torch.Tensor) -> torch.Tensor:
-        return torch.cat((queue[1:], queue[-1:].clone()), dim=0).contiguous()
-
     output_buffers = tuple(
         _append_to_tail(out.new_zeros((T, *out.shape)), out) for out in first_outputs
     )
@@ -655,17 +662,6 @@ def lowerable_while_loop_scan_final_state(
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
 
-    def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
-        if tensor.dim() >= 4:
-            return tensor.clone(memory_format=torch.contiguous_format)
-        return tensor.contiguous()
-
-    def _carry_device(*tensor_groups) -> torch.device:
-        for group in tensor_groups:
-            for tensor in group:
-                return tensor.device
-        return torch.device("cpu")
-
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
         if x.shape[0] != T:
@@ -711,12 +707,6 @@ def lowerable_while_loop_scan_final_state(
 
     first_outputs = tuple(_ensure_contiguous(x) for x in first_results[:num_outputs])
     first_states = tuple(_ensure_contiguous(x) for x in first_results[num_outputs:])
-
-    def _append_to_tail(buffer: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
-        return torch.cat((buffer[1:], _ensure_contiguous(value).unsqueeze(0)), dim=0).contiguous()
-
-    def _shift_input_queue(queue: torch.Tensor) -> torch.Tensor:
-        return torch.cat((queue[1:], queue[-1:].clone()), dim=0).contiguous()
 
     output_buffers = tuple(
         _append_to_tail(out.new_zeros((T, *out.shape)), out) for out in first_outputs
@@ -816,6 +806,9 @@ def _register_dynamo_hop() -> None:
     except (ImportError, ModuleNotFoundError, AttributeError):
         return
     except Exception as e:
+        # Import-time registration must never break package import on
+        # unsupported or drifting Torch internals; warn and leave the HOP
+        # available through its eager fallback instead.
         warnings.warn(
             f"FlexSN HOP Dynamo registration failed unexpectedly: {type(e).__name__}: {e}",
             stacklevel=2,
