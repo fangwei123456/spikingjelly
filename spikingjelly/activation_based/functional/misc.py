@@ -85,11 +85,11 @@ class _TrainConvBnWrapper(nn.Module):
     def _packed_forward(self, x: Tensor) -> Tensor:
         t, n = x.shape[:2]
         x = x.flatten(0, 1)
-        if isinstance(self.conv, layer.Conv1d):
+        if isinstance(self.conv, nn.Conv1d):
             x = nn.Conv1d.forward(self.conv, x)
-        elif isinstance(self.conv, layer.Conv2d):
+        elif isinstance(self.conv, nn.Conv2d):
             x = nn.Conv2d.forward(self.conv, x)
-        elif isinstance(self.conv, layer.Conv3d):
+        elif isinstance(self.conv, nn.Conv3d):
             x = nn.Conv3d.forward(self.conv, x)
         else:
             raise TypeError(f"Unsupported packed conv type: {type(self.conv)!r}")
@@ -100,12 +100,22 @@ class _TrainConvBnWrapper(nn.Module):
             x = self.bn(x)
         return x.view(t, n, *x.shape[1:])
 
+    def _expects_multistep_input(self, x: Tensor) -> bool:
+        if isinstance(self.conv, nn.Conv1d):
+            return x.dim() == 4
+        if isinstance(self.conv, nn.Conv2d):
+            return x.dim() == 5
+        if isinstance(self.conv, nn.Conv3d):
+            return x.dim() == 6
+        return False
+
     def forward(self, x: Tensor) -> Tensor:
         if (
-            isinstance(self.conv, (layer.Conv1d, layer.Conv2d, layer.Conv3d))
-            and isinstance(self.bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d))
-            and getattr(self.conv, "step_mode", None) == "m"
-            and getattr(self.bn, "step_mode", None) == "m"
+            isinstance(self.conv, (nn.Conv1d, nn.Conv2d, nn.Conv3d))
+            and isinstance(self.bn, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d))
+            and getattr(self.conv, "step_mode", "m") == "m"
+            and getattr(self.bn, "step_mode", "m") == "m"
+            and self._expects_multistep_input(x)
         ):
             return self._packed_forward(x)
         return self.bn(self.conv(x))

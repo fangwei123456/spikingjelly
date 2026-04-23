@@ -117,3 +117,30 @@ def test_pack_conv_bn_train_modules_matches_native_block():
         packed.conv.bn.weight.grad, model.bn.weight.grad, atol=1e-5, rtol=1e-4
     )
     assert any(isinstance(m, _TrainConvBnWrapper) for m in packed.modules())
+
+
+def test_train_conv_bn_wrapper_packs_native_multistep_inputs():
+    torch.manual_seed(0)
+    model = _NativeStepBlock().train()
+    wrapped = _TrainConvBnWrapper(copy.deepcopy(model.conv), copy.deepcopy(model.bn)).train()
+    x = torch.randn(4, 2, 3, 16, 16, requires_grad=True)
+    x_packed = x.detach().clone().requires_grad_(True)
+
+    y_packed = wrapped(x_packed)
+
+    x_ref = x.flatten(0, 1)
+    y_ref = model.bn(model.conv(x_ref)).view_as(y_packed)
+    torch.testing.assert_close(y_packed, y_ref, atol=1e-5, rtol=1e-4)
+
+    loss_ref = y_ref.square().mean()
+    loss_packed = y_packed.square().mean()
+    loss_ref.backward()
+    loss_packed.backward()
+
+    torch.testing.assert_close(x_packed.grad, x.grad, atol=1e-5, rtol=1e-4)
+    torch.testing.assert_close(
+        wrapped.conv.weight.grad, model.conv.weight.grad, atol=1e-5, rtol=1e-4
+    )
+    torch.testing.assert_close(
+        wrapped.bn.weight.grad, model.bn.weight.grad, atol=1e-5, rtol=1e-4
+    )

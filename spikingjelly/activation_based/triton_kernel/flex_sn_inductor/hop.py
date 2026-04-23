@@ -545,11 +545,11 @@ def lowerable_while_loop_scan(
         )
         next_output_acc = tuple(
             _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs, strict=True)
+            for buf, out in zip(outputs_acc, outputs)
         )
         next_state_acc = tuple(
             _append_to_tail(buf, state)
-            for buf, state in zip(states_acc, next_states, strict=True)
+            for buf, state in zip(states_acc, next_states)
         )
         return (
             t + 1,
@@ -691,7 +691,7 @@ def lowerable_while_loop_scan_final_state(
         )
         next_output_acc = tuple(
             _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs, strict=True)
+            for buf, out in zip(outputs_acc, outputs)
         )
         return (
             t + 1,

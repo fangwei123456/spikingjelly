@@ -441,11 +441,6 @@ def _flexsn_inductor_backward_fake(
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
-    if len(input_templates) == bundle.training_info.num_inputs:
-        return [
-            input_templates[i].new_empty(input_templates[i].shape)
-            for i in range(bundle.training_info.num_inputs)
-        ]
     seq_grads = [
         input_templates[i].new_empty(input_templates[i].shape)
         for i in range(bundle.training_info.num_inputs)
