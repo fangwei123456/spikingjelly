@@ -50,6 +50,17 @@ _KERNEL_REGISTRY_LOCK = Lock()
 _KERNEL_ID_GEN = count(1)
 
 
+def _normalize_kernel_handle(handle: int) -> int:
+    if isinstance(handle, int):
+        return handle
+    try:
+        return int(handle)
+    except Exception as exc:
+        raise TypeError(
+            f"Unsupported FlexSN kernel handle type: {type(handle)!r}"
+        ) from exc
+
+
 def register_flexsn_kernel_handle(
     *,
     inference_kernel,
@@ -95,13 +106,7 @@ def _cleanup_kernel_handle(bundle: FlexSNKernelHandle) -> None:
 
 
 def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
-    if not isinstance(handle, int):
-        try:
-            handle = int(handle)
-        except Exception as exc:
-            raise TypeError(
-                f"Unsupported FlexSN kernel handle type: {type(handle)!r}"
-            ) from exc
+    handle = _normalize_kernel_handle(handle)
     try:
         return _KERNEL_REGISTRY[handle]
     except KeyError as e:
@@ -109,18 +114,21 @@ def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
 
 
 def retain_flexsn_kernel_handle(handle: int) -> None:
+    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _lookup_kernel_handle(handle)
         bundle.active_refs += 1
 
 
 def retain_owner_flexsn_kernel_handle(handle: int) -> None:
+    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _lookup_kernel_handle(handle)
         bundle.owner_refs += 1
 
 
 def release_flexsn_kernel_handle(handle: int) -> None:
+    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
         if bundle is None:
@@ -134,6 +142,7 @@ def release_flexsn_kernel_handle(handle: int) -> None:
 
 
 def release_active_flexsn_kernel_handle(handle: int) -> None:
+    handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
         if bundle is None:
@@ -236,6 +245,21 @@ def _flexsn_inductor_training_impl(
         )
 
 
+def _flexsn_inductor_training_final_state_impl(
+    bundle: FlexSNKernelHandle, flat_args: list[torch.Tensor]
+) -> list[torch.Tensor]:
+    full_returns = _flexsn_inductor_training_impl(bundle, flat_args)
+    info = bundle.training_info
+    assert info is not None
+    visible_outputs = list(full_returns[: info.num_outputs])
+    state_seqs = list(
+        full_returns[info.num_outputs : info.num_outputs + info.num_states]
+    )
+    final_states = [state_seq[-1] for state_seq in state_seqs]
+    saved_tensors = [full_returns[i] for i in info.c2k_return_mapping]
+    return [*visible_outputs, *final_states, *saved_tensors]
+
+
 def _flexsn_inductor_backward_impl(
     bundle: FlexSNKernelHandle,
     grad_outputs: list[torch.Tensor],
@@ -324,6 +348,20 @@ def flexsn_inductor_training(handle: int, flat_args: list[torch.Tensor]) -> list
     return _flexsn_inductor_training_impl(bundle, flat_args)
 
 
+@torch.library.custom_op("sj::flexsn_inductor_training_final_state", mutates_args=())
+def flexsn_inductor_training_final_state(
+    handle: int, flat_args: list[torch.Tensor]
+) -> list[torch.Tensor]:
+    bundle = _lookup_kernel_handle(handle)
+    if (
+        bundle.forward_kernel is None
+        or bundle.backward_kernel is None
+        or bundle.training_info is None
+    ):
+        raise RuntimeError("FlexSN training kernels are unavailable for this handle.")
+    return _flexsn_inductor_training_final_state_impl(bundle, flat_args)
+
+
 @torch.library.register_fake("sj::flexsn_inductor_training")
 def _flexsn_inductor_training_fake(
     handle: int, flat_args: list[torch.Tensor]
@@ -336,6 +374,34 @@ def _flexsn_inductor_training_fake(
         flat_args,
         bundle.training_info.num_fwd_kernel_returns,
     )
+
+
+@torch.library.register_fake("sj::flexsn_inductor_training_final_state")
+def _flexsn_inductor_training_final_state_fake(
+    handle: int, flat_args: list[torch.Tensor]
+) -> list[torch.Tensor]:
+    bundle = _lookup_kernel_handle(handle)
+    if bundle.training_info is None:
+        raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
+    seq_outputs = _make_seq_outputs_like(
+        bundle.training_info,
+        flat_args,
+        bundle.training_info.num_outputs,
+    )
+    if flat_args:
+        state_template = flat_args[0][0]
+    else:
+        raise ValueError("Expected at least one input tensor for FlexSN fake training.")
+    final_states = [
+        state_template.new_empty(state_template.shape)
+        for _ in range(bundle.training_info.num_states)
+    ]
+    saved_tensors = _make_seq_outputs_like(
+        bundle.training_info,
+        flat_args,
+        len(bundle.training_info.c2k_return_mapping),
+    )
+    return [*seq_outputs, *final_states, *saved_tensors]
 
 
 @torch.library.custom_op("sj::flexsn_inductor_backward", mutates_args=())
@@ -379,7 +445,7 @@ def _flexsn_inductor_backward_fake(
 
 
 def _flexsn_training_setup_context(ctx, inputs, output):
-    handle = inputs[0]
+    handle = _normalize_kernel_handle(inputs[0])
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
@@ -395,6 +461,28 @@ def _flexsn_training_setup_context(ctx, inputs, output):
     ]
     saved = [output[i] for i in bundle.training_info.c2k_return_mapping]
     ctx.save_for_backward(*saved)
+
+
+def _flexsn_training_final_state_setup_context(ctx, inputs, output):
+    handle = _normalize_kernel_handle(inputs[0])
+    bundle = _lookup_kernel_handle(handle)
+    if bundle.training_info is None:
+        raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
+    retain_flexsn_kernel_handle(handle)
+    ctx._active_ref_finalizer = weakref.finalize(
+        ctx, release_active_flexsn_kernel_handle, handle
+    )
+    ctx.handle = handle
+    ctx.input_template_specs = [_template_spec(t) for t in inputs[1]]
+    ctx.output_template_specs = [
+        _template_spec(t) for t in output[: bundle.training_info.num_outputs]
+    ]
+    if bundle.training_info.num_inputs == 0:
+        raise RuntimeError("FlexSN training requires at least one input sequence.")
+    seq_shape, seq_dtype, seq_device = ctx.input_template_specs[0]
+    ctx.state_seq_template_spec = (seq_shape, seq_dtype, seq_device)
+    visible = bundle.training_info.num_outputs + bundle.training_info.num_states
+    ctx.save_for_backward(*list(output[visible:]))
 
 
 def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
@@ -432,10 +520,66 @@ def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
     return None, grads
 
 
+def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | None]):
+    bundle = _lookup_kernel_handle(ctx.handle)
+    if bundle.backward_kernel is None or bundle.training_info is None:
+        raise RuntimeError("FlexSN backward kernel is unavailable for this handle.")
+
+    output_grads = []
+    for i in range(bundle.training_info.num_outputs):
+        if grad_out[i] is not None:
+            output_grads.append(grad_out[i])
+        else:
+            output_grads.append(
+                torch.zeros(
+                    ctx.output_template_specs[i][0],
+                    dtype=ctx.output_template_specs[i][1],
+                    device=ctx.output_template_specs[i][2],
+                )
+            )
+
+    state_seq_shape, state_seq_dtype, state_seq_device = ctx.state_seq_template_spec
+    state_grads = []
+    for i in range(bundle.training_info.num_states):
+        final_grad = grad_out[bundle.training_info.num_outputs + i]
+        seq_grad = torch.zeros(
+            state_seq_shape,
+            dtype=state_seq_dtype,
+            device=state_seq_device,
+        )
+        if final_grad is not None:
+            seq_grad[-1].copy_(final_grad)
+        state_grads.append(seq_grad)
+
+    input_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
+    try:
+        if ctx._active_ref_finalizer.alive:
+            ctx._active_ref_finalizer.detach()
+        grads = list(
+            flexsn_inductor_backward(
+                ctx.handle,
+                [*output_grads, *state_grads],
+                list(ctx.saved_tensors),
+                input_templates,
+            )
+        )
+        if len(grads) != len(ctx.input_template_specs):
+            grads = grads[: len(ctx.input_template_specs)]
+    finally:
+        release_active_flexsn_kernel_handle(ctx.handle)
+    return None, grads
+
+
 torch.library.register_autograd(
     "sj::flexsn_inductor_training",
     _flexsn_training_backward,
     setup_context=_flexsn_training_setup_context,
+)
+
+torch.library.register_autograd(
+    "sj::flexsn_inductor_training_final_state",
+    _flexsn_training_final_state_backward,
+    setup_context=_flexsn_training_final_state_setup_context,
 )
 
 

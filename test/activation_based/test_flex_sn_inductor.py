@@ -635,6 +635,30 @@ def test_compile_fullgraph_backward_matches_eager(rng):
     torch.testing.assert_close(x_compiled.grad, x_eager.grad)
 
 
+def test_compile_fullgraph_backward_store_state_seqs_false_matches_eager(rng):
+    T, N = 5, 8
+    x_eager = torch.randn(T, N, generator=rng, requires_grad=True)
+    x_compiled = x_eager.detach().clone().requires_grad_(True)
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="inductor",
+            store_state_seqs=False,
+        )
+
+    make_neuron()(x_eager).sum().backward()
+
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_fn(x_compiled).sum().backward()
+
+    torch.testing.assert_close(x_compiled.grad, x_eager.grad)
+
+
 def test_compile_fullgraph_hop_backend_matches_eager(rng):
     if sys.platform == "win32":
         pytest.skip("torch.compile is not supported on Windows")
@@ -879,6 +903,46 @@ def test_inductor_compile_graph_elides_explicit_zero_state_init():
         for target in targets
     )
     assert not any("zeros_like" in target for target in targets)
+
+
+def test_inductor_compile_training_graph_uses_final_state_custom_op():
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if not torch.cuda.is_available():
+        pytest.skip("inductor custom-op graph coverage is exercised on CUDA")
+
+    from torch._dynamo import explain
+
+    def core(x, v):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = (h >= v_th).to(h.dtype)
+        return s, h * (1.0 - s)
+
+    T, N = 4, 8
+    torch.manual_seed(42)
+    x = torch.randn((T, N), device="cuda", requires_grad=True)
+    neuron = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda().train()
+
+    explanation = explain(lambda inp: neuron(inp).sum())(x)
+    targets = [
+        str(node.target)
+        for graph in explanation.graphs
+        for node in graph.graph.nodes
+    ]
+
+    assert any(
+        "sj.flexsn_inductor_training_final_state.default" in target
+        for target in targets
+    )
 
 
 def test_aot_function_backward_numerical_match(rng):

@@ -760,6 +760,7 @@ class FlexSN(base.MemoryModule):
                     flexsn_inductor_inference,
                     flexsn_inductor_inference_final_state,
                     flexsn_inductor_training,
+                    flexsn_inductor_training_final_state,
                 )
 
                 if _no_grad and self._inductor_inference_available:
@@ -778,6 +779,17 @@ class FlexSN(base.MemoryModule):
                             self._inductor_handle, flat_args
                         )
                 elif (not _no_grad) and self._inductor_training_available:
+                    if not self.store_state_seqs:
+                        result_seqs = flexsn_inductor_training_final_state(
+                            self._inductor_handle, flat_args
+                        )
+                        output_seqs = list(result_seqs[: self.num_outputs])
+                        self.states = list(
+                            result_seqs[
+                                self.num_outputs : self.num_outputs + self.num_states
+                            ]
+                        )
+                        return output_seqs
                     result_seqs = flexsn_inductor_training(
                         self._inductor_handle, flat_args
                     )
