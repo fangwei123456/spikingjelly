@@ -1,4 +1,5 @@
 from typing import Tuple
+import errno
 import importlib.util
 import linecache
 import os
@@ -44,9 +45,22 @@ def _generate_hash(s: str, w: int = 8) -> str:
 
 
 def _codegen_cache_dir() -> Path:
-    cache_dir = Path.home() / ".spikingjelly" / "triton_codegen"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
+    candidates = [
+        Path.home() / ".spikingjelly" / "triton_codegen",
+        Path(tempfile.gettempdir()) / "spikingjelly_triton_codegen",
+    ]
+    last_error = None
+    for cache_dir in candidates:
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            return cache_dir
+        except OSError as e:
+            last_error = e
+            if e.errno not in (errno.EACCES, errno.EROFS, errno.EPERM):
+                raise
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Failed to initialize Triton codegen cache directory")
 
 
 def _uw(arg) -> str:
@@ -356,6 +370,8 @@ def compile_triton_code_str(
                 if not isinstance(tl, types.ModuleType):
                     language_module.__dict__.update(getattr(tl, "__dict__", {}))
                 sys.modules["triton.language"] = language_module
+            had_language_attr = hasattr(triton_module, "language")
+            original_language = getattr(triton_module, "language", None)
             triton_module.language = language_module
             if cacheable:
                 sys.modules[module_name] = module
@@ -366,6 +382,13 @@ def compile_triton_code_str(
                     sys.modules.pop(module_name, None)
                 raise
             finally:
+                if had_language_attr:
+                    triton_module.language = original_language
+                else:
+                    try:
+                        delattr(triton_module, "language")
+                    except AttributeError:
+                        pass
                 if restore_language:
                     sys.modules.pop("triton.language", None)
                 if restore_triton:

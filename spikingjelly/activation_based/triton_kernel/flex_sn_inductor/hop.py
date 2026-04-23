@@ -250,6 +250,8 @@ def eager_scan_final_state(
                 ref = states[i]
             elif states:
                 ref = states[-1]
+            elif lifted_args:
+                ref = lifted_args[min(i, len(lifted_args) - 1)]
             else:
                 ref = inputs_seq[0].new_empty(inputs_seq[0].shape[1:])
             return ref.new_empty((0, *ref.shape))

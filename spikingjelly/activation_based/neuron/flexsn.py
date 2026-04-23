@@ -144,16 +144,12 @@ def _run_hop_scan(
             if store_state_seqs
             else _flexsn_lowerable_scan_final_state
         )
-    elif _is_compiling() or _flexsn_hop_scan is None:
-        scan_impl = (
-            _flexsn_eager_scan
-            if store_state_seqs
-            else _flexsn_eager_scan_final_state
-        )
+    elif _flexsn_hop_scan is not None and store_state_seqs:
+        scan_impl = _flexsn_hop_scan
     elif not store_state_seqs:
         scan_impl = _flexsn_eager_scan_final_state
     else:
-        scan_impl = _flexsn_hop_scan
+        scan_impl = _flexsn_eager_scan
 
     return scan_impl(
         core,
@@ -509,9 +505,6 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_kernel, self._inductor_scan_info = (
                         build_inference_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
-                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
-                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
-                    )
                 except Exception as e:
                     logging.warning(
                         "FlexSN: could not build inductor inference kernel (%s); "
@@ -519,6 +512,15 @@ class FlexSN(base.MemoryModule):
                     )
                     self._inductor_scan_kernel = None
                     self._inductor_scan_info = None
+                try:
+                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
+                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                    )
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not build inductor inference-final-state kernel (%s); "
+                        "store_state_seqs=False inference falls back to the regular inference kernel." % e
+                    )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
                 try:
