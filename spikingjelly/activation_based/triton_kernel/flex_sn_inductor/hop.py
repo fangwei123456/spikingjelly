@@ -191,6 +191,8 @@ def eager_scan(
     for t in range(T):
         step_inputs = tuple(x[t] for x in inputs_seq)
         results = core_fn(*step_inputs, *states, *lifted_args)
+        if not isinstance(results, (tuple, list)):
+            results = (results,)
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "
@@ -264,6 +266,8 @@ def eager_scan_final_state(
     for t in range(T):
         step_inputs = tuple(x[t] for x in inputs_seq)
         results = core_fn(*step_inputs, *states, *lifted_args)
+        if not isinstance(results, (tuple, list)):
+            results = (results,)
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "

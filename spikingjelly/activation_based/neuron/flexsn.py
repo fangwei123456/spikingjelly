@@ -587,7 +587,11 @@ class FlexSN(base.MemoryModule):
         if (
             backend == "inductor"
             and register_flexsn_kernel_handle is not None
-            and (self._inductor_inference_available or self._inductor_training_available)
+            and (
+                self._inductor_inference_available
+                or self._inductor_inference_final_state_available
+                or self._inductor_training_available
+            )
         ):
             self._inductor_handle = register_flexsn_kernel_handle(
                 inference_kernel=self._inductor_scan_kernel,
@@ -821,6 +825,8 @@ class FlexSN(base.MemoryModule):
             use_implicit_zero_states = (
                 self.states is None and _no_grad and _can_elide_zero_state_inputs(self)
             )
+            if self.states is None and not use_implicit_zero_states:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
             state_args = [] if use_implicit_zero_states else list(self.states)
             flat_args = [*args, *state_args]
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
