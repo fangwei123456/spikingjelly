@@ -61,7 +61,14 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
     from ..triton_kernel.flexsn.wrapper import flexsn_inference_final_state
 
     info = module._inductor_scan_final_state_info
-    seq_template = torch.zeros((1, 1), device="cuda")
+    device = None
+    if isinstance(module.core, torch.nn.Module):
+        for tensor in [*module.core.parameters(), *module.core.buffers()]:
+            device = tensor.device
+            break
+    if device is None:
+        device = torch.device("cuda", torch.cuda.current_device())
+    seq_template = torch.zeros((1, 1), device=device)
     state_template = seq_template[0].clone()
     warm_args = [seq_template.clone() for _ in range(info.num_inputs)]
     warm_args.extend(state_template.clone() for _ in range(info.num_states))
@@ -174,6 +181,23 @@ def _last_state_or_current(
     current_state: torch.Tensor,
 ) -> torch.Tensor:
     return current_state if state_seq.shape[0] == 0 else state_seq[-1]
+
+
+def _empty_multistep_outputs(
+    args: Tuple[torch.Tensor, ...],
+    states: List[torch.Tensor],
+    num_outputs: int,
+) -> List[torch.Tensor]:
+    def _empty_output(i: int) -> torch.Tensor:
+        if i < len(states):
+            ref = states[i]
+        elif states:
+            ref = states[-1]
+        else:
+            ref = args[0].new_empty(args[0].shape[1:])
+        return ref.new_empty((0, *ref.shape))
+
+    return [_empty_output(i) for i in range(num_outputs)]
 
 
 def _core_requires_grad(core: Callable) -> bool:
@@ -740,25 +764,18 @@ class FlexSN(base.MemoryModule):
         return results[: self.num_outputs]
 
     def multi_step_forward(self, *args):
+        T = args[0].shape[0]
+        if T == 0:
+            if self.states is None:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
+            output_seqs = _empty_multistep_outputs(args, self.states, self.num_outputs)
+            if self.store_state_seqs:
+                self.state_seqs = [
+                    s.new_empty((0, *s.shape)) for s in self.states
+                ]
+            return output_seqs
+
         if self.backend == "torch":
-            T = args[0].shape[0]
-            if T == 0:
-                def _empty_output(i: int) -> torch.Tensor:
-                    if i < len(self.states):
-                        ref = self.states[i]
-                    elif self.states:
-                        ref = self.states[-1]
-                    else:
-                        ref = args[0].new_empty(args[0].shape[1:])
-                    return ref.new_empty((0, *ref.shape))
-
-                output_seqs = [_empty_output(i) for i in range(self.num_outputs)]
-                if self.store_state_seqs:
-                    self.state_seqs = [
-                        s.new_empty((0, *s.shape)) for s in self.states
-                    ]
-                return output_seqs
-
             output_seqs = [[] for _ in range(self.num_outputs)]
             if self.store_state_seqs:
                 state_seqs = [[] for _ in range(self.num_states)]

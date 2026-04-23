@@ -218,12 +218,12 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
 
     * **中文**
 
-    将训练模式下模型中的相邻 ``Conv*`` 与 ``BatchNorm*`` 模块打包为单个 wrapper，
+    将训练模式下模型中的相邻 ``Conv*`` 与 ``BatchNorm*`` 模块打包为单个 wrapper,
     以减少多步 ``Conv -> BatchNorm`` 路径中的 ``view/flatten`` 往返。
 
-    该函数不会像 ``fuse_conv_bn_eval_modules`` 那样融合权重；它只是将相邻层包装成一个
+    该函数不会像 ``fuse_conv_bn_eval_modules`` 那样融合权重; 它只是将相邻层包装成一个
     compile-friendly 的训练模块。当前同时支持原生 ``torch.nn`` 的 ``Conv*`` / ``BatchNorm*``
-    模块，以及 SpikingJelly activation-based ``layer.Conv*`` / ``layer.BatchNorm*`` 模块。
+    模块, 以及 SpikingJelly activation-based ``layer.Conv*`` / ``layer.BatchNorm*`` 模块。
 
     输入模型必须处于 ``train()`` 模式。返回值是变换后的 ``fx.GraphModule``。
 

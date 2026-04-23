@@ -66,7 +66,6 @@ Captured tensor freevars from ``core_fn`` are appended after the
 ``[*inputs_seq, *init_states]`` segment when Dynamo rewrites the HOP call.
 """
 from __future__ import annotations
-import functools
 import warnings
 from typing import Callable, Tuple
 
@@ -322,10 +321,11 @@ def lowerable_scan(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
-    def combine_fn(carry, step_inputs):
+    def combine_fn(carry, step_inputs, additional_inputs):
         carry = tuple(carry)
         step_inputs = tuple(step_inputs)
-        results = core_fn(*step_inputs, *carry, *lifted_args)
+        additional_inputs = tuple(additional_inputs)
+        results = core_fn(*step_inputs, *carry, *additional_inputs)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
         if len(results) != num_outputs + num_states:
             raise ValueError(
@@ -342,20 +342,25 @@ def lowerable_scan(
     _, spec_init = pytree.tree_flatten(leaves_init)
     _, spec_xs = pytree.tree_flatten(leaves_xs)
 
-    wrapped_combine_fn = functools.partial(
-        _wrap_scan_combine_fn_flat,
-        combine_fn=combine_fn,
-        spec_init=spec_init,
-        spec_xs=spec_xs,
-        num_init_leaves=len(leaves_init),
-        num_inp_leaves=len(leaves_xs),
-    )
+    def wrapped_combine_fn(*args):
+        expected_args = len(leaves_init) + len(leaves_xs) + len(lifted_args)
+        if len(args) != expected_args:
+            raise ValueError(
+                f"scan combine_fn expected {expected_args} flattened args, got {len(args)}"
+            )
+        carry = pytree.tree_unflatten(args[: len(leaves_init)], spec_init)
+        xs = pytree.tree_unflatten(
+            args[len(leaves_init) : len(leaves_init) + len(leaves_xs)],
+            spec_xs,
+        )
+        additional_inputs = tuple(args[len(leaves_init) + len(leaves_xs) :])
+        return combine_fn(carry, xs, additional_inputs)
 
     result = _torch_scan_op(
         wrapped_combine_fn,
         leaves_init,
         leaves_xs,
-        additional_inputs=(),
+        additional_inputs=lifted_args,
     )
     result = tuple(result)
     return result[num_states:]
@@ -385,10 +390,11 @@ def lowerable_scan_final_state(
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
 
-    def combine_fn(carry, step_inputs):
+    def combine_fn(carry, step_inputs, additional_inputs):
         carry = tuple(carry)
         step_inputs = tuple(step_inputs)
-        results = core_fn(*step_inputs, *carry, *lifted_args)
+        additional_inputs = tuple(additional_inputs)
+        results = core_fn(*step_inputs, *carry, *additional_inputs)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
         if len(results) != num_outputs + num_states:
             raise ValueError(
@@ -404,20 +410,25 @@ def lowerable_scan_final_state(
     _, spec_init = pytree.tree_flatten(leaves_init)
     _, spec_xs = pytree.tree_flatten(leaves_xs)
 
-    wrapped_combine_fn = functools.partial(
-        _wrap_scan_combine_fn_flat,
-        combine_fn=combine_fn,
-        spec_init=spec_init,
-        spec_xs=spec_xs,
-        num_init_leaves=len(leaves_init),
-        num_inp_leaves=len(leaves_xs),
-    )
+    def wrapped_combine_fn(*args):
+        expected_args = len(leaves_init) + len(leaves_xs) + len(lifted_args)
+        if len(args) != expected_args:
+            raise ValueError(
+                f"scan combine_fn expected {expected_args} flattened args, got {len(args)}"
+            )
+        carry = pytree.tree_unflatten(args[: len(leaves_init)], spec_init)
+        xs = pytree.tree_unflatten(
+            args[len(leaves_init) : len(leaves_init) + len(leaves_xs)],
+            spec_xs,
+        )
+        additional_inputs = tuple(args[len(leaves_init) + len(leaves_xs) :])
+        return combine_fn(carry, xs, additional_inputs)
 
     result = _torch_scan_op(
         wrapped_combine_fn,
         leaves_init,
         leaves_xs,
-        additional_inputs=(),
+        additional_inputs=lifted_args,
     )
     result = tuple(result)
     final_states = result[:num_states]
@@ -536,14 +547,16 @@ def lowerable_while_loop_scan(
         pending_seq_end = num_inputs
         states_end = pending_seq_end + num_states
         outputs_end = states_end + num_outputs
+        lifted_end = outputs_end + len(lifted_args)
 
         step_input_queues = carry[:pending_seq_end]
         states = carry[pending_seq_end:states_end]
         outputs_acc = carry[states_end:outputs_end]
-        states_acc = carry[outputs_end:]
+        lifted = carry[outputs_end:lifted_end]
+        states_acc = carry[lifted_end:]
 
         step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
-        results = core_fn(*step_inputs, *states, *lifted_args)
+        results = core_fn(*step_inputs, *states, *lifted)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
         if len(results) != len(first_results):
             raise ValueError(
@@ -568,6 +581,7 @@ def lowerable_while_loop_scan(
             *next_pending_inputs,
             *next_states,
             *next_output_acc,
+            *lifted,
             *next_state_acc,
         )
 
@@ -579,6 +593,7 @@ def lowerable_while_loop_scan(
             *pending_inputs,
             *first_states,
             *output_buffers,
+            *lifted_args,
             *state_buffers,
         ),
     )
@@ -586,8 +601,9 @@ def lowerable_while_loop_scan(
     pending_seq_end = 1 + num_inputs
     states_end = pending_seq_end + num_states
     outputs_end = states_end + num_outputs
+    lifted_end = outputs_end + len(lifted_args)
     final_output_buffers = final[states_end:outputs_end]
-    final_state_buffers = final[outputs_end:]
+    final_state_buffers = final[lifted_end:]
     return (*final_output_buffers, *final_state_buffers)
 
 
@@ -690,11 +706,14 @@ def lowerable_while_loop_scan_final_state(
         states_end = pending_seq_end + num_states
 
         step_input_queues = carry[:pending_seq_end]
+        outputs_end = states_end + num_outputs
+        lifted_end = outputs_end + len(lifted_args)
         states = carry[pending_seq_end:states_end]
-        outputs_acc = carry[states_end:]
+        outputs_acc = carry[states_end:outputs_end]
+        lifted = carry[outputs_end:lifted_end]
 
         step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
-        results = core_fn(*step_inputs, *states, *lifted_args)
+        results = core_fn(*step_inputs, *states, *lifted)
         results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
         if len(results) != len(first_results):
             raise ValueError(
@@ -715,6 +734,7 @@ def lowerable_while_loop_scan_final_state(
             *next_pending_inputs,
             *next_states,
             *next_output_acc,
+            *lifted,
         )
 
     final = _torch_while_loop(
@@ -725,13 +745,15 @@ def lowerable_while_loop_scan_final_state(
             *pending_inputs,
             *first_states,
             *output_buffers,
+            *lifted_args,
         ),
     )
     final = tuple(final)
     pending_seq_end = 1 + num_inputs
     states_end = pending_seq_end + num_states
+    outputs_end = states_end + num_outputs
     final_states = final[pending_seq_end:states_end]
-    final_output_buffers = final[states_end:]
+    final_output_buffers = final[states_end:outputs_end]
     return (*final_output_buffers, *final_states)
 
 
@@ -862,6 +884,12 @@ def _register_dynamo_hop() -> None:
                 raise hop_vars.unimplemented(
                     "flex_sn_scan only supports tensor lifted freevars"
                 )
+            for freevar in lifted_freevars:
+                example_value = freevar.node.meta.get("example_value")
+                if not isinstance(example_value, torch.Tensor):
+                    raise hop_vars.unimplemented(
+                        "flex_sn_scan only supports tensor lifted freevars"
+                    )
 
             body_gm = torch.fx.GraphModule(tx.output.nn_modules, body_graph)
             body_name = install_subgraph(tx, self.source, "flex_sn_scan_body", body_gm)

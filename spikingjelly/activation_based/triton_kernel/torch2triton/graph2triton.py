@@ -319,13 +319,13 @@ def compile_triton_code_str(
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
     """
+    cacheable = name_space is None
     if name_space is None:
         name_space = {"triton": triton, "tl": tl}
     else:
         name_space = dict(name_space)
         name_space.setdefault("triton", triton)
         name_space.setdefault("tl", tl)
-    cacheable = len(name_space) == 0
 
     module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
     module_name = (

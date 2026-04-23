@@ -176,6 +176,22 @@ def _materialize_template(spec):
     return torch.empty((), dtype=dtype, device=device).expand(shape)
 
 
+def _make_state_templates_like(
+    flat_args: list[torch.Tensor], num_states: int
+) -> list[torch.Tensor]:
+    if not flat_args:
+        raise ValueError("Expected at least one input tensor for FlexSN fake op.")
+    seq_template = flat_args[0]
+    if seq_template.dim() == 0:
+        state_shape = ()
+    else:
+        state_shape = tuple(seq_template.shape[1:])
+    return [
+        seq_template.new_empty(state_shape)
+        for _ in range(num_states)
+    ]
+
+
 def _device_guard(tensors: list[torch.Tensor]):
     for tensor in tensors:
         if isinstance(tensor, torch.Tensor) and tensor.is_cuda:
@@ -265,11 +281,16 @@ def _flexsn_inductor_training_final_state_impl(
     full_returns = _flexsn_inductor_training_impl(bundle, flat_args)
     info = bundle.training_info
     assert info is not None
+    args = _materialize_zero_state_args(info, flat_args)
     visible_outputs = list(full_returns[: info.num_outputs])
     state_seqs = list(
         full_returns[info.num_outputs : info.num_outputs + info.num_states]
     )
-    final_states = [state_seq[-1] for state_seq in state_seqs]
+    init_states = list(args[info.num_inputs : info.num_inputs + info.num_states])
+    final_states = [
+        init_states[i] if state_seq.shape[0] == 0 else state_seq[-1]
+        for i, state_seq in enumerate(state_seqs)
+    ]
     extra_saved_tensors = [full_returns[i] for i in _final_state_saved_return_indices(info)]
     return [*visible_outputs, *final_states, *extra_saved_tensors]
 
@@ -339,14 +360,9 @@ def _flexsn_inductor_inference_final_state_fake(
         flat_args,
         bundle.inference_final_state_info.num_outputs,
     )
-    if flat_args:
-        state_template = flat_args[0][0]
-    else:
-        raise ValueError("Expected at least one input tensor for FlexSN fake inference.")
-    final_states = [
-        state_template.new_empty(state_template.shape)
-        for _ in range(bundle.inference_final_state_info.num_states)
-    ]
+    final_states = _make_state_templates_like(
+        flat_args, bundle.inference_final_state_info.num_states
+    )
     return [*seq_outputs, *final_states]
 
 
@@ -402,14 +418,9 @@ def _flexsn_inductor_training_final_state_fake(
         flat_args,
         bundle.training_info.num_outputs,
     )
-    if flat_args:
-        state_template = flat_args[0][0]
-    else:
-        raise ValueError("Expected at least one input tensor for FlexSN fake training.")
-    final_states = [
-        state_template.new_empty(state_template.shape)
-        for _ in range(bundle.training_info.num_states)
-    ]
+    final_states = _make_state_templates_like(
+        flat_args, bundle.training_info.num_states
+    )
     extra_saved_tensors = _make_seq_outputs_like(
         bundle.training_info,
         flat_args,
@@ -574,7 +585,7 @@ def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | Non
             dtype=state_seq_dtype,
             device=state_seq_device,
         )
-        if final_grad is not None:
+        if final_grad is not None and state_seq_shape[0] > 0:
             seq_grad[-1].copy_(final_grad)
         state_grads.append(seq_grad)
 
