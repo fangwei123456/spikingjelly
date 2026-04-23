@@ -102,6 +102,12 @@ def _run_hop_scan(
     store_state_seqs: bool,
     *flat_args: torch.Tensor,
 ):
+    enable_lowerable_while_loop = (
+        os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "0") == "1"
+    )
+    enable_lowerable_scan = (
+        os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
+    )
     if _flexsn_eager_scan is None:
         raise RuntimeError(
             "FlexSN HOP backend is unavailable: eager_scan failed to import. "
@@ -115,7 +121,7 @@ def _run_hop_scan(
         and callable(_flexsn_lowerable_while_loop_available)
         and _flexsn_lowerable_while_loop_available()
         and (not torch.is_grad_enabled())
-        and os.getenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "0") == "1"
+        and enable_lowerable_while_loop
     )
     use_lowerable_scan = (
         _is_compiling()
@@ -123,7 +129,7 @@ def _run_hop_scan(
         and callable(_flexsn_lowerable_scan_available)
         and _flexsn_lowerable_scan_available()
         and (not torch.is_grad_enabled())
-        and os.getenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
+        and enable_lowerable_scan
     )
 
     if use_lowerable_while_loop:
@@ -698,16 +704,19 @@ class FlexSN(base.MemoryModule):
         if self.backend == "torch":
             T = args[0].shape[0]
             if T == 0:
-                step_inputs = tuple(arg.new_empty(arg.shape[1:]) for arg in args)
-                with torch.no_grad():
-                    step_results = _as_tuple(self.core(*step_inputs, *self.states))
-                output_seqs = [
-                    y.new_empty((0, *y.shape))
-                    for y in step_results[: self.num_outputs]
-                ]
+                def _empty_output(i: int) -> torch.Tensor:
+                    if i < len(self.states):
+                        ref = self.states[i]
+                    elif self.states:
+                        ref = self.states[-1]
+                    else:
+                        ref = args[0].new_empty(args[0].shape[1:])
+                    return ref.new_empty((0, *ref.shape))
+
+                output_seqs = [_empty_output(i) for i in range(self.num_outputs)]
                 if self.store_state_seqs:
                     self.state_seqs = [
-                        s.new_empty((0, *s.shape)) for s in step_results[self.num_outputs :]
+                        s.new_empty((0, *s.shape)) for s in self.states
                     ]
                 return output_seqs
 
@@ -758,6 +767,7 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         elif self.backend == "inductor":
+            result_has_state_seqs = self.store_state_seqs
             _no_grad = not torch.is_grad_enabled() or not any(
                 a.requires_grad for a in (
                     *args,
@@ -816,7 +826,6 @@ class FlexSN(base.MemoryModule):
             else:
                 result_seqs = None
 
-            result_has_state_seqs = self.store_state_seqs
             if result_seqs is None:
                 if self.states is None:
                     self.states = self.init_states(self.num_states, self.step_mode, *args)

@@ -44,7 +44,7 @@ def _generate_hash(s: str, w: int = 8) -> str:
 
 
 def _codegen_cache_dir() -> Path:
-    cache_dir = Path(tempfile.gettempdir()) / "spikingjelly_triton_codegen"
+    cache_dir = Path.home() / ".spikingjelly" / "triton_codegen"
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
@@ -354,6 +354,9 @@ def compile_triton_code_str(
             sys.modules[module_name] = module
             try:
                 spec.loader.exec_module(module)
+            except BaseException:
+                sys.modules.pop(module_name, None)
+                raise
             finally:
                 if restore_language:
                     sys.modules.pop("triton.language", None)

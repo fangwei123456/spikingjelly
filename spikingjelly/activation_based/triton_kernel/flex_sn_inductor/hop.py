@@ -169,6 +169,22 @@ def eager_scan(
                 f"input {i} has leading dim {x.shape[0]}, expected {T}"
             )
 
+    if T == 0:
+        def _empty_output(i: int) -> torch.Tensor:
+            if i < len(states):
+                ref = states[i]
+            elif states:
+                ref = states[-1]
+            elif lifted_args:
+                ref = lifted_args[min(i, len(lifted_args) - 1)]
+            else:
+                ref = inputs_seq[0].new_empty(inputs_seq[0].shape[1:])
+            return ref.new_empty((0, *ref.shape))
+
+        empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
+        empty_states = tuple(state.new_empty((0, *state.shape)) for state in states)
+        return (*empty_outputs, *empty_states)
+
     output_buffers = [[] for _ in range(num_outputs)]
     state_buffers = [[] for _ in range(num_states)]
 

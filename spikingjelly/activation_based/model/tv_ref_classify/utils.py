@@ -517,6 +517,5 @@ def reduce_across_processes(val, op=dist.ReduceOp.SUM, dtype=None):
     else:
         device = torch.device("cpu")
     t = torch.tensor(val, device=device, dtype=dtype)
-    dist.barrier()
     dist.all_reduce(t, op=op)
     return t
