@@ -2,6 +2,7 @@ import torch
 from torch import nn
 
 from spikingjelly.activation_based import functional, layer
+from spikingjelly.activation_based.functional.misc import _TrainConvBnWrapper
 
 
 class _StepBlock(nn.Module):
@@ -34,3 +35,29 @@ def test_fuse_conv_bn_eval_modules_matches_step_block():
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
     assert not any(isinstance(m, layer.BatchNorm2d) for m in fused.modules())
+
+
+def test_pack_conv_bn_train_modules_matches_step_block():
+    torch.manual_seed(0)
+    model = _StepBlock().train()
+    packed = functional.pack_conv_bn_train_modules(model)
+    x = torch.randn(4, 2, 3, 16, 16, requires_grad=True)
+    x_packed = x.detach().clone().requires_grad_(True)
+
+    y_ref = model(x)
+    y_packed = packed(x_packed)
+    torch.testing.assert_close(y_packed, y_ref, atol=1e-5, rtol=1e-4)
+
+    loss_ref = y_ref.square().mean()
+    loss_packed = y_packed.square().mean()
+    loss_ref.backward()
+    loss_packed.backward()
+
+    torch.testing.assert_close(x_packed.grad, x.grad, atol=1e-5, rtol=1e-4)
+    torch.testing.assert_close(
+        packed.conv.conv.weight.grad, model.conv.weight.grad, atol=1e-5, rtol=1e-4
+    )
+    torch.testing.assert_close(
+        packed.conv.bn.weight.grad, model.bn.weight.grad, atol=1e-5, rtol=1e-4
+    )
+    assert any(isinstance(m, _TrainConvBnWrapper) for m in packed.modules())

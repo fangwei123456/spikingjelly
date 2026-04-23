@@ -16,6 +16,7 @@ __all__ = [
     "kaiming_normal_conv_linear_weight",
     "delay",
     "fuse_conv_bn_eval_modules",
+    "pack_conv_bn_train_modules",
 ]
 
 
@@ -68,6 +69,45 @@ class _EvalFusionTracer(fx.Tracer):
         ):
             return True
         return super().is_leaf_module(m, module_qualified_name)
+
+
+class _TrainPackTracer(_EvalFusionTracer):
+    pass
+
+
+class _TrainConvBnWrapper(nn.Module):
+    def __init__(self, conv: nn.Module, bn: nn.Module):
+        super().__init__()
+        self.conv = conv
+        self.bn = bn
+
+    def _packed_forward(self, x: Tensor) -> Tensor:
+        t, n = x.shape[:2]
+        x = x.flatten(0, 1)
+        if isinstance(self.conv, layer.Conv1d):
+            x = nn.Conv1d.forward(self.conv, x)
+        elif isinstance(self.conv, layer.Conv2d):
+            x = nn.Conv2d.forward(self.conv, x)
+        elif isinstance(self.conv, layer.Conv3d):
+            x = nn.Conv3d.forward(self.conv, x)
+        else:
+            raise TypeError(f"Unsupported packed conv type: {type(self.conv)!r}")
+
+        if isinstance(self.bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d)):
+            x = self.bn.super_forward(x)
+        else:
+            x = self.bn(x)
+        return x.view(t, n, *x.shape[1:])
+
+    def forward(self, x: Tensor) -> Tensor:
+        if (
+            isinstance(self.conv, (layer.Conv1d, layer.Conv2d, layer.Conv3d))
+            and isinstance(self.bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d))
+            and getattr(self.conv, "step_mode", None) == "m"
+            and getattr(self.bn, "step_mode", None) == "m"
+        ):
+            return self._packed_forward(x)
+        return self.bn(self.conv(x))
 
 
 def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
@@ -131,6 +171,83 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
             bn = modules[node.target]
             fused_conv = fuse_conv_bn_eval(conv, bn)
             _replace_node_module(node.args[0], modules, fused_conv)
+            node.replace_all_uses_with(node.args[0])
+            fx_model.graph.erase_node(node)
+
+    fx_model.graph.lint()
+    fx_model.delete_all_unused_submodules()
+    fx_model.recompile()
+    return fx_model
+
+
+def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
+    """
+    **API Language:**
+    :ref:`中文 <pack_conv_bn_train_modules-cn>` | :ref:`English <pack_conv_bn_train_modules-en>`
+
+    ----
+
+    .. _pack_conv_bn_train_modules-cn:
+
+    * **中文**
+
+    将训练模式下模型中的相邻 ``Conv*`` 与 ``BatchNorm*`` 模块打包为单个 wrapper，
+    以减少多步 ``Conv -> BatchNorm`` 路径中的 ``view/flatten`` 往返。
+
+    该函数不会像 ``fuse_conv_bn_eval_modules`` 那样融合权重；它只是将相邻层包装成一个
+    compile-friendly 的训练模块。当前同时支持原生 ``torch.nn`` 的 ``Conv*`` / ``BatchNorm*``
+    模块，以及 SpikingJelly activation-based ``layer.Conv*`` / ``layer.BatchNorm*`` 模块。
+
+    输入模型必须处于 ``train()`` 模式。返回值是变换后的 ``fx.GraphModule``。
+
+    .. _pack_conv_bn_train_modules-en:
+
+    * **English**
+
+    Pack adjacent ``Conv*`` and ``BatchNorm*`` modules in a training-mode model into
+    a single wrapper to reduce redundant ``view/flatten`` hops along multi-step
+    ``Conv -> BatchNorm`` paths.
+
+    Unlike ``fuse_conv_bn_eval_modules``, this transform does not fuse weights. It
+    only rewrites the module graph into a more compile-friendly training structure.
+    Both native ``torch.nn`` layers and SpikingJelly activation-based
+    ``layer.Conv*`` / ``layer.BatchNorm*`` wrappers are supported.
+
+    The input model must be in ``train()`` mode. The returned value is the packed
+    ``fx.GraphModule``.
+    """
+    if not net.training:
+        raise ValueError("pack_conv_bn_train_modules only supports train() models.")
+
+    tracer = _TrainPackTracer()
+    graph = tracer.trace(net)
+    fx_model = fx.GraphModule(tracer.root, graph)
+    modules = dict(fx_model.named_modules())
+    patterns = [
+        (nn.Conv1d, nn.BatchNorm1d),
+        (nn.Conv2d, nn.BatchNorm2d),
+        (nn.Conv3d, nn.BatchNorm3d),
+        (layer.Conv1d, layer.BatchNorm1d),
+        (layer.Conv2d, layer.BatchNorm2d),
+        (layer.Conv3d, layer.BatchNorm3d),
+    ]
+
+    for pattern in patterns:
+        for node in list(fx_model.graph.nodes):
+            if not _matches_module_pattern(pattern, node, modules):
+                continue
+            if len(node.args[0].users) > 1:
+                continue
+            conv = modules[node.args[0].target]
+            bn = modules[node.target]
+            if (
+                isinstance(conv, (layer.Conv1d, layer.Conv2d, layer.Conv3d))
+                and isinstance(bn, (layer.BatchNorm1d, layer.BatchNorm2d, layer.BatchNorm3d))
+                and getattr(conv, "step_mode", None) != getattr(bn, "step_mode", None)
+            ):
+                continue
+            packed = _TrainConvBnWrapper(conv, bn)
+            _replace_node_module(node.args[0], modules, packed)
             node.replace_all_uses_with(node.args[0])
             fx_model.graph.erase_node(node)
 
