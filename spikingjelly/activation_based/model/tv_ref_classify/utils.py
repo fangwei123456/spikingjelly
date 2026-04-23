@@ -512,7 +512,10 @@ def reduce_across_processes(val, op=dist.ReduceOp.SUM, dtype=None):
         return torch.tensor(val, dtype=dtype)
 
     backend = dist.get_backend()
-    if backend == "nccl":
+    backend_name = (
+        backend if isinstance(backend, str) else getattr(backend, "value", str(backend))
+    )
+    if "nccl" in backend_name.lower():
         device = torch.device("cuda", torch.cuda.current_device())
     else:
         device = torch.device("cpu")

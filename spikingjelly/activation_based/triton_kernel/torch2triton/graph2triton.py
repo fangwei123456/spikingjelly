@@ -45,10 +45,12 @@ def _generate_hash(s: str, w: int = 8) -> str:
 
 
 def _codegen_cache_dir() -> Path:
-    candidates = [
-        Path.home() / ".spikingjelly" / "triton_codegen",
-        Path(tempfile.gettempdir()) / "spikingjelly_triton_codegen",
-    ]
+    candidates = []
+    try:
+        candidates.append(Path.home() / ".spikingjelly" / "triton_codegen")
+    except RuntimeError:
+        pass
+    candidates.append(Path(tempfile.gettempdir()) / "spikingjelly_triton_codegen")
     last_error = None
     for cache_dir in candidates:
         try:
@@ -328,10 +330,7 @@ def compile_triton_code_str(
     )
     fpath = _codegen_cache_dir() / f"{kernel_name}_{module_hash}.py"
 
-    try:
-        needs_write = (not fpath.exists()) or (fpath.read_text(encoding="utf-8") != triton_code)
-    except OSError:
-        needs_write = True
+    needs_write = not fpath.exists()
     if needs_write:
         with tempfile.NamedTemporaryFile(
             "w", encoding="utf-8", dir=fpath.parent, delete=False, suffix=".tmp"

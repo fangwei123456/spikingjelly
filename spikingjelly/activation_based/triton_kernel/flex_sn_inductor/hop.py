@@ -76,13 +76,13 @@ from torch._ops import HigherOrderOperator
 try:
     from torch._higher_order_ops.scan import scan_op as _torch_scan_op
     from torch._higher_order_ops.scan import wrap_combine_fn_flat as _wrap_scan_combine_fn_flat
-except Exception:
+except (ImportError, AttributeError):
     _torch_scan_op = None
     _wrap_scan_combine_fn_flat = None
 
 try:
     from torch._higher_order_ops.while_loop import while_loop as _torch_while_loop
-except Exception:
+except (ImportError, AttributeError):
     _torch_while_loop = None
 
 
@@ -469,8 +469,10 @@ def lowerable_while_loop_scan(
 
     if T == 0:
         def _empty_output(i: int) -> torch.Tensor:
-            if init_states:
-                ref = init_states[i % len(init_states)]
+            if i < len(init_states):
+                ref = init_states[i]
+            elif init_states:
+                ref = init_states[-1]
             elif lifted_args:
                 ref = lifted_args[min(i, len(lifted_args) - 1)]
             else:

@@ -63,7 +63,6 @@ class _EvalFusionTracer(fx.Tracer):
                 layer.BatchNorm1d,
                 layer.BatchNorm2d,
                 layer.BatchNorm3d,
-                base.StepModule,
                 base.MemoryModule,
                 neuron.BaseNode,
             ),
