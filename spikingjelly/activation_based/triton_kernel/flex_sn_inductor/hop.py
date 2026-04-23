@@ -450,6 +450,12 @@ def lowerable_while_loop_scan(
     def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
         return tensor.contiguous()
 
+    def _carry_device(*tensor_groups) -> torch.device:
+        for group in tensor_groups:
+            for tensor in group:
+                return tensor.device
+        return torch.device("cpu")
+
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
         if x.shape[0] != T:
@@ -459,8 +465,11 @@ def lowerable_while_loop_scan(
         def _empty_output(i: int) -> torch.Tensor:
             if init_states:
                 ref = init_states[i % len(init_states)]
-                return ref.new_empty((0, *ref.shape))
-            return input_seqs[0].new_empty((0, *input_seqs[0].shape[1:]))
+            elif lifted_args:
+                ref = lifted_args[min(i, len(lifted_args) - 1)]
+            else:
+                return input_seqs[0].new_empty((0, *input_seqs[0].shape[1:]))
+            return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(
             _empty_output(i) for i in range(num_outputs)
@@ -505,7 +514,11 @@ def lowerable_while_loop_scan(
         _shift_input_queue(seq) for seq in input_seqs
     )
 
-    t0 = torch.tensor(1, dtype=torch.int64, device=first_outputs[0].device)
+    t0 = torch.tensor(
+        1,
+        dtype=torch.int64,
+        device=_carry_device(first_states, input_seqs, first_outputs),
+    )
 
     def cond_fn(t, *carry):
         return t < T
@@ -591,6 +604,12 @@ def lowerable_while_loop_scan_final_state(
     def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
         return tensor.contiguous()
 
+    def _carry_device(*tensor_groups) -> torch.device:
+        for group in tensor_groups:
+            for tensor in group:
+                return tensor.device
+        return torch.device("cpu")
+
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
         if x.shape[0] != T:
@@ -602,6 +621,8 @@ def lowerable_while_loop_scan_final_state(
                 ref = init_states[i]
             elif init_states:
                 ref = init_states[-1]
+            elif lifted_args:
+                ref = lifted_args[min(i, len(lifted_args) - 1)]
             else:
                 ref = input_seqs[0].new_empty(input_seqs[0].shape[1:])
             return ref.new_empty((0, *ref.shape))
@@ -641,7 +662,11 @@ def lowerable_while_loop_scan_final_state(
     )
     pending_inputs = tuple(_shift_input_queue(seq) for seq in input_seqs)
 
-    t0 = torch.tensor(1, dtype=torch.int64, device=first_outputs[0].device)
+    t0 = torch.tensor(
+        1,
+        dtype=torch.int64,
+        device=_carry_device(first_states, input_seqs, first_outputs),
+    )
 
     def cond_fn(t, *carry):
         return t < T

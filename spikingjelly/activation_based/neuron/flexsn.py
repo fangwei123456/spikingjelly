@@ -173,6 +173,13 @@ def _can_elide_zero_state_inputs(module: "FlexSN") -> bool:
     )
 
 
+def _last_state_or_current(
+    state_seq: torch.Tensor,
+    current_state: torch.Tensor,
+) -> torch.Tensor:
+    return current_state if state_seq.shape[0] == 0 else state_seq[-1]
+
+
 def _validate_scan_backend_contract(
     core: Callable,
     num_inputs: int,
@@ -458,7 +465,7 @@ class FlexSN(base.MemoryModule):
         self.backend = backend
         self.store_state_seqs = store_state_seqs
 
-        if backend in ("triton", "inductor", "hop"):
+        if backend in ("triton", "inductor"):
             _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
@@ -741,7 +748,10 @@ class FlexSN(base.MemoryModule):
             result_seqs = self.kernel(*args, *self.states)
             output_seqs = result_seqs[: self.num_outputs]
             state_seqs = result_seqs[self.num_outputs :]
-            self.states = [v[-1] for v in state_seqs]
+            self.states = [
+                _last_state_or_current(v, self.states[i])
+                for i, v in enumerate(state_seqs)
+            ]
             if self.store_state_seqs:
                 self.state_seqs = state_seqs
             return output_seqs
@@ -760,7 +770,10 @@ class FlexSN(base.MemoryModule):
             state_results = list(result_seqs[self.num_outputs :])
             if self.store_state_seqs:
                 state_seqs = state_results
-                self.states = [v[-1] for v in state_seqs]
+                self.states = [
+                    _last_state_or_current(v, self.states[i])
+                    for i, v in enumerate(state_seqs)
+                ]
                 self.state_seqs = state_seqs
             else:
                 self.states = state_results
@@ -842,7 +855,12 @@ class FlexSN(base.MemoryModule):
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
             if result_has_state_seqs:
-                self.states = [v[-1] for v in state_seqs]
+                if self.states is None:
+                    self.states = self.init_states(self.num_states, self.step_mode, *args)
+                self.states = [
+                    _last_state_or_current(v, self.states[i])
+                    for i, v in enumerate(state_seqs)
+                ]
                 if self.store_state_seqs:
                     self.state_seqs = state_seqs
             else:

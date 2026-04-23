@@ -313,7 +313,11 @@ def compile_triton_code_str(
     )
     fpath = _codegen_cache_dir() / f"{kernel_name}_{module_hash}.py"
 
-    if not fpath.exists() or fpath.read_text(encoding="utf-8") != triton_code:
+    try:
+        needs_write = (not fpath.exists()) or (fpath.read_text(encoding="utf-8") != triton_code)
+    except OSError:
+        needs_write = True
+    if needs_write:
         with tempfile.NamedTemporaryFile(
             "w", encoding="utf-8", dir=fpath.parent, delete=False, suffix=".tmp"
         ) as tmp_file:
@@ -350,7 +354,7 @@ def compile_triton_code_str(
                 if not isinstance(tl, types.ModuleType):
                     language_module.__dict__.update(getattr(tl, "__dict__", {}))
                 sys.modules["triton.language"] = language_module
-            setattr(triton_module, "language", language_module)
+            triton_module.language = language_module
             sys.modules[module_name] = module
             try:
                 spec.loader.exec_module(module)
@@ -362,14 +366,6 @@ def compile_triton_code_str(
                     sys.modules.pop("triton.language", None)
                 if restore_triton:
                     sys.modules.pop("triton", None)
-        else:
-            module.__dict__.update(
-                {
-                    "triton": triton,
-                    "tl": tl,
-                }
-            )
-
     name_space.update(module.__dict__)
     if kernel_name in module.__dict__:
         return module.__dict__[kernel_name]
