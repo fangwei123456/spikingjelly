@@ -56,6 +56,7 @@ class _EvalFusionTracer(fx.Tracer):
         if isinstance(
             m,
             (
+                _TrainConvBnWrapper,
                 layer.Conv1d,
                 layer.Conv2d,
                 layer.Conv3d,
