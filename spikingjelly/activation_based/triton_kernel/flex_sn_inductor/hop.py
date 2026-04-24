@@ -147,6 +147,8 @@ def _empty_outputs_from_template(
     num_outputs: int,
     output_template_specs: Optional[OutputTemplateSpecs],
 ) -> Tuple[torch.Tensor, ...]:
+    if num_outputs == 0:
+        return ()
     if output_template_specs is None:
         raise ValueError(
             "FlexSN HOP empty scans require output_template_specs so output "

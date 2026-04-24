@@ -34,6 +34,8 @@ from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     lowerable_while_loop_available,
 )
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import hop as hop_module
+from spikingjelly.activation_based.triton_kernel.flexsn import template as template_module
+from spikingjelly.activation_based.triton_kernel.flexsn.info import FlexSNInfo
 
 
 def _lif_core(x: torch.Tensor, v: torch.Tensor):
@@ -128,6 +130,30 @@ def test_torch_backend_empty_sequence_requires_example_output_template():
     assert calls["count"] == 0
 
 
+def test_torch_backend_empty_state_only_sequence_does_not_require_output_template():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty multi-step input")
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=0,
+        step_mode="m",
+        backend="torch",
+    )
+    m.states = [torch.zeros(3)]
+
+    outputs = m.multi_step_forward(torch.empty(0, 3))
+
+    assert calls["count"] == 0
+    assert outputs == []
+    torch.testing.assert_close(m.states[0], torch.zeros(3))
+
+
 def test_torch_backend_empty_sequence_uses_example_output_template_without_core_probe():
     calls = {"count": 0}
 
@@ -181,6 +207,14 @@ def test_output_template_specs_from_examples_use_first_input_contract():
         ((2,), torch.float16),
         ((2,), torch.float16),
     )
+
+
+def test_output_template_specs_from_outputs_preserve_device():
+    output = torch.zeros(4, dtype=torch.float64)
+
+    specs = flexsn_module._make_output_template_specs_from_outputs(1, (output,))
+
+    assert specs == (((4,), torch.float64, output.device),)
 
 
 def test_multi_step_forward_initializes_states_for_torch_backend():
@@ -947,6 +981,55 @@ def test_eager_scan_empty_sequence_uses_template_without_core_call():
     assert y_final.dtype == torch.float64
     torch.testing.assert_close(v_final, v0)
     assert v_final is not v0
+
+
+def test_eager_scan_empty_state_only_does_not_require_output_template():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty eager scan")
+
+    x = torch.empty(0, 2)
+    v0 = torch.ones(3)
+
+    (v_seq,) = eager_scan(core, 1, 1, 0, x, v0)
+    (v_final,) = eager_scan_final_state(core, 1, 1, 0, x, v0)
+
+    assert calls["count"] == 0
+    assert v_seq.shape == (0, 3)
+    torch.testing.assert_close(v_final, v0)
+    assert v_final is not v0
+
+
+def test_inference_final_state_template_handles_zero_states(monkeypatch):
+    captured = {}
+
+    def fake_compile(kernel_str, kernel_name, verbose):
+        compile(kernel_str, kernel_name, "exec")
+        captured["kernel_str"] = kernel_str
+        return object()
+
+    monkeypatch.setattr(template_module, "compile_triton_code_str", fake_compile)
+    info = FlexSNInfo(
+        num_inputs=1,
+        num_outputs=1,
+        num_states=0,
+        fwd_core_args=["x"],
+        fwd_core_returns=["s"],
+        fwd_core_recipients=["s0"],
+        fwd_kernel_returns=["s0"],
+        num_fwd_kernel_returns=1,
+        c2k_return_mapping=[],
+    )
+
+    template_module.get_flexsn_inference_final_state_kernel(
+        "@triton.jit\ndef core_12345678(x0):\n    return x0",
+        "core_12345678",
+        info,
+    )
+
+    assert "\n    , # inputs" not in captured["kernel_str"]
 
 
 def test_lowerable_while_loop_matches_manual_loop(rng):

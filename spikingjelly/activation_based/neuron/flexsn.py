@@ -269,10 +269,9 @@ def _empty_multistep_outputs(
             spec = output_template_specs[i]
             if len(spec) == 2:
                 shape, dtype = spec
-                device = args[0].device
             else:
-                shape, dtype, device = spec
-            return torch.empty((0, *shape), dtype=dtype, device=device)
+                shape, dtype, _ = spec
+            return torch.empty((0, *shape), dtype=dtype, device=args[0].device)
         if args:
             ref = args[0].new_empty(args[0].shape[1:])
         elif states:
@@ -311,7 +310,7 @@ def _make_output_template_specs_from_outputs(
             raise TypeError(
                 f"FlexSN example output #{i} is {type(tensor)!r}; expected a tensor."
             )
-        specs.append((tuple(tensor.shape), tensor.dtype))
+        specs.append((tuple(tensor.shape), tensor.dtype, tensor.device))
     return tuple(specs)
 
 
@@ -975,6 +974,7 @@ class FlexSN(base.MemoryModule):
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
             if (
                 self.backend in ("torch", "hop")
+                and self.num_outputs > 0
                 and self._explicit_output_template_specs is None
             ):
                 raise ValueError(
