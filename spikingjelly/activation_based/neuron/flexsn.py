@@ -34,6 +34,9 @@ try:
         lowerable_scan_available as _flexsn_lowerable_scan_available,
     )
     from ..triton_kernel.flex_sn_inductor import (
+        dynamo_hop_available as _flexsn_dynamo_hop_available,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
         lowerable_while_loop_available as _flexsn_lowerable_while_loop_available,
     )
 except (ImportError, AttributeError) as e:
@@ -44,6 +47,7 @@ except (ImportError, AttributeError) as e:
     _flexsn_lowerable_scan = None
     _flexsn_lowerable_scan_final_state = None
     _flexsn_lowerable_scan_available = None
+    _flexsn_dynamo_hop_available = None
     _flexsn_lowerable_while_loop_scan = None
     _flexsn_lowerable_while_loop_scan_final_state = None
     _flexsn_lowerable_while_loop_available = None
@@ -153,6 +157,7 @@ def _run_hop_scan(
     enable_lowerable_scan = (
         os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
     )
+    is_compiling = _is_compiling()
     if _flexsn_eager_scan is None:
         raise RuntimeError(
             "FlexSN HOP backend is unavailable: eager_scan failed to import. "
@@ -161,7 +166,7 @@ def _run_hop_scan(
         )
 
     use_lowerable_while_loop = (
-        _is_compiling()
+        is_compiling
         and _flexsn_lowerable_while_loop_scan is not None
         and callable(_flexsn_lowerable_while_loop_available)
         and _flexsn_lowerable_while_loop_available()
@@ -169,7 +174,7 @@ def _run_hop_scan(
         and enable_lowerable_while_loop
     )
     use_lowerable_scan = (
-        _is_compiling()
+        is_compiling
         and _flexsn_lowerable_scan is not None
         and callable(_flexsn_lowerable_scan_available)
         and _flexsn_lowerable_scan_available()
@@ -189,7 +194,17 @@ def _run_hop_scan(
             if store_state_seqs
             else _flexsn_lowerable_scan_final_state
         )
-    elif _flexsn_hop_scan is not None and store_state_seqs:
+    elif (
+        _flexsn_hop_scan is not None
+        and store_state_seqs
+        and (
+            not is_compiling
+            or (
+                callable(_flexsn_dynamo_hop_available)
+                and _flexsn_dynamo_hop_available()
+            )
+        )
+    ):
         scan_impl = _flexsn_hop_scan
     elif not store_state_seqs:
         scan_impl = _flexsn_eager_scan_final_state
@@ -732,8 +747,10 @@ class FlexSN(base.MemoryModule):
                     _warmup_inductor_inference_final_state_kernel(self)
                 except Exception as e:
                     logging.warning(
-                        "FlexSN: could not warm up inductor inference-final-state kernel (%s); "
-                        "falling back to the regular inference kernel for store_state_seqs=False." % e
+                        "FlexSN: could not warm up inductor inference-final-state "
+                        "kernel (%s: %s); falling back to the regular inference "
+                        "kernel for store_state_seqs=False."
+                        % (type(e).__name__, e)
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None

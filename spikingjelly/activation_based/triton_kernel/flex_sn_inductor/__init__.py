@@ -7,6 +7,7 @@ try:
         lowerable_scan,
         lowerable_scan_final_state,
         lowerable_scan_available,
+        dynamo_hop_available,
         lowerable_while_loop_scan,
         lowerable_while_loop_scan_final_state,
         lowerable_while_loop_available,
@@ -22,6 +23,7 @@ except BaseException as e:
     lowerable_scan = None
     lowerable_scan_final_state = None
     lowerable_scan_available = None
+    dynamo_hop_available = None
     lowerable_while_loop_scan = None
     lowerable_while_loop_scan_final_state = None
     lowerable_while_loop_available = None

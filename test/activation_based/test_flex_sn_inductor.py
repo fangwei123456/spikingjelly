@@ -19,6 +19,7 @@ from spikingjelly.activation_based.neuron.flexsn import (
     FlexSN,
     _make_inductor_final_state_warmup_args,
 )
+from spikingjelly.activation_based.neuron import flexsn as flexsn_module
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     flex_sn_scan,
@@ -128,6 +129,59 @@ def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
     assert tuple(y_seq.shape) == (0, 3)
     torch.testing.assert_close(v_final, v)
     assert v_final.data_ptr() != v.data_ptr()
+
+
+def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+        custom_ops,
+    )
+
+    x = torch.randn(2, 3)
+    v = torch.randn(3)
+    y = torch.randn(2, 3)
+    bundle = SimpleNamespace(
+        backward_kernel=object(),
+        training_info=SimpleNamespace(num_inputs=1, num_outputs=1, num_states=1),
+    )
+    ctx = SimpleNamespace(
+        handle=1,
+        input_template_specs=[
+            (tuple(x.shape), x.dtype, x.device),
+            (tuple(v.shape), v.dtype, v.device),
+        ],
+        output_template_specs=[(tuple(y.shape), y.dtype, y.device)],
+        state_seq_template_specs=[((x.shape[0], *v.shape), v.dtype, v.device)],
+        saved_tensors=[],
+        _active_ref_finalizer=SimpleNamespace(
+            alive=False,
+            detach=lambda: None,
+        ),
+    )
+    seen = {}
+
+    def fake_backward(handle, grad_inputs, saved_tensors, input_templates):
+        seen["grad_inputs"] = grad_inputs
+        assert handle == ctx.handle
+        assert saved_tensors == []
+        return [torch.zeros_like(x), torch.zeros_like(v)]
+
+    monkeypatch.setattr(custom_ops, "_lookup_kernel_handle", lambda handle: bundle)
+    monkeypatch.setattr(custom_ops, "flexsn_inductor_backward", fake_backward)
+    monkeypatch.setattr(
+        custom_ops,
+        "release_active_flexsn_kernel_handle",
+        lambda handle: None,
+    )
+
+    _, grads = custom_ops._flexsn_training_final_state_backward(ctx, [])
+
+    assert len(seen["grad_inputs"]) == 2
+    torch.testing.assert_close(seen["grad_inputs"][0], torch.zeros_like(y))
+    torch.testing.assert_close(
+        seen["grad_inputs"][1], torch.zeros((x.shape[0], *v.shape))
+    )
+    torch.testing.assert_close(grads[0], torch.zeros_like(x))
+    torch.testing.assert_close(grads[1], torch.zeros_like(v))
 
 
 @pytest.mark.parametrize("T", [1, 4, 16])
@@ -338,6 +392,31 @@ def test_hop_registers_with_dynamo():
 
     hop_var = TorchHigherOrderOperatorVariable.make(flex_sn_scan)
     assert hop_var.value is flex_sn_scan
+
+
+def test_run_hop_scan_compiled_falls_back_when_dynamo_hop_unavailable(monkeypatch):
+    x = torch.randn(2, 3)
+    v = torch.zeros(3)
+
+    def fake_hop(*args):
+        return ("hop",)
+
+    def fake_eager(*args):
+        return ("eager",)
+
+    monkeypatch.setattr(flexsn_module, "_is_compiling", lambda: True)
+    monkeypatch.setattr(flexsn_module, "_flexsn_lowerable_scan", None)
+    monkeypatch.setattr(flexsn_module, "_flexsn_lowerable_while_loop_scan", None)
+    monkeypatch.setattr(flexsn_module, "_flexsn_hop_scan", fake_hop)
+    monkeypatch.setattr(flexsn_module, "_flexsn_eager_scan", fake_eager)
+    monkeypatch.setattr(flexsn_module, "_flexsn_dynamo_hop_available", lambda: False)
+
+    result = flexsn_module._run_hop_scan(None, 1, 1, 1, True, x, v)
+    assert result == ("eager",)
+
+    monkeypatch.setattr(flexsn_module, "_flexsn_dynamo_hop_available", lambda: True)
+    result = flexsn_module._run_hop_scan(None, 1, 1, 1, True, x, v)
+    assert result == ("hop",)
 
 
 def test_lowerable_scan_matches_manual_loop(rng):

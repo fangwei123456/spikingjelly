@@ -176,6 +176,14 @@ def _materialize_template(spec):
     return torch.empty((), dtype=dtype, device=device).expand(shape)
 
 
+def _grad_or_zeros(grad_out, index: int, spec):
+    grad = grad_out[index] if index < len(grad_out) else None
+    if grad is not None:
+        return grad
+    shape, dtype, device = spec
+    return torch.zeros(shape, dtype=dtype, device=device)
+
+
 def _make_state_templates_like(
     flat_args: list[torch.Tensor], num_states: int
 ) -> list[torch.Tensor]:
@@ -528,13 +536,7 @@ def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
 
     required_grads = bundle.training_info.num_outputs + bundle.training_info.num_states
     grad_inputs = [
-        grad_out[i]
-        if grad_out[i] is not None
-        else torch.zeros(
-            ctx.output_template_specs[i][0],
-            dtype=ctx.output_template_specs[i][1],
-            device=ctx.output_template_specs[i][2],
-        )
+        _grad_or_zeros(grad_out, i, ctx.output_template_specs[i])
         for i in range(required_grads)
     ]
     input_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
@@ -563,23 +565,19 @@ def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | Non
 
     output_grads = []
     for i in range(bundle.training_info.num_outputs):
-        if grad_out[i] is not None:
-            output_grads.append(grad_out[i])
-        else:
-            output_grads.append(
-                torch.zeros(
-                    ctx.output_template_specs[i][0],
-                    dtype=ctx.output_template_specs[i][1],
-                    device=ctx.output_template_specs[i][2],
-                )
-            )
+        output_grads.append(_grad_or_zeros(grad_out, i, ctx.output_template_specs[i]))
 
     state_grads = []
     for i in range(bundle.training_info.num_states):
         state_seq_shape, state_seq_dtype, state_seq_device = (
             ctx.state_seq_template_specs[i]
         )
-        final_grad = grad_out[bundle.training_info.num_outputs + i]
+        final_grad_index = bundle.training_info.num_outputs + i
+        final_grad = (
+            grad_out[final_grad_index]
+            if final_grad_index < len(grad_out)
+            else None
+        )
         seq_grad = torch.zeros(
             state_seq_shape,
             dtype=state_seq_dtype,
@@ -605,7 +603,12 @@ def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | Non
             grads = grads[: len(ctx.input_template_specs)]
         explicit_state_start = bundle.training_info.num_inputs
         for i in range(bundle.training_info.num_states):
-            final_grad = grad_out[bundle.training_info.num_outputs + i]
+            final_grad_index = bundle.training_info.num_outputs + i
+            final_grad = (
+                grad_out[final_grad_index]
+                if final_grad_index < len(grad_out)
+                else None
+            )
             state_seq_shape = ctx.state_seq_template_specs[i][0]
             grad_index = explicit_state_start + i
             if (

@@ -122,6 +122,7 @@ class FlexSNScan(HigherOrderOperator):
 
 
 flex_sn_scan = FlexSNScan()
+_DYNAMO_HOP_REGISTERED = False
 
 
 def _as_tuple(outputs):
@@ -132,6 +133,10 @@ def _as_tuple(outputs):
 
 def lowerable_scan_available() -> bool:
     return _torch_scan_op is not None
+
+
+def dynamo_hop_available() -> bool:
+    return _DYNAMO_HOP_REGISTERED
 
 
 def lowerable_while_loop_available() -> bool:
@@ -862,6 +867,7 @@ flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
 
 
 def _register_dynamo_hop() -> None:
+    global _DYNAMO_HOP_REGISTERED
     try:
         from torch._dynamo.variables import higher_order_ops as hop_vars
         from torch._dynamo.variables.builder import wrap_fx_proxy
@@ -889,6 +895,7 @@ def _register_dynamo_hop() -> None:
         return
 
     if getattr(TorchHigherOrderOperatorVariable.make, "_spikingjelly_flexsn_hop", False):
+        _DYNAMO_HOP_REGISTERED = True
         return
 
     original_make = TorchHigherOrderOperatorVariable.make
@@ -1064,6 +1071,7 @@ def _register_dynamo_hop() -> None:
 
     patched_make._spikingjelly_flexsn_hop = True
     TorchHigherOrderOperatorVariable.make = staticmethod(patched_make)
+    _DYNAMO_HOP_REGISTERED = True
 
 
 _register_dynamo_hop()
