@@ -561,6 +561,10 @@ def lowerable_while_loop_scan(
 
     This is an explicit research helper for probing whether a first-class loop
     representation is a better fit than the current unrolled scan path.
+    Current PyTorch while-loop capture does not support indexing input
+    sequences by the symbolic loop counter in this path, so the implementation
+    keeps functional queue buffers. Prefer ``lowerable_scan`` for performance
+    experiments on long sequences.
     """
     if _torch_while_loop is None:
         raise RuntimeError("PyTorch while_loop HOP is unavailable in this environment")
@@ -637,9 +641,7 @@ def lowerable_while_loop_scan(
         _append_to_tail(state.new_zeros((T, *state.shape)), state)
         for state in first_states
     )
-    pending_inputs = tuple(
-        _shift_input_queue(seq) for seq in input_seqs
-    )
+    pending_inputs = tuple(_shift_input_queue(seq) for seq in input_seqs)
 
     t0 = torch.tensor(
         1,
@@ -681,8 +683,8 @@ def lowerable_while_loop_scan(
                 f"expected {len(outputs_acc)}"
             )
         next_output_acc = tuple(
-            _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs)
+            _append_to_tail(outputs_acc[i], outputs[i])
+            for i in range(len(outputs_acc))
         )
         if len(states_acc) != len(next_states):
             raise ValueError(
@@ -690,8 +692,8 @@ def lowerable_while_loop_scan(
                 f"expected {len(states_acc)}"
             )
         next_state_acc = tuple(
-            _append_to_tail(buf, state)
-            for buf, state in zip(states_acc, next_states)
+            _append_to_tail(states_acc[i], next_states[i])
+            for i in range(len(states_acc))
         )
         return (
             t + 1,
@@ -840,8 +842,8 @@ def lowerable_while_loop_scan_final_state(
                 f"expected {len(outputs_acc)}"
             )
         next_output_acc = tuple(
-            _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs)
+            _append_to_tail(outputs_acc[i], outputs[i])
+            for i in range(len(outputs_acc))
         )
         return (
             t + 1,

@@ -531,8 +531,8 @@ def test_compile_fullgraph_lowerable_while_loop_matches_eager(rng):
     compiled_out = torch.compile(run_scan, fullgraph=True)(x_compiled, v0_compiled)
 
     assert len(compiled_out) == len(eager_out)
-    for compiled_tensor, eager_tensor in zip(compiled_out, eager_out):
-        torch.testing.assert_close(compiled_tensor, eager_tensor)
+    for i in range(len(eager_out)):
+        torch.testing.assert_close(compiled_out[i], eager_out[i])
 
 
 def test_compile_fullgraph_hop_backend_matches_eager_with_lowerable_while_loop(

@@ -45,7 +45,9 @@ def _matches_module_pattern(pattern, node: fx.Node, modules) -> bool:
     nodes = (node.args[0], node)
     if len(pattern) != len(nodes):
         return False
-    for expected_type, current_node in zip(pattern, nodes):
+    for i in range(len(pattern)):
+        expected_type = pattern[i]
+        current_node = nodes[i]
         if not isinstance(current_node, fx.Node):
             return False
         if current_node.op != "call_module":
