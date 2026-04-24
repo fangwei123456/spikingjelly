@@ -282,6 +282,27 @@ def _make_output_template_specs_from_examples(
     return tuple(specs)
 
 
+def _make_output_template_specs_from_outputs(
+    num_outputs: int,
+    example_outputs: Optional[Tuple[torch.Tensor, ...]],
+) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
+    if example_outputs is None:
+        return None
+    if len(example_outputs) != num_outputs:
+        raise ValueError(
+            f"FlexSN expected {num_outputs} example output tensors, but got "
+            f"{len(example_outputs)}."
+        )
+    specs = []
+    for i, tensor in enumerate(example_outputs):
+        if not isinstance(tensor, torch.Tensor):
+            raise TypeError(
+                f"FlexSN example output #{i} is {type(tensor)!r}; expected a tensor."
+            )
+        specs.append((tuple(tensor.shape), tensor.dtype))
+    return tuple(specs)
+
+
 def _core_requires_grad(core: Callable) -> bool:
     if isinstance(core, functools.partial):
         return (
@@ -508,6 +529,7 @@ class FlexSN(base.MemoryModule):
         step_mode: str = "m",
         backend: str = "triton",
         store_state_seqs: bool = False,
+        example_outputs: Optional[Tuple[torch.Tensor]] = None,
     ):
         """
         **API Language:**
@@ -557,6 +579,11 @@ class FlexSN(base.MemoryModule):
         :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
             ``state_seqs`` 是个列表，每个元素是形状为 ``[T, ...]`` 的张量。默认 ``False``。
         :type store_state_seqs: bool
+
+        :param example_outputs: ``core`` 的单步输出模板，形式为 ``[*outputs]``。
+            在空序列输入时用于构造输出张量的形状和 dtype，避免为了推断输出而执行 ``core``。
+            默认为 ``None``。
+        :type example_outputs: Optional[Tuple[torch.Tensor]]
 
         ----
 
@@ -617,6 +644,11 @@ class FlexSN(base.MemoryModule):
             ``state_seqs`` is a list of tensors with shape ``[T, ...]``. Defaults
             to ``False``.
         :type store_state_seqs: bool
+
+        :param example_outputs: per-step output templates for ``core`` with the form of
+            ``[*outputs]``. They provide the empty-sequence output shapes and dtypes
+            without executing ``core`` for shape inference. Defaults to ``None``.
+        :type example_outputs: Optional[Tuple[torch.Tensor]]
         """
         super().__init__()
         self.core = core
@@ -632,9 +664,15 @@ class FlexSN(base.MemoryModule):
                 num_inputs + num_states,
             )
         )
-        self._output_template_specs = _make_output_template_specs_from_examples(
-            num_outputs,
-            example_inputs,
+        self._output_template_specs = (
+            _make_output_template_specs_from_outputs(
+                num_outputs,
+                example_outputs,
+            )
+            or _make_output_template_specs_from_examples(
+                num_outputs,
+                example_inputs,
+            )
         )
 
         if backend in ("triton", "inductor"):
@@ -700,6 +738,9 @@ class FlexSN(base.MemoryModule):
                         build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
                 except Exception as e:
+                    # Triton/CUDA/driver compilation failures surface through
+                    # several exception types; any failure here can safely fall
+                    # back to the already-built regular inference path.
                     logging.warning(
                         "FlexSN: could not build inductor inference-final-state kernel (%s); "
                         "store_state_seqs=False inference falls back to the regular inference kernel." % e

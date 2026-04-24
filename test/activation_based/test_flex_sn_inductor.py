@@ -100,6 +100,46 @@ def test_torch_backend_empty_sequence_does_not_probe_core_at_construction():
     assert out.shape == (0, 2)
 
 
+def test_torch_backend_empty_sequence_uses_example_output_template_without_core_probe():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty multi-step input")
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        example_inputs=(torch.zeros(2), torch.zeros(3)),
+        example_outputs=(torch.zeros(4, dtype=torch.float64),),
+    )
+    assert calls["count"] == 0
+    m.states = [torch.zeros(3)]
+
+    out = m.multi_step_forward(torch.empty(0, 2))[0]
+
+    assert calls["count"] == 0
+    assert out.shape == (0, 4)
+    assert out.dtype == torch.float64
+
+
+def test_flexsn_rejects_invalid_example_output_template():
+    with pytest.raises(ValueError, match="expected 1 example output tensors"):
+        FlexSN(
+            core=_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="torch",
+            example_outputs=(),
+        )
+
+
 def test_multi_step_forward_initializes_states_for_torch_backend():
     m = FlexSN(
         core=_lif_core,

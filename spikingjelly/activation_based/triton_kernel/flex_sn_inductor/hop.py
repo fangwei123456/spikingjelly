@@ -1107,6 +1107,9 @@ def _register_dynamo_hop() -> None:
         return original_make(cls, value, source=source, **kwargs)
 
     patched_make._spikingjelly_flexsn_hop = True
+    # Dynamo does not currently expose a public registry for this HOP hook.
+    # Patch only the flex_sn_scan dispatch and delegate every other operator
+    # back to PyTorch's original implementation.
     TorchHigherOrderOperatorVariable.make = classmethod(patched_make)
     _DYNAMO_HOP_REGISTERED = True
 
