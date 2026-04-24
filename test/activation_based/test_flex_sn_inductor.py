@@ -20,6 +20,7 @@ from spikingjelly.activation_based.neuron.flexsn import (
     _make_inductor_final_state_warmup_args,
 )
 from spikingjelly.activation_based.neuron import flexsn as flexsn_module
+from spikingjelly.activation_based import base as base_module
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     dynamo_hop_available,
@@ -51,14 +52,12 @@ def _skip_if_dynamo_hop_unavailable():
         pytest.skip("FlexSN Dynamo HOP registration is unavailable")
 
 
-def test_torch_backend_empty_sequence_uses_core_output_shape_and_cloned_states():
+def test_torch_backend_empty_sequence_does_not_call_core():
     calls = {"count": 0}
-    initial_state = torch.ones(3)
 
     def core(x, v):
         calls["count"] += 1
-        v.add_(1)
-        return x.new_zeros(4), v
+        raise AssertionError("core should not run for an empty multi-step input")
 
     m = FlexSN(
         core=core,
@@ -68,14 +67,12 @@ def test_torch_backend_empty_sequence_uses_core_output_shape_and_cloned_states()
         step_mode="m",
         backend="torch",
     )
-    m.states = [initial_state.clone()]
 
     out = m(torch.empty(0, 3))
 
-    assert calls["count"] == 1
-    assert out.shape == (0, 4)
+    assert calls["count"] == 0
+    assert out.shape == (0, 3)
     assert m.states[0].shape == (3,)
-    torch.testing.assert_close(m.states[0], initial_state)
 
 
 def test_torch_backend_empty_sequence_does_not_probe_core_at_construction():
@@ -99,8 +96,8 @@ def test_torch_backend_empty_sequence_does_not_probe_core_at_construction():
 
     out = m.multi_step_forward(torch.empty(0, 2))[0]
 
-    assert calls["count"] == 1
-    assert out.shape == (0, 4)
+    assert calls["count"] == 0
+    assert out.shape == (0, 2)
 
 
 def test_multi_step_forward_initializes_states_for_torch_backend():
@@ -137,7 +134,7 @@ def test_multi_step_forward_initializes_states_for_hop_backend():
     assert m.states[0].shape == (3,)
 
 
-def test_multi_step_forward_initializes_states_for_triton_backend():
+def test_multi_step_forward_initializes_states_for_triton_backend(monkeypatch):
     class FakeKernel:
         def __call__(self, x_seq, v):
             assert v.shape == x_seq.shape[1:]
@@ -151,7 +148,8 @@ def test_multi_step_forward_initializes_states_for_triton_backend():
         step_mode="m",
         backend="torch",
     )
-    m._backend = "triton"
+    monkeypatch.setattr(base_module, "triton", object())
+    m.backend = "triton"
     m.kernel = FakeKernel()
 
     out = m.multi_step_forward(torch.randn(2, 3))[0]
@@ -190,6 +188,18 @@ def test_core_requires_grad_detects_functor_tensor_attributes():
     assert not flexsn_module._core_requires_grad(
         Core(torch.ones(3, requires_grad=False))
     )
+
+
+def test_core_requires_grad_detects_bound_method_self_parameters():
+    class Core(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.nn.Parameter(torch.ones(3))
+
+        def forward(self, x, v):
+            return x * self.weight, v
+
+    assert flexsn_module._core_requires_grad(Core().forward)
 
 
 def test_flexsn_wrapper_final_states_use_init_state_templates():

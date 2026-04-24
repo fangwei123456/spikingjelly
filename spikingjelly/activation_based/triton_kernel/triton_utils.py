@@ -3,14 +3,9 @@ https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
-import atexit
 import contextlib
 import functools
-import logging
 import os
-import tempfile
-import threading
-from pathlib import Path
 from typing import Callable
 
 import torch
@@ -137,49 +132,13 @@ else:
     amp_custom_fwd = torch.cuda.amp.custom_fwd
     amp_custom_bwd = torch.cuda.amp.custom_bwd
 
-_CLEANUP_TMP_PYTHON_FILES_REGISTERED = False
-_CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK = threading.Lock()
-_logger = logging.getLogger(__name__)
-
-
-def _triton_codegen_cache_dirs():
-    uid = getattr(os, "getuid", lambda: None)()
-    temp_suffix = f"_{uid}" if uid is not None else ""
-    candidates = [
-        Path(tempfile.gettempdir()) / f"spikingjelly_triton_codegen{temp_suffix}"
-    ]
-    try:
-        candidates.append(Path.home() / ".spikingjelly" / "triton_codegen")
-    except RuntimeError:
-        pass
-    return candidates
-
-
 def cleanup_tmp_python_files():
-    print("Cleaning up temporary python files!")
-    for cache_dir in _triton_codegen_cache_dirs():
-        if not cache_dir.is_dir():
-            continue
-        for pattern in ("*.py", "*.py.tmp", "*.tmp"):
-            for f in cache_dir.glob(pattern):
-                try:
-                    f.unlink()
-                except FileNotFoundError:
-                    pass
-                except Exception as exc:
-                    _logger.warning(
-                        "failed to remove temporary Triton file %s: %s", f, exc
-                    )
+    return None
 
 
 def ensure_cleanup_tmp_python_files(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
-        global _CLEANUP_TMP_PYTHON_FILES_REGISTERED
-        with _CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK:
-            if not _CLEANUP_TMP_PYTHON_FILES_REGISTERED:
-                atexit.register(cleanup_tmp_python_files)
-                _CLEANUP_TMP_PYTHON_FILES_REGISTERED = True
         return fn(*args, **kwargs)
 
     return wrapper
