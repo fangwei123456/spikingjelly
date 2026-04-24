@@ -409,12 +409,7 @@ def compile_triton_code_str(
                 raise ImportError(f"Could not create import spec for {fpath}")
             module = importlib.util.module_from_spec(spec)
             module.__dict__.update(module_globals)
-            try:
-                spec.loader.exec_module(module)
-            except BaseException:
-                if cacheable:
-                    sys.modules.pop(module_name, None)
-                raise
+            spec.loader.exec_module(module)
             if cacheable:
                 sys.modules[module_name] = module
     if caller_namespace is not None:

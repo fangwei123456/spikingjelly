@@ -132,6 +132,44 @@ def test_multi_step_forward_initializes_states_for_hop_backend():
     assert m.states[0].shape == (3,)
 
 
+def test_multi_step_forward_initializes_states_for_triton_backend():
+    class FakeKernel:
+        def __call__(self, x_seq, v):
+            assert v.shape == x_seq.shape[1:]
+            return x_seq.new_zeros(x_seq.shape), x_seq.new_zeros(x_seq.shape)
+
+    m = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+    m._backend = "triton"
+    m.kernel = FakeKernel()
+
+    out = m.multi_step_forward(torch.randn(2, 3))[0]
+
+    assert out.shape == (2, 3)
+    assert m.states is not None
+    assert m.states[0].shape == (3,)
+
+
+def test_core_requires_grad_detects_functor_tensor_attributes():
+    class Core:
+        def __init__(self, weight):
+            self.weight = weight
+
+        def __call__(self, x, v):
+            return x * self.weight, v
+
+    assert flexsn_module._core_requires_grad(Core(torch.ones(3, requires_grad=True)))
+    assert not flexsn_module._core_requires_grad(
+        Core(torch.ones(3, requires_grad=False))
+    )
+
+
 def test_flexsn_wrapper_final_states_use_init_state_templates():
     from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
         flexsn_inference_final_state,

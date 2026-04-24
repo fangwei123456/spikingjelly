@@ -295,6 +295,13 @@ def _core_requires_grad(core: Callable) -> bool:
             if tensor.requires_grad:
                 return True
 
+    if callable(core) and not hasattr(core, "__code__"):
+        core_dict = getattr(core, "__dict__", None)
+        if core_dict is not None:
+            for value in core_dict.values():
+                if _value_requires_grad(value):
+                    return True
+
     closure = getattr(core, "__closure__", None)
     if closure is None:
         return False
@@ -930,6 +937,8 @@ class FlexSN(base.MemoryModule):
             return [torch.stack(y, dim=0) for y in output_seqs]
 
         elif self.backend == "triton":
+            if self.states is None:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
             result_seqs = self.kernel(*args, *self.states)
             output_seqs = result_seqs[: self.num_outputs]
             state_seqs = result_seqs[self.num_outputs :]

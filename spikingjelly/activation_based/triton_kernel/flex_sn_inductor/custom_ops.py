@@ -290,10 +290,10 @@ def _flexsn_inductor_training_impl(
 def _flexsn_inductor_training_final_state_impl(
     bundle: FlexSNKernelHandle, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
-    full_returns = _flexsn_inductor_training_impl(bundle, flat_args)
     info = bundle.training_info
     assert info is not None
     args = _materialize_zero_state_args(info, flat_args)
+    full_returns = _flexsn_inductor_training_impl(bundle, args)
     visible_outputs = list(full_returns[: info.num_outputs])
     state_seqs = list(
         full_returns[info.num_outputs : info.num_outputs + info.num_states]
