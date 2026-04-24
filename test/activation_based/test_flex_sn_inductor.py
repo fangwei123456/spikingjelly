@@ -22,6 +22,7 @@ from spikingjelly.activation_based.neuron.flexsn import (
 from spikingjelly.activation_based.neuron import flexsn as flexsn_module
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    dynamo_hop_available,
     flex_sn_scan,
     lowerable_scan,
     lowerable_scan_available,
@@ -45,6 +46,11 @@ def rng():
     return torch.Generator().manual_seed(42)
 
 
+def _skip_if_dynamo_hop_unavailable():
+    if not callable(dynamo_hop_available) or not dynamo_hop_available():
+        pytest.skip("FlexSN Dynamo HOP registration is unavailable")
+
+
 def test_torch_backend_empty_sequence_does_not_call_core():
     calls = {"count": 0}
 
@@ -66,6 +72,116 @@ def test_torch_backend_empty_sequence_does_not_call_core():
     assert calls["count"] == 0
     assert out.shape == (0, 3)
     assert m.states[0].shape == (3,)
+
+
+def test_torch_backend_empty_sequence_uses_example_output_template():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        return x.new_zeros(4), v
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        example_inputs=(torch.zeros(2), torch.zeros(3)),
+    )
+    m.states = [torch.zeros(3)]
+    calls["count"] = 0
+
+    out = m.multi_step_forward(torch.empty(0, 2))[0]
+
+    assert calls["count"] == 0
+    assert out.shape == (0, 4)
+
+
+def test_multi_step_forward_initializes_states_for_torch_backend():
+    m = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+
+    out = m.multi_step_forward(torch.randn(2, 3))[0]
+
+    assert out.shape == (2, 3)
+    assert m.states is not None
+    assert m.states[0].shape == (3,)
+
+
+def test_multi_step_forward_initializes_states_for_hop_backend():
+    m = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+    )
+
+    out = m.multi_step_forward(torch.randn(2, 3))[0]
+
+    assert out.shape == (2, 3)
+    assert m.states is not None
+    assert m.states[0].shape == (3,)
+
+
+def test_flexsn_wrapper_final_states_use_init_state_templates():
+    from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
+        flexsn_inference_final_state,
+    )
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
+    x = torch.empty(0, 2)
+    state = torch.ones(3, dtype=torch.float64)
+
+    out, final_state = flexsn_inference_final_state(None, info, x, state)
+
+    assert out.shape == (0, 2)
+    assert final_state.shape == (3,)
+    assert final_state.dtype == torch.float64
+    assert final_state.data_ptr() != state.data_ptr()
+    torch.testing.assert_close(final_state, state)
+
+
+def test_flexsn_wrapper_t0_backward_state_grads_use_state_templates(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    class _FakeKernel:
+        def __getitem__(self, grid):
+            def _run(*args, **kwargs):
+                return None
+
+            return _run
+
+    info = SimpleNamespace(num_inputs=1, num_states=2, num_outputs=1)
+    grad_y = torch.empty(0, 2)
+    grad_s0 = torch.empty(0, 3)
+    grad_s1 = torch.empty(0, 4, dtype=torch.float64)
+
+    monkeypatch.setitem(wrapper.type_dict, grad_y.dtype, "float32")
+
+    grad_x, grad_v0, grad_v1 = wrapper.flexsn_backward(
+        _FakeKernel(),
+        info,
+        grad_y,
+        grad_s0,
+        grad_s1,
+    )
+
+    assert grad_x.shape == (0, 2)
+    assert grad_v0.shape == (3,)
+    assert grad_v1.shape == (4,)
+    assert grad_v1.dtype == torch.float64
+    torch.testing.assert_close(grad_v0, torch.zeros_like(grad_v0))
+    torch.testing.assert_close(grad_v1, torch.zeros_like(grad_v1))
 
 
 def test_inductor_final_state_warmup_args_use_example_shapes():
@@ -937,6 +1053,7 @@ def test_compile_fullgraph_backward_store_state_seqs_false_matches_eager(rng):
 def test_compile_fullgraph_hop_backend_matches_eager(rng):
     if sys.platform == "win32":
         pytest.skip("torch.compile is not supported on Windows")
+    _skip_if_dynamo_hop_unavailable()
 
     T, N = 4, 8
     x_eager = torch.randn(T, N, generator=rng)
@@ -964,6 +1081,7 @@ def test_compile_fullgraph_hop_backend_matches_eager(rng):
 def test_compile_fullgraph_hop_backend_matches_eager_with_closure(rng):
     if sys.platform == "win32":
         pytest.skip("torch.compile is not supported on Windows")
+    _skip_if_dynamo_hop_unavailable()
 
     T, N = 4, 8
     x_eager = torch.randn(T, N, generator=rng)

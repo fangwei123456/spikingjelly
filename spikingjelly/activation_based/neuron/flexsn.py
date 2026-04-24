@@ -248,10 +248,14 @@ def _empty_multistep_outputs(
     args: Tuple[torch.Tensor, ...],
     states: List[torch.Tensor],
     num_outputs: int,
+    output_template_specs: Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]] = None,
 ) -> List[torch.Tensor]:
     def _empty_output(i: int) -> torch.Tensor:
-        if i < len(states):
-            ref = states[i]
+        if output_template_specs is not None and i < len(output_template_specs):
+            shape, dtype = output_template_specs[i]
+            return torch.empty((0, *shape), dtype=dtype, device=args[0].device)
+        if i < len(args):
+            ref = args[i].new_empty(args[i].shape[1:])
         elif states:
             ref = states[-1]
         else:
@@ -259,6 +263,28 @@ def _empty_multistep_outputs(
         return ref.new_empty((0, *ref.shape))
 
     return [_empty_output(i) for i in range(num_outputs)]
+
+
+def _make_output_template_specs(
+    core: Callable,
+    num_outputs: int,
+    example_inputs: Optional[Tuple[torch.Tensor, ...]],
+) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
+    if example_inputs is None:
+        return None
+    with torch.no_grad():
+        results = _as_tuple(core(*tuple(x.detach().clone() for x in example_inputs)))
+    if len(results) < num_outputs:
+        raise ValueError(
+            f"FlexSN core returned {len(results)} values, expected at least "
+            f"{num_outputs} outputs."
+        )
+    specs = []
+    for result in results[:num_outputs]:
+        if not isinstance(result, torch.Tensor):
+            return None
+        specs.append((tuple(result.shape), result.dtype))
+    return tuple(specs)
 
 
 def _core_requires_grad(core: Callable) -> bool:
@@ -600,6 +626,11 @@ class FlexSN(base.MemoryModule):
                 num_inputs + num_states,
             )
         )
+        self._output_template_specs = _make_output_template_specs(
+            core,
+            num_outputs,
+            example_inputs,
+        )
 
         if backend in ("triton", "inductor"):
             _validate_scan_backend_contract(
@@ -876,7 +907,7 @@ class FlexSN(base.MemoryModule):
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
             output_seqs = _empty_multistep_outputs(
-                args, self.states, self.num_outputs
+                args, self.states, self.num_outputs, self._output_template_specs
             )
             if self.store_state_seqs:
                 self.state_seqs = [
@@ -885,6 +916,8 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         if self.backend == "torch":
+            if self.states is None:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
             output_seqs = [[] for _ in range(self.num_outputs)]
             if self.store_state_seqs:
                 state_seqs = [[] for _ in range(self.num_states)]
@@ -915,6 +948,8 @@ class FlexSN(base.MemoryModule):
             return output_seqs
 
         elif self.backend == "hop":
+            if self.states is None:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
             state_args = [state.contiguous() for state in self.states]
             result_seqs = _run_hop_scan(
                 self.core,

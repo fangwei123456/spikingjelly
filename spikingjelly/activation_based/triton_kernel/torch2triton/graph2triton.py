@@ -396,7 +396,8 @@ def compile_triton_code_str(
                 pass
             raise
     if verbose:
-        print(f"Triton code `{kernel_name}` written to {fpath}")
+        action = "written to" if needs_write else "loaded from cache"
+        print(f"Triton code `{kernel_name}` {action} {fpath}")
 
     linecache.checkcache(str(fpath))
 

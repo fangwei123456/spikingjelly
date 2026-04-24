@@ -56,11 +56,14 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
     NCL = _num_elements_per_step(x_example)
     dtype = x_example.dtype
     output_seqs = [torch.empty_like(x_example) for _ in range(info.num_outputs)]
+    init_states = args[info.num_inputs : info.num_inputs + info.num_states]
     final_states = [
-        x_example.new_empty(x_example.shape[1:]) for _ in range(info.num_states)
+        init_states[i].new_empty(init_states[i].shape)
+        if i < len(init_states)
+        else x_example.new_empty(x_example.shape[1:])
+        for i in range(info.num_states)
     ]
     if T == 0:
-        init_states = args[info.num_inputs : info.num_inputs + info.num_states]
         final_states = [state.clone() for state in init_states]
         return tuple([*output_seqs, *final_states])
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
@@ -99,8 +102,20 @@ def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
     grad_inputs = [torch.empty_like(grad_example) for _ in range(info.num_inputs)]
+    grad_state_examples = args[info.num_outputs : info.num_outputs + info.num_states]
     grad_inputs += [
-        grad_example.new_empty(grad_example.shape[1:]) for _ in range(info.num_states)
+        (
+            grad_state_examples[i].new_zeros(grad_state_examples[i].shape[1:])
+            if T == 0
+            else grad_state_examples[i].new_empty(grad_state_examples[i].shape[1:])
+        )
+        if i < len(grad_state_examples) and grad_state_examples[i] is not None
+        else (
+            grad_example.new_zeros(grad_example.shape[1:])
+            if T == 0
+            else grad_example.new_empty(grad_example.shape[1:])
+        )
+        for i in range(info.num_states)
     ]
     dtype = grad_example.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
