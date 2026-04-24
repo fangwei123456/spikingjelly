@@ -10,11 +10,15 @@ so these tests do not require a CUDA GPU.
 from __future__ import annotations
 
 import sys
+from types import SimpleNamespace
 
 import pytest
 import torch
 
-from spikingjelly.activation_based.neuron.flexsn import FlexSN
+from spikingjelly.activation_based.neuron.flexsn import (
+    FlexSN,
+    _make_inductor_final_state_warmup_args,
+)
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     flex_sn_scan,
@@ -38,6 +42,35 @@ def _lif_core(x: torch.Tensor, v: torch.Tensor):
 @pytest.fixture
 def rng():
     return torch.Generator().manual_seed(42)
+
+
+def test_inductor_final_state_warmup_args_use_example_shapes():
+    info = SimpleNamespace(num_inputs=2, num_states=2)
+    specs = (
+        ((3, 4), torch.float32),
+        ((5,), torch.float64),
+        ((3, 4), torch.float32),
+        ((2, 3), torch.float64),
+    )
+
+    warm_args = _make_inductor_final_state_warmup_args(
+        info,
+        torch.device("cpu"),
+        specs,
+    )
+
+    assert [tuple(arg.shape) for arg in warm_args] == [
+        (1, 3, 4),
+        (1, 5),
+        (3, 4),
+        (2, 3),
+    ]
+    assert [arg.dtype for arg in warm_args] == [
+        torch.float32,
+        torch.float64,
+        torch.float32,
+        torch.float64,
+    ]
 
 
 @pytest.mark.parametrize("T", [1, 4, 16])

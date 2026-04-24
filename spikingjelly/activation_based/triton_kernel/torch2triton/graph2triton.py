@@ -401,19 +401,6 @@ def compile_triton_code_str(
                 raise ImportError(f"Could not create import spec for {fpath}")
             module = importlib.util.module_from_spec(spec)
             module.__dict__.update(module_globals)
-            triton_module = sys.modules.get("triton")
-            language_module = sys.modules.get("triton.language")
-            restore_triton = triton_module is None
-            restore_language = language_module is None
-            if triton_module is None:
-                sys.modules["triton"] = triton
-                triton_module = triton
-            if language_module is None:
-                sys.modules["triton.language"] = tl
-                language_module = tl
-            had_language_attr = hasattr(triton_module, "language")
-            original_language = getattr(triton_module, "language", None)
-            triton_module.language = language_module
             if cacheable:
                 sys.modules[module_name] = module
             try:
@@ -422,18 +409,6 @@ def compile_triton_code_str(
                 if cacheable:
                     sys.modules.pop(module_name, None)
                 raise
-            finally:
-                if had_language_attr:
-                    triton_module.language = original_language
-                else:
-                    try:
-                        delattr(triton_module, "language")
-                    except AttributeError:
-                        pass
-                if restore_language:
-                    sys.modules.pop("triton.language", None)
-                if restore_triton:
-                    sys.modules.pop("triton", None)
     if caller_namespace is not None:
         exported_symbols = {
             key: value

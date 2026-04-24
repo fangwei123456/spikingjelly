@@ -545,6 +545,7 @@ def lowerable_while_loop_scan(
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
     _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    lifted_args = tuple(_ensure_contiguous(arg) for arg in lifted_args)
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -703,6 +704,7 @@ def lowerable_while_loop_scan_final_state(
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
     _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    lifted_args = tuple(_ensure_contiguous(arg) for arg in lifted_args)
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -911,12 +913,10 @@ def _register_dynamo_hop() -> None:
                     "flex_sn_scan only supports tensor inputs and states"
                 )
 
-            from torch._dynamo.variables.constant import ConstantVariable as _ConstantVariable
-
             def _make_step_template(arg: TensorVariable):
                 example_value = arg.as_proxy().node.meta["example_value"]
                 if example_value.shape[0] > 0:
-                    return arg.call_method(tx, "__getitem__", [_ConstantVariable(0)], {})
+                    return arg.call_method(tx, "__getitem__", [ConstantVariable(0)], {})
 
                 shape_without_t = tuple(example_value.shape[1:])
                 proxy = tx.output.create_proxy(

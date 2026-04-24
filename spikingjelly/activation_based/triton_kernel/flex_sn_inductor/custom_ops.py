@@ -55,7 +55,7 @@ def _normalize_kernel_handle(handle: int) -> int:
         return handle
     try:
         return int(handle)
-    except Exception as exc:
+    except (TypeError, ValueError) as exc:
         raise TypeError(
             f"Unsupported FlexSN kernel handle type: {type(handle)!r}"
         ) from exc

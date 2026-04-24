@@ -73,10 +73,11 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
                     break
     if device is None:
         device = torch.device("cuda", torch.cuda.current_device())
-    seq_template = torch.zeros((1, 1), device=device)
-    state_template = seq_template[0].clone()
-    warm_args = [seq_template.clone() for _ in range(info.num_inputs)]
-    warm_args.extend(state_template.clone() for _ in range(info.num_states))
+    warm_args = _make_inductor_final_state_warmup_args(
+        info,
+        device,
+        getattr(module, "_inductor_scan_final_state_warmup_specs", None),
+    )
 
     with torch.no_grad():
         flexsn_inference_final_state(
@@ -84,6 +85,38 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
             info,
             *warm_args,
         )
+
+
+def _make_inductor_final_state_warmup_specs(
+    example_inputs: Optional[Tuple[torch.Tensor, ...]],
+    expected: int,
+):
+    if example_inputs is None or len(example_inputs) < expected:
+        return None
+    return tuple(
+        (tuple(tensor.shape), tensor.dtype)
+        for tensor in example_inputs[:expected]
+    )
+
+
+def _make_inductor_final_state_warmup_args(info, device, warmup_specs):
+    expected = info.num_inputs + info.num_states
+    if warmup_specs is not None and len(warmup_specs) >= expected:
+        warm_args = [
+            torch.zeros((1, *shape), dtype=dtype, device=device)
+            for shape, dtype in warmup_specs[: info.num_inputs]
+        ]
+        warm_args.extend(
+            torch.zeros(shape, dtype=dtype, device=device)
+            for shape, dtype in warmup_specs[info.num_inputs : expected]
+        )
+        return warm_args
+
+    seq_template = torch.zeros((1, 1), device=device)
+    state_template = seq_template[0].clone()
+    warm_args = [seq_template.clone() for _ in range(info.num_inputs)]
+    warm_args.extend(state_template.clone() for _ in range(info.num_states))
+    return warm_args
 
 
 def _as_tuple(outputs):
@@ -554,6 +587,12 @@ class FlexSN(base.MemoryModule):
         self.step_mode = step_mode
         self.backend = backend
         self.store_state_seqs = store_state_seqs
+        self._inductor_scan_final_state_warmup_specs = (
+            _make_inductor_final_state_warmup_specs(
+                example_inputs,
+                num_inputs + num_states,
+            )
+        )
 
         if backend in ("triton", "inductor"):
             _validate_scan_backend_contract(
