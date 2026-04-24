@@ -269,15 +269,18 @@ def _empty_multistep_outputs(
             spec = output_template_specs[i]
             if len(spec) == 2:
                 shape, dtype = spec
+                device = args[0].device
             else:
-                shape, dtype, _ = spec
-            return torch.empty((0, *shape), dtype=dtype, device=args[0].device)
+                shape, dtype, device = spec
+            return torch.empty((0, *shape), dtype=dtype, device=device)
         if args:
             ref = args[0].new_empty(args[0].shape[1:])
         elif states:
             ref = states[-1]
         else:
-            ref = args[0].new_empty(args[0].shape[1:])
+            raise ValueError(
+                "FlexSN empty output fallback requires at least one input or state."
+            )
         return ref.new_empty((0, *ref.shape))
 
     return [_empty_output(i) for i in range(num_outputs)]

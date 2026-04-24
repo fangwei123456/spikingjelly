@@ -217,6 +217,21 @@ def test_output_template_specs_from_outputs_preserve_device():
     assert specs == (((4,), torch.float64, output.device),)
 
 
+def test_empty_multistep_outputs_honor_template_device():
+    specs = (((4,), torch.float64, torch.device("meta")),)
+
+    outputs = flexsn_module._empty_multistep_outputs((torch.empty(0, 3),), [], 1, specs)
+
+    assert outputs[0].shape == (0, 4)
+    assert outputs[0].dtype == torch.float64
+    assert outputs[0].device.type == "meta"
+
+
+def test_empty_multistep_outputs_rejects_missing_template_reference():
+    with pytest.raises(ValueError, match="at least one input or state"):
+        flexsn_module._empty_multistep_outputs((), [], 1)
+
+
 def test_multi_step_forward_initializes_states_for_torch_backend():
     m = FlexSN(
         core=_lif_core,
