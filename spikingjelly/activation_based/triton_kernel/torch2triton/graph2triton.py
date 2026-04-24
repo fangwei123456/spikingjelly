@@ -386,7 +386,10 @@ def compile_triton_code_str(
             except OSError:
                 pass
         except BaseException:
-            tmp_path.unlink(missing_ok=True)
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
             raise
     if verbose:
         print(f"Triton code `{kernel_name}` written to {fpath}")

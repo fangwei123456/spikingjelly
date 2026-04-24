@@ -1,6 +1,6 @@
 """Build Triton scan kernels from a user-defined core_fn for FlexSN inductor backend.
 
-Two entry points:
+Three entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)
 * build_inference_final_state_kernel — inference path that returns final states only
 * build_training_kernels  — forward + backward kernels for full BPTT training
@@ -97,6 +97,24 @@ def build_inference_final_state_kernel(
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
 ):
+    """Build an inference kernel that returns output sequences and final states.
+
+    This final-state variant traces ``core_fn`` and generates a Triton kernel
+    like :func:`build_inference_kernel`, but returns only the final state
+    tensors instead of full state sequences.
+
+    Args:
+        core_fn: single-step dynamics callable with signature
+            ``(*inputs, *states) -> (*outputs, *updated_states)``.
+        num_inputs: number of per-step input tensors.
+        num_states: number of state tensors.
+        num_outputs: number of per-step output tensors.
+        example_inputs: optional example tensors ``[*inputs, *states]``.
+
+    Returns:
+        ``(kernel, info)`` from ``get_flexsn_inference_final_state_kernel``
+        and ``extract_info``.
+    """
     from torch.fx.experimental.proxy_tensor import make_fx
     from ..torch2triton import generate_triton_code_str
     from ..flexsn import extract_info, get_flexsn_inference_final_state_kernel

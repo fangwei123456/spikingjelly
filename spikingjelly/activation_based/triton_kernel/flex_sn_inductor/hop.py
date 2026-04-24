@@ -894,11 +894,19 @@ def _register_dynamo_hop() -> None:
         )
         return
 
-    if getattr(TorchHigherOrderOperatorVariable.make, "_spikingjelly_flexsn_hop", False):
+    make_descriptor = TorchHigherOrderOperatorVariable.__dict__.get(
+        "make", TorchHigherOrderOperatorVariable.make
+    )
+    make_func = (
+        make_descriptor.__func__
+        if isinstance(make_descriptor, (classmethod, staticmethod))
+        else make_descriptor
+    )
+    if getattr(make_func, "_spikingjelly_flexsn_hop", False):
         _DYNAMO_HOP_REGISTERED = True
         return
 
-    original_make = TorchHigherOrderOperatorVariable.make
+    original_make = make_descriptor
 
     install_subgraph = getattr(hop_vars, "add_subgraph", None)
     if install_subgraph is None:
@@ -1064,13 +1072,17 @@ def _register_dynamo_hop() -> None:
             )
             return wrap_fx_proxy(tx=tx, proxy=proxy, example_value=example_value)
 
-    def patched_make(value, source=None, **kwargs):
+    def patched_make(cls, value, source=None, **kwargs):
         if value is flex_sn_scan:
             return FlexSNScanHigherOrderVariable(value, source, **kwargs)
-        return original_make(value, source=source, **kwargs)
+        if isinstance(original_make, classmethod):
+            return original_make.__func__(cls, value, source=source, **kwargs)
+        if isinstance(original_make, staticmethod):
+            return original_make.__func__(value, source=source, **kwargs)
+        return original_make(cls, value, source=source, **kwargs)
 
     patched_make._spikingjelly_flexsn_hop = True
-    TorchHigherOrderOperatorVariable.make = staticmethod(patched_make)
+    TorchHigherOrderOperatorVariable.make = classmethod(patched_make)
     _DYNAMO_HOP_REGISTERED = True
 
 
