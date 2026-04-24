@@ -131,6 +131,25 @@ def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
     assert v_final.data_ptr() != v.data_ptr()
 
 
+def test_inductor_fake_final_state_templates_use_explicit_states():
+    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+        custom_ops,
+    )
+
+    info = SimpleNamespace(num_inputs=1, num_states=2)
+    x = torch.randn(4, 3, dtype=torch.float32)
+    state_a = torch.randn(5, dtype=torch.float64)
+    state_b = torch.empty(2, 3, dtype=torch.float16)
+
+    templates = custom_ops._make_state_templates_like(info, [x, state_a, state_b])
+
+    assert [tuple(template.shape) for template in templates] == [(5,), (2, 3)]
+    assert [template.dtype for template in templates] == [
+        torch.float64,
+        torch.float16,
+    ]
+
+
 def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
     from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
         custom_ops,

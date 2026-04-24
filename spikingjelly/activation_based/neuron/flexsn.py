@@ -634,9 +634,9 @@ class FlexSN(base.MemoryModule):
         register_flexsn_kernel_handle = None
 
         if backend == "inductor" and torch.cuda.is_available():
-            self._inductor_scan_final_state_device = None
-            if example_inputs is not None and example_inputs[0].device.type == "cuda":
-                self._inductor_scan_final_state_device = example_inputs[0].device
+            self._inductor_scan_final_state_device = torch.device(
+                "cuda", torch.cuda.current_device()
+            )
             try:
                 from ..triton_kernel.flex_sn_inductor.kernel import (
                     build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,
