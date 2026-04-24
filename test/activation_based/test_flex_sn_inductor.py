@@ -897,6 +897,34 @@ def test_run_hop_scan_forwards_output_template_specs(monkeypatch):
     assert captured["output_template_specs"] is specs
 
 
+def test_run_hop_scan_forwards_output_template_specs_to_hop(monkeypatch):
+    x = torch.empty(0, 2)
+    v = torch.zeros(3)
+    specs = (((4,), torch.float64, torch.device("cpu")),)
+    captured = {}
+
+    def fake_hop(*args, output_template_specs=None):
+        captured["output_template_specs"] = output_template_specs
+        return ("hop",)
+
+    monkeypatch.setattr(flexsn_module, "_is_compiling", lambda: False)
+    monkeypatch.setattr(flexsn_module, "_flexsn_hop_scan", fake_hop)
+
+    result = flexsn_module._run_hop_scan(
+        None,
+        1,
+        1,
+        1,
+        True,
+        x,
+        v,
+        output_template_specs=specs,
+    )
+
+    assert result == ("hop",)
+    assert captured["output_template_specs"] is specs
+
+
 def test_lowerable_scan_matches_manual_loop(rng):
     if not callable(lowerable_scan_available) or not lowerable_scan_available():
         pytest.skip("PyTorch scan HOP is unavailable in this environment")

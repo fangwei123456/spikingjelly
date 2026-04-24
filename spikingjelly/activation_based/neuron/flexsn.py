@@ -229,7 +229,7 @@ def _run_hop_scan(
 
     template_kwargs = (
         {}
-        if output_template_specs is None or scan_impl is _flexsn_hop_scan
+        if output_template_specs is None
         else {"output_template_specs": output_template_specs}
     )
     return scan_impl(

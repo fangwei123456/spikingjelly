@@ -95,14 +95,18 @@ def _resolve_codegen_cache_dir() -> Path:
             cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             if uid is not None:
                 st = cache_dir.stat()
+                chmod_failed = False
                 if st.st_uid == uid:
-                    os.chmod(cache_dir, 0o700)
+                    try:
+                        os.chmod(cache_dir, 0o700)
+                    except OSError:
+                        chmod_failed = True
                     st = cache_dir.stat()
                 mode = stat.S_IMODE(st.st_mode)
                 if (
                     st.st_uid != uid
                     or not (mode & stat.S_IWUSR)
-                    or (mode & 0o077)
+                    or ((mode & 0o077) and not chmod_failed)
                 ):
                     continue
             with tempfile.NamedTemporaryFile(dir=cache_dir, delete=True):
