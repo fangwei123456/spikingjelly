@@ -75,10 +75,8 @@ from torch._ops import HigherOrderOperator
 
 try:
     from torch._higher_order_ops.scan import scan_op as _torch_scan_op
-    from torch._higher_order_ops.scan import wrap_combine_fn_flat as _wrap_scan_combine_fn_flat
 except (ImportError, AttributeError):
     _torch_scan_op = None
-    _wrap_scan_combine_fn_flat = None
 
 try:
     from torch._higher_order_ops.while_loop import while_loop as _torch_while_loop
@@ -132,7 +130,7 @@ def _as_tuple(outputs):
 
 
 def lowerable_scan_available() -> bool:
-    return _torch_scan_op is not None and _wrap_scan_combine_fn_flat is not None
+    return _torch_scan_op is not None
 
 
 def lowerable_while_loop_available() -> bool:
@@ -317,9 +315,8 @@ def lowerable_scan(
     * On the PyTorch versions we validate against, fake/proxy/export handling
       for this out-of-tree scan pattern is still not stable enough to make this
       the default compiled path.
-    * We mirror the internal ``scan`` frontend contract by routing through
-      ``wrap_combine_fn_flat`` with explicit tree specs for the flattened
-      inputs/states.
+    * We pass flattened input/state leaves directly to ``torch.ops.higher_order.scan``
+      and rebuild the structured inputs inside ``wrapped_combine_fn``.
     """
     if _torch_scan_op is None or _wrap_scan_combine_fn_flat is None:
         raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
@@ -454,7 +451,7 @@ def lowerable_scan_final_state(
 
 def _ensure_contiguous(tensor: torch.Tensor) -> torch.Tensor:
     if tensor.dim() >= 4:
-        return tensor.clone(memory_format=torch.contiguous_format)
+        return tensor.contiguous(memory_format=torch.contiguous_format)
     return tensor.contiguous()
 
 
@@ -469,11 +466,11 @@ def _append_to_tail(buffer: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
     return torch.cat(
         (buffer[1:], _ensure_contiguous(value).unsqueeze(0)),
         dim=0,
-    ).contiguous()
+    )
 
 
 def _shift_input_queue(queue: torch.Tensor) -> torch.Tensor:
-    return torch.cat((queue[1:], queue[-1:].clone()), dim=0).contiguous()
+    return torch.cat((queue[1:], queue[-1:]), dim=0)
 
 
 def lowerable_while_loop_scan(
