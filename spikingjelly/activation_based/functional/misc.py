@@ -151,13 +151,9 @@ class _TrainConvBnWrapper(nn.Module):
     def _packed_forward(self, x: Tensor) -> Tensor:
         t, n = x.shape[:2]
         x = x.flatten(0, 1)
-        if not isinstance(self.conv, _TRAIN_PACK_CONV_TYPES):
-            raise TypeError(f"Unsupported packed conv type: {type(self.conv)!r}")
         with self._single_step_mode(self.conv):
             x = self.conv(x)
 
-        if not isinstance(self.bn, _TRAIN_PACK_BN_TYPES):
-            raise TypeError(f"Unsupported packed batchnorm type: {type(self.bn)!r}")
         with self._single_step_mode(self.bn):
             x = self.bn(x)
         return x.view(t, n, *x.shape[1:])

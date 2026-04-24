@@ -15,7 +15,13 @@ from ..triton_utils import amp_custom_fwd, amp_custom_bwd
 from .info import FlexSNInfo
 
 
-__all__ = ["flexsn_inference", "flexsn_inference_final_state", "flexsn_forward", "flexsn_backward", "FlexSNFunction"]
+__all__ = [
+    "flexsn_inference",
+    "flexsn_inference_final_state",
+    "flexsn_forward",
+    "flexsn_backward",
+    "FlexSNFunction",
+]
 
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
