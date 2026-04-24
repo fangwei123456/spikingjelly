@@ -177,7 +177,10 @@ def test_output_template_specs_from_examples_use_first_input_contract():
         ),
     )
 
-    assert specs == (((2,), torch.float16), ((2,), torch.float16))
+    assert specs == (
+        ((2,), torch.float16, torch.device("cpu")),
+        ((2,), torch.float16, torch.device("cpu")),
+    )
 
 
 def test_multi_step_forward_initializes_states_for_torch_backend():
@@ -309,6 +312,23 @@ def test_flexsn_wrapper_final_states_use_init_state_templates():
     assert final_state.dtype == torch.float64
     assert final_state.data_ptr() != state.data_ptr()
     torch.testing.assert_close(final_state, state)
+
+
+def test_flexsn_wrapper_t0_final_states_preserve_num_states_without_init():
+    from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
+        flexsn_inference_final_state,
+    )
+
+    info = SimpleNamespace(num_inputs=1, num_states=2, num_outputs=1)
+    x = torch.empty(0, 3)
+
+    out, state0, state1 = flexsn_inference_final_state(None, info, x)
+
+    assert out.shape == (0, 3)
+    assert state0.shape == (3,)
+    assert state1.shape == (3,)
+    torch.testing.assert_close(state0, torch.zeros_like(state0))
+    torch.testing.assert_close(state1, torch.zeros_like(state1))
 
 
 def test_flexsn_wrapper_t0_backward_state_grads_use_state_templates(monkeypatch):
@@ -739,7 +759,10 @@ def test_dynamo_body_result_templates_use_speculated_outputs():
         num_outputs=2,
     )
 
-    assert specs == (((2,), torch.float64), ((3,), torch.float16))
+    assert specs == (
+        ((2,), torch.float64, torch.device("cpu")),
+        ((3,), torch.float16, torch.device("cpu")),
+    )
 
 
 def test_run_hop_scan_compiled_falls_back_when_dynamo_hop_unavailable(monkeypatch):
@@ -765,6 +788,35 @@ def test_run_hop_scan_compiled_falls_back_when_dynamo_hop_unavailable(monkeypatc
     monkeypatch.setattr(flexsn_module, "_flexsn_dynamo_hop_available", lambda: True)
     result = flexsn_module._run_hop_scan(None, 1, 1, 1, True, x, v)
     assert result == ("hop",)
+
+
+def test_run_hop_scan_forwards_output_template_specs(monkeypatch):
+    x = torch.empty(0, 2)
+    v = torch.zeros(3)
+    specs = (((4,), torch.float64, torch.device("cpu")),)
+    captured = {}
+
+    def fake_eager(*args, output_template_specs=None):
+        captured["output_template_specs"] = output_template_specs
+        return ("eager",)
+
+    monkeypatch.setattr(flexsn_module, "_is_compiling", lambda: False)
+    monkeypatch.setattr(flexsn_module, "_flexsn_hop_scan", None)
+    monkeypatch.setattr(flexsn_module, "_flexsn_eager_scan", fake_eager)
+
+    result = flexsn_module._run_hop_scan(
+        None,
+        1,
+        1,
+        1,
+        True,
+        x,
+        v,
+        output_template_specs=specs,
+    )
+
+    assert result == ("eager",)
+    assert captured["output_template_specs"] is specs
 
 
 def test_lowerable_scan_matches_manual_loop(rng):

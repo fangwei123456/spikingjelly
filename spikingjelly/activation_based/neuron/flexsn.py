@@ -158,6 +158,7 @@ def _run_hop_scan(
     num_outputs: int,
     store_state_seqs: bool,
     *flat_args: torch.Tensor,
+    output_template_specs=None,
 ):
     enable_lowerable_while_loop = (
         os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "0") == "1"
@@ -226,12 +227,18 @@ def _run_hop_scan(
     if scan_impl is None:
         raise RuntimeError("FlexSN HOP backend has no available scan implementation.")
 
+    template_kwargs = (
+        {}
+        if output_template_specs is None or scan_impl is _flexsn_hop_scan
+        else {"output_template_specs": output_template_specs}
+    )
     return scan_impl(
         core,
         num_inputs,
         num_states,
         num_outputs,
         *flat_args,
+        **template_kwargs,
     )
 
 
@@ -255,12 +262,17 @@ def _empty_multistep_outputs(
     args: Tuple[torch.Tensor, ...],
     states: List[torch.Tensor],
     num_outputs: int,
-    output_template_specs: Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]] = None,
+    output_template_specs: Optional[Tuple[Tuple, ...]] = None,
 ) -> List[torch.Tensor]:
     def _empty_output(i: int) -> torch.Tensor:
         if output_template_specs is not None and i < len(output_template_specs):
-            shape, dtype = output_template_specs[i]
-            return torch.empty((0, *shape), dtype=dtype, device=args[0].device)
+            spec = output_template_specs[i]
+            if len(spec) == 2:
+                shape, dtype = spec
+                device = args[0].device
+            else:
+                shape, dtype, device = spec
+            return torch.empty((0, *shape), dtype=dtype, device=device)
         if i < len(args):
             ref = args[i].new_empty(args[i].shape[1:])
         elif states:
@@ -275,17 +287,17 @@ def _empty_multistep_outputs(
 def _make_output_template_specs_from_examples(
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]],
-) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
+) -> Optional[Tuple[Tuple, ...]]:
     if example_inputs is None:
         return None
     ref = example_inputs[0]
-    return tuple((tuple(ref.shape), ref.dtype) for _ in range(num_outputs))
+    return tuple((tuple(ref.shape), ref.dtype, ref.device) for _ in range(num_outputs))
 
 
 def _make_output_template_specs_from_outputs(
     num_outputs: int,
     example_outputs: Optional[Tuple[torch.Tensor, ...]],
-) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
+) -> Optional[Tuple[Tuple, ...]]:
     if example_outputs is None:
         return None
     if len(example_outputs) != num_outputs:
@@ -299,7 +311,7 @@ def _make_output_template_specs_from_outputs(
             raise TypeError(
                 f"FlexSN example output #{i} is {type(tensor)!r}; expected a tensor."
             )
-        specs.append((tuple(tensor.shape), tensor.dtype))
+        specs.append((tuple(tensor.shape), tensor.dtype, tensor.device))
     return tuple(specs)
 
 
@@ -1025,6 +1037,7 @@ class FlexSN(base.MemoryModule):
                 self.store_state_seqs,
                 *args,
                 *state_args,
+                output_template_specs=self._output_template_specs,
             )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_results = list(result_seqs[self.num_outputs :])
@@ -1117,6 +1130,7 @@ class FlexSN(base.MemoryModule):
                     self.store_state_seqs,
                     *args,
                     *state_args,
+                    output_template_specs=self._output_template_specs,
                 )
                 result_has_state_seqs = self.store_state_seqs
             output_seqs = list(result_seqs[: self.num_outputs])

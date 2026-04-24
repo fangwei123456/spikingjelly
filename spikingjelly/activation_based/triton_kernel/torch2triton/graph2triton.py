@@ -88,7 +88,7 @@ def _codegen_cache_dir() -> Path:
                 if (
                     st.st_uid != uid
                     or not (mode & stat.S_IWUSR)
-                    or (mode & 0o022)
+                    or (mode & 0o077)
                 ):
                     continue
             with tempfile.NamedTemporaryFile(dir=cache_dir, delete=True):

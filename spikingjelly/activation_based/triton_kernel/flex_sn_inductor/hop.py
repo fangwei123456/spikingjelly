@@ -116,7 +116,7 @@ class FlexSNScan(HigherOrderOperator):
         num_outputs: int,
         *flat_args: torch.Tensor,
         output_template_specs: Optional[
-            Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+            Tuple[Tuple, ...]
         ] = None,
     ) -> Tuple[torch.Tensor, ...]:
         return super().__call__(
@@ -142,7 +142,7 @@ def _as_tuple(outputs):
 def _empty_outputs_from_template(
     input_seqs: Tuple[torch.Tensor, ...],
     num_outputs: int,
-    output_template_specs: Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]],
+    output_template_specs: Optional[Tuple[Tuple, ...]],
 ) -> Tuple[torch.Tensor, ...]:
     if output_template_specs is None:
         raise ValueError(
@@ -154,10 +154,18 @@ def _empty_outputs_from_template(
             f"expected {num_outputs} output template specs, got "
             f"{len(output_template_specs)}"
         )
-    return tuple(
-        input_seqs[0].new_empty((0, *shape), dtype=dtype)
-        for shape, dtype in output_template_specs
-    )
+    outputs = []
+    for spec in output_template_specs:
+        if len(spec) == 2:
+            shape, dtype = spec
+            device = input_seqs[0].device
+        else:
+            shape, dtype, device = spec
+        if device == input_seqs[0].device:
+            outputs.append(input_seqs[0].new_empty((0, *shape), dtype=dtype))
+        else:
+            outputs.append(torch.empty((0, *shape), dtype=dtype, device=device))
+    return tuple(outputs)
 
 
 def _flatten_dynamo_body_result(value) -> Tuple[object, ...]:
@@ -196,7 +204,7 @@ def _dynamo_leaf_example_value(value):
 def _output_template_specs_from_dynamo_body_result(
     body_result,
     num_outputs: int,
-) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
+) -> Optional[Tuple[Tuple, ...]]:
     leaves = _flatten_dynamo_body_result(body_result)
     if len(leaves) < num_outputs:
         return None
@@ -205,7 +213,9 @@ def _output_template_specs_from_dynamo_body_result(
         example_value = _dynamo_leaf_example_value(leaf)
         if not isinstance(example_value, torch.Tensor):
             return None
-        specs.append((tuple(example_value.shape), example_value.dtype))
+        specs.append(
+            (tuple(example_value.shape), example_value.dtype, example_value.device)
+        )
     return tuple(specs)
 
 
@@ -504,7 +514,8 @@ def lowerable_scan(
 
         outputs = list(results[:num_outputs])
         next_states = list(results[num_outputs:])
-        return next_states, [*outputs, *next_states]
+        output_states = [state.clone() for state in next_states]
+        return next_states, [*outputs, *output_states]
 
     leaves_init = list(init_states)
     leaves_xs = list(input_seqs)
@@ -982,9 +993,10 @@ def _register_dynamo_hop() -> None:
         )
         return
 
-    make_descriptor = TorchHigherOrderOperatorVariable.__dict__.get(
-        "make", TorchHigherOrderOperatorVariable.make
-    )
+    make_descriptor = TorchHigherOrderOperatorVariable.__dict__.get("make")
+    original_make_is_bound = make_descriptor is None
+    if make_descriptor is None:
+        make_descriptor = TorchHigherOrderOperatorVariable.make
     make_func = (
         make_descriptor.__func__
         if isinstance(make_descriptor, (classmethod, staticmethod))
@@ -1172,6 +1184,8 @@ def _register_dynamo_hop() -> None:
             return original_make.__func__(cls, value, source=source, **kwargs)
         if isinstance(original_make, staticmethod):
             return original_make.__func__(value, source=source, **kwargs)
+        if original_make_is_bound:
+            return original_make(value, source=source, **kwargs)
         return original_make(cls, value, source=source, **kwargs)
 
     patched_make._spikingjelly_flexsn_hop = True
