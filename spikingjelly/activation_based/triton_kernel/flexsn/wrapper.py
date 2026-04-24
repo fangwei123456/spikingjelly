@@ -49,7 +49,8 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
     ]
     if T == 0:
         init_states = args[info.num_inputs : info.num_inputs + info.num_states]
-        return tuple([*output_seqs, *init_states])
+        final_states = [state.clone() for state in init_states]
+        return tuple([*output_seqs, *final_states])
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     f[grid](

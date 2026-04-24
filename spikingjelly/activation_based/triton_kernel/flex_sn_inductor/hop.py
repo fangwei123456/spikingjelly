@@ -138,7 +138,7 @@ def lowerable_while_loop_available() -> bool:
     return _torch_while_loop is not None
 
 
-def _callable_accepts_positional_args(fn: Callable, n_args: int) -> bool | None:
+def _callable_positional_arg_capacity(fn: Callable) -> int | None:
     target = fn.forward if isinstance(fn, torch.nn.Module) else fn
     try:
         signature = inspect.signature(target)
@@ -147,13 +147,42 @@ def _callable_accepts_positional_args(fn: Callable, n_args: int) -> bool | None:
     positional = 0
     for parameter in signature.parameters.values():
         if parameter.kind == inspect.Parameter.VAR_POSITIONAL:
-            return True
+            return None
         if parameter.kind in (
             inspect.Parameter.POSITIONAL_ONLY,
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
         ):
             positional += 1
-    return n_args <= positional
+    return positional
+
+
+def _callable_accepts_positional_args(fn: Callable, n_args: int) -> bool | None:
+    capacity = _callable_positional_arg_capacity(fn)
+    if capacity is None:
+        return None
+    return n_args <= capacity
+
+
+def _reorder_placeholders_to_canonical_args(
+    graph: torch.fx.Graph, canonical_arg_names: Tuple[str, ...]
+) -> Tuple[torch.fx.Node, ...]:
+    placeholders = [node for node in graph.nodes if node.op == "placeholder"]
+    if not placeholders:
+        return ()
+
+    by_name = {node.name: node for node in placeholders}
+    ordered = [by_name[name] for name in canonical_arg_names if name in by_name]
+    ordered.extend(node for node in placeholders if node not in ordered)
+
+    if ordered != placeholders:
+        first_non_placeholder = next(
+            (node for node in graph.nodes if node.op != "placeholder"), None
+        )
+        if first_non_placeholder is not None:
+            for node in ordered:
+                first_non_placeholder.prepend(node)
+
+    return tuple(node for node in graph.nodes if node.op == "placeholder")
 
 
 def _check_lifted_arg_arity(
@@ -933,8 +962,11 @@ def _register_dynamo_hop() -> None:
 
             step_inputs = [_make_step_template(arg) for arg in flat_args[:num_inputs]]
             body_args = [*step_inputs, *flat_args[num_inputs:]]
+            canonical_body_arg_names = tuple(
+                arg.as_proxy().node.name for arg in body_args
+            )
 
-            _body_r, body_graph, body_lifted_freevars, _parent_proxy_map = speculate_subgraph(
+            speculated = speculate_subgraph(
                 tx,
                 body_fn,
                 body_args,
@@ -942,6 +974,19 @@ def _register_dynamo_hop() -> None:
                 "flex_sn_scan",
                 source_target=self.value,
             )
+            if len(speculated) == 4:
+                (
+                    _body_r,
+                    body_graph,
+                    body_lifted_freevars,
+                    _parent_proxy_map,
+                ) = speculated
+            elif len(speculated) == 3:
+                _body_r, body_graph, body_lifted_freevars = speculated
+            else:
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan received an unsupported speculate_subgraph result"
+                )
 
             if hasattr(body_lifted_freevars, "keys"):
                 lifted_freevars = tuple(body_lifted_freevars.keys())
@@ -959,6 +1004,31 @@ def _register_dynamo_hop() -> None:
                     raise hop_vars.unimplemented(
                         "flex_sn_scan only supports tensor lifted freevars"
                     )
+
+            placeholders = _reorder_placeholders_to_canonical_args(
+                body_graph, canonical_body_arg_names
+            )
+            placeholder_freevar_names = tuple(
+                node.name for node in placeholders[len(body_args) :]
+            )
+            if placeholder_freevar_names:
+                freevars_by_name = {
+                    freevar.node.name: freevar for freevar in lifted_freevars
+                }
+                missing = [
+                    name
+                    for name in placeholder_freevar_names
+                    if name not in freevars_by_name
+                ]
+                if missing:
+                    raise hop_vars.unimplemented(
+                        "flex_sn_scan could not map lifted tensor freevars"
+                    )
+                lifted_freevars = tuple(
+                    freevars_by_name[name] for name in placeholder_freevar_names
+                )
+            else:
+                lifted_freevars = ()
 
             body_gm = torch.fx.GraphModule(tx.output.nn_modules, body_graph)
             body_name = install_subgraph(tx, self.source, "flex_sn_scan_body", body_gm)

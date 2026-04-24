@@ -73,6 +73,63 @@ def test_inductor_final_state_warmup_args_use_example_shapes():
     ]
 
 
+def test_inductor_final_state_wrapper_t0_returns_non_aliased_states():
+    from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
+        flexsn_inference_final_state,
+    )
+
+    info = SimpleNamespace(num_inputs=1, num_outputs=1, num_states=1)
+    x = torch.randn(0, 3)
+    v = torch.randn(3)
+
+    y_seq, v_final = flexsn_inference_final_state(None, info, x, v)
+
+    assert tuple(y_seq.shape) == (0, 3)
+    torch.testing.assert_close(v_final, v)
+    assert v_final.data_ptr() != v.data_ptr()
+
+
+def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
+    monkeypatch,
+):
+    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+        custom_ops,
+    )
+
+    info = SimpleNamespace(
+        num_inputs=1,
+        num_outputs=1,
+        num_states=1,
+        c2k_return_mapping=[],
+    )
+    bundle = SimpleNamespace(training_info=info)
+    x = torch.randn(0, 3)
+    v = torch.randn(3)
+    full_returns = [x.new_empty(x.shape), x.new_empty((0, *v.shape))]
+
+    def fake_training_impl(bundle_arg, flat_args):
+        assert bundle_arg is bundle
+        assert len(flat_args) == 2
+        assert flat_args[0] is x
+        assert flat_args[1] is v
+        return full_returns
+
+    monkeypatch.setattr(
+        custom_ops,
+        "_flexsn_inductor_training_impl",
+        fake_training_impl,
+    )
+
+    y_seq, v_final = custom_ops._flexsn_inductor_training_final_state_impl(
+        bundle,
+        [x, v],
+    )
+
+    assert tuple(y_seq.shape) == (0, 3)
+    torch.testing.assert_close(v_final, v)
+    assert v_final.data_ptr() != v.data_ptr()
+
+
 @pytest.mark.parametrize("T", [1, 4, 16])
 @pytest.mark.parametrize("shape", [(8,), (4, 8), (2, 3, 8)])
 def test_hop_matches_manual_loop(rng, T, shape):
@@ -166,6 +223,7 @@ def test_hop_backend_matches_torch_backend(rng, T, shape):
         num_outputs=1,
         step_mode="m",
         backend="hop",
+        store_state_seqs=True,
         example_inputs=(torch.zeros(shape), torch.zeros(shape)),
     )
 
@@ -200,6 +258,7 @@ def test_hop_backend_matches_torch_backend_with_closure(rng):
         num_outputs=1,
         step_mode="m",
         backend="hop",
+        store_state_seqs=True,
         example_inputs=(torch.zeros(N), torch.zeros(N)),
     )
 
@@ -372,13 +431,15 @@ def test_compile_fullgraph_hop_backend_matches_eager_with_lowerable_while_loop(
             num_outputs=1,
             step_mode="m",
             backend="hop",
+            store_state_seqs=True,
             example_inputs=(torch.zeros(N), torch.zeros(N)),
         )
 
-    eager_out = make_neuron()(x_eager)
     monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
-    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
-    compiled_out = compiled_fn(x_compiled)
+    with torch.no_grad():
+        eager_out = make_neuron()(x_eager)
+        compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+        compiled_out = compiled_fn(x_compiled)
 
     torch.testing.assert_close(compiled_out, eager_out)
 
@@ -424,7 +485,7 @@ def test_hop_backend_zero_length_sequence_matches_torch_backend():
         num_outputs=1,
         step_mode="m",
         backend="hop",
-        store_state_seqs=False,
+        store_state_seqs=True,
         example_inputs=(torch.zeros(8), torch.zeros(8)),
     )
     torch_neuron = FlexSN(
@@ -434,7 +495,7 @@ def test_hop_backend_zero_length_sequence_matches_torch_backend():
         num_outputs=1,
         step_mode="m",
         backend="torch",
-        store_state_seqs=False,
+        store_state_seqs=True,
     )
 
     hop_out = hop_neuron(x)
@@ -493,12 +554,13 @@ def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerab
             example_inputs=(torch.zeros(N), torch.zeros(N)),
         )
 
-    eager_neuron = make_neuron()
-    eager_out = eager_neuron(x_eager)
     monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
-    compiled_neuron = make_neuron()
-    compiled_fn = torch.compile(compiled_neuron, fullgraph=True)
-    compiled_out = compiled_fn(x_compiled)
+    with torch.no_grad():
+        eager_neuron = make_neuron()
+        eager_out = eager_neuron(x_eager)
+        compiled_neuron = make_neuron()
+        compiled_fn = torch.compile(compiled_neuron, fullgraph=True)
+        compiled_out = compiled_fn(x_compiled)
 
     torch.testing.assert_close(compiled_out, eager_out)
     torch.testing.assert_close(compiled_neuron.states[0], eager_neuron.states[0])
@@ -761,6 +823,7 @@ def test_compile_fullgraph_hop_backend_matches_eager(rng):
             num_outputs=1,
             step_mode="m",
             backend="hop",
+            store_state_seqs=True,
             example_inputs=(torch.zeros(N), torch.zeros(N)),
         )
 
@@ -791,6 +854,7 @@ def test_compile_fullgraph_hop_backend_matches_eager_with_closure(rng):
             num_outputs=1,
             step_mode="m",
             backend="hop",
+            store_state_seqs=True,
             example_inputs=(torch.zeros(N), torch.zeros(N)),
         )
 

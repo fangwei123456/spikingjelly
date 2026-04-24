@@ -288,7 +288,7 @@ def _flexsn_inductor_training_final_state_impl(
     )
     init_states = list(args[info.num_inputs : info.num_inputs + info.num_states])
     final_states = [
-        init_states[i] if state_seq.shape[0] == 0 else state_seq[-1]
+        (init_states[i] if state_seq.shape[0] == 0 else state_seq[-1]).clone()
         for i, state_seq in enumerate(state_seqs)
     ]
     extra_saved_tensors = [full_returns[i] for i in _final_state_saved_return_indices(info)]

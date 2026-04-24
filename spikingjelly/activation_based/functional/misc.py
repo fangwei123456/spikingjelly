@@ -21,6 +21,24 @@ __all__ = [
 ]
 
 
+_TRAIN_PACK_CONV_TYPES = (
+    nn.Conv1d,
+    nn.Conv2d,
+    nn.Conv3d,
+    layer.Conv1d,
+    layer.Conv2d,
+    layer.Conv3d,
+)
+_TRAIN_PACK_BN_TYPES = (
+    nn.BatchNorm1d,
+    nn.BatchNorm2d,
+    nn.BatchNorm3d,
+    layer.BatchNorm1d,
+    layer.BatchNorm2d,
+    layer.BatchNorm3d,
+)
+
+
 def _matches_module_pattern(pattern, node: fx.Node, modules) -> bool:
     if len(node.args) == 0:
         return False
@@ -127,30 +145,30 @@ class _TrainConvBnWrapper(nn.Module):
     def _packed_forward(self, x: Tensor) -> Tensor:
         t, n = x.shape[:2]
         x = x.flatten(0, 1)
-        if not isinstance(self.conv, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+        if not isinstance(self.conv, _TRAIN_PACK_CONV_TYPES):
             raise TypeError(f"Unsupported packed conv type: {type(self.conv)!r}")
         with self._single_step_mode(self.conv):
             x = self.conv(x)
 
-        if not isinstance(self.bn, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
+        if not isinstance(self.bn, _TRAIN_PACK_BN_TYPES):
             raise TypeError(f"Unsupported packed batchnorm type: {type(self.bn)!r}")
         with self._single_step_mode(self.bn):
             x = self.bn(x)
         return x.view(t, n, *x.shape[1:])
 
     def _expects_multistep_input(self, x: Tensor) -> bool:
-        if isinstance(self.conv, nn.Conv1d):
+        if isinstance(self.conv, (nn.Conv1d, layer.Conv1d)):
             return x.dim() == 4
-        if isinstance(self.conv, nn.Conv2d):
+        if isinstance(self.conv, (nn.Conv2d, layer.Conv2d)):
             return x.dim() == 5
-        if isinstance(self.conv, nn.Conv3d):
+        if isinstance(self.conv, (nn.Conv3d, layer.Conv3d)):
             return x.dim() == 6
         return False
 
     def forward(self, x: Tensor) -> Tensor:
         if (
-            isinstance(self.conv, (nn.Conv1d, nn.Conv2d, nn.Conv3d))
-            and isinstance(self.bn, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d))
+            isinstance(self.conv, _TRAIN_PACK_CONV_TYPES)
+            and isinstance(self.bn, _TRAIN_PACK_BN_TYPES)
             and getattr(self.conv, "step_mode", "m") == "m"
             and getattr(self.bn, "step_mode", "m") == "m"
             and self._expects_multistep_input(x)
