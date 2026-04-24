@@ -12,7 +12,7 @@ try:
         lowerable_while_loop_scan_final_state,
         lowerable_while_loop_available,
     )
-except Exception as e:
+except (ImportError, ModuleNotFoundError, AttributeError) as e:
     import logging
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flex_sn_inductor: {e}")

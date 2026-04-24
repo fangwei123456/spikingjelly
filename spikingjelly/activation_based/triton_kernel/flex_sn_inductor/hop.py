@@ -68,7 +68,7 @@ Captured tensor freevars from ``core_fn`` are appended after the
 from __future__ import annotations
 import inspect
 import warnings
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple, Union
 
 import torch
 import torch.utils._pytree as pytree
@@ -115,9 +115,7 @@ class FlexSNScan(HigherOrderOperator):
         num_states: int,
         num_outputs: int,
         *flat_args: torch.Tensor,
-        output_template_specs: Optional[
-            Tuple[Tuple, ...]
-        ] = None,
+        output_template_specs: Optional[OutputTemplateSpecs] = None,
     ) -> Tuple[torch.Tensor, ...]:
         return super().__call__(
             core_fn,
@@ -131,6 +129,11 @@ class FlexSNScan(HigherOrderOperator):
 
 flex_sn_scan = FlexSNScan()
 _DYNAMO_HOP_REGISTERED = False
+OutputTemplateSpec = Union[
+    Tuple[Tuple[int, ...], torch.dtype],
+    Tuple[Tuple[int, ...], torch.dtype, torch.device],
+]
+OutputTemplateSpecs = Tuple[OutputTemplateSpec, ...]
 
 
 def _as_tuple(outputs):
@@ -142,7 +145,7 @@ def _as_tuple(outputs):
 def _empty_outputs_from_template(
     input_seqs: Tuple[torch.Tensor, ...],
     num_outputs: int,
-    output_template_specs: Optional[Tuple[Tuple, ...]],
+    output_template_specs: Optional[OutputTemplateSpecs],
 ) -> Tuple[torch.Tensor, ...]:
     if output_template_specs is None:
         raise ValueError(
@@ -204,7 +207,7 @@ def _dynamo_leaf_example_value(value):
 def _output_template_specs_from_dynamo_body_result(
     body_result,
     num_outputs: int,
-) -> Optional[Tuple[Tuple, ...]]:
+) -> Optional[OutputTemplateSpecs]:
     leaves = _flatten_dynamo_body_result(body_result)
     if len(leaves) < num_outputs:
         return None
@@ -303,9 +306,7 @@ def eager_scan(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
-    output_template_specs: Optional[
-        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
-    ] = None,
+    output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Plain-Python scan loop reused by both the HOP eager impl and the
     Dynamo-friendly path in :class:`FlexSN` (see ``backend="inductor"``).
@@ -379,9 +380,7 @@ def eager_scan_final_state(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
-    output_template_specs: Optional[
-        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
-    ] = None,
+    output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Variant of :func:`eager_scan` that returns output sequences followed by
     final states only.
@@ -447,9 +446,7 @@ def lowerable_scan(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
-    output_template_specs: Optional[
-        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
-    ] = None,
+    output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``scan`` HOP.
 
@@ -553,9 +550,7 @@ def lowerable_scan_final_state(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
-    output_template_specs: Optional[
-        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
-    ] = None,
+    output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     if _torch_scan_op is None:
         raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
@@ -666,9 +661,7 @@ def lowerable_while_loop_scan(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
-    output_template_specs: Optional[
-        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
-    ] = None,
+    output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``while_loop`` HOP.
 
@@ -829,9 +822,7 @@ def lowerable_while_loop_scan_final_state(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
-    output_template_specs: Optional[
-        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
-    ] = None,
+    output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     if _torch_while_loop is None:
         raise RuntimeError("PyTorch while_loop HOP is unavailable in this environment")
@@ -1020,8 +1011,21 @@ def _register_dynamo_hop() -> None:
         _ALLOW_FALLBACK_TO_EAGER = False
 
         def call_function(self, tx, args, kwargs):
+            output_template_specs_arg = kwargs.pop("output_template_specs", None)
             if kwargs:
-                raise hop_vars.unimplemented("flex_sn_scan does not support kwargs")
+                raise hop_vars.unimplemented(
+                    "flex_sn_scan only supports output_template_specs as a kwarg"
+                )
+            explicit_output_template_specs = None
+            if output_template_specs_arg is not None:
+                try:
+                    explicit_output_template_specs = (
+                        output_template_specs_arg.as_python_constant()
+                    )
+                except Exception:
+                    raise hop_vars.unimplemented(
+                        "flex_sn_scan output_template_specs must be a Python constant"
+                    )
 
             if len(args) < 4:
                 raise hop_vars.unimplemented(
@@ -1154,6 +1158,13 @@ def _register_dynamo_hop() -> None:
                 _body_r,
                 num_outputs,
             )
+            if explicit_output_template_specs is not None:
+                output_template_specs = explicit_output_template_specs
+            proxy_kwargs = (
+                {}
+                if output_template_specs is None
+                else {"output_template_specs": output_template_specs}
+            )
 
             proxy = tx.output.create_proxy(
                 "call_function",
@@ -1166,7 +1177,7 @@ def _register_dynamo_hop() -> None:
                     *(arg.as_proxy() for arg in flat_args),
                     *lifted_freevars,
                 ),
-                kwargs={"output_template_specs": output_template_specs},
+                kwargs=proxy_kwargs,
             )
             example_value = eager_scan(
                 body_gm,

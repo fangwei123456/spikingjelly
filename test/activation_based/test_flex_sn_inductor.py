@@ -178,8 +178,8 @@ def test_output_template_specs_from_examples_use_first_input_contract():
     )
 
     assert specs == (
-        ((2,), torch.float16, torch.device("cpu")),
-        ((2,), torch.float16, torch.device("cpu")),
+        ((2,), torch.float16),
+        ((2,), torch.float16),
     )
 
 
@@ -1454,6 +1454,37 @@ def test_compile_fullgraph_hop_direct_zero_length_scan_uses_body_template():
     assert out.shape == (0, 3)
     assert state_seq.shape == (0, 3)
     assert out.dtype == state.dtype
+
+
+def test_compile_fullgraph_hop_direct_accepts_output_template_specs():
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    _skip_if_dynamo_hop_unavailable()
+
+    def core(x_step, state):
+        return state + 1, state
+
+    x = torch.empty(0, 2)
+    state = torch.zeros(3)
+    specs = (((5,), torch.float64),)
+
+    @torch.compile(fullgraph=True)
+    def compiled_scan(x_seq, init_state):
+        return flex_sn_scan(
+            core,
+            1,
+            1,
+            1,
+            x_seq,
+            init_state,
+            output_template_specs=specs,
+        )
+
+    out, state_seq = compiled_scan(x, state)
+
+    assert out.shape == (0, 5)
+    assert out.dtype == torch.float64
+    assert state_seq.shape == (0, 3)
 
 
 def test_compile_fullgraph_hop_backend_matches_eager_with_closure(rng):

@@ -38,6 +38,8 @@ __all__ = [
 
 _MODULE_CACHE_LOCK_GUARD = threading.Lock()
 _MODULE_CACHE_LOCKS = {}
+_CODEGEN_CACHE_DIR = None
+_CODEGEN_CACHE_DIR_LOCK = threading.Lock()
 _NAMESPACE_METADATA_KEYS = {
     "__name__",
     "__spec__",
@@ -65,6 +67,18 @@ def _has_real_triton_runtime() -> bool:
 
 
 def _codegen_cache_dir() -> Path:
+    global _CODEGEN_CACHE_DIR
+    if _CODEGEN_CACHE_DIR is not None:
+        return _CODEGEN_CACHE_DIR
+    with _CODEGEN_CACHE_DIR_LOCK:
+        if _CODEGEN_CACHE_DIR is not None:
+            return _CODEGEN_CACHE_DIR
+        cache_dir = _resolve_codegen_cache_dir()
+        _CODEGEN_CACHE_DIR = cache_dir
+        return cache_dir
+
+
+def _resolve_codegen_cache_dir() -> Path:
     candidates = []
     uid = getattr(os, "getuid", lambda: None)()
     try:

@@ -291,7 +291,7 @@ def _make_output_template_specs_from_examples(
     if example_inputs is None:
         return None
     ref = example_inputs[0]
-    return tuple((tuple(ref.shape), ref.dtype, ref.device) for _ in range(num_outputs))
+    return tuple((tuple(ref.shape), ref.dtype) for _ in range(num_outputs))
 
 
 def _make_output_template_specs_from_outputs(
@@ -311,7 +311,7 @@ def _make_output_template_specs_from_outputs(
             raise TypeError(
                 f"FlexSN example output #{i} is {type(tensor)!r}; expected a tensor."
             )
-        specs.append((tuple(tensor.shape), tensor.dtype, tensor.device))
+        specs.append((tuple(tensor.shape), tensor.dtype))
     return tuple(specs)
 
 
