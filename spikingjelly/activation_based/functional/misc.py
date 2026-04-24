@@ -73,6 +73,12 @@ def _replace_node_module(
 def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
     pair_to_nodes = {}
     conv_to_bn_targets = {}
+    conv_target_call_counts = {}
+    for node in fx_model.graph.nodes:
+        if node.op == "call_module":
+            conv_target_call_counts[node.target] = (
+                conv_target_call_counts.get(node.target, 0) + 1
+            )
     for pattern in patterns:
         for node in list(fx_model.graph.nodes):
             if not _matches_module_pattern(pattern, node, modules):
@@ -90,13 +96,13 @@ def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
         for conv_target, bn_targets in conv_to_bn_targets.items()
         if len(bn_targets) > 1
     }
-    if not ambiguous_conv_targets:
-        return pair_to_nodes
-
     return {
         pair: matched_nodes
         for pair, matched_nodes in pair_to_nodes.items()
-        if pair[0] not in ambiguous_conv_targets
+        if (
+            pair[0] not in ambiguous_conv_targets
+            and len(matched_nodes) == conv_target_call_counts[pair[0]]
+        )
     }
 
 

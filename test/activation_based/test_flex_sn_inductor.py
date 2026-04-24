@@ -329,7 +329,12 @@ def test_hop_rejects_mismatched_T():
 
 
 def test_hop_registers_with_dynamo():
-    from torch._dynamo.variables.higher_order_ops import TorchHigherOrderOperatorVariable
+    try:
+        from torch._dynamo.variables.higher_order_ops import (
+            TorchHigherOrderOperatorVariable,
+        )
+    except (ImportError, ModuleNotFoundError, AttributeError):
+        pytest.skip("torch._dynamo higher-order-op internals are unavailable")
 
     hop_var = TorchHigherOrderOperatorVariable.make(flex_sn_scan)
     assert hop_var.value is flex_sn_scan

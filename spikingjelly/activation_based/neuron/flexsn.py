@@ -10,7 +10,7 @@ from .. import base
 
 try:
     from .. import triton_kernel
-except BaseException as e:
+except (ImportError, AttributeError) as e:
     logging.info(f"spikingjelly.activation_based.neuron: {e}")
     triton_kernel = None
 
@@ -36,7 +36,7 @@ try:
     from ..triton_kernel.flex_sn_inductor import (
         lowerable_while_loop_available as _flexsn_lowerable_while_loop_available,
     )
-except BaseException as e:
+except (ImportError, AttributeError) as e:
     logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
     _flexsn_eager_scan = None
     _flexsn_eager_scan_final_state = None
