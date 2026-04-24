@@ -1181,15 +1181,36 @@ def _register_dynamo_hop() -> None:
                 ),
                 kwargs=proxy_kwargs,
             )
-            example_value = eager_scan(
-                body_gm,
-                num_inputs,
-                num_states,
-                num_outputs,
-                *(arg.as_proxy().node.meta["example_value"] for arg in flat_args),
-                *(freevar.node.meta["example_value"] for freevar in lifted_freevars),
-                output_template_specs=output_template_specs,
-            )
+            body_leaves = _flatten_dynamo_body_result(_body_r)
+            example_value = []
+            T = flat_args[0].as_proxy().node.meta["example_value"].shape[0]
+            for i in range(num_outputs + num_states):
+                if i >= len(body_leaves):
+                    example_value = None
+                    break
+                leaf_ev = _dynamo_leaf_example_value(body_leaves[i])
+                if not isinstance(leaf_ev, torch.Tensor):
+                    example_value = None
+                    break
+                example_value.append(leaf_ev.new_empty((T, *leaf_ev.shape)))
+            if example_value is None:
+                example_value = eager_scan(
+                    body_gm,
+                    num_inputs,
+                    num_states,
+                    num_outputs,
+                    *(
+                        arg.as_proxy().node.meta["example_value"]
+                        for arg in flat_args
+                    ),
+                    *(
+                        freevar.node.meta["example_value"]
+                        for freevar in lifted_freevars
+                    ),
+                    output_template_specs=output_template_specs,
+                )
+            else:
+                example_value = tuple(example_value)
             return wrap_fx_proxy(tx=tx, proxy=proxy, example_value=example_value)
 
     def patched_make(cls, value, source=None, **kwargs):

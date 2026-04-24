@@ -130,6 +130,30 @@ def test_torch_backend_empty_sequence_requires_example_output_template():
     assert calls["count"] == 0
 
 
+def test_torch_backend_empty_sequence_can_use_example_input_template():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty multi-step input")
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        example_inputs=(torch.zeros(4), torch.zeros(3)),
+    )
+    m.states = [torch.zeros(3)]
+
+    out = m.multi_step_forward(torch.empty(0, 4))[0]
+
+    assert calls["count"] == 0
+    assert out.shape == (0, 4)
+
+
 def test_torch_backend_empty_state_only_sequence_does_not_require_output_template():
     calls = {"count": 0}
 
@@ -225,6 +249,27 @@ def test_empty_multistep_outputs_honor_template_device():
     assert outputs[0].shape == (0, 4)
     assert outputs[0].dtype == torch.float64
     assert outputs[0].device.type == "meta"
+
+
+def test_flexsn_empty_multistep_outputs_follow_runtime_device():
+    def core(x, v):
+        raise AssertionError("core should not run for an empty multi-step input")
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        example_outputs=(torch.empty(4, device="meta"),),
+    )
+    m.states = [torch.zeros(3)]
+
+    out = m.multi_step_forward(torch.empty(0, 2))[0]
+
+    assert out.shape == (0, 4)
+    assert out.device.type == "cpu"
 
 
 def test_empty_multistep_outputs_rejects_missing_template_reference():

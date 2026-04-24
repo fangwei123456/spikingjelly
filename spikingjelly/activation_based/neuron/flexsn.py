@@ -263,6 +263,8 @@ def _empty_multistep_outputs(
     states: List[torch.Tensor],
     num_outputs: int,
     output_template_specs: Optional[Tuple[Tuple, ...]] = None,
+    *,
+    use_template_device: bool = True,
 ) -> List[torch.Tensor]:
     def _empty_output(i: int) -> torch.Tensor:
         if output_template_specs is not None and i < len(output_template_specs):
@@ -271,7 +273,8 @@ def _empty_multistep_outputs(
                 shape, dtype = spec
                 device = args[0].device
             else:
-                shape, dtype, device = spec
+                shape, dtype, template_device = spec
+                device = template_device if use_template_device else args[0].device
             return torch.empty((0, *shape), dtype=dtype, device=device)
         if args:
             ref = args[0].new_empty(args[0].shape[1:])
@@ -978,15 +981,20 @@ class FlexSN(base.MemoryModule):
             if (
                 self.backend in ("torch", "hop")
                 and self.num_outputs > 0
-                and self._explicit_output_template_specs is None
+                and self._output_template_specs is None
             ):
                 raise ValueError(
                     f"FlexSN backend='{self.backend}' requires example_outputs "
+                    "or example_inputs "
                     "for empty multi-step inputs so output shapes and dtypes "
                     "match core's per-step return contract without executing core."
                 )
             output_seqs = _empty_multistep_outputs(
-                args, self.states, self.num_outputs, self._output_template_specs
+                args,
+                self.states,
+                self.num_outputs,
+                self._output_template_specs,
+                use_template_device=False,
             )
             if self.store_state_seqs:
                 self.state_seqs = [
