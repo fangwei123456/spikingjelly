@@ -273,8 +273,8 @@ def _empty_multistep_outputs(
             else:
                 shape, dtype, device = spec
             return torch.empty((0, *shape), dtype=dtype, device=device)
-        if i < len(args):
-            ref = args[i].new_empty(args[i].shape[1:])
+        if args:
+            ref = args[0].new_empty(args[0].shape[1:])
         elif states:
             ref = states[-1]
         else:

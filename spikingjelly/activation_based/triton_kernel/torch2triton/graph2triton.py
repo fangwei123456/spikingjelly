@@ -388,22 +388,24 @@ def compile_triton_code_str(
 
     needs_write = not fpath.exists()
     if needs_write:
-        with tempfile.NamedTemporaryFile(
-            "w", encoding="utf-8", dir=fpath.parent, delete=False, suffix=".tmp"
-        ) as tmp_file:
-            tmp_file.write(triton_code)
-            tmp_path = Path(tmp_file.name)
+        tmp_path = None
         try:
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=fpath.parent, delete=False, suffix=".tmp"
+            ) as tmp_file:
+                tmp_path = Path(tmp_file.name)
+                tmp_file.write(triton_code)
             os.replace(tmp_path, fpath)
             try:
                 os.chmod(fpath, 0o600)
             except OSError:
                 pass
         except Exception:
-            try:
-                tmp_path.unlink()
-            except FileNotFoundError:
-                pass
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink()
+                except FileNotFoundError:
+                    pass
             raise
     if verbose:
         action = "written to" if needs_write else "loaded from cache"

@@ -38,6 +38,8 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     outputs = [
         torch.empty_like(x_example) for _ in range(info.num_outputs + info.num_states)
     ]
+    if T == 0:
+        return tuple(outputs)
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     f[grid](
@@ -92,6 +94,8 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     NCL = _num_elements_per_step(x_example)
     returns = [torch.empty_like(x_example) for _ in range(info.num_fwd_kernel_returns)]
     dtype = x_example.dtype
+    if T == 0:
+        return tuple(returns)
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     f[grid](
@@ -132,6 +136,8 @@ def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
         for i in range(info.num_states)
     ]
     dtype = grad_example.dtype
+    if T == 0:
+        return tuple(grad_inputs)
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     f[grid](

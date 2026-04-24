@@ -331,6 +331,35 @@ def test_flexsn_wrapper_t0_final_states_preserve_num_states_without_init():
     torch.testing.assert_close(state1, torch.zeros_like(state1))
 
 
+def test_flexsn_wrappers_skip_kernel_launch_for_t0():
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    class _RaisingKernel:
+        def __getitem__(self, grid):
+            raise AssertionError("T == 0 wrappers should not launch Triton")
+
+    x = torch.empty(0, 3)
+    info = SimpleNamespace(
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        num_fwd_kernel_returns=2,
+    )
+
+    inference_outputs = wrapper.flexsn_inference(_RaisingKernel(), info, x)
+    forward_outputs = wrapper.flexsn_forward(_RaisingKernel(), info, x)
+    backward_outputs = wrapper.flexsn_backward(_RaisingKernel(), info, x)
+
+    assert [tuple(t.shape) for t in inference_outputs] == [(0, 3), (0, 3)]
+    assert [tuple(t.shape) for t in forward_outputs] == [(0, 3), (0, 3)]
+    assert [tuple(t.shape) for t in backward_outputs] == [(0, 3), (3,)]
+    torch.testing.assert_close(backward_outputs[0], torch.zeros_like(x))
+    torch.testing.assert_close(
+        backward_outputs[1],
+        torch.zeros_like(backward_outputs[1]),
+    )
+
+
 def test_flexsn_wrapper_t0_backward_state_grads_use_state_templates(monkeypatch):
     from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
 
@@ -839,6 +868,28 @@ def test_lowerable_scan_matches_manual_loop(rng):
 
     torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
     torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_lowerable_scan_return_order_with_unequal_outputs_and_states():
+    if not callable(lowerable_scan_available) or not lowerable_scan_available():
+        pytest.skip("PyTorch scan HOP is unavailable in this environment")
+
+    def core(x, v):
+        next_v = v + x
+        return x, x + 1, next_v
+
+    x = torch.arange(6, dtype=torch.float32).reshape(3, 2)
+    v0 = torch.zeros(2)
+
+    y0_seq, y1_seq, v_seq = lowerable_scan(core, 1, 1, 2, x, v0)
+    y0_final, y1_final, v_final = lowerable_scan_final_state(core, 1, 1, 2, x, v0)
+
+    torch.testing.assert_close(y0_seq, x)
+    torch.testing.assert_close(y1_seq, x + 1)
+    torch.testing.assert_close(v_seq, x.cumsum(dim=0))
+    torch.testing.assert_close(y0_final, x)
+    torch.testing.assert_close(y1_final, x + 1)
+    torch.testing.assert_close(v_final, x.sum(dim=0))
 
 
 def test_lowerable_scan_empty_sequence_returns_templates_without_scan_op():

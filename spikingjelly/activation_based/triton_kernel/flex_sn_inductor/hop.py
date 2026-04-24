@@ -543,6 +543,7 @@ def lowerable_scan(
         additional_inputs=lifted_args,
     )
     result = tuple(result)
+    # PyTorch scan returns final carry first, followed by the stacked outputs.
     return result[num_states:]
 
 
@@ -629,6 +630,7 @@ def lowerable_scan_final_state(
         additional_inputs=lifted_args,
     )
     result = tuple(result)
+    # PyTorch scan returns final carry first; keep that as the final states.
     final_states = result[:num_states]
     output_seqs = result[num_states:]
     return (*output_seqs, *final_states)
