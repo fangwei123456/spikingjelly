@@ -33,6 +33,7 @@ from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     lowerable_while_loop_scan,
     lowerable_while_loop_available,
 )
+from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import hop as hop_module
 
 
 def _lif_core(x: torch.Tensor, v: torch.Tensor):
@@ -165,6 +166,18 @@ def test_flexsn_rejects_invalid_example_output_template():
             backend="torch",
             example_outputs=(),
         )
+
+
+def test_output_template_specs_from_examples_use_first_input_contract():
+    specs = flexsn_module._make_output_template_specs_from_examples(
+        2,
+        (
+            torch.zeros(2, dtype=torch.float16),
+            torch.zeros(3, dtype=torch.float64),
+        ),
+    )
+
+    assert specs == (((2,), torch.float16), ((2,), torch.float16))
 
 
 def test_multi_step_forward_initializes_states_for_torch_backend():
@@ -697,6 +710,36 @@ def test_hop_registers_with_dynamo():
 
     hop_var = TorchHigherOrderOperatorVariable.make(flex_sn_scan)
     assert hop_var.value is flex_sn_scan
+
+
+def test_dynamo_body_result_templates_use_speculated_outputs():
+    class _FakeVar:
+        def __init__(self, example_value):
+            self._proxy = SimpleNamespace(
+                node=SimpleNamespace(meta={"example_value": example_value})
+            )
+
+        def as_proxy(self):
+            return self._proxy
+
+    class _FakeTupleVariable:
+        def __init__(self, items):
+            self.items = items
+
+    body_result = _FakeTupleVariable(
+        [
+            _FakeVar(torch.empty(2, dtype=torch.float64)),
+            _FakeVar(torch.empty(3, dtype=torch.float16)),
+            _FakeVar(torch.empty(4, dtype=torch.float32)),
+        ]
+    )
+
+    specs = hop_module._output_template_specs_from_dynamo_body_result(
+        body_result,
+        num_outputs=2,
+    )
+
+    assert specs == (((2,), torch.float64), ((3,), torch.float16))
 
 
 def test_run_hop_scan_compiled_falls_back_when_dynamo_hop_unavailable(monkeypatch):
@@ -1286,6 +1329,28 @@ def test_compile_fullgraph_hop_backend_matches_eager(rng):
     compiled_out = compiled_fn(x_compiled)
 
     torch.testing.assert_close(compiled_out, eager_out)
+
+
+def test_compile_fullgraph_hop_direct_zero_length_scan_uses_body_template():
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    _skip_if_dynamo_hop_unavailable()
+
+    def core(x_step, state):
+        return state + 1, state
+
+    x = torch.empty(0, 2)
+    state = torch.zeros(3)
+
+    @torch.compile(fullgraph=True)
+    def compiled_scan(x_seq, init_state):
+        return flex_sn_scan(core, 1, 1, 1, x_seq, init_state)
+
+    out, state_seq = compiled_scan(x, state)
+
+    assert out.shape == (0, 3)
+    assert state_seq.shape == (0, 3)
+    assert out.dtype == state.dtype
 
 
 def test_compile_fullgraph_hop_backend_matches_eager_with_closure(rng):

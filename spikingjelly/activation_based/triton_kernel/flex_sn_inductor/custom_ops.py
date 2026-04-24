@@ -54,6 +54,12 @@ _KERNEL_ID_GEN = count(1)
 def _normalize_kernel_handle(handle: int) -> int:
     if isinstance(handle, int):
         return handle
+    if isinstance(handle, torch.Tensor):
+        if handle.numel() != 1:
+            raise TypeError(
+                f"Unsupported FlexSN kernel handle tensor shape: {tuple(handle.shape)}"
+            )
+        return int(handle.item())
     try:
         return int(handle)
     except (TypeError, ValueError) as exc:

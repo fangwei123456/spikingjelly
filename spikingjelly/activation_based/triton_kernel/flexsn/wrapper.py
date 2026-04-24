@@ -101,7 +101,14 @@ def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     grad_example = args[0]
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
-    grad_inputs = [torch.empty_like(grad_example) for _ in range(info.num_inputs)]
+    grad_inputs = [
+        (
+            torch.zeros_like(grad_example)
+            if T == 0
+            else torch.empty_like(grad_example)
+        )
+        for _ in range(info.num_inputs)
+    ]
     grad_state_examples = args[info.num_outputs : info.num_outputs + info.num_states]
     grad_inputs += [
         (

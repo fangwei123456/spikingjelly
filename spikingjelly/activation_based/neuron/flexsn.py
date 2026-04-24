@@ -278,11 +278,8 @@ def _make_output_template_specs_from_examples(
 ) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
     if example_inputs is None:
         return None
-    specs = []
-    for i in range(num_outputs):
-        ref = example_inputs[i] if i < len(example_inputs) else example_inputs[0]
-        specs.append((tuple(ref.shape), ref.dtype))
-    return tuple(specs)
+    ref = example_inputs[0]
+    return tuple((tuple(ref.shape), ref.dtype) for _ in range(num_outputs))
 
 
 def _make_output_template_specs_from_outputs(

@@ -37,6 +37,14 @@ _TRAIN_PACK_BN_TYPES = (
     layer.BatchNorm2d,
     layer.BatchNorm3d,
 )
+_CONV_BN_PATTERNS = [
+    (layer.Conv1d, layer.BatchNorm1d),
+    (layer.Conv2d, layer.BatchNorm2d),
+    (layer.Conv3d, layer.BatchNorm3d),
+    (nn.Conv1d, nn.BatchNorm1d),
+    (nn.Conv2d, nn.BatchNorm2d),
+    (nn.Conv3d, nn.BatchNorm3d),
+]
 
 
 def _matches_module_pattern(pattern, node: fx.Node, modules) -> bool:
@@ -229,17 +237,9 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     graph = tracer.trace(net)
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())
-    patterns = [
-        (layer.Conv1d, layer.BatchNorm1d),
-        (layer.Conv2d, layer.BatchNorm2d),
-        (layer.Conv3d, layer.BatchNorm3d),
-        (nn.Conv1d, nn.BatchNorm1d),
-        (nn.Conv2d, nn.BatchNorm2d),
-        (nn.Conv3d, nn.BatchNorm3d),
-    ]
 
     for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
-        fx_model, modules, patterns
+        fx_model, modules, _CONV_BN_PATTERNS
     ).items():
         conv = modules[conv_target]
         bn = modules[bn_target]
@@ -308,17 +308,9 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     graph = tracer.trace(net)
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())
-    patterns = [
-        (layer.Conv1d, layer.BatchNorm1d),
-        (layer.Conv2d, layer.BatchNorm2d),
-        (layer.Conv3d, layer.BatchNorm3d),
-        (nn.Conv1d, nn.BatchNorm1d),
-        (nn.Conv2d, nn.BatchNorm2d),
-        (nn.Conv3d, nn.BatchNorm3d),
-    ]
 
     for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
-        fx_model, modules, patterns
+        fx_model, modules, _CONV_BN_PATTERNS
     ).items():
         conv = modules[conv_target]
         bn = modules[bn_target]

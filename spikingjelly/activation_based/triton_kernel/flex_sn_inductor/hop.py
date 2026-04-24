@@ -115,9 +115,17 @@ class FlexSNScan(HigherOrderOperator):
         num_states: int,
         num_outputs: int,
         *flat_args: torch.Tensor,
+        output_template_specs: Optional[
+            Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+        ] = None,
     ) -> Tuple[torch.Tensor, ...]:
         return super().__call__(
-            core_fn, num_inputs, num_states, num_outputs, *flat_args
+            core_fn,
+            num_inputs,
+            num_states,
+            num_outputs,
+            *flat_args,
+            output_template_specs=output_template_specs,
         )
 
 
@@ -146,11 +154,59 @@ def _empty_outputs_from_template(
             f"expected {num_outputs} output template specs, got "
             f"{len(output_template_specs)}"
         )
-    device = input_seqs[0].device
     return tuple(
-        torch.empty((0, *shape), dtype=dtype, device=device)
+        input_seqs[0].new_empty((0, *shape), dtype=dtype)
         for shape, dtype in output_template_specs
     )
+
+
+def _flatten_dynamo_body_result(value) -> Tuple[object, ...]:
+    if isinstance(value, torch.Tensor):
+        return (value,)
+    if isinstance(value, (tuple, list)):
+        return tuple(
+            leaf for item in value for leaf in _flatten_dynamo_body_result(item)
+        )
+    variable_items = getattr(value, "items", None)
+    if isinstance(variable_items, (tuple, list)):
+        return tuple(
+            leaf
+            for item in variable_items
+            for leaf in _flatten_dynamo_body_result(item)
+        )
+    return (value,)
+
+
+def _dynamo_leaf_example_value(value):
+    if isinstance(value, torch.Tensor):
+        return value
+    as_proxy = getattr(value, "as_proxy", None)
+    if callable(as_proxy):
+        try:
+            proxy = as_proxy()
+        except Exception:
+            return None
+        node = getattr(proxy, "node", None)
+        meta = getattr(node, "meta", None)
+        if isinstance(meta, dict):
+            return meta.get("example_value")
+    return None
+
+
+def _output_template_specs_from_dynamo_body_result(
+    body_result,
+    num_outputs: int,
+) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
+    leaves = _flatten_dynamo_body_result(body_result)
+    if len(leaves) < num_outputs:
+        return None
+    specs = []
+    for leaf in leaves[:num_outputs]:
+        example_value = _dynamo_leaf_example_value(leaf)
+        if not isinstance(example_value, torch.Tensor):
+            return None
+        specs.append((tuple(example_value.shape), example_value.dtype))
+    return tuple(specs)
 
 
 def lowerable_scan_available() -> bool:
@@ -1080,6 +1136,10 @@ def _register_dynamo_hop() -> None:
             body_gm = torch.fx.GraphModule(tx.output.nn_modules, body_graph)
             body_name = install_subgraph(tx, self.source, "flex_sn_scan_body", body_gm)
             body_node = make_attr(tx, body_name)
+            output_template_specs = _output_template_specs_from_dynamo_body_result(
+                _body_r,
+                num_outputs,
+            )
 
             proxy = tx.output.create_proxy(
                 "call_function",
@@ -1092,7 +1152,7 @@ def _register_dynamo_hop() -> None:
                     *(arg.as_proxy() for arg in flat_args),
                     *lifted_freevars,
                 ),
-                kwargs={},
+                kwargs={"output_template_specs": output_template_specs},
             )
             example_value = eager_scan(
                 body_gm,
@@ -1101,6 +1161,7 @@ def _register_dynamo_hop() -> None:
                 num_outputs,
                 *(arg.as_proxy().node.meta["example_value"] for arg in flat_args),
                 *(freevar.node.meta["example_value"] for freevar in lifted_freevars),
+                output_template_specs=output_template_specs,
             )
             return wrap_fx_proxy(tx=tx, proxy=proxy, example_value=example_value)
 

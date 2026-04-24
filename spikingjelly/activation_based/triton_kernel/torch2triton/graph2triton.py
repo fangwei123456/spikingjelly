@@ -81,6 +81,9 @@ def _codegen_cache_dir() -> Path:
             cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
             if uid is not None:
                 st = cache_dir.stat()
+                if st.st_uid == uid:
+                    os.chmod(cache_dir, 0o700)
+                    st = cache_dir.stat()
                 mode = stat.S_IMODE(st.st_mode)
                 if (
                     st.st_uid != uid
