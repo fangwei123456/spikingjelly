@@ -1,4 +1,5 @@
 import copy
+import functools
 import os
 from typing import Callable, Optional, Tuple, List
 import logging
@@ -221,6 +222,13 @@ def _infer_empty_output_templates(
 
 
 def _core_requires_grad(core: Callable) -> bool:
+    if isinstance(core, functools.partial):
+        return (
+            _core_requires_grad(core.func)
+            or _value_requires_grad(core.args)
+            or _value_requires_grad(core.keywords)
+        )
+
     if isinstance(core, torch.nn.Module):
         for tensor in [*core.parameters(), *core.buffers()]:
             if tensor.requires_grad:
@@ -234,8 +242,31 @@ def _core_requires_grad(core: Callable) -> bool:
             cell_value = cell.cell_contents
         except ValueError:
             continue
-        if isinstance(cell_value, torch.Tensor) and cell_value.requires_grad:
+        if _value_requires_grad(cell_value):
             return True
+    return False
+
+
+def _value_requires_grad(value) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, torch.Tensor):
+        return value.requires_grad
+    if isinstance(value, torch.nn.Module):
+        return any(
+            tensor.requires_grad
+            for tensor in [*value.parameters(), *value.buffers()]
+        )
+    if isinstance(value, functools.partial):
+        return (
+            _core_requires_grad(value.func)
+            or _value_requires_grad(value.args)
+            or _value_requires_grad(value.keywords)
+        )
+    if isinstance(value, dict):
+        return any(_value_requires_grad(v) for v in value.values())
+    if isinstance(value, (tuple, list)):
+        return any(_value_requires_grad(v) for v in value)
     return False
 
 
@@ -866,7 +897,11 @@ class FlexSN(base.MemoryModule):
 
         elif self.backend == "inductor":
             result_has_state_seqs = self.store_state_seqs
-            _no_grad = not torch.is_grad_enabled()
+            _no_grad = not torch.is_grad_enabled() or (
+                not _value_requires_grad(args)
+                and not _value_requires_grad(self.states)
+                and not _core_requires_grad(self.core)
+            )
             use_implicit_zero_states = (
                 self.states is None and _no_grad and _can_elide_zero_state_inputs(self)
             )
@@ -957,7 +992,13 @@ class FlexSN(base.MemoryModule):
         can_elide = (
             self.step_mode == "m"
             and _can_elide_zero_state_inputs(self)
-            and not torch.is_grad_enabled()
+            and (
+                not torch.is_grad_enabled()
+                or (
+                    not _value_requires_grad(args)
+                    and not _core_requires_grad(self.core)
+                )
+            )
         )
         if self.states is None and not can_elide:
             self.states = self.init_states(self.num_states, self.step_mode, *args)

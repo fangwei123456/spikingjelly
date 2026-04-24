@@ -66,6 +66,7 @@ Captured tensor freevars from ``core_fn`` are appended after the
 ``[*inputs_seq, *init_states]`` segment when Dynamo rewrites the HOP call.
 """
 from __future__ import annotations
+import inspect
 import warnings
 from typing import Callable, Tuple
 
@@ -137,6 +138,43 @@ def lowerable_while_loop_available() -> bool:
     return _torch_while_loop is not None
 
 
+def _callable_accepts_positional_args(fn: Callable, n_args: int) -> bool | None:
+    target = fn.forward if isinstance(fn, torch.nn.Module) else fn
+    try:
+        signature = inspect.signature(target)
+    except (TypeError, ValueError):
+        return None
+    positional = 0
+    for parameter in signature.parameters.values():
+        if parameter.kind == inspect.Parameter.VAR_POSITIONAL:
+            return True
+        if parameter.kind in (
+            inspect.Parameter.POSITIONAL_ONLY,
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+        ):
+            positional += 1
+    return n_args <= positional
+
+
+def _check_lifted_arg_arity(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    lifted_args: Tuple[torch.Tensor, ...],
+) -> None:
+    if not lifted_args:
+        return
+    expected = num_inputs + num_states
+    total = expected + len(lifted_args)
+    accepts = _callable_accepts_positional_args(core_fn, total)
+    if accepts is False:
+        raise ValueError(
+            f"flex_sn_scan expected {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {total}"
+        )
+
+
 def eager_scan(
     core_fn: Callable,
     num_inputs: int,
@@ -162,6 +200,7 @@ def eager_scan(
     inputs_seq = flat_args[:num_inputs]
     states = list(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
+    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -245,6 +284,7 @@ def eager_scan_final_state(
     inputs_seq = flat_args[:num_inputs]
     states = list(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
+    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -318,7 +358,7 @@ def lowerable_scan(
     * We pass flattened input/state leaves directly to ``torch.ops.higher_order.scan``
       and rebuild the structured inputs inside ``wrapped_combine_fn``.
     """
-    if _torch_scan_op is None or _wrap_scan_combine_fn_flat is None:
+    if _torch_scan_op is None:
         raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
 
     expected = num_inputs + num_states
@@ -334,6 +374,8 @@ def lowerable_scan(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
+    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+
     def combine_fn(carry, step_inputs, additional_inputs):
         carry = tuple(carry)
         step_inputs = tuple(step_inputs)
@@ -386,7 +428,7 @@ def lowerable_scan_final_state(
     num_outputs: int,
     *flat_args: torch.Tensor,
 ) -> Tuple[torch.Tensor, ...]:
-    if _torch_scan_op is None or _wrap_scan_combine_fn_flat is None:
+    if _torch_scan_op is None:
         raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
 
     expected = num_inputs + num_states
@@ -402,6 +444,7 @@ def lowerable_scan_final_state(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
+    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
 
     def combine_fn(carry, step_inputs, additional_inputs):
         carry = tuple(carry)
@@ -501,6 +544,7 @@ def lowerable_while_loop_scan(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
+    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -658,6 +702,7 @@ def lowerable_while_loop_scan_final_state(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
+    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -823,6 +868,9 @@ def _register_dynamo_hop() -> None:
             return tx.output.install_subgraph(name, gm)
 
     class FlexSNScanHigherOrderVariable(TorchHigherOrderOperatorVariable):
+        _HOP_NAME = "spikingjelly.flex_sn_scan"
+        _ALLOW_FALLBACK_TO_EAGER = False
+
         def call_function(self, tx, args, kwargs):
             if kwargs:
                 raise hop_vars.unimplemented("flex_sn_scan does not support kwargs")

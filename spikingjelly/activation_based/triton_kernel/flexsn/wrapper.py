@@ -21,7 +21,7 @@ __all__ = ["flexsn_inference", "flexsn_inference_final_state", "flexsn_forward",
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
-    NCL = x_example[0].numel()
+    NCL = x_example.shape[1:].numel()
     dtype = x_example.dtype
     outputs = [
         torch.empty_like(x_example) for _ in range(info.num_outputs + info.num_states)
@@ -41,12 +41,15 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
-    NCL = x_example[0].numel()
+    NCL = x_example.shape[1:].numel()
     dtype = x_example.dtype
     output_seqs = [torch.empty_like(x_example) for _ in range(info.num_outputs)]
     final_states = [
-        torch.empty_like(x_example[0]) for _ in range(info.num_states)
+        x_example.new_empty(x_example.shape[1:]) for _ in range(info.num_states)
     ]
+    if T == 0:
+        init_states = args[info.num_inputs : info.num_inputs + info.num_states]
+        return tuple([*output_seqs, *init_states])
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
     f[grid](
@@ -63,7 +66,7 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
-    NCL = x_example[0].numel()
+    NCL = x_example.shape[1:].numel()
     returns = [torch.empty_like(x_example) for _ in range(info.num_fwd_kernel_returns)]
     dtype = x_example.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
@@ -81,9 +84,11 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
 def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     grad_example = args[0]
     T = grad_example.shape[0]
-    NCL = grad_example[0].numel()
+    NCL = grad_example.shape[1:].numel()
     grad_inputs = [torch.empty_like(grad_example) for _ in range(info.num_inputs)]
-    grad_inputs += [torch.empty_like(grad_example[0]) for _ in range(info.num_states)]
+    grad_inputs += [
+        grad_example.new_empty(grad_example.shape[1:]) for _ in range(info.num_states)
+    ]
     dtype = grad_example.dtype
     grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
 
