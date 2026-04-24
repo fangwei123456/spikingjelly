@@ -248,8 +248,11 @@ def eager_scan(
 
     if T == 0:
         step_inputs = tuple(x.new_empty(x.shape[1:]) for x in inputs_seq)
+        temp_states = [s.clone() for s in states]
         with torch.no_grad():
-            template_results = _as_tuple(core_fn(*step_inputs, *states, *lifted_args))
+            template_results = _as_tuple(
+                core_fn(*step_inputs, *temp_states, *lifted_args)
+            )
         if len(template_results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(template_results)} values, "
@@ -332,8 +335,11 @@ def eager_scan_final_state(
 
     if T == 0:
         step_inputs = tuple(x.new_empty(x.shape[1:]) for x in inputs_seq)
+        temp_states = [s.clone() for s in states]
         with torch.no_grad():
-            template_results = _as_tuple(core_fn(*step_inputs, *states, *lifted_args))
+            template_results = _as_tuple(
+                core_fn(*step_inputs, *temp_states, *lifted_args)
+            )
         if len(template_results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(template_results)} values, "
@@ -346,7 +352,7 @@ def eager_scan_final_state(
             return ref.new_empty((0, *ref.shape))
 
         empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
-        final_states = tuple(states)
+        final_states = tuple(s.clone() for s in states)
         return (*empty_outputs, *final_states)
 
     output_buffers = [[] for _ in range(num_outputs)]
@@ -592,9 +598,10 @@ def lowerable_while_loop_scan(
 
     if T == 0:
         step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
+        temp_states = [s.clone() for s in init_states]
         with torch.no_grad():
             template_results = _as_tuple(
-                core_fn(*step_inputs, *init_states, *lifted_args)
+                core_fn(*step_inputs, *temp_states, *lifted_args)
             )
         if len(template_results) != num_outputs + num_states:
             raise ValueError(
@@ -759,9 +766,10 @@ def lowerable_while_loop_scan_final_state(
 
     if T == 0:
         step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
+        temp_states = [s.clone() for s in init_states]
         with torch.no_grad():
             template_results = _as_tuple(
-                core_fn(*step_inputs, *init_states, *lifted_args)
+                core_fn(*step_inputs, *temp_states, *lifted_args)
             )
         if len(template_results) != num_outputs + num_states:
             raise ValueError(
@@ -777,7 +785,7 @@ def lowerable_while_loop_scan_final_state(
         empty_outputs = tuple(
             _empty_output(i) for i in range(num_outputs)
         )
-        return (*empty_outputs, *init_states)
+        return (*empty_outputs, *(s.clone() for s in init_states))
 
     input_seqs = tuple(_ensure_contiguous(seq) for seq in input_seqs)
     init_states = tuple(_ensure_contiguous(state) for state in init_states)

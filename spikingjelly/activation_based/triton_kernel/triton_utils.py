@@ -6,6 +6,7 @@ https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 import atexit
 import contextlib
 import functools
+import logging
 import os
 import tempfile
 import threading
@@ -138,6 +139,7 @@ else:
 
 _CLEANUP_TMP_PYTHON_FILES_REGISTERED = False
 _CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK = threading.Lock()
+_logger = logging.getLogger(__name__)
 
 
 def _triton_codegen_cache_dirs():
@@ -164,8 +166,10 @@ def cleanup_tmp_python_files():
                     f.unlink()
                 except FileNotFoundError:
                     pass
-                except BaseException:
-                    pass  # ignore the errors
+                except Exception as exc:
+                    _logger.warning(
+                        "failed to remove temporary Triton file %s: %s", f, exc
+                    )
 
 
 def ensure_cleanup_tmp_python_files(fn):

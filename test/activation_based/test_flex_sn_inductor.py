@@ -51,12 +51,14 @@ def _skip_if_dynamo_hop_unavailable():
         pytest.skip("FlexSN Dynamo HOP registration is unavailable")
 
 
-def test_torch_backend_empty_sequence_does_not_call_core():
+def test_torch_backend_empty_sequence_uses_core_output_shape_and_cloned_states():
     calls = {"count": 0}
+    initial_state = torch.ones(3)
 
     def core(x, v):
         calls["count"] += 1
-        raise AssertionError("core should not run for an empty multi-step input")
+        v.add_(1)
+        return x.new_zeros(4), v
 
     m = FlexSN(
         core=core,
@@ -66,15 +68,17 @@ def test_torch_backend_empty_sequence_does_not_call_core():
         step_mode="m",
         backend="torch",
     )
+    m.states = [initial_state.clone()]
 
     out = m(torch.empty(0, 3))
 
-    assert calls["count"] == 0
-    assert out.shape == (0, 3)
+    assert calls["count"] == 1
+    assert out.shape == (0, 4)
     assert m.states[0].shape == (3,)
+    torch.testing.assert_close(m.states[0], initial_state)
 
 
-def test_torch_backend_empty_sequence_uses_example_input_template_without_core_probe():
+def test_torch_backend_empty_sequence_does_not_probe_core_at_construction():
     calls = {"count": 0}
 
     def core(x, v):
@@ -90,12 +94,13 @@ def test_torch_backend_empty_sequence_uses_example_input_template_without_core_p
         backend="torch",
         example_inputs=(torch.zeros(2), torch.zeros(3)),
     )
+    assert calls["count"] == 0
     m.states = [torch.zeros(3)]
 
     out = m.multi_step_forward(torch.empty(0, 2))[0]
 
-    assert calls["count"] == 0
-    assert out.shape == (0, 2)
+    assert calls["count"] == 1
+    assert out.shape == (0, 4)
 
 
 def test_multi_step_forward_initializes_states_for_torch_backend():

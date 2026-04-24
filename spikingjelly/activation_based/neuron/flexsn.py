@@ -269,6 +269,26 @@ def _empty_multistep_outputs(
     return [_empty_output(i) for i in range(num_outputs)]
 
 
+def _make_output_template_specs_from_core(
+    core: Callable,
+    args: Tuple[torch.Tensor, ...],
+    states: List[torch.Tensor],
+    num_outputs: int,
+    num_states: int,
+) -> Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]:
+    step_inputs = tuple(arg.new_empty(arg.shape[1:]) for arg in args)
+    state_inputs = [state.clone() for state in states]
+    with torch.no_grad():
+        returns = _as_tuple(core(*step_inputs, *state_inputs))
+    expected = num_outputs + num_states
+    if len(returns) != expected:
+        raise ValueError(
+            f"FlexSN core returned {len(returns)} values, but expected "
+            f"{expected} (= num_outputs + num_states)."
+        )
+    return tuple((tuple(t.shape), t.dtype) for t in returns[:num_outputs])
+
+
 def _make_output_template_specs_from_examples(
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]],
@@ -907,8 +927,18 @@ class FlexSN(base.MemoryModule):
         if T == 0 and self.backend != "hop":
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
+            output_template_specs = self._output_template_specs
+            if self.backend == "torch":
+                output_template_specs = _make_output_template_specs_from_core(
+                    self.core,
+                    args,
+                    self.states,
+                    self.num_outputs,
+                    self.num_states,
+                )
+                self._output_template_specs = output_template_specs
             output_seqs = _empty_multistep_outputs(
-                args, self.states, self.num_outputs, self._output_template_specs
+                args, self.states, self.num_outputs, output_template_specs
             )
             if self.store_state_seqs:
                 self.state_seqs = [
