@@ -173,9 +173,19 @@ def _run_hop_scan(
             "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
         )
 
+    lowerable_while_loop_impl = (
+        _flexsn_lowerable_while_loop_scan
+        if store_state_seqs
+        else _flexsn_lowerable_while_loop_scan_final_state
+    )
+    lowerable_scan_impl = (
+        _flexsn_lowerable_scan
+        if store_state_seqs
+        else _flexsn_lowerable_scan_final_state
+    )
     use_lowerable_while_loop = (
         is_compiling
-        and _flexsn_lowerable_while_loop_scan is not None
+        and lowerable_while_loop_impl is not None
         and callable(_flexsn_lowerable_while_loop_available)
         and _flexsn_lowerable_while_loop_available()
         and (not torch.is_grad_enabled())
@@ -183,7 +193,7 @@ def _run_hop_scan(
     )
     use_lowerable_scan = (
         is_compiling
-        and _flexsn_lowerable_scan is not None
+        and lowerable_scan_impl is not None
         and callable(_flexsn_lowerable_scan_available)
         and _flexsn_lowerable_scan_available()
         and (not torch.is_grad_enabled())
@@ -191,17 +201,9 @@ def _run_hop_scan(
     )
 
     if use_lowerable_while_loop:
-        scan_impl = (
-            _flexsn_lowerable_while_loop_scan
-            if store_state_seqs
-            else _flexsn_lowerable_while_loop_scan_final_state
-        )
+        scan_impl = lowerable_while_loop_impl
     elif use_lowerable_scan:
-        scan_impl = (
-            _flexsn_lowerable_scan
-            if store_state_seqs
-            else _flexsn_lowerable_scan_final_state
-        )
+        scan_impl = lowerable_scan_impl
     elif (
         _flexsn_hop_scan is not None
         and store_state_seqs
@@ -218,6 +220,8 @@ def _run_hop_scan(
         scan_impl = _flexsn_eager_scan_final_state
     else:
         scan_impl = _flexsn_eager_scan
+    if scan_impl is None:
+        raise RuntimeError("FlexSN HOP backend has no available scan implementation.")
 
     return scan_impl(
         core,
@@ -265,25 +269,16 @@ def _empty_multistep_outputs(
     return [_empty_output(i) for i in range(num_outputs)]
 
 
-def _make_output_template_specs(
-    core: Callable,
+def _make_output_template_specs_from_examples(
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]],
 ) -> Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]]:
     if example_inputs is None:
         return None
-    with torch.no_grad():
-        results = _as_tuple(core(*tuple(x.detach().clone() for x in example_inputs)))
-    if len(results) < num_outputs:
-        raise ValueError(
-            f"FlexSN core returned {len(results)} values, expected at least "
-            f"{num_outputs} outputs."
-        )
     specs = []
-    for result in results[:num_outputs]:
-        if not isinstance(result, torch.Tensor):
-            return None
-        specs.append((tuple(result.shape), result.dtype))
+    for i in range(num_outputs):
+        ref = example_inputs[i] if i < len(example_inputs) else example_inputs[0]
+        specs.append((tuple(ref.shape), ref.dtype))
     return tuple(specs)
 
 
@@ -626,8 +621,7 @@ class FlexSN(base.MemoryModule):
                 num_inputs + num_states,
             )
         )
-        self._output_template_specs = _make_output_template_specs(
-            core,
+        self._output_template_specs = _make_output_template_specs_from_examples(
             num_outputs,
             example_inputs,
         )
@@ -975,16 +969,17 @@ class FlexSN(base.MemoryModule):
 
         elif self.backend == "inductor":
             result_has_state_seqs = self.store_state_seqs
+            can_elide_zero_states = (
+                self.states is None and _can_elide_zero_state_inputs(self)
+            )
+            if self.states is None and not can_elide_zero_states:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
             _no_grad = not torch.is_grad_enabled() or (
                 not _value_requires_grad(args)
                 and not _value_requires_grad(self.states)
                 and not _core_requires_grad(self.core)
             )
-            use_implicit_zero_states = (
-                self.states is None and _no_grad and _can_elide_zero_state_inputs(self)
-            )
-            if self.states is None and not use_implicit_zero_states:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
+            use_implicit_zero_states = can_elide_zero_states and _no_grad
             state_args = [] if use_implicit_zero_states else list(self.states)
             flat_args = [*args, *state_args]
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)

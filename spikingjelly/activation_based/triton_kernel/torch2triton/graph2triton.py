@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Optional, Tuple
 import errno
 import importlib.util
 import linecache
@@ -333,7 +333,7 @@ def compile_triton_code_str(
     triton_code: str,
     kernel_name: str,
     verbose: bool = False,
-    name_space: dict | None = None,
+    name_space: Optional[dict] = None,
 ):
     """Compile a Triton code string into a runnable Triton JIT function.
 
@@ -344,7 +344,7 @@ def compile_triton_code_str(
         triton_code (str): The Triton code string to compile.
         kernel_name (str): The name of the Triton function to extract.
         verbose (bool, optional): If True, print the path to the temporary file. Defaults to False.
-        name_space (dict | None, optional): Optional globals injected before execution.
+        name_space (Optional[dict], optional): Optional globals injected before execution.
             When provided, it will be updated with symbols defined by the compiled module.
 
     Returns:

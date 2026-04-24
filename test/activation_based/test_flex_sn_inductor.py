@@ -74,7 +74,7 @@ def test_torch_backend_empty_sequence_does_not_call_core():
     assert m.states[0].shape == (3,)
 
 
-def test_torch_backend_empty_sequence_uses_example_output_template():
+def test_torch_backend_empty_sequence_uses_example_input_template_without_core_probe():
     calls = {"count": 0}
 
     def core(x, v):
@@ -91,12 +91,11 @@ def test_torch_backend_empty_sequence_uses_example_output_template():
         example_inputs=(torch.zeros(2), torch.zeros(3)),
     )
     m.states = [torch.zeros(3)]
-    calls["count"] = 0
 
     out = m.multi_step_forward(torch.empty(0, 2))[0]
 
     assert calls["count"] == 0
-    assert out.shape == (0, 4)
+    assert out.shape == (0, 2)
 
 
 def test_multi_step_forward_initializes_states_for_torch_backend():
