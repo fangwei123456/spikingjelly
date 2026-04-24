@@ -570,12 +570,15 @@ class LIFNode(BaseNode):
                     )
 
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = ac_neuron_kernel.LIFNodeATGF.apply(
+                spike_seq, v_seq = ac_neuron_kernel.multistep_lif(
                     x_seq.flatten(1),
                     self.v.flatten(0),
+                    self.decay_input,
+                    self.tau,
                     self.v_threshold,
                     self.v_reset,
-                    1.0 / self.tau,
+                    self.detach_reset,
+                    self.surrogate_function,
                     self.forward_kernel,
                     self.backward_kernel,
                 )

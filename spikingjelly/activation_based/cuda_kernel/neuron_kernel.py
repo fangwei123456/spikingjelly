@@ -3602,6 +3602,59 @@ class MultiStepEIFNodePTT(torch.autograd.Function):
 def save_cuda_codes(
     cu_file_path: str = "./spikingjelly/activation_based/neuron_kernel_sample.cu",
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <save_cuda_codes-cn>` | :ref:`English <save_cuda_codes-en>`
+
+    ----
+
+    .. _save_cuda_codes-cn:
+
+    * **中文**
+
+    将本模块内置的 CUDA kernel 源码导出到 ``.cu`` 文件中，便于阅读、调试或离线分析。
+
+    .. note::
+
+        该函数仅导出源码文本，不会编译或执行导出的 CUDA 代码。
+
+    :param cu_file_path: 导出目标 ``.cu`` 文件路径
+    :type cu_file_path: str
+
+    :return: 无返回值
+    :rtype: None
+
+    ----
+
+    .. _save_cuda_codes-en:
+
+    * **English**
+
+    Export built-in CUDA kernel source codes from this module to a ``.cu`` file
+    for inspection, debugging, or offline analysis.
+
+    .. admonition:: Note
+        :class: note
+
+        This function only dumps source text and does not compile or execute the
+        exported CUDA code.
+
+    :param cu_file_path: Output path of the exported ``.cu`` file
+    :type cu_file_path: str
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    * **示例代码 | Example**
+
+    .. code-block:: python
+
+        from spikingjelly.activation_based.cuda_kernel import neuron_kernel
+
+        neuron_kernel.save_cuda_codes("./neuron_kernels_dump.cu")
+    """
     # save all cuda codes to files
     with open(cu_file_path, "w+") as cu_file:
         cu_file.write(

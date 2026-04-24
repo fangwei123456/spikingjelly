@@ -382,12 +382,83 @@ def gen_backward_codes(
     detach_reset: bool,
     surrogate_fuction,
 ):
-    """
-    用户定义的前向传播函数为
-    h_seq[t] = fun(x_seq[t], v_v_seq[t], ...)
+    r"""
+    **API Language:**
+    :ref:`中文 <gen_backward_codes-cn>` | :ref:`English <gen_backward_codes-en>`
 
-    需要计算出 h_seq[t] -> x_seq[t] 的梯度和 h_seq[t] -> v_v_seq[t]的梯度
-    还需要考虑 ... 中如果有tensor，可以增加flag，决定是否计算h_seq[t]对其的梯度
+    ----
+
+    .. _gen_backward_codes-cn:
+
+    * **中文**
+
+    根据前向计算图命令和前向 CUDA 指令，自动生成反向传播 CUDA kernel 代码字符串。
+
+    若用户前向函数满足 ``h_seq[t] = fun(x_seq[t], v_v_seq[t], ...)``，
+    本函数会在反向中生成 ``h_seq[t]`` 到 ``x_seq[t]``、``v_v_seq[t]`` 以及其他
+    需要梯度输入的链式求导代码，并返回 kernel 名称与反向所需附加输入变量名。
+
+    :param cuda_cmds: 前向 CUDA 指令列表，每个元素为一条语句字符串
+    :type cuda_cmds: list
+
+    :param input_nodes: 输入节点字典，key 为节点 debug 名，value 为 ``VarNode``
+    :type input_nodes: dict
+
+    :param output_nodes: 输出节点字典，key 为节点 debug 名，value 为 ``VarNode``
+    :type output_nodes: dict
+
+    :param cmds: 计算图命令列表，每个元素形如 ``(output, fun, inputs)``
+    :type cmds: list
+
+    :param hard_reset: 是否使用 hard reset 神经元重置分支
+    :type hard_reset: bool
+
+    :param detach_reset: 是否在 reset 分支中截断梯度
+    :type detach_reset: bool
+
+    :param surrogate_fuction: 代理梯度函数对象，需提供 ``cuda_code`` 接口
+    :type surrogate_fuction: object
+
+    :return: ``(codes, kernel_name, input_bp_vars)``，分别为反向 CUDA 代码、kernel 名称、反向所需附加输入变量名列表
+    :rtype: tuple
+
+    ----
+
+    .. _gen_backward_codes-en:
+
+    * **English**
+
+    Generate CUDA source code for backward propagation from forward graph commands
+    and forward CUDA statements.
+
+    Given a user-defined forward form ``h_seq[t] = fun(x_seq[t], v_v_seq[t], ...)``,
+    this function builds chain-rule gradients from ``h_seq[t]`` to ``x_seq[t]``,
+    ``v_v_seq[t]``, and other gradient-enabled inputs, then returns the generated
+    kernel name and the extra backward input variable names.
+
+    :param cuda_cmds: Forward CUDA statement list; each element is one statement string
+    :type cuda_cmds: list
+
+    :param input_nodes: Input-node dictionary. Keys are debug names and values are ``VarNode``
+    :type input_nodes: dict
+
+    :param output_nodes: Output-node dictionary. Keys are debug names and values are ``VarNode``
+    :type output_nodes: dict
+
+    :param cmds: Graph command list where each item is ``(output, fun, inputs)``
+    :type cmds: list
+
+    :param hard_reset: Whether to use the hard-reset branch in neuron reset
+    :type hard_reset: bool
+
+    :param detach_reset: Whether to detach gradients through the reset branch
+    :type detach_reset: bool
+
+    :param surrogate_fuction: Surrogate-gradient object that provides ``cuda_code``
+    :type surrogate_fuction: object
+
+    :return: ``(codes, kernel_name, input_bp_vars)`` for generated CUDA source, kernel name, and required extra backward input-variable names
+    :rtype: tuple
     """
 
     input_bp_nodes = {}
