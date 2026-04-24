@@ -7,6 +7,7 @@ import atexit
 import contextlib
 import functools
 import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Callable
@@ -139,15 +140,32 @@ _CLEANUP_TMP_PYTHON_FILES_REGISTERED = False
 _CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK = threading.Lock()
 
 
+def _triton_codegen_cache_dirs():
+    uid = getattr(os, "getuid", lambda: None)()
+    temp_suffix = f"_{uid}" if uid is not None else ""
+    candidates = [
+        Path(tempfile.gettempdir()) / f"spikingjelly_triton_codegen{temp_suffix}"
+    ]
+    try:
+        candidates.append(Path.home() / ".spikingjelly" / "triton_codegen")
+    except RuntimeError:
+        pass
+    return candidates
+
+
 def cleanup_tmp_python_files():
     print("Cleaning up temporary python files!")
-    for f in Path("/tmp").glob("*.py"):
-        try:
-            f.unlink()
-        except FileNotFoundError:
-            pass
-        except BaseException:
-            pass  # ignore the errors
+    for cache_dir in _triton_codegen_cache_dirs():
+        if not cache_dir.is_dir():
+            continue
+        for pattern in ("*.py", "*.py.tmp", "*.tmp"):
+            for f in cache_dir.glob(pattern):
+                try:
+                    f.unlink()
+                except FileNotFoundError:
+                    pass
+                except BaseException:
+                    pass  # ignore the errors
 
 
 def ensure_cleanup_tmp_python_files(fn):

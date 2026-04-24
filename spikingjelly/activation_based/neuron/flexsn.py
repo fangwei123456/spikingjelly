@@ -989,6 +989,8 @@ class FlexSN(base.MemoryModule):
                 and not _core_requires_grad(self.core)
             )
             use_implicit_zero_states = can_elide_zero_states and _no_grad
+            if self.states is None and not use_implicit_zero_states:
+                self.states = self.init_states(self.num_states, self.step_mode, *args)
             state_args = [] if use_implicit_zero_states else list(self.states)
             flat_args = [*args, *state_args]
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
@@ -1001,7 +1003,7 @@ class FlexSN(base.MemoryModule):
                     flexsn_inductor_training_final_state,
                 )
 
-                if _no_grad and self._inductor_inference_available:
+                if _no_grad:
                     if (
                         not self.store_state_seqs
                         and self._inductor_inference_final_state_available
@@ -1012,11 +1014,13 @@ class FlexSN(base.MemoryModule):
                         output_seqs = list(result_seqs[: self.num_outputs])
                         self.states = list(result_seqs[self.num_outputs :])
                         return output_seqs
-                    else:
+                    elif self._inductor_inference_available:
                         result_seqs = flexsn_inductor_inference(
                             self._inductor_handle, flat_args
                         )
                         result_has_state_seqs = True
+                    else:
+                        result_seqs = None
                 elif (not _no_grad) and self._inductor_training_available:
                     if not self.store_state_seqs:
                         result_seqs = flexsn_inductor_training_final_state(

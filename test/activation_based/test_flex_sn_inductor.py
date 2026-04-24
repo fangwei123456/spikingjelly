@@ -156,6 +156,23 @@ def test_multi_step_forward_initializes_states_for_triton_backend():
     assert m.states[0].shape == (3,)
 
 
+def test_multi_step_forward_initializes_states_for_inductor_training_fallback():
+    m = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+    )
+
+    out = m.multi_step_forward(torch.randn(2, 3, requires_grad=True))[0]
+
+    assert out.shape == (2, 3)
+    assert m.states is not None
+    assert m.states[0].shape == (3,)
+
+
 def test_core_requires_grad_detects_functor_tensor_attributes():
     class Core:
         def __init__(self, weight):
