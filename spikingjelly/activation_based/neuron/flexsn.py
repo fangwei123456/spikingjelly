@@ -166,6 +166,9 @@ def _run_hop_scan(
         os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
     )
     is_compiling = _is_compiling()
+    # flex_sn_inductor imports HOP helpers as an all-or-none group and sets all
+    # of them to None on failure, so _flexsn_eager_scan is the availability
+    # sentinel for this backend family.
     if _flexsn_eager_scan is None:
         raise RuntimeError(
             "FlexSN HOP backend is unavailable: eager_scan failed to import. "
@@ -956,14 +959,19 @@ class FlexSN(base.MemoryModule):
 
     def multi_step_forward(self, *args):
         T = args[0].shape[0]
-        if T == 0 and self.backend != "hop":
+        if T == 0:
+            if self.backend not in self.supported_backends:
+                raise ValueError(f"Unsupported backend: {self.backend}")
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
-            if self.backend == "torch" and self._explicit_output_template_specs is None:
+            if (
+                self.backend in ("torch", "hop")
+                and self._explicit_output_template_specs is None
+            ):
                 raise ValueError(
-                    "FlexSN backend='torch' requires example_outputs for empty "
-                    "multi-step inputs so output shapes and dtypes match core's "
-                    "per-step return contract without executing core."
+                    f"FlexSN backend='{self.backend}' requires example_outputs "
+                    "for empty multi-step inputs so output shapes and dtypes "
+                    "match core's per-step return contract without executing core."
                 )
             output_seqs = _empty_multistep_outputs(
                 args, self.states, self.num_outputs, self._output_template_specs

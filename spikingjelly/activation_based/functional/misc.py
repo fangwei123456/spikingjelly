@@ -56,7 +56,7 @@ def _matches_module_pattern(pattern, node: fx.Node, modules) -> bool:
             return False
         if current_node.target not in modules:
             return False
-        if type(modules[current_node.target]) is not expected_type:
+        if not isinstance(modules[current_node.target], expected_type):
             return False
     return True
 
@@ -78,6 +78,7 @@ def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
     pair_to_nodes = {}
     conv_to_bn_targets = {}
     conv_target_call_counts = {}
+    matched_bn_nodes = set()
     for node in fx_model.graph.nodes:
         if node.op == "call_module":
             conv_target_call_counts[node.target] = (
@@ -85,6 +86,8 @@ def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
             )
     for pattern in patterns:
         for node in list(fx_model.graph.nodes):
+            if node in matched_bn_nodes:
+                continue
             if not _matches_module_pattern(pattern, node, modules):
                 continue
             conv_node = node.args[0]
@@ -94,6 +97,7 @@ def _collect_conv_bn_matches(fx_model: fx.GraphModule, modules, patterns):
             pair = (conv_node.target, node.target)
             pair_to_nodes.setdefault(pair, []).append(node)
             conv_to_bn_targets.setdefault(conv_node.target, set()).add(node.target)
+            matched_bn_nodes.add(node)
 
     ambiguous_conv_targets = {
         conv_target
@@ -226,12 +230,12 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())
     patterns = [
-        (nn.Conv1d, nn.BatchNorm1d),
-        (nn.Conv2d, nn.BatchNorm2d),
-        (nn.Conv3d, nn.BatchNorm3d),
         (layer.Conv1d, layer.BatchNorm1d),
         (layer.Conv2d, layer.BatchNorm2d),
         (layer.Conv3d, layer.BatchNorm3d),
+        (nn.Conv1d, nn.BatchNorm1d),
+        (nn.Conv2d, nn.BatchNorm2d),
+        (nn.Conv3d, nn.BatchNorm3d),
     ]
 
     for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(
@@ -305,12 +309,12 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     fx_model = fx.GraphModule(tracer.root, graph)
     modules = dict(fx_model.named_modules())
     patterns = [
-        (nn.Conv1d, nn.BatchNorm1d),
-        (nn.Conv2d, nn.BatchNorm2d),
-        (nn.Conv3d, nn.BatchNorm3d),
         (layer.Conv1d, layer.BatchNorm1d),
         (layer.Conv2d, layer.BatchNorm2d),
         (layer.Conv3d, layer.BatchNorm3d),
+        (nn.Conv1d, nn.BatchNorm1d),
+        (nn.Conv2d, nn.BatchNorm2d),
+        (nn.Conv3d, nn.BatchNorm3d),
     ]
 
     for (conv_target, bn_target), matched_nodes in _collect_conv_bn_matches(

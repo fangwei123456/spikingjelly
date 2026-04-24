@@ -24,6 +24,8 @@ from spikingjelly.activation_based import base as base_module
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     dynamo_hop_available,
+    eager_scan,
+    eager_scan_final_state,
     flex_sn_scan,
     lowerable_scan,
     lowerable_scan_final_state,
@@ -752,18 +754,51 @@ def test_lowerable_scan_empty_sequence_returns_templates_without_scan_op():
 
     def core(x, v):
         calls["count"] += 1
-        return x.new_empty(4), v.new_empty(5)
+        raise AssertionError("core should not run for an empty lowerable scan")
 
     x = torch.empty(0, 2)
     v0 = torch.zeros(3)
+    specs = (((4,), torch.float64),)
 
-    y_seq, v_seq = lowerable_scan(core, 1, 1, 1, x, v0)
-    y_final, v_final = lowerable_scan_final_state(core, 1, 1, 1, x, v0)
+    y_seq, v_seq = lowerable_scan(
+        core, 1, 1, 1, x, v0, output_template_specs=specs
+    )
+    y_final, v_final = lowerable_scan_final_state(
+        core, 1, 1, 1, x, v0, output_template_specs=specs
+    )
 
-    assert calls["count"] == 2
+    assert calls["count"] == 0
     assert y_seq.shape == (0, 4)
-    assert v_seq.shape == (0, 5)
+    assert y_seq.dtype == torch.float64
+    assert v_seq.shape == (0, 3)
     assert y_final.shape == (0, 4)
+    assert y_final.dtype == torch.float64
+    torch.testing.assert_close(v_final, v0)
+    assert v_final is not v0
+
+
+def test_eager_scan_empty_sequence_uses_template_without_core_call():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty eager scan")
+
+    x = torch.empty(0, 2)
+    v0 = torch.zeros(3)
+    specs = (((4,), torch.float64),)
+
+    y_seq, v_seq = eager_scan(core, 1, 1, 1, x, v0, output_template_specs=specs)
+    y_final, v_final = eager_scan_final_state(
+        core, 1, 1, 1, x, v0, output_template_specs=specs
+    )
+
+    assert calls["count"] == 0
+    assert y_seq.shape == (0, 4)
+    assert y_seq.dtype == torch.float64
+    assert v_seq.shape == (0, 3)
+    assert y_final.shape == (0, 4)
+    assert y_final.dtype == torch.float64
     torch.testing.assert_close(v_final, v0)
     assert v_final is not v0
 
@@ -899,6 +934,7 @@ def test_hop_backend_zero_length_sequence_matches_torch_backend():
         backend="hop",
         store_state_seqs=True,
         example_inputs=(torch.zeros(8), torch.zeros(8)),
+        example_outputs=(torch.zeros(8),),
     )
     torch_neuron = FlexSN(
         core=_differentiable_lif_core,
@@ -921,9 +957,11 @@ def test_hop_backend_zero_length_sequence_matches_torch_backend():
 def test_hop_backend_zero_length_sequence_uses_closure_output_shape():
     x = torch.randn(0, 2)
     bias = torch.zeros(3)
+    calls = {"count": 0}
 
     def core_with_closure(x_step):
-        return bias
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty hop input")
 
     hop_neuron = FlexSN(
         core=core_with_closure,
@@ -934,9 +972,11 @@ def test_hop_backend_zero_length_sequence_uses_closure_output_shape():
         backend="hop",
         store_state_seqs=False,
         example_inputs=(torch.zeros(2),),
+        example_outputs=(bias,),
     )
 
     hop_out = hop_neuron(x)
+    assert calls["count"] == 0
     assert hop_out.shape == (0, 3)
 
 

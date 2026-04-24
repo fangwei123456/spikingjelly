@@ -68,7 +68,7 @@ Captured tensor freevars from ``core_fn`` are appended after the
 from __future__ import annotations
 import inspect
 import warnings
-from typing import Callable, Tuple
+from typing import Callable, Optional, Tuple
 
 import torch
 import torch.utils._pytree as pytree
@@ -129,6 +129,28 @@ def _as_tuple(outputs):
     if isinstance(outputs, torch.Tensor):
         return (outputs,)
     return tuple(outputs)
+
+
+def _empty_outputs_from_template(
+    input_seqs: Tuple[torch.Tensor, ...],
+    num_outputs: int,
+    output_template_specs: Optional[Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]],
+) -> Tuple[torch.Tensor, ...]:
+    if output_template_specs is None:
+        raise ValueError(
+            "FlexSN HOP empty scans require output_template_specs so output "
+            "shapes and dtypes can be built without executing core_fn."
+        )
+    if len(output_template_specs) != num_outputs:
+        raise ValueError(
+            f"expected {num_outputs} output template specs, got "
+            f"{len(output_template_specs)}"
+        )
+    device = input_seqs[0].device
+    return tuple(
+        torch.empty((0, *shape), dtype=dtype, device=device)
+        for shape, dtype in output_template_specs
+    )
 
 
 def lowerable_scan_available() -> bool:
@@ -215,6 +237,9 @@ def eager_scan(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
+    output_template_specs: Optional[
+        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+    ] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Plain-Python scan loop reused by both the HOP eager impl and the
     Dynamo-friendly path in :class:`FlexSN` (see ``backend="inductor"``).
@@ -247,27 +272,12 @@ def eager_scan(
             )
 
     if T == 0:
-        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in inputs_seq)
-        temp_states = [s.clone() for s in states]
-        with torch.no_grad():
-            template_results = _as_tuple(
-                core_fn(*step_inputs, *temp_states, *lifted_args)
-            )
-        if len(template_results) != num_outputs + num_states:
-            raise ValueError(
-                f"core returned {len(template_results)} values, "
-                f"expected num_outputs + num_states "
-                f"= {num_outputs + num_states}"
-            )
-
-        def _empty_output(i: int) -> torch.Tensor:
-            ref = template_results[i]
-            return ref.new_empty((0, *ref.shape))
-
-        empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
+        empty_outputs = _empty_outputs_from_template(
+            inputs_seq, num_outputs, output_template_specs
+        )
         empty_states = tuple(
             state.new_empty((0, *state.shape))
-            for state in template_results[num_outputs:]
+            for state in states
         )
         return (*empty_outputs, *empty_states)
 
@@ -303,6 +313,9 @@ def eager_scan_final_state(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
+    output_template_specs: Optional[
+        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+    ] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Variant of :func:`eager_scan` that returns output sequences followed by
     final states only.
@@ -334,24 +347,9 @@ def eager_scan_final_state(
             )
 
     if T == 0:
-        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in inputs_seq)
-        temp_states = [s.clone() for s in states]
-        with torch.no_grad():
-            template_results = _as_tuple(
-                core_fn(*step_inputs, *temp_states, *lifted_args)
-            )
-        if len(template_results) != num_outputs + num_states:
-            raise ValueError(
-                f"core returned {len(template_results)} values, "
-                f"expected num_outputs + num_states "
-                f"= {num_outputs + num_states}"
-            )
-
-        def _empty_output(i: int) -> torch.Tensor:
-            ref = template_results[i]
-            return ref.new_empty((0, *ref.shape))
-
-        empty_outputs = tuple(_empty_output(i) for i in range(num_outputs))
+        empty_outputs = _empty_outputs_from_template(
+            inputs_seq, num_outputs, output_template_specs
+        )
         final_states = tuple(s.clone() for s in states)
         return (*empty_outputs, *final_states)
 
@@ -383,6 +381,9 @@ def lowerable_scan(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
+    output_template_specs: Optional[
+        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+    ] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``scan`` HOP.
 
@@ -424,25 +425,12 @@ def lowerable_scan(
             )
 
     if T == 0:
-        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
-        temp_states = [s.clone() for s in init_states]
-        with torch.no_grad():
-            template_results = _as_tuple(
-                core_fn(*step_inputs, *temp_states, *lifted_args)
-            )
-        if len(template_results) != num_outputs + num_states:
-            raise ValueError(
-                f"core returned {len(template_results)} values, "
-                f"expected num_outputs + num_states "
-                f"= {num_outputs + num_states}"
-            )
-        empty_outputs = tuple(
-            template_results[i].new_empty((0, *template_results[i].shape))
-            for i in range(num_outputs)
+        empty_outputs = _empty_outputs_from_template(
+            input_seqs, num_outputs, output_template_specs
         )
         empty_states = tuple(
             state.new_empty((0, *state.shape))
-            for state in template_results[num_outputs:]
+            for state in init_states
         )
         return (*empty_outputs, *empty_states)
 
@@ -497,6 +485,9 @@ def lowerable_scan_final_state(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
+    output_template_specs: Optional[
+        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+    ] = None,
 ) -> Tuple[torch.Tensor, ...]:
     if _torch_scan_op is None:
         raise RuntimeError("PyTorch scan HOP is unavailable in this environment")
@@ -524,21 +515,8 @@ def lowerable_scan_final_state(
             )
 
     if T == 0:
-        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
-        temp_states = [s.clone() for s in init_states]
-        with torch.no_grad():
-            template_results = _as_tuple(
-                core_fn(*step_inputs, *temp_states, *lifted_args)
-            )
-        if len(template_results) != num_outputs + num_states:
-            raise ValueError(
-                f"core returned {len(template_results)} values, "
-                f"expected num_outputs + num_states "
-                f"= {num_outputs + num_states}"
-            )
-        empty_outputs = tuple(
-            template_results[i].new_empty((0, *template_results[i].shape))
-            for i in range(num_outputs)
+        empty_outputs = _empty_outputs_from_template(
+            input_seqs, num_outputs, output_template_specs
         )
         final_states = tuple(s.clone() for s in init_states)
         return (*empty_outputs, *final_states)
@@ -619,6 +597,9 @@ def lowerable_while_loop_scan(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
+    output_template_specs: Optional[
+        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+    ] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``while_loop`` HOP.
 
@@ -654,29 +635,12 @@ def lowerable_while_loop_scan(
             raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
-        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
-        temp_states = [s.clone() for s in init_states]
-        with torch.no_grad():
-            template_results = _as_tuple(
-                core_fn(*step_inputs, *temp_states, *lifted_args)
-            )
-        if len(template_results) != num_outputs + num_states:
-            raise ValueError(
-                f"core returned {len(template_results)} values, "
-                f"expected num_outputs + num_states "
-                f"= {num_outputs + num_states}"
-            )
-
-        def _empty_output(i: int) -> torch.Tensor:
-            ref = template_results[i]
-            return ref.new_empty((0, *ref.shape))
-
-        empty_outputs = tuple(
-            _empty_output(i) for i in range(num_outputs)
+        empty_outputs = _empty_outputs_from_template(
+            input_seqs, num_outputs, output_template_specs
         )
         empty_states = tuple(
             state.new_empty((0, *state.shape))
-            for state in template_results[num_outputs:]
+            for state in init_states
         )
         return (*empty_outputs, *empty_states)
 
@@ -796,6 +760,9 @@ def lowerable_while_loop_scan_final_state(
     num_states: int,
     num_outputs: int,
     *flat_args: torch.Tensor,
+    output_template_specs: Optional[
+        Tuple[Tuple[Tuple[int, ...], torch.dtype], ...]
+    ] = None,
 ) -> Tuple[torch.Tensor, ...]:
     if _torch_while_loop is None:
         raise RuntimeError("PyTorch while_loop HOP is unavailable in this environment")
@@ -822,25 +789,8 @@ def lowerable_while_loop_scan_final_state(
             raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
-        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
-        temp_states = [s.clone() for s in init_states]
-        with torch.no_grad():
-            template_results = _as_tuple(
-                core_fn(*step_inputs, *temp_states, *lifted_args)
-            )
-        if len(template_results) != num_outputs + num_states:
-            raise ValueError(
-                f"core returned {len(template_results)} values, "
-                f"expected num_outputs + num_states "
-                f"= {num_outputs + num_states}"
-            )
-
-        def _empty_output(i: int) -> torch.Tensor:
-            ref = template_results[i]
-            return ref.new_empty((0, *ref.shape))
-
-        empty_outputs = tuple(
-            _empty_output(i) for i in range(num_outputs)
+        empty_outputs = _empty_outputs_from_template(
+            input_seqs, num_outputs, output_template_specs
         )
         return (*empty_outputs, *(s.clone() for s in init_states))
 

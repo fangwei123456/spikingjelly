@@ -36,7 +36,8 @@ __all__ = [
 ]
 
 
-_MODULE_CACHE_LOCK = threading.Lock()
+_MODULE_CACHE_LOCK_GUARD = threading.Lock()
+_MODULE_CACHE_LOCKS = {}
 _NAMESPACE_METADATA_KEYS = {
     "__name__",
     "__spec__",
@@ -47,6 +48,11 @@ _NAMESPACE_METADATA_KEYS = {
     "__builtins__",
     "__doc__",
 }
+
+
+def _get_module_cache_lock(module_name: str) -> threading.Lock:
+    with _MODULE_CACHE_LOCK_GUARD:
+        return _MODULE_CACHE_LOCKS.setdefault(module_name, threading.Lock())
 
 
 def _generate_hash(s: str, w: int = 8) -> str:
@@ -335,15 +341,18 @@ def compile_triton_code_str(
 ):
     """Compile a Triton code string into a runnable Triton JIT function.
 
-    Writes the Triton code to a temporary file, compiles it, and extracts the
-    JIT function from the compiled namespace.
+    Materializes the Triton code under the persistent codegen cache, loads or
+    reuses the matching module object, and extracts the requested JIT function.
 
     Args:
-        triton_code (str): The Triton code string to compile.
+        triton_code (str): The Triton code string to compile/cache.
         kernel_name (str): The name of the Triton function to extract.
-        verbose (bool, optional): If True, print the path to the temporary file. Defaults to False.
+        verbose (bool, optional): If True, print whether the cached source was
+            written or reused, along with its path. Defaults to False.
         name_space (Optional[dict], optional): Optional globals injected before execution.
             When provided, it will be updated with symbols defined by the compiled module.
+            Calls without ``name_space`` reuse a cached module keyed by the generated
+            source hash; calls with ``name_space`` reload so injected symbols stay fresh.
 
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
@@ -399,7 +408,7 @@ def compile_triton_code_str(
 
     linecache.checkcache(str(fpath))
 
-    with _MODULE_CACHE_LOCK:
+    with _get_module_cache_lock(module_name):
         module = sys.modules.get(module_name) if cacheable else None
         if module is None:
             spec = importlib.util.spec_from_file_location(module_name, fpath)
