@@ -675,13 +675,23 @@ def lowerable_while_loop_scan(
         next_pending_inputs = tuple(
             _shift_input_queue(queue) for queue in step_input_queues
         )
+        if len(outputs_acc) != len(outputs):
+            raise ValueError(
+                f"core returned {len(outputs)} outputs at runtime, "
+                f"expected {len(outputs_acc)}"
+            )
         next_output_acc = tuple(
             _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs, strict=True)
+            for buf, out in zip(outputs_acc, outputs)
         )
+        if len(states_acc) != len(next_states):
+            raise ValueError(
+                f"core returned {len(next_states)} states at runtime, "
+                f"expected {len(states_acc)}"
+            )
         next_state_acc = tuple(
             _append_to_tail(buf, state)
-            for buf, state in zip(states_acc, next_states, strict=True)
+            for buf, state in zip(states_acc, next_states)
         )
         return (
             t + 1,
@@ -824,9 +834,14 @@ def lowerable_while_loop_scan_final_state(
         next_pending_inputs = tuple(
             _shift_input_queue(queue) for queue in step_input_queues
         )
+        if len(outputs_acc) != len(outputs):
+            raise ValueError(
+                f"core returned {len(outputs)} outputs at runtime, "
+                f"expected {len(outputs_acc)}"
+            )
         next_output_acc = tuple(
             _append_to_tail(buf, out)
-            for buf, out in zip(outputs_acc, outputs, strict=True)
+            for buf, out in zip(outputs_acc, outputs)
         )
         return (
             t + 1,

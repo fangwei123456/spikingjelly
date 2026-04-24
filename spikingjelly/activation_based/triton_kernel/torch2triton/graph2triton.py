@@ -361,7 +361,11 @@ def compile_triton_code_str(
     if caller_namespace is None:
         module_globals = {"triton": triton, "tl": tl}
     else:
-        module_globals = dict(caller_namespace)
+        module_globals = {
+            key: value
+            for key, value in caller_namespace.items()
+            if key not in _NAMESPACE_METADATA_KEYS
+        }
         module_globals.setdefault("triton", triton)
         module_globals.setdefault("tl", tl)
 

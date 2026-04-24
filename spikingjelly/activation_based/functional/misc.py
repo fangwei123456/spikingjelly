@@ -43,6 +43,8 @@ def _matches_module_pattern(pattern, node: fx.Node, modules) -> bool:
     if len(node.args) == 0:
         return False
     nodes = (node.args[0], node)
+    if len(pattern) != len(nodes):
+        return False
     for expected_type, current_node in zip(pattern, nodes):
         if not isinstance(current_node, fx.Node):
             return False
@@ -156,7 +158,7 @@ class _TrainConvBnWrapper(nn.Module):
 
         with self._single_step_mode(self.bn):
             x = self.bn(x)
-        return x.view(t, n, *x.shape[1:])
+        return x.reshape(t, n, *x.shape[1:])
 
     def _expects_multistep_input(self, x: Tensor) -> bool:
         if isinstance(self.conv, (nn.Conv1d, layer.Conv1d)):

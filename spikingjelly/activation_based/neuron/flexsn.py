@@ -261,22 +261,6 @@ def _empty_multistep_outputs(
     return [_empty_output(i) for i in range(num_outputs)]
 
 
-def _infer_empty_output_templates(
-    core: Callable,
-    args: Tuple[torch.Tensor, ...],
-    states: List[torch.Tensor],
-    num_outputs: int,
-) -> List[torch.Tensor]:
-    step_inputs = tuple(arg.new_empty(arg.shape[1:]) for arg in args)
-    with torch.no_grad():
-        results = _as_tuple(core(*step_inputs, *states))
-    if len(results) < num_outputs:
-        raise ValueError(
-            f"FlexSN core returned {len(results)} values, expected at least {num_outputs} outputs."
-        )
-    return [result.new_empty((0, *result.shape)) for result in results[:num_outputs]]
-
-
 def _core_requires_grad(core: Callable) -> bool:
     if isinstance(core, functools.partial):
         return (
@@ -891,14 +875,9 @@ class FlexSN(base.MemoryModule):
         if T == 0 and self.backend != "hop":
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
-            if self.backend == "torch":
-                output_seqs = _infer_empty_output_templates(
-                    self.core, args, self.states, self.num_outputs
-                )
-            else:
-                output_seqs = _empty_multistep_outputs(
-                    args, self.states, self.num_outputs
-                )
+            output_seqs = _empty_multistep_outputs(
+                args, self.states, self.num_outputs
+            )
             if self.store_state_seqs:
                 self.state_seqs = [
                     s.new_empty((0, *s.shape)) for s in self.states

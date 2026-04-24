@@ -143,7 +143,9 @@ def cleanup_tmp_python_files():
     print("Cleaning up temporary python files!")
     for f in Path("/tmp").glob("*.py"):
         try:
-            f.unlink(missing_ok=True)
+            f.unlink()
+        except FileNotFoundError:
+            pass
         except BaseException:
             pass  # ignore the errors
 

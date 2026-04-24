@@ -45,6 +45,29 @@ def rng():
     return torch.Generator().manual_seed(42)
 
 
+def test_torch_backend_empty_sequence_does_not_call_core():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        raise AssertionError("core should not run for an empty multi-step input")
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+
+    out = m(torch.empty(0, 3))
+
+    assert calls["count"] == 0
+    assert out.shape == (0, 3)
+    assert m.states[0].shape == (3,)
+
+
 def test_inductor_final_state_warmup_args_use_example_shapes():
     info = SimpleNamespace(num_inputs=2, num_states=2)
     specs = (
