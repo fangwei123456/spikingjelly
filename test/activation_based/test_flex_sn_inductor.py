@@ -26,6 +26,7 @@ from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     dynamo_hop_available,
     flex_sn_scan,
     lowerable_scan,
+    lowerable_scan_final_state,
     lowerable_scan_available,
     lowerable_while_loop_scan,
     lowerable_while_loop_available,
@@ -66,6 +67,7 @@ def test_torch_backend_empty_sequence_does_not_call_core():
         num_outputs=1,
         step_mode="m",
         backend="torch",
+        example_outputs=(torch.zeros(3),),
     )
 
     out = m(torch.empty(0, 3))
@@ -90,6 +92,7 @@ def test_torch_backend_empty_sequence_does_not_probe_core_at_construction():
         step_mode="m",
         backend="torch",
         example_inputs=(torch.zeros(2), torch.zeros(3)),
+        example_outputs=(torch.zeros(4),),
     )
     assert calls["count"] == 0
     m.states = [torch.zeros(3)]
@@ -97,7 +100,29 @@ def test_torch_backend_empty_sequence_does_not_probe_core_at_construction():
     out = m.multi_step_forward(torch.empty(0, 2))[0]
 
     assert calls["count"] == 0
-    assert out.shape == (0, 2)
+    assert out.shape == (0, 4)
+
+
+def test_torch_backend_empty_sequence_requires_example_output_template():
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        return x, v
+
+    m = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+
+    with pytest.raises(ValueError, match="requires example_outputs"):
+        m(torch.empty(0, 3))
+
+    assert calls["count"] == 0
 
 
 def test_torch_backend_empty_sequence_uses_example_output_template_without_core_probe():
@@ -235,6 +260,17 @@ def test_core_requires_grad_detects_bound_method_self_parameters():
         def __init__(self):
             super().__init__()
             self.weight = torch.nn.Parameter(torch.ones(3))
+
+        def forward(self, x, v):
+            return x * self.weight, v
+
+    assert flexsn_module._core_requires_grad(Core().forward)
+
+
+def test_core_requires_grad_detects_plain_bound_method_self_tensors():
+    class Core:
+        def __init__(self):
+            self.weight = torch.ones(3, requires_grad=True)
 
         def forward(self, x, v):
             return x * self.weight, v
@@ -708,6 +744,30 @@ def test_lowerable_scan_matches_manual_loop(rng):
     torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
 
 
+def test_lowerable_scan_empty_sequence_returns_templates_without_scan_op():
+    if not callable(lowerable_scan_available) or not lowerable_scan_available():
+        pytest.skip("PyTorch scan HOP is unavailable in this environment")
+
+    calls = {"count": 0}
+
+    def core(x, v):
+        calls["count"] += 1
+        return x.new_empty(4), v.new_empty(5)
+
+    x = torch.empty(0, 2)
+    v0 = torch.zeros(3)
+
+    y_seq, v_seq = lowerable_scan(core, 1, 1, 1, x, v0)
+    y_final, v_final = lowerable_scan_final_state(core, 1, 1, 1, x, v0)
+
+    assert calls["count"] == 2
+    assert y_seq.shape == (0, 4)
+    assert v_seq.shape == (0, 5)
+    assert y_final.shape == (0, 4)
+    torch.testing.assert_close(v_final, v0)
+    assert v_final is not v0
+
+
 def test_lowerable_while_loop_matches_manual_loop(rng):
     if (
         not callable(lowerable_while_loop_available)
@@ -848,6 +908,7 @@ def test_hop_backend_zero_length_sequence_matches_torch_backend():
         step_mode="m",
         backend="torch",
         store_state_seqs=True,
+        example_outputs=(torch.zeros(8),),
     )
 
     hop_out = hop_neuron(x)

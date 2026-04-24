@@ -131,14 +131,3 @@ if _check_pytorch_version("2.4"):
 else:
     amp_custom_fwd = torch.cuda.amp.custom_fwd
     amp_custom_bwd = torch.cuda.amp.custom_bwd
-
-def cleanup_tmp_python_files():
-    return None
-
-
-def ensure_cleanup_tmp_python_files(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        return fn(*args, **kwargs)
-
-    return wrapper

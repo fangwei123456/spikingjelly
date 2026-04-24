@@ -314,6 +314,12 @@ def _core_requires_grad(core: Callable) -> bool:
     bound_self = getattr(core, "__self__", None)
     if bound_self is not None and _value_requires_grad(bound_self):
         return True
+    if bound_self is not None:
+        bound_self_dict = getattr(bound_self, "__dict__", None)
+        if bound_self_dict is not None and any(
+            _value_requires_grad(value) for value in bound_self_dict.values()
+        ):
+            return True
 
     if isinstance(core, torch.nn.Module):
         for tensor in [*core.parameters(), *core.buffers()]:
@@ -664,11 +670,12 @@ class FlexSN(base.MemoryModule):
                 num_inputs + num_states,
             )
         )
+        self._explicit_output_template_specs = _make_output_template_specs_from_outputs(
+            num_outputs,
+            example_outputs,
+        )
         self._output_template_specs = (
-            _make_output_template_specs_from_outputs(
-                num_outputs,
-                example_outputs,
-            )
+            self._explicit_output_template_specs
             or _make_output_template_specs_from_examples(
                 num_outputs,
                 example_inputs,
@@ -952,6 +959,12 @@ class FlexSN(base.MemoryModule):
         if T == 0 and self.backend != "hop":
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
+            if self.backend == "torch" and self._explicit_output_template_specs is None:
+                raise ValueError(
+                    "FlexSN backend='torch' requires example_outputs for empty "
+                    "multi-step inputs so output shapes and dtypes match core's "
+                    "per-step return contract without executing core."
+                )
             output_seqs = _empty_multistep_outputs(
                 args, self.states, self.num_outputs, self._output_template_specs
             )

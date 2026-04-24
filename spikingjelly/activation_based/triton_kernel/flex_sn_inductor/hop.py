@@ -416,6 +416,36 @@ def lowerable_scan(
     lifted_args = tuple(flat_args[expected:])
     _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
 
+    T = input_seqs[0].shape[0]
+    for i, x in enumerate(input_seqs):
+        if x.shape[0] != T:
+            raise ValueError(
+                f"input {i} has leading dim {x.shape[0]}, expected {T}"
+            )
+
+    if T == 0:
+        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
+        temp_states = [s.clone() for s in init_states]
+        with torch.no_grad():
+            template_results = _as_tuple(
+                core_fn(*step_inputs, *temp_states, *lifted_args)
+            )
+        if len(template_results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(template_results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+        empty_outputs = tuple(
+            template_results[i].new_empty((0, *template_results[i].shape))
+            for i in range(num_outputs)
+        )
+        empty_states = tuple(
+            state.new_empty((0, *state.shape))
+            for state in template_results[num_outputs:]
+        )
+        return (*empty_outputs, *empty_states)
+
     def combine_fn(carry, step_inputs, additional_inputs):
         carry = tuple(carry)
         step_inputs = tuple(step_inputs)
@@ -485,6 +515,33 @@ def lowerable_scan_final_state(
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
     _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+
+    T = input_seqs[0].shape[0]
+    for i, x in enumerate(input_seqs):
+        if x.shape[0] != T:
+            raise ValueError(
+                f"input {i} has leading dim {x.shape[0]}, expected {T}"
+            )
+
+    if T == 0:
+        step_inputs = tuple(x.new_empty(x.shape[1:]) for x in input_seqs)
+        temp_states = [s.clone() for s in init_states]
+        with torch.no_grad():
+            template_results = _as_tuple(
+                core_fn(*step_inputs, *temp_states, *lifted_args)
+            )
+        if len(template_results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(template_results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+        empty_outputs = tuple(
+            template_results[i].new_empty((0, *template_results[i].shape))
+            for i in range(num_outputs)
+        )
+        final_states = tuple(s.clone() for s in init_states)
+        return (*empty_outputs, *final_states)
 
     def combine_fn(carry, step_inputs, additional_inputs):
         carry = tuple(carry)

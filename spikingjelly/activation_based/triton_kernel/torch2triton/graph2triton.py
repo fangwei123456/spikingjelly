@@ -28,7 +28,6 @@ except BaseException as e:
     tl = dummy.DummyImport()
 
 from ..triton_utils import type_str_dict
-from ..triton_utils import ensure_cleanup_tmp_python_files
 
 
 __all__ = [
@@ -328,7 +327,6 @@ def generate_triton_code_str(
     return f"{prefix}\n\n{signature}\n{triton_code_lines}", fn_name
 
 
-@ensure_cleanup_tmp_python_files
 def compile_triton_code_str(
     triton_code: str,
     kernel_name: str,
@@ -389,7 +387,7 @@ def compile_triton_code_str(
                 os.chmod(fpath, 0o600)
             except OSError:
                 pass
-        except BaseException:
+        except Exception:
             try:
                 tmp_path.unlink()
             except FileNotFoundError:
