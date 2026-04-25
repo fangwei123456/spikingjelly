@@ -1,4 +1,5 @@
 import copy
+import contextlib
 import functools
 import os
 from typing import Callable, Optional, Tuple, List
@@ -83,7 +84,12 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
         getattr(module, "_inductor_scan_final_state_warmup_specs", None),
     )
 
-    with torch.no_grad():
+    device_guard = (
+        torch.cuda.device(device)
+        if device.type == "cuda"
+        else contextlib.nullcontext()
+    )
+    with torch.no_grad(), device_guard:
         flexsn_inference_final_state(
             module._inductor_scan_final_state_kernel,
             info,
@@ -333,10 +339,16 @@ def _core_requires_grad(core: Callable) -> bool:
         return True
     if bound_self is not None:
         bound_self_dict = getattr(bound_self, "__dict__", None)
-        if bound_self_dict is not None and any(
-            _value_requires_grad(value) for value in bound_self_dict.values()
-        ):
-            return True
+        if bound_self_dict is not None:
+            values = bound_self_dict.values()
+            if isinstance(bound_self, torch.nn.Module):
+                values = (
+                    value
+                    for key, value in bound_self_dict.items()
+                    if key not in {"_parameters", "_buffers", "_modules"}
+                )
+            if any(_value_requires_grad(value) for value in values):
+                return True
 
     if isinstance(core, torch.nn.Module):
         for tensor in [*core.parameters(), *core.buffers()]:

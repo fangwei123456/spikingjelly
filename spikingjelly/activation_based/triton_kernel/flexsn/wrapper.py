@@ -25,9 +25,17 @@ __all__ = [
 
 
 def _num_elements_per_step(x: torch.Tensor) -> int:
-    if x.shape[0] > 0:
-        return x[0].numel()
-    return x.new_empty(x.shape[1:]).numel()
+    n = 1
+    for dim in x.shape[1:]:
+        n *= dim
+    return n
+
+
+def _make_grid(ncl: int):
+    def grid(meta):
+        return (triton.cdiv(ncl, meta["BLOCK_NCL"]),)
+
+    return grid
 
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
@@ -40,7 +48,7 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     ]
     if T == 0:
         return tuple(outputs)
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,
@@ -75,7 +83,7 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
             for i in range(info.num_states)
         ]
         return tuple([*output_seqs, *final_states])
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,
@@ -96,7 +104,7 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     dtype = x_example.dtype
     if T == 0:
         return tuple(returns)
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,
@@ -144,7 +152,7 @@ def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     dtype = grad_example.dtype
     if T == 0:
         return tuple(grad_inputs)
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,

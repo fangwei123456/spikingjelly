@@ -5,6 +5,7 @@ import linecache
 import os
 from pathlib import Path
 import hashlib
+import re
 import stat
 import sys
 import tempfile
@@ -45,6 +46,7 @@ _NAMESPACE_METADATA_KEYS = {
     "__spec__",
     "__loader__",
     "__package__",
+    "__path__",
     "__file__",
     "__cached__",
     "__builtins__",
@@ -60,6 +62,12 @@ def _get_module_cache_lock(module_name: str) -> threading.Lock:
 def _generate_hash(s: str, w: int = 8) -> str:
     hasher = hashlib.sha256(s.encode("utf-8"))
     return hasher.hexdigest()[:w]
+
+
+def _safe_codegen_stem(kernel_name: str) -> str:
+    name = str(kernel_name).replace("\\", "/").rsplit("/", 1)[-1]
+    safe = re.sub(r"[^0-9A-Za-z_.-]+", "_", name).strip("._")
+    return (safe or "kernel")[:128]
 
 
 def _has_real_triton_runtime() -> bool:
@@ -396,12 +404,13 @@ def compile_triton_code_str(
         module_globals.setdefault("triton", triton)
         module_globals.setdefault("tl", tl)
 
+    safe_kernel_name = _safe_codegen_stem(kernel_name)
     module_hash = _generate_hash(f"{kernel_name}\n{triton_code}", w=16)
     module_name = (
         "spikingjelly.activation_based.triton_kernel.codegen."
-        f"{kernel_name}_{module_hash}"
+        f"{safe_kernel_name}_{module_hash}"
     )
-    fpath = _codegen_cache_dir() / f"{kernel_name}_{module_hash}.py"
+    fpath = _codegen_cache_dir() / f"{safe_kernel_name}_{module_hash}.py"
 
     needs_write = not fpath.exists()
     if needs_write:

@@ -36,6 +36,9 @@ from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import hop as hop_module
 from spikingjelly.activation_based.triton_kernel.flexsn import template as template_module
 from spikingjelly.activation_based.triton_kernel.flexsn.info import FlexSNInfo
+from spikingjelly.activation_based.triton_kernel.torch2triton import (
+    graph2triton as graph2triton_module,
+)
 
 
 def _lif_core(x: torch.Tensor, v: torch.Tensor):
@@ -379,6 +382,18 @@ def test_core_requires_grad_detects_bound_method_self_parameters():
     assert flexsn_module._core_requires_grad(Core().forward)
 
 
+def test_core_requires_grad_detects_module_unregistered_tensors():
+    class Core(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = torch.ones(3, requires_grad=True)
+
+        def forward(self, x, v):
+            return x * self.weight, v
+
+    assert flexsn_module._core_requires_grad(Core().forward)
+
+
 def test_core_requires_grad_detects_plain_bound_method_self_tensors():
     class Core:
         def __init__(self):
@@ -393,11 +408,14 @@ def test_core_requires_grad_detects_plain_bound_method_self_tensors():
 def test_flexsn_wrapper_final_states_use_init_state_templates():
     from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
         flexsn_inference_final_state,
+        _num_elements_per_step,
     )
 
     info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
     x = torch.empty(0, 2)
     state = torch.ones(3, dtype=torch.float64)
+
+    assert _num_elements_per_step(x) == 2
 
     out, final_state = flexsn_inference_final_state(None, info, x, state)
 
@@ -406,6 +424,14 @@ def test_flexsn_wrapper_final_states_use_init_state_templates():
     assert final_state.dtype == torch.float64
     assert final_state.data_ptr() != state.data_ptr()
     torch.testing.assert_close(final_state, state)
+
+
+def test_codegen_stem_sanitizes_cache_filenames():
+    assert graph2triton_module._safe_codegen_stem("../escape") == "escape"
+    assert graph2triton_module._safe_codegen_stem("/tmp/absolute") == "absolute"
+    assert graph2triton_module._safe_codegen_stem("bad/name?x") == "name_x"
+    assert graph2triton_module._safe_codegen_stem("..") == "kernel"
+    assert "__path__" in graph2triton_module._NAMESPACE_METADATA_KEYS
 
 
 def test_flexsn_wrapper_t0_final_states_preserve_num_states_without_init():
