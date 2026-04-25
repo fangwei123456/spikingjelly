@@ -401,6 +401,7 @@ def compile_triton_code_str(
             for key, value in caller_namespace.items()
             if key not in _NAMESPACE_METADATA_KEYS
         }
+        module_globals.pop(kernel_name, None)
         module_globals.setdefault("triton", triton)
         module_globals.setdefault("tl", tl)
 

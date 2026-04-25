@@ -133,12 +133,12 @@ def test_torch_backend_empty_sequence_requires_example_output_template():
     assert calls["count"] == 0
 
 
-def test_torch_backend_empty_sequence_can_use_example_input_template():
+def test_torch_backend_empty_sequence_rejects_example_input_template():
     calls = {"count": 0}
 
     def core(x, v):
         calls["count"] += 1
-        raise AssertionError("core should not run for an empty multi-step input")
+        return x.new_zeros(5), v
 
     m = FlexSN(
         core=core,
@@ -151,10 +151,10 @@ def test_torch_backend_empty_sequence_can_use_example_input_template():
     )
     m.states = [torch.zeros(3)]
 
-    out = m.multi_step_forward(torch.empty(0, 4))[0]
+    with pytest.raises(ValueError, match="requires example_outputs"):
+        m.multi_step_forward(torch.empty(0, 4))
 
     assert calls["count"] == 0
-    assert out.shape == (0, 4)
 
 
 def test_torch_backend_empty_state_only_sequence_does_not_require_output_template():
@@ -219,21 +219,6 @@ def test_flexsn_rejects_invalid_example_output_template():
             backend="torch",
             example_outputs=(),
         )
-
-
-def test_output_template_specs_from_examples_use_first_input_contract():
-    specs = flexsn_module._make_output_template_specs_from_examples(
-        2,
-        (
-            torch.zeros(2, dtype=torch.float16),
-            torch.zeros(3, dtype=torch.float64),
-        ),
-    )
-
-    assert specs == (
-        ((2,), torch.float16),
-        ((2,), torch.float16),
-    )
 
 
 def test_output_template_specs_from_outputs_preserve_device():
@@ -432,6 +417,25 @@ def test_codegen_stem_sanitizes_cache_filenames():
     assert graph2triton_module._safe_codegen_stem("bad/name?x") == "name_x"
     assert graph2triton_module._safe_codegen_stem("..") == "kernel"
     assert "__path__" in graph2triton_module._NAMESPACE_METADATA_KEYS
+
+
+def test_compile_triton_code_str_rejects_stale_namespace_symbol(
+    tmp_path, monkeypatch
+):
+    stale = object()
+    namespace = {"missing_kernel": stale}
+
+    monkeypatch.setattr(graph2triton_module, "_CODEGEN_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(graph2triton_module, "_has_real_triton_runtime", lambda: True)
+
+    with pytest.raises(ValueError, match="missing_kernel"):
+        graph2triton_module.compile_triton_code_str(
+            "other_symbol = 1\n",
+            "missing_kernel",
+            name_space=namespace,
+        )
+
+    assert namespace["missing_kernel"] is stale
 
 
 def test_flexsn_wrapper_t0_final_states_preserve_num_states_without_init():

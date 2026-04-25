@@ -295,16 +295,6 @@ def _empty_multistep_outputs(
     return [_empty_output(i) for i in range(num_outputs)]
 
 
-def _make_output_template_specs_from_examples(
-    num_outputs: int,
-    example_inputs: Optional[Tuple[torch.Tensor, ...]],
-) -> Optional[Tuple[Tuple, ...]]:
-    if example_inputs is None:
-        return None
-    ref = example_inputs[0]
-    return tuple((tuple(ref.shape), ref.dtype) for _ in range(num_outputs))
-
-
 def _make_output_template_specs_from_outputs(
     num_outputs: int,
     example_outputs: Optional[Tuple[torch.Tensor, ...]],
@@ -703,13 +693,7 @@ class FlexSN(base.MemoryModule):
             num_outputs,
             example_outputs,
         )
-        self._output_template_specs = (
-            self._explicit_output_template_specs
-            or _make_output_template_specs_from_examples(
-                num_outputs,
-                example_inputs,
-            )
-        )
+        self._output_template_specs = self._explicit_output_template_specs
 
         if backend in ("triton", "inductor"):
             _validate_scan_backend_contract(
@@ -778,8 +762,9 @@ class FlexSN(base.MemoryModule):
                     # several exception types; any failure here can safely fall
                     # back to the already-built regular inference path.
                     logging.warning(
-                        "FlexSN: could not build inductor inference-final-state kernel (%s); "
-                        "store_state_seqs=False inference falls back to the regular inference kernel." % e
+                        "FlexSN: could not build inductor inference-final-state kernel (%s: %s); "
+                        "store_state_seqs=False inference falls back to the regular inference kernel."
+                        % (type(e).__name__, e)
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
@@ -997,7 +982,6 @@ class FlexSN(base.MemoryModule):
             ):
                 raise ValueError(
                     f"FlexSN backend='{self.backend}' requires example_outputs "
-                    "or example_inputs "
                     "for empty multi-step inputs so output shapes and dtypes "
                     "match core's per-step return contract without executing core."
                 )
