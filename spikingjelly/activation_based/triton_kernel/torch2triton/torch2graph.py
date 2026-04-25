@@ -3,7 +3,7 @@ from typing import Callable, Optional, Tuple
 
 import torch
 import torch.fx as fx
-from functorch.compile import aot_function
+from functorch.compile import aot_function, min_cut_rematerialization_partition
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -102,6 +102,7 @@ def generate_forward_and_backward_graph(
         fn,
         fw_compiler=collector.get_forward_compiler(),
         bw_compiler=collector.get_backward_compiler(),
+        partition_fn=min_cut_rematerialization_partition,
     )
 
     if requires_grad is not None:

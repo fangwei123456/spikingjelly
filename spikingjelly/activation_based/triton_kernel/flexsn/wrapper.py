@@ -15,18 +15,40 @@ from ..triton_utils import amp_custom_fwd, amp_custom_bwd
 from .info import FlexSNInfo
 
 
-__all__ = ["FlexSNFunction"]
+__all__ = [
+    "flexsn_inference",
+    "flexsn_inference_final_state",
+    "flexsn_forward",
+    "flexsn_backward",
+    "FlexSNFunction",
+]
+
+
+def _num_elements_per_step(x: torch.Tensor) -> int:
+    n = 1
+    for dim in x.shape[1:]:
+        n *= dim
+    return n
+
+
+def _make_grid(ncl: int):
+    def grid(meta):
+        return (triton.cdiv(ncl, meta["BLOCK_NCL"]),)
+
+    return grid
 
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
-    NCL = x_example[0].numel()
+    NCL = _num_elements_per_step(x_example)
     dtype = x_example.dtype
     outputs = [
         torch.empty_like(x_example) for _ in range(info.num_outputs + info.num_states)
     ]
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    if T == 0:
+        return tuple(outputs)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,
@@ -38,13 +60,51 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     return tuple(outputs)
 
 
+def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
+    x_example = args[0]
+    T = x_example.shape[0]
+    NCL = _num_elements_per_step(x_example)
+    dtype = x_example.dtype
+    output_seqs = [torch.empty_like(x_example) for _ in range(info.num_outputs)]
+    init_states = args[info.num_inputs : info.num_inputs + info.num_states]
+    final_states = [
+        init_states[i].new_empty(init_states[i].shape)
+        if i < len(init_states)
+        else x_example.new_empty(x_example.shape[1:])
+        for i in range(info.num_states)
+    ]
+    if T == 0:
+        final_states = [
+            (
+                init_states[i].clone()
+                if i < len(init_states)
+                else x_example.new_zeros(x_example.shape[1:])
+            )
+            for i in range(info.num_states)
+        ]
+        return tuple([*output_seqs, *final_states])
+    grid = _make_grid(NCL)
+
+    f[grid](
+        *args,
+        *output_seqs,
+        *final_states,
+        T=T,
+        NCL=NCL,
+        dtype=type_dict[dtype],
+    )
+    return tuple([*output_seqs, *final_states])
+
+
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     x_example = args[0]
     T = x_example.shape[0]
-    NCL = x_example[0].numel()
+    NCL = _num_elements_per_step(x_example)
     returns = [torch.empty_like(x_example) for _ in range(info.num_fwd_kernel_returns)]
     dtype = x_example.dtype
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    if T == 0:
+        return tuple(returns)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,
@@ -59,11 +119,40 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
 def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     grad_example = args[0]
     T = grad_example.shape[0]
-    NCL = grad_example[0].numel()
-    grad_inputs = [torch.empty_like(grad_example) for _ in range(info.num_inputs)]
-    grad_inputs += [torch.empty_like(grad_example[0]) for _ in range(info.num_states)]
+    NCL = _num_elements_per_step(grad_example)
+    grad_inputs = [
+        (
+            torch.zeros_like(grad_example)
+            if T == 0
+            else torch.empty_like(grad_example)
+        )
+        for _ in range(info.num_inputs)
+    ]
+    grad_state_seq_examples = args[
+        info.num_outputs : info.num_outputs + info.num_states
+    ]
+    # State-sequence gradients include the leading time dimension. The wrapper
+    # returns gradients for the initial states, so their templates are shape[1:].
+    grad_inputs += [
+        (
+            grad_state_seq_examples[i].new_zeros(grad_state_seq_examples[i].shape[1:])
+            if T == 0
+            else grad_state_seq_examples[i].new_empty(
+                grad_state_seq_examples[i].shape[1:]
+            )
+        )
+        if i < len(grad_state_seq_examples) and grad_state_seq_examples[i] is not None
+        else (
+            grad_example.new_zeros(grad_example.shape[1:])
+            if T == 0
+            else grad_example.new_empty(grad_example.shape[1:])
+        )
+        for i in range(info.num_states)
+    ]
     dtype = grad_example.dtype
-    grid = lambda meta: (triton.cdiv(NCL, meta["BLOCK_NCL"]),)
+    if T == 0:
+        return tuple(grad_inputs)
+    grid = _make_grid(NCL)
 
     f[grid](
         *args,
