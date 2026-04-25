@@ -221,6 +221,20 @@ def test_flexsn_rejects_invalid_example_output_template():
         )
 
 
+def test_scan_backends_reject_mismatched_example_output_template():
+    with pytest.raises(ValueError, match="example_outputs"):
+        FlexSN(
+            core=_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="inductor",
+            example_inputs=(torch.zeros(3), torch.zeros(3)),
+            example_outputs=(torch.zeros(4),),
+        )
+
+
 def test_output_template_specs_from_outputs_preserve_device():
     output = torch.zeros(4, dtype=torch.float64)
 
@@ -1301,7 +1315,7 @@ def test_hop_backend_zero_length_sequence_matches_torch_backend():
     torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
 
 
-def test_hop_backend_zero_length_sequence_uses_closure_output_shape():
+def test_hop_backend_zero_length_sequence_uses_example_output_template():
     x = torch.randn(0, 2)
     bias = torch.zeros(3)
     calls = {"count": 0}
@@ -1325,6 +1339,41 @@ def test_hop_backend_zero_length_sequence_uses_closure_output_shape():
     hop_out = hop_neuron(x)
     assert calls["count"] == 0
     assert hop_out.shape == (0, 3)
+
+
+def test_hop_backend_zero_length_sequence_delegates_to_hop_scan(monkeypatch):
+    calls = {"count": 0}
+
+    def fake_run_hop_scan(
+        core,
+        num_inputs,
+        num_states,
+        num_outputs,
+        store_state_seqs,
+        *flat_args,
+        output_template_specs=None,
+    ):
+        calls["count"] += 1
+        assert flat_args[0].shape[0] == 0
+        assert output_template_specs is None
+        return (flat_args[0].new_empty((0, 5)),)
+
+    monkeypatch.setattr(flexsn_module, "_run_hop_scan", fake_run_hop_scan)
+    hop_neuron = FlexSN(
+        core=lambda x: (x.new_empty(5),),
+        num_inputs=1,
+        num_states=0,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(2),),
+    )
+
+    hop_out = hop_neuron(torch.empty(0, 2))
+
+    assert calls["count"] == 1
+    assert hop_out.shape == (0, 5)
 
 
 def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerable_while_loop(

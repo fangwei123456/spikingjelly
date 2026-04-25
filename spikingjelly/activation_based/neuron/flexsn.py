@@ -316,6 +316,26 @@ def _make_output_template_specs_from_outputs(
     return tuple(specs)
 
 
+def _validate_scan_backend_output_template_specs(
+    output_template_specs: Optional[Tuple[Tuple, ...]],
+    example_inputs: Optional[Tuple[torch.Tensor, ...]],
+) -> None:
+    if output_template_specs is None or example_inputs is None:
+        return
+    seq_template = example_inputs[0]
+    expected_shape = tuple(seq_template.shape)
+    expected_dtype = seq_template.dtype
+    for i, spec in enumerate(output_template_specs):
+        shape, dtype = spec[:2]
+        if tuple(shape) != expected_shape or dtype != expected_dtype:
+            raise ValueError(
+                "FlexSN triton/inductor scan backends require example_outputs "
+                "to match the first example input's per-step shape and dtype "
+                f"({expected_shape}, {expected_dtype}), but example output "
+                f"#{i} is ({tuple(shape)}, {dtype})."
+            )
+
+
 def _core_requires_grad(core: Callable) -> bool:
     if isinstance(core, functools.partial):
         return (
@@ -696,6 +716,10 @@ class FlexSN(base.MemoryModule):
         self._output_template_specs = self._explicit_output_template_specs
 
         if backend in ("triton", "inductor"):
+            _validate_scan_backend_output_template_specs(
+                self._explicit_output_template_specs,
+                example_inputs,
+            )
             _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
@@ -975,8 +999,31 @@ class FlexSN(base.MemoryModule):
                 raise ValueError(f"Unsupported backend: {self.backend}")
             if self.states is None:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
+            if self.backend == "hop":
+                state_args = [state.contiguous() for state in self.states]
+                result_seqs = _run_hop_scan(
+                    self.core,
+                    self.num_inputs,
+                    self.num_states,
+                    self.num_outputs,
+                    self.store_state_seqs,
+                    *args,
+                    *state_args,
+                    output_template_specs=self._output_template_specs,
+                )
+                output_seqs = list(result_seqs[: self.num_outputs])
+                state_results = list(result_seqs[self.num_outputs :])
+                if self.store_state_seqs:
+                    self.state_seqs = state_results
+                    self.states = [
+                        _last_state_or_current(v, self.states[i])
+                        for i, v in enumerate(state_results)
+                    ]
+                else:
+                    self.states = state_results
+                return output_seqs
             if (
-                self.backend in ("torch", "hop")
+                self.backend == "torch"
                 and self.num_outputs > 0
                 and self._output_template_specs is None
             ):
