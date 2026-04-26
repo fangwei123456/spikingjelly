@@ -207,7 +207,7 @@ def _template_spec(tensor: torch.Tensor):
 
 def _materialize_template(spec):
     shape, dtype, device = spec
-    return torch.empty((), dtype=dtype, device=device).expand(shape)
+    return torch.empty(shape, dtype=dtype, device=device)
 
 
 def _resolve_state_template_specs(
@@ -220,10 +220,15 @@ def _resolve_state_template_specs(
     if len(flat_args) >= info.num_inputs + info.num_states:
         return [_template_spec(flat_args[info.num_inputs + i]) for i in range(info.num_states)]
     if bundle.state_template_specs is not None:
-        return list(bundle.state_template_specs)
+        runtime_device = flat_args[0].device if flat_args else None
+        specs = []
+        for shape, dtype, device in bundle.state_template_specs:
+            specs.append((shape, dtype, runtime_device if runtime_device is not None else device))
+        return specs
     if not flat_args:
         raise ValueError("Expected at least one FlexSN argument tensor.")
-    state_template = _template_spec(flat_args[0][0])
+    runtime_template = flat_args[0][0]
+    state_template = (tuple(runtime_template.shape), runtime_template.dtype, runtime_template.device)
     return [state_template for _ in range(info.num_states)]
 
 
@@ -587,20 +592,15 @@ def _flexsn_inductor_backward_fake(
     bundle = _lookup_kernel_handle(handle)
     if bundle.training_info is None:
         raise RuntimeError("FlexSN training metadata is unavailable for this handle.")
-    if len(input_templates) == bundle.training_info.num_inputs:
-        return [
-            input_templates[i].new_empty(input_templates[i].shape)
-            for i in range(bundle.training_info.num_inputs)
-        ]
-    seq_grads = [
-        input_templates[i].new_empty(input_templates[i].shape)
-        for i in range(bundle.training_info.num_inputs)
-    ]
-    state_offset = bundle.training_info.num_inputs
-    state_grads = [
-        input_templates[state_offset + i].new_empty(input_templates[state_offset + i].shape)
-        for i in range(bundle.training_info.num_states)
-    ]
+    seq_grads = []
+    for i in range(bundle.training_info.num_inputs):
+        seq_grads.append(input_templates[i].new_empty(input_templates[i].shape))
+    state_specs = _resolve_state_template_specs(
+        bundle.training_info,
+        input_templates,
+        bundle,
+    )
+    state_grads = [_materialize_empty_from_spec(spec) for spec in state_specs]
     return [*seq_grads, *state_grads]
 
 

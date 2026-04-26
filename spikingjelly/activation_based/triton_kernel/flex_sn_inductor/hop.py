@@ -143,3 +143,32 @@ flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
 # full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
 # graph natively by unrolling; see module docstring.
 flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
+
+
+def eager_scan_final_state(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    """Eager scan variant that returns final states instead of full state seqs."""
+    results = eager_scan(core_fn, num_inputs, num_states, num_outputs, *flat_args)
+    output_seqs = results[:num_outputs]
+    state_seqs = results[num_outputs:]
+    final_states = tuple(state_seq[-1] for state_seq in state_seqs)
+    return (*output_seqs, *final_states)
+
+
+lowerable_scan = None
+lowerable_scan_final_state = None
+lowerable_while_loop_scan = None
+lowerable_while_loop_scan_final_state = None
+
+
+def lowerable_scan_available() -> bool:
+    return False
+
+
+def lowerable_while_loop_available() -> bool:
+    return False

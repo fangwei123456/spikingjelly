@@ -408,7 +408,7 @@ def get_flexsn_forward_final_state_kernel(
     info: FlexSNInfo,
     verbose: bool = False,
 ):
-    hash = f"{core_name[-8:]}_{BASE_AUTOTUNE_TAG}"
+    hash = f"{core_name[-8:]}_{FORWARD_FINAL_STATE_AUTOTUNE_TAG}"
     num_inputs = info.num_inputs
     num_states = info.num_states
     num_outputs = info.num_outputs
@@ -469,7 +469,7 @@ def get_flexsn_forward_final_state_kernel(
 
     kernel_str = kernel_template.format(
         core_str=core_str,
-        autotune_configs=BASE_AUTOTUNE_CONFIGS,
+        autotune_configs=FORWARD_FINAL_STATE_AUTOTUNE_CONFIGS,
         autotune_key='["T", "dtype"]',
         meta_signature="",
         autotune_restore=autotune_restore,

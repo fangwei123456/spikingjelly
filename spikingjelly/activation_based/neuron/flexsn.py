@@ -624,9 +624,6 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_kernel, self._inductor_scan_info = (
                         build_inference_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
-                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
-                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
-                    )
                 except Exception as e:
                     logging.warning(
                         "FlexSN: could not build inductor inference kernel (%s); "
@@ -634,6 +631,15 @@ class FlexSN(base.MemoryModule):
                     )
                     self._inductor_scan_kernel = None
                     self._inductor_scan_info = None
+                try:
+                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
+                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                    )
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not build inductor inference-final-state kernel (%s); "
+                        "store_state_seqs=False inference falls back to the regular inference kernel." % e
+                    )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
                 try:

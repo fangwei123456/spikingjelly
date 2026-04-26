@@ -12,6 +12,15 @@ from typing import Callable, List, Optional, Tuple
 import torch
 
 
+def _clone_example_inputs(
+    example_inputs: Tuple[torch.Tensor, ...] | None,
+    count: int,
+):
+    if example_inputs is None:
+        return tuple(torch.zeros(1, device="cuda") for _ in range(count))
+    return tuple(x.detach().clone() for x in example_inputs)
+
+
 def _training_final_state_specialized_wins(info) -> bool:
     saved_non_output_indices = []
     seen = set()
@@ -55,14 +64,9 @@ def build_inference_kernel(
     from ..torch2triton import generate_triton_code_str
     from ..flexsn import extract_info, get_flexsn_inference_kernel
 
-    if example_inputs is None:
-        example_inputs = tuple(
-            torch.zeros(1, device="cuda") for _ in range(num_inputs + num_states)
-        )
-    else:
-        # .clone() breaks aliasing: in-place ops inside core_fn during tracing
-        # must not silently mutate the caller's original buffers.
-        example_inputs = tuple(x.detach().to("cuda").clone() for x in example_inputs)
+    # .clone() breaks aliasing: in-place ops inside core_fn during tracing
+    # must not silently mutate the caller's original buffers.
+    example_inputs = _clone_example_inputs(example_inputs, num_inputs + num_states)
 
     # Trace core_fn to an aten-level FX graph (no PYTORCH_JIT=0 needed).
     traced = make_fx(core_fn)(*example_inputs)
@@ -96,12 +100,7 @@ def build_inference_final_state_kernel(
     from ..torch2triton import generate_triton_code_str
     from ..flexsn import extract_info, get_flexsn_inference_final_state_kernel
 
-    if example_inputs is None:
-        example_inputs = tuple(
-            torch.zeros(1, device="cuda") for _ in range(num_inputs + num_states)
-        )
-    else:
-        example_inputs = tuple(x.detach().to("cuda").clone() for x in example_inputs)
+    example_inputs = _clone_example_inputs(example_inputs, num_inputs + num_states)
 
     traced = make_fx(core_fn)(*example_inputs)
     graph = traced.graph
@@ -200,13 +199,8 @@ def build_training_kernels(
         get_flexsn_forward_kernel,
     )
 
-    if example_inputs is None:
-        example_inputs = tuple(
-            torch.zeros(1, device="cuda") for _ in range(num_inputs + num_states)
-        )
-    else:
-        # .clone() breaks aliasing so tracing cannot mutate the caller's buffers.
-        example_inputs = tuple(x.detach().to("cuda").clone() for x in example_inputs)
+    # .clone() breaks aliasing so tracing cannot mutate the caller's buffers.
+    example_inputs = _clone_example_inputs(example_inputs, num_inputs + num_states)
 
     # Build requires_grad mask: only float/complex tensors support autograd.
     # Passing the mask prevents generate_forward_and_backward_graph from calling
@@ -240,9 +234,12 @@ def build_training_kernels(
     fwd_str, fwd_name = generate_triton_code_str(fwd_graph, core_name + "_fwd")
     fwd_kernel = get_flexsn_forward_kernel(fwd_str, fwd_name, info=info)
     if _training_final_state_specialized_wins(info):
-        fwd_final_state_kernel = get_flexsn_forward_final_state_kernel(
-            fwd_str, fwd_name, info=info
-        )
+        try:
+            fwd_final_state_kernel = get_flexsn_forward_final_state_kernel(
+                fwd_str, fwd_name, info=info
+            )
+        except Exception:
+            fwd_final_state_kernel = None
     else:
         fwd_final_state_kernel = None
 
@@ -256,8 +253,11 @@ def build_training_kernels(
     else:
         bwd_call_name = bwd_name
     bwd_kernel = get_flexsn_backward_kernel(bwd_str, bwd_call_name, info=info)
-    bwd_final_state_kernel = get_flexsn_backward_final_state_kernel(
-        bwd_str, bwd_call_name, info=info
-    )
+    try:
+        bwd_final_state_kernel = get_flexsn_backward_final_state_kernel(
+            bwd_str, bwd_call_name, info=info
+        )
+    except Exception:
+        bwd_final_state_kernel = None
 
     return fwd_kernel, fwd_final_state_kernel, bwd_kernel, bwd_final_state_kernel, info

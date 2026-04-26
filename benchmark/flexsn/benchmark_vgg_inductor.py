@@ -110,7 +110,7 @@ def main() -> None:
          lambda: build_vgg(make_flexsn_factory())),
     ]
 
-    print(f"Input : T={T}, B={B}, {C}×{H}×{W}  (ImageNet-scale)")
+    print(f"Input : T={T}, B={B}, {C}×{H}×{W}  (CIFAR-scale)")
     print(f"Model : SpikingVGG-16-BN")
     print()
     print(f"  {'backend':<30}  {'ms/iter':>9}  {'img/s':>9}  {'vs torch':>10}")
