@@ -210,6 +210,11 @@ def _materialize_template(spec):
     return torch.empty(shape, dtype=dtype, device=device)
 
 
+def _materialize_runtime_template_arg(spec):
+    _, dtype, device = spec
+    return torch.empty((), dtype=dtype, device=device)
+
+
 def _resolve_state_template_specs(
     info: FlexSNInfo,
     flat_args: list[torch.Tensor],
@@ -379,16 +384,13 @@ def _should_use_backward_final_state_kernel(grad_outputs: list[torch.Tensor]) ->
     if not grad_outputs:
         return False
     grad0 = grad_outputs[0]
-    if _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS > 0:
-        if grad0.shape[0] >= _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS:
-            return True
-    if _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS > 0:
-        if grad0.numel() >= _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS:
-            return True
-    return (
-        _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS <= 0
-        or _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS <= 0
-    )
+    steps_enabled = _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS > 0
+    tokens_enabled = _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS > 0
+    if steps_enabled and grad0.shape[0] >= _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS:
+        return True
+    if tokens_enabled and grad0.numel() >= _BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS:
+        return True
+    return not steps_enabled and not tokens_enabled
 
 
 def _flexsn_inductor_training_final_state_impl(
@@ -680,7 +682,9 @@ def _flexsn_training_backward(ctx, grad_out: list[torch.Tensor | None]):
         )
         for i in range(required_grads)
     ]
-    input_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
+    input_templates = [
+        _materialize_runtime_template_arg(spec) for spec in ctx.input_template_specs
+    ]
     try:
         if ctx._active_ref_finalizer.alive:
             ctx._active_ref_finalizer.detach()
@@ -743,7 +747,8 @@ def _flexsn_training_final_state_backward(ctx, grad_out: list[torch.Tensor | Non
             )
         else:
             input_templates = [
-                _materialize_template(spec) for spec in ctx.input_template_specs
+                _materialize_runtime_template_arg(spec)
+                for spec in ctx.input_template_specs
             ]
             state_grads = []
             for i, state_seq_spec in enumerate(ctx.state_seq_template_specs):

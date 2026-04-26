@@ -958,6 +958,7 @@ class FlexSN(base.MemoryModule):
                             result_seqs = flexsn_inductor_inference(
                                 self._inductor_handle, flat_args
                             )
+                            result_has_state_seqs = True
                     elif (not _no_grad) and self._inductor_training_available:
                         if not self.store_state_seqs:
                             result_seqs = flexsn_inductor_training_final_state(
@@ -974,6 +975,7 @@ class FlexSN(base.MemoryModule):
                             self._inductor_handle, flat_args
                         )
                         result_seqs = result_seqs[: self.num_outputs + self.num_states]
+                        result_has_state_seqs = True
                     else:
                         result_seqs = None
             else:

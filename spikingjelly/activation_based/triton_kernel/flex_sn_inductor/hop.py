@@ -76,6 +76,12 @@ class FlexSNScan(HigherOrderOperator):
 flex_sn_scan = FlexSNScan()
 
 
+def _normalize_scan_results(results):
+    if isinstance(results, torch.Tensor):
+        return (results,)
+    return tuple(results)
+
+
 def eager_scan(
     core_fn: Callable,
     num_inputs: int,
@@ -116,7 +122,7 @@ def eager_scan(
 
     for t in range(T):
         step_inputs = tuple(x[t] for x in inputs_seq)
-        results = core_fn(*step_inputs, *states)
+        results = _normalize_scan_results(core_fn(*step_inputs, *states))
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "

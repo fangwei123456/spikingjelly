@@ -408,6 +408,16 @@ def test_hop_rejects_wrong_arity():
         flex_sn_scan(_lif_core, 1, 1, 1, x, v0, extra)
 
 
+def test_hop_accepts_single_tensor_return(rng):
+    x = torch.randn(4, 8, generator=rng)
+
+    def stateless_core(x_step):
+        return x_step.sin()
+
+    (y_seq,) = flex_sn_scan(stateless_core, 1, 0, 1, x)
+    torch.testing.assert_close(y_seq, x.sin())
+
+
 def test_hop_rejects_mismatched_T():
     x1 = torch.randn(4, 8)
     x2 = torch.randn(5, 8)
@@ -418,6 +428,66 @@ def test_hop_rejects_mismatched_T():
 
     with pytest.raises(ValueError, match="leading dim"):
         flex_sn_scan(two_input_core, 2, 1, 1, x1, x2, v0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_inference_without_final_state_kernel_keeps_final_state_semantics(rng):
+    x = torch.randn((6, 16), generator=rng).cuda()
+    neuron = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda()
+    if not neuron._inductor_inference_available:
+        pytest.skip("inductor inference kernel unavailable")
+
+    neuron._inductor_scan_final_state_kernel = None
+    neuron._inductor_scan_final_state_info = None
+    neuron._inductor_inference_final_state_available = False
+
+    with torch.no_grad():
+        _ = neuron(x)
+
+    assert neuron.states[0].shape == x.shape[1:]
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_stateless_final_state_kernel_builds():
+    def stateless_core(x):
+        return (x,)
+
+    neuron = FlexSN(
+        core=stateless_core,
+        num_inputs=1,
+        num_states=0,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(8, device="cuda"),),
+    ).cuda()
+
+    assert neuron._inductor_inference_available
+    assert neuron._inductor_inference_final_state_available
+
+
+def test_backward_final_state_kernel_threshold_knobs_do_not_force_specialization(monkeypatch):
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS",
+        0,
+    )
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS",
+        1024,
+    )
+    grad = torch.randn(4, 8)
+    assert not flexsn_custom_ops._should_use_backward_final_state_kernel([grad])
 
 
 def test_hop_registers_with_dynamo():

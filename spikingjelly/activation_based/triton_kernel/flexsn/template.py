@@ -23,6 +23,14 @@ __all__ = [
 
 INDENTATION = " " * 4
 
+
+def _join_signature(parts):
+    return f",\n{INDENTATION}".join(parts)
+
+
+def _join_args(parts):
+    return ", ".join(parts)
+
 init_state_load_template = """
     {name}_init_ptrs = tl.make_block_ptr(
         {name}_init_ptr,
@@ -178,25 +186,20 @@ def get_flexsn_inference_kernel(
     num_states = info.num_states
     num_outputs = info.num_outputs
 
-    kernel_input_signature = f",\n{INDENTATION}".join(
+    kernel_input_signature = _join_signature(
         [f"x{i}_seq_ptr" for i in range(num_inputs)]
-    )
-    kernel_input_signature += f",\n{INDENTATION}"
-    kernel_input_signature += f",\n{INDENTATION}".join(
-        [f"v{i}_init_ptr" for i in range(num_states)]
+        + [f"v{i}_init_ptr" for i in range(num_states)]
     )
 
-    kernel_output_signature = f",\n{INDENTATION}".join(
+    kernel_output_signature = _join_signature(
         [f"s{i}_seq_ptr" for i in range(num_outputs)]
-    )
-    kernel_output_signature += f",\n{INDENTATION}"
-    kernel_output_signature += f",\n{INDENTATION}".join(
-        [f"v{i}_seq_ptr" for i in range(num_states)]
+        + [f"v{i}_seq_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
-    autotune_restore += ", "
-    autotune_restore += ", ".join([f'"v{i}_seq_ptr"' for i in range(num_states)])
+    autotune_restore = _join_args(
+        [f'"s{i}_seq_ptr"' for i in range(num_outputs)]
+        + [f'"v{i}_seq_ptr"' for i in range(num_states)]
+    )
 
     init_state_loads = "".join(
         [
@@ -211,12 +214,12 @@ def get_flexsn_inference_kernel(
     stores = "".join([store_template.format(name=f"s{i}") for i in range(num_outputs)])
     stores += "".join([store_template.format(name=f"v{i}") for i in range(num_states)])
 
-    lhs = ", ".join([f"s{i}" for i in range(num_outputs)])
-    lhs += ", "
-    lhs += ", ".join([f"v{i}" for i in range(num_states)])
-    core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
-    core_args += ", "
-    core_args += ", ".join([f"v{i}" for i in range(num_states)])
+    lhs = _join_args(
+        [f"s{i}" for i in range(num_outputs)] + [f"v{i}" for i in range(num_states)]
+    )
+    core_args = _join_args(
+        [f"x{i}" for i in range(num_inputs)] + [f"v{i}" for i in range(num_states)]
+    )
 
     kernel_str = kernel_template.format(
         core_str=core_str,
@@ -258,26 +261,20 @@ def get_flexsn_inference_final_state_kernel(
     num_states = info.num_states
     num_outputs = info.num_outputs
 
-    kernel_input_signature = f",\n{INDENTATION}".join(
+    kernel_input_signature = _join_signature(
         [f"x{i}_seq_ptr" for i in range(num_inputs)]
-    )
-    kernel_input_signature += f",\n{INDENTATION}"
-    kernel_input_signature += f",\n{INDENTATION}".join(
-        [f"v{i}_init_ptr" for i in range(num_states)]
+        + [f"v{i}_init_ptr" for i in range(num_states)]
     )
 
-    kernel_output_signature = f",\n{INDENTATION}".join(
+    kernel_output_signature = _join_signature(
         [f"s{i}_seq_ptr" for i in range(num_outputs)]
-    )
-    kernel_output_signature += f",\n{INDENTATION}"
-    kernel_output_signature += f",\n{INDENTATION}".join(
-        [f"v{i}_final_ptr" for i in range(num_states)]
+        + [f"v{i}_final_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
-    if num_states > 0:
-        autotune_restore += ", "
-        autotune_restore += ", ".join([f'"v{i}_final_ptr"' for i in range(num_states)])
+    autotune_restore = _join_args(
+        [f'"s{i}_seq_ptr"' for i in range(num_outputs)]
+        + [f'"v{i}_final_ptr"' for i in range(num_states)]
+    )
 
     init_state_loads = "".join(
         [init_state_load_template.format(name=f"v{i}") for i in range(num_states)]
@@ -289,12 +286,12 @@ def get_flexsn_inference_final_state_kernel(
         [final_state_store_template.format(name=f"v{i}") for i in range(num_states)]
     )
 
-    lhs = ", ".join([f"s{i}" for i in range(num_outputs)])
-    lhs += ", "
-    lhs += ", ".join([f"v{i}" for i in range(num_states)])
-    core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
-    core_args += ", "
-    core_args += ", ".join([f"v{i}" for i in range(num_states)])
+    lhs = _join_args(
+        [f"s{i}" for i in range(num_outputs)] + [f"v{i}" for i in range(num_states)]
+    )
+    core_args = _join_args(
+        [f"x{i}" for i in range(num_inputs)] + [f"v{i}" for i in range(num_states)]
+    )
 
     kernel_str = kernel_template.format(
         core_str=core_str,
@@ -340,12 +337,9 @@ def get_flexsn_forward_kernel(
     fwd_kernel_returns = info.fwd_kernel_returns  # unique
     fwd_core_recipients = info.fwd_core_recipients  # `_` for duplicates
 
-    kernel_input_signature = f",\n{INDENTATION}".join(
+    kernel_input_signature = _join_signature(
         [f"x{i}_seq_ptr" for i in range(num_inputs)]
-    )
-    kernel_input_signature += f",\n{INDENTATION}"
-    kernel_input_signature += f",\n{INDENTATION}".join(
-        [f"v{i}_init_ptr" for i in range(num_states)]
+        + [f"v{i}_init_ptr" for i in range(num_states)]
     )
 
     kernel_output_signature = f",\n{INDENTATION}".join(
@@ -365,10 +359,10 @@ def get_flexsn_forward_kernel(
 
     loads = "".join([load_template.format(name=f"x{i}") for i in range(num_inputs)])
     stores = "".join([store_template.format(name=r) for r in fwd_kernel_returns])
-    lhs = ", ".join([r for r in fwd_core_recipients])
-    core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
-    core_args += ", "
-    core_args += ", ".join([f"v{i}" for i in range(num_states)])
+    lhs = _join_args([r for r in fwd_core_recipients])
+    core_args = _join_args(
+        [f"x{i}" for i in range(num_inputs)] + [f"v{i}" for i in range(num_states)]
+    )
 
     kernel_str = kernel_template.format(
         core_str=core_str,
@@ -425,12 +419,9 @@ def get_flexsn_forward_final_state_kernel(
         info.fwd_kernel_returns[idx] for idx in saved_non_output_indices
     ]
 
-    kernel_input_signature = f",\n{INDENTATION}".join(
+    kernel_input_signature = _join_signature(
         [f"x{i}_seq_ptr" for i in range(num_inputs)]
-    )
-    kernel_input_signature += f",\n{INDENTATION}"
-    kernel_input_signature += f",\n{INDENTATION}".join(
-        [f"v{i}_init_ptr" for i in range(num_states)]
+        + [f"v{i}_init_ptr" for i in range(num_states)]
     )
 
     kernel_output_signature = f",\n{INDENTATION}".join(
@@ -439,15 +430,11 @@ def get_flexsn_forward_final_state_kernel(
         + [f"{name}_seq_ptr" for name in saved_non_output_returns]
     )
 
-    autotune_restore = ", ".join([f'"s{i}_seq_ptr"' for i in range(num_outputs)])
-    if num_states > 0:
-        autotune_restore += ", "
-        autotune_restore += ", ".join([f'"v{i}_final_ptr"' for i in range(num_states)])
-    if saved_non_output_returns:
-        autotune_restore += ", "
-        autotune_restore += ", ".join(
-            [f'"{name}_seq_ptr"' for name in saved_non_output_returns]
-        )
+    autotune_restore = _join_args(
+        [f'"s{i}_seq_ptr"' for i in range(num_outputs)]
+        + [f'"v{i}_final_ptr"' for i in range(num_states)]
+        + [f'"{name}_seq_ptr"' for name in saved_non_output_returns]
+    )
 
     init_state_loads = "".join(
         [init_state_load_template.format(name=f"v{i}") for i in range(num_states)]
@@ -462,10 +449,10 @@ def get_flexsn_forward_final_state_kernel(
         [final_state_store_template.format(name=f"v{i}") for i in range(num_states)]
     )
 
-    lhs = ", ".join([r for r in info.fwd_core_recipients])
-    core_args = ", ".join([f"x{i}" for i in range(num_inputs)])
-    core_args += ", "
-    core_args += ", ".join([f"v{i}" for i in range(num_states)])
+    lhs = _join_args([r for r in info.fwd_core_recipients])
+    core_args = _join_args(
+        [f"x{i}" for i in range(num_inputs)] + [f"v{i}" for i in range(num_states)]
+    )
 
     kernel_str = kernel_template.format(
         core_str=core_str,
@@ -513,32 +500,23 @@ def get_flexsn_backward_kernel(
 
     assert n + num_outputs + num_states == len(info.fwd_core_returns)
 
-    kernel_input_signature = f",\n{INDENTATION}".join(
-        [f"grad_s{i}_seq_ptr" for i in range(num_outputs)]
-    )
-    kernel_input_signature += f",\n{INDENTATION}"
-    kernel_input_signature += f",\n{INDENTATION}".join(
-        [f"grad_v{i}_seq_ptr" for i in range(num_states)]
-    )
+    kernel_input_signature_parts = [f"grad_s{i}_seq_ptr" for i in range(num_outputs)]
+    kernel_input_signature_parts += [f"grad_v{i}_seq_ptr" for i in range(num_states)]
     if n > 0:
-        kernel_input_signature += f",\n{INDENTATION}"
-        kernel_input_signature += f",\n{INDENTATION}".join(
-            [f"res{i}_b_seq_ptr" for i in range(n)]
-        )
+        kernel_input_signature_parts += [f"res{i}_b_seq_ptr" for i in range(n)]
+    kernel_input_signature = _join_signature(kernel_input_signature_parts)
     # res{i}_b slightly different from res{i}_f in the forward kernel
     # as res{i}_b might be from s{i} or v{i}
 
-    kernel_output_signature = f",\n{INDENTATION}".join(
+    kernel_output_signature = _join_signature(
         [f"grad_x{i}_seq_ptr" for i in range(num_inputs)]
-    )
-    kernel_output_signature += f",\n{INDENTATION}"
-    kernel_output_signature += f",\n{INDENTATION}".join(
-        [f"grad_v{i}_init_ptr" for i in range(num_states)]
+        + [f"grad_v{i}_init_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = ", ".join([f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)])
-    autotune_restore += ", "
-    autotune_restore += ", ".join([f'"grad_v{i}_init_ptr"' for i in range(num_states)])
+    autotune_restore = _join_args(
+        [f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)]
+        + [f'"grad_v{i}_init_ptr"' for i in range(num_states)]
+    )
 
     init_state_loads = f"\n{INDENTATION}".join(
         [
@@ -565,9 +543,10 @@ def get_flexsn_backward_kernel(
             for i in range(num_states)
         ]
     )  # accumulate gradients of states
-    lhs = ", ".join([f"grad_x{i}" for i in range(num_inputs)])
-    lhs += ", "
-    lhs += ", ".join([f"grad_v{i}_accumulate" for i in range(num_states)])
+    lhs = _join_args(
+        [f"grad_x{i}" for i in range(num_inputs)]
+        + [f"grad_v{i}_accumulate" for i in range(num_states)]
+    )
     _core_args_parts = []
     if n > 0:
         _core_args_parts += [f"res{i}_b" for i in range(n)]
@@ -641,17 +620,15 @@ def get_flexsn_backward_final_state_kernel(
             [f"res{i}_b_seq_ptr" for i in range(n)]
         )
 
-    kernel_output_signature = f",\n{INDENTATION}".join(
+    kernel_output_signature = _join_signature(
         [f"grad_x{i}_seq_ptr" for i in range(num_inputs)]
-    )
-    kernel_output_signature += f",\n{INDENTATION}"
-    kernel_output_signature += f",\n{INDENTATION}".join(
-        [f"grad_v{i}_init_ptr" for i in range(num_states)]
+        + [f"grad_v{i}_init_ptr" for i in range(num_states)]
     )
 
-    autotune_restore = ", ".join([f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)])
-    autotune_restore += ", "
-    autotune_restore += ", ".join([f'"grad_v{i}_init_ptr"' for i in range(num_states)])
+    autotune_restore = _join_args(
+        [f'"grad_x{i}_seq_ptr"' for i in range(num_inputs)]
+        + [f'"grad_v{i}_init_ptr"' for i in range(num_states)]
+    )
 
     init_state_loads = "".join(
         [grad_final_state_load_template.format(name=f"grad_v{i}") for i in range(num_states)]
@@ -666,9 +643,10 @@ def get_flexsn_backward_final_state_kernel(
         [store_template.format(name=f"grad_x{i}") for i in range(num_inputs)]
     )
 
-    lhs = ", ".join([f"grad_x{i}" for i in range(num_inputs)])
-    lhs += ", "
-    lhs += ", ".join([f"grad_v{i}_accumulate" for i in range(num_states)])
+    lhs = _join_args(
+        [f"grad_x{i}" for i in range(num_inputs)]
+        + [f"grad_v{i}_accumulate" for i in range(num_states)]
+    )
     _core_args_parts = []
     if n > 0:
         _core_args_parts += [f"res{i}_b" for i in range(n)]
