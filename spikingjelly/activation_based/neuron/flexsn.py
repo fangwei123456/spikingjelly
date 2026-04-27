@@ -1,4 +1,5 @@
 import copy
+import os
 from typing import Callable, Optional, Tuple, List
 import logging
 
@@ -12,14 +13,278 @@ except BaseException as e:
     logging.info(f"spikingjelly.activation_based.neuron: {e}")
     triton_kernel = None
 
+try:
+    from ..triton_kernel.flex_sn_inductor import eager_scan as _flexsn_eager_scan
+    from ..triton_kernel.flex_sn_inductor import (
+        eager_scan_final_state as _flexsn_eager_scan_final_state,
+    )
+    from ..triton_kernel.flex_sn_inductor import flex_sn_scan as _flexsn_hop_scan
+    from ..triton_kernel.flex_sn_inductor import lowerable_scan as _flexsn_lowerable_scan
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_scan_final_state as _flexsn_lowerable_scan_final_state,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_while_loop_scan as _flexsn_lowerable_while_loop_scan,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_scan_available as _flexsn_lowerable_scan_available,
+    )
+    from ..triton_kernel.flex_sn_inductor import (
+        lowerable_while_loop_available as _flexsn_lowerable_while_loop_available,
+    )
+except BaseException as e:
+    logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
+    _flexsn_eager_scan = None
+    _flexsn_eager_scan_final_state = None
+    _flexsn_hop_scan = None
+    _flexsn_lowerable_scan = None
+    _flexsn_lowerable_scan_final_state = None
+    _flexsn_lowerable_scan_available = None
+    _flexsn_lowerable_while_loop_scan = None
+    _flexsn_lowerable_while_loop_scan_final_state = None
+    _flexsn_lowerable_while_loop_available = None
+
 
 __all__ = ["FlexSNKernel", "FlexSN"]
+
+
+def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
+    if (
+        module._inductor_scan_final_state_kernel is None
+        or module._inductor_scan_final_state_info is None
+    ):
+        return
+
+    from ..triton_kernel.flexsn.wrapper import flexsn_inference_final_state
+
+    info = module._inductor_scan_final_state_info
+    seq_template = torch.zeros((1, 1), device="cuda")
+    state_template = seq_template[0].clone()
+    warm_args = [seq_template.clone() for _ in range(info.num_inputs)]
+    warm_args.extend(state_template.clone() for _ in range(info.num_states))
+
+    with torch.no_grad():
+        flexsn_inference_final_state(
+            module._inductor_scan_final_state_kernel,
+            info,
+            *warm_args,
+        )
+
+
+def _warmup_inductor_training_final_state_kernel(module: "FlexSN") -> None:
+    if module._inductor_handle is None or not module._inductor_training_available:
+        return
+
+    from ..triton_kernel.flex_sn_inductor.custom_ops import (
+        flexsn_inductor_training_final_state,
+    )
+
+    info = module._inductor_train_info
+    seq_template = torch.zeros((1, 1), device="cuda")
+    warm_args = [seq_template.clone() for _ in range(info.num_inputs)]
+
+    with torch.enable_grad():
+        flat_args = [arg.requires_grad_(True) for arg in warm_args]
+        outputs = flexsn_inductor_training_final_state(module._inductor_handle, flat_args)
+        if outputs:
+            loss = sum(output.sum() for output in outputs if isinstance(output, torch.Tensor))
+            loss.backward()
 
 
 def _as_tuple(outputs):
     if isinstance(outputs, torch.Tensor):
         return (outputs,)
     return tuple(outputs)
+
+
+def _is_compiling() -> bool:
+    compiler = getattr(torch, "compiler", None)
+    is_compiling = getattr(compiler, "is_compiling", None)
+    if callable(is_compiling):
+        return is_compiling()
+
+    dynamo = getattr(torch, "_dynamo", None)
+    is_compiling = getattr(dynamo, "is_compiling", None)
+    if callable(is_compiling):
+        return is_compiling()
+
+    return False
+
+
+def _get_inductor_segment_steps() -> int:
+    raw = os.environ.get("SJ_FLEXSN_INDUCTOR_SEGMENT_T", "0")
+    try:
+        steps = int(raw)
+    except ValueError:
+        logging.warning(
+            "FlexSN: invalid SJ_FLEXSN_INDUCTOR_SEGMENT_T=%r; segmented scan is disabled.",
+            raw,
+        )
+        return 0
+    return steps if steps > 0 else 0
+
+
+def _concat_segmented_results(segment_results: List[List[torch.Tensor]]) -> List[torch.Tensor]:
+    if not segment_results:
+        return []
+    merged = []
+    for idx in range(len(segment_results[0])):
+        pieces = [segment[idx] for segment in segment_results]
+        merged.append(pieces[0] if len(pieces) == 1 else torch.cat(pieces, dim=0))
+    return merged
+
+
+def _run_inductor_segmented_scan(
+    module: "FlexSN",
+    args: Tuple[torch.Tensor, ...],
+    *,
+    use_implicit_zero_states: bool,
+    no_grad: bool,
+):
+    segment_steps = _get_inductor_segment_steps()
+    if segment_steps <= 0:
+        return None, module.store_state_seqs
+
+    total_steps = args[0].shape[0]
+    if total_steps <= segment_steps:
+        return None, module.store_state_seqs
+
+    from ..triton_kernel.flex_sn_inductor.custom_ops import (
+        flexsn_inductor_inference,
+        flexsn_inductor_inference_final_state,
+        flexsn_inductor_training,
+        flexsn_inductor_training_final_state,
+    )
+
+    segmented_results: List[List[torch.Tensor]] = []
+    current_states = None if use_implicit_zero_states else list(module.states)
+    result_has_state_seqs = module.store_state_seqs
+
+    for start in range(0, total_steps, segment_steps):
+        end = min(start + segment_steps, total_steps)
+        chunk_args = [arg[start:end] for arg in args]
+        flat_args = [*chunk_args]
+        if current_states is not None:
+            flat_args.extend(current_states)
+
+        if no_grad:
+            if not module.store_state_seqs and module._inductor_inference_final_state_available:
+                chunk_result = list(
+                    flexsn_inductor_inference_final_state(module._inductor_handle, flat_args)
+                )
+                segmented_results.append(list(chunk_result[: module.num_outputs]))
+                current_states = list(chunk_result[module.num_outputs :])
+                result_has_state_seqs = False
+                continue
+            if not module._inductor_inference_available:
+                return None, module.store_state_seqs
+            chunk_result = list(flexsn_inductor_inference(module._inductor_handle, flat_args))
+            chunk_result = chunk_result[: module.num_outputs + module.num_states]
+            result_has_state_seqs = True
+        else:
+            if not module._inductor_training_available:
+                return None, module.store_state_seqs
+            if not module.store_state_seqs:
+                chunk_result = list(
+                    flexsn_inductor_training_final_state(module._inductor_handle, flat_args)
+                )
+                segmented_results.append(list(chunk_result[: module.num_outputs]))
+                current_states = list(
+                    chunk_result[module.num_outputs : module.num_outputs + module.num_states]
+                )
+                result_has_state_seqs = False
+                continue
+            chunk_result = list(flexsn_inductor_training(module._inductor_handle, flat_args))
+            chunk_result = chunk_result[: module.num_outputs + module.num_states]
+            result_has_state_seqs = True
+
+        segmented_results.append(chunk_result)
+        chunk_state_seqs = chunk_result[module.num_outputs :]
+        current_states = [state_seq[-1] for state_seq in chunk_state_seqs]
+
+    if not segmented_results:
+        return None, module.store_state_seqs
+
+    merged_results = _concat_segmented_results(segmented_results)
+    if result_has_state_seqs:
+        return merged_results, True
+    return [*merged_results, *(current_states or [])], False
+
+
+def _run_hop_scan(
+    core: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    store_state_seqs: bool,
+    *flat_args: torch.Tensor,
+):
+    if _flexsn_eager_scan is None:
+        raise RuntimeError(
+            "FlexSN HOP backend is unavailable: eager_scan failed to import. "
+            "See logs from "
+            "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+        )
+
+    use_lowerable_while_loop = (
+        _is_compiling()
+        and _flexsn_lowerable_while_loop_scan is not None
+        and callable(_flexsn_lowerable_while_loop_available)
+        and _flexsn_lowerable_while_loop_available()
+        and (not torch.is_grad_enabled())
+        and os.getenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "0") == "1"
+    )
+    use_lowerable_scan = (
+        _is_compiling()
+        and _flexsn_lowerable_scan is not None
+        and callable(_flexsn_lowerable_scan_available)
+        and _flexsn_lowerable_scan_available()
+        and (not torch.is_grad_enabled())
+        and os.getenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
+    )
+
+    if use_lowerable_while_loop:
+        scan_impl = (
+            _flexsn_lowerable_while_loop_scan
+            if store_state_seqs
+            else _flexsn_lowerable_while_loop_scan_final_state
+        )
+    elif use_lowerable_scan:
+        scan_impl = (
+            _flexsn_lowerable_scan
+            if store_state_seqs
+            else _flexsn_lowerable_scan_final_state
+        )
+    elif _is_compiling() or _flexsn_hop_scan is None:
+        scan_impl = (
+            _flexsn_eager_scan
+            if store_state_seqs
+            else _flexsn_eager_scan_final_state
+        )
+    elif not store_state_seqs:
+        scan_impl = _flexsn_eager_scan_final_state
+    else:
+        scan_impl = _flexsn_hop_scan
+
+    return scan_impl(
+        core,
+        num_inputs,
+        num_states,
+        num_outputs,
+        *flat_args,
+    )
+
+
+def _can_elide_zero_state_inputs(module: "FlexSN") -> bool:
+    return (
+        module.backend == "inductor"
+        and module._inductor_handle is not None
+        and module._memories_rv.get("states") is None
+        and module.__class__.init_states is FlexSN.init_states
+    )
 
 
 def _validate_scan_backend_contract(
@@ -57,6 +322,21 @@ def _validate_scan_backend_contract(
         )
 
     seq_template = example_inputs[0]
+    for i, tensor in enumerate(example_inputs[1:], start=1):
+        if tensor.shape != seq_template.shape:
+            raise ValueError(
+                "FlexSN triton/inductor scan backends currently require every "
+                "example input/state tensor to have the same shape as the "
+                f"first example tensor {tuple(seq_template.shape)}, but input #{i} "
+                f"has shape {tuple(tensor.shape)}."
+            )
+        if tensor.dtype != seq_template.dtype or tensor.device != seq_template.device:
+            raise ValueError(
+                "FlexSN triton/inductor scan backends currently require every "
+                "example input/state tensor to match the first example tensor's "
+                f"dtype/device ({seq_template.dtype}, {seq_template.device}), but "
+                f"input #{i} is ({tensor.dtype}, {tensor.device})."
+            )
     for i, tensor in enumerate(returns):
         if not isinstance(tensor, torch.Tensor):
             raise TypeError(
@@ -230,8 +510,8 @@ class FlexSN(base.MemoryModule):
         :param step_mode: 步进模式。Triton 内核仅在 ``"m"`` 模式下可用。默认 ``"m"``。
         :type step_mode: str
 
-        :param backend: 使用的后端。``"triton"`` 仅在 ``step_mode="m"`` 时可用；``"torch"`` 始终可用。
-            默认 ``"triton"``。
+        :param backend: 使用的后端。``"triton"``、``"inductor"`` 和 ``"hop"`` 仅在
+            ``step_mode="m"`` 时可用；``"torch"`` 始终可用。默认 ``"triton"``。
         :type backend: str
 
         :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
@@ -287,8 +567,9 @@ class FlexSN(base.MemoryModule):
             mode. Defaults to ``"m"``.
         :type step_mode: str
 
-        :param backend: backend to use. ``"triton"`` is available only when
-            ``step_mode="m"``. ``"torch"`` is always available. Defaults to ``"triton"``.
+        :param backend: backend to use. ``"triton"``, ``"inductor"``, and
+            ``"hop"`` are available only when ``step_mode="m"``. ``"torch"``
+            is always available. Defaults to ``"triton"``.
         :type backend: str
 
         :param store_state_seqs: whether to store the state sequences. If ``True``,
@@ -306,7 +587,7 @@ class FlexSN(base.MemoryModule):
         self.backend = backend
         self.store_state_seqs = store_state_seqs
 
-        if backend in ("triton", "inductor"):
+        if backend in ("triton", "inductor", "hop"):
             _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
@@ -322,7 +603,7 @@ class FlexSN(base.MemoryModule):
         if backend == "inductor" and torch.cuda.is_available():
             try:
                 from ..triton_kernel.flex_sn_inductor.kernel import (
-                    build_inference_kernel, build_training_kernels,
+                    build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,
                 )
                 from ..triton_kernel.flex_sn_inductor.custom_ops import (
                     attach_flexsn_handle_finalizer,
@@ -334,6 +615,7 @@ class FlexSN(base.MemoryModule):
                     "falling back to eager_scan/flex_sn_scan for all paths." % e
                 )
                 build_inference_kernel = None
+                build_inference_final_state_kernel = None
                 build_training_kernels = None
                 attach_flexsn_handle_finalizer = None
                 register_flexsn_kernel_handle = None
@@ -350,7 +632,24 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_kernel = None
                     self._inductor_scan_info = None
                 try:
-                    self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
+                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
+                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                    )
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not build inductor inference-final-state kernel (%s); "
+                        "store_state_seqs=False inference falls back to the regular inference kernel." % e
+                    )
+                    self._inductor_scan_final_state_kernel = None
+                    self._inductor_scan_final_state_info = None
+                try:
+                    (
+                        self._inductor_fwd_kernel,
+                        self._inductor_fwd_final_state_kernel,
+                        self._inductor_bwd_kernel,
+                        self._inductor_bwd_final_state_kernel,
+                        self._inductor_train_info,
+                    ) = (
                         build_training_kernels(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
                     )
                 except Exception as e:
@@ -359,24 +658,38 @@ class FlexSN(base.MemoryModule):
                         "training falls back to eager_scan." % e
                     )
                     self._inductor_fwd_kernel = None
+                    self._inductor_fwd_final_state_kernel = None
                     self._inductor_bwd_kernel = None
+                    self._inductor_bwd_final_state_kernel = None
                     self._inductor_train_info = None
             else:
                 self._inductor_scan_kernel = None
                 self._inductor_scan_info = None
+                self._inductor_scan_final_state_kernel = None
+                self._inductor_scan_final_state_info = None
                 self._inductor_fwd_kernel = None
+                self._inductor_fwd_final_state_kernel = None
                 self._inductor_bwd_kernel = None
+                self._inductor_bwd_final_state_kernel = None
                 self._inductor_train_info = None
         else:
             self._inductor_scan_kernel = None
             self._inductor_scan_info = None
+            self._inductor_scan_final_state_kernel = None
+            self._inductor_scan_final_state_info = None
             self._inductor_fwd_kernel = None
+            self._inductor_fwd_final_state_kernel = None
             self._inductor_bwd_kernel = None
+            self._inductor_bwd_final_state_kernel = None
             self._inductor_train_info = None
         self._inductor_handle = None
         self._inductor_inference_available = (
             self._inductor_scan_kernel is not None
             and self._inductor_scan_info is not None
+        )
+        self._inductor_inference_final_state_available = (
+            self._inductor_scan_final_state_kernel is not None
+            and self._inductor_scan_final_state_info is not None
         )
         self._inductor_training_available = (
             self._inductor_fwd_kernel is not None
@@ -388,16 +701,46 @@ class FlexSN(base.MemoryModule):
             and register_flexsn_kernel_handle is not None
             and (self._inductor_inference_available or self._inductor_training_available)
         ):
+            state_template_specs = None
+            if example_inputs is not None:
+                state_template_specs = tuple(
+                    (tuple(t.shape), t.dtype, t.device)
+                    for t in example_inputs[num_inputs : num_inputs + num_states]
+                )
             self._inductor_handle = register_flexsn_kernel_handle(
                 inference_kernel=self._inductor_scan_kernel,
                 inference_info=self._inductor_scan_info,
+                inference_final_state_kernel=self._inductor_scan_final_state_kernel,
+                inference_final_state_info=self._inductor_scan_final_state_info,
                 forward_kernel=self._inductor_fwd_kernel,
+                forward_final_state_kernel=self._inductor_fwd_final_state_kernel,
                 backward_kernel=self._inductor_bwd_kernel,
+                backward_final_state_kernel=self._inductor_bwd_final_state_kernel,
                 training_info=self._inductor_train_info,
+                state_template_specs=state_template_specs,
             )
             self._inductor_handle_finalizer = attach_flexsn_handle_finalizer(
                 self, self._inductor_handle
             )
+            if self._inductor_inference_final_state_available:
+                try:
+                    _warmup_inductor_inference_final_state_kernel(self)
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not warm up inductor inference-final-state kernel (%s); "
+                        "falling back to the regular inference kernel for store_state_seqs=False." % e
+                    )
+                    self._inductor_scan_final_state_kernel = None
+                    self._inductor_scan_final_state_info = None
+                    self._inductor_inference_final_state_available = False
+            if self._inductor_training_available:
+                try:
+                    _warmup_inductor_training_final_state_kernel(self)
+                except Exception as e:
+                    logging.warning(
+                        "FlexSN: could not warm up inductor training-final-state kernel (%s); "
+                        "training will compile it lazily on first use." % e
+                    )
         else:
             self._inductor_handle_finalizer = None
 
@@ -435,7 +778,7 @@ class FlexSN(base.MemoryModule):
 
     @property
     def supported_backends(self):
-        return ("triton", "torch", "inductor")
+        return ("triton", "torch", "inductor", "hop")
 
     @property
     def store_state_seqs(self):
@@ -548,66 +891,124 @@ class FlexSN(base.MemoryModule):
                 self.state_seqs = state_seqs
             return output_seqs
 
-        elif self.backend == "inductor":
-            _no_grad = not torch.is_grad_enabled() or not any(
-                a.requires_grad for a in (*args, *self.states)
+        elif self.backend == "hop":
+            result_seqs = _run_hop_scan(
+                self.core,
+                self.num_inputs,
+                self.num_states,
+                self.num_outputs,
+                self.store_state_seqs,
+                *args,
+                *self.states,
             )
-            flat_args = [*args, *self.states]
+            output_seqs = list(result_seqs[: self.num_outputs])
+            state_results = list(result_seqs[self.num_outputs :])
+            if self.store_state_seqs:
+                state_seqs = state_results
+                self.states = [v[-1] for v in state_seqs]
+                self.state_seqs = state_seqs
+            else:
+                self.states = state_results
+            return output_seqs
+
+        elif self.backend == "inductor":
+            result_has_state_seqs = self.store_state_seqs
+            _no_grad = not torch.is_grad_enabled() or not any(
+                a.requires_grad for a in (
+                    *args,
+                    *([] if self.states is None else self.states),
+                )
+            )
+            use_implicit_zero_states = (
+                self.states is None and _no_grad and _can_elide_zero_state_inputs(self)
+            )
+            state_args = [] if use_implicit_zero_states else list(self.states)
+            flat_args = [*args, *state_args]
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
             same_device = len({t.device for t in flat_args}) == 1
             if self._inductor_handle is not None and all_cuda and same_device:
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
-                    flexsn_inductor_inference,
-                    flexsn_inductor_training,
+                segmented_result, result_has_state_seqs = _run_inductor_segmented_scan(
+                    self,
+                    args,
+                    use_implicit_zero_states=use_implicit_zero_states,
+                    no_grad=_no_grad,
                 )
-
-                if _no_grad and self._inductor_inference_available:
-                    result_seqs = flexsn_inductor_inference(
-                        self._inductor_handle, flat_args
-                    )
-                elif (not _no_grad) and self._inductor_training_available:
-                    result_seqs = flexsn_inductor_training(
-                        self._inductor_handle, flat_args
-                    )
-                    result_seqs = result_seqs[: self.num_outputs + self.num_states]
+                if segmented_result is not None:
+                    result_seqs = segmented_result
                 else:
-                    result_seqs = None
+                    from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                        flexsn_inductor_inference,
+                        flexsn_inductor_inference_final_state,
+                        flexsn_inductor_training,
+                        flexsn_inductor_training_final_state,
+                    )
+
+                    if _no_grad and self._inductor_inference_available:
+                        if (
+                            not self.store_state_seqs
+                            and self._inductor_inference_final_state_available
+                        ):
+                            result_seqs = flexsn_inductor_inference_final_state(
+                                self._inductor_handle, flat_args
+                            )
+                            output_seqs = list(result_seqs[: self.num_outputs])
+                            self.states = list(result_seqs[self.num_outputs :])
+                            return output_seqs
+                        else:
+                            result_seqs = flexsn_inductor_inference(
+                                self._inductor_handle, flat_args
+                            )
+                            result_has_state_seqs = True
+                    elif (not _no_grad) and self._inductor_training_available:
+                        if not self.store_state_seqs:
+                            result_seqs = flexsn_inductor_training_final_state(
+                                self._inductor_handle, flat_args
+                            )
+                            output_seqs = list(result_seqs[: self.num_outputs])
+                            self.states = list(
+                                result_seqs[
+                                    self.num_outputs : self.num_outputs + self.num_states
+                                ]
+                            )
+                            return output_seqs
+                        result_seqs = flexsn_inductor_training(
+                            self._inductor_handle, flat_args
+                        )
+                        result_seqs = result_seqs[: self.num_outputs + self.num_states]
+                        result_has_state_seqs = True
+                    else:
+                        result_seqs = None
             else:
                 result_seqs = None
 
             if result_seqs is None:
-                from ..triton_kernel.flex_sn_inductor import eager_scan, flex_sn_scan
-
-                if eager_scan is None:
-                    raise RuntimeError(
-                        "FlexSN inductor backend is unavailable: "
-                        "eager_scan failed to import. "
-                        "See logs from spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
-                    )
-                if torch.compiler.is_compiling() or flex_sn_scan is None:
-                    scan_impl = eager_scan
-                else:
-                    scan_impl = flex_sn_scan
-                result_seqs = scan_impl(
+                if self.states is None:
+                    self.states = self.init_states(self.num_states, self.step_mode, *args)
+                result_seqs = _run_hop_scan(
                     self.core,
                     self.num_inputs,
                     self.num_states,
                     self.num_outputs,
+                    self.store_state_seqs,
                     *args,
                     *self.states,
                 )
             output_seqs = list(result_seqs[: self.num_outputs])
             state_seqs = list(result_seqs[self.num_outputs :])
-            self.states = [v[-1] for v in state_seqs]
-            if self.store_state_seqs:
-                self.state_seqs = state_seqs
+            if result_has_state_seqs:
+                self.states = [v[-1] for v in state_seqs]
+                if self.store_state_seqs:
+                    self.state_seqs = state_seqs
+            else:
+                self.states = state_seqs
             return output_seqs
 
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
     def forward(self, *args):
-        if self.states is None:
+        can_elide = _can_elide_zero_state_inputs(self) and not torch.is_grad_enabled()
+        if self.states is None and not can_elide:
             self.states = self.init_states(self.num_states, self.step_mode, *args)
         output = super().forward(*args)
         return output[0] if len(output) == 1 else output

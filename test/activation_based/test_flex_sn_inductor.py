@@ -9,12 +9,29 @@ so these tests do not require a CUDA GPU.
 """
 from __future__ import annotations
 
+import sys
+
 import pytest
 import torch
+from torch.fx.experimental.proxy_tensor import make_fx
 
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
+from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    custom_ops as flexsn_custom_ops,
     flex_sn_scan,
+    kernel as flexsn_inductor_kernel,
+    lowerable_scan,
+    lowerable_scan_available,
+    lowerable_while_loop_scan,
+    lowerable_while_loop_available,
+)
+from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    hop as flexsn_hop,
+)
+from spikingjelly.activation_based.triton_kernel.flexsn.info import FlexSNInfo
+from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
+    flexsn_backward_ncl_bucket,
 )
 
 
@@ -26,6 +43,12 @@ def _lif_core(x: torch.Tensor, v: torch.Tensor):
     s = (h >= v_threshold).to(h.dtype)
     v_new = h * (1.0 - s) + v_reset * s
     return s, v_new
+
+
+def _stateful_tanh_core(x: torch.Tensor, v: torch.Tensor):
+    v_new = torch.tanh(x + 0.5 * v)
+    y = torch.sigmoid(v_new)
+    return y, v_new
 
 
 @pytest.fixture
@@ -52,6 +75,63 @@ def test_hop_matches_manual_loop(rng, T, shape):
 
     torch.testing.assert_close(s_seq, expected_s)
     torch.testing.assert_close(v_seq, expected_v)
+
+
+def test_hop_matches_manual_loop_with_lifted_tensor(rng):
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    v0 = torch.zeros(N)
+    bias = torch.randn(N, generator=rng)
+
+    def core_with_bias(x_step, v, bias_term):
+        return _lif_core(x_step + bias_term, v)
+
+    s_seq, v_seq = flex_sn_scan(core_with_bias, 1, 1, 1, x, v0, bias)
+
+    expected_s, expected_v = [], []
+    v = v0.clone()
+    for t in range(T):
+        s, v = core_with_bias(x[t], v, bias)
+        expected_s.append(s)
+        expected_v.append(v)
+
+    torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
+    torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_hop_rejects_empty_input_sequence():
+    x = torch.empty(0, 8)
+    v0 = torch.zeros(8)
+
+    with pytest.raises(ValueError, match="T == 0"):
+        flex_sn_scan(_lif_core, 1, 1, 1, x, v0)
+
+    with pytest.raises(ValueError, match="T == 0"):
+        flexsn_hop.eager_scan_final_state(_lif_core, 1, 1, 1, x, v0)
+
+
+def test_kernel_names_include_graph_fingerprint():
+    def core_a(x):
+        return x + 1
+
+    def core_b(x):
+        return x * 2
+
+    example = torch.randn(4)
+    graph_a = make_fx(core_a)(example).graph
+    graph_b = make_fx(core_b)(example).graph
+
+    name_a = flexsn_inductor_kernel._make_core_name(
+        core_a, "inductor_scan", graph_a
+    )
+    name_b = flexsn_inductor_kernel._make_core_name(
+        core_b, "inductor_scan", graph_b
+    )
+
+    assert name_a != name_b
+    assert name_a == flexsn_inductor_kernel._make_core_name(
+        core_a, "inductor_scan", graph_a
+    )
 
 
 @pytest.mark.parametrize("T", [1, 4, 16])
@@ -84,6 +164,70 @@ def test_inductor_backend_matches_torch_backend(rng, T, shape):
     torch.testing.assert_close(inductor_neuron.states[0], torch_neuron.states[0])
 
 
+@pytest.mark.parametrize("T", [1, 4, 16])
+@pytest.mark.parametrize("shape", [(8,), (4, 8)])
+def test_hop_backend_matches_torch_backend(rng, T, shape):
+    x = torch.randn((T, *shape), generator=rng)
+
+    torch_neuron = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+    hop_neuron = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        example_inputs=(torch.zeros(shape), torch.zeros(shape)),
+    )
+
+    torch_out = torch_neuron(x)
+    hop_out = hop_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
+    assert len(hop_neuron.states) == 1
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
+
+
+def test_hop_backend_matches_torch_backend_with_closure(rng):
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    bias = torch.randn(N, generator=rng)
+
+    def core_with_bias(x_step, v):
+        return _lif_core(x_step + bias, v)
+
+    torch_neuron = FlexSN(
+        core=core_with_bias,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+    )
+    hop_neuron = FlexSN(
+        core=core_with_bias,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        example_inputs=(torch.zeros(N), torch.zeros(N)),
+    )
+
+    torch_out = torch_neuron(x)
+    hop_out = hop_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
+
+
 def test_inductor_backend_store_state_seqs(rng):
     T, N = 8, 16
     x = torch.randn((T, N), generator=rng)
@@ -106,6 +250,220 @@ def test_inductor_backend_store_state_seqs(rng):
     )
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+@pytest.mark.parametrize("store_state_seqs", [False, True])
+def test_inductor_backend_segmented_inference_matches_unsegmented(
+    rng, monkeypatch, store_state_seqs
+):
+    T, N = 9, 16
+    x = torch.randn((T, N), generator=rng).cuda()
+
+    reference = FlexSN(
+        core=_lif_core, num_inputs=1, num_states=1, num_outputs=1,
+        step_mode="m", backend="inductor", store_state_seqs=store_state_seqs,
+    ).cuda()
+    segmented = FlexSN(
+        core=_lif_core, num_inputs=1, num_states=1, num_outputs=1,
+        step_mode="m", backend="inductor", store_state_seqs=store_state_seqs,
+    ).cuda()
+
+    with torch.no_grad():
+        ref_out = reference(x)
+        monkeypatch.setenv("SJ_FLEXSN_INDUCTOR_SEGMENT_T", "4")
+        seg_out = segmented(x)
+
+    torch.testing.assert_close(seg_out, ref_out)
+    torch.testing.assert_close(segmented.states[0], reference.states[0])
+    if store_state_seqs:
+        torch.testing.assert_close(segmented.state_seqs[0], reference.state_seqs[0])
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_training_final_state_matches_full_training(rng):
+    T, N = 8, 16
+    x_ref = torch.randn((T, N), generator=rng, device="cpu").cuda().requires_grad_(True)
+    x_opt = x_ref.detach().clone().requires_grad_(True)
+
+    reference = FlexSN(
+        core=_stateful_tanh_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=True,
+    ).cuda()
+    optimized = FlexSN(
+        core=_stateful_tanh_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda()
+
+    ref_out = reference(x_ref)
+    opt_out = optimized(x_opt)
+
+    torch.testing.assert_close(opt_out, ref_out)
+    torch.testing.assert_close(optimized.states[0], reference.states[0])
+
+    ref_loss = ref_out.sum() + reference.states[0].sum()
+    opt_loss = opt_out.sum() + optimized.states[0].sum()
+    ref_loss.backward()
+    opt_loss.backward()
+
+    torch.testing.assert_close(x_opt.grad, x_ref.grad)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_training_final_state_kernel_only_builds_when_it_reduces_saved_sequences():
+    lif_neuron = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+    ).cuda()
+    tanh_neuron = FlexSN(
+        core=_stateful_tanh_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+    ).cuda()
+
+    assert lif_neuron._inductor_fwd_final_state_kernel is not None
+    assert tanh_neuron._inductor_fwd_final_state_kernel is None
+
+
+def _stateless_passthrough_core(x: torch.Tensor, v: torch.Tensor):
+    return x, x
+
+
+@pytest.mark.parametrize("backend", ["inductor", "hop"])
+def test_scan_backends_reject_mismatched_example_state_shape(backend):
+    with pytest.raises(ValueError, match="example input/state tensor"):
+        FlexSN(
+            core=_stateless_passthrough_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend=backend,
+            example_inputs=(torch.zeros(8), torch.zeros(4)),
+        )
+
+
+def test_inductor_zero_state_materialization_uses_registered_state_specs():
+    info = FlexSNInfo(
+        num_inputs=1,
+        num_outputs=1,
+        num_states=1,
+        fwd_core_args=[],
+        fwd_core_returns=[],
+        fwd_core_recipients=[],
+        fwd_kernel_returns=[],
+        num_fwd_kernel_returns=0,
+        c2k_return_mapping=[],
+    )
+    bundle = flexsn_custom_ops.FlexSNKernelHandle(
+        inference_kernel=None,
+        inference_info=info,
+        inference_final_state_kernel=None,
+        inference_final_state_info=None,
+        forward_kernel=None,
+        forward_final_state_kernel=None,
+        backward_kernel=None,
+        backward_final_state_kernel=None,
+        training_info=None,
+        state_template_specs=(((3, 5), torch.float32, torch.device("cpu")),),
+    )
+    x_seq = torch.randn(4, 8, dtype=torch.float16)
+
+    materialized = flexsn_custom_ops._materialize_zero_state_args(bundle, info, [x_seq])
+
+    assert len(materialized) == 2
+    assert materialized[1].shape == (3, 5)
+    assert materialized[1].dtype == torch.float32
+    assert materialized[1].device.type == "cpu"
+    torch.testing.assert_close(materialized[1], torch.zeros(3, 5))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_zero_state_materialization_overrides_registered_device_at_runtime():
+    info = FlexSNInfo(
+        num_inputs=1,
+        num_outputs=1,
+        num_states=1,
+        fwd_core_args=[],
+        fwd_core_returns=[],
+        fwd_core_recipients=[],
+        fwd_kernel_returns=[],
+        num_fwd_kernel_returns=0,
+        c2k_return_mapping=[],
+    )
+    bundle = flexsn_custom_ops.FlexSNKernelHandle(
+        inference_kernel=None,
+        inference_info=info,
+        inference_final_state_kernel=None,
+        inference_final_state_info=None,
+        forward_kernel=None,
+        forward_final_state_kernel=None,
+        backward_kernel=None,
+        backward_final_state_kernel=None,
+        training_info=None,
+        state_template_specs=(((3, 5), torch.float32, torch.device("cpu")),),
+    )
+    device = (
+        torch.device("cuda", 1)
+        if torch.cuda.device_count() > 1
+        else torch.device("cuda")
+    )
+    x_seq = torch.randn(4, 8, dtype=torch.float16, device=device)
+
+    materialized = flexsn_custom_ops._materialize_zero_state_args(bundle, info, [x_seq])
+
+    assert len(materialized) == 2
+    assert materialized[1].shape == (3, 5)
+    assert materialized[1].dtype == torch.float32
+    assert materialized[1].device == x_seq.device
+    torch.testing.assert_close(materialized[1], torch.zeros(3, 5, device=x_seq.device))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_backward_final_state_kernel_handles_small_t_large_token_workloads():
+    small_t_large_tokens = torch.randn((4, 8, 224, 224), device="cuda")
+    small_t_medium_tokens = torch.randn((4, 32, 3, 32, 32), device="cuda")
+    small_t_small_tokens = torch.randn((4, 16, 64), device="cuda")
+
+    assert flexsn_custom_ops._should_use_backward_final_state_kernel(
+        [small_t_large_tokens]
+    )
+    assert flexsn_custom_ops._should_use_backward_final_state_kernel(
+        [small_t_medium_tokens]
+    )
+    assert not flexsn_custom_ops._should_use_backward_final_state_kernel(
+        [small_t_small_tokens]
+    )
+
+
+def test_flexsn_backward_ncl_bucket_boundaries():
+    assert flexsn_backward_ncl_bucket(512) == 0
+    assert flexsn_backward_ncl_bucket(1 << 12) == 0
+    assert flexsn_backward_ncl_bucket((1 << 12) + 1) == 1
+    assert flexsn_backward_ncl_bucket(1 << 17) == 1
+    assert flexsn_backward_ncl_bucket((1 << 17) + 1) == 2
+    assert flexsn_backward_ncl_bucket(1 << 20) == 2
+    assert flexsn_backward_ncl_bucket((1 << 20) + 1) == 3
+    assert flexsn_backward_ncl_bucket(1 << 23) == 3
+    assert flexsn_backward_ncl_bucket((1 << 23) + 1) == 4
+
+
+
 def test_inductor_backend_skips_flex_sn_kernel_construction():
     neuron = FlexSN(
         core=_lif_core, num_inputs=1, num_states=1, num_outputs=1,
@@ -125,10 +483,19 @@ def test_inductor_backend_in_supported_backends():
 def test_hop_rejects_wrong_arity():
     x = torch.randn(4, 8)
     v0 = torch.zeros(8)
-    extra = torch.zeros(8)
 
-    with pytest.raises(ValueError, match="expected 2 tensor args"):
-        flex_sn_scan(_lif_core, 1, 1, 1, x, v0, extra)
+    with pytest.raises(ValueError, match="expected at least 2 tensor args"):
+        flex_sn_scan(_lif_core, 1, 1, 1, x)
+
+
+def test_hop_accepts_single_tensor_return(rng):
+    x = torch.randn(4, 8, generator=rng)
+
+    def stateless_core(x_step):
+        return x_step.sin()
+
+    (y_seq,) = flex_sn_scan(stateless_core, 1, 0, 1, x)
+    torch.testing.assert_close(y_seq, x.sin())
 
 
 def test_hop_rejects_mismatched_T():
@@ -141,6 +508,273 @@ def test_hop_rejects_mismatched_T():
 
     with pytest.raises(ValueError, match="leading dim"):
         flex_sn_scan(two_input_core, 2, 1, 1, x1, x2, v0)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_inference_without_final_state_kernel_keeps_final_state_semantics(rng):
+    x = torch.randn((6, 16), generator=rng).cuda()
+    reference = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda()
+    fallback = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda()
+    if not reference._inductor_inference_available:
+        pytest.skip("inductor inference kernel unavailable")
+
+    with torch.no_grad():
+        expected = reference(x)
+        expected_state = reference.states[0].detach().clone()
+        fallback._inductor_scan_final_state_kernel = None
+        fallback._inductor_scan_final_state_info = None
+        fallback._inductor_inference_final_state_available = False
+        actual = fallback(x)
+        actual_state = fallback.states[0].detach().clone()
+
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(actual_state, expected_state)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_stateless_final_state_kernel_builds():
+    def stateless_core(x):
+        return (x,)
+
+    neuron = FlexSN(
+        core=stateless_core,
+        num_inputs=1,
+        num_states=0,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(8, device="cuda"),),
+    ).cuda()
+
+    assert neuron._inductor_inference_available
+    assert neuron._inductor_inference_final_state_available
+
+
+def test_backward_final_state_kernel_threshold_knobs_do_not_force_specialization(monkeypatch):
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS",
+        0,
+    )
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS",
+        1024,
+    )
+    grad = torch.randn(4, 8)
+    assert not flexsn_custom_ops._should_use_backward_final_state_kernel([grad])
+
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS",
+        1024,
+    )
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS",
+        0,
+    )
+    assert not flexsn_custom_ops._should_use_backward_final_state_kernel([grad])
+
+
+def test_hop_registers_with_dynamo():
+    from torch._dynamo.variables.higher_order_ops import TorchHigherOrderOperatorVariable
+
+    hop_var = TorchHigherOrderOperatorVariable.make(flex_sn_scan)
+    assert hop_var.value is flex_sn_scan
+
+
+def test_lowerable_scan_matches_manual_loop(rng):
+    if not callable(lowerable_scan_available) or not lowerable_scan_available():
+        pytest.skip("PyTorch scan HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    v0 = torch.zeros(N)
+
+    with torch.no_grad():
+        s_seq, v_seq = lowerable_scan(_lif_core, 1, 1, 1, x, v0)
+
+    expected_s, expected_v = [], []
+    v = v0.clone()
+    for t in range(T):
+        s, v = _lif_core(x[t], v)
+        expected_s.append(s)
+        expected_v.append(v)
+
+    torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
+    torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_lowerable_while_loop_matches_manual_loop(rng):
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x = torch.randn((T, N), generator=rng)
+    v0 = torch.zeros(N)
+
+    with torch.no_grad():
+        s_seq, v_seq = lowerable_while_loop_scan(_lif_core, 1, 1, 1, x, v0)
+
+    expected_s, expected_v = [], []
+    v = v0.clone()
+    for t in range(T):
+        s, v = _lif_core(x[t], v)
+        expected_s.append(s)
+        expected_v.append(v)
+
+    torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
+    torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_compile_fullgraph_lowerable_while_loop_matches_eager(rng):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x_eager = torch.randn((T, N), generator=rng)
+    x_compiled = x_eager.detach().clone()
+    v0_eager = torch.zeros(N)
+    v0_compiled = v0_eager.detach().clone()
+
+    def run_scan(x, v0):
+        with torch.no_grad():
+            return lowerable_while_loop_scan(_lif_core, 1, 1, 1, x, v0)
+
+    eager_out = run_scan(x_eager, v0_eager)
+    compiled_out = torch.compile(run_scan, fullgraph=True)(x_compiled, v0_compiled)
+
+    assert len(compiled_out) == len(eager_out)
+    for compiled_tensor, eager_tensor in zip(compiled_out, eager_out):
+        torch.testing.assert_close(compiled_tensor, eager_tensor)
+
+
+def test_compile_fullgraph_hop_backend_matches_eager_with_lowerable_while_loop(
+    rng, monkeypatch
+):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_out = make_neuron()(x_eager)
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
+def test_hop_backend_store_state_seqs_false_matches_torch_backend(rng):
+    T, N = 4, 8
+    x = torch.randn(T, N, generator=rng)
+
+    hop_neuron = FlexSN(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(N), torch.zeros(N)),
+    )
+    torch_neuron = FlexSN(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="torch",
+        store_state_seqs=False,
+    )
+
+    hop_out = hop_neuron(x)
+    torch_out = torch_neuron(x)
+
+    torch.testing.assert_close(hop_out, torch_out)
+    torch.testing.assert_close(hop_neuron.states[0], torch_neuron.states[0])
+
+
+def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerable_while_loop(
+    rng, monkeypatch
+):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            store_state_seqs=False,
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_neuron = make_neuron()
+    eager_out = eager_neuron(x_eager)
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+    torch.testing.assert_close(compiled_fn._orig_mod.states[0], eager_neuron.states[0])
 
 
 # -------------------------------------------------------------------------
@@ -360,6 +994,86 @@ def test_compile_fullgraph_backward_matches_eager(rng):
     torch.testing.assert_close(x_compiled.grad, x_eager.grad)
 
 
+def test_compile_fullgraph_backward_store_state_seqs_false_matches_eager(rng):
+    T, N = 5, 8
+    x_eager = torch.randn(T, N, generator=rng, requires_grad=True)
+    x_compiled = x_eager.detach().clone().requires_grad_(True)
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="inductor",
+            store_state_seqs=False,
+        )
+
+    make_neuron()(x_eager).sum().backward()
+
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_fn(x_compiled).sum().backward()
+
+    torch.testing.assert_close(x_compiled.grad, x_eager.grad)
+
+
+def test_compile_fullgraph_hop_backend_matches_eager(rng):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+
+    def make_neuron():
+        return FlexSN(
+            core=_differentiable_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_out = make_neuron()(x_eager)
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
+def test_compile_fullgraph_hop_backend_matches_eager_with_closure(rng):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+
+    T, N = 4, 8
+    x_eager = torch.randn(T, N, generator=rng)
+    x_compiled = x_eager.detach().clone()
+    bias = torch.randn(N, generator=rng)
+
+    def core_with_bias(x, v):
+        return _differentiable_lif_core(x + bias, v)
+
+    def make_neuron():
+        return FlexSN(
+            core=core_with_bias,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="hop",
+            example_inputs=(torch.zeros(N), torch.zeros(N)),
+        )
+
+    eager_out = make_neuron()(x_eager)
+    compiled_fn = torch.compile(make_neuron(), fullgraph=True)
+    compiled_out = compiled_fn(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
 def test_compile_fuses_surrounding_linear_layers(rng):
     """Linear -> FlexSN -> Linear must compile under fullgraph=True.
     On GPU this is the case Inductor fuses into a single kernel stack;
@@ -392,6 +1106,105 @@ def test_compile_fuses_surrounding_linear_layers(rng):
     torch.testing.assert_close(compiled_net(x_c), eager_net(x_e))
 
 
+def test_compile_fuses_surrounding_linear_layers_with_hop_lowerable_while_loop(rng, monkeypatch):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+
+    T, N = 4, 8
+
+    class Net(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.pre = torch.nn.Linear(N, N)
+            self.neuron = FlexSN(
+                core=_differentiable_lif_core,
+                num_inputs=1,
+                num_states=1,
+                num_outputs=1,
+                step_mode="m",
+                backend="hop",
+                example_inputs=(torch.zeros(N), torch.zeros(N)),
+            )
+            self.post = torch.nn.Linear(N, N)
+
+        def forward(self, x):
+            pre = self.pre(x)
+            spikes = self.neuron(pre)
+            return self.post(spikes)
+
+    torch.manual_seed(0)
+    eager_net = Net().eval()
+    torch.manual_seed(0)
+    compiled_net = Net().eval()
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+    compiled_net = torch.compile(compiled_net, fullgraph=True)
+
+    x_e = torch.randn(T, N, generator=rng)
+    x_c = x_e.detach().clone()
+    with torch.no_grad():
+        eager_out = eager_net(x_e)
+        compiled_out = compiled_net(x_c)
+
+    torch.testing.assert_close(compiled_out, eager_out)
+
+
+def test_compile_spiking_vgg_hop_lowerable_while_loop_matches_eager(monkeypatch):
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if (
+        not callable(lowerable_while_loop_available)
+        or not lowerable_while_loop_available()
+    ):
+        pytest.skip("PyTorch while_loop HOP is unavailable in this environment")
+    if not torch.cuda.is_available():
+        pytest.skip("SpikingVGG compile coverage is only exercised on CUDA")
+
+    def core(x, v):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = (h >= v_th).to(h.dtype)
+        return s, h * (1.0 - s)
+
+    def make_flexsn(**kwargs):
+        return FlexSN(
+            core=core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode=kwargs.get("step_mode", "m"),
+            backend="hop",
+        )
+
+    T, B, C, H, W = 4, 8, 3, 32, 32
+    torch.manual_seed(42)
+    x_eager = torch.randn((T, B, C, H, W), device="cuda")
+    x_compiled = x_eager.detach().clone()
+
+    torch.manual_seed(0)
+    model = spiking_vgg16_bn(
+        spiking_neuron=make_flexsn,
+        step_mode="m",
+    ).cuda().eval()
+
+    from spikingjelly.activation_based import functional as sj_functional
+    sj_functional.set_step_mode(model, "m")
+
+    monkeypatch.setenv("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_WHILE_LOOP", "1")
+
+    with torch.no_grad():
+        eager_out = model(x_eager)
+        sj_functional.reset_net(model)
+        compiled_model = torch.compile(model, fullgraph=True)
+        compiled_out = compiled_model(x_compiled)
+
+    torch.testing.assert_close(compiled_out, eager_out, atol=1e-5, rtol=1e-4)
+
+
 def test_compile_captures_core_ops_in_fx_graph(rng):
     """Verify that the compiled forward graph contains T unrolled copies of
     the core_fn's aten ops — the unrolled shape Inductor expects to lower.
@@ -409,6 +1222,86 @@ def test_compile_captures_core_ops_in_fx_graph(rng):
     assert explanation.graph_break_count == 0, (
         f"Expected no graph breaks, got {explanation.graph_break_count}:\n"
         f"{explanation.break_reasons}"
+    )
+
+
+def test_inductor_compile_graph_elides_explicit_zero_state_init():
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if not torch.cuda.is_available():
+        pytest.skip("inductor custom-op graph coverage is exercised on CUDA")
+
+    from torch._dynamo import explain
+
+    def core(x, v):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = (h >= v_th).to(h.dtype)
+        return s, h * (1.0 - s)
+
+    def make_flexsn(**kwargs):
+        return FlexSN(
+            core=core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode=kwargs.get("step_mode", "m"),
+            backend="inductor",
+        )
+
+    T, N = 4, 8
+    torch.manual_seed(42)
+    x = torch.randn((T, N), device="cuda")
+    neuron = make_flexsn(store_state_seqs=False).cuda().eval()
+
+    with torch.no_grad():
+        explanation = explain(neuron)(x)
+    targets = [str(node.target) for graph in explanation.graphs for node in graph.graph.nodes]
+
+    assert any(
+        "sj.flexsn_inductor_inference_final_state.default" in target
+        for target in targets
+    )
+    assert not any("zeros_like" in target for target in targets)
+
+
+def test_inductor_compile_training_graph_uses_final_state_custom_op():
+    if sys.platform == "win32":
+        pytest.skip("torch.compile is not supported on Windows")
+    if not torch.cuda.is_available():
+        pytest.skip("inductor custom-op graph coverage is exercised on CUDA")
+
+    from torch._dynamo import explain
+
+    def core(x, v):
+        tau, v_th = 2.0, 1.0
+        h = v + (x - v) / tau
+        s = (h >= v_th).to(h.dtype)
+        return s, h * (1.0 - s)
+
+    T, N = 4, 8
+    torch.manual_seed(42)
+    x = torch.randn((T, N), device="cuda", requires_grad=True)
+    neuron = FlexSN(
+        core=core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda().train()
+
+    explanation = explain(lambda inp: neuron(inp).sum())(x)
+    targets = [
+        str(node.target)
+        for graph in explanation.graphs
+        for node in graph.graph.nodes
+    ]
+
+    assert any(
+        "sj.flexsn_inductor_training_final_state.default" in target
+        for target in targets
     )
 
 

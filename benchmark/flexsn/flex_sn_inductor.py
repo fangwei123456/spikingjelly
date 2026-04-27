@@ -44,19 +44,14 @@ def make_flexsn(backend: str) -> FlexSN:
 # ---------------------------------------------------------------------------
 
 
-def cuda_time_ms(fn, warmup: int = 10, iters: int = 200,
-                 reset_hook=None) -> float:
+def cuda_time_ms(fn, warmup: int = 10, iters: int = 200) -> float:
     for _ in range(warmup):
-        if reset_hook is not None:
-            reset_hook()
         fn()
     torch.cuda.synchronize()
     start = torch.cuda.Event(enable_timing=True)
     end = torch.cuda.Event(enable_timing=True)
     start.record()
     for _ in range(iters):
-        if reset_hook is not None:
-            reset_hook()
         fn()
     end.record()
     torch.cuda.synchronize()
@@ -91,8 +86,8 @@ def bench_single_layer():
         c_ind = torch.compile(n_ind, fullgraph=True)
 
         with torch.no_grad():
-            ms_tri = cuda_time_ms(lambda: n_tri(x), reset_hook=n_tri.reset)
-            ms_ind = cuda_time_ms(lambda: c_ind(x), reset_hook=n_ind.reset)
+            ms_tri = cuda_time_ms(lambda: n_tri(x))
+            ms_ind = cuda_time_ms(lambda: c_ind(x))
 
         r = ms_ind / ms_tri
         print(
@@ -157,12 +152,9 @@ def bench_linear_flexsn_linear():
         m_ind = SeqModelFused(N, "inductor").cuda()
         c_ind = torch.compile(m_ind, fullgraph=True)
 
-        from spikingjelly.activation_based import functional
         with torch.no_grad():
-            ms_tri = cuda_time_ms(lambda: m_tri(x),
-                                  reset_hook=lambda: functional.reset_net(m_tri))
-            ms_ind = cuda_time_ms(lambda: c_ind(x),
-                                  reset_hook=lambda: functional.reset_net(m_ind))
+            ms_tri = cuda_time_ms(lambda: m_tri(x))
+            ms_ind = cuda_time_ms(lambda: c_ind(x))
 
         r = ms_ind / ms_tri
         print(
@@ -181,12 +173,11 @@ def main() -> None:
         sys.exit(1)
     if os.environ.get("PYTORCH_JIT", "1") != "0":
         print(
-            "Error: PYTORCH_JIT != 0. "
+            "Warning: PYTORCH_JIT != 0. "
             "The triton backend requires PYTORCH_JIT=0.\n"
-            "Run with:  PYTORCH_JIT=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py",
+            "Run with:  PYTORCH_JIT=0 python flex_sn_inductor.py",
             file=sys.stderr,
         )
-        sys.exit(1)
 
     print(f"GPU    : {torch.cuda.get_device_name(0)}")
     print(f"PyTorch: {torch.__version__}")

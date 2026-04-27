@@ -76,6 +76,12 @@ class FlexSNScan(HigherOrderOperator):
 flex_sn_scan = FlexSNScan()
 
 
+def _normalize_scan_results(results):
+    if isinstance(results, torch.Tensor):
+        return (results,)
+    return tuple(results)
+
+
 def eager_scan(
     core_fn: Callable,
     num_inputs: int,
@@ -91,20 +97,23 @@ def eager_scan(
     loop into an FX graph that Inductor can lower normally.
     """
     expected = num_inputs + num_states
-    if len(flat_args) != expected:
+    if len(flat_args) < expected:
         raise ValueError(
-            f"flex_sn_scan expected {expected} tensor args "
+            f"flex_sn_scan expected at least {expected} tensor args "
             f"(num_inputs={num_inputs} + num_states={num_states}), "
             f"got {len(flat_args)}"
         )
 
     inputs_seq = flat_args[:num_inputs]
-    states = list(flat_args[num_inputs:])
+    states = list(flat_args[num_inputs : num_inputs + num_states])
+    lifted_args = flat_args[num_inputs + num_states :]
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
 
     T = inputs_seq[0].shape[0]
+    if T == 0:
+        raise ValueError("empty input sequence: T == 0 not supported")
     for i, x in enumerate(inputs_seq):
         if x.shape[0] != T:
             raise ValueError(
@@ -116,7 +125,7 @@ def eager_scan(
 
     for t in range(T):
         step_inputs = tuple(x[t] for x in inputs_seq)
-        results = core_fn(*step_inputs, *states)
+        results = _normalize_scan_results(core_fn(*step_inputs, *states, *lifted_args))
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "
@@ -143,3 +152,69 @@ flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
 # full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
 # graph natively by unrolling; see module docstring.
 flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
+
+
+def eager_scan_final_state(
+    core_fn: Callable,
+    num_inputs: int,
+    num_states: int,
+    num_outputs: int,
+    *flat_args: torch.Tensor,
+) -> Tuple[torch.Tensor, ...]:
+    """Eager scan variant that returns final states instead of full state seqs."""
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+
+    inputs_seq = flat_args[:num_inputs]
+    states = list(flat_args[num_inputs : num_inputs + num_states])
+    lifted_args = flat_args[num_inputs + num_states :]
+
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    T = inputs_seq[0].shape[0]
+    if T == 0:
+        raise ValueError("empty input sequence: T == 0 not supported")
+    for i, x in enumerate(inputs_seq):
+        if x.shape[0] != T:
+            raise ValueError(
+                f"input {i} has leading dim {x.shape[0]}, expected {T}"
+            )
+
+    output_buffers = [[] for _ in range(num_outputs)]
+
+    for t in range(T):
+        step_inputs = tuple(x[t] for x in inputs_seq)
+        results = _normalize_scan_results(core_fn(*step_inputs, *states, *lifted_args))
+        if len(results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+        outputs = results[:num_outputs]
+        states = list(results[num_outputs:])
+        for i, y in enumerate(outputs):
+            output_buffers[i].append(y)
+
+    output_seqs = tuple(torch.stack(buf, dim=0) for buf in output_buffers)
+    return (*output_seqs, *states)
+
+
+lowerable_scan = None
+lowerable_scan_final_state = None
+lowerable_while_loop_scan = None
+lowerable_while_loop_scan_final_state = None
+
+
+def lowerable_scan_available() -> bool:
+    return False
+
+
+def lowerable_while_loop_available() -> bool:
+    return False
