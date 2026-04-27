@@ -90,6 +90,12 @@ def _result_row(module_name: str):
     return [(module_name, 0.0)]
 
 
+def _profile_result_with_optional_peak(result, return_peak):
+    if return_peak:
+        return result, 100, 100
+    return result
+
+
 def test_thread_local_functions():
     """Test thread-local functions and context managers."""
     # Test initial state
@@ -259,8 +265,12 @@ def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
         return 100, 100
 
     def fake_train_memory_profile(*args, **kwargs):
-        profile_flags.append(kwargs.get("worker_warmup"))
-        return []
+        profile_flags.append(
+            (kwargs.get("worker_warmup"), kwargs.get("return_peak", False))
+        )
+        return _profile_result_with_optional_peak(
+            [], kwargs.get("return_peak", False)
+        )
 
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
@@ -279,8 +289,8 @@ def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
     )
 
     assert isinstance(optimized[0], GCContainer)
-    assert peak_flags == [False]
-    assert profile_flags == [False]
+    assert peak_flags == []
+    assert profile_flags == [(False, True)]
 
 
 def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
@@ -336,7 +346,7 @@ def test_apply_gc_clones_manual_compressor_instances(monkeypatch):
 def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(100, 100), (80, 80)])
+    peak_values = iter([(80, 80)])
     profile_values = iter([
         _result_row("0"),
         [],
@@ -347,7 +357,9 @@ def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypa
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
-        lambda *args, **kwargs: next(profile_values),
+        lambda *args, **kwargs: _profile_result_with_optional_peak(
+            next(profile_values), kwargs.get("return_peak", False)
+        ),
     )
 
     net = nn.Sequential(SpatialSplitBlock())
@@ -367,7 +379,7 @@ def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypa
 def test_memory_optimization_level2_skips_unsplittable_hottest_candidate(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(100, 100), (80, 80)])
+    peak_values = iter([(80, 80)])
     profile_values = iter(
         [
             [("0", 0.0), ("1", 0.0)],
@@ -380,7 +392,9 @@ def test_memory_optimization_level2_skips_unsplittable_hottest_candidate(monkeyp
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
-        lambda *args, **kwargs: next(profile_values),
+        lambda *args, **kwargs: _profile_result_with_optional_peak(
+            next(profile_values), kwargs.get("return_peak", False)
+        ),
     )
 
     net = nn.Sequential(UnsplittableBlock(), SpatialSplitBlock())
@@ -433,7 +447,7 @@ def test_memory_optimization_level2_skips_profiling_when_no_gccontainers(monkeyp
 def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(100, 100), (80, 80)])
+    peak_values = iter([(80, 80)])
     profile_values = iter([
         [],
         _result_row("0"),
@@ -445,7 +459,9 @@ def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeyp
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
-        lambda *args, **kwargs: next(profile_values),
+        lambda *args, **kwargs: _profile_result_with_optional_peak(
+            next(profile_values), kwargs.get("return_peak", False)
+        ),
     )
 
     net = nn.Sequential(TemporalSplitBlock())
@@ -474,7 +490,9 @@ def test_memory_optimization_level3_respects_split_budgets(monkeypatch):
 
     def fake_train_memory_profile(*args, **kwargs):
         profile_calls["count"] += 1
-        return [("0", 0.0), ("1", 0.0)]
+        return _profile_result_with_optional_peak(
+            [("0", 0.0), ("1", 0.0)], kwargs.get("return_peak", False)
+        )
 
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
@@ -495,13 +513,13 @@ def test_memory_optimization_level3_respects_split_budgets(monkeypatch):
     assert isinstance(optimized[0], GCContainer)
     assert isinstance(optimized[1], GCContainer)
     assert profile_calls["count"] == 2
-    assert peak_calls["count"] == 2
+    assert peak_calls["count"] == 1
 
 
 def test_memory_optimization_level3_caches_blocked_candidates(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(100, 100), (80, 80), (60, 60)])
+    peak_values = iter([(80, 80), (60, 60)])
     profile_values = iter(
         [
             [("0", 0.0), ("1", 0.0)],
@@ -530,7 +548,9 @@ def test_memory_optimization_level3_caches_blocked_candidates(monkeypatch):
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
-        lambda *args, **kwargs: next(profile_values),
+        lambda *args, **kwargs: _profile_result_with_optional_peak(
+            next(profile_values), kwargs.get("return_peak", False)
+        ),
     )
     monkeypatch.setattr(
         memopt_pipeline, "_temporally_split_gc_container", fake_temporal_split
@@ -560,7 +580,7 @@ def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
 ):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(100, 100), (100, 100)])
+    peak_values = iter([(100, 100)])
     profile_values = iter([
         [],
         [],
@@ -571,7 +591,9 @@ def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
-        lambda *args, **kwargs: next(profile_values),
+        lambda *args, **kwargs: _profile_result_with_optional_peak(
+            next(profile_values), kwargs.get("return_peak", False)
+        ),
     )
     monkeypatch.setattr(
         memopt_pipeline,
