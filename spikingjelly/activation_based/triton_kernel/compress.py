@@ -108,7 +108,7 @@ def bit_spike_compress(s_seq):
 def bit_spike_decompress(s_seq_compressed, shape):
     # s_seq: uint8, ndim=1
     n_compressed_elements = s_seq_compressed.numel()
-    n_decompressed_elements = shape.numel()
+    n_decompressed_elements = torch.Size(shape).numel()
     s_seq_decompressed = torch.zeros(
         n_decompressed_elements, dtype=torch.uint8, device=s_seq_compressed.device
     )
