@@ -594,6 +594,12 @@ def _cprint(verbose, *args, **kwargs):
         print(*args, **kwargs)
 
 
+def _candidate_entries(results, max_candidates_per_round: Optional[int]):
+    if max_candidates_per_round is None or max_candidates_per_round <= 0:
+        return results
+    return results[:max_candidates_per_round]
+
+
 def memory_optimization(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
@@ -602,6 +608,8 @@ def memory_optimization(
     level: int = 0,
     verbose: bool = False,
     temporal_split_factor: int = 2,
+    max_split_rounds: Optional[int] = None,
+    max_candidates_per_round: Optional[int] = None,
 ):
     r"""
     **API Language:**
@@ -644,6 +652,12 @@ def memory_optimization(
     :param temporal_split_factor: 沿时间拆分检查点片段时所使用的倍增因子
     :type temporal_split_factor: int
 
+    :param max_split_rounds: 每个 split 阶段允许的最大 profiling 轮数。 ``None`` 表示不限制
+    :type max_split_rounds: Optional[int]
+
+    :param max_candidates_per_round: 每轮 profiling 至多尝试的候选 ``GCContainer`` 数量。 ``None`` 表示不限制
+    :type max_candidates_per_round: Optional[int]
+
     :return: 优化后的模型
     :rtype: nn.Module
 
@@ -684,6 +698,14 @@ def memory_optimization(
     :param temporal_split_factor: factor to increase the number of chunks when splitting GC segments temporally
     :type temporal_split_factor: int
 
+    :param max_split_rounds: maximum number of profiling rounds allowed for each split stage.
+        ``None`` means no limit
+    :type max_split_rounds: Optional[int]
+
+    :param max_candidates_per_round: maximum number of GCContainer candidates to try in each profiling round.
+        ``None`` means no limit
+    :type max_candidates_per_round: Optional[int]
+
     :return: the optimized model
     :rtype: nn.Module
     """
@@ -703,79 +725,101 @@ def memory_optimization(
 
         _cprint(verbose, "Level 2: split GCContainers spatially")
         peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+        split_rounds = 0
 
         while True:
+            if max_split_rounds is not None and split_rounds >= max_split_rounds:
+                _cprint(verbose, "\tReached max_split_rounds for spatial split.")
+                break
+            split_rounds += 1
             results = _train_memory_profile(net, dummy_input, ctx, device)
             if not results:
                 _cprint(verbose, "\tNo more GCContainers to split.")
                 break
-            cb_name = results[0][0]  # GCContainer with the highest mem.
-            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
-
-            # try to spatially split the GCContainer
-            # if not split-able, break
-            split_cb = _spatially_split_gc_container(cb)
-            if split_cb is None:
-                _cprint(verbose, f"\t{cb_name}: can't be spatially split")
-                break
-            setattr(parent, child_name, split_cb)
-
-            # if the peak memory does not reduces, revert and break;
-            # otherwise, keep the change and continue
-            new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
-            if new_peak_allocated >= peak_allocated:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: no reduction in memory, revert "
-                    f"({peak_allocated} -> {new_peak_allocated})",
+            improved = False
+            for row in _candidate_entries(results, max_candidates_per_round):
+                cb_name = row[0]
+                cb, parent, child_name = get_module_and_parent(
+                    net, cb_name.split(" ")[-1]
                 )
-                setattr(parent, child_name, cb)
-                break
-            else:
+
+                split_cb = _spatially_split_gc_container(cb)
+                if split_cb is None:
+                    _cprint(verbose, f"\t{cb_name}: can't be spatially split")
+                    continue
+                setattr(parent, child_name, split_cb)
+
+                new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+                if new_peak_allocated >= peak_allocated:
+                    _cprint(
+                        verbose,
+                        f"\t{cb_name}: no reduction in memory, revert "
+                        f"({peak_allocated} -> {new_peak_allocated})",
+                    )
+                    setattr(parent, child_name, cb)
+                    continue
+
                 _cprint(
                     verbose,
                     f"\t{cb_name}: successfully split "
                     f"({peak_allocated} -> {new_peak_allocated})",
                 )
-                peak_allocated = new_peak_allocated  # update the peak memory
+                peak_allocated = new_peak_allocated
+                improved = True
+                break
+
+            if not improved:
+                _cprint(verbose, "\tNo spatial split candidate improved memory.")
+                break
 
     if level > 2:  # temporal split
         _cprint(verbose, "Level 3: split GCContainers temporally")
+        split_rounds = 0
 
         while True:
+            if max_split_rounds is not None and split_rounds >= max_split_rounds:
+                _cprint(verbose, "\tReached max_split_rounds for temporal split.")
+                break
+            split_rounds += 1
             results = _train_memory_profile(net, dummy_input, ctx, device)
             if not results:
                 _cprint(verbose, "\tNo more GCContainers to split.")
                 break
-            cb_name = results[0][0]  # GCContainer with the highest mem.
-            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
-
-            # try to temporally split the GCContainer
-            # if not split-able, break
-            split_cb = _temporally_split_gc_container(cb, temporal_split_factor)
-            if split_cb is None:
-                _cprint(verbose, f"\t{cb_name}: can't be temporally split")
-                break
-            setattr(parent, child_name, split_cb)
-
-            # if the peak memory does not reduces, revert and break;
-            # otherwise, keep the change and continue
-            new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
-            if new_peak_allocated >= peak_allocated:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: no reduction in memory, revert "
-                    f"({peak_allocated} -> {new_peak_allocated})",
+            improved = False
+            for row in _candidate_entries(results, max_candidates_per_round):
+                cb_name = row[0]
+                cb, parent, child_name = get_module_and_parent(
+                    net, cb_name.split(" ")[-1]
                 )
-                setattr(parent, child_name, cb)
-                break
-            else:
+
+                split_cb = _temporally_split_gc_container(cb, temporal_split_factor)
+                if split_cb is None:
+                    _cprint(verbose, f"\t{cb_name}: can't be temporally split")
+                    continue
+                setattr(parent, child_name, split_cb)
+
+                new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+                if new_peak_allocated >= peak_allocated:
+                    _cprint(
+                        verbose,
+                        f"\t{cb_name}: no reduction in memory, revert "
+                        f"({peak_allocated} -> {new_peak_allocated})",
+                    )
+                    setattr(parent, child_name, cb)
+                    continue
+
                 _cprint(
                     verbose,
                     f"\t{cb_name}: successfully split "
                     f"({peak_allocated} -> {new_peak_allocated})",
                 )
-                peak_allocated = new_peak_allocated  # update the peak memory
+                peak_allocated = new_peak_allocated
+                improved = True
+                break
+
+            if not improved:
+                _cprint(verbose, "\tNo temporal split candidate improved memory.")
+                break
 
     if level > 3:
         _cprint(verbose, "Level 4: greedily disable GCContainers")
