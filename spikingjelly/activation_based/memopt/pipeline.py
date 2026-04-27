@@ -120,11 +120,15 @@ def _probe_binary_inputs(
     instance: Union[type, Tuple[type]],
     dummy_input: tuple,
     n_trials: int = 5,
+    target_modules: Optional[Tuple[nn.Module, ...]] = None,
 ) -> Dict[nn.Module, bool]:
     """Run dummy forward and record whether target modules receive binary inputs."""
     is_binary = defaultdict(lambda: True)
     hooks = []
-    target_modules = []
+    if target_modules is None:
+        target_modules = tuple(
+            m for m in net.modules() if isinstance(m, instance)
+        )
 
     def hook_fn(m, inputs: tuple):
         x = inputs[0]  # assume the first input is the one to be checked
@@ -132,10 +136,8 @@ def _probe_binary_inputs(
         is_binary[m] = is_binary[m] and binary
 
     # register hooks
-    for m in net.modules():
-        if isinstance(m, instance):
-            target_modules.append(m)
-            hooks.append(m.register_forward_pre_hook(hook_fn))
+    for m in target_modules:
+        hooks.append(m.register_forward_pre_hook(hook_fn))
 
     def _generate_tensor_like(x: torch.Tensor):
         choice = torch.randint(0, 3, ()).item()
@@ -238,9 +240,20 @@ def apply_gc(
     """
     is_binary_input = {}
     if compress_x and dummy_input is not None:
-        net = net.to(device)
-        dummy_input = _dummy_input_to_device(dummy_input, device)
-        is_binary_input = _probe_binary_inputs(net, instance, dummy_input)
+        probe_targets = tuple(
+            m
+            for m in net.modules()
+            if isinstance(m, instance) and getattr(m, "x_compressor", None) is None
+        )
+        if probe_targets:
+            net = net.to(device)
+            dummy_input = _dummy_input_to_device(dummy_input, device)
+            is_binary_input = _probe_binary_inputs(
+                net,
+                instance,
+                dummy_input,
+                target_modules=probe_targets,
+            )
 
     def _get_compressor(module: nn.Module, is_binary_input: bool):
         spec = getattr(module, "x_compressor", None)

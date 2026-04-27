@@ -368,6 +368,38 @@ def test_apply_gc_clones_manual_compressor_instances(monkeypatch):
     )
 
 
+def test_apply_gc_skips_binary_probe_when_all_targets_have_manual_compressors(
+    monkeypatch,
+):
+    calls = {"count": 0}
+
+    def fake_probe(*args, **kwargs):
+        calls["count"] += 1
+        return {}
+
+    monkeypatch.setattr(memopt_pipeline, "_probe_binary_inputs", fake_probe)
+
+    block1 = TargetBlock()
+    block1.x_compressor = BooleanSpikeCompressor()
+    block2 = TargetBlock()
+    block2.x_compressor = BitSpikeCompressor()
+    net = nn.Sequential(block1, block2)
+
+    optimized = memopt_pipeline.apply_gc(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randint(0, 2, (2, 4), dtype=torch.float32),),
+        compress_x=True,
+        device="cpu",
+    )
+
+    assert calls["count"] == 0
+    assert isinstance(optimized[0], GCContainer)
+    assert isinstance(optimized[1], GCContainer)
+    assert isinstance(optimized[0].x_compressor, BooleanSpikeCompressor)
+    assert isinstance(optimized[1].x_compressor, BitSpikeCompressor)
+
+
 def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
