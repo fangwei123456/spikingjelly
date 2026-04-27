@@ -248,6 +248,41 @@ def test_memory_optimization_can_disable_main_process_warmup(monkeypatch):
     assert warmup_calls["count"] == 0
 
 
+def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    peak_flags = []
+    profile_flags = []
+
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_flags.append(kwargs.get("worker_warmup"))
+        return 100, 100
+
+    def fake_train_memory_profile(*args, **kwargs):
+        profile_flags.append(kwargs.get("worker_warmup"))
+        return []
+
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
+    monkeypatch.setattr(
+        memopt_pipeline, "_train_memory_profile", fake_train_memory_profile
+    )
+
+    net = nn.Sequential(SpatialSplitBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        SpatialSplitBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        level=2,
+        warmup_in_profile_workers=False,
+        warmup_in_main_process=False,
+    )
+
+    assert isinstance(optimized[0], GCContainer)
+    assert peak_flags == [False]
+    assert profile_flags == [False]
+
+
 def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
     spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
     compressor = BitSpikeCompressor()

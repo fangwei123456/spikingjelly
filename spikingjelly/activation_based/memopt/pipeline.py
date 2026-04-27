@@ -348,7 +348,7 @@ def _dummy_train_step(
         _load_bn_states(net, saved_bn_states)
 
 
-def _train_memory_profile_worker(net, dummy_input, q, device):
+def _train_memory_profile_worker(net, dummy_input, q, device, worker_warmup=True):
     """`net` and `dummy_input` should be a deep copy of the original model and
     should be located on CPU, since they must be pickle-able.
     """
@@ -357,7 +357,8 @@ def _train_memory_profile_worker(net, dummy_input, q, device):
 
     # Warmup to trigger Triton autotune & JIT compilation in this subprocess.
     # Without this, the peak memory of the 1st and last layers will be strange!
-    _dummy_train_step(net, dummy_input)
+    if worker_warmup:
+        _dummy_train_step(net, dummy_input)
 
     torch.cuda.synchronize(device)
     torch.cuda.empty_cache()
@@ -374,7 +375,7 @@ def _train_memory_profile_worker(net, dummy_input, q, device):
     q.put(results)
 
 
-def _train_memory_profile(net, dummy_input, ctx, device):
+def _train_memory_profile(net, dummy_input, ctx, device, worker_warmup=True):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_memory_profile_worker,
@@ -383,6 +384,7 @@ def _train_memory_profile(net, dummy_input, ctx, device):
             _dummy_input_to_device(dummy_input, "cpu"),
             q,
             device,
+            worker_warmup,
         ),
     )
     p.start()
@@ -391,7 +393,7 @@ def _train_memory_profile(net, dummy_input, ctx, device):
     return results
 
 
-def _train_peak_memory_worker(net, dummy_input, q, device):
+def _train_peak_memory_worker(net, dummy_input, q, device, worker_warmup=True):
     """Profile the peak training memory usage of the entire net.
 
     `net` and `dummy_input` should be deep copies located on CPU,
@@ -401,7 +403,8 @@ def _train_peak_memory_worker(net, dummy_input, q, device):
     dummy_input = _dummy_input_to_device(dummy_input, device)
     # Warmup to trigger Triton autotune & JIT compilation in this subprocess.
     # Without this, the peak memory of the 1st and last layers will be strange!
-    _dummy_train_step(net, dummy_input)
+    if worker_warmup:
+        _dummy_train_step(net, dummy_input)
 
     torch.cuda.synchronize(device)
     torch.cuda.empty_cache()
@@ -413,7 +416,7 @@ def _train_peak_memory_worker(net, dummy_input, q, device):
     q.put((peak_allocated, peak_reserved))
 
 
-def _train_peak_memory(net, dummy_input, ctx, device):
+def _train_peak_memory(net, dummy_input, ctx, device, worker_warmup=True):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_peak_memory_worker,
@@ -422,6 +425,7 @@ def _train_peak_memory(net, dummy_input, ctx, device):
             _dummy_input_to_device(dummy_input, "cpu"),
             q,
             device,
+            worker_warmup,
         ),
     )
     p.start()
@@ -615,6 +619,7 @@ def memory_optimization(
     max_split_rounds: Optional[int] = None,
     max_candidates_per_round: Optional[int] = None,
     warmup_in_main_process: bool = True,
+    warmup_in_profile_workers: bool = True,
 ):
     r"""
     **API Language:**
@@ -666,6 +671,10 @@ def memory_optimization(
     :param warmup_in_main_process: 是否在主进程中对优化后的模型执行一次 dummy train step，
         以避免首次使用时的额外开销。默认开启
     :type warmup_in_main_process: bool
+
+    :param warmup_in_profile_workers: 是否在 profiling 子进程中执行预热 dummy train step。
+        默认开启；关闭后可以减少优化耗时，但可能增加测量噪声
+    :type warmup_in_profile_workers: bool
 
     :return: 优化后的模型
     :rtype: nn.Module
@@ -719,6 +728,11 @@ def memory_optimization(
         model in the main process to hide first-use overhead. Default to ``True``
     :type warmup_in_main_process: bool
 
+    :param warmup_in_profile_workers: whether to run a warmup dummy train step in
+        profiling subprocesses. Default to ``True``; disabling it can reduce
+        optimization latency at the cost of noisier measurements
+    :type warmup_in_profile_workers: bool
+
     :return: the optimized model
     :rtype: nn.Module
     """
@@ -739,7 +753,13 @@ def memory_optimization(
             _cprint(verbose, "Level 2: no GCContainers found, skip spatial split")
         else:
             _cprint(verbose, "Level 2: split GCContainers spatially")
-            peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+            peak_allocated, _ = _train_peak_memory(
+                net,
+                dummy_input,
+                ctx,
+                device,
+                worker_warmup=warmup_in_profile_workers,
+            )
             split_rounds = 0
             blocked_candidates = set()
 
@@ -748,7 +768,13 @@ def memory_optimization(
                     _cprint(verbose, "\tReached max_split_rounds for spatial split.")
                     break
                 split_rounds += 1
-                results = _train_memory_profile(net, dummy_input, ctx, device)
+                results = _train_memory_profile(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
                 if not results:
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
@@ -771,7 +797,13 @@ def memory_optimization(
                         continue
                     setattr(parent, child_name, split_cb)
 
-                    new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+                    new_peak_allocated, _ = _train_peak_memory(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                    )
                     if new_peak_allocated >= peak_allocated:
                         _cprint(
                             verbose,
@@ -809,7 +841,13 @@ def memory_optimization(
                     _cprint(verbose, "\tReached max_split_rounds for temporal split.")
                     break
                 split_rounds += 1
-                results = _train_memory_profile(net, dummy_input, ctx, device)
+                results = _train_memory_profile(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
                 if not results:
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
@@ -832,7 +870,13 @@ def memory_optimization(
                         continue
                     setattr(parent, child_name, split_cb)
 
-                    new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+                    new_peak_allocated, _ = _train_peak_memory(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                    )
                     if new_peak_allocated >= peak_allocated:
                         _cprint(
                             verbose,
@@ -873,7 +917,13 @@ def memory_optimization(
                 setattr(parent, child_name, ucb)
 
                 # if the peak memory increases, revert; otherwise, keep the change
-                new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
+                new_peak_allocated, _ = _train_peak_memory(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
                 if new_peak_allocated > peak_allocated:
                     _cprint(
                         verbose,

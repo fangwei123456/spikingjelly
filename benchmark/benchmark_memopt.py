@@ -96,6 +96,7 @@ def optimize_model(
     x,
     level: int,
     warmup_in_main_process: bool,
+    warmup_in_profile_workers: bool,
 ):
     t0 = time.perf_counter()
     optimized = memory_optimization(
@@ -105,18 +106,29 @@ def optimize_model(
         compress_x=True,
         level=level,
         warmup_in_main_process=warmup_in_main_process,
+        warmup_in_profile_workers=warmup_in_profile_workers,
     )
     optimize_ms = (time.perf_counter() - t0) * 1000.0
     return optimized, optimize_ms
 
 
-def run_single_variant(base, instance, x, level: int, warmup_in_main_process: bool, warmup: int, iters: int):
+def run_single_variant(
+    base,
+    instance,
+    x,
+    level: int,
+    warmup_in_main_process: bool,
+    warmup_in_profile_workers: bool,
+    warmup: int,
+    iters: int,
+):
     model, optimize_ms = optimize_model(
         copy.deepcopy(base).cpu(),
         instance,
         x.detach().cpu(),
         level=level,
         warmup_in_main_process=warmup_in_main_process,
+        warmup_in_profile_workers=warmup_in_profile_workers,
     )
     model = model.to(x.device)
     result = benchmark_train_step(model, x, warmup, iters)
@@ -156,10 +168,13 @@ def main():
             continue
         results["levels"][str(level)] = {
             "warm_main": run_single_variant(
-                base, instance, x, level, True, args.warmup, args.iters
+                base, instance, x, level, True, True, args.warmup, args.iters
             ),
             "no_main_warmup": run_single_variant(
-                base, instance, x, level, False, args.warmup, args.iters
+                base, instance, x, level, False, True, args.warmup, args.iters
+            ),
+            "no_profile_worker_warmup": run_single_variant(
+                base, instance, x, level, False, False, args.warmup, args.iters
             ),
         }
 
