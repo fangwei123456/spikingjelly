@@ -180,6 +180,31 @@ def test_memory_optimization_requires_dummy_input_for_higher_levels():
         memopt.memory_optimization(net, TargetBlock, level=2)
 
 
+def test_memory_optimization_level1_without_dummy_input_skips_main_process_warmup(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    warmup_calls = {"count": 0}
+
+    def fake_dummy_train_step(*args, **kwargs):
+        warmup_calls["count"] += 1
+
+    monkeypatch.setattr(memopt_pipeline, "_dummy_train_step", fake_dummy_train_step)
+
+    net = nn.Sequential(TargetBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        TargetBlock,
+        dummy_input=None,
+        compress_x=False,
+        level=1,
+    )
+
+    assert isinstance(optimized[0], GCContainer)
+    assert warmup_calls["count"] == 0
+
+
 def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor(
     monkeypatch,
 ):
@@ -197,6 +222,30 @@ def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor
     assert isinstance(optimized[1], GCContainer)
     assert isinstance(optimized[1].x_compressor, BitSpikeCompressor)
     assert next(optimized.parameters(), torch.empty(0)).device.type == "cpu"
+
+
+def test_memory_optimization_can_disable_main_process_warmup(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    warmup_calls = {"count": 0}
+
+    def fake_dummy_train_step(*args, **kwargs):
+        warmup_calls["count"] += 1
+
+    monkeypatch.setattr(memopt_pipeline, "_dummy_train_step", fake_dummy_train_step)
+
+    net = nn.Sequential(TargetBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        level=1,
+        warmup_in_main_process=False,
+    )
+
+    assert isinstance(optimized[0], GCContainer)
+    assert warmup_calls["count"] == 0
 
 
 def test_bit_spike_compressor_cpu_round_trip_with_triton_available():

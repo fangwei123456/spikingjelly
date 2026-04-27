@@ -614,6 +614,7 @@ def memory_optimization(
     temporal_split_factor: int = 2,
     max_split_rounds: Optional[int] = None,
     max_candidates_per_round: Optional[int] = None,
+    warmup_in_main_process: bool = True,
 ):
     r"""
     **API Language:**
@@ -662,6 +663,10 @@ def memory_optimization(
     :param max_candidates_per_round: 每轮 profiling 至多尝试的候选 ``GCContainer`` 数量。 ``None`` 表示不限制
     :type max_candidates_per_round: Optional[int]
 
+    :param warmup_in_main_process: 是否在主进程中对优化后的模型执行一次 dummy train step，
+        以避免首次使用时的额外开销。默认开启
+    :type warmup_in_main_process: bool
+
     :return: 优化后的模型
     :rtype: nn.Module
 
@@ -709,6 +714,10 @@ def memory_optimization(
     :param max_candidates_per_round: maximum number of GCContainer candidates to try in each profiling round.
         ``None`` means no limit
     :type max_candidates_per_round: Optional[int]
+
+    :param warmup_in_main_process: whether to run one dummy train step for the optimized
+        model in the main process to hide first-use overhead. Default to ``True``
+    :type warmup_in_main_process: bool
 
     :return: the optimized model
     :rtype: nn.Module
@@ -880,10 +889,11 @@ def memory_optimization(
                     )
                     peak_allocated = new_peak_allocated  # update the peak memory
 
-    # Warm up in the main process to avoid 1st-time overhead
-    net = net.to(device)
-    dummy_input = _dummy_input_to_device(dummy_input, device)
-    _dummy_train_step(net, dummy_input, restore_bn=True)
+    if warmup_in_main_process and dummy_input is not None:
+        # Warm up in the main process to avoid 1st-time overhead.
+        net = net.to(device)
+        dummy_input = _dummy_input_to_device(dummy_input, device)
+        _dummy_train_step(net, dummy_input, restore_bn=True)
 
     et = time.time()
     _cprint(verbose, f"Total time: {et - st:.2f}s")
