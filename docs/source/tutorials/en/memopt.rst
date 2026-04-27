@@ -90,6 +90,15 @@ Besides manually choosing ``level=0..4``, :func:`memory_optimization <spikingjel
 * ``"memory"``: more aggressive toward memory reduction. Tries both spatial and temporal split by default.
 * ``"exhaustive"``: most aggressive mode. Allows fuller search and greedy unwrap, suitable for offline tuning.
 
+In practice, these presets usually imply the following trade-offs:
+
+* ``"safe"``: lowest optimizer-side overhead. It usually stays close to layer-wise GC only, making it a good first try when you mainly want something robust and cheap to run.
+* ``"balanced"``: the recommended starting point. It performs limited split search and often provides a good compromise between memory savings and optimization latency.
+* ``"memory"``: more aggressive about reducing peak memory and therefore more likely to trigger spatial/temporal split; the trade-off is higher optimization overhead and a larger chance of training slowdown.
+* ``"exhaustive"``: best suited for offline tuning or research experiments. It explores a fuller search space and is the most likely to find aggressive structure changes, but also has the highest optimization cost.
+
+If you are unsure which one to choose, start from ``"balanced"``. Use ``"safe"`` when you want the smallest extra overhead, and reserve ``"memory"`` / ``"exhaustive"`` for memory-constrained or offline tuning scenarios.
+
 If you want to explicitly limit the optimizer's own overhead, set ``allow_expensive_profiling=False``. This automatically tightens split-search budgets and disables worker warmup during profiling.
 
 In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:

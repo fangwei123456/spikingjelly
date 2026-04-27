@@ -90,6 +90,15 @@ English version: :doc:`../en/memopt`
 * ``"memory"`` ：更偏向显存优化。默认会尝试时间/空间 split。
 * ``"exhaustive"`` ：激进模式。允许更完整的搜索和 greedy unwrap，适合离线调优。
 
+这些 ``profile`` 的实际效果和取舍大致如下：
+
+* ``"safe"`` ：优化器自身开销最低，通常只做逐层GC，适合先快速验证功能是否可用。
+* ``"balanced"`` ：通常是最推荐的起点。会尝试有限的 split 搜索，往往能在显存收益和优化耗时之间取得较好平衡。
+* ``"memory"`` ：更积极地追求峰值显存下降，更可能启用空间/时间 split；代价是优化器本身更慢，训练速度也更可能下降。
+* ``"exhaustive"`` ：适合离线调参或论文实验。它会尝试更完整的搜索流程，最有机会找到更激进的结构调整，但优化耗时最高。
+
+如果不确定如何选择，建议优先从 ``"balanced"`` 开始；若只想快速启用并尽量减少额外开销，可先尝试 ``"safe"`` ；若显存非常紧张，再考虑 ``"memory"`` 或 ``"exhaustive"`` 。
+
 如果用户希望显式限制优化器本身的开销，可设置 ``allow_expensive_profiling=False`` 。此时会自动收紧 split 搜索预算，并关闭 profiling worker 的 warmup。
 
 另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
