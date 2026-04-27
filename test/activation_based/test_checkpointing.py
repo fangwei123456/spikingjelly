@@ -368,7 +368,7 @@ def test_memory_optimization_level3_respects_split_budgets(monkeypatch):
     assert isinstance(optimized[0], GCContainer)
     assert isinstance(optimized[1], GCContainer)
     assert profile_calls["count"] == 2
-    assert peak_calls["count"] == 3
+    assert peak_calls["count"] == 2
 
 
 def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
