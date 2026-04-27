@@ -42,8 +42,11 @@ else:
                 s_seq_compressed[:sliced_len] |= sliced << i
         return s_seq_compressed
 
+    def _shape_numel(shape) -> int:
+        return torch.Size(shape).numel()
+
     def bit_spike_decompress(s_seq_compressed: torch.Tensor, shape) -> torch.Tensor:
-        decompressed_len = shape.numel()
+        decompressed_len = _shape_numel(shape)
         s_seq_decompressed = torch.zeros(
             decompressed_len, dtype=torch.bool, device=s_seq_compressed.device
         )
@@ -456,7 +459,7 @@ class SparseSpikeCompressor(BaseSpikeCompressor):
 
     def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
         s_seq_decompressed = torch.zeros(
-            shape.numel(), dtype=self.s_seq_dtype, device=s_seq.device
+            torch.Size(shape).numel(), dtype=self.s_seq_dtype, device=s_seq.device
         )
         s_seq_decompressed = s_seq_decompressed.scatter_(
             dim=0,
