@@ -124,6 +124,7 @@ def _probe_binary_inputs(
     """Run dummy forward and record whether target modules receive binary inputs."""
     is_binary = defaultdict(lambda: True)
     hooks = []
+    target_modules = []
 
     def hook_fn(m, inputs: tuple):
         x = inputs[0]  # assume the first input is the one to be checked
@@ -133,6 +134,7 @@ def _probe_binary_inputs(
     # register hooks
     for m in net.modules():
         if isinstance(m, instance):
+            target_modules.append(m)
             hooks.append(m.register_forward_pre_hook(hook_fn))
 
     def _generate_tensor_like(x: torch.Tensor):
@@ -162,6 +164,8 @@ def _probe_binary_inputs(
             new_input = _generate_input_like(dummy_input)
             _ = net(*new_input)
             functional.reset_net(net)
+            if target_modules and all(not is_binary[m] for m in target_modules):
+                break
 
     net.train(is_training)
     for h in hooks:
@@ -574,6 +578,10 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
     return nn.Sequential(*l)
 
 
+def _can_spatially_split(block: GCContainer) -> bool:
+    return len(block) > 1 or (len(block) == 1 and hasattr(block[0], "__spatial_split__"))
+
+
 def _cannot_temporally_split(block: GCContainer):
     for m in block.modules():
         if isinstance(m, tuple(TCGC_FORBIDDEN_MODULES)):
@@ -600,6 +608,10 @@ def _temporally_split_gc_container(block: GCContainer, factor: int = 2):
     )
 
 
+def _can_temporally_split(block: GCContainer) -> bool:
+    return not _cannot_temporally_split(block)
+
+
 def _unwrap_gc_container(block: GCContainer) -> nn.Module:
     assert isinstance(block, GCContainer)
 
@@ -622,6 +634,10 @@ def _candidate_entries(results, max_candidates_per_round: Optional[int]):
 
 def _gc_container_count(net: nn.Module) -> int:
     return sum(1 for m in net.modules() if isinstance(m, GCContainer))
+
+
+def _has_split_candidate(net: nn.Module, predicate) -> bool:
+    return any(predicate(m) for m in net.modules() if isinstance(m, GCContainer))
 
 
 def memory_optimization(
@@ -767,6 +783,8 @@ def memory_optimization(
             raise ValueError("dummy_input must be provided for memory profiling.")
         if _gc_container_count(net) == 0:
             _cprint(verbose, "Level 2: no GCContainers found, skip spatial split")
+        elif not _has_split_candidate(net, _can_spatially_split):
+            _cprint(verbose, "Level 2: no spatially splittable GCContainers, skip")
         else:
             _cprint(verbose, "Level 2: split GCContainers spatially")
             peak_allocated = -1.0
@@ -776,6 +794,9 @@ def memory_optimization(
             while True:
                 if max_split_rounds is not None and split_rounds >= max_split_rounds:
                     _cprint(verbose, "\tReached max_split_rounds for spatial split.")
+                    break
+                if not _has_split_candidate(net, _can_spatially_split):
+                    _cprint(verbose, "\tNo spatially splittable GCContainers remain.")
                     break
                 split_rounds += 1
                 if peak_allocated < 0:
@@ -851,6 +872,8 @@ def memory_optimization(
     if level > 2:  # temporal split
         if _gc_container_count(net) == 0:
             _cprint(verbose, "Level 3: no GCContainers found, skip temporal split")
+        elif not _has_split_candidate(net, _can_temporally_split):
+            _cprint(verbose, "Level 3: no temporally splittable GCContainers, skip")
         else:
             _cprint(verbose, "Level 3: split GCContainers temporally")
             split_rounds = 0
@@ -859,6 +882,9 @@ def memory_optimization(
             while True:
                 if max_split_rounds is not None and split_rounds >= max_split_rounds:
                     _cprint(verbose, "\tReached max_split_rounds for temporal split.")
+                    break
+                if not _has_split_candidate(net, _can_temporally_split):
+                    _cprint(verbose, "\tNo temporally splittable GCContainers remain.")
                     break
                 split_rounds += 1
                 if peak_allocated < 0:

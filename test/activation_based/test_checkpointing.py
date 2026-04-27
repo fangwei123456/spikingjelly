@@ -86,6 +86,18 @@ class UnsplittableBlock(nn.Module):
         return x
 
 
+class CountedNonBinaryNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+        self.block = TargetBlock()
+        self.forward_calls = 0
+
+    def forward(self, x):
+        self.forward_calls += 1
+        return self.block(self.proj(x))
+
+
 def _result_row(module_name: str):
     return [(module_name, 0.0)]
 
@@ -117,6 +129,19 @@ def test_thread_local_functions():
 
 def test_memopt_package_imports_pipeline_api():
     assert hasattr(memopt, "memory_optimization")
+
+
+def test_probe_binary_inputs_stops_early_when_all_targets_are_non_binary():
+    net = CountedNonBinaryNet()
+    result = memopt_pipeline._probe_binary_inputs(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        n_trials=5,
+    )
+
+    assert result[net.block] is False
+    assert net.forward_calls == 1
 
 
 def test_autocast_query():
@@ -444,12 +469,47 @@ def test_memory_optimization_level2_skips_profiling_when_no_gccontainers(monkeyp
     assert profile_calls["count"] == 0
 
 
+def test_memory_optimization_level2_skips_when_no_spatial_split_candidates(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    peak_calls = {"count": 0}
+    profile_calls = {"count": 0}
+
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_peak_memory",
+        lambda *args, **kwargs: peak_calls.__setitem__("count", peak_calls["count"] + 1),
+    )
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_memory_profile",
+        lambda *args, **kwargs: profile_calls.__setitem__(
+            "count", profile_calls["count"] + 1
+        ),
+    )
+
+    net = nn.Sequential(TemporalOnlyBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        TemporalOnlyBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        level=2,
+        warmup_in_main_process=False,
+    )
+
+    assert isinstance(optimized[0], GCContainer)
+    assert peak_calls["count"] == 0
+    assert profile_calls["count"] == 0
+
+
 def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
     peak_values = iter([(80, 80)])
     profile_values = iter([
-        [],
         _result_row("0"),
         [],
     ])
@@ -476,6 +536,42 @@ def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeyp
 
     assert isinstance(optimized[0], TCGCContainer)
     assert optimized[0].n_chunk == 2
+
+
+def test_memory_optimization_level3_skips_when_no_temporal_split_candidates(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    peak_calls = {"count": 0}
+    profile_calls = {"count": 0}
+
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_peak_memory",
+        lambda *args, **kwargs: peak_calls.__setitem__("count", peak_calls["count"] + 1),
+    )
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_memory_profile",
+        lambda *args, **kwargs: profile_calls.__setitem__(
+            "count", profile_calls["count"] + 1
+        ),
+    )
+
+    net = nn.Sequential(neuron.PSN(T=4))
+    optimized = memopt.memory_optimization(
+        net,
+        neuron.PSN,
+        dummy_input=(torch.randn(4, 2, 4),),
+        compress_x=False,
+        level=3,
+        warmup_in_main_process=False,
+    )
+
+    assert isinstance(optimized[0], GCContainer)
+    assert peak_calls["count"] == 0
+    assert profile_calls["count"] == 0
 
 
 def test_memory_optimization_level3_respects_split_budgets(monkeypatch):
@@ -512,11 +608,13 @@ def test_memory_optimization_level3_respects_split_budgets(monkeypatch):
 
     assert isinstance(optimized[0], GCContainer)
     assert isinstance(optimized[1], GCContainer)
-    assert profile_calls["count"] == 2
+    assert profile_calls["count"] == 1
     assert peak_calls["count"] == 1
 
 
-def test_memory_optimization_level3_caches_blocked_candidates(monkeypatch):
+def test_memory_optimization_level3_retries_blocked_candidates_after_improvement(
+    monkeypatch,
+):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
     peak_values = iter([(80, 80), (60, 60)])
@@ -571,8 +669,8 @@ def test_memory_optimization_level3_caches_blocked_candidates(monkeypatch):
 
     assert isinstance(optimized[0], GCContainer)
     assert isinstance(optimized[1], TCGCContainer)
-    assert temporal_attempts["0"] == 1
-    assert temporal_attempts["1"] == 1
+    assert temporal_attempts["0"] == 2
+    assert temporal_attempts["1"] == 2
 
 
 def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
