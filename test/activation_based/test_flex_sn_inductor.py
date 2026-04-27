@@ -111,8 +111,12 @@ def test_hop_rejects_empty_input_sequence():
 
 
 def test_kernel_names_include_graph_fingerprint():
-    core_a = lambda x: x + 1
-    core_b = lambda x: x * 2
+    def core_a(x):
+        return x + 1
+
+    def core_b(x):
+        return x * 2
+
     example = torch.randn(4)
     graph_a = make_fx(core_a)(example).graph
     graph_b = make_fx(core_b)(example).graph
