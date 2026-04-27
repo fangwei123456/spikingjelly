@@ -2,6 +2,7 @@ import copy
 import os
 import time
 from collections import defaultdict
+from dataclasses import dataclass, field
 from typing import Dict, Optional, Tuple, Union
 
 import torch
@@ -15,9 +16,40 @@ from . import compress
 from .checkpointing import GCContainer, TCGCContainer
 from .compress import BitSpikeCompressor, NullSpikeCompressor
 
-__all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimization"]
+__all__ = [
+    "MEMOPT_PROFILES",
+    "MemOptSummary",
+    "resolve_device",
+    "apply_gc",
+    "get_module_and_parent",
+    "memory_optimization",
+]
 
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
+MEMOPT_PROFILES = ("safe", "balanced", "memory", "exhaustive")
+
+
+@dataclass
+class MemOptSummary:
+    profile: Optional[str]
+    device: str
+    requested_level: int
+    applied_level: int
+    compress_x: bool
+    allow_expensive_profiling: bool
+    applied_steps: list = field(default_factory=list)
+    skipped_steps: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
+    gc_wrap_count: int = 0
+    manual_compressor_count: int = 0
+    bit_compressor_count: int = 0
+    null_compressor_count: int = 0
+    spatial_split_count: int = 0
+    temporal_split_count: int = 0
+    unwrap_count: int = 0
+    gc_container_count: int = 0
+    tcgc_container_count: int = 0
+    options: dict = field(default_factory=dict)
 
 
 def _build_compressor_from_spec(spec):
@@ -182,13 +214,138 @@ def _probe_binary_inputs(
     return dict(is_binary)
 
 
+def _resolve_memory_optimization_options(
+    level: Optional[int],
+    profile: Optional[str],
+    dummy_input,
+    compress_x: bool,
+    max_split_rounds: Optional[int],
+    max_candidates_per_round: Optional[int],
+    warmup_in_main_process: bool,
+    warmup_in_profile_workers: bool,
+    allow_expensive_profiling: Optional[bool],
+):
+    if profile is not None and profile not in MEMOPT_PROFILES:
+        raise ValueError(
+            f"Unsupported memopt profile {profile!r}. Expected one of {MEMOPT_PROFILES}."
+        )
+
+    defaults = {
+        "safe": dict(
+            level=1,
+            compress_x=True,
+            max_split_rounds=0,
+            max_candidates_per_round=0,
+            warmup_in_main_process=False,
+            warmup_in_profile_workers=False,
+            allow_expensive_profiling=False,
+        ),
+        "balanced": dict(
+            level=2,
+            compress_x=True,
+            max_split_rounds=1,
+            max_candidates_per_round=1,
+            warmup_in_main_process=False,
+            warmup_in_profile_workers=False,
+            allow_expensive_profiling=False,
+        ),
+        "memory": dict(
+            level=3,
+            compress_x=True,
+            max_split_rounds=2,
+            max_candidates_per_round=2,
+            warmup_in_main_process=False,
+            warmup_in_profile_workers=True,
+            allow_expensive_profiling=True,
+        ),
+        "exhaustive": dict(
+            level=4,
+            compress_x=True,
+            max_split_rounds=None,
+            max_candidates_per_round=None,
+            warmup_in_main_process=True,
+            warmup_in_profile_workers=True,
+            allow_expensive_profiling=True,
+        ),
+    }
+
+    if profile is None:
+        resolved_level = 0 if level is None else level
+        resolved = dict(
+            level=resolved_level,
+            compress_x=compress_x,
+            max_split_rounds=max_split_rounds,
+            max_candidates_per_round=max_candidates_per_round,
+            warmup_in_main_process=warmup_in_main_process,
+            warmup_in_profile_workers=warmup_in_profile_workers,
+            allow_expensive_profiling=(
+                True if allow_expensive_profiling is None else allow_expensive_profiling
+            ),
+        )
+        notes = []
+    else:
+        preset = defaults[profile]
+        resolved = dict(
+            level=preset["level"] if level is None else level,
+            compress_x=compress_x if compress_x is not None else preset["compress_x"],
+            max_split_rounds=(
+                preset["max_split_rounds"]
+                if max_split_rounds is None
+                else max_split_rounds
+            ),
+            max_candidates_per_round=(
+                preset["max_candidates_per_round"]
+                if max_candidates_per_round is None
+                else max_candidates_per_round
+            ),
+            warmup_in_main_process=(
+                preset["warmup_in_main_process"]
+                if warmup_in_main_process is True
+                and level is None
+                and max_split_rounds is None
+                and max_candidates_per_round is None
+                else warmup_in_main_process
+            ),
+            warmup_in_profile_workers=(
+                preset["warmup_in_profile_workers"]
+                if warmup_in_profile_workers is True
+                and max_split_rounds is None
+                and max_candidates_per_round is None
+                else warmup_in_profile_workers
+            ),
+            allow_expensive_profiling=(
+                preset["allow_expensive_profiling"]
+                if allow_expensive_profiling is None
+                else allow_expensive_profiling
+            ),
+        )
+        notes = [f"profile:{profile}"]
+
+    if not resolved["allow_expensive_profiling"] and resolved["level"] > 1:
+        resolved["max_split_rounds"] = 1
+        resolved["max_candidates_per_round"] = 1
+        resolved["warmup_in_profile_workers"] = False
+
+    if dummy_input is None and resolved["level"] > 1:
+        if profile is None:
+            raise ValueError("dummy_input must be provided for memory profiling.")
+        notes.append("fallback:level>1_requires_dummy_input")
+        resolved["level"] = 1
+        resolved["max_split_rounds"] = 0
+        resolved["max_candidates_per_round"] = 0
+        resolved["warmup_in_profile_workers"] = False
+
+    return resolved, notes
+
+
 def apply_gc(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
     device: str = "cuda",
-) -> nn.Module:
+    return_summary: bool = False,
+) -> Union[nn.Module, Tuple[nn.Module, dict]]:
     r"""
     **API Language:**
     :ref:`中文 <_apply_gc-cn>` | :ref:`English <_apply_gc-en>`
@@ -246,6 +403,12 @@ def apply_gc(
     :rtype: torch.nn.Module
     """
     is_binary_input = {}
+    apply_summary = dict(
+        gc_wrap_count=0,
+        manual_compressor_count=0,
+        bit_compressor_count=0,
+        null_compressor_count=0,
+    )
     if compress_x and dummy_input is not None:
         probe_targets = tuple(
             m
@@ -269,10 +432,16 @@ def apply_gc(
                 x_compressor = (
                     BitSpikeCompressor() if is_binary_input else NullSpikeCompressor()
                 )
+                if isinstance(x_compressor, BitSpikeCompressor):
+                    apply_summary["bit_compressor_count"] += 1
+                else:
+                    apply_summary["null_compressor_count"] += 1
             else:  # manually specified
                 x_compressor = _build_compressor_from_spec(spec)
+                apply_summary["manual_compressor_count"] += 1
         else:  # disable compression
             x_compressor = NullSpikeCompressor()
+            apply_summary["null_compressor_count"] += 1
         return x_compressor
 
     def _replace(subnet: nn.Module):
@@ -280,10 +449,13 @@ def apply_gc(
             if isinstance(child, instance):
                 x_compressor = _get_compressor(child, is_binary_input.get(child, False))
                 setattr(subnet, name, GCContainer(x_compressor, child))
+                apply_summary["gc_wrap_count"] += 1
             elif not isinstance(child, GCContainer):
                 _replace(child)
 
     _replace(net)
+    if return_summary:
+        return net, apply_summary
     return net
 
 
@@ -665,14 +837,17 @@ def memory_optimization(
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
-    level: int = 0,
+    level: Optional[int] = None,
     verbose: bool = False,
     temporal_split_factor: int = 2,
     max_split_rounds: Optional[int] = None,
     max_candidates_per_round: Optional[int] = None,
     warmup_in_main_process: bool = True,
     warmup_in_profile_workers: bool = True,
-):
+    profile: Optional[str] = None,
+    allow_expensive_profiling: Optional[bool] = None,
+    return_summary: bool = False,
+) -> Union[nn.Module, Tuple[nn.Module, MemOptSummary]]:
     r"""
     **API Language:**
     :ref:`中文 <memory_optimization-cn>` | :ref:`English <memory_optimization-en>`
@@ -705,8 +880,8 @@ def memory_optimization(
     :param compress_x: 是否应用输入脉冲压缩
     :type compress_x: bool
 
-    :param level: 优化级别
-    :type level: int
+    :param level: 优化级别。若为 ``None`` 且指定 ``profile`` ，则使用预设推荐值
+    :type level: Optional[int]
 
     :param verbose: 是否打印优化过程日志
     :type verbose: bool
@@ -728,8 +903,17 @@ def memory_optimization(
         默认开启；关闭后可以减少优化耗时，但可能增加测量噪声
     :type warmup_in_profile_workers: bool
 
-    :return: 优化后的模型
-    :rtype: nn.Module
+    :param profile: 高层预设策略，可选 ``"safe"`` 、 ``"balanced"`` 、 ``"memory"`` 、 ``"exhaustive"``
+    :type profile: Optional[str]
+
+    :param allow_expensive_profiling: 是否允许高开销 profiling。关闭后会自动收紧 split 搜索预算
+    :type allow_expensive_profiling: Optional[bool]
+
+    :param return_summary: 是否同时返回结构化优化摘要
+    :type return_summary: bool
+
+    :return: 优化后的模型；当 ``return_summary=True`` 时，返回 ``(model, summary)``
+    :rtype: Union[nn.Module, Tuple[nn.Module, MemOptSummary]]
 
     ----
 
@@ -759,8 +943,9 @@ def memory_optimization(
     :param compress_x: whether to apply input spike compression
     :type compress_x: bool
 
-    :param level: optimization level
-    :type level: int
+    :param level: optimization level. If ``None`` and ``profile`` is specified,
+        the recommended preset level will be used
+    :type level: Optional[int]
 
     :param verbose: whether to print logs
     :type verbose: bool
@@ -785,28 +970,95 @@ def memory_optimization(
         optimization latency at the cost of noisier measurements
     :type warmup_in_profile_workers: bool
 
-    :return: the optimized model
-    :rtype: nn.Module
+    :param profile: high-level preset strategy. One of ``"safe"``, ``"balanced"``,
+        ``"memory"``, or ``"exhaustive"``
+    :type profile: Optional[str]
+
+    :param allow_expensive_profiling: whether to allow expensive profiling.
+        Disabling this automatically tightens split search budgets
+    :type allow_expensive_profiling: Optional[bool]
+
+    :param return_summary: whether to also return a structured optimization summary
+    :type return_summary: bool
+
+    :return: the optimized model, or ``(model, summary)`` when ``return_summary=True``
+    :rtype: Union[nn.Module, Tuple[nn.Module, MemOptSummary]]
     """
     st = time.time()
     ctx = mp.get_context("spawn")
     device = resolve_device()
+    preset_levels = {
+        "safe": 1,
+        "balanced": 2,
+        "memory": 3,
+        "exhaustive": 4,
+    }
+    requested_level = (
+        level if level is not None else preset_levels.get(profile, 0)
+    )
+    resolved, resolution_notes = _resolve_memory_optimization_options(
+        level=level,
+        profile=profile,
+        dummy_input=dummy_input,
+        compress_x=compress_x,
+        max_split_rounds=max_split_rounds,
+        max_candidates_per_round=max_candidates_per_round,
+        warmup_in_main_process=warmup_in_main_process,
+        warmup_in_profile_workers=warmup_in_profile_workers,
+        allow_expensive_profiling=allow_expensive_profiling,
+    )
+    level = resolved["level"]
+    compress_x = resolved["compress_x"]
+    max_split_rounds = resolved["max_split_rounds"]
+    max_candidates_per_round = resolved["max_candidates_per_round"]
+    warmup_in_main_process = resolved["warmup_in_main_process"]
+    warmup_in_profile_workers = resolved["warmup_in_profile_workers"]
+    allow_expensive_profiling = resolved["allow_expensive_profiling"]
+
+    summary = MemOptSummary(
+        profile=profile,
+        device=device,
+        requested_level=requested_level,
+        applied_level=0 if level is None else level,
+        compress_x=compress_x,
+        allow_expensive_profiling=allow_expensive_profiling,
+        notes=list(resolution_notes),
+        options=dict(
+            temporal_split_factor=temporal_split_factor,
+            max_split_rounds=max_split_rounds,
+            max_candidates_per_round=max_candidates_per_round,
+            warmup_in_main_process=warmup_in_main_process,
+            warmup_in_profile_workers=warmup_in_profile_workers,
+        ),
+    )
+    summary.applied_level = level
     _cprint(verbose, f"Optimizing memory on device {device}")
     peak_allocated = -1.0
 
     if level > 0:
         _cprint(verbose, "Level 1: layer-wise GC with input spike compression")
-        net = apply_gc(net, instance, dummy_input, compress_x, device)
+        net, apply_summary = apply_gc(
+            net,
+            instance,
+            dummy_input,
+            compress_x,
+            device,
+            return_summary=True,
+        )
+        summary.applied_steps.append("level1_gc")
+        for k, v in apply_summary.items():
+            setattr(summary, k, getattr(summary, k) + v)
 
     if level > 1:  # spatial split
-        if dummy_input is None:
-            raise ValueError("dummy_input must be provided for memory profiling.")
         if _gc_container_count(net) == 0:
             _cprint(verbose, "Level 2: no GCContainers found, skip spatial split")
+            summary.skipped_steps.append("level2:no_gccontainers")
         elif not _has_split_candidate(net, _can_spatially_split):
             _cprint(verbose, "Level 2: no spatially splittable GCContainers, skip")
+            summary.skipped_steps.append("level2:no_spatial_candidates")
         else:
             _cprint(verbose, "Level 2: split GCContainers spatially")
+            summary.applied_steps.append("level2_spatial_split")
             peak_allocated = -1.0
             split_rounds = 0
             blocked_candidates = set()
@@ -881,21 +1133,26 @@ def memory_optimization(
                         f"({peak_allocated} -> {new_peak_allocated})",
                     )
                     peak_allocated = new_peak_allocated
+                    summary.spatial_split_count += 1
                     improved = True
                     blocked_candidates.clear()
                     break
 
                 if not improved:
                     _cprint(verbose, "\tNo spatial split candidate improved memory.")
+                    summary.skipped_steps.append("level2:no_improving_candidate")
                     break
 
     if level > 2:  # temporal split
         if _gc_container_count(net) == 0:
             _cprint(verbose, "Level 3: no GCContainers found, skip temporal split")
+            summary.skipped_steps.append("level3:no_gccontainers")
         elif not _has_split_candidate(net, _can_temporally_split):
             _cprint(verbose, "Level 3: no temporally splittable GCContainers, skip")
+            summary.skipped_steps.append("level3:no_temporal_candidates")
         else:
             _cprint(verbose, "Level 3: split GCContainers temporally")
+            summary.applied_steps.append("level3_temporal_split")
             split_rounds = 0
             blocked_candidates = set()
 
@@ -969,19 +1226,23 @@ def memory_optimization(
                         f"({peak_allocated} -> {new_peak_allocated})",
                     )
                     peak_allocated = new_peak_allocated
+                    summary.temporal_split_count += 1
                     improved = True
                     blocked_candidates.clear()
                     break
 
                 if not improved:
                     _cprint(verbose, "\tNo temporal split candidate improved memory.")
+                    summary.skipped_steps.append("level3:no_improving_candidate")
                     break
 
     if level > 3:
         if _gc_container_count(net) == 0:
             _cprint(verbose, "Level 4: no GCContainers found, skip greedy unwrap")
+            summary.skipped_steps.append("level4:no_gccontainers")
         else:
             _cprint(verbose, "Level 4: greedily disable GCContainers")
+            summary.applied_steps.append("level4_greedy_unwrap")
             results = _inference_time_profile(net, dummy_input, ctx, device)
 
             for r in results:
@@ -1014,6 +1275,7 @@ def memory_optimization(
                         f"({peak_allocated} -> {new_peak_allocated})",
                     )
                     peak_allocated = new_peak_allocated  # update the peak memory
+                    summary.unwrap_count += 1
 
     if warmup_in_main_process and dummy_input is not None:
         # Warm up in the main process to avoid 1st-time overhead.
@@ -1023,4 +1285,13 @@ def memory_optimization(
 
     et = time.time()
     _cprint(verbose, f"Total time: {et - st:.2f}s")
-    return net.cpu()  # must return a model on CPU
+    net = net.cpu()  # must return a model on CPU
+    summary.gc_container_count = sum(
+        1 for m in net.modules() if isinstance(m, GCContainer)
+    )
+    summary.tcgc_container_count = sum(
+        1 for m in net.modules() if isinstance(m, TCGCContainer)
+    )
+    if return_summary:
+        return net, summary
+    return net

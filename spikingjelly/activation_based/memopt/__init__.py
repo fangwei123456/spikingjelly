@@ -1,3 +1,3 @@
 from .checkpointing import *
 from .compress import *
-from .pipeline import memory_optimization  # noqa
+from .pipeline import MEMOPT_PROFILES, MemOptSummary, memory_optimization  # noqa

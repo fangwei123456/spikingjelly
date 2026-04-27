@@ -129,6 +129,8 @@ def test_thread_local_functions():
 
 def test_memopt_package_imports_pipeline_api():
     assert hasattr(memopt, "memory_optimization")
+    assert hasattr(memopt, "MemOptSummary")
+    assert hasattr(memopt, "MEMOPT_PROFILES")
 
 
 def test_probe_binary_inputs_stops_early_when_all_targets_are_non_binary():
@@ -227,6 +229,36 @@ def test_memory_optimization_requires_dummy_input_for_higher_levels():
     net = nn.Sequential(TargetBlock())
     with pytest.raises(ValueError, match="dummy_input must be provided"):
         memopt.memory_optimization(net, TargetBlock, level=2)
+
+
+def test_memory_optimization_profile_balanced_falls_back_without_dummy_input(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    net, summary = memopt.memory_optimization(
+        nn.Sequential(TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        profile="balanced",
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(summary, memopt.MemOptSummary)
+    assert summary.profile == "balanced"
+    assert summary.requested_level == 2
+    assert summary.applied_level == 1
+    assert "fallback:level>1_requires_dummy_input" in summary.notes
+
+
+def test_memory_optimization_rejects_unknown_profile():
+    with pytest.raises(ValueError, match="Unsupported memopt profile"):
+        memopt.memory_optimization(
+            nn.Sequential(TargetBlock()),
+            TargetBlock,
+            profile="mystery",
+        )
 
 
 def test_memory_optimization_level1_without_dummy_input_skips_main_process_warmup(
@@ -336,6 +368,47 @@ def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
     assert profile_flags == [(False, True)]
 
 
+def test_memory_optimization_profile_memory_honors_allow_expensive_profiling_false(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    profile_flags = []
+
+    def fake_train_memory_profile(*args, **kwargs):
+        profile_flags.append(
+            (
+                kwargs.get("worker_warmup"),
+                kwargs.get("return_peak", False),
+            )
+        )
+        return _profile_result_with_optional_peak([], kwargs.get("return_peak", False))
+
+    monkeypatch.setattr(
+        memopt_pipeline, "_train_memory_profile", fake_train_memory_profile
+    )
+    monkeypatch.setattr(
+        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: (100, 100)
+    )
+
+    _, summary = memopt.memory_optimization(
+        nn.Sequential(SpatialSplitBlock()),
+        SpatialSplitBlock,
+        dummy_input=(torch.randn(2, 4),),
+        profile="memory",
+        allow_expensive_profiling=False,
+        warmup_in_main_process=False,
+        return_summary=True,
+    )
+
+    assert profile_flags
+    assert all(flag[0] is False for flag in profile_flags)
+    assert any(flag[1] is True for flag in profile_flags)
+    assert summary.allow_expensive_profiling is False
+    assert summary.options["max_split_rounds"] == 1
+    assert summary.options["max_candidates_per_round"] == 1
+
+
 def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
     spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
     compressor = BitSpikeCompressor()
@@ -416,6 +489,28 @@ def test_apply_gc_skips_binary_probe_when_all_targets_have_manual_compressors(
     assert isinstance(optimized[1], GCContainer)
     assert isinstance(optimized[0].x_compressor, BooleanSpikeCompressor)
     assert isinstance(optimized[1].x_compressor, BitSpikeCompressor)
+
+
+def test_memory_optimization_returns_summary_for_skipped_spatial_stage(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    net, summary = memopt.memory_optimization(
+        nn.Sequential(TemporalOnlyBlock()),
+        TemporalOnlyBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        level=2,
+        warmup_in_main_process=False,
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(summary, memopt.MemOptSummary)
+    assert summary.gc_wrap_count == 1
+    assert summary.gc_container_count == 1
+    assert summary.tcgc_container_count == 0
+    assert "level1_gc" in summary.applied_steps
+    assert "level2:no_spatial_candidates" in summary.skipped_steps
 
 
 def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):
