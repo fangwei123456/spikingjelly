@@ -42,11 +42,8 @@ else:
                 s_seq_compressed[:sliced_len] |= sliced << i
         return s_seq_compressed
 
-    def _shape_numel(shape) -> int:
-        return torch.Size(shape).numel()
-
     def bit_spike_decompress(s_seq_compressed: torch.Tensor, shape) -> torch.Tensor:
-        decompressed_len = _shape_numel(shape)
+        decompressed_len = torch.Size(shape).numel()
         s_seq_decompressed = torch.zeros(
             decompressed_len, dtype=torch.bool, device=s_seq_compressed.device
         )
