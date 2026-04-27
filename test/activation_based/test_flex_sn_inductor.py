@@ -508,7 +508,7 @@ def test_hop_rejects_mismatched_T():
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
 def test_inductor_inference_without_final_state_kernel_keeps_final_state_semantics(rng):
     x = torch.randn((6, 16), generator=rng).cuda()
-    neuron = FlexSN(
+    reference = FlexSN(
         core=_lif_core,
         num_inputs=1,
         num_states=1,
@@ -517,17 +517,29 @@ def test_inductor_inference_without_final_state_kernel_keeps_final_state_semanti
         backend="inductor",
         store_state_seqs=False,
     ).cuda()
-    if not neuron._inductor_inference_available:
+    fallback = FlexSN(
+        core=_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        step_mode="m",
+        backend="inductor",
+        store_state_seqs=False,
+    ).cuda()
+    if not reference._inductor_inference_available:
         pytest.skip("inductor inference kernel unavailable")
 
-    neuron._inductor_scan_final_state_kernel = None
-    neuron._inductor_scan_final_state_info = None
-    neuron._inductor_inference_final_state_available = False
-
     with torch.no_grad():
-        _ = neuron(x)
+        expected = reference(x)
+        expected_state = reference.states[0].detach().clone()
+        fallback._inductor_scan_final_state_kernel = None
+        fallback._inductor_scan_final_state_info = None
+        fallback._inductor_inference_final_state_available = False
+        actual = fallback(x)
+        actual_state = fallback.states[0].detach().clone()
 
-    assert neuron.states[0].shape == x.shape[1:]
+    torch.testing.assert_close(actual, expected)
+    torch.testing.assert_close(actual_state, expected_state)
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
@@ -1169,6 +1181,7 @@ def test_compile_spiking_vgg_hop_lowerable_while_loop_matches_eager(monkeypatch)
 
     with torch.no_grad():
         eager_out = model(x_eager)
+        sj_functional.reset_net(model)
         compiled_model = torch.compile(model, fullgraph=True)
         compiled_out = compiled_model(x_compiled)
 
