@@ -115,6 +115,27 @@ def _dummy_input_to_device(dummy_input, device):
         return dummy_input
 
 
+def _randomize_input_like(dummy_input):
+    def _generate_tensor_like(x: torch.Tensor):
+        choice = torch.randint(0, 3, ()).item()
+        if choice == 0:
+            return torch.randn_like(x)
+        elif choice == 1:
+            return torch.empty_like(x).uniform_(-5, 5)
+        else:
+            return torch.empty_like(x).bernoulli_(p=0.5)
+
+    if isinstance(dummy_input, torch.Tensor):
+        return _generate_tensor_like(dummy_input)
+    elif isinstance(dummy_input, (tuple, list)):
+        return type(dummy_input)(_randomize_input_like(t) for t in dummy_input)
+    elif isinstance(dummy_input, dict):
+        return {k: _randomize_input_like(v) for k, v in dummy_input.items()}
+    else:
+        # Non-tensor inputs (e.g., None, int, etc.)
+        return dummy_input
+
+
 def _probe_binary_inputs(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
@@ -139,31 +160,17 @@ def _probe_binary_inputs(
     for m in target_modules:
         hooks.append(m.register_forward_pre_hook(hook_fn))
 
-    def _generate_tensor_like(x: torch.Tensor):
-        choice = torch.randint(0, 3, ()).item()
-        if choice == 0:
-            return torch.randn_like(x)
-        elif choice == 1:
-            return torch.empty_like(x).uniform_(-5, 5)
-        else:
-            return torch.empty_like(x).bernoulli_(p=0.5)
-
-    def _generate_input_like(dummy_input):
-        if isinstance(dummy_input, torch.Tensor):
-            return _generate_tensor_like(dummy_input)
-        elif isinstance(dummy_input, (tuple, list)):
-            return type(dummy_input)(_generate_input_like(t) for t in dummy_input)
-        elif isinstance(dummy_input, dict):
-            return {k: _generate_input_like(v) for k, v in dummy_input.items()}
-        else:
-            # Non-tensor inputs (e.g., None, int, etc.)
-            return dummy_input
-
     is_training = net.training
     net.eval()
     with torch.no_grad():
-        for _ in range(n_trials):
-            new_input = _generate_input_like(dummy_input)
+        if n_trials > 0:
+            _ = net(*dummy_input)
+            functional.reset_net(net)
+            if target_modules and all(not is_binary[m] for m in target_modules):
+                n_trials = 1
+
+        for _ in range(1, n_trials):
+            new_input = _randomize_input_like(dummy_input)
             _ = net(*new_input)
             functional.reset_net(net)
             if target_modules and all(not is_binary[m] for m in target_modules):

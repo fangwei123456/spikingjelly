@@ -144,6 +144,24 @@ def test_probe_binary_inputs_stops_early_when_all_targets_are_non_binary():
     assert net.forward_calls == 1
 
 
+def test_probe_binary_inputs_uses_dummy_input_before_random_trials(monkeypatch):
+    net = CountedNonBinaryNet()
+
+    def fail_randomize(dummy_input):
+        raise AssertionError("_randomize_input_like should not be called")
+
+    monkeypatch.setattr(memopt_pipeline, "_randomize_input_like", fail_randomize)
+    result = memopt_pipeline._probe_binary_inputs(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        n_trials=5,
+    )
+
+    assert result[net.block] is False
+    assert net.forward_calls == 1
+
+
 def test_autocast_query():
     """Test autocast querying functionality."""
     device_type, dtype, enabled = query_autocast()
