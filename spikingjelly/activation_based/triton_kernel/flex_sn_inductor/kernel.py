@@ -7,6 +7,7 @@ Two entry points:
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Callable, List, Optional, Tuple
 
 import torch
@@ -19,6 +20,15 @@ def _clone_example_inputs(
     if example_inputs is None:
         return tuple(torch.zeros(1, device="cuda") for _ in range(count))
     return tuple(x.detach().clone() for x in example_inputs)
+
+
+def _make_core_name(core_fn: Callable, suffix: str, *graphs) -> str:
+    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
+    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name) or "core"
+    graph_fingerprint = hashlib.sha1(
+        "||".join(str(graph) for graph in graphs).encode("utf-8")
+    ).hexdigest()[:8]
+    return f"{safe_name}_{graph_fingerprint}_{suffix}"
 
 
 def _training_final_state_specialized_wins(info) -> bool:
@@ -75,9 +85,7 @@ def build_inference_kernel(
     # Generate Triton function source for the per-step body.
     # Sanitize name: lambdas → "<lambda>", functools.partial → no __name__.
     # Replace every non-alphanumeric character (including < > space) with "_".
-    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
-    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
-    core_name = f"{safe_name}_inductor_scan"
+    core_name = _make_core_name(core_fn, "inductor_scan", graph)
     core_str, core_name = generate_triton_code_str(graph, core_name)
 
     # Extract metadata: arg/return names, output/state counts.
@@ -105,9 +113,7 @@ def build_inference_final_state_kernel(
     traced = make_fx(core_fn)(*example_inputs)
     graph = traced.graph
 
-    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
-    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
-    core_name = f"{safe_name}_inductor_scan_final_state"
+    core_name = _make_core_name(core_fn, "inductor_scan_final_state", graph)
     core_str, core_name = generate_triton_code_str(graph, core_name)
     info = extract_info(graph, num_inputs, num_states, num_outputs)
     kernel = get_flexsn_inference_final_state_kernel(core_str, core_name, info=info)
@@ -226,9 +232,7 @@ def build_training_kernels(
         )
     n_saved = len(info.c2k_return_mapping)
 
-    raw_name = getattr(core_fn, "__name__", type(core_fn).__name__)
-    safe_name = "".join(c if c.isalnum() else "_" for c in raw_name)
-    core_name = safe_name + "_inductor_train"
+    core_name = _make_core_name(core_fn, "inductor_train", fwd_graph, bwd_graph)
 
     # Forward kernel — saves intermediates needed by backward
     fwd_str, fwd_name = generate_triton_code_str(fwd_graph, core_name + "_fwd")

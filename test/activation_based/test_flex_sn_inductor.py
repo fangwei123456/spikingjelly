@@ -13,12 +13,14 @@ import sys
 
 import pytest
 import torch
+from torch.fx.experimental.proxy_tensor import make_fx
 
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
 from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     custom_ops as flexsn_custom_ops,
     flex_sn_scan,
+    kernel as flexsn_inductor_kernel,
     lowerable_scan,
     lowerable_scan_available,
     lowerable_while_loop_scan,
@@ -92,6 +94,26 @@ def test_hop_matches_manual_loop_with_lifted_tensor(rng):
 
     torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
     torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_kernel_names_include_graph_fingerprint():
+    core_a = lambda x: x + 1
+    core_b = lambda x: x * 2
+    example = torch.randn(4)
+    graph_a = make_fx(core_a)(example).graph
+    graph_b = make_fx(core_b)(example).graph
+
+    name_a = flexsn_inductor_kernel._make_core_name(
+        core_a, "inductor_scan", graph_a
+    )
+    name_b = flexsn_inductor_kernel._make_core_name(
+        core_b, "inductor_scan", graph_b
+    )
+
+    assert name_a != name_b
+    assert name_a == flexsn_inductor_kernel._make_core_name(
+        core_a, "inductor_scan", graph_a
+    )
 
 
 @pytest.mark.parametrize("T", [1, 4, 16])
