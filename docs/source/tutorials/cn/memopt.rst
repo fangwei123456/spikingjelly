@@ -80,6 +80,26 @@ English version: :doc:`../en/memopt`
 
 用户无需了解底层实现，只需调用 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` ，即可自动网络结构转换。
 
+高层预设与摘要
+---------------------
+
+除了直接指定 ``level=0..4`` ， :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 现在还提供了更高层的 ``profile`` 预设：
+
+* ``"safe"`` ：保守模式。仅启用逐层GC，关闭高开销 profiling，适合快速试用。
+* ``"balanced"`` ：推荐默认模式。启用有限的 split 搜索，在显存收益和优化耗时之间取得折中。
+* ``"memory"`` ：更偏向显存优化。默认会尝试时间/空间 split。
+* ``"exhaustive"`` ：激进模式。允许更完整的搜索和 greedy unwrap，适合离线调优。
+
+如果用户希望显式限制优化器本身的开销，可设置 ``allow_expensive_profiling=False`` 。此时会自动收紧 split 搜索预算，并关闭 profiling worker 的 warmup。
+
+另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
+
+* 请求/实际生效的优化级别
+* 使用的 ``profile`` 和 ``allow_expensive_profiling`` 配置
+* 哪些优化步骤被应用、哪些步骤被跳过
+* 包装成 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 的数量
+* 自动选择的压缩器统计，以及空间/时间 split、greedy unwrap 的执行次数
+
 示例
 -----------------------
 
@@ -226,6 +246,27 @@ Step 3. 调用工具函数
     )
 
 查询 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的文档以获取参数说明。
+
+如果用户更关注“少调参、快速拿到一个合理配置”，则推荐优先使用 ``profile`` 接口。例如：
+
+.. code:: python
+
+    from spikingjelly.activation_based import memopt
+
+    net, summary = memopt.memory_optimization(
+        net,
+        (VGGBlock,),
+        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
+        profile="balanced",
+        allow_expensive_profiling=False,
+        return_summary=True,
+    )
+
+    print(summary.applied_steps)
+    print(summary.skipped_steps)
+    print(summary.gc_container_count, summary.tcgc_container_count)
+
+若 ``profile`` 要求 ``level > 1`` 但没有提供 ``dummy_input`` ，则框架会自动回退到 ``level=1`` ，并在 ``summary.notes`` 中记录这一回退原因。
 
 结果
 ###############################

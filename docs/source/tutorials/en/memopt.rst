@@ -80,6 +80,26 @@ The entire optimization procedure described above is wrapped inside :func:`memor
 
 Users do not need to understand the internals. Simply call :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` to transform the network automatically.
 
+High-level presets and summaries
+--------------------------------
+
+Besides manually choosing ``level=0..4``, :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` now provides higher-level ``profile`` presets:
+
+* ``"safe"``: conservative mode. Only applies layer-wise GC and avoids expensive profiling.
+* ``"balanced"``: recommended default. Enables limited split search and balances memory savings against optimization overhead.
+* ``"memory"``: more aggressive toward memory reduction. Tries both spatial and temporal split by default.
+* ``"exhaustive"``: most aggressive mode. Allows fuller search and greedy unwrap, suitable for offline tuning.
+
+If you want to explicitly limit the optimizer's own overhead, set ``allow_expensive_profiling=False``. This automatically tightens split-search budgets and disables worker warmup during profiling.
+
+In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:
+
+* requested versus applied optimization levels
+* the chosen ``profile`` and ``allow_expensive_profiling`` setting
+* which optimization stages were applied or skipped
+* how many :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` objects remain
+* compressor statistics and counts of spatial split, temporal split, and greedy unwrap operations
+
 Example
 -------
 
@@ -226,6 +246,27 @@ Once the preparation is done, call :func:`memory_optimization <spikingjelly.acti
     )
 
 Refer to the :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` docs for argument details.
+
+If you prefer a simpler, higher-level entry point, start from the ``profile`` argument instead:
+
+.. code:: python
+
+    from spikingjelly.activation_based import memopt
+
+    net, summary = memopt.memory_optimization(
+        net,
+        (VGGBlock,),
+        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
+        profile="balanced",
+        allow_expensive_profiling=False,
+        return_summary=True,
+    )
+
+    print(summary.applied_steps)
+    print(summary.skipped_steps)
+    print(summary.gc_container_count, summary.tcgc_container_count)
+
+If a chosen ``profile`` implies ``level > 1`` but no ``dummy_input`` is provided, the framework will automatically fall back to ``level=1`` and record the fallback reason in ``summary.notes``.
 
 Results
 ###############################
