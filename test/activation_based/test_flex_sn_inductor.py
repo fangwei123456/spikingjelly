@@ -418,15 +418,20 @@ def test_inductor_zero_state_materialization_overrides_registered_device_at_runt
         training_info=None,
         state_template_specs=(((3, 5), torch.float32, torch.device("cpu")),),
     )
-    x_seq = torch.randn(4, 8, dtype=torch.float16, device="cuda")
+    device = (
+        torch.device("cuda", 1)
+        if torch.cuda.device_count() > 1
+        else torch.device("cuda")
+    )
+    x_seq = torch.randn(4, 8, dtype=torch.float16, device=device)
 
     materialized = flexsn_custom_ops._materialize_zero_state_args(bundle, info, [x_seq])
 
     assert len(materialized) == 2
     assert materialized[1].shape == (3, 5)
     assert materialized[1].dtype == torch.float32
-    assert materialized[1].device.type == "cuda"
-    torch.testing.assert_close(materialized[1], torch.zeros(3, 5, device="cuda"))
+    assert materialized[1].device == x_seq.device
+    torch.testing.assert_close(materialized[1], torch.zeros(3, 5, device=x_seq.device))
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
@@ -574,6 +579,18 @@ def test_backward_final_state_kernel_threshold_knobs_do_not_force_specialization
         1024,
     )
     grad = torch.randn(4, 8)
+    assert not flexsn_custom_ops._should_use_backward_final_state_kernel([grad])
+
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_STEPS",
+        1024,
+    )
+    monkeypatch.setattr(
+        flexsn_custom_ops,
+        "_BACKWARD_FINAL_STATE_SPECIALIZED_MIN_TOKENS",
+        0,
+    )
     assert not flexsn_custom_ops._should_use_backward_final_state_kernel([grad])
 
 
