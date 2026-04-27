@@ -348,7 +348,14 @@ def _dummy_train_step(
         _load_bn_states(net, saved_bn_states)
 
 
-def _train_memory_profile_worker(net, dummy_input, q, device, worker_warmup=True):
+def _train_memory_profile_worker(
+    net,
+    dummy_input,
+    q,
+    device,
+    worker_warmup=True,
+    return_peak=False,
+):
     """`net` and `dummy_input` should be a deep copy of the original model and
     should be located on CPU, since they must be pickle-able.
     """
@@ -372,10 +379,18 @@ def _train_memory_profile_worker(net, dummy_input, q, device, worker_warmup=True
     ) as prof:
         _dummy_train_step(net, dummy_input)
     results = prof.export(output=False)
-    q.put(results)
+    if return_peak:
+        torch.cuda.synchronize(device)
+        peak_allocated = torch.cuda.max_memory_allocated(device)
+        peak_reserved = torch.cuda.max_memory_reserved(device)
+        q.put((results, peak_allocated, peak_reserved))
+    else:
+        q.put(results)
 
 
-def _train_memory_profile(net, dummy_input, ctx, device, worker_warmup=True):
+def _train_memory_profile(
+    net, dummy_input, ctx, device, worker_warmup=True, return_peak=False
+):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_memory_profile_worker,
@@ -385,6 +400,7 @@ def _train_memory_profile(net, dummy_input, ctx, device, worker_warmup=True):
             q,
             device,
             worker_warmup,
+            return_peak,
         ),
     )
     p.start()
@@ -753,13 +769,7 @@ def memory_optimization(
             _cprint(verbose, "Level 2: no GCContainers found, skip spatial split")
         else:
             _cprint(verbose, "Level 2: split GCContainers spatially")
-            peak_allocated, _ = _train_peak_memory(
-                net,
-                dummy_input,
-                ctx,
-                device,
-                worker_warmup=warmup_in_profile_workers,
-            )
+            peak_allocated = -1.0
             split_rounds = 0
             blocked_candidates = set()
 
@@ -768,13 +778,23 @@ def memory_optimization(
                     _cprint(verbose, "\tReached max_split_rounds for spatial split.")
                     break
                 split_rounds += 1
-                results = _train_memory_profile(
-                    net,
-                    dummy_input,
-                    ctx,
-                    device,
-                    worker_warmup=warmup_in_profile_workers,
-                )
+                if peak_allocated < 0:
+                    results, peak_allocated, _ = _train_memory_profile(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                        return_peak=True,
+                    )
+                else:
+                    results = _train_memory_profile(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                    )
                 if not results:
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
@@ -841,13 +861,23 @@ def memory_optimization(
                     _cprint(verbose, "\tReached max_split_rounds for temporal split.")
                     break
                 split_rounds += 1
-                results = _train_memory_profile(
-                    net,
-                    dummy_input,
-                    ctx,
-                    device,
-                    worker_warmup=warmup_in_profile_workers,
-                )
+                if peak_allocated < 0:
+                    results, peak_allocated, _ = _train_memory_profile(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                        return_peak=True,
+                    )
+                else:
+                    results = _train_memory_profile(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                    )
                 if not results:
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
