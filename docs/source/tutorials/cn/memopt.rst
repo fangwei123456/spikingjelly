@@ -101,6 +101,44 @@ English version: :doc:`../en/memopt`
 
 如果用户希望显式限制优化器本身的开销，可设置 ``allow_expensive_profiling=False`` 。此时会自动收紧 split 搜索预算，并关闭 profiling worker 的 warmup。
 
+为了给这些取舍提供一个更直观的量化参考，我们在服务器上的一张 ``RTX 4090`` 上，对一个较小的合成工作负载做了对比测试。测试模型为 ``MemOptBlockNet(depth=1)`` ，输入形状为 ``[T, N, C] = [2, 2, 16]`` ，每个配置均测量了 ``memory_optimization`` 自身耗时、优化后单步训练耗时以及训练峰值显存。未优化 baseline 的单步训练耗时约为 ``5.80 ms`` ， ``peak_allocated`` 为 ``17.26 MB`` ， ``peak_reserved`` 为 ``22.0 MB`` 。四个 ``profile`` 的结果如下：
+
+.. list-table::
+    :header-rows: 1
+
+    * - Profile
+      - ``memory_optimization`` 耗时
+      - 单步训练耗时
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - 结构变化
+    * - ``safe``
+      - ``910.9 ms``
+      - ``5.73 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 仅包装为 1 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``balanced``
+      - ``8661.2 ms``
+      - ``6.13 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``memory``
+      - ``20027.8 ms``
+      - ``6.07 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``exhaustive``
+      - ``32880.1 ms``
+      - ``5.71 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+
+需要强调的是，这组数据的主要用途是说明不同 ``profile`` 的 **优化器开销趋势** ，而非给出对所有网络都成立的通用绝对值。对于真实的大模型，具体的训练速度和显存收益仍取决于网络结构、输入形状、batch size 以及当前设备环境。
+
 另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
 
 * 请求/实际生效的优化级别

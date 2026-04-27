@@ -101,6 +101,44 @@ If you are unsure which one to choose, start from ``"balanced"``. Use ``"safe"``
 
 If you want to explicitly limit the optimizer's own overhead, set ``allow_expensive_profiling=False``. This automatically tightens split-search budgets and disables worker warmup during profiling.
 
+To make these trade-offs more concrete, we also ran a small synthetic benchmark on a single ``RTX 4090``. The tested model was ``MemOptBlockNet(depth=1)`` with input shape ``[T, N, C] = [2, 2, 16]``. For each profile, we measured the time spent inside ``memory_optimization``, the post-optimization training step latency, and the training peak memory. The unoptimized baseline on this workload took about ``5.80 ms`` per training step, with ``peak_allocated = 17.26 MB`` and ``peak_reserved = 22.0 MB``. The profile-wise results were:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Profile
+      - ``memory_optimization`` time
+      - Training step time
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - Structural effect
+    * - ``safe``
+      - ``910.9 ms``
+      - ``5.73 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Only wraps the target block into 1 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``balanced``
+      - ``8661.2 ms``
+      - ``6.13 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``memory``
+      - ``20027.8 ms``
+      - ``6.07 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``exhaustive``
+      - ``32880.1 ms``
+      - ``5.71 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+
+These numbers are mainly intended to show the **optimizer-overhead trend** of different profiles, not to provide universal absolute values. On larger real workloads, the exact training-speed and memory trade-offs still depend on model structure, input shapes, batch size, and the current GPU environment.
+
 In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:
 
 * requested versus applied optimization levels
