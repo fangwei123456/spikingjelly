@@ -18,6 +18,7 @@ from spikingjelly.activation_based.memopt.checkpointing import (
 )
 from spikingjelly.activation_based.memopt.compress import (
     BaseSpikeCompressor,
+    BooleanSpikeCompressor,
     BitSpikeCompressor,
     NullSpikeCompressor,
     SparseSpikeCompressor,
@@ -192,6 +193,45 @@ def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
 
     assert compressed.device.type == "cpu"
     torch.testing.assert_close(decompressed, spikes)
+
+
+def test_apply_gc_clones_manual_compressor_instances(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    shared = BooleanSpikeCompressor()
+    block1 = TargetBlock()
+    block2 = TargetBlock()
+    block1.x_compressor = shared
+    block2.x_compressor = shared
+    net = nn.Sequential(block1, block2)
+
+    optimized = memopt_pipeline.apply_gc(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randint(0, 2, (2, 4), dtype=torch.float32),),
+        compress_x=True,
+        device="cpu",
+    )
+
+    compressor1 = optimized[0].x_compressor
+    compressor2 = optimized[1].x_compressor
+    assert isinstance(compressor1, BooleanSpikeCompressor)
+    assert isinstance(compressor2, BooleanSpikeCompressor)
+    assert compressor1 is not compressor2
+
+    compressed1 = compressor1.compress(torch.randint(0, 2, (2, 4), dtype=torch.float16))
+    compressed2 = compressor2.compress(torch.randint(0, 2, (2, 4), dtype=torch.float32))
+
+    assert compressor1.s_seq_dtype == torch.float16
+    assert compressor2.s_seq_dtype == torch.float32
+    torch.testing.assert_close(
+        compressor1.decompress(compressed1, (2, 4)),
+        compressed1.to(torch.float16),
+    )
+    torch.testing.assert_close(
+        compressor2.decompress(compressed2, (2, 4)),
+        compressed2.to(torch.float32),
+    )
 
 
 def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):

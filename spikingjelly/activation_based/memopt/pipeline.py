@@ -20,6 +20,12 @@ __all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimi
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
 
 
+def _build_compressor_from_spec(spec):
+    if isinstance(spec, str):
+        return getattr(compress, spec)()
+    return copy.deepcopy(spec)
+
+
 def resolve_device() -> str:
     r"""
     **API Language:**
@@ -240,9 +246,7 @@ def apply_gc(
                     BitSpikeCompressor() if is_binary_input else NullSpikeCompressor()
                 )
             else:  # manually specified
-                x_compressor = (
-                    getattr(compress, spec)() if isinstance(spec, str) else spec
-                )
+                x_compressor = _build_compressor_from_spec(spec)
         else:  # disable compression
             x_compressor = NullSpikeCompressor()
         return x_compressor
@@ -532,9 +536,13 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
         spec = getattr(module, "x_compressor", None)
         if compress_x:
             if spec is None:  # auto-detect
-                c = x_compressor if use_original_compressor else NullSpikeCompressor()
+                c = (
+                    copy.deepcopy(x_compressor)
+                    if use_original_compressor
+                    else NullSpikeCompressor()
+                )
             else:  # manually specified
-                c = getattr(compress, spec)() if isinstance(spec, str) else spec
+                c = _build_compressor_from_spec(spec)
         else:  # disable compression
             c = NullSpikeCompressor()
         return c
