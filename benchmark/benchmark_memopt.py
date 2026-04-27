@@ -26,6 +26,41 @@ class MemOptToyNet(nn.Module):
         return self.blocks(x)
 
 
+class MemOptBlock(nn.Sequential):
+    def __init__(self, channels: int):
+        super().__init__(
+            nn.Linear(channels, channels),
+            neuron.IFNode(step_mode="m"),
+            nn.Linear(channels, channels),
+            neuron.IFNode(step_mode="m"),
+        )
+        self.n_seq_inputs = 1
+        self.n_outputs = 1
+
+    def __spatial_split__(self):
+        return [
+            nn.Sequential(self[0], self[1]),
+            nn.Sequential(self[2], self[3]),
+        ]
+
+
+class MemOptBlockNet(nn.Module):
+    def __init__(self, channels: int, depth: int = 3):
+        super().__init__()
+        self.blocks = nn.Sequential(*[MemOptBlock(channels) for _ in range(depth)])
+
+    def forward(self, x):
+        return self.blocks(x)
+
+
+def build_case(model_kind: str, channels: int):
+    if model_kind == "neuron":
+        return MemOptToyNet(channels), neuron.IFNode
+    if model_kind == "block":
+        return MemOptBlockNet(channels), MemOptBlock
+    raise ValueError(f"Unsupported model_kind={model_kind!r}")
+
+
 def train_step(net: nn.Module, x: torch.Tensor):
     net.train()
     net.zero_grad(set_to_none=True)
@@ -55,11 +90,17 @@ def benchmark_train_step(net: nn.Module, x: torch.Tensor, warmup: int, iters: in
     }
 
 
-def optimize_model(net, x, level: int, warmup_in_main_process: bool):
+def optimize_model(
+    net,
+    instance,
+    x,
+    level: int,
+    warmup_in_main_process: bool,
+):
     t0 = time.perf_counter()
     optimized = memory_optimization(
         net,
-        neuron.IFNode,
+        instance,
         dummy_input=(x,),
         compress_x=True,
         level=level,
@@ -69,12 +110,27 @@ def optimize_model(net, x, level: int, warmup_in_main_process: bool):
     return optimized, optimize_ms
 
 
+def run_single_variant(base, instance, x, level: int, warmup_in_main_process: bool, warmup: int, iters: int):
+    model, optimize_ms = optimize_model(
+        copy.deepcopy(base).cpu(),
+        instance,
+        x.detach().cpu(),
+        level=level,
+        warmup_in_main_process=warmup_in_main_process,
+    )
+    model = model.to(x.device)
+    result = benchmark_train_step(model, x, warmup, iters)
+    result["optimize_ms"] = optimize_ms
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model-kind", choices=("neuron", "block"), default="neuron")
     parser.add_argument("--T", type=int, default=16)
     parser.add_argument("--N", type=int, default=32)
     parser.add_argument("--C", type=int, default=512)
-    parser.add_argument("--level", type=int, default=1)
+    parser.add_argument("--levels", type=int, nargs="+", default=[0, 1, 2, 3, 4])
     parser.add_argument("--warmup", type=int, default=5)
     parser.add_argument("--iters", type=int, default=20)
     args = parser.parse_args()
@@ -84,42 +140,30 @@ def main():
 
     device = torch.device("cuda")
     x = torch.randn(args.T, args.N, args.C, device=device)
-    base = MemOptToyNet(args.C).to(device)
+    base, instance = build_case(args.model_kind, args.C)
+    base = base.to(device)
 
     baseline = benchmark_train_step(copy.deepcopy(base), x, args.warmup, args.iters)
-
-    warm_model, warm_opt_ms = optimize_model(
-        copy.deepcopy(base).cpu(),
-        x.detach().cpu(),
-        level=args.level,
-        warmup_in_main_process=True,
-    )
-    warm_model = warm_model.to(device)
-    warm_result = benchmark_train_step(warm_model, x, args.warmup, args.iters)
-
-    cold_model, cold_opt_ms = optimize_model(
-        copy.deepcopy(base).cpu(),
-        x.detach().cpu(),
-        level=args.level,
-        warmup_in_main_process=False,
-    )
-    cold_model = cold_model.to(device)
-    cold_result = benchmark_train_step(cold_model, x, args.warmup, args.iters)
-
-    result = {
+    results = {
+        "model_kind": args.model_kind,
         "shape": {"T": args.T, "N": args.N, "C": args.C},
-        "level": args.level,
         "baseline": baseline,
-        "optimized_warm_main": {
-            "optimize_ms": warm_opt_ms,
-            **warm_result,
-        },
-        "optimized_no_main_warmup": {
-            "optimize_ms": cold_opt_ms,
-            **cold_result,
-        },
+        "levels": {},
     }
-    print(json.dumps(result, indent=2))
+
+    for level in args.levels:
+        if level == 0:
+            continue
+        results["levels"][str(level)] = {
+            "warm_main": run_single_variant(
+                base, instance, x, level, True, args.warmup, args.iters
+            ),
+            "no_main_warmup": run_single_variant(
+                base, instance, x, level, False, args.warmup, args.iters
+            ),
+        }
+
+    print(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":
