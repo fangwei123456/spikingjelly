@@ -1,5 +1,6 @@
 import copy
 
+import pytest
 import torch
 import torch.nn as nn
 
@@ -21,6 +22,7 @@ from spikingjelly.activation_based.memopt.compress import (
     NullSpikeCompressor,
     SparseSpikeCompressor,
 )
+from spikingjelly.activation_based.memopt import pipeline as memopt_pipeline
 from spikingjelly.activation_based import neuron
 
 
@@ -37,6 +39,39 @@ class MockCompressor(BaseSpikeCompressor):
 
     def _decompress(self, s_seq: torch.Tensor, shape) -> torch.Tensor:
         return s_seq / 2
+
+
+class BinaryProject(nn.Module):
+    def forward(self, x):
+        return (x > 0).to(x.dtype)
+
+
+class TargetBlock(nn.Module):
+    def forward(self, x):
+        return x + 1.0
+
+
+class SpatialSplitBlock(nn.Module):
+    def __init__(self, features=4):
+        super().__init__()
+        self.features = features
+
+    def forward(self, x):
+        return torch.relu(x)
+
+    def __spatial_split__(self):
+        return [nn.Identity(), nn.ReLU()]
+
+
+class TemporalSplitBlock(nn.Sequential):
+    def __init__(self, features=4):
+        super().__init__(nn.Linear(features, features), nn.ReLU())
+        self.n_seq_inputs = 1
+        self.n_outputs = 1
+
+
+def _result_row(module_name: str):
+    return [(module_name, 0.0)]
 
 
 def test_thread_local_functions():
@@ -121,6 +156,130 @@ def test_compressors_accept_tuple_shapes_on_decompress():
     sparse = SparseSpikeCompressor()
     sparse_decompressed = sparse.decompress(sparse.compress(spikes), shape)
     torch.testing.assert_close(sparse_decompressed, spikes)
+
+
+def test_memory_optimization_requires_dummy_input_for_higher_levels():
+    net = nn.Sequential(TargetBlock())
+    with pytest.raises(ValueError, match="dummy_input must be provided"):
+        memopt.memory_optimization(net, TargetBlock, level=2)
+
+
+def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    net = nn.Sequential(BinaryProject(), TargetBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=True,
+        level=1,
+    )
+
+    assert isinstance(optimized[1], GCContainer)
+    assert isinstance(optimized[1].x_compressor, BitSpikeCompressor)
+    assert next(optimized.parameters(), torch.empty(0)).device.type == "cpu"
+
+
+def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    peak_values = iter([(100, 100), (80, 80)])
+    profile_values = iter([
+        _result_row("0"),
+        [],
+    ])
+    monkeypatch.setattr(
+        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
+    )
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_memory_profile",
+        lambda *args, **kwargs: next(profile_values),
+    )
+
+    net = nn.Sequential(SpatialSplitBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        SpatialSplitBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        level=2,
+    )
+
+    assert isinstance(optimized[0], nn.Sequential)
+    assert len(optimized[0]) == 2
+    assert all(isinstance(block, GCContainer) for block in optimized[0])
+
+
+def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    peak_values = iter([(100, 100), (80, 80)])
+    profile_values = iter([
+        [],
+        _result_row("0"),
+        [],
+    ])
+    monkeypatch.setattr(
+        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
+    )
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_memory_profile",
+        lambda *args, **kwargs: next(profile_values),
+    )
+
+    net = nn.Sequential(TemporalSplitBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        TemporalSplitBlock,
+        dummy_input=(torch.randn(4, 2, 4),),
+        compress_x=False,
+        level=3,
+        temporal_split_factor=2,
+    )
+
+    assert isinstance(optimized[0], TCGCContainer)
+    assert optimized[0].n_chunk == 2
+
+
+def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
+    monkeypatch,
+):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    peak_values = iter([(100, 100), (100, 100)])
+    profile_values = iter([
+        [],
+        [],
+    ])
+    monkeypatch.setattr(
+        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
+    )
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_train_memory_profile",
+        lambda *args, **kwargs: next(profile_values),
+    )
+    monkeypatch.setattr(
+        memopt_pipeline,
+        "_inference_time_profile",
+        lambda *args, **kwargs: _result_row("0"),
+    )
+
+    net = nn.Sequential(TargetBlock())
+    optimized = memopt.memory_optimization(
+        net,
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        level=4,
+    )
+
+    assert isinstance(optimized[0], TargetBlock)
 
 
 def test_input_compressed_gc():
