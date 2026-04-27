@@ -109,7 +109,7 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
                 if isinstance(value, torch.Tensor):
                     first_tensor = value
                     break
-        if first_tensor is not None:
+        if first_tensor is not None and first_tensor.device.type == "cuda":
             ctx = torch.cuda.device(first_tensor.device.index)
         else:
             ctx = contextlib.nullcontext()

@@ -164,11 +164,10 @@ def test_memory_optimization_requires_dummy_input_for_higher_levels():
         memopt.memory_optimization(net, TargetBlock, level=2)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
 def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor(
     monkeypatch,
 ):
-    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cuda:0")
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
     net = nn.Sequential(BinaryProject(), TargetBlock())
     optimized = memopt.memory_optimization(
@@ -182,6 +181,17 @@ def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor
     assert isinstance(optimized[1], GCContainer)
     assert isinstance(optimized[1].x_compressor, BitSpikeCompressor)
     assert next(optimized.parameters(), torch.empty(0)).device.type == "cpu"
+
+
+def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
+    spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+    compressor = BitSpikeCompressor()
+
+    compressed = compressor.compress(spikes)
+    decompressed = compressor.decompress(compressed, spikes.shape)
+
+    assert compressed.device.type == "cpu"
+    torch.testing.assert_close(decompressed, spikes)
 
 
 def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):
