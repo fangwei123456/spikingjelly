@@ -107,13 +107,17 @@ def test_argument_separate_combine():
 
 
 def test_compressors_accept_tuple_shapes_on_decompress():
-    spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
-    shape = tuple(spikes.shape)
+    bit_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    bit_spikes = torch.tensor(
+        [[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], device=bit_device
+    )
+    shape = tuple(bit_spikes.shape)
 
     bit = BitSpikeCompressor()
-    bit_decompressed = bit.decompress(bit.compress(spikes), shape)
-    torch.testing.assert_close(bit_decompressed, spikes)
+    bit_decompressed = bit.decompress(bit.compress(bit_spikes), shape)
+    torch.testing.assert_close(bit_decompressed, bit_spikes)
 
+    spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
     sparse = SparseSpikeCompressor()
     sparse_decompressed = sparse.decompress(sparse.compress(spikes), shape)
     torch.testing.assert_close(sparse_decompressed, spikes)
