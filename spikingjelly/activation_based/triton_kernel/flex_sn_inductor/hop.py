@@ -112,6 +112,8 @@ def eager_scan(
         raise ValueError("flex_sn_scan requires at least one input sequence")
 
     T = inputs_seq[0].shape[0]
+    if T == 0:
+        raise ValueError("empty input sequence: T == 0 not supported")
     for i, x in enumerate(inputs_seq):
         if x.shape[0] != T:
             raise ValueError(
@@ -176,6 +178,8 @@ def eager_scan_final_state(
         raise ValueError("flex_sn_scan requires at least one input sequence")
 
     T = inputs_seq[0].shape[0]
+    if T == 0:
+        raise ValueError("empty input sequence: T == 0 not supported")
     for i, x in enumerate(inputs_seq):
         if x.shape[0] != T:
             raise ValueError(

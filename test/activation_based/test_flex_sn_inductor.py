@@ -26,6 +26,9 @@ from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     lowerable_while_loop_scan,
     lowerable_while_loop_available,
 )
+from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    hop as flexsn_hop,
+)
 from spikingjelly.activation_based.triton_kernel.flexsn.info import FlexSNInfo
 from spikingjelly.activation_based.triton_kernel.flexsn.wrapper import (
     flexsn_backward_ncl_bucket,
@@ -94,6 +97,17 @@ def test_hop_matches_manual_loop_with_lifted_tensor(rng):
 
     torch.testing.assert_close(s_seq, torch.stack(expected_s, dim=0))
     torch.testing.assert_close(v_seq, torch.stack(expected_v, dim=0))
+
+
+def test_hop_rejects_empty_input_sequence():
+    x = torch.empty(0, 8)
+    v0 = torch.zeros(8)
+
+    with pytest.raises(ValueError, match="T == 0"):
+        flex_sn_scan(_lif_core, 1, 1, 1, x, v0)
+
+    with pytest.raises(ValueError, match="T == 0"):
+        flexsn_hop.eager_scan_final_state(_lif_core, 1, 1, 1, x, v0)
 
 
 def test_kernel_names_include_graph_fingerprint():
