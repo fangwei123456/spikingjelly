@@ -354,6 +354,42 @@ def test_inductor_zero_state_materialization_uses_registered_state_specs():
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
+def test_inductor_zero_state_materialization_overrides_registered_device_at_runtime():
+    info = FlexSNInfo(
+        num_inputs=1,
+        num_outputs=1,
+        num_states=1,
+        fwd_core_args=[],
+        fwd_core_returns=[],
+        fwd_core_recipients=[],
+        fwd_kernel_returns=[],
+        num_fwd_kernel_returns=0,
+        c2k_return_mapping=[],
+    )
+    bundle = flexsn_custom_ops.FlexSNKernelHandle(
+        inference_kernel=None,
+        inference_info=info,
+        inference_final_state_kernel=None,
+        inference_final_state_info=None,
+        forward_kernel=None,
+        forward_final_state_kernel=None,
+        backward_kernel=None,
+        backward_final_state_kernel=None,
+        training_info=None,
+        state_template_specs=(((3, 5), torch.float32, torch.device("cpu")),),
+    )
+    x_seq = torch.randn(4, 8, dtype=torch.float16, device="cuda")
+
+    materialized = flexsn_custom_ops._materialize_zero_state_args(bundle, info, [x_seq])
+
+    assert len(materialized) == 2
+    assert materialized[1].shape == (3, 5)
+    assert materialized[1].dtype == torch.float32
+    assert materialized[1].device.type == "cuda"
+    torch.testing.assert_close(materialized[1], torch.zeros(3, 5, device="cuda"))
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
 def test_inductor_backward_final_state_kernel_handles_small_t_large_token_workloads():
     small_t_large_tokens = torch.randn((4, 8, 224, 224), device="cuda")
     small_t_medium_tokens = torch.randn((4, 32, 3, 32, 32), device="cuda")
@@ -402,10 +438,9 @@ def test_inductor_backend_in_supported_backends():
 def test_hop_rejects_wrong_arity():
     x = torch.randn(4, 8)
     v0 = torch.zeros(8)
-    extra = torch.zeros(8)
 
-    with pytest.raises(ValueError, match="expected 2 tensor args"):
-        flex_sn_scan(_lif_core, 1, 1, 1, x, v0, extra)
+    with pytest.raises(ValueError, match="expected at least 2 tensor args"):
+        flex_sn_scan(_lif_core, 1, 1, 1, x)
 
 
 def test_hop_accepts_single_tensor_return(rng):

@@ -97,15 +97,16 @@ def eager_scan(
     loop into an FX graph that Inductor can lower normally.
     """
     expected = num_inputs + num_states
-    if len(flat_args) != expected:
+    if len(flat_args) < expected:
         raise ValueError(
-            f"flex_sn_scan expected {expected} tensor args "
+            f"flex_sn_scan expected at least {expected} tensor args "
             f"(num_inputs={num_inputs} + num_states={num_states}), "
             f"got {len(flat_args)}"
         )
 
     inputs_seq = flat_args[:num_inputs]
-    states = list(flat_args[num_inputs:])
+    states = list(flat_args[num_inputs : num_inputs + num_states])
+    lifted_args = flat_args[num_inputs + num_states :]
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -122,7 +123,7 @@ def eager_scan(
 
     for t in range(T):
         step_inputs = tuple(x[t] for x in inputs_seq)
-        results = _normalize_scan_results(core_fn(*step_inputs, *states))
+        results = _normalize_scan_results(core_fn(*step_inputs, *states, *lifted_args))
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "

@@ -606,19 +606,11 @@ def get_flexsn_backward_final_state_kernel(
     num_states = info.num_states
     n = len(info.c2k_return_mapping)
 
-    kernel_input_signature = f",\n{INDENTATION}".join(
-        [f"grad_s{i}_seq_ptr" for i in range(num_outputs)]
-    )
-    if num_states > 0:
-        kernel_input_signature += f",\n{INDENTATION}"
-        kernel_input_signature += f",\n{INDENTATION}".join(
-            [f"grad_v{i}_final_ptr" for i in range(num_states)]
-        )
+    kernel_input_signature_parts = [f"grad_s{i}_seq_ptr" for i in range(num_outputs)]
+    kernel_input_signature_parts += [f"grad_v{i}_final_ptr" for i in range(num_states)]
     if n > 0:
-        kernel_input_signature += f",\n{INDENTATION}"
-        kernel_input_signature += f",\n{INDENTATION}".join(
-            [f"res{i}_b_seq_ptr" for i in range(n)]
-        )
+        kernel_input_signature_parts += [f"res{i}_b_seq_ptr" for i in range(n)]
+    kernel_input_signature = _join_signature(kernel_input_signature_parts)
 
     kernel_output_signature = _join_signature(
         [f"grad_x{i}_seq_ptr" for i in range(num_inputs)]
