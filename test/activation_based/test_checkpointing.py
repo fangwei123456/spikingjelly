@@ -3,6 +3,7 @@ import copy
 import torch
 import torch.nn as nn
 
+import spikingjelly.activation_based.memopt as memopt
 from spikingjelly.activation_based.memopt.checkpointing import (
     in_gc_1st_forward,
     query_autocast,
@@ -16,7 +17,9 @@ from spikingjelly.activation_based.memopt.checkpointing import (
 )
 from spikingjelly.activation_based.memopt.compress import (
     BaseSpikeCompressor,
+    BitSpikeCompressor,
     NullSpikeCompressor,
+    SparseSpikeCompressor,
 )
 from spikingjelly.activation_based import neuron
 
@@ -53,6 +56,10 @@ def test_thread_local_functions():
             assert in_gc_1st_forward()
         assert in_gc_1st_forward()
     assert not in_gc_1st_forward()
+
+
+def test_memopt_package_imports_pipeline_api():
+    assert hasattr(memopt, "memory_optimization")
 
 
 def test_autocast_query():
@@ -97,6 +104,23 @@ def test_argument_separate_combine():
     assert torch.equal(combined[0], tensor1)
     assert combined[1] == "string"
     assert torch.equal(combined[2], tensor2)
+
+
+def test_compressors_accept_tuple_shapes_on_decompress():
+    bit_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    bit_spikes = torch.tensor(
+        [[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], device=bit_device
+    )
+    shape = tuple(bit_spikes.shape)
+
+    bit = BitSpikeCompressor()
+    bit_decompressed = bit.decompress(bit.compress(bit_spikes), shape)
+    torch.testing.assert_close(bit_decompressed, bit_spikes)
+
+    spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+    sparse = SparseSpikeCompressor()
+    sparse_decompressed = sparse.decompress(sparse.compress(spikes), shape)
+    torch.testing.assert_close(sparse_decompressed, spikes)
 
 
 def test_input_compressed_gc():

@@ -434,15 +434,12 @@ def _inference_time_profile_worker(net, dummy_input, q, device, N=50):
     dummy_input = _dummy_input_to_device(dummy_input, device)
 
     net.eval()
-    with (
-        torch.no_grad(),
-        LayerWiseFPCUDATimeProfiler(
-            (net,),
-            model_names=("net",),
-            search_mode=("submodules",),
-            instances=(GCContainer,),
-        ) as prof,
-    ):
+    with torch.no_grad(), LayerWiseFPCUDATimeProfiler(
+        (net,),
+        model_names=("net",),
+        search_mode=("submodules",),
+        instances=(GCContainer,),
+    ) as prof:
         for _ in range(N):
             _ = net(*dummy_input)
             functional.reset_net(net)
