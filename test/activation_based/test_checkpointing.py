@@ -468,7 +468,7 @@ def test_memory_optimization_level3_caches_blocked_candidates(monkeypatch):
     assert isinstance(optimized[0], GCContainer)
     assert isinstance(optimized[1], TCGCContainer)
     assert temporal_attempts["0"] == 1
-    assert temporal_attempts["1"] == 2
+    assert temporal_attempts["1"] == 1
 
 
 def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
