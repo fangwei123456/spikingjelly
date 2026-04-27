@@ -160,11 +160,46 @@ def eager_scan_final_state(
     *flat_args: torch.Tensor,
 ) -> Tuple[torch.Tensor, ...]:
     """Eager scan variant that returns final states instead of full state seqs."""
-    results = eager_scan(core_fn, num_inputs, num_states, num_outputs, *flat_args)
-    output_seqs = results[:num_outputs]
-    state_seqs = results[num_outputs:]
-    final_states = tuple(state_seq[-1] for state_seq in state_seqs)
-    return (*output_seqs, *final_states)
+    expected = num_inputs + num_states
+    if len(flat_args) < expected:
+        raise ValueError(
+            f"flex_sn_scan expected at least {expected} tensor args "
+            f"(num_inputs={num_inputs} + num_states={num_states}), "
+            f"got {len(flat_args)}"
+        )
+
+    inputs_seq = flat_args[:num_inputs]
+    states = list(flat_args[num_inputs : num_inputs + num_states])
+    lifted_args = flat_args[num_inputs + num_states :]
+
+    if num_inputs == 0:
+        raise ValueError("flex_sn_scan requires at least one input sequence")
+
+    T = inputs_seq[0].shape[0]
+    for i, x in enumerate(inputs_seq):
+        if x.shape[0] != T:
+            raise ValueError(
+                f"input {i} has leading dim {x.shape[0]}, expected {T}"
+            )
+
+    output_buffers = [[] for _ in range(num_outputs)]
+
+    for t in range(T):
+        step_inputs = tuple(x[t] for x in inputs_seq)
+        results = _normalize_scan_results(core_fn(*step_inputs, *states, *lifted_args))
+        if len(results) != num_outputs + num_states:
+            raise ValueError(
+                f"core returned {len(results)} values, "
+                f"expected num_outputs + num_states "
+                f"= {num_outputs + num_states}"
+            )
+        outputs = results[:num_outputs]
+        states = list(results[num_outputs:])
+        for i, y in enumerate(outputs):
+            output_buffers[i].append(y)
+
+    output_seqs = tuple(torch.stack(buf, dim=0) for buf in output_buffers)
+    return (*output_seqs, *states)
 
 
 lowerable_scan = None

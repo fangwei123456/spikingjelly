@@ -130,7 +130,8 @@ def bench_single_shape(step_shape, repeats=20, warmup=6):
 
 def main():
     if not torch.cuda.is_available():
-        raise RuntimeError("CUDA is required for this benchmark.")
+        print("CUDA not available - skipping benchmark.")
+        return
     torch.backends.cudnn.benchmark = True
     print("GPU", torch.cuda.get_device_name(0))
     print("bucket thresholds", BUCKET_LABELS)

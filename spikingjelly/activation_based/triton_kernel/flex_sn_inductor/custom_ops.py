@@ -211,8 +211,8 @@ def _materialize_template(spec):
 
 
 def _materialize_runtime_template_arg(spec):
-    _, dtype, device = spec
-    return torch.empty((), dtype=dtype, device=device)
+    shape, dtype, device = spec
+    return torch.empty((), dtype=dtype, device=device).expand(shape)
 
 
 def _resolve_state_template_specs(
