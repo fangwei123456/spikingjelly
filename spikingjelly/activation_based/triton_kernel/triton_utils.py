@@ -6,6 +6,7 @@ https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 import atexit
 import contextlib
 import functools
+import os
 import threading
 from pathlib import Path
 from typing import Callable
@@ -18,10 +19,10 @@ from . import dummy
 try:
     from torch.library import triton_op
 
-    _USE_TRITON_OP = True
+    _TRITON_OP_AVAILABLE = True
 except BaseException:
     triton_op = dummy.DummyImport()
-    _USE_TRITON_OP = False
+    _TRITON_OP_AVAILABLE = False
 
 try:
     import triton
@@ -64,14 +65,25 @@ def convert_and_store(pointer, value, boundary_check):
     tl.store(pointer, value, boundary_check=boundary_check)
 
 
+def _env_flag_enabled(var_name: str) -> bool:
+    v = os.getenv(var_name)
+    if v is None:
+        return True
+    return v.strip().lower() not in ("0", "false", "off", "no")
+
+
 def register_op(opname: str, mutates_args=()):
-    if _USE_TRITON_OP:
+    if _env_flag_enabled("SJ_USE_TRITON_OP") and _TRITON_OP_AVAILABLE:
         return triton_op(opname, mutates_args=mutates_args)
     return torch.library.custom_op(opname, mutates_args=mutates_args)
 
 
 def wrap_triton(kernel):
-    if _USE_TRITON_OP:
+    if (
+        _TRITON_OP_AVAILABLE
+        and _env_flag_enabled("SJ_USE_TRITON_OP")
+        and _env_flag_enabled("SJ_USE_WRAP_TRITON")
+    ):
         return torch.library.wrap_triton(kernel)
     return kernel
 

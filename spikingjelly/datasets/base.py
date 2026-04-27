@@ -1039,8 +1039,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         else:
             # not reachable
             raise NotImplementedError(
-                f"Please specify the frames number or duration or "
-                f"custom integrate function."
+                "Please specify the frames number or duration or "
+                "custom integrate function."
             )
 
     def get_root_when_train_is_none(self, _root: Path) -> Path:

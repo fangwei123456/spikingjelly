@@ -1,22 +1,24 @@
+import argparse
 import logging
 
 logging.getLogger().setLevel(logging.INFO)
+
+import os
+
+import h5py
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torchvision
 from torchvision import transforms
+
 from spikingjelly.activation_based import (
+    encoding,
     functional,
     lava_exchange,
-    surrogate,
-    encoding,
     neuron,
+    surrogate,
 )
-import torch.nn.functional as F
-from torch.utils.data import DataLoader
-import os
-import argparse
-import h5py
 
 
 def export_hdf5(net, filename):
@@ -142,7 +144,7 @@ def main():
             optimizer.zero_grad()
             img = img.to(args.device)
             label = label.to(args.device)
-            img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+            img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
             fr = net(encoder(img)).mean(0)
             loss = F.cross_entropy(fr, label)
@@ -165,7 +167,7 @@ def main():
             for img, label in test_data_loader:
                 img = img.to(args.device)
                 label = label.to(args.device)
-                img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+                img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
                 fr = net(encoder(img)).mean(0)
                 loss = F.cross_entropy(fr, label)
@@ -194,7 +196,7 @@ def main():
         for img, label in test_data_loader:
             img = img.to(args.device)
             label = label.to(args.device)
-            img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+            img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
             img = encoder(img)
             img = lava_exchange.TNX_to_NXT(img)
             fr = net_ladl(img).mean(-1)

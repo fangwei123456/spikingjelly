@@ -2,11 +2,11 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from spikingjelly.activation_based import neuron, layer, functional
+from spikingjelly.activation_based import functional, layer, neuron
 from spikingjelly.activation_based.profiler import (
     CategoryMemoryProfiler,
-    LayerWiseMemoryProfiler,
     LayerWiseFPCUDATimeProfiler,
+    LayerWiseMemoryProfiler,
 )
 
 
@@ -57,7 +57,7 @@ def test_layer_wise_profiling():
         loss = y.sum()
         loss.backward()
         functional.reset_net(net)
-    results = prof.export(output=True)
+    prof.export(output=True)
 
 
 def test_time_profiling():
@@ -76,7 +76,7 @@ def test_time_profiling():
                 x = torch.randn(7, 8, 1, 28, 28).cuda()
                 _ = net(x)
                 functional.reset_net(net)
-    results = prof.export(output=True)
+    prof.export(output=True)
 
 
 def test_exception_safety():
@@ -96,8 +96,8 @@ def test_exception_safety():
             raise RuntimeError("Simulate an exception.")
             loss = y.sum()
             loss.backward()
-    print(f"len(prof.hooks)={len(prof.hooks)}")
-    assert len(prof.hooks) == 0
+            print(f"len(prof.hooks)={len(prof.hooks)}")
+            assert len(prof.hooks) == 0
 
 
 if __name__ == "__main__":

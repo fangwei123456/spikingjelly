@@ -200,13 +200,11 @@ class BaseNode(base.MemoryModule):
                 self.register_memory("v_seq", None)
 
     @staticmethod
-    @torch.jit.script
     def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
         v = (1.0 - spike) * v + spike * v_reset
         return v
 
     @staticmethod
-    @torch.jit.script
     def jit_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
         v = v - spike * v_threshold
         return v
@@ -353,7 +351,16 @@ class BaseNode(base.MemoryModule):
     def v_float_to_tensor(self, x: torch.Tensor):
         if isinstance(self.v, float):
             v_init = self.v
-            self.v = torch.full_like(x.data, v_init)
+            self.v = torch.full_like(x, v_init, requires_grad=False)
+        elif isinstance(self.v, torch.Tensor):
+            if self.v.shape != x.shape:
+                self.v = torch.full_like(
+                    x,
+                    self.v_reset if self.v_reset is not None else 0.0,
+                    requires_grad=False,
+                )
+            elif self.v.dtype != x.dtype or self.v.device != x.device:
+                self.v = self.v.to(dtype=x.dtype, device=x.device)
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):

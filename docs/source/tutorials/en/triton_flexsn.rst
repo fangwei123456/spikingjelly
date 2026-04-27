@@ -397,7 +397,6 @@ general.
     When using ``FlexSN``, please note the following:
 
     * It should be executed on a GPU.
-    * ``FlexSN`` is not compatible with ``torch.jit``. Please set the environment variable ``PYTORCH_JIT=0`` before running your script.
     * The Triton backend only supports multi-step mode ``step_mode="m"``.
     * The PyTorch backend is implemented by repeatedly calling ``core``.
     * In the design of ``FlexSN``, compromises are made in efficiency in order to pursue generality. At present, ``IFNode``, ``LIFNode``, and ``PLIFNode`` are equipped with highly optimized predefined Triton kernels. Please use these predefined kernels instead of ``FlexSN`` whenever possible to obtain higher performance.

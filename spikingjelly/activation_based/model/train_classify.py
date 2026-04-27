@@ -1,22 +1,23 @@
+import argparse
 import datetime
 import os
+import random
+import sys
 import time
 import warnings
-from .tv_ref_classify import presets, transforms, utils
+
+import numpy as np
 import torch
 import torch.utils.data
 import torchvision
-from .tv_ref_classify.sampler import RASampler
 from torch import nn
 from torch.utils.data.dataloader import default_collate
-from torchvision.transforms.functional import InterpolationMode
-import random
-import numpy as np
 from torch.utils.tensorboard import SummaryWriter
-import sys
-import argparse
-from .. import functional
+from torchvision.transforms.functional import InterpolationMode
 
+from .. import functional
+from .tv_ref_classify import presets, transforms, utils
+from .tv_ref_classify.sampler import RASampler
 
 try:
     from torchvision import prototype
@@ -49,6 +50,9 @@ def seed_worker(worker_id):
 
 
 class Trainer:
+    def get_data_to_device_kwargs(self, args):
+        return {"non_blocking": not args.disable_pinmemory}
+
     def cal_acc1_acc5(self, output, target):
         # define how to calculate acc1 and acc5
         acc1, acc5 = utils.accuracy(output, target, topk=(1, 5))
@@ -66,6 +70,63 @@ class Trainer:
         # define how to process y = model(x)
         return y
 
+    def compile_model(
+        self, args, model: nn.Module, *, enabled: bool | None = None
+    ) -> nn.Module:
+        if enabled is None:
+            enabled = args.compile
+
+        if not enabled:
+            return model
+
+        if not hasattr(torch, "compile"):
+            raise RuntimeError(
+                "torch.compile is not available in the current PyTorch version."
+            )
+
+        compile_kwargs = {"backend": args.compile_backend}
+        if args.compile_mode is not None:
+            compile_kwargs["mode"] = args.compile_mode
+
+        if args.compile_backend == "inductor":
+            compile_options = {}
+            if args.compile_disable_cudagraphs:
+                compile_options.update(
+                    {
+                        "triton.cudagraphs": False,
+                        "triton.cudagraph_trees": False,
+                    }
+                )
+            if compile_options:
+                compile_kwargs["options"] = compile_options
+
+        try:
+            return torch.compile(model, **compile_kwargs)
+        except RuntimeError as e:
+            compile_options = compile_kwargs.get("options")
+            error_text = str(e).lower()
+            retryable_option_error = (
+                "options" in error_text
+                or "cudagraph" in error_text
+                or "config" in error_text
+            )
+            if not compile_options or not retryable_option_error:
+                raise
+            warnings.warn(
+                "torch.compile failed with backend options "
+                f"{compile_options!r}; retrying without options. "
+                f"Original error: {e}",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            compile_kwargs.pop("options", None)
+            return torch.compile(model, **compile_kwargs)
+
+    def get_eval_model(self, args, train_model, model_without_ddp):
+        if args.compile and not args.compile_eval:
+            return model_without_ddp
+        return train_model
+
     def train_one_epoch(
         self,
         model,
@@ -81,22 +142,22 @@ class Trainer:
         model.train()
         metric_logger = utils.MetricLogger(delimiter="  ")
         metric_logger.add_meter("lr", utils.SmoothedValue(window_size=1, fmt="{value}"))
-        metric_logger.add_meter(
-            "img/s", utils.SmoothedValue(window_size=10, fmt="{value}")
-        )
+        metric_logger.add_meter("img/s", utils.ThroughputValue(fmt="{global_avg:.3f}"))
 
         header = f"Epoch: [{epoch}]"
+        data_to_device_kwargs = self.get_data_to_device_kwargs(args)
         for i, (image, target) in enumerate(
             metric_logger.log_every(data_loader, -1, header)
         ):
             start_time = time.time()
-            image, target = image.to(device), target.to(device)
+            image = image.to(device, **data_to_device_kwargs)
+            target = target.to(device, **data_to_device_kwargs)
             with torch.cuda.amp.autocast(enabled=scaler is not None):
                 image = self.preprocess_train_sample(args, image)
                 output = self.process_model_output(args, model(image))
                 loss = criterion(output, target)
 
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=True)
             if scaler is not None:
                 scaler.scale(loss).backward()
                 if args.clip_grad_norm is not None:
@@ -124,7 +185,7 @@ class Trainer:
             metric_logger.meters["acc1"].update(acc1.item(), n=batch_size)
             metric_logger.meters["acc5"].update(acc5.item(), n=batch_size)
             metric_logger.meters["img/s"].update(
-                batch_size / (time.time() - start_time)
+                samples=batch_size, elapsed_time=time.time() - start_time
             )
         # gather the stats from all processes
         metric_logger.synchronize_between_processes()
@@ -134,7 +195,7 @@ class Trainer:
             metric_logger.acc5.global_avg,
         )
         print(
-            f"Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={metric_logger.meters['img/s']}"
+            f"Train: train_acc1={train_acc1:.3f}, train_acc5={train_acc5:.3f}, train_loss={train_loss:.6f}, samples/s={metric_logger.meters['img/s'].global_avg:.3f}"
         )
         return train_loss, train_acc1, train_acc5
 
@@ -142,13 +203,14 @@ class Trainer:
         model.eval()
         metric_logger = utils.MetricLogger(delimiter="  ")
         header = f"Test: {log_suffix}"
+        data_to_device_kwargs = self.get_data_to_device_kwargs(args)
 
         num_processed_samples = 0
         start_time = time.time()
         with torch.inference_mode():
             for image, target in metric_logger.log_every(data_loader, -1, header):
-                image = image.to(device, non_blocking=True)
-                target = target.to(device, non_blocking=True)
+                image = image.to(device, **data_to_device_kwargs)
+                target = target.to(device, **data_to_device_kwargs)
                 image = self.preprocess_test_sample(args, image)
                 output = self.process_model_output(args, model(image))
                 loss = criterion(output, target)
@@ -206,11 +268,7 @@ class Trainer:
     def load_CIFAR10(self, args):
         # Data loading code
         print("Loading data")
-        val_resize_size, val_crop_size, train_crop_size = (
-            args.val_resize_size,
-            args.val_crop_size,
-            args.train_crop_size,
-        )
+        train_crop_size = args.train_crop_size
         interpolation = InterpolationMode(args.interpolation)
 
         print("Loading training data")
@@ -454,6 +512,10 @@ class Trainer:
 
     def main(self, args):
         set_deterministic(args.seed, args.disable_uda)
+        if args.workers > 0 and args.prefetch_factor < 1:
+            raise ValueError(
+                f"--prefetch-factor must be >= 1 when --workers > 0, but got {args.prefetch_factor}."
+            )
         if args.prototype and prototype is None:
             raise ImportError(
                 "The prototype module couldn't be found. Please install the latest torchvision nightly."
@@ -502,6 +564,10 @@ class Trainer:
             pin_memory=not args.disable_pinmemory,
             collate_fn=collate_fn,
             worker_init_fn=seed_worker,
+            persistent_workers=args.persistent_workers and args.workers > 0,
+            prefetch_factor=(
+                args.prefetch_factor if args.workers > 0 else None
+            ),
         )
 
         data_loader_test = torch.utils.data.DataLoader(
@@ -511,6 +577,10 @@ class Trainer:
             num_workers=args.workers,
             pin_memory=not args.disable_pinmemory,
             worker_init_fn=seed_worker,
+            persistent_workers=args.persistent_workers and args.workers > 0,
+            prefetch_factor=(
+                args.prefetch_factor if args.workers > 0 else None
+            ),
         )
 
         print("Creating model")
@@ -544,11 +614,6 @@ class Trainer:
         lr_scheduler = self.set_lr_scheduler(args, optimizer)
 
         model_without_ddp = model
-        if args.distributed:
-            model = torch.nn.parallel.DistributedDataParallel(
-                model, device_ids=[args.gpu]
-            )
-            model_without_ddp = model.module
 
         model_ema = None
         if args.model_ema:
@@ -610,6 +675,14 @@ class Trainer:
                 if model_ema:
                     max_ema_test_acc1 = checkpoint["max_ema_test_acc1"]
 
+        model = self.compile_model(args, model_without_ddp)
+        eval_model = self.get_eval_model(args, model, model_without_ddp)
+
+        if args.distributed:
+            model = torch.nn.parallel.DistributedDataParallel(
+                model, device_ids=[args.gpu]
+            )
+
         if utils.is_main_process():
             tb_writer = SummaryWriter(tb_dir, purge_step=args.start_epoch)
             with open(
@@ -634,7 +707,9 @@ class Trainer:
                     log_suffix="EMA",
                 )
             else:
-                self.evaluate(args, model, criterion, data_loader_test, device=device)
+                self.evaluate(
+                    args, eval_model, criterion, data_loader_test, device=device
+                )
             return
 
         for epoch in range(args.start_epoch, args.epochs):
@@ -660,9 +735,9 @@ class Trainer:
                 tb_writer.add_scalar("train_acc5", train_acc5, epoch)
 
             lr_scheduler.step()
-            self.before_test_one_epoch(args, model, epoch)
+            self.before_test_one_epoch(args, eval_model, epoch)
             test_loss, test_acc1, test_acc5 = self.evaluate(
-                args, model, criterion, data_loader_test, device=device
+                args, eval_model, criterion, data_loader_test, device=device
             )
             if utils.is_main_process():
                 tb_writer.add_scalar("test_loss", test_loss, epoch)
@@ -716,12 +791,12 @@ class Trainer:
                 if save_max_test_acc1:
                     utils.save_on_master(
                         checkpoint,
-                        os.path.join(pt_dir, f"checkpoint_max_test_acc1.pth"),
+                        os.path.join(pt_dir, "checkpoint_max_test_acc1.pth"),
                     )
                 if model_ema and save_max_ema_test_acc1:
                     utils.save_on_master(
                         checkpoint,
-                        os.path.join(pt_dir, f"checkpoint_max_ema_test_acc1.pth"),
+                        os.path.join(pt_dir, "checkpoint_max_ema_test_acc1.pth"),
                     )
 
                 if utils.is_main_process() and epoch > 0:
@@ -996,9 +1071,47 @@ class Trainer:
             help="not use pin memory in dataloader, which can help reduce memory consumption",
         )
         parser.add_argument(
+            "--persistent-workers",
+            action="store_true",
+            help="keep dataloader workers alive across epochs for better throughput",
+        )
+        parser.add_argument(
+            "--prefetch-factor",
+            default=2,
+            type=int,
+            help="number of batches prefetched by each dataloader worker (default: 2)",
+        )
+        parser.add_argument(
             "--disable-amp",
             action="store_true",
             help="not use automatic mixed precision training",
+        )
+        parser.add_argument(
+            "--compile",
+            action="store_true",
+            help="compile the training model with torch.compile",
+        )
+        parser.add_argument(
+            "--compile-backend",
+            default="inductor",
+            type=str,
+            help="backend passed to torch.compile (default: inductor)",
+        )
+        parser.add_argument(
+            "--compile-mode",
+            default=None,
+            type=str,
+            help="optional mode passed to torch.compile, e.g. default or max-autotune",
+        )
+        parser.add_argument(
+            "--compile-disable-cudagraphs",
+            action="store_true",
+            help="disable Inductor cudagraph options for better cross-version stability",
+        )
+        parser.add_argument(
+            "--compile-eval",
+            action="store_true",
+            help="also compile evaluation instead of using the eager model for validation",
         )
         parser.add_argument(
             "--local_rank",

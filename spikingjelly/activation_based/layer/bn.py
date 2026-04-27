@@ -147,7 +147,10 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
                 raise ValueError(
                     f"expected x with shape [T, N, C, H, W], but got x with shape {x.shape}!"
                 )
-            return functional.seq_to_ann_forward(x, self.super_forward)
+            y_shape = [x.shape[0], x.shape[1]]
+            x = self.super_forward(x.flatten(0, 1))
+            y_shape.extend(x.shape[1:])
+            return x.view(y_shape)
 
 
 class BatchNorm3d(nn.BatchNorm3d, base.StepModule):

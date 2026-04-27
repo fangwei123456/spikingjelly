@@ -1,14 +1,13 @@
-from typing import Callable, Optional
 import math
+from typing import Callable, Optional
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from .. import surrogate, base
+from .. import base, surrogate
 from .base_node import BaseNode
 from .lif import LIFNode
-
 
 __all__ = ["GatedLIFNode", "KLIFNode", "CUBALIFNode", "LIAFNode"]
 
@@ -380,7 +379,7 @@ class KLIFNode(BaseNode):
 
         Constructor of the K-based Leaky Integrate-and-Fire (KLIF) neuron.
 
-        The KLIF neuron is proposed in  
+        The KLIF neuron is proposed in
         `KLIF: An optimized spiking neuron unit for tuning surrogate gradient slope and membrane potential <https://arxiv.org/abs/2302.09238>`_.
         It can be regarded as a leaky integrator with a modified firing and reset mechanism compared to conventional LIF neurons.
 
@@ -480,7 +479,6 @@ class KLIFNode(BaseNode):
         return ("torch",)
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor
     ):
@@ -489,7 +487,6 @@ class KLIFNode(BaseNode):
         return v
 
     @staticmethod
-    @torch.jit.script
     def neuronal_charge_no_decay_input(
         x: torch.Tensor, v: torch.Tensor, v_reset: float, tau: float, k: torch.Tensor
     ):
@@ -667,7 +664,7 @@ class LIAFNode(LIFNode):
         self.threshold_related = threshold_related
 
         assert self.backend == "torch", "LIAFNode only supports for backend='torch'!"
-        assert self.single_step_cupy_fp32_inference == False, (
+        assert not self.single_step_cupy_fp32_inference, (
             "LIAFNode does not support for single_step_cupy_fp32_inference!"
         )
 

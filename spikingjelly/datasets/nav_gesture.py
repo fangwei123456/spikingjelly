@@ -4,10 +4,22 @@
 # Email: jean-matthieu dot maro, hosted at inserm, which is located in FRance.
 # Thanks to Germain Haessig and Laurent Dardelet.
 
-from struct import unpack
-import numpy as np
+import multiprocessing
+import os
+import shutil
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from struct import unpack
+from typing import Callable, Optional, Tuple, Union
 
+import numpy as np
+from torchvision.datasets.utils import extract_archive
+
+from .. import configure
+from . import utils
+from .base import NeuromorphicDatasetFolder
 
 __all__ = ["NAVGestureWalk", "NAVGestureSit"]
 
@@ -177,24 +189,6 @@ def _readATIS_tddat(
         )
 
     return timestamps, coords, polarities, removed_events
-
-
-# ------------------------------------------------------------------------------
-
-
-from typing import Callable, Optional, Tuple, Union
-import os
-from pathlib import Path
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
-import shutil
-import time
-
-from torchvision.datasets.utils import extract_archive
-
-from .. import configure
-from . import utils
-from .base import NeuromorphicDatasetFolder
 
 
 def _read_aedat_save_to_np(bin_file: Union[str, Path], np_file: Union[str, Path]):

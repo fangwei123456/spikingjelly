@@ -389,7 +389,6 @@ FlexSN 使用流程
     在使用 ``FlexSN`` 时，需注意：
 
     * 应在 GPU 上运行。
-    * ``FlexSN`` 不兼容 ``torch.jit``。运行脚本前，请设置环境变量 ``PYTORCH_JIT=0``。
     * Triton 后端仅支持多步运行模式 ``step_mode="m"`` 。
     * PyTorch 后端是通过反复调用 ``core`` 来实现的。
     * ``FlexSN`` 在设计时，为了追求泛用性，在效率方面做出了妥协。目前， ``IFNode`` ， ``LIFNode`` 和 ``PLIFNode`` 配备了高度优化的预定义 Triton 内核。请尽量使用这些预定义的内核以获取更高的性能！

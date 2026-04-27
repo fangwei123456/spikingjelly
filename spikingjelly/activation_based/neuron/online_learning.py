@@ -184,7 +184,6 @@ class OTTTLIFNode(LIFNode):
                 )
 
     @staticmethod
-    @torch.jit.script
     def track_trace(spike: torch.Tensor, trace: torch.Tensor, tau: float):
         with torch.no_grad():
             trace = trace * (1.0 - 1.0 / tau) + spike
@@ -237,32 +236,9 @@ class OTTTLIFNode(LIFNode):
             else:
                 raise ValueError(self.backend)
         else:
-            if self.v_reset is None:
-                if self.decay_input:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_soft_reset_decay_input(
-                            x, self.v, self.v_threshold, self.tau
-                        )
-                    )
-                else:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_soft_reset_no_decay_input(
-                            x, self.v, self.v_threshold, self.tau
-                        )
-                    )
-            else:
-                if self.decay_input:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_hard_reset_decay_input(
-                            x, self.v, self.v_threshold, self.v_reset, self.tau
-                        )
-                    )
-                else:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_hard_reset_no_decay_input(
-                            x, self.v, self.v_threshold, self.v_reset, self.tau
-                        )
-                    )
+            spike, self.v = self._eval_single_step_forward(
+                x, self.v, self.v_threshold, self.v_reset, self.tau, self.decay_input,
+            )
             return spike
 
 
@@ -448,30 +424,7 @@ class SLTTLIFNode(LIFNode):
             else:
                 raise ValueError(self.backend)
         else:
-            if self.v_reset is None:
-                if self.decay_input:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_soft_reset_decay_input(
-                            x, self.v, self.v_threshold, self.tau
-                        )
-                    )
-                else:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_soft_reset_no_decay_input(
-                            x, self.v, self.v_threshold, self.tau
-                        )
-                    )
-            else:
-                if self.decay_input:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_hard_reset_decay_input(
-                            x, self.v, self.v_threshold, self.v_reset, self.tau
-                        )
-                    )
-                else:
-                    spike, self.v = (
-                        self.jit_eval_single_step_forward_hard_reset_no_decay_input(
-                            x, self.v, self.v_threshold, self.v_reset, self.tau
-                        )
-                    )
+            spike, self.v = self._eval_single_step_forward(
+                x, self.v, self.v_threshold, self.v_reset, self.tau, self.decay_input,
+            )
             return spike

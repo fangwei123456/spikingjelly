@@ -1,6 +1,8 @@
 import logging
+import operator as _op
+import typing
 import torch
-import re
+import torch.fx as _fx
 import sys
 
 
@@ -35,9 +37,9 @@ class VarNode:
         # 如果value非空，表明其是一个常数值，直接返回数值即可，例如 value = 0.1 返回 '0.1f'
         if self.value is not None:
             if self.instance == "int":
-                return self.name
+                return str(int(self.value))
             elif self.instance == "float":
-                return self.name + "f"
+                return f"{float(self.value)}f"
             else:
                 raise ValueError(self.instance)
 
@@ -58,135 +60,159 @@ class VarNode:
 
 
 def analyse_graph(custom_fun, requires_grad: tuple):
-    graph: torch.Graph = torch.jit.script(custom_fun).graph
+    # Map from torch.fx operator targets to aten-style kind strings
+    _FX_TO_KIND = {
+        _op.add: "aten::add",
+        _op.sub: "aten::sub",
+        _op.mul: "aten::mul",
+        _op.truediv: "aten::div",
+    }
+
+    # typing.get_type_hints() resolves string annotations produced by
+    # 'from __future__ import annotations' (PEP 563), unlike __annotations__.
+    try:
+        annotations = typing.get_type_hints(custom_fun)
+    except (NameError, AttributeError):
+        annotations = custom_fun.__annotations__
+    n_params = sum(1 for k in annotations if k != "return")
+    if n_params < 2:
+        raise ValueError(
+            "custom_fun must have at least two parameters: 'x: torch.Tensor' and "
+            "'v_last: torch.Tensor'."
+        )
+    if len(requires_grad) != n_params:
+        raise ValueError(
+            f"requires_grad has {len(requires_grad)} entries but custom_fun has "
+            f"{n_params} parameters; they must have the same length to avoid "
+            "silently dropping gradients for trailing inputs."
+        )
+
+    gm = _fx.symbolic_trace(custom_fun)
+    graph = gm.graph
 
     logging.debug(f"\ngraph = {graph}")
-    # 生成 输入 中间 输出 节点
     assert sys.version_info.major >= 3 and sys.version_info.minor >= 6
-    # python >= 3.6时，字典默认是有序的
-    # key是VarNode.debug_name，value是VarNode
+
     input_nodes = {}
     output_nodes = {}
     inter_nodes = {}
+    _fx_to_var = {}
+    _const_id = [0]
 
-    assert custom_fun.__annotations__.__len__() >= 2
-    for i, (item, name) in enumerate(
-        zip(graph.inputs(), custom_fun.__annotations__.keys())
-    ):
-        # 要求custom_fun一定是custom_fun(x: torch.Tensor, v_last: torch.Tensor, ...)的形式
-        if i == 0:
-            assert str(item.type()) == "Tensor" and name == "x"
-        elif i == 1:
-            assert str(item.type()) == "Tensor" and name == "v_last"
+    def _make_const(value):
+        _const_id[0] += 1
+        cname = f"const_{_const_id[0]}"
+        instance = "int" if isinstance(value, int) else "float"
+        var = VarNode(prefix="inter", name=cname, instance=instance, value=value)
+        inter_nodes[cname] = var
+        return var
 
-        # 用python函数中的name覆盖掉jit自动生成的name
-        # 仅包括输入。中间变量的命名仍然是jit设置的，不会被更改
-        item.setDebugName(name)
-
-        node = VarNode(prefix="input", name=item.debugName(), instance=item.type())
-        if node.instance == "Tensor" and requires_grad[i]:
-            node.requires_grad = True
-
-        logging.debug(f"\ninput node [{i}] = {node}")
-        assert node not in input_nodes
-        input_nodes[node.debug_name] = node
-
-    for i, item in enumerate(graph.outputs()):
-        if i == 0:
-            assert str(item.type()) == "Tensor"
-            item.setDebugName("h")
-
-        elif i > 0:
-            raise NotImplementedError(
-                "For the moment, we only support for single output!"
-            )
-
-        node = VarNode(prefix="output", name=item.debugName(), instance=item.type())
-
-        logging.debug(f"\noutput node [{i}] = {node}")
-        assert node not in output_nodes
-        output_nodes[node.debug_name] = node
+    def _resolve(arg):
+        if isinstance(arg, _fx.Node):
+            return _fx_to_var[arg]
+        if isinstance(arg, (int, float)):
+            return _make_const(arg)
+        raise NotImplementedError(f"unsupported arg type: {type(arg)}")
 
     cmds = []
-    # cmds的元素是一个元组，为 (output, fun, inputs)
-    # 这里的output是VarNode，fun是str，inputs是(VarNode)
-    for node in graph.nodes():
-        # item: torch.Note
-        fun = node.kind()
-        if fun == "prim::Constant":
-            item = node.output()
-            assert (
-                item.debugName() not in input_nodes
-                and item.debugName() not in output_nodes
-            )
+    ph_idx = 0
 
-            i_node = VarNode(
-                prefix="inter", name=item.debugName(), instance=item.type()
-            )
-            value = None
-
-            # 从命令中提取出常数值
-            if i_node.instance == "int":
-                pattern = re.compile(r".*prim::Constant\[value=([0-9]+)\]")
-                m = pattern.match(str(node))
-                value = int(m.groups()[0])
-
-            elif i_node.instance == "float":
-                pattern = re.compile(r".*prim::Constant\[value=([0-9\.]+)\]")
-                m = pattern.match(str(node))
-                value = float(m.groups()[0])
-
+    for fx_node in graph.nodes:
+        if fx_node.op == "placeholder":
+            name = fx_node.name
+            ann = annotations.get(name)
+            if ann is None:
+                raise TypeError(
+                    f"Parameter '{name}' of custom_fun must have a type annotation "
+                    "(torch.Tensor, float, or int)."
+                )
+            if ann is torch.Tensor:
+                inst = "Tensor"
+            elif ann is float:
+                inst = "float"
+            elif ann is int:
+                inst = "int"
             else:
-                raise NotImplementedError
+                inst = str(ann)
 
-            i_node.value = value
-            assert i_node.debug_name not in input_nodes
-            assert i_node.debug_name not in output_nodes
-            if i_node.debug_name not in inter_nodes:
-                inter_nodes[i_node.debug_name] = i_node
-
-            cmds.append((i_node, fun, ()))
-
-        else:
-            inputs = []
-
-            for item in node.inputs():
-                if item.debugName() in input_nodes:
-                    i_node = input_nodes[item.debugName()]
-
-                elif item.debugName() in output_nodes:
-                    i_node = output_nodes[item.debugName()]
-
-                else:
-                    # 只有既不为输入node也不为输出node的node，才会被视作中间node
-                    if item.debugName() in inter_nodes:
-                        i_node = inter_nodes[item.debugName()]
-                    else:
-                        i_node = VarNode(
-                            prefix="inter", name=item.debugName(), instance=item.type()
-                        )
-                        inter_nodes[i_node.debug_name] = i_node
-
-                inputs.append(i_node)
-
-            item = node.output()
-            if item.debugName() in input_nodes:
-                i_node = input_nodes[item.debugName()]
-
-            elif item.debugName() in output_nodes:
-                i_node = output_nodes[item.debugName()]
-
-            else:
-                # 只有既不为输入node也不为输出node的node，才会被视作中间node
-                if item.debugName() in inter_nodes:
-                    i_node = inter_nodes[item.debugName()]
-                else:
-                    i_node = VarNode(
-                        prefix="inter", name=item.debugName(), instance=item.type()
+            if ph_idx == 0:
+                if inst != "Tensor" or name != "x":
+                    raise ValueError(
+                        f"First parameter of custom_fun must be 'x: torch.Tensor', "
+                        f"got '{name}: {ann}'"
                     )
-                    inter_nodes[i_node.debug_name] = i_node
+            elif ph_idx == 1:
+                if inst != "Tensor" or name != "v_last":
+                    raise ValueError(
+                        f"Second parameter of custom_fun must be 'v_last: torch.Tensor', "
+                        f"got '{name}: {ann}'"
+                    )
 
-            cmds.append((i_node, fun, tuple(inputs)))
+            var = VarNode(prefix="input", name=name, instance=inst)
+            if inst == "Tensor" and ph_idx < len(requires_grad) and requires_grad[ph_idx]:
+                var.requires_grad = True
+
+            logging.debug(f"\ninput node [{ph_idx}] = {var}")
+            input_nodes[name] = var
+            _fx_to_var[fx_node] = var
+            ph_idx += 1
+
+        elif fx_node.op == "call_function":
+            target = fx_node.target
+            if target not in _FX_TO_KIND:
+                raise NotImplementedError(f"unsupported operation: {target}")
+            kind = _FX_TO_KIND[target]
+
+            var = VarNode(prefix="inter", name=fx_node.name, instance="Tensor")
+            inter_nodes[fx_node.name] = var
+            _fx_to_var[fx_node] = var
+
+            in_vars = tuple(_resolve(a) for a in fx_node.args)
+            # aten::add/sub require a trailing alpha=1 constant for compatibility with
+            # gen_forward_codes / gen_backward_codes which expect (x, y, alpha) inputs
+            if kind in ("aten::add", "aten::sub") and len(in_vars) == 2:
+                in_vars = (*in_vars, _make_const(1))
+
+            cmds.append((var, kind, in_vars))
+
+        elif fx_node.op in ("call_method", "call_module", "get_attr"):
+            raise NotImplementedError(
+                f"fx node op '{fx_node.op}' (target={fx_node.target!r}) is not supported. "
+                "custom_fun must use only Python arithmetic operators (+, -, *, /) on its arguments."
+            )
+
+        elif fx_node.op == "output":
+            ret = fx_node.args[0]
+            if not isinstance(ret, _fx.Node):
+                raise NotImplementedError(f"unsupported output type: {type(ret)}")
+
+            h_var = VarNode(prefix="output", name="h", instance="Tensor")
+            output_nodes["h"] = h_var
+            logging.debug(f"\noutput node [0] = {h_var}")
+
+            src = _fx_to_var[ret]
+            # Replace src with h_var everywhere in cmds — both as a cmd's
+            # output and inside any cmd's in_vars.  Updating only the output
+            # position would leave stale references to src in in_vars of cmds
+            # that happen to consume the output node's value (e.g. dead-code
+            # operations that follow the return expression in the source).
+            # Those stale references would produce undeclared CUDA identifiers.
+            for i, (out, fun, ins) in enumerate(cmds):
+                new_out = h_var if out is src else out
+                new_ins = tuple(h_var if v is src else v for v in ins)
+                if new_out is not out or new_ins != ins:
+                    cmds[i] = (new_out, fun, new_ins)
+            if src.debug_name in inter_nodes:
+                del inter_nodes[src.debug_name]
+            _fx_to_var[ret] = h_var
+
+            # If no cmd was renamed to produce h_var (e.g. the function directly
+            # returns an input placeholder without any computation), insert a
+            # synthetic identity operation so gen_forward_codes emits a valid
+            # 'float output_h = <input>;' declaration instead of referencing an
+            # undeclared variable.
+            if not any(out is h_var for out, _, _ in cmds):
+                cmds.append((h_var, "aten::add", (src, _make_const(0.0), _make_const(1))))
 
     for i, node in enumerate(inter_nodes.values()):
         logging.debug(f"\ninter node [{i}] = {node}")
@@ -232,9 +258,7 @@ def gen_forward_codes(
     for item in cmds:
         output, fun, inputs = item
         codes += "                  "
-        if fun == "prim::Constant":
-            gen_cmd = "\n"
-        elif fun in ["aten::add", "aten::sub"]:
+        if fun in ["aten::add", "aten::sub"]:
             # z = x + y * alpha
             x, y, alpha = inputs
             z = output
@@ -317,6 +341,8 @@ def gen_forward_codes(
                 param = (node.name, "const float *")
             elif node.instance == "float":
                 param = (node.name, "const float &")
+            elif node.instance == "int":
+                param = (node.name, "const int &")
             else:
                 raise NotImplementedError
             params.append(param)
@@ -407,9 +433,7 @@ def gen_backward_codes(
         codes += "\n"
         codes += "                 "
         codes += f"// {cuda_cmds[cmds.__len__() - 1 - i]}"
-        if fun == "prim::Constant":
-            codes += "\n"
-        elif fun == "aten::add":
+        if fun == "aten::add":
             # z = x + y * alpha
             x, y, alpha = inputs
             z = output
@@ -443,11 +467,11 @@ def gen_backward_codes(
                     if y.cu_var_bp not in code_block_nodes:
                         code_block_nodes[y.cu_var_bp] = y
                         codes += "                 "
-                        codes += f"float {y.cu_var_bp} = {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                        codes += f"float {y.cu_var_bp} = {z.cu_var_bp} * {alpha.cu_var};\n"
                     else:
                         codes += "                 "
                         codes += (
-                            f"{y.cu_var_bp} += {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                            f"{y.cu_var_bp} += {z.cu_var_bp} * {alpha.cu_var};\n"
                         )
 
         elif fun == "aten::sub":
@@ -484,11 +508,11 @@ def gen_backward_codes(
                     if y.cu_var_bp not in code_block_nodes:
                         code_block_nodes[y.cu_var_bp] = y
                         codes += "                 "
-                        codes += f"float {y.cu_var_bp} = - {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                        codes += f"float {y.cu_var_bp} = - {z.cu_var_bp} * {alpha.cu_var};\n"
                     else:
                         codes += "                 "
                         codes += (
-                            f"{y.cu_var_bp} += - {z.cu_var_bp} * {alpha.cu_var_bp};\n"
+                            f"{y.cu_var_bp} += - {z.cu_var_bp} * {alpha.cu_var};\n"
                         )
 
         elif fun == "aten::mul":
@@ -503,7 +527,8 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{x.cu_var_bp} += {z.cu_var_bp} * {y.cu_var};\n"
-                input_bp_nodes[y.name] = y
+                if y.value is None:  # constants are inlined via cu_var; no CUDA param needed
+                    input_bp_nodes[y.name] = y
             if y.requires_grad:
                 if y.cu_var_bp not in code_block_nodes:
                     code_block_nodes[y.cu_var_bp] = y
@@ -512,7 +537,8 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{y.cu_var_bp} += {z.cu_var_bp} * {x.cu_var};\n"
-                input_bp_nodes[x.name] = x
+                if x.value is None:
+                    input_bp_nodes[x.name] = x
 
         elif fun == "aten::div":
             # z = x / y
@@ -526,7 +552,8 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{x.cu_var_bp} += {z.cu_var_bp} / {y.cu_var};\n"
-                input_bp_nodes[y.name] = y
+                if y.value is None:
+                    input_bp_nodes[y.name] = y
             if y.requires_grad:
                 if y.cu_var_bp not in code_block_nodes:
                     code_block_nodes[y.cu_var_bp] = y
@@ -535,8 +562,10 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{y.cu_var_bp} += - {z.cu_var_bp} * {x.cu_var} / ({y.cu_var} * {y.cu_var});\n"
-                input_bp_nodes[x.name] = x
-                input_bp_nodes[y.name] = y
+                if x.value is None:
+                    input_bp_nodes[x.name] = x
+                if y.value is None:
+                    input_bp_nodes[y.name] = y
 
     for i, node in enumerate(input_bp_nodes):
         logging.debug(f"\ninput bp node [{i}] = {node}")
@@ -576,6 +605,8 @@ def gen_backward_codes(
                 cuda_params[node.name] = "const float *"
             elif node.instance == "float":
                 cuda_params[node.name] = "const float &"
+            elif node.instance == "int":
+                cuda_params[node.name] = "const int &"
             else:
                 raise NotImplementedError(node)
 

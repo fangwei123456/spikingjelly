@@ -1,24 +1,24 @@
-import os
-from pathlib import Path
+import logging
 import math
+import os
 import shutil
 import struct
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Callable, Union
-import logging
 
 import numpy as np
 import torch
 import torch.utils.data
-from concurrent.futures import ThreadPoolExecutor
-from torchvision import transforms
-from matplotlib import pyplot as plt
 import tqdm
+from matplotlib import pyplot as plt
+from torchvision import transforms
 
 from .. import configure
 
-
 try:
     import cupy
+
     from ..activation_based.cuda_kernel import cuda_utils
 
     padded_sequence_mask_kernel_code = r"""
@@ -335,13 +335,13 @@ def load_aedat_v3(file_name: Union[str, Path]) -> dict:
 
             # read header
             e_type = struct.unpack("H", header[0:2])[0]
-            e_source = struct.unpack("H", header[2:4])[0]
+            # e_source = struct.unpack("H", header[2:4])[0]
             e_size = struct.unpack("I", header[4:8])[0]
-            e_offset = struct.unpack("I", header[8:12])[0]
+            # e_offset = struct.unpack("I", header[8:12])[0]
             e_tsoverflow = struct.unpack("I", header[12:16])[0]
             e_capacity = struct.unpack("I", header[16:20])[0]
-            e_number = struct.unpack("I", header[20:24])[0]
-            e_valid = struct.unpack("I", header[24:28])[0]
+            # e_number = struct.unpack("I", header[20:24])[0]
+            # e_valid = struct.unpack("I", header[24:28])[0]
 
             data_length = e_capacity * e_size
             data = bin_f.read(data_length)

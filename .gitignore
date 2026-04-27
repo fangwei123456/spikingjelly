@@ -146,3 +146,5 @@ dmypy.json
 uv.lock
 events.out.tfevents.*
 .ruff_cache/
+workspace/
+/w1.py

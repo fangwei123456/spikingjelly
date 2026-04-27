@@ -68,3 +68,6 @@ line-length = 88
 [tool.ruff.format]
 docstring-code-format = true
 quote-style = "double"
+
+[tool.ruff.lint]
+ignore = ["E402", "E731", "E741", "F403"]

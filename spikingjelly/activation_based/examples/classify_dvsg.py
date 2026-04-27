@@ -5,7 +5,6 @@ from torch.cuda import amp
 from spikingjelly.activation_based import functional, surrogate, neuron
 from spikingjelly.activation_based.model import parametric_lif_net
 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
-from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import time
 import os

@@ -1,13 +1,11 @@
-from . import common
-from . import actions
-from . import experience
-from . import agent
+from . import actions, agent, common, experience
 
 __all__ = ["common", "actions", "experience", "agent"]
 
 try:
     import ignite
-    from . import ignite
+
+    from . import ignite  # noqa
 
     __all__.append("ignite")
 except ImportError:
