@@ -164,10 +164,11 @@ def test_memory_optimization_requires_dummy_input_for_higher_levels():
         memopt.memory_optimization(net, TargetBlock, level=2)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA is required")
 def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor(
     monkeypatch,
 ):
-    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cuda:0")
 
     net = nn.Sequential(BinaryProject(), TargetBlock())
     optimized = memopt.memory_optimization(
