@@ -282,11 +282,13 @@ class IFNode(BaseNode):
                     )
 
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = ac_neuron_kernel.IFNodeATGF.apply(
+                spike_seq, v_seq = ac_neuron_kernel.multistep_if(
                     x_seq.flatten(1),
                     self.v.flatten(0),
                     self.v_threshold,
                     self.v_reset,
+                    self.detach_reset,
+                    self.surrogate_function,
                     self.forward_kernel,
                     self.backward_kernel,
                 )

@@ -372,33 +372,64 @@ class NeuronBPKernel(base.CKernel1D):
 class NeuronATGFBase:
     @staticmethod
     def pre_forward(py_dict: dict):
-        """
-        :param py_dict: a dict built from the neuron's forward autograd function. It should at least contain ``x, v, v_reset``
+        r"""
+        **API Language:**
+        :ref:`中文 <ss_neuron_kernel_pre_forward-cn>` | :ref:`English <ss_neuron_kernel_pre_forward-en>`
+
+        ----
+
+        .. _ss_neuron_kernel_pre_forward-cn:
+
+        * **中文**
+
+        对单步神经元 ``autograd.Function`` 的前向输入字典做预处理，返回 CUDA kernel
+        调用所需的参数。
+
+        :param py_dict: 由神经元前向函数构建的字典，至少应包含 ``x``、``v``、``v_reset``
         :type py_dict: dict
-        :return: requires_grad, blocks, threads, py_dict
 
-            requires_grad: bool
-                if any tensor in ``py_dict`` requires grad, then ``requires_grad = True``;else ``requires_grad = False``
+        :return: ``(requires_grad, blocks, threads, py_dict)``
 
-            blocks: int
-                CUDA param used in calling CUDA kernel
+            - ``requires_grad``: 是否存在需要梯度的张量
+            - ``blocks``: CUDA kernel 启动参数 ``blocks``
+            - ``threads``: CUDA kernel 启动参数 ``threads``，
+              默认来自 ``spikingjelly.configure.cuda_threads``
+            - ``py_dict``: 预处理后的字典。相较输入字典会：
 
-            threads: int
-                CUDA param used in calling CUDA kernel. The default value is ``spikingjelly.configure.cuda_threads``
+              1) 将 ``float/int`` 标量转换为 ``cupy.ndarray``；
+              2) 新增 ``h``、``spike``、``v_next``（与 ``x`` 或 ``v`` 同形状的零张量）；
+              3) 新增 ``numel``（``cupy.ndarray``）。当 ``x.dtype == torch.half`` 时，
+              kernel 按 half2 路径计算，``numel = math.ceil(numel / 2)``。
+        :rtype: tuple
 
-            py_dict: dict
-                Compared with the input ``py_dict``, the returned ``py_dict`` will:
+        ----
 
-                    * convert all ``float/int`` scalars in ``py_dict`` to ``cupy.ndarray``
+        .. _ss_neuron_kernel_pre_forward-en:
 
-                    * add ``h, spike, v_next`` to ``py_dict``. They are zero tensors
-                      with the same shape with ``x`` or ``v``.
+        * **English**
 
-                    * add ``numel`` to ``py_dict``. Note that ``x.shape = [numel]``.
-                      A specific case is that ``x.dtype == torch.half``, then ``numel = math.ceil(numel / 2)``.
-                      Note that ``numel`` in the returned ``py_dict`` is ``cupy.ndarray``
+        Preprocess the forward input dictionary of single-step neuron
+        ``autograd.Function`` and return runtime parameters required by the CUDA
+        kernel launch.
 
+        :param py_dict: A dict built from the neuron's forward function. It should
+            at least contain ``x``, ``v``, and ``v_reset``.
+        :type py_dict: dict
 
+        :return: ``(requires_grad, blocks, threads, py_dict)``
+
+            - ``requires_grad``: whether any tensor in ``py_dict`` requires grad
+            - ``blocks``: CUDA launch parameter ``blocks``
+            - ``threads``: CUDA launch parameter ``threads``; default value is
+              ``spikingjelly.configure.cuda_threads``
+            - ``py_dict``: processed dict. Compared with the input, it will:
+
+              1) convert ``float/int`` scalars to ``cupy.ndarray``;
+              2) add ``h``, ``spike``, ``v_next`` (zero tensors with shape matching
+              ``x`` or ``v``);
+              3) add ``numel`` (as ``cupy.ndarray``). If ``x.dtype ==
+              torch.half``, the half2 path is used and ``numel = math.ceil(numel /
+              2)``.
         :rtype: tuple
         """
         device = py_dict["x"].get_device()
