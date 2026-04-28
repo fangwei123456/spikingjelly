@@ -189,7 +189,7 @@ def _randomize_input_like(dummy_input):
         choice = torch.randint(0, 3, ()).item()
         if choice == 0:
             return x.clone()
-        return torch.empty_like(x)
+        return torch.zeros_like(x)
 
     if isinstance(dummy_input, torch.Tensor):
         return _generate_tensor_like(dummy_input)

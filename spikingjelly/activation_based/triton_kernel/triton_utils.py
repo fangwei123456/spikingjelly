@@ -127,6 +127,16 @@ def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
         tmp_paths = []
+        original_named_temporary_file = tempfile.NamedTemporaryFile
+
+        def tracking_named_temporary_file(*ntf_args, **ntf_kwargs):
+            tmp = original_named_temporary_file(*ntf_args, **ntf_kwargs)
+            tmp_name = getattr(tmp, "name", None)
+            if isinstance(tmp_name, str) and tmp_name.endswith(".py"):
+                tmp_paths.append(tmp_name)
+            return tmp
+
+        tempfile.NamedTemporaryFile = tracking_named_temporary_file
         try:
             result = f(*args, **kwargs)
             if isinstance(result, str) and result.endswith(".py"):
@@ -135,6 +145,7 @@ def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
                 tmp_paths.append(result.name)
             return result
         finally:
+            tempfile.NamedTemporaryFile = original_named_temporary_file
             for path in tmp_paths:
                 try:
                     if path and os.path.exists(path):

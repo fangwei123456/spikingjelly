@@ -1,4 +1,6 @@
 import copy
+import os
+import tempfile
 
 import pytest
 import torch
@@ -648,6 +650,30 @@ def test_candidate_entries_treats_zero_budget_as_disabled():
     assert memopt_pipeline._candidate_entries(results, -1) == []
 
 
+def test_ensure_cleanup_tmp_python_files_tracks_created_temp_files():
+    from spikingjelly.activation_based.triton_kernel.triton_utils import (
+        ensure_cleanup_tmp_python_files,
+    )
+    created = {"path": None}
+
+    @ensure_cleanup_tmp_python_files
+    def build_temp_python_file():
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".py",
+            delete=False,
+        )
+        tmp.write(b"print('hello')\n")
+        tmp.close()
+        created["path"] = tmp.name
+        assert os.path.exists(created["path"])
+        return "done"
+
+    result = build_temp_python_file()
+    assert result == "done"
+    assert created["path"] is not None
+    assert not os.path.exists(created["path"])
+
+
 def test_apply_gc_clones_manual_compressor_instances(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
@@ -817,17 +843,17 @@ def test_memory_optimization_level2_skips_profiling_when_no_gccontainers(monkeyp
     peak_calls = {"count": 0}
     profile_calls = {"count": 0}
 
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_calls["count"] += 1
+        return 100, 100
+
+    def fake_train_memory_profile(*args, **kwargs):
+        profile_calls["count"] += 1
+        return _profile_result_with_optional_peak([], kwargs.get("return_peak", False))
+
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
-        memopt_pipeline,
-        "_train_peak_memory",
-        lambda *args, **kwargs: peak_calls.__setitem__("count", peak_calls["count"] + 1),
-    )
-    monkeypatch.setattr(
-        memopt_pipeline,
-        "_train_memory_profile",
-        lambda *args, **kwargs: profile_calls.__setitem__(
-            "count", profile_calls["count"] + 1
-        ),
+        memopt_pipeline, "_train_memory_profile", fake_train_memory_profile
     )
 
     net = nn.Sequential(nn.ReLU())
