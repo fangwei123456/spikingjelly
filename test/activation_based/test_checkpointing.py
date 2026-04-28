@@ -143,6 +143,7 @@ def test_memopt_package_imports_pipeline_api():
     assert hasattr(memopt, "memory_optimization")
     assert hasattr(memopt, "MemOptSummary")
     assert hasattr(memopt, "MEMOPT_PROFILES")
+    assert hasattr(memopt, "MEMOPT_CHECKPOINT_BUDGETS")
 
 
 def test_probe_binary_inputs_stops_early_when_all_targets_are_non_binary():
@@ -309,6 +310,63 @@ def test_apply_gc_budget_without_dummy_input_falls_back_to_module_order():
     assert summary["gc_candidate_count"] == 2
     assert summary["gc_selected_count"] == 1
     assert summary["gc_selection_policy"] == "fallback_module_order"
+
+
+def test_apply_gc_checkpoint_budget_speed_selects_half_of_targets():
+    net, summary = memopt_pipeline.apply_gc(
+        nn.Sequential(TargetBlock(), TargetBlock(), TargetBlock(), TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        compress_x=False,
+        device="cpu",
+        checkpoint_budget="speed",
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(net[1], GCContainer)
+    assert isinstance(net[2], TargetBlock)
+    assert isinstance(net[3], TargetBlock)
+    assert summary["checkpoint_budget"] == "speed"
+    assert summary["gc_candidate_count"] == 4
+    assert summary["gc_selected_count"] == 2
+    assert "checkpoint_budget:speed" in summary["budget_notes"]
+
+
+def test_apply_gc_checkpoint_budget_memory_covers_all_targets():
+    net, summary = memopt_pipeline.apply_gc(
+        nn.Sequential(TargetBlock(), TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        compress_x=False,
+        device="cpu",
+        checkpoint_budget="memory",
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(net[1], GCContainer)
+    assert summary["gc_selected_count"] == 2
+    assert summary["gc_selection_policy"] == "budget_covers_all"
+
+
+def test_apply_gc_manual_budget_takes_priority_over_checkpoint_budget():
+    net, summary = memopt_pipeline.apply_gc(
+        nn.Sequential(TargetBlock(), TargetBlock(), TargetBlock(), TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        compress_x=False,
+        device="cpu",
+        checkpoint_budget="memory",
+        max_gc_wrapped_modules=1,
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(net[1], TargetBlock)
+    assert isinstance(net[2], TargetBlock)
+    assert isinstance(net[3], TargetBlock)
+    assert summary["gc_selected_count"] == 1
 
 
 def test_memory_optimization_level1_without_dummy_input_skips_main_process_warmup(

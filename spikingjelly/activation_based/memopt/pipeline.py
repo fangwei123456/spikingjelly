@@ -19,6 +19,7 @@ from .compress import BitSpikeCompressor, NullSpikeCompressor
 
 __all__ = [
     "MEMOPT_PROFILES",
+    "MEMOPT_CHECKPOINT_BUDGETS",
     "MemOptSummary",
     "resolve_device",
     "apply_gc",
@@ -28,11 +29,13 @@ __all__ = [
 
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
 MEMOPT_PROFILES = ("safe", "balanced", "memory", "exhaustive")
+MEMOPT_CHECKPOINT_BUDGETS = ("speed", "balanced", "memory")
 
 
 @dataclass
 class MemOptSummary:
     profile: Optional[str]
+    checkpoint_budget: Optional[str]
     device: str
     requested_level: int
     applied_level: int
@@ -426,12 +429,41 @@ def _resolve_memory_optimization_options(
     return resolved, notes
 
 
+def _resolve_checkpoint_budget_options(
+    checkpoint_budget: Optional[str],
+    max_gc_wrapped_modules: Optional[int],
+    gc_target_budget_ratio: Optional[float],
+):
+    if checkpoint_budget is not None and checkpoint_budget not in MEMOPT_CHECKPOINT_BUDGETS:
+        raise ValueError(
+            "Unsupported checkpoint_budget "
+            f"{checkpoint_budget!r}. Expected one of {MEMOPT_CHECKPOINT_BUDGETS}."
+        )
+
+    resolved_max = max_gc_wrapped_modules
+    resolved_ratio = gc_target_budget_ratio
+    notes = []
+
+    if checkpoint_budget is not None:
+        defaults = {
+            "speed": 0.5,
+            "balanced": 0.75,
+            "memory": 1.0,
+        }
+        if resolved_ratio is None and resolved_max is None:
+            resolved_ratio = defaults[checkpoint_budget]
+            notes.append(f"checkpoint_budget:{checkpoint_budget}")
+
+    return resolved_max, resolved_ratio, notes
+
+
 def apply_gc(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
     device: str = "cuda",
+    checkpoint_budget: Optional[str] = None,
     max_gc_wrapped_modules: Optional[int] = None,
     gc_target_budget_ratio: Optional[float] = None,
     return_summary: bool = False,
@@ -489,6 +521,10 @@ def apply_gc(
     :param device: Device type, e.g., "cuda" or "cpu"
     :type device: str
 
+    :param checkpoint_budget: High-level selective checkpoint preset. One of
+        ``"speed"``, ``"balanced"``, or ``"memory"``
+    :type checkpoint_budget: Optional[str]
+
     :param max_gc_wrapped_modules: Optional upper bound on how many matching
         modules should be wrapped. When set, the modules with the largest
         observed input activations are preferred if ``dummy_input`` is given
@@ -512,6 +548,15 @@ def apply_gc(
         gc_selected_count=0,
         gc_selection_policy="all_candidates",
     )
+    (
+        max_gc_wrapped_modules,
+        gc_target_budget_ratio,
+        budget_notes,
+    ) = _resolve_checkpoint_budget_options(
+        checkpoint_budget,
+        max_gc_wrapped_modules,
+        gc_target_budget_ratio,
+    )
     selected_targets, candidate_count, selected_count, selection_policy = (
         _resolve_gc_selection_targets(
             net,
@@ -525,6 +570,8 @@ def apply_gc(
     apply_summary["gc_candidate_count"] = candidate_count
     apply_summary["gc_selected_count"] = selected_count
     apply_summary["gc_selection_policy"] = selection_policy
+    apply_summary["checkpoint_budget"] = checkpoint_budget
+    apply_summary["budget_notes"] = budget_notes
     if compress_x and dummy_input is not None:
         probe_targets = tuple(
             m
@@ -966,6 +1013,7 @@ def memory_optimization(
     warmup_in_profile_workers: bool = True,
     profile: Optional[str] = None,
     allow_expensive_profiling: Optional[bool] = None,
+    checkpoint_budget: Optional[str] = None,
     max_gc_wrapped_modules: Optional[int] = None,
     gc_target_budget_ratio: Optional[float] = None,
     return_summary: bool = False,
@@ -1030,6 +1078,10 @@ def memory_optimization(
 
     :param allow_expensive_profiling: 是否允许高开销 profiling。关闭后会自动收紧 split 搜索预算
     :type allow_expensive_profiling: Optional[bool]
+
+    :param checkpoint_budget: 高层选择性 checkpoint 预算策略，可选
+        ``"speed"`` 、 ``"balanced"`` 、 ``"memory"``
+    :type checkpoint_budget: Optional[str]
 
     :param max_gc_wrapped_modules: 选择性 checkpoint 的上限。若给定，则只包装最多这么多个匹配模块。
         当 ``dummy_input`` 可用时，优先选择输入激活更大的模块
@@ -1108,6 +1160,10 @@ def memory_optimization(
         Disabling this automatically tightens split search budgets
     :type allow_expensive_profiling: Optional[bool]
 
+    :param checkpoint_budget: high-level selective checkpoint budget preset.
+        One of ``"speed"``, ``"balanced"``, or ``"memory"``
+    :type checkpoint_budget: Optional[str]
+
     :param max_gc_wrapped_modules: upper bound for selective checkpointing.
         When provided, at most this many matching modules are wrapped; modules
         with larger observed input activations are preferred when ``dummy_input`` is available
@@ -1156,6 +1212,7 @@ def memory_optimization(
 
     summary = MemOptSummary(
         profile=profile,
+        checkpoint_budget=checkpoint_budget,
         device=device,
         requested_level=requested_level,
         applied_level=0 if level is None else level,
@@ -1168,6 +1225,7 @@ def memory_optimization(
             max_candidates_per_round=max_candidates_per_round,
             warmup_in_main_process=warmup_in_main_process,
             warmup_in_profile_workers=warmup_in_profile_workers,
+            checkpoint_budget=checkpoint_budget,
             max_gc_wrapped_modules=max_gc_wrapped_modules,
             gc_target_budget_ratio=gc_target_budget_ratio,
         ),
@@ -1184,14 +1242,19 @@ def memory_optimization(
             dummy_input,
             compress_x,
             device,
+            checkpoint_budget=checkpoint_budget,
             max_gc_wrapped_modules=max_gc_wrapped_modules,
             gc_target_budget_ratio=gc_target_budget_ratio,
             return_summary=True,
         )
         summary.applied_steps.append("level1_gc")
         for k, v in apply_summary.items():
+            if v is None:
+                continue
             if isinstance(v, str):
                 setattr(summary, k, v)
+            elif isinstance(v, list):
+                summary.notes.extend(v)
             else:
                 setattr(summary, k, getattr(summary, k) + v)
 
