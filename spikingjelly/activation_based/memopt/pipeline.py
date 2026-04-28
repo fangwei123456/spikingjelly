@@ -1059,7 +1059,13 @@ def memory_optimization(
         else:
             _cprint(verbose, "Level 2: split GCContainers spatially")
             summary.applied_steps.append("level2_spatial_split")
-            peak_allocated = -1.0
+            peak_allocated, _ = _train_peak_memory(
+                net,
+                dummy_input,
+                ctx,
+                device,
+                worker_warmup=warmup_in_profile_workers,
+            )
             split_rounds = 0
             blocked_candidates = set()
 
@@ -1071,23 +1077,13 @@ def memory_optimization(
                     _cprint(verbose, "\tNo spatially splittable GCContainers remain.")
                     break
                 split_rounds += 1
-                if peak_allocated < 0:
-                    results, peak_allocated, _ = _train_memory_profile(
-                        net,
-                        dummy_input,
-                        ctx,
-                        device,
-                        worker_warmup=warmup_in_profile_workers,
-                        return_peak=True,
-                    )
-                else:
-                    results = _train_memory_profile(
-                        net,
-                        dummy_input,
-                        ctx,
-                        device,
-                        worker_warmup=warmup_in_profile_workers,
-                    )
+                results = _train_memory_profile(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
                 if not results:
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
@@ -1153,6 +1149,14 @@ def memory_optimization(
         else:
             _cprint(verbose, "Level 3: split GCContainers temporally")
             summary.applied_steps.append("level3_temporal_split")
+            if peak_allocated < 0:
+                peak_allocated, _ = _train_peak_memory(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
             split_rounds = 0
             blocked_candidates = set()
 
@@ -1164,23 +1168,13 @@ def memory_optimization(
                     _cprint(verbose, "\tNo temporally splittable GCContainers remain.")
                     break
                 split_rounds += 1
-                if peak_allocated < 0:
-                    results, peak_allocated, _ = _train_memory_profile(
-                        net,
-                        dummy_input,
-                        ctx,
-                        device,
-                        worker_warmup=warmup_in_profile_workers,
-                        return_peak=True,
-                    )
-                else:
-                    results = _train_memory_profile(
-                        net,
-                        dummy_input,
-                        ctx,
-                        device,
-                        worker_warmup=warmup_in_profile_workers,
-                    )
+                results = _train_memory_profile(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
                 if not results:
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
@@ -1241,6 +1235,14 @@ def memory_optimization(
             _cprint(verbose, "Level 4: no GCContainers found, skip greedy unwrap")
             summary.skipped_steps.append("level4:no_gccontainers")
         else:
+            if peak_allocated < 0:
+                peak_allocated, _ = _train_peak_memory(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
             _cprint(verbose, "Level 4: greedily disable GCContainers")
             summary.applied_steps.append("level4_greedy_unwrap")
             results = _inference_time_profile(net, dummy_input, ctx, device)

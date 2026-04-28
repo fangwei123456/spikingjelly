@@ -364,8 +364,8 @@ def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
     )
 
     assert isinstance(optimized[0], GCContainer)
-    assert peak_flags == []
-    assert profile_flags == [(False, True)]
+    assert peak_flags == [False]
+    assert profile_flags == [(False, False)]
 
 
 def test_memory_optimization_profile_memory_honors_allow_expensive_profiling_false(
@@ -403,7 +403,7 @@ def test_memory_optimization_profile_memory_honors_allow_expensive_profiling_fal
 
     assert profile_flags
     assert all(flag[0] is False for flag in profile_flags)
-    assert any(flag[1] is True for flag in profile_flags)
+    assert all(flag[1] is False for flag in profile_flags)
     assert summary.allow_expensive_profiling is False
     assert summary.options["max_split_rounds"] == 1
     assert summary.options["max_candidates_per_round"] == 1
@@ -516,14 +516,15 @@ def test_memory_optimization_returns_summary_for_skipped_spatial_stage(monkeypat
 def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(80, 80)])
+    peak_calls = {"count": 0}
     profile_values = iter([
         _result_row("0"),
         [],
     ])
-    monkeypatch.setattr(
-        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
-    )
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_calls["count"] += 1
+        return (80, 80) if peak_calls["count"] == 1 else (60, 60)
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
@@ -549,16 +550,17 @@ def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypa
 def test_memory_optimization_level2_skips_unsplittable_hottest_candidate(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(80, 80)])
+    peak_calls = {"count": 0}
     profile_values = iter(
         [
             [("0", 0.0), ("1", 0.0)],
             [],
         ]
     )
-    monkeypatch.setattr(
-        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
-    )
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_calls["count"] += 1
+        return (80, 80) if peak_calls["count"] == 1 else (60, 60)
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
@@ -653,14 +655,15 @@ def test_memory_optimization_level2_skips_when_no_spatial_split_candidates(
 def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(80, 80)])
+    peak_calls = {"count": 0}
     profile_values = iter([
         _result_row("0"),
         [],
     ])
-    monkeypatch.setattr(
-        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
-    )
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_calls["count"] += 1
+        return (80, 80) if peak_calls["count"] == 1 else (60, 60)
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
@@ -754,7 +757,7 @@ def test_memory_optimization_level3_respects_split_budgets(monkeypatch):
     assert isinstance(optimized[0], GCContainer)
     assert isinstance(optimized[1], GCContainer)
     assert profile_calls["count"] == 1
-    assert peak_calls["count"] == 1
+    assert peak_calls["count"] == 2
 
 
 def test_memory_optimization_level3_retries_blocked_candidates_after_improvement(
@@ -762,7 +765,7 @@ def test_memory_optimization_level3_retries_blocked_candidates_after_improvement
 ):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(80, 80), (60, 60)])
+    peak_calls = {"count": 0}
     profile_values = iter(
         [
             [("0", 0.0), ("1", 0.0)],
@@ -785,9 +788,14 @@ def test_memory_optimization_level3_retries_blocked_candidates_after_improvement
             n_outputs=getattr(block, "n_outputs", 1),
         )
 
-    monkeypatch.setattr(
-        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
-    )
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_calls["count"] += 1
+        if peak_calls["count"] == 1:
+            return 80, 80
+        if peak_calls["count"] == 2:
+            return 60, 60
+        return 50, 50
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
@@ -823,14 +831,15 @@ def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
 ):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
-    peak_values = iter([(100, 100)])
+    peak_calls = {"count": 0}
     profile_values = iter([
         [],
         [],
     ])
-    monkeypatch.setattr(
-        memopt_pipeline, "_train_peak_memory", lambda *args, **kwargs: next(peak_values)
-    )
+    def fake_train_peak_memory(*args, **kwargs):
+        peak_calls["count"] += 1
+        return (100, 100) if peak_calls["count"] == 1 else (90, 90)
+    monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_memory_profile",
