@@ -16,6 +16,34 @@ from .triton_utils import contiguous_and_device_guard
 __all__ = ["bit_spike_compress", "bit_spike_decompress"]
 
 
+def _bit_spike_compress_pytorch(s_seq: torch.Tensor) -> torch.Tensor:
+    s_seq = s_seq.to(dtype=torch.bool).reshape(-1)
+    n_compressed_elements = (s_seq.numel() + 7) // 8
+    s_seq_compressed = torch.zeros(
+        n_compressed_elements, dtype=torch.uint8, device=s_seq.device
+    )
+    for i in range(8):
+        sliced = s_seq[i::8].to(dtype=torch.uint8)
+        sliced_len = sliced.numel()
+        if sliced_len > 0:
+            s_seq_compressed[:sliced_len] |= sliced << i
+    return s_seq_compressed
+
+
+def _bit_spike_decompress_pytorch(
+    s_seq_compressed: torch.Tensor, shape
+) -> torch.Tensor:
+    n_decompressed_elements = torch.Size(shape).numel()
+    s_seq_decompressed = torch.zeros(
+        n_decompressed_elements, dtype=torch.uint8, device=s_seq_compressed.device
+    )
+    for i in range(8):
+        sliced_len = (n_decompressed_elements - i + 7) // 8
+        sliced = ((s_seq_compressed >> i) & 1)[:sliced_len]
+        s_seq_decompressed[i::8] = sliced
+    return s_seq_decompressed.reshape(shape)
+
+
 @triton.autotune(
     configs=[triton.Config({"BLOCK_SIZE": b}) for b in [64, 128, 256]],
     key=[],
@@ -87,6 +115,8 @@ def _bit_spike_decompress_triton(
 def bit_spike_compress(s_seq):
     # s_seq: float32, ndim=1
     s_seq = s_seq.reshape(-1)
+    if s_seq.device.type != "cuda":
+        return _bit_spike_compress_pytorch(s_seq)
     n_elements = s_seq.numel()
     n_compressed_elements = (n_elements + 7) // 8
     s_seq_compressed = torch.zeros(
@@ -107,6 +137,8 @@ def bit_spike_compress(s_seq):
 @contiguous_and_device_guard
 def bit_spike_decompress(s_seq_compressed, shape):
     # s_seq: uint8, ndim=1
+    if s_seq_compressed.device.type != "cuda":
+        return _bit_spike_decompress_pytorch(s_seq_compressed, shape)
     n_compressed_elements = s_seq_compressed.numel()
     n_decompressed_elements = torch.Size(shape).numel()
     s_seq_decompressed = torch.zeros(

@@ -3,12 +3,9 @@ https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
-import atexit
 import contextlib
 import functools
 import os
-import threading
-from pathlib import Path
 from typing import Callable
 
 import torch
@@ -112,7 +109,7 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
                 if isinstance(value, torch.Tensor):
                     first_tensor = value
                     break
-        if first_tensor is not None:
+        if first_tensor is not None and first_tensor.device.type == "cuda":
             ctx = torch.cuda.device(first_tensor.device.index)
         else:
             ctx = contextlib.nullcontext()
@@ -134,28 +131,3 @@ if _check_pytorch_version("2.4"):
 else:
     amp_custom_fwd = torch.cuda.amp.custom_fwd
     amp_custom_bwd = torch.cuda.amp.custom_bwd
-
-_CLEANUP_TMP_PYTHON_FILES_REGISTERED = False
-_CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK = threading.Lock()
-
-
-def cleanup_tmp_python_files():
-    print("Cleaning up temporary python files!")
-    for f in Path("/tmp").glob("*.py"):
-        try:
-            f.unlink(missing_ok=True)
-        except BaseException:
-            pass  # ignore the errors
-
-
-def ensure_cleanup_tmp_python_files(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        global _CLEANUP_TMP_PYTHON_FILES_REGISTERED
-        with _CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK:
-            if not _CLEANUP_TMP_PYTHON_FILES_REGISTERED:
-                atexit.register(cleanup_tmp_python_files)
-                _CLEANUP_TMP_PYTHON_FILES_REGISTERED = True
-        return fn(*args, **kwargs)
-
-    return wrapper

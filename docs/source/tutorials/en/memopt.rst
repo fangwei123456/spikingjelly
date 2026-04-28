@@ -80,6 +80,197 @@ The entire optimization procedure described above is wrapped inside :func:`memor
 
 Users do not need to understand the internals. Simply call :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` to transform the network automatically.
 
+High-level presets and summaries
+--------------------------------
+
+Besides manually choosing ``level=0..4``, :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` now provides higher-level ``profile`` presets:
+
+* ``"safe"``: conservative mode. Only applies layer-wise GC and avoids expensive profiling.
+* ``"balanced"``: recommended default. Enables limited split search and balances memory savings against optimization overhead.
+* ``"memory"``: more aggressive toward memory reduction. Tries both spatial and temporal split by default.
+* ``"exhaustive"``: most aggressive mode. Allows fuller search and greedy unwrap, suitable for offline tuning.
+
+In practice, these presets usually imply the following trade-offs:
+
+* ``"safe"``: lowest optimizer-side overhead. It usually stays close to layer-wise GC only, making it a good first try when you mainly want something robust and cheap to run.
+* ``"balanced"``: the recommended starting point. It performs limited split search and often provides a good compromise between memory savings and optimization latency.
+* ``"memory"``: more aggressive about reducing peak memory and therefore more likely to trigger spatial/temporal split; the trade-off is higher optimization overhead and a larger chance of training slowdown.
+* ``"exhaustive"``: best suited for offline tuning or research experiments. It explores a fuller search space and is the most likely to find aggressive structure changes, but also has the highest optimization cost.
+
+If you are unsure which one to choose, start from ``"balanced"``. Use ``"safe"`` when you want the smallest extra overhead, and reserve ``"memory"`` / ``"exhaustive"`` for memory-constrained or offline tuning scenarios.
+
+If you want to explicitly limit the optimizer's own overhead, set ``allow_expensive_profiling=False``. This automatically tightens split-search budgets and disables worker warmup during profiling.
+
+On top of ``profile``, the current version also exposes two more automatic control layers:
+
+* ``checkpoint_budget`` controls **how many candidate modules should actually be wrapped as checkpoint segments**. It accepts
+  ``"speed"``, ``"balanced"``, and ``"memory"``.
+
+  * ``"speed"`` keeps checkpointing focused on only the most valuable hotspots and prioritizes lower training overhead.
+  * ``"balanced"`` covers more hotspots and trades some extra overhead for more memory reduction.
+  * ``"memory"`` tries to cover as many candidates as possible and leans toward lower peak memory.
+
+* ``prefer`` is an even higher-level goal-oriented entry point. It accepts
+  ``"speed"``, ``"balanced"``, and ``"memory"``. When the user does not explicitly specify
+  ``profile`` or ``checkpoint_budget``, it maps to recommended defaults:
+
+  * ``prefer="speed"`` -> ``profile="safe"`` + ``checkpoint_budget="speed"``
+  * ``prefer="balanced"`` -> ``profile="balanced"`` + ``checkpoint_budget="balanced"``
+  * ``prefer="memory"`` -> ``profile="memory"`` + ``checkpoint_budget="memory"``
+
+This gives three levels of control:
+
+* the simplest goal-driven interface: set ``prefer=...``
+* separate control over search aggressiveness and checkpoint coverage: combine ``profile`` and ``checkpoint_budget``
+* fully manual experimentation: keep using low-level knobs such as ``level``, ``max_gc_wrapped_modules``, and ``gc_target_budget_ratio``
+
+To make these trade-offs more concrete, we also ran a small synthetic benchmark on a single ``RTX 4090``. The tested model was ``MemOptBlockNet(depth=1)`` with input shape ``[T, N, C] = [2, 2, 16]``. For each profile, we measured the time spent inside ``memory_optimization``, the post-optimization training step latency, and the training peak memory. The unoptimized baseline on this workload took about ``5.80 ms`` per training step, with ``peak_allocated = 17.26 MB`` and ``peak_reserved = 22.0 MB``. The profile-wise results were:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Profile
+      - ``memory_optimization`` time
+      - Training step time
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - Structural effect
+    * - ``safe``
+      - ``910.9 ms``
+      - ``5.73 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Only wraps the target block into 1 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``balanced``
+      - ``8661.2 ms``
+      - ``6.13 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``memory``
+      - ``20027.8 ms``
+      - ``6.07 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``exhaustive``
+      - ``32880.1 ms``
+      - ``5.71 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - Performs 1 spatial split and ends with 2 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+
+These numbers are mainly intended to show the **optimizer-overhead trend** of different profiles, not to provide universal absolute values. On larger real workloads, the exact training-speed and memory trade-offs still depend on model structure, input shapes, batch size, and the current GPU environment.
+
+To complement the synthetic case, we also benchmarked the real tutorial network ``CIFAR10DVSVGG`` on the same ``RTX 4090``. The setup was:
+
+* backend: ``triton``
+* input shape: ``[N, T, C, H, W] = [8, 10, 2, 48, 48]``
+* reported metrics:
+
+  * ``samples/s``: training throughput
+  * ``step_ms``: per-step training latency
+  * ``peak_allocated_mb``: peak allocated training memory
+  * ``peak_reserved_mb``: peak reserved training memory
+  * ``optimize_ms``: time spent inside :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`
+
+The results were:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Configuration
+      - ``samples/s``
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - ``optimize_ms``
+      - Structural effect
+    * - baseline
+      - ``290.14``
+      - ``27.57 ms``
+      - ``1022.23 MB``
+      - ``1574.0 MB``
+      - ``0``
+      - no optimization
+    * - ``safe``
+      - ``218.58``
+      - ``36.60 ms``
+      - ``833.94 MB``
+      - ``1512.0 MB``
+      - ``2605.76 ms``
+      - ``level=1`` with 8 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``balanced``
+      - ``236.15``
+      - ``33.88 ms``
+      - ``787.94 MB``
+      - ``1422.0 MB``
+      - ``37038.26 ms``
+      - ``level=2`` with 1 spatial split and 9 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``memory``
+      - ``223.30``
+      - ``35.83 ms``
+      - ``671.56 MB``
+      - ``1242.0 MB``
+      - ``89788.63 ms``
+      - ``level=3`` with 1 spatial split + 2 temporal splits, ending with 9 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` and 2 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` instances
+    * - ``exhaustive``
+      - ``289.18``
+      - ``27.66 ms``
+      - ``589.16 MB``
+      - ``1332.0 MB``
+      - ``450972.60 ms``
+      - ``level=4`` with 1 spatial split + 3 temporal splits + 4 greedy unwrap operations, ending with 5 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` and 2 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` instances
+
+This real-network benchmark shows a more practical trade-off:
+
+* ``safe`` is the safest starting point: peak memory already drops noticeably, but training slows down.
+* ``balanced`` saves even more memory than ``safe`` on this workload while recovering a bit of training speed.
+* ``memory`` pushes peak memory lower still, but the optimizer-side search cost becomes much larger.
+* ``exhaustive`` gives the best memory result here and almost recovers baseline training-step speed, but its structure-search cost is extremely high and is best treated as an offline tuning mode.
+
+If we zoom in on the new ``prefer`` interface alone, the same network and input shape also show a clear gradient:
+
+.. list-table::
+    :header-rows: 1
+
+    * - ``prefer``
+      - Automatic mapping
+      - Selected checkpoint modules
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``optimize_ms``
+    * - ``"speed"``
+      - ``safe`` + ``speed``
+      - ``4 / 8``
+      - ``34.43 ms``
+      - ``922.39 MB``
+      - ``2726.53 ms``
+    * - ``"balanced"``
+      - ``balanced`` + ``balanced``
+      - ``6 / 8``
+      - ``34.35 ms``
+      - ``877.14 MB``
+      - ``34360.89 ms``
+    * - ``"memory"``
+      - ``memory`` + ``memory``
+      - ``8 / 8``
+      - ``43.36 ms``
+      - ``699.17 MB``
+      - ``92689.79 ms``
+
+You can think of ``prefer`` as directly answering "should this optimization lean more toward training speed or toward memory reduction?", while the framework automatically chooses the corresponding ``profile`` and checkpoint coverage budget underneath.
+
+In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:
+
+* requested versus applied optimization levels
+* the chosen ``prefer``, ``profile``, ``checkpoint_budget``, and ``allow_expensive_profiling`` setting
+* which optimization stages were applied or skipped
+* how many :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` objects remain
+* compressor statistics, checkpoint candidate/selection counts, and counts of spatial split, temporal split, and greedy unwrap operations
+* ``gc_selected_modules`` / ``gc_selection_explanation`` to explain why those modules were chosen for checkpointing
+* ``recommendation`` for the next tuning step, e.g. whether to lean further toward speed or memory
+
 Example
 -------
 
@@ -226,6 +417,27 @@ Once the preparation is done, call :func:`memory_optimization <spikingjelly.acti
     )
 
 Refer to the :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` docs for argument details.
+
+If you prefer a simpler, higher-level entry point, start from the ``profile`` argument instead:
+
+.. code:: python
+
+    from spikingjelly.activation_based import memopt
+
+    net, summary = memopt.memory_optimization(
+        net,
+        (VGGBlock,),
+        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
+        profile="balanced",
+        allow_expensive_profiling=False,
+        return_summary=True,
+    )
+
+    print(summary.applied_steps)
+    print(summary.skipped_steps)
+    print(summary.gc_container_count, summary.tcgc_container_count)
+
+If a chosen ``profile`` implies ``level > 1`` but no ``dummy_input`` is provided, the framework will automatically fall back to ``level=1`` and record the fallback reason in ``summary.notes``.
 
 Results
 ###############################

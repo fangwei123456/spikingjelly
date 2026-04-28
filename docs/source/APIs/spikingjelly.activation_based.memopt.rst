@@ -20,6 +20,10 @@ Automatic memory optimization pipeline for deep SNN training based on gradient c
 
     * - :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`
       - **The main API**. Perform memory optimization on a model.
+    * - :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`
+      - Structured summary returned by ``memory_optimization(..., return_summary=True)``.
+    * - :data:`MEMOPT_PROFILES <spikingjelly.activation_based.memopt.pipeline.MEMOPT_PROFILES>`
+      - Supported high-level memopt presets.
     * - :func:`resolve_device <spikingjelly.activation_based.memopt.pipeline.resolve_device>`
       - Get the device of the current process.
     * - :func:`apply_gc <spikingjelly.activation_based.memopt.pipeline.apply_gc>`
