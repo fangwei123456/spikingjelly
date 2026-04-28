@@ -60,6 +60,9 @@ class MemOptSummary:
     gc_candidate_count: int = 0
     gc_selected_count: int = 0
     gc_selection_policy: str = "all_candidates"
+    gc_selected_modules: list = field(default_factory=list)
+    gc_selection_explanation: str = ""
+    recommendation: str = ""
 
 
 def _build_compressor_from_spec(spec):
@@ -257,6 +260,10 @@ def _estimate_module_input_bytes(
     return dict(estimated_bytes)
 
 
+def _module_path_map(net: nn.Module) -> Dict[nn.Module, str]:
+    return {module: name for name, module in net.named_modules() if name}
+
+
 def _resolve_gc_selection_targets(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
@@ -306,6 +313,90 @@ def _resolve_gc_selection_targets(
         reverse=True,
     )
     return tuple(ranked[:selected_count]), candidate_count, selected_count, "largest_input_activations"
+
+
+def _build_gc_selection_explanation(
+    *,
+    candidate_count: int,
+    selected_count: int,
+    selection_policy: str,
+    checkpoint_budget: Optional[str],
+    max_gc_wrapped_modules: Optional[int],
+    gc_target_budget_ratio: Optional[float],
+):
+    if candidate_count == 0:
+        return "No matching modules were found for checkpoint wrapping."
+    if selected_count == candidate_count:
+        if checkpoint_budget is not None:
+            return (
+                f'Checkpoint budget "{checkpoint_budget}" covered all {candidate_count} matching modules, '
+                "so no module-level filtering was applied."
+            )
+        return f"All {candidate_count} matching modules were selected for checkpoint wrapping."
+    if selection_policy == "largest_input_activations":
+        reason = f"Selected {selected_count} of {candidate_count} matching modules with the largest observed input activations."
+        if checkpoint_budget is not None:
+            reason += f' This was driven by checkpoint budget "{checkpoint_budget}".'
+        elif max_gc_wrapped_modules is not None or gc_target_budget_ratio is not None:
+            reason += " This was driven by the explicit selective-checkpoint budget."
+        return reason
+    if selection_policy == "fallback_module_order":
+        return (
+            f"Selected the first {selected_count} of {candidate_count} matching modules by module order "
+            "because no dummy_input was available to score activation sizes."
+        )
+    if selection_policy == "explicit_zero_budget":
+        return "Selective checkpointing budget was set to zero, so no modules were wrapped."
+    if selection_policy == "zero_ratio_budget":
+        return "Selective checkpointing ratio budget was non-positive, so no modules were wrapped."
+    return (
+        f"Selected {selected_count} of {candidate_count} matching modules under policy "
+        f'"{selection_policy}".'
+    )
+
+
+def _build_memopt_recommendation(summary: MemOptSummary) -> str:
+    if summary.gc_candidate_count == 0:
+        return "No matching modules were found. Consider passing a different target instance tuple."
+    if summary.prefer == "speed":
+        return (
+            "Current settings favor training speed. If you need more memory reduction, try "
+            '`prefer="balanced"` or increase `gc_target_budget_ratio`.'
+        )
+    if summary.prefer == "memory":
+        return (
+            "Current settings favor memory reduction. If optimization latency or training slowdown is too high, "
+            'try `prefer="balanced"` or `checkpoint_budget="speed"`.'
+        )
+    if summary.prefer == "balanced":
+        return (
+            "Current settings aim for a middle ground. Move to `prefer=\"speed\"` for lower overhead or "
+            '`prefer="memory"` for more aggressive memory savings.'
+        )
+    if summary.checkpoint_budget == "speed":
+        return (
+            "Checkpoint coverage is intentionally conservative. Increase to "
+            '`checkpoint_budget="balanced"` or `"memory"` if you want more memory savings.'
+        )
+    if summary.checkpoint_budget == "memory":
+        return (
+            "Checkpoint coverage is already aggressive. To reduce optimization or training cost, "
+            'drop to `checkpoint_budget="balanced"` or `"speed"`.'
+        )
+    if summary.profile == "safe":
+        return (
+            "You are using the conservative `safe` profile. If this does not save enough memory, "
+            'try `profile="balanced"` or `prefer="balanced"`.'
+        )
+    if summary.profile == "exhaustive":
+        return (
+            "You are using the most expensive search mode. Keep it for offline tuning; for routine use, "
+            'consider `profile="balanced"` or `prefer="balanced"`.'
+        )
+    return (
+        "Review `summary.gc_selected_count`, split counts, and skipped steps to decide whether to bias "
+        "future runs toward speed or memory."
+    )
 
 
 def _resolve_memory_optimization_options(
@@ -584,7 +675,10 @@ def apply_gc(
         gc_candidate_count=0,
         gc_selected_count=0,
         gc_selection_policy="all_candidates",
+        gc_selected_modules=[],
+        gc_selection_explanation="",
     )
+    candidates = [m for m in net.modules() if isinstance(m, instance)]
     (
         max_gc_wrapped_modules,
         gc_target_budget_ratio,
@@ -609,6 +703,20 @@ def apply_gc(
     apply_summary["gc_selection_policy"] = selection_policy
     apply_summary["checkpoint_budget"] = checkpoint_budget
     apply_summary["budget_notes"] = budget_notes
+    path_map = _module_path_map(net)
+    apply_summary["gc_selected_modules"] = (
+        [path_map.get(m, "<root>") for m in selected_targets]
+        if selected_targets is not None
+        else [path_map.get(m, "<root>") for m in candidates]
+    )
+    apply_summary["gc_selection_explanation"] = _build_gc_selection_explanation(
+        candidate_count=candidate_count,
+        selected_count=selected_count,
+        selection_policy=selection_policy,
+        checkpoint_budget=checkpoint_budget,
+        max_gc_wrapped_modules=max_gc_wrapped_modules,
+        gc_target_budget_ratio=gc_target_budget_ratio,
+    )
     if compress_x and dummy_input is not None:
         probe_targets = tuple(
             m
@@ -1308,7 +1416,10 @@ def memory_optimization(
             if isinstance(v, str):
                 setattr(summary, k, v)
             elif isinstance(v, list):
-                summary.notes.extend(v)
+                if k == "gc_selected_modules":
+                    summary.gc_selected_modules = list(v)
+                else:
+                    summary.notes.extend(v)
             else:
                 setattr(summary, k, getattr(summary, k) + v)
 
@@ -1557,6 +1668,7 @@ def memory_optimization(
     summary.tcgc_container_count = sum(
         1 for m in net.modules() if isinstance(m, TCGCContainer)
     )
+    summary.recommendation = _build_memopt_recommendation(summary)
     if return_summary:
         return net, summary
     return net

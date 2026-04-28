@@ -268,6 +268,8 @@ English version: :doc:`../en/memopt`
 * 哪些优化步骤被应用、哪些步骤被跳过
 * 包装成 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 的数量
 * 自动选择的压缩器统计、checkpoint 候选数与实际选中数，以及空间/时间 split、greedy unwrap 的执行次数
+* ``gc_selected_modules`` / ``gc_selection_explanation`` ：说明这次为什么选中了这些 checkpoint 模块
+* ``recommendation`` ：基于当前选择结果给出的下一步调参建议，例如更偏速度还是更偏显存
 
 示例
 -----------------------

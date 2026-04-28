@@ -268,6 +268,8 @@ In addition, ``return_summary=True`` makes the function return ``(net, summary)`
 * which optimization stages were applied or skipped
 * how many :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` objects remain
 * compressor statistics, checkpoint candidate/selection counts, and counts of spatial split, temporal split, and greedy unwrap operations
+* ``gc_selected_modules`` / ``gc_selection_explanation`` to explain why those modules were chosen for checkpointing
+* ``recommendation`` for the next tuning step, e.g. whether to lean further toward speed or memory
 
 Example
 -------

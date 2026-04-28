@@ -304,6 +304,10 @@ def test_memory_optimization_prefer_speed_sets_defaults(monkeypatch):
     assert summary.checkpoint_budget == "speed"
     assert "prefer:profile=safe" in summary.notes
     assert "prefer:checkpoint_budget=speed" in summary.notes
+    assert summary.gc_selected_count == 2
+    assert len(summary.gc_selected_modules) == 2
+    assert "no dummy_input was available" in summary.gc_selection_explanation
+    assert "favor training speed" in summary.recommendation
 
 
 def test_memory_optimization_explicit_profile_overrides_prefer_profile(monkeypatch):
@@ -343,6 +347,8 @@ def test_apply_gc_selects_largest_input_targets_when_budgeted(monkeypatch):
     assert summary["gc_candidate_count"] == 2
     assert summary["gc_selected_count"] == 1
     assert summary["gc_selection_policy"] == "largest_input_activations"
+    assert summary["gc_selected_modules"] == ["large"]
+    assert "largest observed input activations" in summary["gc_selection_explanation"]
 
 
 def test_apply_gc_budget_without_dummy_input_falls_back_to_module_order():
