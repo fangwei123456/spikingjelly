@@ -674,6 +674,41 @@ def test_ensure_cleanup_tmp_python_files_tracks_created_temp_files():
     assert not os.path.exists(created["path"])
 
 
+def test_ensure_cleanup_tmp_python_files_cleans_up_on_exception():
+    from spikingjelly.activation_based.triton_kernel.triton_utils import (
+        ensure_cleanup_tmp_python_files,
+    )
+
+    created = {"path": None}
+
+    @ensure_cleanup_tmp_python_files
+    def build_temp_python_file():
+        tmp = tempfile.NamedTemporaryFile(
+            suffix=".py",
+            delete=False,
+        )
+        tmp.write(b"print('hello')\n")
+        tmp.close()
+        created["path"] = tmp.name
+        raise RuntimeError("boom")
+
+    with pytest.raises(RuntimeError, match="boom"):
+        build_temp_python_file()
+
+    assert created["path"] is not None
+    assert not os.path.exists(created["path"])
+
+
+def test_spatial_split_respects_compress_x_flag():
+    block = GCContainer(SpatialSplitBlock(), x_compressor=BitSpikeCompressor())
+
+    split = memopt_pipeline._spatially_split_gc_container(block, compress_x=False)
+
+    assert isinstance(split, nn.Sequential)
+    assert all(isinstance(child, GCContainer) for child in split)
+    assert all(isinstance(child.x_compressor, NullSpikeCompressor) for child in split)
+
+
 def test_apply_gc_clones_manual_compressor_instances(monkeypatch):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 

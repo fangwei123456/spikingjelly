@@ -18,14 +18,14 @@ from .checkpointing import GCContainer, TCGCContainer
 from .compress import BitSpikeCompressor, NullSpikeCompressor
 
 __all__ = [
-    "MEMOPT_PROFILES",
     "MEMOPT_CHECKPOINT_BUDGETS",
     "MEMOPT_PREFERENCES",
+    "MEMOPT_PROFILES",
     "MemOptSummary",
-    "resolve_device",
     "apply_gc",
     "get_module_and_parent",
     "memory_optimization",
+    "resolve_device",
 ]
 
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
@@ -67,6 +67,15 @@ class MemOptSummary:
 
 def _build_compressor_from_spec(spec):
     if isinstance(spec, str):
+        if not hasattr(compress, spec):
+            available = ", ".join(
+                name
+                for name in dir(compress)
+                if name.endswith("Compressor") and not name.startswith("_")
+            )
+            raise ValueError(
+                f"Unknown compressor spec {spec!r}. Available compressor classes: {available}."
+            )
         return getattr(compress, spec)()
     return copy.deepcopy(spec)
 
@@ -1497,7 +1506,7 @@ def memory_optimization(
                     cb_path = cb_name.split(" ")[-1]
                     cb, parent, child_name = get_module_and_parent(net, cb_path)
 
-                    split_cb = _spatially_split_gc_container(cb)
+                    split_cb = _spatially_split_gc_container(cb, compress_x)
                     if split_cb is None:
                         _cprint(verbose, f"\t{cb_name}: can't be spatially split")
                         blocked_candidates.add(cb_path)

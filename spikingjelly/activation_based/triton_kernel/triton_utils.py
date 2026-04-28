@@ -7,6 +7,7 @@ import contextlib
 import functools
 import os
 import tempfile
+import threading
 from typing import Callable
 
 import torch
@@ -121,37 +122,44 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
     return wrapper
 
 
+_TMP_PY_LOCK = threading.Lock()
+_TMP_PY_TRACKER = threading.local()
+
+
 def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
     """Remove temporary python files returned or created by a wrapped function."""
 
     @functools.wraps(f)
     def wrapper(*args, **kwargs):
-        tmp_paths = []
-        original_named_temporary_file = tempfile.NamedTemporaryFile
+        with _TMP_PY_LOCK:
+            tmp_paths = []
+            _TMP_PY_TRACKER.paths = tmp_paths
+            original_named_temporary_file = tempfile.NamedTemporaryFile
 
-        def tracking_named_temporary_file(*ntf_args, **ntf_kwargs):
-            tmp = original_named_temporary_file(*ntf_args, **ntf_kwargs)
-            tmp_name = getattr(tmp, "name", None)
-            if isinstance(tmp_name, str) and tmp_name.endswith(".py"):
-                tmp_paths.append(tmp_name)
-            return tmp
+            def tracking_named_temporary_file(*ntf_args, **ntf_kwargs):
+                tmp = original_named_temporary_file(*ntf_args, **ntf_kwargs)
+                tmp_name = getattr(tmp, "name", None)
+                if isinstance(tmp_name, str) and tmp_name.endswith(".py"):
+                    _TMP_PY_TRACKER.paths.append(tmp_name)
+                return tmp
 
-        tempfile.NamedTemporaryFile = tracking_named_temporary_file
-        try:
-            result = f(*args, **kwargs)
-            if isinstance(result, str) and result.endswith(".py"):
-                tmp_paths.append(result)
-            elif isinstance(result, tempfile._TemporaryFileWrapper):
-                tmp_paths.append(result.name)
-            return result
-        finally:
-            tempfile.NamedTemporaryFile = original_named_temporary_file
-            for path in tmp_paths:
-                try:
-                    if path and os.path.exists(path):
-                        os.remove(path)
-                except OSError:
-                    pass
+            tempfile.NamedTemporaryFile = tracking_named_temporary_file
+            try:
+                result = f(*args, **kwargs)
+                if isinstance(result, str) and result.endswith(".py"):
+                    tmp_paths.append(result)
+                elif isinstance(result, tempfile._TemporaryFileWrapper):
+                    tmp_paths.append(result.name)
+                return result
+            finally:
+                tempfile.NamedTemporaryFile = original_named_temporary_file
+                for path in tmp_paths:
+                    try:
+                        if path and os.path.exists(path):
+                            os.remove(path)
+                    except OSError:
+                        pass
+                _TMP_PY_TRACKER.paths = []
 
     return wrapper
 
