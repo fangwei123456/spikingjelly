@@ -101,6 +101,29 @@ If you are unsure which one to choose, start from ``"balanced"``. Use ``"safe"``
 
 If you want to explicitly limit the optimizer's own overhead, set ``allow_expensive_profiling=False``. This automatically tightens split-search budgets and disables worker warmup during profiling.
 
+On top of ``profile``, the current version also exposes two more automatic control layers:
+
+* ``checkpoint_budget`` controls **how many candidate modules should actually be wrapped as checkpoint segments**. It accepts
+  ``"speed"``, ``"balanced"``, and ``"memory"``.
+
+  * ``"speed"`` keeps checkpointing focused on only the most valuable hotspots and prioritizes lower training overhead.
+  * ``"balanced"`` covers more hotspots and trades some extra overhead for more memory reduction.
+  * ``"memory"`` tries to cover as many candidates as possible and leans toward lower peak memory.
+
+* ``prefer`` is an even higher-level goal-oriented entry point. It accepts
+  ``"speed"``, ``"balanced"``, and ``"memory"``. When the user does not explicitly specify
+  ``profile`` or ``checkpoint_budget``, it maps to recommended defaults:
+
+  * ``prefer="speed"`` -> ``profile="safe"`` + ``checkpoint_budget="speed"``
+  * ``prefer="balanced"`` -> ``profile="balanced"`` + ``checkpoint_budget="balanced"``
+  * ``prefer="memory"`` -> ``profile="memory"`` + ``checkpoint_budget="memory"``
+
+This gives three levels of control:
+
+* the simplest goal-driven interface: set ``prefer=...``
+* separate control over search aggressiveness and checkpoint coverage: combine ``profile`` and ``checkpoint_budget``
+* fully manual experimentation: keep using low-level knobs such as ``level``, ``max_gc_wrapped_modules``, and ``gc_target_budget_ratio``
+
 To make these trade-offs more concrete, we also ran a small synthetic benchmark on a single ``RTX 4090``. The tested model was ``MemOptBlockNet(depth=1)`` with input shape ``[T, N, C] = [2, 2, 16]``. For each profile, we measured the time spent inside ``memory_optimization``, the post-optimization training step latency, and the training peak memory. The unoptimized baseline on this workload took about ``5.80 ms`` per training step, with ``peak_allocated = 17.26 MB`` and ``peak_reserved = 22.0 MB``. The profile-wise results were:
 
 .. list-table::
@@ -206,13 +229,45 @@ This real-network benchmark shows a more practical trade-off:
 * ``memory`` pushes peak memory lower still, but the optimizer-side search cost becomes much larger.
 * ``exhaustive`` gives the best memory result here and almost recovers baseline training-step speed, but its structure-search cost is extremely high and is best treated as an offline tuning mode.
 
+If we zoom in on the new ``prefer`` interface alone, the same network and input shape also show a clear gradient:
+
+.. list-table::
+    :header-rows: 1
+
+    * - ``prefer``
+      - Automatic mapping
+      - Selected checkpoint modules
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``optimize_ms``
+    * - ``"speed"``
+      - ``safe`` + ``speed``
+      - ``4 / 8``
+      - ``34.43 ms``
+      - ``922.39 MB``
+      - ``2726.53 ms``
+    * - ``"balanced"``
+      - ``balanced`` + ``balanced``
+      - ``6 / 8``
+      - ``34.35 ms``
+      - ``877.14 MB``
+      - ``34360.89 ms``
+    * - ``"memory"``
+      - ``memory`` + ``memory``
+      - ``8 / 8``
+      - ``43.36 ms``
+      - ``699.17 MB``
+      - ``92689.79 ms``
+
+You can think of ``prefer`` as directly answering "should this optimization lean more toward training speed or toward memory reduction?", while the framework automatically chooses the corresponding ``profile`` and checkpoint coverage budget underneath.
+
 In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:
 
 * requested versus applied optimization levels
-* the chosen ``profile`` and ``allow_expensive_profiling`` setting
+* the chosen ``prefer``, ``profile``, ``checkpoint_budget``, and ``allow_expensive_profiling`` setting
 * which optimization stages were applied or skipped
 * how many :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` objects remain
-* compressor statistics and counts of spatial split, temporal split, and greedy unwrap operations
+* compressor statistics, checkpoint candidate/selection counts, and counts of spatial split, temporal split, and greedy unwrap operations
 
 Example
 -------

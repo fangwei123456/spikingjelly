@@ -101,6 +101,29 @@ English version: :doc:`../en/memopt`
 
 如果用户希望显式限制优化器本身的开销，可设置 ``allow_expensive_profiling=False`` 。此时会自动收紧 split 搜索预算，并关闭 profiling worker 的 warmup。
 
+在此基础上，当前版本还提供了两层更高阶的自动控制：
+
+* ``checkpoint_budget`` ：控制 **有多少目标模块会被包装成检查点片段** 。可选
+  ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。
+
+  * ``"speed"`` ：只对一部分最“值钱”的热点模块做 checkpoint，优先减少额外训练开销。
+  * ``"balanced"`` ：覆盖更多热点模块，在显存和训练速度之间取折中。
+  * ``"memory"`` ：尽可能覆盖全部候选模块，更偏向显存下降。
+
+* ``prefer`` ：再往上一层的“目标导向”入口。可选
+  ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。当用户没有显式指定
+  ``profile`` 或 ``checkpoint_budget`` 时，会自动映射为推荐组合：
+
+  * ``prefer="speed"`` -> ``profile="safe"`` + ``checkpoint_budget="speed"``
+  * ``prefer="balanced"`` -> ``profile="balanced"`` + ``checkpoint_budget="balanced"``
+  * ``prefer="memory"`` -> ``profile="memory"`` + ``checkpoint_budget="memory"``
+
+这意味着，用户现在可以用三种粒度来控制 memopt：
+
+* 只想要最简单的高层接口：直接指定 ``prefer=...``
+* 希望分别控制搜索激进度与 checkpoint 覆盖范围：组合 ``profile`` 和 ``checkpoint_budget``
+* 需要精细实验：继续使用 ``level`` 、 ``max_gc_wrapped_modules`` 、 ``gc_target_budget_ratio`` 等底层参数
+
 为了给这些取舍提供一个更直观的量化参考，我们在服务器上的一张 ``RTX 4090`` 上，对一个较小的合成工作负载做了对比测试。测试模型为 ``MemOptBlockNet(depth=1)`` ，输入形状为 ``[T, N, C] = [2, 2, 16]`` ，每个配置均测量了 ``memory_optimization`` 自身耗时、优化后单步训练耗时以及训练峰值显存。未优化 baseline 的单步训练耗时约为 ``5.80 ms`` ， ``peak_allocated`` 为 ``17.26 MB`` ， ``peak_reserved`` 为 ``22.0 MB`` 。四个 ``profile`` 的结果如下：
 
 .. list-table::
@@ -206,13 +229,45 @@ English version: :doc:`../en/memopt`
 * ``memory`` 继续降低峰值显存，但优化器自身耗时已经明显上升。
 * ``exhaustive`` 在这组实验里给出了最好的显存结果，而且单步训练速度几乎回到 baseline，但它的结构搜索成本极高，更适合离线调优。
 
+如果把目光缩小到新的高层接口 ``prefer`` ，在同一网络、同一输入形状下也能观察到比较清晰的梯度：
+
+.. list-table::
+    :header-rows: 1
+
+    * - ``prefer``
+      - 自动映射
+      - 选中的 checkpoint 模块数
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``optimize_ms``
+    * - ``"speed"``
+      - ``safe`` + ``speed``
+      - ``4 / 8``
+      - ``34.43 ms``
+      - ``922.39 MB``
+      - ``2726.53 ms``
+    * - ``"balanced"``
+      - ``balanced`` + ``balanced``
+      - ``6 / 8``
+      - ``34.35 ms``
+      - ``877.14 MB``
+      - ``34360.89 ms``
+    * - ``"memory"``
+      - ``memory`` + ``memory``
+      - ``8 / 8``
+      - ``43.36 ms``
+      - ``699.17 MB``
+      - ``92689.79 ms``
+
+可以把它理解为： ``prefer`` 直接回答“这次优化更偏训练速度，还是更偏显存”，而内部再自动决定该用什么 ``profile`` 和 checkpoint 覆盖预算。
+
 另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
 
 * 请求/实际生效的优化级别
-* 使用的 ``profile`` 和 ``allow_expensive_profiling`` 配置
+* 使用的 ``prefer`` 、 ``profile`` 、 ``checkpoint_budget`` 和 ``allow_expensive_profiling`` 配置
 * 哪些优化步骤被应用、哪些步骤被跳过
 * 包装成 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 的数量
-* 自动选择的压缩器统计，以及空间/时间 split、greedy unwrap 的执行次数
+* 自动选择的压缩器统计、checkpoint 候选数与实际选中数，以及空间/时间 split、greedy unwrap 的执行次数
 
 示例
 -----------------------
