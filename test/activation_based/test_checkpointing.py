@@ -5,6 +5,7 @@ import torch
 import torch.nn as nn
 
 import spikingjelly.activation_based.memopt as memopt
+import spikingjelly.activation_based.memopt.pipeline as memopt_pipeline
 from spikingjelly.activation_based.memopt.checkpointing import (
     in_gc_1st_forward,
     query_autocast,
@@ -23,7 +24,6 @@ from spikingjelly.activation_based.memopt.compress import (
     NullSpikeCompressor,
     SparseSpikeCompressor,
 )
-from spikingjelly.activation_based.memopt import pipeline as memopt_pipeline
 from spikingjelly.activation_based import neuron
 
 
@@ -96,6 +96,18 @@ class CountedNonBinaryNet(nn.Module):
     def forward(self, x):
         self.forward_calls += 1
         return self.block(self.proj(x))
+
+
+class DualTargetNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.large = TargetBlock()
+        self.small = TargetBlock()
+
+    def forward(self, x):
+        y1 = self.large(x)
+        y2 = self.small(x[..., :2])
+        return y1[..., :2] + y2
 
 
 def _result_row(module_name: str):
@@ -259,6 +271,44 @@ def test_memory_optimization_rejects_unknown_profile():
             TargetBlock,
             profile="mystery",
         )
+
+
+def test_apply_gc_selects_largest_input_targets_when_budgeted(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    net, summary = memopt_pipeline.apply_gc(
+        DualTargetNet(),
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        compress_x=False,
+        device="cpu",
+        max_gc_wrapped_modules=1,
+        return_summary=True,
+    )
+
+    assert isinstance(net.large, GCContainer)
+    assert isinstance(net.small, TargetBlock)
+    assert summary["gc_candidate_count"] == 2
+    assert summary["gc_selected_count"] == 1
+    assert summary["gc_selection_policy"] == "largest_input_activations"
+
+
+def test_apply_gc_budget_without_dummy_input_falls_back_to_module_order():
+    net, summary = memopt_pipeline.apply_gc(
+        nn.Sequential(TargetBlock(), TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        compress_x=False,
+        device="cpu",
+        max_gc_wrapped_modules=1,
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(net[1], TargetBlock)
+    assert summary["gc_candidate_count"] == 2
+    assert summary["gc_selected_count"] == 1
+    assert summary["gc_selection_policy"] == "fallback_module_order"
 
 
 def test_memory_optimization_level1_without_dummy_input_skips_main_process_warmup(

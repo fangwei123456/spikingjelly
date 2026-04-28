@@ -3,6 +3,7 @@ import os
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
+from math import ceil
 from typing import Dict, Optional, Tuple, Union
 
 import torch
@@ -50,6 +51,9 @@ class MemOptSummary:
     gc_container_count: int = 0
     tcgc_container_count: int = 0
     options: dict = field(default_factory=dict)
+    gc_candidate_count: int = 0
+    gc_selected_count: int = 0
+    gc_selection_policy: str = "all_candidates"
 
 
 def _build_compressor_from_spec(spec):
@@ -214,6 +218,90 @@ def _probe_binary_inputs(
     return dict(is_binary)
 
 
+def _estimate_module_input_bytes(
+    net: nn.Module,
+    instance: Union[type, Tuple[type]],
+    dummy_input: tuple,
+    target_modules: Optional[Tuple[nn.Module, ...]] = None,
+):
+    """Estimate per-module input activation size (in bytes) from one dry run."""
+    estimated_bytes = defaultdict(int)
+    hooks = []
+    if target_modules is None:
+        target_modules = tuple(m for m in net.modules() if isinstance(m, instance))
+
+    def hook_fn(m, inputs: tuple):
+        if not inputs:
+            return
+        x = inputs[0]
+        if isinstance(x, torch.Tensor):
+            estimated_bytes[m] = max(estimated_bytes[m], x.numel() * x.element_size())
+
+    for m in target_modules:
+        hooks.append(m.register_forward_pre_hook(hook_fn))
+
+    is_training = net.training
+    net.eval()
+    with torch.no_grad():
+        _ = net(*dummy_input)
+        functional.reset_net(net)
+    net.train(is_training)
+    for h in hooks:
+        h.remove()
+    return dict(estimated_bytes)
+
+
+def _resolve_gc_selection_targets(
+    net: nn.Module,
+    instance: Union[type, Tuple[type]],
+    dummy_input: Optional[tuple],
+    *,
+    device: str,
+    max_gc_wrapped_modules: Optional[int],
+    gc_target_budget_ratio: Optional[float],
+):
+    candidates = [m for m in net.modules() if isinstance(m, instance)]
+    candidate_count = len(candidates)
+    if candidate_count == 0:
+        return None, candidate_count, candidate_count, "no_candidates"
+
+    limits = []
+    if max_gc_wrapped_modules is not None:
+        if max_gc_wrapped_modules <= 0:
+            return tuple(), candidate_count, 0, "explicit_zero_budget"
+        limits.append(min(max_gc_wrapped_modules, candidate_count))
+    if gc_target_budget_ratio is not None:
+        if gc_target_budget_ratio <= 0:
+            return tuple(), candidate_count, 0, "zero_ratio_budget"
+        ratio_limit = max(1, min(candidate_count, ceil(candidate_count * gc_target_budget_ratio)))
+        limits.append(ratio_limit)
+
+    if not limits:
+        return None, candidate_count, candidate_count, "all_candidates"
+
+    selected_count = min(limits)
+    if selected_count >= candidate_count:
+        return None, candidate_count, candidate_count, "budget_covers_all"
+
+    if dummy_input is None:
+        return tuple(candidates[:selected_count]), candidate_count, selected_count, "fallback_module_order"
+
+    net = net.to(device)
+    moved_input = _dummy_input_to_device(dummy_input, device)
+    estimated_bytes = _estimate_module_input_bytes(
+        net,
+        instance,
+        moved_input,
+        target_modules=tuple(candidates),
+    )
+    ranked = sorted(
+        candidates,
+        key=lambda m: (estimated_bytes.get(m, 0), -candidates.index(m)),
+        reverse=True,
+    )
+    return tuple(ranked[:selected_count]), candidate_count, selected_count, "largest_input_activations"
+
+
 def _resolve_memory_optimization_options(
     level: Optional[int],
     profile: Optional[str],
@@ -344,6 +432,8 @@ def apply_gc(
     dummy_input: Optional[tuple] = None,
     compress_x: bool = True,
     device: str = "cuda",
+    max_gc_wrapped_modules: Optional[int] = None,
+    gc_target_budget_ratio: Optional[float] = None,
     return_summary: bool = False,
 ) -> Union[nn.Module, Tuple[nn.Module, dict]]:
     r"""
@@ -399,6 +489,16 @@ def apply_gc(
     :param device: Device type, e.g., "cuda" or "cpu"
     :type device: str
 
+    :param max_gc_wrapped_modules: Optional upper bound on how many matching
+        modules should be wrapped. When set, the modules with the largest
+        observed input activations are preferred if ``dummy_input`` is given
+    :type max_gc_wrapped_modules: Optional[int]
+
+    :param gc_target_budget_ratio: Optional ratio in ``(0, 1]`` controlling the
+        fraction of matching modules to wrap. When used together with
+        ``max_gc_wrapped_modules``, the smaller budget wins
+    :type gc_target_budget_ratio: Optional[float]
+
     :return: Network module with GC applied
     :rtype: torch.nn.Module
     """
@@ -408,12 +508,30 @@ def apply_gc(
         manual_compressor_count=0,
         bit_compressor_count=0,
         null_compressor_count=0,
+        gc_candidate_count=0,
+        gc_selected_count=0,
+        gc_selection_policy="all_candidates",
     )
+    selected_targets, candidate_count, selected_count, selection_policy = (
+        _resolve_gc_selection_targets(
+            net,
+            instance,
+            dummy_input,
+            device=device,
+            max_gc_wrapped_modules=max_gc_wrapped_modules,
+            gc_target_budget_ratio=gc_target_budget_ratio,
+        )
+    )
+    apply_summary["gc_candidate_count"] = candidate_count
+    apply_summary["gc_selected_count"] = selected_count
+    apply_summary["gc_selection_policy"] = selection_policy
     if compress_x and dummy_input is not None:
         probe_targets = tuple(
             m
             for m in net.modules()
-            if isinstance(m, instance) and getattr(m, "x_compressor", None) is None
+            if isinstance(m, instance)
+            and (selected_targets is None or m in selected_targets)
+            and getattr(m, "x_compressor", None) is None
         )
         if probe_targets:
             net = net.to(device)
@@ -446,7 +564,9 @@ def apply_gc(
 
     def _replace(subnet: nn.Module):
         for name, child in list(subnet.named_children()):
-            if isinstance(child, instance):
+            if isinstance(child, instance) and (
+                selected_targets is None or child in selected_targets
+            ):
                 x_compressor = _get_compressor(child, is_binary_input.get(child, False))
                 setattr(subnet, name, GCContainer(x_compressor, child))
                 apply_summary["gc_wrap_count"] += 1
@@ -846,6 +966,8 @@ def memory_optimization(
     warmup_in_profile_workers: bool = True,
     profile: Optional[str] = None,
     allow_expensive_profiling: Optional[bool] = None,
+    max_gc_wrapped_modules: Optional[int] = None,
+    gc_target_budget_ratio: Optional[float] = None,
     return_summary: bool = False,
 ) -> Union[nn.Module, Tuple[nn.Module, MemOptSummary]]:
     r"""
@@ -908,6 +1030,14 @@ def memory_optimization(
 
     :param allow_expensive_profiling: 是否允许高开销 profiling。关闭后会自动收紧 split 搜索预算
     :type allow_expensive_profiling: Optional[bool]
+
+    :param max_gc_wrapped_modules: 选择性 checkpoint 的上限。若给定，则只包装最多这么多个匹配模块。
+        当 ``dummy_input`` 可用时，优先选择输入激活更大的模块
+    :type max_gc_wrapped_modules: Optional[int]
+
+    :param gc_target_budget_ratio: 选择性 checkpoint 的比例预算，取值应在 ``(0, 1]`` 之间。
+        当与 ``max_gc_wrapped_modules`` 同时给定时，较小的预算生效
+    :type gc_target_budget_ratio: Optional[float]
 
     :param return_summary: 是否同时返回结构化优化摘要
     :type return_summary: bool
@@ -978,6 +1108,15 @@ def memory_optimization(
         Disabling this automatically tightens split search budgets
     :type allow_expensive_profiling: Optional[bool]
 
+    :param max_gc_wrapped_modules: upper bound for selective checkpointing.
+        When provided, at most this many matching modules are wrapped; modules
+        with larger observed input activations are preferred when ``dummy_input`` is available
+    :type max_gc_wrapped_modules: Optional[int]
+
+    :param gc_target_budget_ratio: ratio budget for selective checkpointing in ``(0, 1]``.
+        When used together with ``max_gc_wrapped_modules``, the smaller budget wins
+    :type gc_target_budget_ratio: Optional[float]
+
     :param return_summary: whether to also return a structured optimization summary
     :type return_summary: bool
 
@@ -1029,6 +1168,8 @@ def memory_optimization(
             max_candidates_per_round=max_candidates_per_round,
             warmup_in_main_process=warmup_in_main_process,
             warmup_in_profile_workers=warmup_in_profile_workers,
+            max_gc_wrapped_modules=max_gc_wrapped_modules,
+            gc_target_budget_ratio=gc_target_budget_ratio,
         ),
     )
     summary.applied_level = level
@@ -1043,11 +1184,16 @@ def memory_optimization(
             dummy_input,
             compress_x,
             device,
+            max_gc_wrapped_modules=max_gc_wrapped_modules,
+            gc_target_budget_ratio=gc_target_budget_ratio,
             return_summary=True,
         )
         summary.applied_steps.append("level1_gc")
         for k, v in apply_summary.items():
-            setattr(summary, k, getattr(summary, k) + v)
+            if isinstance(v, str):
+                setattr(summary, k, v)
+            else:
+                setattr(summary, k, getattr(summary, k) + v)
 
     if level > 1:  # spatial split
         if _gc_container_count(net) == 0:
