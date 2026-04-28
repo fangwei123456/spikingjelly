@@ -337,9 +337,10 @@ def _resolve_gc_selection_targets(
         moved_input,
         target_modules=tuple(candidates),
     )
+    index_map = {m: i for i, m in enumerate(candidates)}
     ranked = sorted(
         candidates,
-        key=lambda m: (estimated_bytes.get(m, 0), -candidates.index(m)),
+        key=lambda m: (estimated_bytes.get(m, 0), -index_map[m]),
         reverse=True,
     )
     return tuple(ranked[:selected_count]), candidate_count, selected_count, "largest_input_activations"

@@ -140,7 +140,9 @@ def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
                 tmp = original_named_temporary_file(*ntf_args, **ntf_kwargs)
                 tmp_name = getattr(tmp, "name", None)
                 if isinstance(tmp_name, str) and tmp_name.endswith(".py"):
-                    _TMP_PY_TRACKER.paths.append(tmp_name)
+                    thread_paths = getattr(_TMP_PY_TRACKER, "paths", None)
+                    if thread_paths is not None:
+                        thread_paths.append(tmp_name)
                 return tmp
 
             tempfile.NamedTemporaryFile = tracking_named_temporary_file

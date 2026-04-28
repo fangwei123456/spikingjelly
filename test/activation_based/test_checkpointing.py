@@ -700,7 +700,14 @@ def test_ensure_cleanup_tmp_python_files_cleans_up_on_exception():
 
 
 def test_spatial_split_respects_compress_x_flag():
-    block = GCContainer(SpatialSplitBlock(), x_compressor=BitSpikeCompressor())
+    wrapped = memopt_pipeline.apply_gc(
+        nn.Sequential(SpatialSplitBlock()),
+        SpatialSplitBlock,
+        dummy_input=(torch.randint(0, 2, (2, 4), dtype=torch.float32),),
+        compress_x=True,
+        device="cpu",
+    )
+    block = wrapped[0]
 
     split = memopt_pipeline._spatially_split_gc_container(block, compress_x=False)
 
