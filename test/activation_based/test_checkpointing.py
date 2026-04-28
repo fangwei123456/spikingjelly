@@ -144,6 +144,7 @@ def test_memopt_package_imports_pipeline_api():
     assert hasattr(memopt, "MemOptSummary")
     assert hasattr(memopt, "MEMOPT_PROFILES")
     assert hasattr(memopt, "MEMOPT_CHECKPOINT_BUDGETS")
+    assert hasattr(memopt, "MEMOPT_PREFERENCES")
 
 
 def test_probe_binary_inputs_stops_early_when_all_targets_are_non_binary():
@@ -272,6 +273,56 @@ def test_memory_optimization_rejects_unknown_profile():
             TargetBlock,
             profile="mystery",
         )
+
+
+def test_memory_optimization_rejects_unknown_prefer():
+    with pytest.raises(ValueError, match="Unsupported prefer"):
+        memopt.memory_optimization(
+            nn.Sequential(TargetBlock()),
+            TargetBlock,
+            prefer="mystery",
+        )
+
+
+def test_memory_optimization_prefer_speed_sets_defaults(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    net, summary = memopt.memory_optimization(
+        nn.Sequential(TargetBlock(), TargetBlock(), TargetBlock(), TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        prefer="speed",
+        return_summary=True,
+    )
+
+    assert isinstance(net[0], GCContainer)
+    assert isinstance(net[1], GCContainer)
+    assert isinstance(net[2], TargetBlock)
+    assert isinstance(net[3], TargetBlock)
+    assert summary.prefer == "speed"
+    assert summary.profile == "safe"
+    assert summary.checkpoint_budget == "speed"
+    assert "prefer:profile=safe" in summary.notes
+    assert "prefer:checkpoint_budget=speed" in summary.notes
+
+
+def test_memory_optimization_explicit_profile_overrides_prefer_profile(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    _, summary = memopt.memory_optimization(
+        nn.Sequential(TargetBlock(), TargetBlock(), TargetBlock(), TargetBlock()),
+        TargetBlock,
+        dummy_input=None,
+        prefer="speed",
+        profile="memory",
+        return_summary=True,
+    )
+
+    assert summary.prefer == "speed"
+    assert summary.profile == "memory"
+    assert summary.checkpoint_budget == "speed"
+    assert "prefer:profile=safe" not in summary.notes
+    assert "prefer:checkpoint_budget=speed" in summary.notes
 
 
 def test_apply_gc_selects_largest_input_targets_when_budgeted(monkeypatch):

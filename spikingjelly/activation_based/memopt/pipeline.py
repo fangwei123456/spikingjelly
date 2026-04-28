@@ -20,6 +20,7 @@ from .compress import BitSpikeCompressor, NullSpikeCompressor
 __all__ = [
     "MEMOPT_PROFILES",
     "MEMOPT_CHECKPOINT_BUDGETS",
+    "MEMOPT_PREFERENCES",
     "MemOptSummary",
     "resolve_device",
     "apply_gc",
@@ -30,12 +31,14 @@ __all__ = [
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
 MEMOPT_PROFILES = ("safe", "balanced", "memory", "exhaustive")
 MEMOPT_CHECKPOINT_BUDGETS = ("speed", "balanced", "memory")
+MEMOPT_PREFERENCES = ("speed", "balanced", "memory")
 
 
 @dataclass
 class MemOptSummary:
     profile: Optional[str]
     checkpoint_budget: Optional[str]
+    prefer: Optional[str]
     device: str
     requested_level: int
     applied_level: int
@@ -427,6 +430,40 @@ def _resolve_memory_optimization_options(
         resolved["warmup_in_profile_workers"] = False
 
     return resolved, notes
+
+
+def _resolve_preference_options(
+    prefer: Optional[str],
+    profile: Optional[str],
+    checkpoint_budget: Optional[str],
+):
+    if prefer is not None and prefer not in MEMOPT_PREFERENCES:
+        raise ValueError(
+            f"Unsupported prefer {prefer!r}. Expected one of {MEMOPT_PREFERENCES}."
+        )
+
+    resolved_profile = profile
+    resolved_budget = checkpoint_budget
+    notes = []
+
+    if prefer is None:
+        return resolved_profile, resolved_budget, notes
+
+    defaults = {
+        "speed": ("safe", "speed"),
+        "balanced": ("balanced", "balanced"),
+        "memory": ("memory", "memory"),
+    }
+    default_profile, default_budget = defaults[prefer]
+
+    if resolved_profile is None:
+        resolved_profile = default_profile
+        notes.append(f"prefer:profile={default_profile}")
+    if resolved_budget is None:
+        resolved_budget = default_budget
+        notes.append(f"prefer:checkpoint_budget={default_budget}")
+
+    return resolved_profile, resolved_budget, notes
 
 
 def _resolve_checkpoint_budget_options(
@@ -1011,6 +1048,7 @@ def memory_optimization(
     max_candidates_per_round: Optional[int] = None,
     warmup_in_main_process: bool = True,
     warmup_in_profile_workers: bool = True,
+    prefer: Optional[str] = None,
     profile: Optional[str] = None,
     allow_expensive_profiling: Optional[bool] = None,
     checkpoint_budget: Optional[str] = None,
@@ -1072,6 +1110,10 @@ def memory_optimization(
     :param warmup_in_profile_workers: 是否在 profiling 子进程中执行预热 dummy train step。
         默认开启；关闭后可以减少优化耗时，但可能增加测量噪声
     :type warmup_in_profile_workers: bool
+
+    :param prefer: 更高层的优化倾向，可选 ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。
+        当 ``profile`` / ``checkpoint_budget`` 未显式指定时，将自动映射到对应默认值
+    :type prefer: Optional[str]
 
     :param profile: 高层预设策略，可选 ``"safe"`` 、 ``"balanced"`` 、 ``"memory"`` 、 ``"exhaustive"``
     :type profile: Optional[str]
@@ -1152,6 +1194,11 @@ def memory_optimization(
         optimization latency at the cost of noisier measurements
     :type warmup_in_profile_workers: bool
 
+    :param prefer: higher-level optimization preference. One of ``"speed"``,
+        ``"balanced"``, or ``"memory"``. When ``profile`` / ``checkpoint_budget``
+        are not explicitly provided, this preference maps to their default values
+    :type prefer: Optional[str]
+
     :param profile: high-level preset strategy. One of ``"safe"``, ``"balanced"``,
         ``"memory"``, or ``"exhaustive"``
     :type profile: Optional[str]
@@ -1188,6 +1235,11 @@ def memory_optimization(
         "memory": 3,
         "exhaustive": 4,
     }
+    profile, checkpoint_budget, preference_notes = _resolve_preference_options(
+        prefer,
+        profile,
+        checkpoint_budget,
+    )
     requested_level = (
         level if level is not None else preset_levels.get(profile, 0)
     )
@@ -1213,13 +1265,15 @@ def memory_optimization(
     summary = MemOptSummary(
         profile=profile,
         checkpoint_budget=checkpoint_budget,
+        prefer=prefer,
         device=device,
         requested_level=requested_level,
         applied_level=0 if level is None else level,
         compress_x=compress_x,
         allow_expensive_profiling=allow_expensive_profiling,
-        notes=list(resolution_notes),
+        notes=list(preference_notes) + list(resolution_notes),
         options=dict(
+            prefer=prefer,
             temporal_split_factor=temporal_split_factor,
             max_split_rounds=max_split_rounds,
             max_candidates_per_round=max_candidates_per_round,
