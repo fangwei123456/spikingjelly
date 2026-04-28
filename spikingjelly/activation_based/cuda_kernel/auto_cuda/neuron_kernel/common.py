@@ -172,24 +172,55 @@ class NeuronFPTTKernel(base.CKernel2D):
             self.add_param(ctype=f"{dtype} &", cname="v_reset")
 
     def neuronal_charge(self) -> str:
-        """
-        :return: CUDA code
-        :rtype: str
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronfpttkernel-neuronal_charge-cn>` |
+        :ref:`English <neuronfpttkernel-neuronal_charge-en>`
 
-        Returns CUDA code for calculating :math:`H[t] = f(X[t], V[t-1], ...)`.
+        ----
 
-        This function should define how ``h_seq[t]`` is calculated by ``x_seq[t], v_v_seq[t]`` and other params if
-        the neuron needs.
+        .. _neuronfpttkernel-neuronal_charge-cn:
 
-        For example, the IF neuron define this function as:
+        * **中文**
+
+        返回用于计算 :math:`H[t] = f(X[t], V[t-1], \ldots)` 的 CUDA 代码字符串。
+        子类应在该函数中定义 ``h_seq[t]`` 如何由 ``x_seq[t]``、``v_v_seq[t]`` 以及其他参数计算。
+
+        示例（IF 神经元）：
 
         .. code-block:: python
 
             def neuronal_charge(self) -> str:
-                # note that v_v_seq[t] is v_seq[t - dt]
+                # v_v_seq[t] 对应 v_seq[t - dt]
                 return cfunction.add(
                     z="h_seq[t]", x="x_seq[t]", y="v_v_seq[t]", dtype=self.dtype
                 )
+
+        :return: CUDA 代码字符串
+        :rtype: str
+
+        ----
+
+        .. _neuronfpttkernel-neuronal_charge-en:
+
+        * **English**
+
+        Return CUDA code that computes :math:`H[t] = f(X[t], V[t-1], \ldots)`.
+        Subclasses should implement how ``h_seq[t]`` is computed from ``x_seq[t]``,
+        ``v_v_seq[t]``, and other neuron-specific parameters.
+
+        Example (IF neuron):
+
+        .. code-block:: python
+
+            def neuronal_charge(self) -> str:
+                # v_v_seq[t] is v_seq[t - dt]
+                return cfunction.add(
+                    z="h_seq[t]", x="x_seq[t]", y="v_v_seq[t]", dtype=self.dtype
+                )
+
+        :return: CUDA code string
+        :rtype: str
         """
         return "// neuronal_charge should be defined here!"
 
@@ -284,16 +315,21 @@ class NeuronBPTTKernel(base.CKernel2D):
         return self._post_core
 
     def grad_h_next_to_v(self) -> str:
-        """
-        :return: CUDA code
-        :rtype: str
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronbpttkernel-grad_h_next_to_v-cn>` |
+        :ref:`English <neuronbpttkernel-grad_h_next_to_v-en>`
 
-        Returns CUDA code for calculating :math:`\\frac{\\mathrm{d} H[t+1]}{\\mathrm{d} V[t]}`.
+        ----
 
-        This function should define how ``grad_h_next_to_v`` is calculated. Note that ``grad_h_next_to_v`` has not been
-        declared. Thus, this function should also declare ``grad_h_next_to_v``.
+        .. _neuronbpttkernel-grad_h_next_to_v-cn:
 
-        For example, the IF neuron define this function as:
+        * **中文**
+
+        返回计算 :math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}` 的 CUDA 代码字符串。
+        子类应在此函数中给出 ``grad_h_next_to_v`` 的计算，并同时完成其声明。
+
+        示例（IF 神经元）：
 
         .. code-block:: python
 
@@ -301,20 +337,49 @@ class NeuronBPTTKernel(base.CKernel2D):
                 return cfunction.constant(
                     y=f"const {self.dtype} grad_h_next_to_v", x=1.0, dtype=self.dtype
                 )
+
+        :return: CUDA 代码字符串
+        :rtype: str
+
+        ----
+
+        .. _neuronbpttkernel-grad_h_next_to_v-en:
+
+        * **English**
+
+        Return CUDA code that computes :math:`\frac{\mathrm{d} H[t+1]}{\mathrm{d} V[t]}`.
+        Subclasses should define and declare ``grad_h_next_to_v`` in this method.
+
+        Example (IF neuron):
+
+        .. code-block:: python
+
+            def grad_h_next_to_v(self) -> str:
+                return cfunction.constant(
+                    y=f"const {self.dtype} grad_h_next_to_v", x=1.0, dtype=self.dtype
+                )
+
+        :return: CUDA code string
+        :rtype: str
         """
         return "// grad_h_next_to_v should be defined here!"
 
     def grad_h_to_x(self) -> str:
-        """
-        :return: CUDA code
-        :rtype: str
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronbpttkernel-grad_h_to_x-cn>` |
+        :ref:`English <neuronbpttkernel-grad_h_to_x-en>`
 
-        Returns CUDA code for calculating :math:`\\frac{\\mathrm{d} H[t]}{\\mathrm{d} X[t]}`.
+        ----
 
-        This function should define how ``grad_h_to_x`` is calculated. Note that ``grad_h_to_x`` has not been
-        declared. Thus, this function should also declare ``grad_h_to_x``.
+        .. _neuronbpttkernel-grad_h_to_x-cn:
 
-        For example, the IF neuron define this function as:
+        * **中文**
+
+        返回计算 :math:`\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}` 的 CUDA 代码字符串。
+        子类应在此函数中给出 ``grad_h_to_x`` 的计算，并同时完成其声明。
+
+        示例（IF 神经元）：
 
         .. code-block:: python
 
@@ -322,6 +387,30 @@ class NeuronBPTTKernel(base.CKernel2D):
                 return cfunction.constant(
                     y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
                 )
+
+        :return: CUDA 代码字符串
+        :rtype: str
+
+        ----
+
+        .. _neuronbpttkernel-grad_h_to_x-en:
+
+        * **English**
+
+        Return CUDA code that computes :math:`\frac{\mathrm{d} H[t]}{\mathrm{d} X[t]}`.
+        Subclasses should define and declare ``grad_h_to_x`` in this method.
+
+        Example (IF neuron):
+
+        .. code-block:: python
+
+            def grad_h_to_x(self) -> str:
+                return cfunction.constant(
+                    y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
+                )
+
+        :return: CUDA code string
+        :rtype: str
         """
         return "// grad_h_to_x should be defined here!"
 
@@ -491,34 +580,67 @@ def new_tensors(news: tuple, py_dict: dict, ref: str = "x_seq"):
 class NeuronATGFBase:
     @staticmethod
     def pre_forward(py_dict: dict):
-        """
-        :param py_dict: a dict built from the neuron's forward autograd function. It should at least contain ``x_seq, v_init, v_reset``
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronatgfbase-pre_forward-cn>` |
+        :ref:`English <neuronatgfbase-pre_forward-en>`
+
+        ----
+
+        .. _neuronatgfbase-pre_forward-cn:
+
+        * **中文**
+
+        为神经元前向 CUDA kernel 执行准备参数与中间张量。
+
+        :param py_dict: 从神经元 ``forward`` 自动求导函数构建的字典，至少应包含
+            ``x_seq``、``v_init``、``v_reset``。
         :type py_dict: dict
-        :return: requires_grad, blocks, threads, py_dict
 
-            requires_grad: bool
-                if any tensor in ``py_dict`` requires grad, then ``requires_grad = True``;else ``requires_grad = False``
+        :return: ``(requires_grad, blocks, threads, py_dict)``
 
-            blocks: int
-                CUDA param used in calling CUDA kernel
+            ``requires_grad``: ``bool``，若 ``py_dict`` 中任一张量需要梯度则为 ``True``。
 
-            threads: int
-                CUDA param used in calling CUDA kernel. The default value is ``spikingjelly.configure.cuda_threads``
+            ``blocks``: ``int``，调用 CUDA kernel 的 ``blocks`` 参数。
 
-            py_dict: dict
-                Compared with the input ``py_dict``, the returned ``py_dict`` will:
+            ``threads``: ``int``，调用 CUDA kernel 的 ``threads`` 参数，默认取
+            ``spikingjelly.configure.cuda_threads``。
 
-                    * convert all ``float/int`` scalars in ``py_dict`` to ``cupy.ndarray``
+            ``py_dict``: ``dict``，返回字典相较输入会：
+            1) 将 ``float/int`` 标量转换为 ``cupy.ndarray``；
+            2) 新增 ``h_seq``、``spike_seq``、``v_v_seq``；
+            3) 新增 ``N``、``numel``（均为 ``cupy.ndarray``）。当
+            ``x_seq.dtype == torch.float16`` 时，按 half2 规则调整 ``N`` 和 ``numel``。
 
-                    * add ``h_seq, spike_seq, v_v_seq`` to ``py_dict``. ``h_seq, spike_seq`` are zero tensors
-                      with the same shape with ``x_seq``. ``v_v_seq`` is concatenated from ``v_init`` and
-                      ``v_seq``, which is zero tensors with the same shape with ``x_seq``
+        :rtype: tuple
 
-                    * add ``N, numel`` to ``py_dict``. Note that ``x_seq.shape = [T, N]`` and ``numel = T * N``.
-                      A specific case is that ``x_seq.dtype == torch.half``, then ``N = math.ceil(N / 2)``, and
-                      ``numel = N * x_seq.shape[0]``.
-                      Note that ``N, numel`` in the returned ``py_dict`` are ``cupy.ndarray``
+        ----
 
+        .. _neuronatgfbase-pre_forward-en:
+
+        * **English**
+
+        Prepare parameters and intermediate tensors for the forward CUDA kernel.
+
+        :param py_dict: A dict built from the neuron's forward autograd function.
+            It should at least contain ``x_seq``, ``v_init``, and ``v_reset``.
+        :type py_dict: dict
+
+        :return: ``(requires_grad, blocks, threads, py_dict)``
+
+            ``requires_grad``: ``bool``. ``True`` if any tensor in ``py_dict`` requires grad.
+
+            ``blocks``: ``int``. CUDA ``blocks`` argument for kernel launch.
+
+            ``threads``: ``int``. CUDA ``threads`` argument for kernel launch.
+            The default is ``spikingjelly.configure.cuda_threads``.
+
+            ``py_dict``: ``dict``. Compared with the input dict, it:
+            1) converts ``float/int`` scalars to ``cupy.ndarray``;
+            2) adds ``h_seq``, ``spike_seq``, and ``v_v_seq``;
+            3) adds ``N`` and ``numel`` (both ``cupy.ndarray``). When
+            ``x_seq.dtype == torch.float16``, ``N`` and ``numel`` are adjusted for
+            half2 execution.
 
         :rtype: tuple
         """
@@ -552,14 +674,48 @@ class NeuronATGFBase:
 
     @staticmethod
     def ctx_save(ctx, requires_grad: bool, *args, **kwargs):
-        """
-        :param ctx: ``ctx`` in :class:`torch.autograd.Function`
-        :param requires_grad: if any tensor in forward params requires grad
-        :type requires_grad: bool
-        :param args: tensors that need to be saved by ``ctx.save_for_backward``
-        :param kwargs: items that need to be saved by ``ctx.xx = xx``
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronatgfbase-ctx_save-cn>` |
+        :ref:`English <neuronatgfbase-ctx_save-en>`
 
-        Saves ``*args, **kwargs`` in ``ctx`` by ``ctx.save_for_backward(*args)`` and ``ctx.xx = xx`` for all ``xx`` in ``kwargs.items()``.
+        ----
+
+        .. _neuronatgfbase-ctx_save-cn:
+
+        * **中文**
+
+        当 ``requires_grad`` 为 ``True`` 时，将前向所需上下文保存到 ``ctx``。
+
+        :param ctx: :class:`torch.autograd.Function` 的上下文对象。
+        :type ctx: Any
+        :param requires_grad: 前向输入中是否存在需要梯度的张量。
+        :type requires_grad: bool
+        :param args: 使用 ``ctx.save_for_backward`` 保存的张量。
+        :type args: tuple
+        :param kwargs: 通过 ``ctx.xx = xx`` 保存的附加字段。
+        :type kwargs: dict
+        :return: 无返回值。
+        :rtype: None
+
+        ----
+
+        .. _neuronatgfbase-ctx_save-en:
+
+        * **English**
+
+        Save forward context into ``ctx`` when ``requires_grad`` is ``True``.
+
+        :param ctx: Context object in :class:`torch.autograd.Function`.
+        :type ctx: Any
+        :param requires_grad: Whether any forward input tensor requires grad.
+        :type requires_grad: bool
+        :param args: Tensors saved by ``ctx.save_for_backward``.
+        :type args: tuple
+        :param kwargs: Extra fields saved via ``ctx.xx = xx`` assignments.
+        :type kwargs: dict
+        :return: No return value.
+        :rtype: None
         """
         if requires_grad:
             ctx.save_for_backward(*args)
@@ -568,22 +724,64 @@ class NeuronATGFBase:
 
     @staticmethod
     def pre_backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
-        """
-        :param ctx: ``ctx`` in :class:`torch.autograd.Function`
-        :param grad_spike_seq: gradients of ``spike_seq``
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronatgfbase-pre_backward-cn>` |
+        :ref:`English <neuronatgfbase-pre_backward-en>`
+
+        ----
+
+        .. _neuronatgfbase-pre_backward-cn:
+
+        * **中文**
+
+        为反向 CUDA kernel 执行准备参数与输出梯度缓冲区。
+
+        :param ctx: :class:`torch.autograd.Function` 的上下文对象。
+        :type ctx: Any
+        :param grad_spike_seq: ``spike_seq`` 的梯度。
         :type grad_spike_seq: torch.Tensor
-        :param grad_v_seq: gradients of ``v_seq``
+        :param grad_v_seq: ``v_seq`` 的梯度。
         :type grad_v_seq: torch.Tensor
-        :return: backward_kernel, blocks, threads, py_dict
+        :return: ``(backward_kernel, blocks, threads, py_dict)``
 
-            backward_kernel: NeuronBPTTKernel
-                The CUDA kernel used for backward. It should be provided in ``ctx.backward_kernel``
+            ``backward_kernel``: ``NeuronBPTTKernel``，反向使用的 CUDA kernel
+            （来自 ``ctx.backward_kernel``）。
 
-            blocks: int
-                CUDA param used in calling CUDA kernel. It should be provided in ``ctx.blocks``
+            ``blocks``: ``int``，kernel 启动参数（来自 ``ctx.blocks``）。
 
-            threads: int
-                CUDA param used in calling CUDA kernel. It should be provided in ``ctx.threads``
+            ``threads``: ``int``，kernel 启动参数（来自 ``ctx.threads``）。
+
+            ``py_dict``: ``dict``，包含反向 kernel 计算所需全部输入输出张量。
+
+        :rtype: tuple
+
+        ----
+
+        .. _neuronatgfbase-pre_backward-en:
+
+        * **English**
+
+        Prepare parameters and output gradient buffers for the backward CUDA kernel.
+
+        :param ctx: Context object in :class:`torch.autograd.Function`.
+        :type ctx: Any
+        :param grad_spike_seq: Gradient of ``spike_seq``.
+        :type grad_spike_seq: torch.Tensor
+        :param grad_v_seq: Gradient of ``v_seq``.
+        :type grad_v_seq: torch.Tensor
+        :return: ``(backward_kernel, blocks, threads, py_dict)``
+
+            ``backward_kernel``: ``NeuronBPTTKernel`` used in backward
+            (from ``ctx.backward_kernel``).
+
+            ``blocks``: ``int`` kernel launch parameter (from ``ctx.blocks``).
+
+            ``threads``: ``int`` kernel launch parameter (from ``ctx.threads``).
+
+            ``py_dict``: ``dict`` containing all tensor inputs/outputs for backward
+            kernel execution.
+
         :rtype: tuple
         """
         backward_kernel = ctx.backward_kernel
