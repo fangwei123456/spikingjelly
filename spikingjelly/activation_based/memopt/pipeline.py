@@ -162,13 +162,34 @@ def _dummy_input_to_device(dummy_input, device):
 
 def _randomize_input_like(dummy_input):
     def _generate_tensor_like(x: torch.Tensor):
+        if x.dtype == torch.bool:
+            return torch.rand_like(x, dtype=torch.float32) > 0.5
+        if x.is_floating_point():
+            choice = torch.randint(0, 3, ()).item()
+            if choice == 0:
+                return torch.randn_like(x)
+            elif choice == 1:
+                return torch.empty_like(x).uniform_(-5, 5)
+            else:
+                return torch.empty_like(x).bernoulli_(p=0.5)
+        if x.dtype in (
+            torch.uint8,
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+        ):
+            return torch.randint(
+                0,
+                3,
+                x.shape,
+                device=x.device,
+                dtype=x.dtype,
+            )
         choice = torch.randint(0, 3, ()).item()
         if choice == 0:
-            return torch.randn_like(x)
-        elif choice == 1:
-            return torch.empty_like(x).uniform_(-5, 5)
-        else:
-            return torch.empty_like(x).bernoulli_(p=0.5)
+            return x.clone()
+        return torch.empty_like(x)
 
     if isinstance(dummy_input, torch.Tensor):
         return _generate_tensor_like(dummy_input)
@@ -403,11 +424,11 @@ def _resolve_memory_optimization_options(
     level: Optional[int],
     profile: Optional[str],
     dummy_input,
-    compress_x: bool,
+    compress_x: Optional[bool],
     max_split_rounds: Optional[int],
     max_candidates_per_round: Optional[int],
-    warmup_in_main_process: bool,
-    warmup_in_profile_workers: bool,
+    warmup_in_main_process: Optional[bool],
+    warmup_in_profile_workers: Optional[bool],
     allow_expensive_profiling: Optional[bool],
 ):
     if profile is not None and profile not in MEMOPT_PROFILES:
@@ -458,11 +479,17 @@ def _resolve_memory_optimization_options(
         resolved_level = 0 if level is None else level
         resolved = dict(
             level=resolved_level,
-            compress_x=compress_x,
+            compress_x=True if compress_x is None else compress_x,
             max_split_rounds=max_split_rounds,
             max_candidates_per_round=max_candidates_per_round,
-            warmup_in_main_process=warmup_in_main_process,
-            warmup_in_profile_workers=warmup_in_profile_workers,
+            warmup_in_main_process=(
+                True if warmup_in_main_process is None else warmup_in_main_process
+            ),
+            warmup_in_profile_workers=(
+                True
+                if warmup_in_profile_workers is None
+                else warmup_in_profile_workers
+            ),
             allow_expensive_profiling=(
                 True if allow_expensive_profiling is None else allow_expensive_profiling
             ),
@@ -485,17 +512,12 @@ def _resolve_memory_optimization_options(
             ),
             warmup_in_main_process=(
                 preset["warmup_in_main_process"]
-                if warmup_in_main_process is True
-                and level is None
-                and max_split_rounds is None
-                and max_candidates_per_round is None
+                if warmup_in_main_process is None
                 else warmup_in_main_process
             ),
             warmup_in_profile_workers=(
                 preset["warmup_in_profile_workers"]
-                if warmup_in_profile_workers is True
-                and max_split_rounds is None
-                and max_candidates_per_round is None
+                if warmup_in_profile_workers is None
                 else warmup_in_profile_workers
             ),
             allow_expensive_profiling=(
@@ -589,7 +611,7 @@ def apply_gc(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
-    compress_x: bool = True,
+    compress_x: Optional[bool] = True,
     device: str = "cuda",
     checkpoint_budget: Optional[str] = None,
     max_gc_wrapped_modules: Optional[int] = None,
@@ -1131,8 +1153,10 @@ def _cprint(verbose, *args, **kwargs):
 
 
 def _candidate_entries(results, max_candidates_per_round: Optional[int]):
-    if max_candidates_per_round is None or max_candidates_per_round <= 0:
+    if max_candidates_per_round is None:
         return results
+    if max_candidates_per_round <= 0:
+        return []
     return results[:max_candidates_per_round]
 
 
@@ -1148,14 +1172,14 @@ def memory_optimization(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
-    compress_x: bool = True,
+    compress_x: Optional[bool] = None,
     level: Optional[int] = None,
     verbose: bool = False,
     temporal_split_factor: int = 2,
     max_split_rounds: Optional[int] = None,
     max_candidates_per_round: Optional[int] = None,
-    warmup_in_main_process: bool = True,
-    warmup_in_profile_workers: bool = True,
+    warmup_in_main_process: Optional[bool] = None,
+    warmup_in_profile_workers: Optional[bool] = None,
     prefer: Optional[str] = None,
     profile: Optional[str] = None,
     allow_expensive_profiling: Optional[bool] = None,

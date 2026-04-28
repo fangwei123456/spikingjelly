@@ -6,6 +6,7 @@ https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 import contextlib
 import functools
 import os
+import tempfile
 from typing import Callable
 
 import torch
@@ -116,6 +117,30 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
 
         with ctx:
             return f(*contiguous_args, **contiguous_kwargs)
+
+    return wrapper
+
+
+def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
+    """Remove temporary python files returned or created by a wrapped function."""
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        tmp_paths = []
+        try:
+            result = f(*args, **kwargs)
+            if isinstance(result, str) and result.endswith(".py"):
+                tmp_paths.append(result)
+            elif isinstance(result, tempfile._TemporaryFileWrapper):
+                tmp_paths.append(result.name)
+            return result
+        finally:
+            for path in tmp_paths:
+                try:
+                    if path and os.path.exists(path):
+                        os.remove(path)
+                except OSError:
+                    pass
 
     return wrapper
 

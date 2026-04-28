@@ -5,7 +5,9 @@ import torch
 import torch.nn as nn
 
 import spikingjelly.activation_based.memopt as memopt
+import spikingjelly.activation_based.memopt.compress as memopt_compress
 import spikingjelly.activation_based.memopt.pipeline as memopt_pipeline
+import spikingjelly.activation_based.triton_kernel.compress as triton_compress
 from spikingjelly.activation_based.memopt.checkpointing import (
     in_gc_1st_forward,
     query_autocast,
@@ -50,6 +52,15 @@ class BinaryProject(nn.Module):
 class TargetBlock(nn.Module):
     def forward(self, x):
         return x + 1.0
+
+
+class ParameterizedTargetBlock(nn.Module):
+    def __init__(self, features=4):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(features))
+
+    def forward(self, x):
+        return x + self.weight
 
 
 class SpatialSplitBlock(nn.Module):
@@ -176,6 +187,19 @@ def test_probe_binary_inputs_uses_dummy_input_before_random_trials(monkeypatch):
 
     assert result[net.block] is False
     assert net.forward_calls == 1
+
+
+def test_randomize_input_like_supports_bool_and_integer_tensors():
+    bool_input = torch.tensor([[True, False], [False, True]])
+    int_input = torch.tensor([[0, 1], [2, 3]], dtype=torch.int64)
+
+    randomized_bool = memopt_pipeline._randomize_input_like(bool_input)
+    randomized_int = memopt_pipeline._randomize_input_like(int_input)
+
+    assert randomized_bool.dtype == torch.bool
+    assert randomized_bool.shape == bool_input.shape
+    assert randomized_int.dtype == torch.int64
+    assert randomized_int.shape == int_input.shape
 
 
 def test_autocast_query():
@@ -455,11 +479,18 @@ def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor
     monkeypatch,
 ):
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+    monkeypatch.setattr(memopt_compress, "triton", object())
+    monkeypatch.setattr(
+        memopt_compress, "bit_spike_compress", triton_compress.bit_spike_compress
+    )
+    monkeypatch.setattr(
+        memopt_compress, "bit_spike_decompress", triton_compress.bit_spike_decompress
+    )
 
-    net = nn.Sequential(BinaryProject(), TargetBlock())
+    net = nn.Sequential(BinaryProject(), ParameterizedTargetBlock())
     optimized = memopt.memory_optimization(
         net,
-        TargetBlock,
+        ParameterizedTargetBlock,
         dummy_input=(torch.randn(2, 4),),
         compress_x=True,
         level=1,
@@ -467,7 +498,7 @@ def test_memory_optimization_level1_wraps_target_modules_and_uses_bit_compressor
 
     assert isinstance(optimized[1], GCContainer)
     assert isinstance(optimized[1].x_compressor, BitSpikeCompressor)
-    assert next(optimized.parameters(), torch.empty(0)).device.type == "cpu"
+    assert optimized[1][0].weight.device.type == "cpu"
 
 
 def test_memory_optimization_can_disable_main_process_warmup(monkeypatch):
@@ -492,6 +523,23 @@ def test_memory_optimization_can_disable_main_process_warmup(monkeypatch):
 
     assert isinstance(optimized[0], GCContainer)
     assert warmup_calls["count"] == 0
+
+
+def test_memory_optimization_profile_respects_explicit_warmup_flags(monkeypatch):
+    monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
+
+    _, summary = memopt.memory_optimization(
+        nn.Sequential(TargetBlock()),
+        TargetBlock,
+        dummy_input=(torch.randn(2, 4),),
+        profile="safe",
+        warmup_in_main_process=True,
+        warmup_in_profile_workers=True,
+        return_summary=True,
+    )
+
+    assert summary.options["warmup_in_main_process"] is True
+    assert summary.options["warmup_in_profile_workers"] is True
 
 
 def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
@@ -574,7 +622,14 @@ def test_memory_optimization_profile_memory_honors_allow_expensive_profiling_fal
     assert summary.options["max_candidates_per_round"] == 1
 
 
-def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
+def test_bit_spike_compressor_cpu_round_trip_with_triton_available(monkeypatch):
+    monkeypatch.setattr(memopt_compress, "triton", object())
+    monkeypatch.setattr(
+        memopt_compress, "bit_spike_compress", triton_compress.bit_spike_compress
+    )
+    monkeypatch.setattr(
+        memopt_compress, "bit_spike_decompress", triton_compress.bit_spike_decompress
+    )
     spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
     compressor = BitSpikeCompressor()
 
@@ -583,6 +638,14 @@ def test_bit_spike_compressor_cpu_round_trip_with_triton_available():
 
     assert compressed.device.type == "cpu"
     torch.testing.assert_close(decompressed, spikes)
+
+
+def test_candidate_entries_treats_zero_budget_as_disabled():
+    results = [("a", 1.0), ("b", 2.0)]
+
+    assert memopt_pipeline._candidate_entries(results, None) == results
+    assert memopt_pipeline._candidate_entries(results, 0) == []
+    assert memopt_pipeline._candidate_entries(results, -1) == []
 
 
 def test_apply_gc_clones_manual_compressor_instances(monkeypatch):
