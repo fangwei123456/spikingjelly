@@ -32,14 +32,9 @@ class VarNode:
     def cu_var(self):
         # 前向传播时，在cuda代码中的变量名
 
-        # 如果value非空，表明其是一个常数值，直接返回数值即可，例如 value = 0.1 返回 '0.1f'
+        # 如果value非空，表明其是一个常量中间节点
         if self.value is not None:
-            if self.instance == "int":
-                return self.name
-            elif self.instance == "float":
-                return self.name + "f"
-            else:
-                raise ValueError(self.instance)
+            return self.name
 
         # value空，表示其是一个变量
 
@@ -55,6 +50,14 @@ class VarNode:
 
     def __repr__(self):
         return f"({self.debug_name}, {self.name}, {self.instance}, value={self.value}, rg={self.requires_grad})"
+
+
+def _const_literal(node: VarNode) -> str:
+    if node.instance == "int":
+        return str(int(node.value))
+    if node.instance == "float":
+        return f"{float(node.value)}f"
+    raise ValueError(node.instance)
 
 
 def analyse_graph(custom_fun, requires_grad: tuple):
@@ -127,13 +130,20 @@ def analyse_graph(custom_fun, requires_grad: tuple):
 
             # 从命令中提取出常数值
             if i_node.instance == "int":
-                pattern = re.compile(r".*prim::Constant\[value=([0-9]+)\]")
+                pattern = re.compile(r".*prim::Constant\[value=([+-]?[0-9]+)\]")
                 m = pattern.match(str(node))
+                if m is None:
+                    raise ValueError(f"Cannot parse int constant from node: {node}")
                 value = int(m.groups()[0])
 
             elif i_node.instance == "float":
-                pattern = re.compile(r".*prim::Constant\[value=([0-9\.]+)\]")
+                # Support signs and scientific notation, e.g. -1.0, 1e-3
+                pattern = re.compile(
+                    r".*prim::Constant\[value=([+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?)\]"
+                )
                 m = pattern.match(str(node))
+                if m is None:
+                    raise ValueError(f"Cannot parse float constant from node: {node}")
                 value = float(m.groups()[0])
 
             else:
@@ -233,7 +243,15 @@ def gen_forward_codes(
         output, fun, inputs = item
         codes += "                  "
         if fun == "prim::Constant":
-            gen_cmd = "\n"
+            if output.cu_var not in code_block_nodes:
+                code_block_nodes[output.cu_var] = output
+                if output.instance == "int":
+                    codes += "const int "
+                elif output.instance == "float":
+                    codes += "const float "
+                else:
+                    raise NotImplementedError(output.instance)
+            gen_cmd = f"{output.cu_var} = {_const_literal(output)};\n"
         elif fun in ["aten::add", "aten::sub"]:
             # z = x + y * alpha
             x, y, alpha = inputs
