@@ -139,6 +139,73 @@ To make these trade-offs more concrete, we also ran a small synthetic benchmark 
 
 These numbers are mainly intended to show the **optimizer-overhead trend** of different profiles, not to provide universal absolute values. On larger real workloads, the exact training-speed and memory trade-offs still depend on model structure, input shapes, batch size, and the current GPU environment.
 
+To complement the synthetic case, we also benchmarked the real tutorial network ``CIFAR10DVSVGG`` on the same ``RTX 4090``. The setup was:
+
+* backend: ``triton``
+* input shape: ``[N, T, C, H, W] = [8, 10, 2, 48, 48]``
+* reported metrics:
+
+  * ``samples/s``: training throughput
+  * ``step_ms``: per-step training latency
+  * ``peak_allocated_mb``: peak allocated training memory
+  * ``peak_reserved_mb``: peak reserved training memory
+  * ``optimize_ms``: time spent inside :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>`
+
+The results were:
+
+.. list-table::
+    :header-rows: 1
+
+    * - Configuration
+      - ``samples/s``
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - ``optimize_ms``
+      - Structural effect
+    * - baseline
+      - ``290.14``
+      - ``27.57 ms``
+      - ``1022.23 MB``
+      - ``1574.0 MB``
+      - ``0``
+      - no optimization
+    * - ``safe``
+      - ``218.58``
+      - ``36.60 ms``
+      - ``833.94 MB``
+      - ``1512.0 MB``
+      - ``2605.76 ms``
+      - ``level=1`` with 8 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``balanced``
+      - ``236.15``
+      - ``33.88 ms``
+      - ``787.94 MB``
+      - ``1422.0 MB``
+      - ``37038.26 ms``
+      - ``level=2`` with 1 spatial split and 9 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` instances
+    * - ``memory``
+      - ``223.30``
+      - ``35.83 ms``
+      - ``671.56 MB``
+      - ``1242.0 MB``
+      - ``89788.63 ms``
+      - ``level=3`` with 1 spatial split + 2 temporal splits, ending with 9 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` and 2 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` instances
+    * - ``exhaustive``
+      - ``289.18``
+      - ``27.66 ms``
+      - ``589.16 MB``
+      - ``1332.0 MB``
+      - ``450972.60 ms``
+      - ``level=4`` with 1 spatial split + 3 temporal splits + 4 greedy unwrap operations, ending with 5 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` and 2 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` instances
+
+This real-network benchmark shows a more practical trade-off:
+
+* ``safe`` is the safest starting point: peak memory already drops noticeably, but training slows down.
+* ``balanced`` saves even more memory than ``safe`` on this workload while recovering a bit of training speed.
+* ``memory`` pushes peak memory lower still, but the optimizer-side search cost becomes much larger.
+* ``exhaustive`` gives the best memory result here and almost recovers baseline training-step speed, but its structure-search cost is extremely high and is best treated as an offline tuning mode.
+
 In addition, ``return_summary=True`` makes the function return ``(net, summary)``. The ``summary`` object is :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>`, which records:
 
 * requested versus applied optimization levels

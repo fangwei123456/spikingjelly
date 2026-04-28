@@ -139,6 +139,73 @@ English version: :doc:`../en/memopt`
 
 需要强调的是，这组数据的主要用途是说明不同 ``profile`` 的 **优化器开销趋势** ，而非给出对所有网络都成立的通用绝对值。对于真实的大模型，具体的训练速度和显存收益仍取决于网络结构、输入形状、batch size 以及当前设备环境。
 
+为了更贴近真实使用场景，我们还在同一张 ``RTX 4090`` 上，对教程后文将介绍的真实网络 ``CIFAR10DVSVGG`` 做了对比。测试配置为：
+
+* 后端： ``triton``
+* 输入形状： ``[N, T, C, H, W] = [8, 10, 2, 48, 48]``
+* 指标：
+  
+  * ``samples/s`` ：训练吞吐
+  * ``step_ms`` ：单步训练耗时
+  * ``peak_allocated_mb`` ：训练峰值已分配显存
+  * ``peak_reserved_mb`` ：训练峰值保留显存
+  * ``optimize_ms`` ：执行 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的耗时
+
+结果如下：
+
+.. list-table::
+    :header-rows: 1
+
+    * - 配置
+      - ``samples/s``
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - ``optimize_ms``
+      - 结构变化
+    * - baseline
+      - ``290.14``
+      - ``27.57 ms``
+      - ``1022.23 MB``
+      - ``1574.0 MB``
+      - ``0``
+      - 无优化
+    * - ``safe``
+      - ``218.58``
+      - ``36.60 ms``
+      - ``833.94 MB``
+      - ``1512.0 MB``
+      - ``2605.76 ms``
+      - ``level=1`` ，8 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``balanced``
+      - ``236.15``
+      - ``33.88 ms``
+      - ``787.94 MB``
+      - ``1422.0 MB``
+      - ``37038.26 ms``
+      - ``level=2`` ，1 次 spatial split，9 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``memory``
+      - ``223.30``
+      - ``35.83 ms``
+      - ``671.56 MB``
+      - ``1242.0 MB``
+      - ``89788.63 ms``
+      - ``level=3`` ，1 次 spatial split + 2 次 temporal split，9 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 与 2 个 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
+    * - ``exhaustive``
+      - ``289.18``
+      - ``27.66 ms``
+      - ``589.16 MB``
+      - ``1332.0 MB``
+      - ``450972.60 ms``
+      - ``level=4`` ，1 次 spatial split + 3 次 temporal split + 4 次 greedy unwrap，5 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 与 2 个 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
+
+这组真实网络数据反映了更实际的取舍：
+
+* ``safe`` 是最稳妥的入门选项，显存开始明显下降，但训练会变慢。
+* ``balanced`` 在这组实验里比 ``safe`` 再省一些显存，同时训练速度略好。
+* ``memory`` 继续降低峰值显存，但优化器自身耗时已经明显上升。
+* ``exhaustive`` 在这组实验里给出了最好的显存结果，而且单步训练速度几乎回到 baseline，但它的结构搜索成本极高，更适合离线调优。
+
 另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
 
 * 请求/实际生效的优化级别
