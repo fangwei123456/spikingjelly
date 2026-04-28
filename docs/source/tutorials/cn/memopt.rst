@@ -80,6 +80,197 @@ English version: :doc:`../en/memopt`
 
 用户无需了解底层实现，只需调用 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` ，即可自动网络结构转换。
 
+高层预设与摘要
+---------------------
+
+除了直接指定 ``level=0..4`` ， :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 现在还提供了更高层的 ``profile`` 预设：
+
+* ``"safe"`` ：保守模式。仅启用逐层GC，关闭高开销 profiling，适合快速试用。
+* ``"balanced"`` ：推荐默认模式。启用有限的 split 搜索，在显存收益和优化耗时之间取得折中。
+* ``"memory"`` ：更偏向显存优化。默认会尝试时间/空间 split。
+* ``"exhaustive"`` ：激进模式。允许更完整的搜索和 greedy unwrap，适合离线调优。
+
+这些 ``profile`` 的实际效果和取舍大致如下：
+
+* ``"safe"`` ：优化器自身开销最低，通常只做逐层GC，适合先快速验证功能是否可用。
+* ``"balanced"`` ：通常是最推荐的起点。会尝试有限的 split 搜索，往往能在显存收益和优化耗时之间取得较好平衡。
+* ``"memory"`` ：更积极地追求峰值显存下降，更可能启用空间/时间 split；代价是优化器本身更慢，训练速度也更可能下降。
+* ``"exhaustive"`` ：适合离线调参或论文实验。它会尝试更完整的搜索流程，最有机会找到更激进的结构调整，但优化耗时最高。
+
+如果不确定如何选择，建议优先从 ``"balanced"`` 开始；若只想快速启用并尽量减少额外开销，可先尝试 ``"safe"`` ；若显存非常紧张，再考虑 ``"memory"`` 或 ``"exhaustive"`` 。
+
+如果用户希望显式限制优化器本身的开销，可设置 ``allow_expensive_profiling=False`` 。此时会自动收紧 split 搜索预算，并关闭 profiling worker 的 warmup。
+
+在此基础上，当前版本还提供了两层更高阶的自动控制：
+
+* ``checkpoint_budget`` ：控制 **有多少目标模块会被包装成检查点片段** 。可选
+  ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。
+
+  * ``"speed"`` ：只对一部分最“值钱”的热点模块做 checkpoint，优先减少额外训练开销。
+  * ``"balanced"`` ：覆盖更多热点模块，在显存和训练速度之间取折中。
+  * ``"memory"`` ：尽可能覆盖全部候选模块，更偏向显存下降。
+
+* ``prefer`` ：再往上一层的“目标导向”入口。可选
+  ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。当用户没有显式指定
+  ``profile`` 或 ``checkpoint_budget`` 时，会自动映射为推荐组合：
+
+  * ``prefer="speed"`` -> ``profile="safe"`` + ``checkpoint_budget="speed"``
+  * ``prefer="balanced"`` -> ``profile="balanced"`` + ``checkpoint_budget="balanced"``
+  * ``prefer="memory"`` -> ``profile="memory"`` + ``checkpoint_budget="memory"``
+
+这意味着，用户现在可以用三种粒度来控制 memopt：
+
+* 只想要最简单的高层接口：直接指定 ``prefer=...``
+* 希望分别控制搜索激进度与 checkpoint 覆盖范围：组合 ``profile`` 和 ``checkpoint_budget``
+* 需要精细实验：继续使用 ``level`` 、 ``max_gc_wrapped_modules`` 、 ``gc_target_budget_ratio`` 等底层参数
+
+为了给这些取舍提供一个更直观的量化参考，我们在服务器上的一张 ``RTX 4090`` 上，对一个较小的合成工作负载做了对比测试。测试模型为 ``MemOptBlockNet(depth=1)`` ，输入形状为 ``[T, N, C] = [2, 2, 16]`` ，每个配置均测量了 ``memory_optimization`` 自身耗时、优化后单步训练耗时以及训练峰值显存。未优化 baseline 的单步训练耗时约为 ``5.80 ms`` ， ``peak_allocated`` 为 ``17.26 MB`` ， ``peak_reserved`` 为 ``22.0 MB`` 。四个 ``profile`` 的结果如下：
+
+.. list-table::
+    :header-rows: 1
+
+    * - Profile
+      - ``memory_optimization`` 耗时
+      - 单步训练耗时
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - 结构变化
+    * - ``safe``
+      - ``910.9 ms``
+      - ``5.73 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 仅包装为 1 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``balanced``
+      - ``8661.2 ms``
+      - ``6.13 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``memory``
+      - ``20027.8 ms``
+      - ``6.07 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``exhaustive``
+      - ``32880.1 ms``
+      - ``5.71 ms``
+      - ``17.26 MB``
+      - ``278.0 MB``
+      - 1 次 spatial split，最终为 2 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+
+需要强调的是，这组数据的主要用途是说明不同 ``profile`` 的 **优化器开销趋势** ，而非给出对所有网络都成立的通用绝对值。对于真实的大模型，具体的训练速度和显存收益仍取决于网络结构、输入形状、batch size 以及当前设备环境。
+
+为了更贴近真实使用场景，我们还在同一张 ``RTX 4090`` 上，对教程后文将介绍的真实网络 ``CIFAR10DVSVGG`` 做了对比。测试配置为：
+
+* 后端： ``triton``
+* 输入形状： ``[N, T, C, H, W] = [8, 10, 2, 48, 48]``
+* 指标：
+  
+  * ``samples/s`` ：训练吞吐
+  * ``step_ms`` ：单步训练耗时
+  * ``peak_allocated_mb`` ：训练峰值已分配显存
+  * ``peak_reserved_mb`` ：训练峰值保留显存
+  * ``optimize_ms`` ：执行 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的耗时
+
+结果如下：
+
+.. list-table::
+    :header-rows: 1
+
+    * - 配置
+      - ``samples/s``
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``peak_reserved``
+      - ``optimize_ms``
+      - 结构变化
+    * - baseline
+      - ``290.14``
+      - ``27.57 ms``
+      - ``1022.23 MB``
+      - ``1574.0 MB``
+      - ``0``
+      - 无优化
+    * - ``safe``
+      - ``218.58``
+      - ``36.60 ms``
+      - ``833.94 MB``
+      - ``1512.0 MB``
+      - ``2605.76 ms``
+      - ``level=1`` ，8 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``balanced``
+      - ``236.15``
+      - ``33.88 ms``
+      - ``787.94 MB``
+      - ``1422.0 MB``
+      - ``37038.26 ms``
+      - ``level=2`` ，1 次 spatial split，9 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>`
+    * - ``memory``
+      - ``223.30``
+      - ``35.83 ms``
+      - ``671.56 MB``
+      - ``1242.0 MB``
+      - ``89788.63 ms``
+      - ``level=3`` ，1 次 spatial split + 2 次 temporal split，9 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 与 2 个 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
+    * - ``exhaustive``
+      - ``289.18``
+      - ``27.66 ms``
+      - ``589.16 MB``
+      - ``1332.0 MB``
+      - ``450972.60 ms``
+      - ``level=4`` ，1 次 spatial split + 3 次 temporal split + 4 次 greedy unwrap，5 个 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` 与 2 个 :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>`
+
+这组真实网络数据反映了更实际的取舍：
+
+* ``safe`` 是最稳妥的入门选项，显存开始明显下降，但训练会变慢。
+* ``balanced`` 在这组实验里比 ``safe`` 再省一些显存，同时训练速度略好。
+* ``memory`` 继续降低峰值显存，但优化器自身耗时已经明显上升。
+* ``exhaustive`` 在这组实验里给出了最好的显存结果，而且单步训练速度几乎回到 baseline，但它的结构搜索成本极高，更适合离线调优。
+
+如果把目光缩小到新的高层接口 ``prefer`` ，在同一网络、同一输入形状下也能观察到比较清晰的梯度：
+
+.. list-table::
+    :header-rows: 1
+
+    * - ``prefer``
+      - 自动映射
+      - 选中的 checkpoint 模块数
+      - ``step_ms``
+      - ``peak_allocated``
+      - ``optimize_ms``
+    * - ``"speed"``
+      - ``safe`` + ``speed``
+      - ``4 / 8``
+      - ``34.43 ms``
+      - ``922.39 MB``
+      - ``2726.53 ms``
+    * - ``"balanced"``
+      - ``balanced`` + ``balanced``
+      - ``6 / 8``
+      - ``34.35 ms``
+      - ``877.14 MB``
+      - ``34360.89 ms``
+    * - ``"memory"``
+      - ``memory`` + ``memory``
+      - ``8 / 8``
+      - ``43.36 ms``
+      - ``699.17 MB``
+      - ``92689.79 ms``
+
+可以把它理解为： ``prefer`` 直接回答“这次优化更偏训练速度，还是更偏显存”，而内部再自动决定该用什么 ``profile`` 和 checkpoint 覆盖预算。
+
+另外，若设置 ``return_summary=True`` ，函数将返回 ``(net, summary)`` 。 ``summary`` 是 :class:`MemOptSummary <spikingjelly.activation_based.memopt.pipeline.MemOptSummary>` 对象，包含：
+
+* 请求/实际生效的优化级别
+* 使用的 ``prefer`` 、 ``profile`` 、 ``checkpoint_budget`` 和 ``allow_expensive_profiling`` 配置
+* 哪些优化步骤被应用、哪些步骤被跳过
+* 包装成 :class:`GCContainer <spikingjelly.activation_based.memopt.checkpointing.GCContainer>` / :class:`TCGCContainer <spikingjelly.activation_based.memopt.checkpointing.TCGCContainer>` 的数量
+* 自动选择的压缩器统计、checkpoint 候选数与实际选中数，以及空间/时间 split、greedy unwrap 的执行次数
+* ``gc_selected_modules`` / ``gc_selection_explanation`` ：说明这次为什么选中了这些 checkpoint 模块
+* ``recommendation`` ：基于当前选择结果给出的下一步调参建议，例如更偏速度还是更偏显存
+
 示例
 -----------------------
 
@@ -226,6 +417,27 @@ Step 3. 调用工具函数
     )
 
 查询 :func:`memory_optimization <spikingjelly.activation_based.memopt.pipeline.memory_optimization>` 的文档以获取参数说明。
+
+如果用户更关注“少调参、快速拿到一个合理配置”，则推荐优先使用 ``profile`` 接口。例如：
+
+.. code:: python
+
+    from spikingjelly.activation_based import memopt
+
+    net, summary = memopt.memory_optimization(
+        net,
+        (VGGBlock,),
+        dummy_input=(torch.zeros(32, T, 2, 48, 48),),
+        profile="balanced",
+        allow_expensive_profiling=False,
+        return_summary=True,
+    )
+
+    print(summary.applied_steps)
+    print(summary.skipped_steps)
+    print(summary.gc_container_count, summary.tcgc_container_count)
+
+若 ``profile`` 要求 ``level > 1`` 但没有提供 ``dummy_input`` ，则框架会自动回退到 ``level=1`` ，并在 ``summary.notes`` 中记录这一回退原因。
 
 结果
 ###############################

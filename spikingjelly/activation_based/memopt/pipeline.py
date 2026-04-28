@@ -2,6 +2,8 @@ import copy
 import os
 import time
 from collections import defaultdict
+from dataclasses import dataclass, field
+from math import ceil
 from typing import Dict, Optional, Tuple, Union
 
 import torch
@@ -15,9 +17,67 @@ from . import compress
 from .checkpointing import GCContainer, TCGCContainer
 from .compress import BitSpikeCompressor, NullSpikeCompressor
 
-__all__ = ["resolve_device", "apply_gc", "get_module_and_parent", "memory_optimization"]
+__all__ = [
+    "MEMOPT_CHECKPOINT_BUDGETS",
+    "MEMOPT_PREFERENCES",
+    "MEMOPT_PROFILES",
+    "MemOptSummary",
+    "apply_gc",
+    "get_module_and_parent",
+    "memory_optimization",
+    "resolve_device",
+]
 
 TCGC_FORBIDDEN_MODULES = [neuron.PSN, neuron.MaskedPSN, neuron.SlidingPSN]
+MEMOPT_PROFILES = ("safe", "balanced", "memory", "exhaustive")
+MEMOPT_CHECKPOINT_BUDGETS = ("speed", "balanced", "memory")
+MEMOPT_PREFERENCES = ("speed", "balanced", "memory")
+
+
+@dataclass
+class MemOptSummary:
+    profile: Optional[str]
+    checkpoint_budget: Optional[str]
+    prefer: Optional[str]
+    device: str
+    requested_level: int
+    applied_level: int
+    compress_x: bool
+    allow_expensive_profiling: bool
+    applied_steps: list = field(default_factory=list)
+    skipped_steps: list = field(default_factory=list)
+    notes: list = field(default_factory=list)
+    gc_wrap_count: int = 0
+    manual_compressor_count: int = 0
+    bit_compressor_count: int = 0
+    null_compressor_count: int = 0
+    spatial_split_count: int = 0
+    temporal_split_count: int = 0
+    unwrap_count: int = 0
+    gc_container_count: int = 0
+    tcgc_container_count: int = 0
+    options: dict = field(default_factory=dict)
+    gc_candidate_count: int = 0
+    gc_selected_count: int = 0
+    gc_selection_policy: str = "all_candidates"
+    gc_selected_modules: list = field(default_factory=list)
+    gc_selection_explanation: str = ""
+    recommendation: str = ""
+
+
+def _build_compressor_from_spec(spec):
+    if isinstance(spec, str):
+        if not hasattr(compress, spec):
+            available = ", ".join(
+                name
+                for name in dir(compress)
+                if name.endswith("Compressor") and not name.startswith("_")
+            )
+            raise ValueError(
+                f"Unknown compressor spec {spec!r}. Available compressor classes: {available}."
+            )
+        return getattr(compress, spec)()
+    return copy.deepcopy(spec)
 
 
 def resolve_device() -> str:
@@ -109,15 +169,62 @@ def _dummy_input_to_device(dummy_input, device):
         return dummy_input
 
 
+def _randomize_input_like(dummy_input):
+    def _generate_tensor_like(x: torch.Tensor):
+        if x.dtype == torch.bool:
+            return torch.rand_like(x, dtype=torch.float32) > 0.5
+        if x.is_floating_point():
+            choice = torch.randint(0, 3, ()).item()
+            if choice == 0:
+                return torch.randn_like(x)
+            elif choice == 1:
+                return torch.empty_like(x).uniform_(-5, 5)
+            else:
+                return torch.empty_like(x).bernoulli_(p=0.5)
+        if x.dtype in (
+            torch.uint8,
+            torch.int8,
+            torch.int16,
+            torch.int32,
+            torch.int64,
+        ):
+            return torch.randint(
+                0,
+                3,
+                x.shape,
+                device=x.device,
+                dtype=x.dtype,
+            )
+        choice = torch.randint(0, 3, ()).item()
+        if choice == 0:
+            return x.clone()
+        return torch.zeros_like(x)
+
+    if isinstance(dummy_input, torch.Tensor):
+        return _generate_tensor_like(dummy_input)
+    elif isinstance(dummy_input, (tuple, list)):
+        return type(dummy_input)(_randomize_input_like(t) for t in dummy_input)
+    elif isinstance(dummy_input, dict):
+        return {k: _randomize_input_like(v) for k, v in dummy_input.items()}
+    else:
+        # Non-tensor inputs (e.g., None, int, etc.)
+        return dummy_input
+
+
 def _probe_binary_inputs(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: tuple,
     n_trials: int = 5,
+    target_modules: Optional[Tuple[nn.Module, ...]] = None,
 ) -> Dict[nn.Module, bool]:
     """Run dummy forward and record whether target modules receive binary inputs."""
     is_binary = defaultdict(lambda: True)
     hooks = []
+    if target_modules is None:
+        target_modules = tuple(
+            m for m in net.modules() if isinstance(m, instance)
+        )
 
     def hook_fn(m, inputs: tuple):
         x = inputs[0]  # assume the first input is the one to be checked
@@ -125,37 +232,24 @@ def _probe_binary_inputs(
         is_binary[m] = is_binary[m] and binary
 
     # register hooks
-    for m in net.modules():
-        if isinstance(m, instance):
-            hooks.append(m.register_forward_pre_hook(hook_fn))
-
-    def _generate_tensor_like(x: torch.Tensor):
-        choice = torch.randint(0, 3, ()).item()
-        if choice == 0:
-            return torch.randn_like(x)
-        elif choice == 1:
-            return torch.empty_like(x).uniform_(-5, 5)
-        else:
-            return torch.empty_like(x).bernoulli_(p=0.5)
-
-    def _generate_input_like(dummy_input):
-        if isinstance(dummy_input, torch.Tensor):
-            return _generate_tensor_like(dummy_input)
-        elif isinstance(dummy_input, (tuple, list)):
-            return type(dummy_input)(_generate_input_like(t) for t in dummy_input)
-        elif isinstance(dummy_input, dict):
-            return {k: _generate_input_like(v) for k, v in dummy_input.items()}
-        else:
-            # Non-tensor inputs (e.g., None, int, etc.)
-            return dummy_input
+    for m in target_modules:
+        hooks.append(m.register_forward_pre_hook(hook_fn))
 
     is_training = net.training
     net.eval()
     with torch.no_grad():
-        for _ in range(n_trials):
-            new_input = _generate_input_like(dummy_input)
+        if n_trials > 0:
+            _ = net(*dummy_input)
+            functional.reset_net(net)
+            if target_modules and all(not is_binary[m] for m in target_modules):
+                n_trials = 1
+
+        for _ in range(1, n_trials):
+            new_input = _randomize_input_like(dummy_input)
             _ = net(*new_input)
             functional.reset_net(net)
+            if target_modules and all(not is_binary[m] for m in target_modules):
+                break
 
     net.train(is_training)
     for h in hooks:
@@ -163,13 +257,377 @@ def _probe_binary_inputs(
     return dict(is_binary)
 
 
+def _estimate_module_input_bytes(
+    net: nn.Module,
+    instance: Union[type, Tuple[type]],
+    dummy_input: tuple,
+    target_modules: Optional[Tuple[nn.Module, ...]] = None,
+):
+    """Estimate per-module input activation size (in bytes) from one dry run."""
+    estimated_bytes = defaultdict(int)
+    hooks = []
+    if target_modules is None:
+        target_modules = tuple(m for m in net.modules() if isinstance(m, instance))
+
+    def hook_fn(m, inputs: tuple):
+        if not inputs:
+            return
+        x = inputs[0]
+        if isinstance(x, torch.Tensor):
+            estimated_bytes[m] = max(estimated_bytes[m], x.numel() * x.element_size())
+
+    for m in target_modules:
+        hooks.append(m.register_forward_pre_hook(hook_fn))
+
+    is_training = net.training
+    net.eval()
+    with torch.no_grad():
+        _ = net(*dummy_input)
+        functional.reset_net(net)
+    net.train(is_training)
+    for h in hooks:
+        h.remove()
+    return dict(estimated_bytes)
+
+
+def _module_path_map(net: nn.Module) -> Dict[nn.Module, str]:
+    return {module: name for name, module in net.named_modules() if name}
+
+
+def _resolve_gc_selection_targets(
+    net: nn.Module,
+    instance: Union[type, Tuple[type]],
+    dummy_input: Optional[tuple],
+    *,
+    device: str,
+    max_gc_wrapped_modules: Optional[int],
+    gc_target_budget_ratio: Optional[float],
+):
+    candidates = [m for m in net.modules() if isinstance(m, instance)]
+    candidate_count = len(candidates)
+    if candidate_count == 0:
+        return None, candidate_count, candidate_count, "no_candidates"
+
+    limits = []
+    if max_gc_wrapped_modules is not None:
+        if max_gc_wrapped_modules <= 0:
+            return tuple(), candidate_count, 0, "explicit_zero_budget"
+        limits.append(min(max_gc_wrapped_modules, candidate_count))
+    if gc_target_budget_ratio is not None:
+        if gc_target_budget_ratio <= 0:
+            return tuple(), candidate_count, 0, "zero_ratio_budget"
+        ratio_limit = max(1, min(candidate_count, ceil(candidate_count * gc_target_budget_ratio)))
+        limits.append(ratio_limit)
+
+    if not limits:
+        return None, candidate_count, candidate_count, "all_candidates"
+
+    selected_count = min(limits)
+    if selected_count >= candidate_count:
+        return None, candidate_count, candidate_count, "budget_covers_all"
+
+    if dummy_input is None:
+        return tuple(candidates[:selected_count]), candidate_count, selected_count, "fallback_module_order"
+
+    net = net.to(device)
+    moved_input = _dummy_input_to_device(dummy_input, device)
+    estimated_bytes = _estimate_module_input_bytes(
+        net,
+        instance,
+        moved_input,
+        target_modules=tuple(candidates),
+    )
+    index_map = {m: i for i, m in enumerate(candidates)}
+    ranked = sorted(
+        candidates,
+        key=lambda m: (estimated_bytes.get(m, 0), -index_map[m]),
+        reverse=True,
+    )
+    return tuple(ranked[:selected_count]), candidate_count, selected_count, "largest_input_activations"
+
+
+def _build_gc_selection_explanation(
+    *,
+    candidate_count: int,
+    selected_count: int,
+    selection_policy: str,
+    checkpoint_budget: Optional[str],
+    max_gc_wrapped_modules: Optional[int],
+    gc_target_budget_ratio: Optional[float],
+):
+    if candidate_count == 0:
+        return "No matching modules were found for checkpoint wrapping."
+    if selected_count == candidate_count:
+        if checkpoint_budget is not None:
+            return (
+                f'Checkpoint budget "{checkpoint_budget}" covered all {candidate_count} matching modules, '
+                "so no module-level filtering was applied."
+            )
+        return f"All {candidate_count} matching modules were selected for checkpoint wrapping."
+    if selection_policy == "largest_input_activations":
+        reason = f"Selected {selected_count} of {candidate_count} matching modules with the largest observed input activations."
+        if checkpoint_budget is not None:
+            reason += f' This was driven by checkpoint budget "{checkpoint_budget}".'
+        elif max_gc_wrapped_modules is not None or gc_target_budget_ratio is not None:
+            reason += " This was driven by the explicit selective-checkpoint budget."
+        return reason
+    if selection_policy == "fallback_module_order":
+        return (
+            f"Selected the first {selected_count} of {candidate_count} matching modules by module order "
+            "because no dummy_input was available to score activation sizes."
+        )
+    if selection_policy == "explicit_zero_budget":
+        return "Selective checkpointing budget was set to zero, so no modules were wrapped."
+    if selection_policy == "zero_ratio_budget":
+        return "Selective checkpointing ratio budget was non-positive, so no modules were wrapped."
+    return (
+        f"Selected {selected_count} of {candidate_count} matching modules under policy "
+        f'"{selection_policy}".'
+    )
+
+
+def _build_memopt_recommendation(summary: MemOptSummary) -> str:
+    if summary.gc_candidate_count == 0:
+        return "No matching modules were found. Consider passing a different target instance tuple."
+    if summary.prefer == "speed":
+        return (
+            "Current settings favor training speed. If you need more memory reduction, try "
+            '`prefer="balanced"` or increase `gc_target_budget_ratio`.'
+        )
+    if summary.prefer == "memory":
+        return (
+            "Current settings favor memory reduction. If optimization latency or training slowdown is too high, "
+            'try `prefer="balanced"` or `checkpoint_budget="speed"`.'
+        )
+    if summary.prefer == "balanced":
+        return (
+            "Current settings aim for a middle ground. Move to `prefer=\"speed\"` for lower overhead or "
+            '`prefer="memory"` for more aggressive memory savings.'
+        )
+    if summary.checkpoint_budget == "speed":
+        return (
+            "Checkpoint coverage is intentionally conservative. Increase to "
+            '`checkpoint_budget="balanced"` or `"memory"` if you want more memory savings.'
+        )
+    if summary.checkpoint_budget == "memory":
+        return (
+            "Checkpoint coverage is already aggressive. To reduce optimization or training cost, "
+            'drop to `checkpoint_budget="balanced"` or `"speed"`.'
+        )
+    if summary.profile == "safe":
+        return (
+            "You are using the conservative `safe` profile. If this does not save enough memory, "
+            'try `profile="balanced"` or `prefer="balanced"`.'
+        )
+    if summary.profile == "exhaustive":
+        return (
+            "You are using the most expensive search mode. Keep it for offline tuning; for routine use, "
+            'consider `profile="balanced"` or `prefer="balanced"`.'
+        )
+    return (
+        "Review `summary.gc_selected_count`, split counts, and skipped steps to decide whether to bias "
+        "future runs toward speed or memory."
+    )
+
+
+def _resolve_memory_optimization_options(
+    level: Optional[int],
+    profile: Optional[str],
+    dummy_input,
+    compress_x: Optional[bool],
+    max_split_rounds: Optional[int],
+    max_candidates_per_round: Optional[int],
+    warmup_in_main_process: Optional[bool],
+    warmup_in_profile_workers: Optional[bool],
+    allow_expensive_profiling: Optional[bool],
+):
+    if profile is not None and profile not in MEMOPT_PROFILES:
+        raise ValueError(
+            f"Unsupported memopt profile {profile!r}. Expected one of {MEMOPT_PROFILES}."
+        )
+
+    defaults = {
+        "safe": dict(
+            level=1,
+            compress_x=True,
+            max_split_rounds=0,
+            max_candidates_per_round=0,
+            warmup_in_main_process=False,
+            warmup_in_profile_workers=False,
+            allow_expensive_profiling=False,
+        ),
+        "balanced": dict(
+            level=2,
+            compress_x=True,
+            max_split_rounds=1,
+            max_candidates_per_round=1,
+            warmup_in_main_process=False,
+            warmup_in_profile_workers=False,
+            allow_expensive_profiling=False,
+        ),
+        "memory": dict(
+            level=3,
+            compress_x=True,
+            max_split_rounds=2,
+            max_candidates_per_round=2,
+            warmup_in_main_process=False,
+            warmup_in_profile_workers=True,
+            allow_expensive_profiling=True,
+        ),
+        "exhaustive": dict(
+            level=4,
+            compress_x=True,
+            max_split_rounds=None,
+            max_candidates_per_round=None,
+            warmup_in_main_process=True,
+            warmup_in_profile_workers=True,
+            allow_expensive_profiling=True,
+        ),
+    }
+
+    if profile is None:
+        resolved_level = 0 if level is None else level
+        resolved = dict(
+            level=resolved_level,
+            compress_x=True if compress_x is None else compress_x,
+            max_split_rounds=max_split_rounds,
+            max_candidates_per_round=max_candidates_per_round,
+            warmup_in_main_process=(
+                True if warmup_in_main_process is None else warmup_in_main_process
+            ),
+            warmup_in_profile_workers=(
+                True
+                if warmup_in_profile_workers is None
+                else warmup_in_profile_workers
+            ),
+            allow_expensive_profiling=(
+                True if allow_expensive_profiling is None else allow_expensive_profiling
+            ),
+        )
+        notes = []
+    else:
+        preset = defaults[profile]
+        resolved = dict(
+            level=preset["level"] if level is None else level,
+            compress_x=compress_x if compress_x is not None else preset["compress_x"],
+            max_split_rounds=(
+                preset["max_split_rounds"]
+                if max_split_rounds is None
+                else max_split_rounds
+            ),
+            max_candidates_per_round=(
+                preset["max_candidates_per_round"]
+                if max_candidates_per_round is None
+                else max_candidates_per_round
+            ),
+            warmup_in_main_process=(
+                preset["warmup_in_main_process"]
+                if warmup_in_main_process is None
+                else warmup_in_main_process
+            ),
+            warmup_in_profile_workers=(
+                preset["warmup_in_profile_workers"]
+                if warmup_in_profile_workers is None
+                else warmup_in_profile_workers
+            ),
+            allow_expensive_profiling=(
+                preset["allow_expensive_profiling"]
+                if allow_expensive_profiling is None
+                else allow_expensive_profiling
+            ),
+        )
+        notes = [f"profile:{profile}"]
+
+    if not resolved["allow_expensive_profiling"] and resolved["level"] > 1:
+        resolved["max_split_rounds"] = 1
+        resolved["max_candidates_per_round"] = 1
+        resolved["warmup_in_profile_workers"] = False
+
+    if dummy_input is None and resolved["level"] > 1:
+        if profile is None:
+            raise ValueError("dummy_input must be provided for memory profiling.")
+        notes.append("fallback:level>1_requires_dummy_input")
+        resolved["level"] = 1
+        resolved["max_split_rounds"] = 0
+        resolved["max_candidates_per_round"] = 0
+        resolved["warmup_in_profile_workers"] = False
+
+    return resolved, notes
+
+
+def _resolve_preference_options(
+    prefer: Optional[str],
+    profile: Optional[str],
+    checkpoint_budget: Optional[str],
+):
+    if prefer is not None and prefer not in MEMOPT_PREFERENCES:
+        raise ValueError(
+            f"Unsupported prefer {prefer!r}. Expected one of {MEMOPT_PREFERENCES}."
+        )
+
+    resolved_profile = profile
+    resolved_budget = checkpoint_budget
+    notes = []
+
+    if prefer is None:
+        return resolved_profile, resolved_budget, notes
+
+    defaults = {
+        "speed": ("safe", "speed"),
+        "balanced": ("balanced", "balanced"),
+        "memory": ("memory", "memory"),
+    }
+    default_profile, default_budget = defaults[prefer]
+
+    if resolved_profile is None:
+        resolved_profile = default_profile
+        notes.append(f"prefer:profile={default_profile}")
+    if resolved_budget is None:
+        resolved_budget = default_budget
+        notes.append(f"prefer:checkpoint_budget={default_budget}")
+
+    return resolved_profile, resolved_budget, notes
+
+
+def _resolve_checkpoint_budget_options(
+    checkpoint_budget: Optional[str],
+    max_gc_wrapped_modules: Optional[int],
+    gc_target_budget_ratio: Optional[float],
+):
+    if checkpoint_budget is not None and checkpoint_budget not in MEMOPT_CHECKPOINT_BUDGETS:
+        raise ValueError(
+            "Unsupported checkpoint_budget "
+            f"{checkpoint_budget!r}. Expected one of {MEMOPT_CHECKPOINT_BUDGETS}."
+        )
+
+    resolved_max = max_gc_wrapped_modules
+    resolved_ratio = gc_target_budget_ratio
+    notes = []
+
+    if checkpoint_budget is not None:
+        defaults = {
+            "speed": 0.5,
+            "balanced": 0.75,
+            "memory": 1.0,
+        }
+        if resolved_ratio is None and resolved_max is None:
+            resolved_ratio = defaults[checkpoint_budget]
+            notes.append(f"checkpoint_budget:{checkpoint_budget}")
+
+    return resolved_max, resolved_ratio, notes
+
+
 def apply_gc(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
-    compress_x: bool = True,
+    compress_x: Optional[bool] = True,
     device: str = "cuda",
-) -> nn.Module:
+    checkpoint_budget: Optional[str] = None,
+    max_gc_wrapped_modules: Optional[int] = None,
+    gc_target_budget_ratio: Optional[float] = None,
+    return_summary: bool = False,
+) -> Union[nn.Module, Tuple[nn.Module, dict]]:
     r"""
     **API Language:**
     :ref:`中文 <_apply_gc-cn>` | :ref:`English <_apply_gc-en>`
@@ -223,14 +681,91 @@ def apply_gc(
     :param device: Device type, e.g., "cuda" or "cpu"
     :type device: str
 
+    :param checkpoint_budget: High-level selective checkpoint preset. One of
+        ``"speed"``, ``"balanced"``, or ``"memory"``
+    :type checkpoint_budget: Optional[str]
+
+    :param max_gc_wrapped_modules: Optional upper bound on how many matching
+        modules should be wrapped. When set, the modules with the largest
+        observed input activations are preferred if ``dummy_input`` is given
+    :type max_gc_wrapped_modules: Optional[int]
+
+    :param gc_target_budget_ratio: Optional ratio in ``(0, 1]`` controlling the
+        fraction of matching modules to wrap. When used together with
+        ``max_gc_wrapped_modules``, the smaller budget wins
+    :type gc_target_budget_ratio: Optional[float]
+
     :return: Network module with GC applied
     :rtype: torch.nn.Module
     """
     is_binary_input = {}
+    apply_summary = dict(
+        gc_wrap_count=0,
+        manual_compressor_count=0,
+        bit_compressor_count=0,
+        null_compressor_count=0,
+        gc_candidate_count=0,
+        gc_selected_count=0,
+        gc_selection_policy="all_candidates",
+        gc_selected_modules=[],
+        gc_selection_explanation="",
+    )
+    candidates = [m for m in net.modules() if isinstance(m, instance)]
+    (
+        max_gc_wrapped_modules,
+        gc_target_budget_ratio,
+        budget_notes,
+    ) = _resolve_checkpoint_budget_options(
+        checkpoint_budget,
+        max_gc_wrapped_modules,
+        gc_target_budget_ratio,
+    )
+    selected_targets, candidate_count, selected_count, selection_policy = (
+        _resolve_gc_selection_targets(
+            net,
+            instance,
+            dummy_input,
+            device=device,
+            max_gc_wrapped_modules=max_gc_wrapped_modules,
+            gc_target_budget_ratio=gc_target_budget_ratio,
+        )
+    )
+    apply_summary["gc_candidate_count"] = candidate_count
+    apply_summary["gc_selected_count"] = selected_count
+    apply_summary["gc_selection_policy"] = selection_policy
+    apply_summary["checkpoint_budget"] = checkpoint_budget
+    apply_summary["budget_notes"] = budget_notes
+    path_map = _module_path_map(net)
+    apply_summary["gc_selected_modules"] = (
+        [path_map.get(m, "<root>") for m in selected_targets]
+        if selected_targets is not None
+        else [path_map.get(m, "<root>") for m in candidates]
+    )
+    apply_summary["gc_selection_explanation"] = _build_gc_selection_explanation(
+        candidate_count=candidate_count,
+        selected_count=selected_count,
+        selection_policy=selection_policy,
+        checkpoint_budget=checkpoint_budget,
+        max_gc_wrapped_modules=max_gc_wrapped_modules,
+        gc_target_budget_ratio=gc_target_budget_ratio,
+    )
     if compress_x and dummy_input is not None:
-        net = net.to(device)
-        dummy_input = _dummy_input_to_device(dummy_input, device)
-        is_binary_input = _probe_binary_inputs(net, instance, dummy_input)
+        probe_targets = tuple(
+            m
+            for m in net.modules()
+            if isinstance(m, instance)
+            and (selected_targets is None or m in selected_targets)
+            and getattr(m, "x_compressor", None) is None
+        )
+        if probe_targets:
+            net = net.to(device)
+            dummy_input = _dummy_input_to_device(dummy_input, device)
+            is_binary_input = _probe_binary_inputs(
+                net,
+                instance,
+                dummy_input,
+                target_modules=probe_targets,
+            )
 
     def _get_compressor(module: nn.Module, is_binary_input: bool):
         spec = getattr(module, "x_compressor", None)
@@ -239,23 +774,32 @@ def apply_gc(
                 x_compressor = (
                     BitSpikeCompressor() if is_binary_input else NullSpikeCompressor()
                 )
+                if isinstance(x_compressor, BitSpikeCompressor):
+                    apply_summary["bit_compressor_count"] += 1
+                else:
+                    apply_summary["null_compressor_count"] += 1
             else:  # manually specified
-                x_compressor = (
-                    getattr(compress, spec)() if isinstance(spec, str) else spec
-                )
+                x_compressor = _build_compressor_from_spec(spec)
+                apply_summary["manual_compressor_count"] += 1
         else:  # disable compression
             x_compressor = NullSpikeCompressor()
+            apply_summary["null_compressor_count"] += 1
         return x_compressor
 
     def _replace(subnet: nn.Module):
         for name, child in list(subnet.named_children()):
-            if isinstance(child, instance):
+            if isinstance(child, instance) and (
+                selected_targets is None or child in selected_targets
+            ):
                 x_compressor = _get_compressor(child, is_binary_input.get(child, False))
                 setattr(subnet, name, GCContainer(x_compressor, child))
+                apply_summary["gc_wrap_count"] += 1
             elif not isinstance(child, GCContainer):
                 _replace(child)
 
     _replace(net)
+    if return_summary:
+        return net, apply_summary
     return net
 
 
@@ -344,7 +888,14 @@ def _dummy_train_step(
         _load_bn_states(net, saved_bn_states)
 
 
-def _train_memory_profile_worker(net, dummy_input, q, device):
+def _train_memory_profile_worker(
+    net,
+    dummy_input,
+    q,
+    device,
+    worker_warmup=True,
+    return_peak=False,
+):
     """`net` and `dummy_input` should be a deep copy of the original model and
     should be located on CPU, since they must be pickle-able.
     """
@@ -353,7 +904,8 @@ def _train_memory_profile_worker(net, dummy_input, q, device):
 
     # Warmup to trigger Triton autotune & JIT compilation in this subprocess.
     # Without this, the peak memory of the 1st and last layers will be strange!
-    _dummy_train_step(net, dummy_input)
+    if worker_warmup:
+        _dummy_train_step(net, dummy_input)
 
     torch.cuda.synchronize(device)
     torch.cuda.empty_cache()
@@ -367,10 +919,18 @@ def _train_memory_profile_worker(net, dummy_input, q, device):
     ) as prof:
         _dummy_train_step(net, dummy_input)
     results = prof.export(output=False)
-    q.put(results)
+    if return_peak:
+        torch.cuda.synchronize(device)
+        peak_allocated = torch.cuda.max_memory_allocated(device)
+        peak_reserved = torch.cuda.max_memory_reserved(device)
+        q.put((results, peak_allocated, peak_reserved))
+    else:
+        q.put(results)
 
 
-def _train_memory_profile(net, dummy_input, ctx, device):
+def _train_memory_profile(
+    net, dummy_input, ctx, device, worker_warmup=True, return_peak=False
+):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_memory_profile_worker,
@@ -379,6 +939,8 @@ def _train_memory_profile(net, dummy_input, ctx, device):
             _dummy_input_to_device(dummy_input, "cpu"),
             q,
             device,
+            worker_warmup,
+            return_peak,
         ),
     )
     p.start()
@@ -387,7 +949,7 @@ def _train_memory_profile(net, dummy_input, ctx, device):
     return results
 
 
-def _train_peak_memory_worker(net, dummy_input, q, device):
+def _train_peak_memory_worker(net, dummy_input, q, device, worker_warmup=True):
     """Profile the peak training memory usage of the entire net.
 
     `net` and `dummy_input` should be deep copies located on CPU,
@@ -397,7 +959,8 @@ def _train_peak_memory_worker(net, dummy_input, q, device):
     dummy_input = _dummy_input_to_device(dummy_input, device)
     # Warmup to trigger Triton autotune & JIT compilation in this subprocess.
     # Without this, the peak memory of the 1st and last layers will be strange!
-    _dummy_train_step(net, dummy_input)
+    if worker_warmup:
+        _dummy_train_step(net, dummy_input)
 
     torch.cuda.synchronize(device)
     torch.cuda.empty_cache()
@@ -409,7 +972,7 @@ def _train_peak_memory_worker(net, dummy_input, q, device):
     q.put((peak_allocated, peak_reserved))
 
 
-def _train_peak_memory(net, dummy_input, ctx, device):
+def _train_peak_memory(net, dummy_input, ctx, device, worker_warmup=True):
     q = ctx.Queue(maxsize=1)
     p = ctx.Process(
         target=_train_peak_memory_worker,
@@ -418,6 +981,7 @@ def _train_peak_memory(net, dummy_input, ctx, device):
             _dummy_input_to_device(dummy_input, "cpu"),
             q,
             device,
+            worker_warmup,
         ),
     )
     p.start()
@@ -532,9 +1096,13 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
         spec = getattr(module, "x_compressor", None)
         if compress_x:
             if spec is None:  # auto-detect
-                c = x_compressor if use_original_compressor else NullSpikeCompressor()
+                c = (
+                    copy.deepcopy(x_compressor)
+                    if use_original_compressor
+                    else NullSpikeCompressor()
+                )
             else:  # manually specified
-                c = getattr(compress, spec)() if isinstance(spec, str) else spec
+                c = _build_compressor_from_spec(spec)
         else:  # disable compression
             c = NullSpikeCompressor()
         return c
@@ -544,6 +1112,10 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
         c = _get_compressor(sub, i == 0)
         l.append(GCContainer(c, sub))
     return nn.Sequential(*l)
+
+
+def _can_spatially_split(block: GCContainer) -> bool:
+    return len(block) > 1 or (len(block) == 1 and hasattr(block[0], "__spatial_split__"))
 
 
 def _cannot_temporally_split(block: GCContainer):
@@ -572,6 +1144,10 @@ def _temporally_split_gc_container(block: GCContainer, factor: int = 2):
     )
 
 
+def _can_temporally_split(block: GCContainer) -> bool:
+    return not _cannot_temporally_split(block)
+
+
 def _unwrap_gc_container(block: GCContainer) -> nn.Module:
     assert isinstance(block, GCContainer)
 
@@ -586,15 +1162,42 @@ def _cprint(verbose, *args, **kwargs):
         print(*args, **kwargs)
 
 
+def _candidate_entries(results, max_candidates_per_round: Optional[int]):
+    if max_candidates_per_round is None:
+        return results
+    if max_candidates_per_round <= 0:
+        return []
+    return results[:max_candidates_per_round]
+
+
+def _gc_container_count(net: nn.Module) -> int:
+    return sum(1 for m in net.modules() if isinstance(m, GCContainer))
+
+
+def _has_split_candidate(net: nn.Module, predicate) -> bool:
+    return any(predicate(m) for m in net.modules() if isinstance(m, GCContainer))
+
+
 def memory_optimization(
     net: nn.Module,
     instance: Union[type, Tuple[type]],
     dummy_input: Optional[tuple] = None,
-    compress_x: bool = True,
-    level: int = 0,
+    compress_x: Optional[bool] = None,
+    level: Optional[int] = None,
     verbose: bool = False,
     temporal_split_factor: int = 2,
-):
+    max_split_rounds: Optional[int] = None,
+    max_candidates_per_round: Optional[int] = None,
+    warmup_in_main_process: Optional[bool] = None,
+    warmup_in_profile_workers: Optional[bool] = None,
+    prefer: Optional[str] = None,
+    profile: Optional[str] = None,
+    allow_expensive_profiling: Optional[bool] = None,
+    checkpoint_budget: Optional[str] = None,
+    max_gc_wrapped_modules: Optional[int] = None,
+    gc_target_budget_ratio: Optional[float] = None,
+    return_summary: bool = False,
+) -> Union[nn.Module, Tuple[nn.Module, MemOptSummary]]:
     r"""
     **API Language:**
     :ref:`中文 <memory_optimization-cn>` | :ref:`English <memory_optimization-en>`
@@ -627,8 +1230,8 @@ def memory_optimization(
     :param compress_x: 是否应用输入脉冲压缩
     :type compress_x: bool
 
-    :param level: 优化级别
-    :type level: int
+    :param level: 优化级别。若为 ``None`` 且指定 ``profile`` ，则使用预设推荐值
+    :type level: Optional[int]
 
     :param verbose: 是否打印优化过程日志
     :type verbose: bool
@@ -636,8 +1239,47 @@ def memory_optimization(
     :param temporal_split_factor: 沿时间拆分检查点片段时所使用的倍增因子
     :type temporal_split_factor: int
 
-    :return: 优化后的模型
-    :rtype: nn.Module
+    :param max_split_rounds: 每个 split 阶段允许的最大 profiling 轮数。 ``None`` 表示不限制
+    :type max_split_rounds: Optional[int]
+
+    :param max_candidates_per_round: 每轮 profiling 至多尝试的候选 ``GCContainer`` 数量。 ``None`` 表示不限制
+    :type max_candidates_per_round: Optional[int]
+
+    :param warmup_in_main_process: 是否在主进程中对优化后的模型执行一次 dummy train step，
+        以避免首次使用时的额外开销。默认开启
+    :type warmup_in_main_process: bool
+
+    :param warmup_in_profile_workers: 是否在 profiling 子进程中执行预热 dummy train step。
+        默认开启；关闭后可以减少优化耗时，但可能增加测量噪声
+    :type warmup_in_profile_workers: bool
+
+    :param prefer: 更高层的优化倾向，可选 ``"speed"`` 、 ``"balanced"`` 、 ``"memory"`` 。
+        当 ``profile`` / ``checkpoint_budget`` 未显式指定时，将自动映射到对应默认值
+    :type prefer: Optional[str]
+
+    :param profile: 高层预设策略，可选 ``"safe"`` 、 ``"balanced"`` 、 ``"memory"`` 、 ``"exhaustive"``
+    :type profile: Optional[str]
+
+    :param allow_expensive_profiling: 是否允许高开销 profiling。关闭后会自动收紧 split 搜索预算
+    :type allow_expensive_profiling: Optional[bool]
+
+    :param checkpoint_budget: 高层选择性 checkpoint 预算策略，可选
+        ``"speed"`` 、 ``"balanced"`` 、 ``"memory"``
+    :type checkpoint_budget: Optional[str]
+
+    :param max_gc_wrapped_modules: 选择性 checkpoint 的上限。若给定，则只包装最多这么多个匹配模块。
+        当 ``dummy_input`` 可用时，优先选择输入激活更大的模块
+    :type max_gc_wrapped_modules: Optional[int]
+
+    :param gc_target_budget_ratio: 选择性 checkpoint 的比例预算，取值应在 ``(0, 1]`` 之间。
+        当与 ``max_gc_wrapped_modules`` 同时给定时，较小的预算生效
+    :type gc_target_budget_ratio: Optional[float]
+
+    :param return_summary: 是否同时返回结构化优化摘要
+    :type return_summary: bool
+
+    :return: 优化后的模型；当 ``return_summary=True`` 时，返回 ``(model, summary)``
+    :rtype: Union[nn.Module, Tuple[nn.Module, MemOptSummary]]
 
     ----
 
@@ -667,8 +1309,9 @@ def memory_optimization(
     :param compress_x: whether to apply input spike compression
     :type compress_x: bool
 
-    :param level: optimization level
-    :type level: int
+    :param level: optimization level. If ``None`` and ``profile`` is specified,
+        the recommended preset level will be used
+    :type level: Optional[int]
 
     :param verbose: whether to print logs
     :type verbose: bool
@@ -676,133 +1319,390 @@ def memory_optimization(
     :param temporal_split_factor: factor to increase the number of chunks when splitting GC segments temporally
     :type temporal_split_factor: int
 
-    :return: the optimized model
-    :rtype: nn.Module
+    :param max_split_rounds: maximum number of profiling rounds allowed for each split stage.
+        ``None`` means no limit
+    :type max_split_rounds: Optional[int]
+
+    :param max_candidates_per_round: maximum number of GCContainer candidates to try in each profiling round.
+        ``None`` means no limit
+    :type max_candidates_per_round: Optional[int]
+
+    :param warmup_in_main_process: whether to run one dummy train step for the optimized
+        model in the main process to hide first-use overhead. Default to ``True``
+    :type warmup_in_main_process: bool
+
+    :param warmup_in_profile_workers: whether to run a warmup dummy train step in
+        profiling subprocesses. Default to ``True``; disabling it can reduce
+        optimization latency at the cost of noisier measurements
+    :type warmup_in_profile_workers: bool
+
+    :param prefer: higher-level optimization preference. One of ``"speed"``,
+        ``"balanced"``, or ``"memory"``. When ``profile`` / ``checkpoint_budget``
+        are not explicitly provided, this preference maps to their default values
+    :type prefer: Optional[str]
+
+    :param profile: high-level preset strategy. One of ``"safe"``, ``"balanced"``,
+        ``"memory"``, or ``"exhaustive"``
+    :type profile: Optional[str]
+
+    :param allow_expensive_profiling: whether to allow expensive profiling.
+        Disabling this automatically tightens split search budgets
+    :type allow_expensive_profiling: Optional[bool]
+
+    :param checkpoint_budget: high-level selective checkpoint budget preset.
+        One of ``"speed"``, ``"balanced"``, or ``"memory"``
+    :type checkpoint_budget: Optional[str]
+
+    :param max_gc_wrapped_modules: upper bound for selective checkpointing.
+        When provided, at most this many matching modules are wrapped; modules
+        with larger observed input activations are preferred when ``dummy_input`` is available
+    :type max_gc_wrapped_modules: Optional[int]
+
+    :param gc_target_budget_ratio: ratio budget for selective checkpointing in ``(0, 1]``.
+        When used together with ``max_gc_wrapped_modules``, the smaller budget wins
+    :type gc_target_budget_ratio: Optional[float]
+
+    :param return_summary: whether to also return a structured optimization summary
+    :type return_summary: bool
+
+    :return: the optimized model, or ``(model, summary)`` when ``return_summary=True``
+    :rtype: Union[nn.Module, Tuple[nn.Module, MemOptSummary]]
     """
     st = time.time()
     ctx = mp.get_context("spawn")
     device = resolve_device()
+    preset_levels = {
+        "safe": 1,
+        "balanced": 2,
+        "memory": 3,
+        "exhaustive": 4,
+    }
+    profile, checkpoint_budget, preference_notes = _resolve_preference_options(
+        prefer,
+        profile,
+        checkpoint_budget,
+    )
+    requested_level = (
+        level if level is not None else preset_levels.get(profile, 0)
+    )
+    resolved, resolution_notes = _resolve_memory_optimization_options(
+        level=level,
+        profile=profile,
+        dummy_input=dummy_input,
+        compress_x=compress_x,
+        max_split_rounds=max_split_rounds,
+        max_candidates_per_round=max_candidates_per_round,
+        warmup_in_main_process=warmup_in_main_process,
+        warmup_in_profile_workers=warmup_in_profile_workers,
+        allow_expensive_profiling=allow_expensive_profiling,
+    )
+    level = resolved["level"]
+    compress_x = resolved["compress_x"]
+    max_split_rounds = resolved["max_split_rounds"]
+    max_candidates_per_round = resolved["max_candidates_per_round"]
+    warmup_in_main_process = resolved["warmup_in_main_process"]
+    warmup_in_profile_workers = resolved["warmup_in_profile_workers"]
+    allow_expensive_profiling = resolved["allow_expensive_profiling"]
+
+    summary = MemOptSummary(
+        profile=profile,
+        checkpoint_budget=checkpoint_budget,
+        prefer=prefer,
+        device=device,
+        requested_level=requested_level,
+        applied_level=0 if level is None else level,
+        compress_x=compress_x,
+        allow_expensive_profiling=allow_expensive_profiling,
+        notes=list(preference_notes) + list(resolution_notes),
+        options=dict(
+            prefer=prefer,
+            temporal_split_factor=temporal_split_factor,
+            max_split_rounds=max_split_rounds,
+            max_candidates_per_round=max_candidates_per_round,
+            warmup_in_main_process=warmup_in_main_process,
+            warmup_in_profile_workers=warmup_in_profile_workers,
+            checkpoint_budget=checkpoint_budget,
+            max_gc_wrapped_modules=max_gc_wrapped_modules,
+            gc_target_budget_ratio=gc_target_budget_ratio,
+        ),
+    )
+    summary.applied_level = level
     _cprint(verbose, f"Optimizing memory on device {device}")
     peak_allocated = -1.0
 
     if level > 0:
         _cprint(verbose, "Level 1: layer-wise GC with input spike compression")
-        net = apply_gc(net, instance, dummy_input, compress_x, device)
+        net, apply_summary = apply_gc(
+            net,
+            instance,
+            dummy_input,
+            compress_x,
+            device,
+            checkpoint_budget=checkpoint_budget,
+            max_gc_wrapped_modules=max_gc_wrapped_modules,
+            gc_target_budget_ratio=gc_target_budget_ratio,
+            return_summary=True,
+        )
+        summary.applied_steps.append("level1_gc")
+        for k, v in apply_summary.items():
+            if v is None:
+                continue
+            if isinstance(v, str):
+                setattr(summary, k, v)
+            elif isinstance(v, list):
+                if k == "gc_selected_modules":
+                    summary.gc_selected_modules = list(v)
+                else:
+                    summary.notes.extend(v)
+            else:
+                setattr(summary, k, getattr(summary, k) + v)
 
     if level > 1:  # spatial split
-        if dummy_input is None:
-            raise ValueError("dummy_input must be provided for memory profiling.")
+        if _gc_container_count(net) == 0:
+            _cprint(verbose, "Level 2: no GCContainers found, skip spatial split")
+            summary.skipped_steps.append("level2:no_gccontainers")
+        elif not _has_split_candidate(net, _can_spatially_split):
+            _cprint(verbose, "Level 2: no spatially splittable GCContainers, skip")
+            summary.skipped_steps.append("level2:no_spatial_candidates")
+        else:
+            _cprint(verbose, "Level 2: split GCContainers spatially")
+            summary.applied_steps.append("level2_spatial_split")
+            peak_allocated, _ = _train_peak_memory(
+                net,
+                dummy_input,
+                ctx,
+                device,
+                worker_warmup=warmup_in_profile_workers,
+            )
+            split_rounds = 0
+            blocked_candidates = set()
 
-        _cprint(verbose, "Level 2: split GCContainers spatially")
-        peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
-
-        while True:
-            results = _train_memory_profile(net, dummy_input, ctx, device)
-            if not results:
-                _cprint(verbose, "\tNo more GCContainers to split.")
-                break
-            cb_name = results[0][0]  # GCContainer with the highest mem.
-            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
-
-            # try to spatially split the GCContainer
-            # if not split-able, break
-            split_cb = _spatially_split_gc_container(cb)
-            if split_cb is None:
-                _cprint(verbose, f"\t{cb_name}: can't be spatially split")
-                break
-            setattr(parent, child_name, split_cb)
-
-            # if the peak memory does not reduces, revert and break;
-            # otherwise, keep the change and continue
-            new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
-            if new_peak_allocated >= peak_allocated:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: no reduction in memory, revert "
-                    f"({peak_allocated} -> {new_peak_allocated})",
+            while True:
+                if max_split_rounds is not None and split_rounds >= max_split_rounds:
+                    _cprint(verbose, "\tReached max_split_rounds for spatial split.")
+                    break
+                if not _has_split_candidate(net, _can_spatially_split):
+                    _cprint(verbose, "\tNo spatially splittable GCContainers remain.")
+                    break
+                split_rounds += 1
+                results = _train_memory_profile(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
                 )
-                setattr(parent, child_name, cb)
-                break
-            else:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: successfully split "
-                    f"({peak_allocated} -> {new_peak_allocated})",
-                )
-                peak_allocated = new_peak_allocated  # update the peak memory
+                if not results:
+                    _cprint(verbose, "\tNo more GCContainers to split.")
+                    break
+                filtered_results = [
+                    row for row in results if row[0].split(" ")[-1] not in blocked_candidates
+                ]
+                if not filtered_results:
+                    _cprint(verbose, "\tNo eligible spatial split candidates remain.")
+                    break
+                improved = False
+                for row in _candidate_entries(filtered_results, max_candidates_per_round):
+                    cb_name = row[0]
+                    cb_path = cb_name.split(" ")[-1]
+                    cb, parent, child_name = get_module_and_parent(net, cb_path)
+
+                    split_cb = _spatially_split_gc_container(cb, compress_x)
+                    if split_cb is None:
+                        _cprint(verbose, f"\t{cb_name}: can't be spatially split")
+                        blocked_candidates.add(cb_path)
+                        continue
+                    setattr(parent, child_name, split_cb)
+
+                    new_peak_allocated, _ = _train_peak_memory(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                    )
+                    if new_peak_allocated >= peak_allocated:
+                        _cprint(
+                            verbose,
+                            f"\t{cb_name}: no reduction in memory, revert "
+                            f"({peak_allocated} -> {new_peak_allocated})",
+                        )
+                        setattr(parent, child_name, cb)
+                        blocked_candidates.add(cb_path)
+                        continue
+
+                    _cprint(
+                        verbose,
+                        f"\t{cb_name}: successfully split "
+                        f"({peak_allocated} -> {new_peak_allocated})",
+                    )
+                    peak_allocated = new_peak_allocated
+                    summary.spatial_split_count += 1
+                    improved = True
+                    blocked_candidates.clear()
+                    break
+
+                if not improved:
+                    _cprint(verbose, "\tNo spatial split candidate improved memory.")
+                    summary.skipped_steps.append("level2:no_improving_candidate")
+                    break
 
     if level > 2:  # temporal split
-        _cprint(verbose, "Level 3: split GCContainers temporally")
-
-        while True:
-            results = _train_memory_profile(net, dummy_input, ctx, device)
-            if not results:
-                _cprint(verbose, "\tNo more GCContainers to split.")
-                break
-            cb_name = results[0][0]  # GCContainer with the highest mem.
-            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
-
-            # try to temporally split the GCContainer
-            # if not split-able, break
-            split_cb = _temporally_split_gc_container(cb, temporal_split_factor)
-            if split_cb is None:
-                _cprint(verbose, f"\t{cb_name}: can't be temporally split")
-                break
-            setattr(parent, child_name, split_cb)
-
-            # if the peak memory does not reduces, revert and break;
-            # otherwise, keep the change and continue
-            new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
-            if new_peak_allocated >= peak_allocated:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: no reduction in memory, revert "
-                    f"({peak_allocated} -> {new_peak_allocated})",
+        if _gc_container_count(net) == 0:
+            _cprint(verbose, "Level 3: no GCContainers found, skip temporal split")
+            summary.skipped_steps.append("level3:no_gccontainers")
+        elif not _has_split_candidate(net, _can_temporally_split):
+            _cprint(verbose, "Level 3: no temporally splittable GCContainers, skip")
+            summary.skipped_steps.append("level3:no_temporal_candidates")
+        else:
+            _cprint(verbose, "Level 3: split GCContainers temporally")
+            summary.applied_steps.append("level3_temporal_split")
+            if peak_allocated < 0:
+                peak_allocated, _ = _train_peak_memory(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
                 )
-                setattr(parent, child_name, cb)
-                break
-            else:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: successfully split "
-                    f"({peak_allocated} -> {new_peak_allocated})",
+            split_rounds = 0
+            blocked_candidates = set()
+
+            while True:
+                if max_split_rounds is not None and split_rounds >= max_split_rounds:
+                    _cprint(verbose, "\tReached max_split_rounds for temporal split.")
+                    break
+                if not _has_split_candidate(net, _can_temporally_split):
+                    _cprint(verbose, "\tNo temporally splittable GCContainers remain.")
+                    break
+                split_rounds += 1
+                results = _train_memory_profile(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
                 )
-                peak_allocated = new_peak_allocated  # update the peak memory
+                if not results:
+                    _cprint(verbose, "\tNo more GCContainers to split.")
+                    break
+                filtered_results = [
+                    row for row in results if row[0].split(" ")[-1] not in blocked_candidates
+                ]
+                if not filtered_results:
+                    _cprint(verbose, "\tNo eligible temporal split candidates remain.")
+                    break
+                improved = False
+                for row in _candidate_entries(filtered_results, max_candidates_per_round):
+                    cb_name = row[0]
+                    cb_path = cb_name.split(" ")[-1]
+                    cb, parent, child_name = get_module_and_parent(net, cb_path)
+
+                    split_cb = _temporally_split_gc_container(cb, temporal_split_factor)
+                    if split_cb is None:
+                        _cprint(verbose, f"\t{cb_name}: can't be temporally split")
+                        blocked_candidates.add(cb_path)
+                        continue
+                    setattr(parent, child_name, split_cb)
+
+                    new_peak_allocated, _ = _train_peak_memory(
+                        net,
+                        dummy_input,
+                        ctx,
+                        device,
+                        worker_warmup=warmup_in_profile_workers,
+                    )
+                    if new_peak_allocated >= peak_allocated:
+                        _cprint(
+                            verbose,
+                            f"\t{cb_name}: no reduction in memory, revert "
+                            f"({peak_allocated} -> {new_peak_allocated})",
+                        )
+                        setattr(parent, child_name, cb)
+                        blocked_candidates.add(cb_path)
+                        continue
+
+                    _cprint(
+                        verbose,
+                        f"\t{cb_name}: successfully split "
+                        f"({peak_allocated} -> {new_peak_allocated})",
+                    )
+                    peak_allocated = new_peak_allocated
+                    summary.temporal_split_count += 1
+                    improved = True
+                    blocked_candidates.clear()
+                    break
+
+                if not improved:
+                    _cprint(verbose, "\tNo temporal split candidate improved memory.")
+                    summary.skipped_steps.append("level3:no_improving_candidate")
+                    break
 
     if level > 3:
-        _cprint(verbose, "Level 4: greedily disable GCContainers")
-        results = _inference_time_profile(net, dummy_input, ctx, device)
-
-        for r in results:
-            cb_name = r[0]
-            cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
-
-            # try to unwrap the GCContainer
-            ucb = _unwrap_gc_container(cb)
-            setattr(parent, child_name, ucb)
-
-            # if the peak memory increases, revert; otherwise, keep the change
-            new_peak_allocated, _ = _train_peak_memory(net, dummy_input, ctx, device)
-            if new_peak_allocated > peak_allocated:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: keep GCContainer "
-                    f"({peak_allocated} -> {new_peak_allocated})",
+        if _gc_container_count(net) == 0:
+            _cprint(verbose, "Level 4: no GCContainers found, skip greedy unwrap")
+            summary.skipped_steps.append("level4:no_gccontainers")
+        else:
+            if peak_allocated < 0:
+                peak_allocated, _ = _train_peak_memory(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
                 )
-                setattr(parent, child_name, cb)
-            else:
-                _cprint(
-                    verbose,
-                    f"\t{cb_name}: disable GCContainer "
-                    f"({peak_allocated} -> {new_peak_allocated})",
-                )
-                peak_allocated = new_peak_allocated  # update the peak memory
+            _cprint(verbose, "Level 4: greedily disable GCContainers")
+            summary.applied_steps.append("level4_greedy_unwrap")
+            results = _inference_time_profile(net, dummy_input, ctx, device)
 
-    # Warm up in the main process to avoid 1st-time overhead
-    net = net.to(device)
-    dummy_input = _dummy_input_to_device(dummy_input, device)
-    _dummy_train_step(net, dummy_input, restore_bn=True)
+            for r in results:
+                cb_name = r[0]
+                cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
+
+                # try to unwrap the GCContainer
+                ucb = _unwrap_gc_container(cb)
+                setattr(parent, child_name, ucb)
+
+                # if the peak memory increases, revert; otherwise, keep the change
+                new_peak_allocated, _ = _train_peak_memory(
+                    net,
+                    dummy_input,
+                    ctx,
+                    device,
+                    worker_warmup=warmup_in_profile_workers,
+                )
+                if new_peak_allocated > peak_allocated:
+                    _cprint(
+                        verbose,
+                        f"\t{cb_name}: keep GCContainer "
+                        f"({peak_allocated} -> {new_peak_allocated})",
+                    )
+                    setattr(parent, child_name, cb)
+                else:
+                    _cprint(
+                        verbose,
+                        f"\t{cb_name}: disable GCContainer "
+                        f"({peak_allocated} -> {new_peak_allocated})",
+                    )
+                    peak_allocated = new_peak_allocated  # update the peak memory
+                    summary.unwrap_count += 1
+
+    if warmup_in_main_process and dummy_input is not None:
+        # Warm up in the main process to avoid 1st-time overhead.
+        net = net.to(device)
+        dummy_input = _dummy_input_to_device(dummy_input, device)
+        _dummy_train_step(net, dummy_input, restore_bn=True)
 
     et = time.time()
     _cprint(verbose, f"Total time: {et - st:.2f}s")
-    return net.cpu()  # must return a model on CPU
+    net = net.cpu()  # must return a model on CPU
+    summary.gc_container_count = sum(
+        1 for m in net.modules() if isinstance(m, GCContainer)
+    )
+    summary.tcgc_container_count = sum(
+        1 for m in net.modules() if isinstance(m, TCGCContainer)
+    )
+    summary.recommendation = _build_memopt_recommendation(summary)
+    if return_summary:
+        return net, summary
+    return net

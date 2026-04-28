@@ -3,12 +3,11 @@ https://github.com/AllenYolk/flash-snn/tree/main/flashsnn/utils
 https://github.com/fla-org/flash-linear-attention/blob/main/fla/utils.py
 """
 
-import atexit
 import contextlib
 import functools
 import os
+import tempfile
 import threading
-from pathlib import Path
 from typing import Callable
 
 import torch
@@ -112,13 +111,57 @@ def contiguous_and_device_guard(f: Callable) -> Callable:
                 if isinstance(value, torch.Tensor):
                     first_tensor = value
                     break
-        if first_tensor is not None:
+        if first_tensor is not None and first_tensor.device.type == "cuda":
             ctx = torch.cuda.device(first_tensor.device.index)
         else:
             ctx = contextlib.nullcontext()
 
         with ctx:
             return f(*contiguous_args, **contiguous_kwargs)
+
+    return wrapper
+
+
+_TMP_PY_LOCK = threading.Lock()
+_TMP_PY_TRACKER = threading.local()
+
+
+def ensure_cleanup_tmp_python_files(f: Callable) -> Callable:
+    """Remove temporary python files returned or created by a wrapped function."""
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        with _TMP_PY_LOCK:
+            tmp_paths = []
+            _TMP_PY_TRACKER.paths = tmp_paths
+            original_named_temporary_file = tempfile.NamedTemporaryFile
+
+            def tracking_named_temporary_file(*ntf_args, **ntf_kwargs):
+                tmp = original_named_temporary_file(*ntf_args, **ntf_kwargs)
+                tmp_name = getattr(tmp, "name", None)
+                if isinstance(tmp_name, str) and tmp_name.endswith(".py"):
+                    thread_paths = getattr(_TMP_PY_TRACKER, "paths", None)
+                    if thread_paths is not None:
+                        thread_paths.append(tmp_name)
+                return tmp
+
+            tempfile.NamedTemporaryFile = tracking_named_temporary_file
+            try:
+                result = f(*args, **kwargs)
+                if isinstance(result, str) and result.endswith(".py"):
+                    tmp_paths.append(result)
+                elif isinstance(result, tempfile._TemporaryFileWrapper):
+                    tmp_paths.append(result.name)
+                return result
+            finally:
+                tempfile.NamedTemporaryFile = original_named_temporary_file
+                for path in tmp_paths:
+                    try:
+                        if path and os.path.exists(path):
+                            os.remove(path)
+                    except OSError:
+                        pass
+                _TMP_PY_TRACKER.paths = []
 
     return wrapper
 
@@ -134,28 +177,3 @@ if _check_pytorch_version("2.4"):
 else:
     amp_custom_fwd = torch.cuda.amp.custom_fwd
     amp_custom_bwd = torch.cuda.amp.custom_bwd
-
-_CLEANUP_TMP_PYTHON_FILES_REGISTERED = False
-_CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK = threading.Lock()
-
-
-def cleanup_tmp_python_files():
-    print("Cleaning up temporary python files!")
-    for f in Path("/tmp").glob("*.py"):
-        try:
-            f.unlink(missing_ok=True)
-        except BaseException:
-            pass  # ignore the errors
-
-
-def ensure_cleanup_tmp_python_files(fn):
-    @functools.wraps(fn)
-    def wrapper(*args, **kwargs):
-        global _CLEANUP_TMP_PYTHON_FILES_REGISTERED
-        with _CLEANUP_TMP_PYTHON_FILES_REGISTERED_LOCK:
-            if not _CLEANUP_TMP_PYTHON_FILES_REGISTERED:
-                atexit.register(cleanup_tmp_python_files)
-                _CLEANUP_TMP_PYTHON_FILES_REGISTERED = True
-        return fn(*args, **kwargs)
-
-    return wrapper
