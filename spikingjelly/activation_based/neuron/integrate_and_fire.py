@@ -184,7 +184,7 @@ class IFNode(BaseNode):
         if self.step_mode == "s":
             return ("torch", "cupy")
         elif self.step_mode == "m":
-            return ("torch", "cupy", "triton")
+            return ("torch", "cupy", "triton", "inductor")
         else:
             raise ValueError(self.step_mode)
 
@@ -243,7 +243,59 @@ class IFNode(BaseNode):
         v = v - spike * v_threshold
         return spike, v
 
+    def _build_inductor_multi_step_graph(self):
+        store_v_seq = self.store_v_seq
+        soft_reset = self.v_reset is None
+        v_reset = 0.0 if soft_reset else self.v_reset
+        surrogate_fn = self.surrogate_function
+        v_threshold = self.v_threshold
+        detach_reset = self.detach_reset
+
+        def _graph(x_seq: torch.Tensor, v_init: torch.Tensor):
+            v = v_init
+            spike_seq = torch.empty_like(x_seq)
+            if store_v_seq:
+                v_seq = torch.empty_like(x_seq)
+            for t in range(x_seq.shape[0]):
+                v = v + x_seq[t]
+                spike = surrogate_fn(v - v_threshold)
+                spike_d = spike.detach() if detach_reset else spike
+                if soft_reset:
+                    v = v - spike_d * v_threshold
+                else:
+                    v = spike_d * v_reset + (1.0 - spike_d) * v
+                spike_seq[t] = spike
+                if store_v_seq:
+                    v_seq[t] = v
+            if store_v_seq:
+                return spike_seq, v, v_seq
+            return spike_seq, v
+
+        return _graph
+
+    def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
+        self.v_float_to_tensor(x_seq[0])
+        graph = self._compile_inductor_graph(
+            (
+                "if",
+                self.store_v_seq,
+                self.v_threshold,
+                self.v_reset,
+                self.detach_reset,
+                self._surrogate_inductor_cache_key(),
+            ),
+            self._build_inductor_multi_step_graph(),
+        )
+        out = graph(x_seq, self.v)
+        if self.store_v_seq:
+            spike_seq, self.v, self.v_seq = out
+        else:
+            spike_seq, self.v = out
+        return spike_seq
+
     def multi_step_forward(self, x_seq: torch.Tensor):
+        if self.backend == "inductor":
+            return self._inductor_multi_step_forward(x_seq)
         if self.training:
             if self.backend == "torch":
                 return super().multi_step_forward(x_seq)
@@ -282,13 +334,11 @@ class IFNode(BaseNode):
                     )
 
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = ac_neuron_kernel.multistep_if(
+                spike_seq, v_seq = ac_neuron_kernel.IFNodeATGF.apply(
                     x_seq.flatten(1),
                     self.v.flatten(0),
                     self.v_threshold,
                     self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
                     self.forward_kernel,
                     self.backward_kernel,
                 )

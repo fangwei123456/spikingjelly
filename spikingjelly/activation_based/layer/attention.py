@@ -397,10 +397,15 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         qkv = self.qkv_conv_bn(x_seq)
         qkv = self.qkv_lif(qkv)  # [T, N, 3*C, L]
-        qkv = qkv.reshape(T, N, 3, self.num_heads, C // self.num_heads, L)
+        local_dim = qkv.shape[2] // 3
+        if local_dim % self.num_heads != 0:
+            raise ValueError(
+                f"local qkv dim {local_dim} is not divisible by num_heads={self.num_heads}."
+            )
+        qkv = qkv.reshape(T, N, 3, self.num_heads, local_dim // self.num_heads, L)
 
         x_seq = self._ssa_kernel_torch(qkv, self.scale)
-        x_seq = self.attn_lif(x_seq).reshape(T, N, C, L)
+        x_seq = self.attn_lif(x_seq).reshape(T, N, local_dim, L)
 
         x_seq = self.proj_conv_bn(x_seq)
         x_seq = self.proj_lif(x_seq)  # [T, N, C, L]
