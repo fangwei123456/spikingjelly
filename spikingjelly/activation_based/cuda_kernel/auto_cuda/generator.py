@@ -7,6 +7,38 @@ import sys
 
 
 def hash_str(x: object):
+    r"""
+    **API Language:**
+    :ref:`中文 <hash_str-cn>` | :ref:`English <hash_str-en>`
+
+    ----
+
+    .. _hash_str-cn:
+
+    * **中文**
+
+    计算对象 ``x`` 的哈希值，并将负值转换为以下划线开头的字符串形式，便于生成合法且稳定的 CUDA 内核名称片段。
+
+    :param x: 任意可哈希对象。
+    :type x: object
+
+    :return: 若 ``hash(x) < 0``，返回 ``\"_\" + str(-hash(x))``；否则返回非负哈希值本身。
+    :rtype: typing.Union[str, int]
+
+    ----
+
+    .. _hash_str-en:
+
+    * **English**
+
+    Compute the hash value of ``x``. If the hash is negative, convert it to an underscore-prefixed string so it can be used safely in generated CUDA kernel name fragments.
+
+    :param x: Any hashable object.
+    :type x: object
+
+    :return: ``\"_\" + str(-hash(x))`` when ``hash(x) < 0``; otherwise the non-negative hash value itself.
+    :rtype: typing.Union[str, int]
+    """
     hash_code = hash(x)
     if hash_code < 0:
         return f"_{-hash_code}"
@@ -15,6 +47,56 @@ def hash_str(x: object):
 
 
 class VarNode:
+    r"""
+    **API Language:**
+    :ref:`中文 <varnode-cn>` | :ref:`English <varnode-en>`
+
+    ----
+
+    .. _varnode-cn:
+
+    * **中文**
+
+    自动 CUDA 代码生成中的变量节点描述类。该类统一管理节点的调试名称、规范化名称、类型信息、常量值与梯度相关属性，并提供前向/反向代码生成时使用的 CUDA 变量名访问接口。
+
+    :param prefix: 节点名称前缀，用于区分输入、中间量与输出等作用域。
+    :type prefix: str
+
+    :param name: 原始节点名称（例如 FX 图中的名字），会被规范化用于 CUDA 变量命名。
+    :type name: str
+
+    :param instance: 节点的实例类型或类型标识（如 ``Tensor``、``float``、``int``）。
+    :type instance: object
+
+    :param value: 常量节点的字面值；为 ``None`` 时表示该节点对应可索引或可传参变量。
+    :type value: typing.Optional[object]
+
+    :return: 变量节点对象。
+    :rtype: VarNode
+
+    ----
+
+    .. _varnode-en:
+
+    * **English**
+
+    Variable-node descriptor used by the auto CUDA code generator. It centralizes debug names, normalized names, type metadata, constant values, and gradient-related flags, and exposes CUDA variable-name accessors for forward/backward code emission.
+
+    :param prefix: Name prefix used to separate scopes such as input/intermediate/output.
+    :type prefix: str
+
+    :param name: Raw node name (for example from an FX graph); it will be normalized for CUDA variable naming.
+    :type name: str
+
+    :param instance: Instance/type identifier (for example ``Tensor``, ``float``, ``int``).
+    :type instance: object
+
+    :param value: Literal value for constant nodes; ``None`` means the node is treated as a variable input/indexed value.
+    :type value: typing.Optional[object]
+
+    :return: A variable node object.
+    :rtype: VarNode
+    """
     def __init__(self, prefix: str, name: str, instance: object, value=None):
         self.debug_name = name  # 原始的name形如 %8, v_last.1
         # 将原始的name进行转换
@@ -60,6 +142,52 @@ class VarNode:
 
 
 def analyse_graph(custom_fun, requires_grad: tuple):
+    r"""
+    **API Language:**
+    :ref:`中文 <analyse_graph-cn>` | :ref:`English <analyse_graph-en>`
+
+    ----
+
+    .. _analyse_graph-cn:
+
+    * **中文**
+
+    使用 ``torch.fx`` 对用户自定义函数 ``custom_fun`` 进行符号追踪，构建输入节点、中间节点、输出节点与可执行命令序列，用于后续自动生成 CUDA 前向/反向代码。当前仅支持通过 Python 算术运算符 ``+``、``-``、``*``、``/`` 表达的计算图。
+
+    :param custom_fun: 用户定义的前向函数；前两个参数必须分别为 ``x: torch.Tensor`` 和 ``v_last: torch.Tensor``，其余参数应提供类型注解。
+    :type custom_fun: typing.Callable
+
+    :param requires_grad: 与 ``custom_fun`` 参数一一对应的布尔元组，用于标记各输入是否需要梯度。
+    :type requires_grad: tuple
+
+    :return: ``(input_nodes, inter_nodes, output_nodes, cmds)``，分别表示输入节点映射、中间节点映射、输出节点映射和按执行顺序组织的命令列表。
+    :rtype: tuple
+
+    :raises ValueError: 当 ``custom_fun`` 参数数量不足、前两个参数签名不满足约束，或 ``requires_grad`` 长度与参数数量不一致时抛出。
+    :raises TypeError: 当参数缺失类型注解时抛出。
+    :raises NotImplementedError: 当图中存在不支持的节点类型、运算或参数/输出类型时抛出。
+
+    ----
+
+    .. _analyse_graph-en:
+
+    * **English**
+
+    Symbolically trace user function ``custom_fun`` with ``torch.fx`` and build input nodes, intermediate nodes, output nodes, and an executable command list for subsequent auto-generation of CUDA forward/backward code. Only computation graphs expressed via Python arithmetic operators ``+``, ``-``, ``*``, ``/`` are supported.
+
+    :param custom_fun: User-defined forward function. The first two parameters must be ``x: torch.Tensor`` and ``v_last: torch.Tensor``; remaining parameters should have type annotations.
+    :type custom_fun: typing.Callable
+
+    :param requires_grad: Boolean tuple aligned with ``custom_fun`` parameters, indicating whether each input requires gradients.
+    :type requires_grad: tuple
+
+    :return: ``(input_nodes, inter_nodes, output_nodes, cmds)``, representing input-node mapping, intermediate-node mapping, output-node mapping, and ordered command list.
+    :rtype: tuple
+
+    :raises ValueError: Raised when ``custom_fun`` has insufficient parameters, invalid first/second parameter signatures, or when ``requires_grad`` length mismatches parameter count.
+    :raises TypeError: Raised when a parameter annotation is missing.
+    :raises NotImplementedError: Raised when unsupported node kinds, operations, or argument/output types are encountered.
+    """
     # Map from torch.fx operator targets to aten-style kind strings
     _FX_TO_KIND = {
         _op.add: "aten::add",
@@ -227,6 +355,68 @@ def gen_forward_codes(
     cmds: list,
     hard_reset: bool,
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <gen_forward_codes-cn>` | :ref:`English <gen_forward_codes-en>`
+
+    ----
+
+    .. _gen_forward_codes-cn:
+
+    * **中文**
+
+    根据 ``analyse_graph`` 产生的节点与命令信息，生成单输出神经元更新逻辑对应的 CUDA 前向 kernel 源码、kernel 名称以及逐条算子语句列表。该函数会按 ``hard_reset`` 配置拼接膜电位重置分支，并自动补充 kernel 参数声明。
+
+    :param input_nodes: 输入节点字典，键为节点名，值为 :class:`VarNode`。
+    :type input_nodes: dict
+
+    :param inter_nodes: 中间节点字典，键为节点名，值为 :class:`VarNode`。
+    :type inter_nodes: dict
+
+    :param output_nodes: 输出节点字典；当前实现要求仅包含一个输出节点。
+    :type output_nodes: dict
+
+    :param cmds: 计算命令列表，每项为 ``(output_var, op_kind, input_vars)``。
+    :type cmds: list
+
+    :param hard_reset: 是否使用 hard reset 分支更新 ``v_v_seq[t + dt]``。
+    :type hard_reset: bool
+
+    :return: ``(codes, kernel_name, cuda_cmds)``，分别为完整 CUDA 源码字符串、生成的 kernel 名称和前向算子代码片段列表。
+    :rtype: tuple
+
+    :raises AssertionError: 当输出节点数量不为 1 或命名冲突断言不满足时抛出。
+    :raises NotImplementedError: 当遇到不支持的节点实例类型或算子类型时抛出。
+
+    ----
+
+    .. _gen_forward_codes-en:
+
+    * **English**
+
+    Generate CUDA forward-kernel source, kernel name, and per-operation CUDA statements from the graph nodes and commands produced by ``analyse_graph``. The function assembles membrane-reset branches according to ``hard_reset`` and auto-infers kernel parameter declarations.
+
+    :param input_nodes: Input-node dictionary mapping node names to :class:`VarNode`.
+    :type input_nodes: dict
+
+    :param inter_nodes: Intermediate-node dictionary mapping node names to :class:`VarNode`.
+    :type inter_nodes: dict
+
+    :param output_nodes: Output-node dictionary; current implementation requires exactly one output node.
+    :type output_nodes: dict
+
+    :param cmds: Ordered computation commands, each as ``(output_var, op_kind, input_vars)``.
+    :type cmds: list
+
+    :param hard_reset: Whether to emit the hard-reset branch for updating ``v_v_seq[t + dt]``.
+    :type hard_reset: bool
+
+    :return: ``(codes, kernel_name, cuda_cmds)``, i.e., full CUDA source string, generated kernel name, and list of forward CUDA statement snippets.
+    :rtype: tuple
+
+    :raises AssertionError: Raised when output-node count is not one or when naming-conflict assertions fail.
+    :raises NotImplementedError: Raised for unsupported node instance kinds or operator kinds.
+    """
     # 暂时只支持单个输出
     assert output_nodes.__len__() == 1
 
@@ -408,12 +598,79 @@ def gen_backward_codes(
     detach_reset: bool,
     surrogate_fuction,
 ):
-    """
-    用户定义的前向传播函数为
-    h_seq[t] = fun(x_seq[t], v_v_seq[t], ...)
+    r"""
+    **API Language:**
+    :ref:`中文 <gen_backward_codes-cn>` | :ref:`English <gen_backward_codes-en>`
 
-    需要计算出 h_seq[t] -> x_seq[t] 的梯度和 h_seq[t] -> v_v_seq[t]的梯度
-    还需要考虑 ... 中如果有tensor，可以增加flag，决定是否计算h_seq[t]对其的梯度
+    ----
+
+    .. _gen_backward_codes-cn:
+
+    * **中文**
+
+    基于前向命令序列自动生成 CUDA 反向 kernel 代码，用于递推计算 ``h_seq[t]`` 对输入序列、初始膜电位以及可选额外输入的梯度。函数会结合 ``hard_reset``、``detach_reset`` 与替代梯度函数 ``surrogate_fuction`` 生成对应反向传播逻辑。
+
+    :param cuda_cmds: 前向阶段生成的 CUDA 算子语句列表，用于注释与回溯反向链路。
+    :type cuda_cmds: list
+
+    :param input_nodes: 输入节点字典，键为节点名，值为 :class:`VarNode`。
+    :type input_nodes: dict
+
+    :param output_nodes: 输出节点字典，键为节点名，值为 :class:`VarNode`。
+    :type output_nodes: dict
+
+    :param cmds: 按前向执行顺序保存的命令列表，每项为 ``(output_var, op_kind, input_vars)``。
+    :type cmds: list
+
+    :param hard_reset: 是否采用 hard reset 的膜电位更新规则。
+    :type hard_reset: bool
+
+    :param detach_reset: 是否在 reset 分支中截断梯度传播。
+    :type detach_reset: bool
+
+    :param surrogate_fuction: 提供 ``cuda_code`` 接口的替代梯度对象，用于生成脉冲函数梯度代码。
+    :type surrogate_fuction: object
+
+    :return: ``(codes, kernel_name, input_bp_vars)``，分别为完整反向 CUDA 源码、kernel 名称和反向计算所依赖的输入变量名列表。
+    :rtype: tuple
+
+    :raises AssertionError: 当反向所需节点与参数命名冲突检查失败时抛出。
+    :raises NotImplementedError: 当遇到不支持的算子类型或节点实例类型时抛出。
+
+    ----
+
+    .. _gen_backward_codes-en:
+
+    * **English**
+
+    Auto-generate CUDA backward-kernel code from forward command sequences to recursively compute gradients from ``h_seq[t]`` to input sequences, initial membrane potential, and optional extra inputs. The emitted logic incorporates ``hard_reset``, ``detach_reset``, and the provided surrogate-gradient object ``surrogate_fuction``.
+
+    :param cuda_cmds: Forward CUDA statement list, used for comments and backward-chain tracing.
+    :type cuda_cmds: list
+
+    :param input_nodes: Input-node dictionary mapping names to :class:`VarNode`.
+    :type input_nodes: dict
+
+    :param output_nodes: Output-node dictionary mapping names to :class:`VarNode`.
+    :type output_nodes: dict
+
+    :param cmds: Forward-ordered command list, each item being ``(output_var, op_kind, input_vars)``.
+    :type cmds: list
+
+    :param hard_reset: Whether hard-reset membrane update is used.
+    :type hard_reset: bool
+
+    :param detach_reset: Whether gradients are detached through the reset branch.
+    :type detach_reset: bool
+
+    :param surrogate_fuction: Surrogate-gradient object exposing a ``cuda_code`` method for spike-gradient code generation.
+    :type surrogate_fuction: object
+
+    :return: ``(codes, kernel_name, input_bp_vars)``, i.e., full backward CUDA source, generated kernel name, and list of input variable names required by backward computation.
+    :rtype: tuple
+
+    :raises AssertionError: Raised when assertions for backward-node/parameter consistency fail.
+    :raises NotImplementedError: Raised for unsupported operator kinds or node instance kinds.
     """
 
     input_bp_nodes = {}
