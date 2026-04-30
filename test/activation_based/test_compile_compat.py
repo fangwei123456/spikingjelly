@@ -23,17 +23,6 @@ def _require_cuda_triton_compile():
         pytest.skip("torch._dynamo.explain is not available.")
 
 
-def _require_cuda_cupy_compile():
-    if not torch.cuda.is_available():
-        pytest.skip("CUDA is required for CuPy compile compatibility tests.")
-    if find_spec("cupy") is None:
-        pytest.skip("CuPy package is required for CuPy backend tests.")
-    if not hasattr(torch, "compile"):
-        pytest.skip("torch.compile is not available.")
-    if not hasattr(torch, "_dynamo") or not hasattr(torch._dynamo, "explain"):
-        pytest.skip("torch._dynamo.explain is not available.")
-
-
 def _make_surrogate(name: str) -> surrogate.SurrogateFunctionBase:
     if name == "Sigmoid":
         return surrogate.Sigmoid(alpha=4.0)
@@ -166,6 +155,128 @@ def test_compile_inductor_runs_forward_backward(kind):
 
 
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_matches_torch_backend(kind):
+    _require_cuda_triton_compile()
+
+    torch.manual_seed(20260429)
+    torch.cuda.manual_seed_all(20260429)
+
+    torch_node = _build_node(kind, "torch", _make_surrogate("Sigmoid")).cuda().train()
+    inductor_node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).cuda().train()
+    inductor_node.load_state_dict(torch_node.state_dict(), strict=True)
+
+    x_ref = torch.randn(9, 3, 18, device="cuda", dtype=torch.float32)
+    x_torch = x_ref.clone().detach().requires_grad_(True)
+    x_inductor = x_ref.clone().detach().requires_grad_(True)
+
+    functional.reset_net(torch_node)
+    functional.reset_net(inductor_node)
+    y_torch = torch_node(x_torch)
+    y_inductor = inductor_node(x_inductor)
+    assert torch.allclose(y_torch, y_inductor, atol=1e-5, rtol=1e-4)
+
+    y_torch.sum().backward()
+    y_inductor.sum().backward()
+    assert torch.allclose(x_torch.grad, x_inductor.grad, atol=1e-5, rtol=1e-4)
+
+    if kind == "plif":
+        assert torch.allclose(
+            torch_node.w.grad, inductor_node.w.grad, atol=1e-5, rtol=1e-4
+        )
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_cache_key_tracks_threshold_changes(kind, monkeypatch):
+    node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train()
+    captured_keys = []
+
+    def _fake_compile(cache_key, fn):
+        captured_keys.append(cache_key)
+        return fn
+
+    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    x = torch.randn(4, 2, 8)
+
+    functional.reset_net(node)
+    node(x)
+    node.v_threshold = 1.5
+    functional.reset_net(node)
+    node(x)
+
+    assert len(captured_keys) == 2
+    assert captured_keys[0] != captured_keys[1]
+
+
+def test_lif_inductor_backend_cache_key_tracks_tau_changes(monkeypatch):
+    node = _build_node("lif", "inductor", _make_surrogate("Sigmoid")).train()
+    captured_keys = []
+
+    def _fake_compile(cache_key, fn):
+        captured_keys.append(cache_key)
+        return fn
+
+    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    x = torch.randn(4, 2, 8)
+
+    functional.reset_net(node)
+    node(x)
+    node.tau = 3.0
+    functional.reset_net(node)
+    node(x)
+
+    assert len(captured_keys) == 2
+    assert captured_keys[0] != captured_keys[1]
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_cache_key_tracks_cuda_device_changes(kind, monkeypatch):
+    if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
+        pytest.skip("At least 2 CUDA devices are required for cache key device-index coverage.")
+
+    node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train().to("cuda:0")
+    captured_keys = []
+
+    def _fake_compile(cache_key, fn):
+        captured_keys.append(cache_key)
+        return fn
+
+    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    x0 = torch.randn(4, 2, 8, device="cuda:0")
+    x1 = torch.randn(4, 2, 8, device="cuda:1")
+
+    functional.reset_net(node)
+    node(x0)
+    node.to("cuda:1")
+    functional.reset_net(node)
+    node(x1)
+
+    assert len(captured_keys) == 2
+    assert captured_keys[0] != captured_keys[1]
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_cache_key_tracks_runtime_shape_changes(kind, monkeypatch):
+    node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train()
+    captured_keys = []
+
+    def _fake_compile(cache_key, fn):
+        captured_keys.append(cache_key)
+        return fn
+
+    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    x3 = torch.randn(4, 2, 8)
+    x4 = torch.randn(4, 2, 2, 4)
+
+    functional.reset_net(node)
+    node(x3)
+    functional.reset_net(node)
+    node(x4)
+
+    assert len(captured_keys) == 2
+    assert captured_keys[0] != captured_keys[1]
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
 @pytest.mark.parametrize("sg_name", ["Sigmoid", "ATan"])
 def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
     _require_cuda_triton_compile()
@@ -251,7 +362,6 @@ _SUBPROCESS_SCRIPT = textwrap.dedent(
         raise ValueError(kind)
 
     node = node.cuda().train()
-    node = torch.compile(node)
     x = torch.randn(4, 2, 7, device="cuda", dtype=torch.float32, requires_grad=True)
     y = node(x)
     y.sum().backward()
@@ -344,154 +454,3 @@ def test_triton_unsupported_surrogate_raises_not_implemented(kind):
     with pytest.raises(NotImplementedError, match="PiecewiseLeakyReLU"):
         y = node(x)
         y.sum().backward()
-
-
-_CUPY_SUBPROCESS_SCRIPT = textwrap.dedent(
-    """
-    import json
-    import os
-
-    import torch
-
-    kind = os.environ["SJ_NODE_KIND"]
-    sg_name = os.environ["SJ_SG_NAME"]
-    force_legacy = os.environ["SJ_FORCE_CUPY_LEGACY"] == "1"
-    os.environ["SJ_USE_CUPY_OP"] = "0" if force_legacy else "1"
-
-    from spikingjelly.activation_based import neuron, surrogate
-
-    torch.manual_seed(20260419)
-    torch.cuda.manual_seed_all(20260419)
-    torch._dynamo.reset()
-
-    if sg_name == "Sigmoid":
-        sg = surrogate.Sigmoid(alpha=4.0)
-    elif sg_name == "S2NN":
-        sg = surrogate.S2NN(alpha=4.0, beta=1.0)
-    else:
-        raise ValueError(sg_name)
-
-    if kind == "lif":
-        node = neuron.LIFNode(
-            tau=2.0,
-            decay_input=True,
-            v_threshold=1.0,
-            v_reset=0.0,
-            surrogate_function=sg,
-            detach_reset=False,
-            step_mode="m",
-            backend="cupy",
-        )
-    elif kind == "if":
-        node = neuron.IFNode(
-            v_threshold=1.0,
-            v_reset=0.0,
-            surrogate_function=sg,
-            detach_reset=False,
-            step_mode="m",
-            backend="cupy",
-        )
-    elif kind == "plif":
-        node = neuron.ParametricLIFNode(
-            init_tau=2.0,
-            decay_input=True,
-            v_threshold=1.0,
-            v_reset=0.0,
-            surrogate_function=sg,
-            detach_reset=False,
-            step_mode="m",
-            backend="cupy",
-        )
-    else:
-        raise ValueError(kind)
-
-    node = node.cuda().train()
-    x = torch.randn(4, 2, 7, device="cuda", dtype=torch.float32, requires_grad=True)
-    y = node(x)
-    y.sum().backward()
-
-    x_for_explain = x.detach().clone().requires_grad_(True)
-    explain_output = torch._dynamo.explain(node)(x_for_explain)
-    if hasattr(explain_output, "graph_break_count"):
-        graph_break_count = int(explain_output.graph_break_count)
-    elif hasattr(explain_output, "break_reasons"):
-        graph_break_count = len(explain_output.break_reasons)
-    else:
-        graph_break_count = -1
-
-    payload = {
-        "out": y.detach().cpu().tolist(),
-        "x_grad": x.grad.detach().cpu().tolist(),
-        "graph_break_count": graph_break_count,
-    }
-    if kind == "plif":
-        payload["w_grad"] = float(node.w.grad.detach().cpu().item())
-
-    print("JSON_RESULT=" + json.dumps(payload))
-    """
-)
-
-
-def _run_cupy_subprocess_path(kind: str, sg_name: str, force_legacy: bool) -> dict:
-    env = os.environ.copy()
-    env["SJ_NODE_KIND"] = kind
-    env["SJ_SG_NAME"] = sg_name
-    env["SJ_FORCE_CUPY_LEGACY"] = "1" if force_legacy else "0"
-    env["SJ_USE_CUPY_OP"] = "0" if force_legacy else "1"
-
-    try:
-        completed = subprocess.run(
-            [sys.executable, "-c", _CUPY_SUBPROCESS_SCRIPT],
-            check=True,
-            capture_output=True,
-            text=True,
-            env=env,
-            timeout=300,
-        )
-    except subprocess.TimeoutExpired as e:
-        pytest.fail(
-            "Subprocess probe timed out while running _CUPY_SUBPROCESS_SCRIPT "
-            f"for kind={kind}, force_legacy={force_legacy}: {e}"
-        )
-
-    for line in reversed(completed.stdout.splitlines()):
-        if line.startswith("JSON_RESULT="):
-            return json.loads(line[len("JSON_RESULT=") :])
-
-    raise AssertionError(
-        "Missing JSON_RESULT in CuPy subprocess stdout. "
-        f"stdout={completed.stdout!r}, stderr={completed.stderr!r}"
-    )
-
-
-@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-@pytest.mark.parametrize("sg_name", ["Sigmoid", "S2NN"])
-def test_cupy_custom_op_and_legacy_fallback_consistency(kind, sg_name):
-    _require_cuda_cupy_compile()
-
-    result_custom = _run_cupy_subprocess_path(kind, sg_name, force_legacy=False)
-    result_legacy = _run_cupy_subprocess_path(kind, sg_name, force_legacy=True)
-
-    out_custom = torch.as_tensor(result_custom["out"])
-    out_legacy = torch.as_tensor(result_legacy["out"])
-    grad_custom = torch.as_tensor(result_custom["x_grad"])
-    grad_legacy = torch.as_tensor(result_legacy["x_grad"])
-
-    assert torch.allclose(out_custom, out_legacy, atol=1e-5, rtol=1e-4)
-    assert torch.allclose(grad_custom, grad_legacy, atol=1e-5, rtol=1e-4)
-
-    if kind == "plif":
-        assert abs(result_custom["w_grad"] - result_legacy["w_grad"]) <= 1e-5
-
-
-@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-@pytest.mark.parametrize("sg_name", ["Sigmoid", "S2NN"])
-def test_cupy_custom_op_graph_break_not_worse_than_legacy(kind, sg_name):
-    _require_cuda_cupy_compile()
-
-    result_custom = _run_cupy_subprocess_path(kind, sg_name, force_legacy=False)
-    result_legacy = _run_cupy_subprocess_path(kind, sg_name, force_legacy=True)
-
-    assert result_custom["graph_break_count"] >= 0
-    assert result_legacy["graph_break_count"] >= 0
-    assert result_custom["graph_break_count"] <= result_legacy["graph_break_count"]

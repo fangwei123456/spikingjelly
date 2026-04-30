@@ -31,6 +31,7 @@
     /tutorials/cn/triton_flexsn
     /tutorials/cn/flexsn_inductor
     /tutorials/cn/memopt
+    /tutorials/cn/distributed_training
     /tutorials/cn/dsqn
     /tutorials/cn/ilc_san
     /tutorials/cn/train_large_scale_snn
