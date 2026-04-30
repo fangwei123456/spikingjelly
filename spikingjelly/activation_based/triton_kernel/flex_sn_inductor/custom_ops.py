@@ -317,16 +317,24 @@ def _flexsn_inductor_backward_impl(
     bundle: FlexSNKernelHandle,
     grad_outputs: List[torch.Tensor],
     saved_tensors: List[torch.Tensor],
+    input_templates: List[torch.Tensor],
 ) -> List[torch.Tensor]:
     grads = [grad.contiguous() for grad in grad_outputs]
     saved = [tensor.contiguous() for tensor in saved_tensors]
-    with _device_guard([*grads, *saved]):
+    templates = [tensor.contiguous() for tensor in input_templates]
+    info = bundle.training_info
+    assert info is not None
+    seq_templates = templates[: info.num_inputs]
+    state_templates = templates[info.num_inputs : info.num_inputs + info.num_states]
+    with _device_guard([*grads, *saved, *templates]):
         return list(
             flexsn_backward(
                 bundle.backward_kernel,
-                bundle.training_info,
+                info,
                 *grads,
                 *saved,
+                input_templates=seq_templates,
+                state_templates=state_templates,
             )
         )
 
@@ -455,7 +463,12 @@ def flexsn_inductor_backward(
     bundle = _lookup_kernel_handle(handle)
     if bundle.backward_kernel is None or bundle.training_info is None:
         raise RuntimeError("FlexSN backward kernel is unavailable for this handle.")
-    return _flexsn_inductor_backward_impl(bundle, grad_outputs, saved_tensors)
+    return _flexsn_inductor_backward_impl(
+        bundle,
+        grad_outputs,
+        saved_tensors,
+        input_templates,
+    )
 
 
 @torch.library.register_fake("sj::flexsn_inductor_backward")

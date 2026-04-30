@@ -613,6 +613,55 @@ def test_flexsn_wrapper_t0_backward_uses_input_templates_for_state_only_core(mon
     torch.testing.assert_close(grad_v, torch.zeros_like(grad_v))
 
 
+def test_flexsn_wrapper_backward_uses_state_templates_for_state_only_core(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    class _FakeKernel:
+        def __getitem__(self, grid):
+            def _run(*args, **kwargs):
+                return None
+
+            return _run
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=0)
+    input_template = torch.empty(2, 2, 3)
+    state_template = torch.empty(6)
+    grad_state_seq = torch.empty(2, 2, 3)
+
+    monkeypatch.setitem(wrapper.type_dict, grad_state_seq.dtype, "float32")
+
+    grad_x, grad_v = wrapper.flexsn_backward(
+        _FakeKernel(),
+        info,
+        grad_state_seq,
+        input_templates=(input_template,),
+        state_templates=(state_template,),
+    )
+
+    assert grad_x.shape == input_template.shape
+    assert grad_v.shape == state_template.shape
+
+
+def test_flexsn_wrapper_backward_all_none_gradients_use_templates():
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
+    input_template = torch.randn(2, 2, 3)
+    state_template = torch.randn(6)
+
+    grad_x, grad_v = wrapper.flexsn_backward(
+        None,
+        info,
+        None,
+        None,
+        input_templates=(input_template,),
+        state_templates=(state_template,),
+    )
+
+    torch.testing.assert_close(grad_x, torch.zeros_like(input_template))
+    torch.testing.assert_close(grad_v, torch.zeros_like(state_template))
+
+
 def test_inductor_final_state_warmup_args_use_example_shapes():
     info = SimpleNamespace(num_inputs=2, num_states=2)
     specs = (
@@ -769,6 +818,48 @@ def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
     )
     torch.testing.assert_close(grads[0], torch.zeros_like(x))
     torch.testing.assert_close(grads[1], torch.zeros_like(v))
+
+
+def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+        custom_ops,
+    )
+
+    input_template = torch.randn(2, 2, 3)
+    state_template = torch.randn(6)
+    grad_state_seq = torch.randn(2, 2, 3)
+    bundle = SimpleNamespace(
+        backward_kernel=object(),
+        training_info=SimpleNamespace(num_inputs=1, num_outputs=0, num_states=1),
+    )
+    seen = {}
+
+    def fake_backward(
+        kernel,
+        info,
+        *args,
+        input_templates=None,
+        state_templates=None,
+    ):
+        seen["input_templates"] = input_templates
+        seen["state_templates"] = state_templates
+        return [torch.zeros_like(input_template), torch.zeros_like(state_template)]
+
+    monkeypatch.setattr(custom_ops, "flexsn_backward", fake_backward)
+
+    grads = custom_ops._flexsn_inductor_backward_impl(
+        bundle,
+        [grad_state_seq],
+        [],
+        [input_template, state_template],
+    )
+
+    assert len(seen["input_templates"]) == 1
+    assert len(seen["state_templates"]) == 1
+    assert seen["input_templates"][0].shape == input_template.shape
+    assert seen["state_templates"][0].shape == state_template.shape
+    assert grads[0].shape == input_template.shape
+    assert grads[1].shape == state_template.shape
 
 
 @pytest.mark.parametrize("T", [1, 4, 16])
@@ -1456,6 +1547,41 @@ def test_hop_backend_zero_length_sequence_delegates_to_hop_scan(monkeypatch):
 
     assert calls["count"] == 1
     assert hop_out.shape == (0, 5)
+
+
+def test_hop_backend_runtime_templates_ignore_example_output_device(monkeypatch):
+    captured = {}
+
+    def fake_run_hop_scan(
+        core,
+        num_inputs,
+        num_states,
+        num_outputs,
+        store_state_seqs,
+        *flat_args,
+        output_template_specs=None,
+    ):
+        captured["output_template_specs"] = output_template_specs
+        return (flat_args[0].new_empty((0, 5)),)
+
+    monkeypatch.setattr(flexsn_module, "_run_hop_scan", fake_run_hop_scan)
+    hop_neuron = FlexSN(
+        core=lambda x: (x.new_empty(5),),
+        num_inputs=1,
+        num_states=0,
+        num_outputs=1,
+        step_mode="m",
+        backend="hop",
+        store_state_seqs=False,
+        example_inputs=(torch.zeros(2),),
+        example_outputs=(torch.empty(5, device="meta"),),
+    )
+
+    hop_out = hop_neuron(torch.empty(0, 2))
+
+    assert captured["output_template_specs"] == (((5,), torch.float32),)
+    assert hop_out.shape == (0, 5)
+    assert hop_out.device.type == "cpu"
 
 
 def test_compile_fullgraph_hop_store_state_seqs_false_matches_eager_with_lowerable_while_loop(

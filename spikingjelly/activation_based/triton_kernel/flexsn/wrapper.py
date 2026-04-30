@@ -71,6 +71,13 @@ def _make_grid(ncl: int):
     return grid
 
 
+def _first_non_none_tensor(tensors):
+    for tensor in tensors:
+        if tensor is not None:
+            return tensor
+    return None
+
+
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     """Run the inference kernel for a multi-step FlexSN core.
 
@@ -196,6 +203,7 @@ def flexsn_backward(
     info: FlexSNInfo,
     *args,
     input_templates=None,
+    state_templates=None,
 ) -> tuple:
     """Run the training backward kernel for FlexSN.
 
@@ -211,15 +219,34 @@ def flexsn_backward(
     :return: EN: Gradients for inputs and initial states. When ``T == 0``, returns zero-filled gradients. Chinese: 输入与初始状态的梯度；当 ``T == 0`` 时, 返回零填充梯度。
     :rtype: tuple
     """
-    grad_example = args[0]
-    T = grad_example.shape[0]
-    NCL = _num_elements_per_step(grad_example)
+    required_grad_count = info.num_outputs + info.num_states
+    grad_output_args = args[:required_grad_count]
+    grad_example = _first_non_none_tensor(grad_output_args)
     if input_templates is None:
+        if grad_example is None:
+            raise ValueError(
+                "input_templates are required when all incoming FlexSN gradients are None"
+            )
         input_templates = tuple(grad_example for _ in range(info.num_inputs))
     if len(input_templates) != info.num_inputs:
         raise ValueError(
             "input_templates must provide one template per FlexSN input sequence"
         )
+    if state_templates is not None and len(state_templates) != info.num_states:
+        raise ValueError(
+            "state_templates must provide one template per FlexSN initial state"
+        )
+    if grad_example is None:
+        if state_templates is None and info.num_states > 0:
+            raise ValueError(
+                "state_templates are required when all incoming FlexSN gradients are None"
+            )
+        grad_inputs = [torch.zeros_like(template) for template in input_templates]
+        if state_templates is not None:
+            grad_inputs.extend(torch.zeros_like(template) for template in state_templates)
+        return tuple(grad_inputs)
+    T = grad_example.shape[0]
+    NCL = _num_elements_per_step(grad_example)
     grad_inputs = [
         (
             torch.zeros_like(input_templates[i])
@@ -228,13 +255,19 @@ def flexsn_backward(
         )
         for i in range(info.num_inputs)
     ]
-    grad_state_seq_examples = args[
+    grad_state_seq_examples = grad_output_args[
         info.num_outputs : info.num_outputs + info.num_states
     ]
     # State-sequence gradients include the leading time dimension. The wrapper
     # returns gradients for the initial states, so their templates are shape[1:].
     grad_inputs += [
         (
+            torch.zeros_like(state_templates[i])
+            if T == 0
+            else torch.empty_like(state_templates[i])
+        )
+        if state_templates is not None
+        else (
             grad_state_seq_examples[i].new_zeros(grad_state_seq_examples[i].shape[1:])
             if T == 0
             else grad_state_seq_examples[i].new_empty(
@@ -297,6 +330,10 @@ class FlexSNFunction(autograd.Function):
                 (tuple(arg.shape), arg.dtype, arg.device)
                 for arg in args[: info.num_inputs]
             )
+            ctx.state_template_specs = tuple(
+                (tuple(arg.shape), arg.dtype, arg.device)
+                for arg in args[info.num_inputs : info.num_inputs + info.num_states]
+            )
         else:
             outputs_states = flexsn_inference(fn_inf, info, *args)
         if len(outputs_states) == 1:
@@ -314,11 +351,16 @@ class FlexSNFunction(autograd.Function):
             torch.empty(shape, dtype=dtype, device=device)
             for shape, dtype, device in getattr(ctx, "input_template_specs", ())
         )
+        state_templates = tuple(
+            torch.empty(shape, dtype=dtype, device=device)
+            for shape, dtype, device in getattr(ctx, "state_template_specs", ())
+        )
         grads = flexsn_backward(
             fn_bwd,
             ctx.info,
             *args,
             *required_results,
             input_templates=input_templates,
+            state_templates=state_templates,
         )
         return None, None, None, None, *grads

@@ -316,6 +316,14 @@ def _make_output_template_specs_from_outputs(
     return tuple(specs)
 
 
+def _runtime_output_template_specs(
+    output_template_specs: Optional[Tuple[Tuple, ...]],
+) -> Optional[Tuple[Tuple, ...]]:
+    if output_template_specs is None:
+        return None
+    return tuple((tuple(shape), dtype) for shape, dtype, *_ in output_template_specs)
+
+
 def _validate_scan_backend_output_template_specs(
     output_template_specs: Optional[Tuple[Tuple, ...]],
     example_inputs: Optional[Tuple[torch.Tensor, ...]],
@@ -736,7 +744,9 @@ class FlexSN(base.MemoryModule):
             num_outputs,
             example_outputs,
         )
-        self._output_template_specs = self._explicit_output_template_specs
+        self._output_template_specs = _runtime_output_template_specs(
+            self._explicit_output_template_specs
+        )
 
         if backend in ("triton", "inductor"):
             _validate_scan_backend_output_template_specs(
