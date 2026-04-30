@@ -31,6 +31,7 @@
     /tutorials/en/triton_flexsn
     /tutorials/en/flexsn_inductor
     /tutorials/en/memopt
+    /tutorials/en/distributed_training
     /tutorials/en/train_large_scale_snn
     /tutorials/en/spikformer
     /tutorials/en/lava_exchange

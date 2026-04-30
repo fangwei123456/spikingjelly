@@ -187,6 +187,7 @@ class BaseNode(base.MemoryModule):
         # used for cupy backend
         self.forward_kernel = None
         self.backward_kernel = None
+        self._inductor_compiled_graphs = {}
 
     @property
     def store_v_seq(self):
@@ -361,6 +362,69 @@ class BaseNode(base.MemoryModule):
                 )
             elif self.v.dtype != x.dtype or self.v.device != x.device:
                 self.v = self.v.to(dtype=x.dtype, device=x.device)
+
+    def _compile_inductor_graph(self, cache_key, fn):
+        compiled = self._inductor_compiled_graphs.get(cache_key)
+        if compiled is not None:
+            return compiled
+        if not hasattr(torch, "compile"):
+            raise RuntimeError(
+                f"{self._get_name()} backend='inductor' requires torch.compile."
+            )
+        compile_kwargs = {"backend": "inductor"}
+        try:
+            compiled = torch.compile(
+                fn,
+                **compile_kwargs,
+                options={
+                    "triton.cudagraphs": False,
+                    "triton.cudagraph_trees": False,
+                },
+            )
+        except TypeError:
+            compiled = torch.compile(fn, **compile_kwargs)
+        self._inductor_compiled_graphs[cache_key] = compiled
+        return compiled
+
+    @staticmethod
+    def _canonicalize_inductor_tensor(tensor: torch.Tensor) -> torch.Tensor:
+        return tensor.contiguous()
+
+    @staticmethod
+    def _inductor_tensor_signature(tensor: torch.Tensor):
+        return (
+            tuple(tensor.shape),
+            tensor.ndim,
+            str(tensor.dtype),
+            tensor.device.type,
+            tensor.device.index,
+            tensor.is_contiguous(),
+            bool(tensor.requires_grad),
+        )
+
+    def _inductor_runtime_cache_key(self, *tensors: torch.Tensor):
+        return tuple(self._inductor_tensor_signature(t) for t in tensors)
+
+    def _surrogate_inductor_cache_key(self):
+        sg = self.surrogate_function
+        params = tuple(sorted(getattr(sg, "_sg_params", {}).items()))
+        return (
+            type(sg).__module__,
+            type(sg).__qualname__,
+            getattr(sg, "spiking", None),
+            params,
+        )
+
+    def __getstate__(self):
+        state = super().__getstate__()
+        if "_inductor_compiled_graphs" in state:
+            state["_inductor_compiled_graphs"] = {}
+        return state
+
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        if not hasattr(self, "_inductor_compiled_graphs"):
+            self._inductor_compiled_graphs = {}
 
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
