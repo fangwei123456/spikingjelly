@@ -702,6 +702,7 @@ def test_flexsn_wrapper_backward_zero_fills_mixed_none_gradients(monkeypatch):
 
     info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
     grad_output = torch.randn(3, 4)
+    state_template = torch.randn(6)
     monkeypatch.setitem(wrapper.type_dict, grad_output.dtype, "float32")
 
     grad_x, grad_v = wrapper.flexsn_backward(
@@ -709,12 +710,35 @@ def test_flexsn_wrapper_backward_zero_fills_mixed_none_gradients(monkeypatch):
         info,
         grad_output,
         None,
+        state_templates=(state_template,),
     )
 
     torch.testing.assert_close(seen["grad_output"], grad_output)
     torch.testing.assert_close(seen["grad_state_seq"], torch.zeros_like(grad_output))
     torch.testing.assert_close(grad_x, torch.ones_like(grad_x))
     torch.testing.assert_close(grad_v, torch.ones_like(grad_v))
+
+
+def test_flexsn_wrapper_backward_requires_state_templates_for_missing_state_seq_grad():
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
+    grad_output = torch.randn(3, 4)
+
+    with pytest.raises(ValueError, match="state_templates are required"):
+        wrapper.flexsn_backward(None, info, grad_output, None)
+
+
+def test_flexsn_wrapper_backward_requires_input_templates_when_output_grads_missing():
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
+    grad_state_seq = torch.randn(3, 4)
+
+    with pytest.raises(
+        ValueError, match="output-sequence gradients are all None"
+    ):
+        wrapper.flexsn_backward(None, info, None, grad_state_seq)
 
 
 def test_inductor_final_state_warmup_args_use_example_shapes():
@@ -1360,6 +1384,23 @@ def test_eager_scan_empty_state_only_does_not_require_output_template():
     assert v_seq.shape == (0, 3)
     torch.testing.assert_close(v_final, v0)
     assert v_final is not v0
+
+
+def test_eager_scan_empty_sequence_validates_core_arity():
+    x = torch.empty(0, 2)
+    v0 = torch.zeros(2)
+    specs = (((2,), x.dtype),)
+
+    def bad_core(x_t, v_t, extra):
+        return x_t, v_t
+
+    with pytest.raises(ValueError, match="expected 2 tensor args"):
+        eager_scan(bad_core, 1, 1, 1, x, v0, output_template_specs=specs)
+
+    with pytest.raises(ValueError, match="expected 2 tensor args"):
+        eager_scan_final_state(
+            bad_core, 1, 1, 1, x, v0, output_template_specs=specs
+        )
 
 
 def test_inference_final_state_template_handles_zero_states(monkeypatch):

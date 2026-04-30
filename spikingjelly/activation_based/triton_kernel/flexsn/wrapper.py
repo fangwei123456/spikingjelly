@@ -257,11 +257,12 @@ def flexsn_backward(
         gradients. They are required when all incoming gradients are ``None`` and
         ensure that state-only cores still return correctly shaped input-sequence
         gradients. When omitted, the fallback allocation path is only valid for
-        single-input cores because it infers the input gradient shape from the
-        first non-``None`` incoming gradient. Chinese: 每个输入序列的模板, 用于分配
-        输入梯度。当所有传入梯度都为 ``None`` 时必须提供, 并确保仅有状态输出的 core
-        仍返回形状正确的输入梯度。若省略该参数, 当前仅支持单输入 core, 因为回退路径会从
-        第一个非 ``None`` 的传入梯度推断输入梯度形状。
+        single-input cores whose output-sequence gradients are present, because
+        it infers the input gradient shape from the first non-``None``
+        output-sequence gradient. Chinese: 每个输入序列的模板, 用于分配输入梯度。
+        当所有传入梯度都为 ``None`` 时必须提供, 并确保仅有状态输出的 core 仍返回
+        形状正确的输入梯度。若省略该参数, 当前仅支持单输入且存在输出序列梯度的 core,
+        因为回退路径会从第一个非 ``None`` 的输出序列梯度推断输入梯度形状。
     :type input_templates: Optional[Tuple[torch.Tensor, ...]]
     :param state_templates: EN: Per-initial-state templates used to allocate initial
         state gradients. When provided, the returned state gradients preserve the
@@ -277,6 +278,7 @@ def flexsn_backward(
     """
     required_grad_count = info.num_outputs + info.num_states
     grad_output_args = args[:required_grad_count]
+    grad_output_example = _first_non_none_tensor(grad_output_args[: info.num_outputs])
     grad_example = _first_non_none_tensor(grad_output_args)
     if input_templates is None:
         if grad_example is None:
@@ -287,7 +289,12 @@ def flexsn_backward(
             raise ValueError(
                 "input_templates are required when FlexSN has multiple input sequences"
             )
-        input_templates = tuple(grad_example for _ in range(info.num_inputs))
+        if grad_output_example is None:
+            raise ValueError(
+                "input_templates are required when FlexSN output-sequence gradients "
+                "are all None"
+            )
+        input_templates = tuple(grad_output_example for _ in range(info.num_inputs))
     if len(input_templates) != info.num_inputs:
         raise ValueError(
             "input_templates must provide one template per FlexSN input sequence"
@@ -318,6 +325,13 @@ def flexsn_backward(
     grad_state_seq_examples = grad_output_args[
         info.num_outputs : info.num_outputs + info.num_states
     ]
+    if state_templates is None and any(
+        grad is None for grad in grad_state_seq_examples
+    ):
+        raise ValueError(
+            "state_templates are required when any incoming FlexSN "
+            "state-sequence gradient is None"
+        )
     grad_kernel_args = [
         grad if grad is not None else torch.zeros_like(grad_example)
         for grad in grad_output_args
