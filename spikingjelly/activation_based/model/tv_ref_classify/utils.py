@@ -92,12 +92,28 @@ class ThroughputValue:
         self.total_time += elapsed_time
 
     def synchronize_between_processes(self):
-        """Synchronize cumulative samples/time across ranks.
+        """Synchronize cumulative throughput statistics across ranks.
 
-        ``total_samples`` is reduced with ``SUM`` across all ranks, while
-        ``total_time`` is reduced with ``MAX`` so global throughput is computed
-        as ``sum(samples) / max(elapsed_time)``. Windowed statistics stored in
-        ``deque`` remain local to each rank.
+        Chinese:
+            同步跨进程的累计吞吐统计量。
+
+        English:
+            Synchronize cumulative throughput statistics across distributed ranks.
+
+        :return: EN: ``None``. Chinese: 无返回值。
+        :rtype: None
+
+        .. note::
+
+            English: ``total_samples`` is reduced with ``SUM`` across ranks,
+            while ``total_time`` is reduced with ``MAX`` so global throughput is
+            computed as ``sum(samples) / max(elapsed_time)``. Windowed
+            statistics stored in ``deque`` remain local to each rank.
+
+            Chinese: ``total_samples`` 会在各 rank 间执行 ``SUM`` 归约,
+            ``total_time`` 会执行 ``MAX`` 归约, 因此全局吞吐被定义为
+            ``sum(samples) / max(elapsed_time)``。保存在 ``deque`` 中的窗口统计
+            仍然保持各 rank 本地独立。
         """
         if not is_dist_avail_and_initialized():
             return
@@ -517,15 +533,15 @@ def reduce_across_processes(
     dtype: Optional[torch.dtype] = None,
 ) -> torch.Tensor:
     """EN: Reduce a scalar, tensor, or number sequence across distributed processes.
-    中文：对标量、张量或数字序列在分布式进程间执行归约。
+    Chinese: 对标量、张量或数字序列在分布式进程间执行归约。
 
-    :param val: EN: Value to reduce. 中文：待归约的值。
+    :param val: EN: Value to reduce. Chinese: 待归约的值。
     :type val: Union[int, float, torch.Tensor, Sequence[Number]]
-    :param op: EN: Reduction operator, defaulting to SUM. 中文：归约操作符，默认为 SUM。
+    :param op: EN: Reduction operator, defaulting to SUM. Chinese: 归约操作符, 默认为 SUM。
     :type op: torch.distributed.ReduceOp
-    :param dtype: EN: Optional output tensor dtype. 中文：可选的输出张量数据类型。
+    :param dtype: EN: Optional output tensor dtype. Chinese: 可选的输出张量数据类型。
     :type dtype: Optional[torch.dtype]
-    :return: EN: Reduced tensor placed on the backend-appropriate device. 中文：位于当前后端对应设备上的归约结果张量。
+    :return: EN: Reduced tensor placed on the backend-appropriate device. Chinese: 位于当前后端对应设备上的归约结果张量。
     :rtype: torch.Tensor
     """
     if not is_dist_avail_and_initialized():

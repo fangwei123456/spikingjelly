@@ -11,9 +11,12 @@ Usage (run from repo root):
 
 import os
 import sys
+from collections.abc import Callable
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
+from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
 # ---------------------------------------------------------------------------
@@ -44,7 +47,12 @@ def make_flexsn(backend: str) -> FlexSN:
 # ---------------------------------------------------------------------------
 
 
-def cuda_time_ms(fn, warmup: int = 10, iters: int = 200, reset_hook=None) -> float:
+def cuda_time_ms(
+    fn: Callable[[], Any],
+    warmup: int = 10,
+    iters: int = 200,
+    reset_hook: Optional[Callable[[], Any]] = None,
+) -> float:
     for _ in range(warmup):
         if reset_hook is not None:
             reset_hook()
@@ -158,7 +166,6 @@ def bench_linear_flexsn_linear():
         m_ind = SeqModelFused(N, "inductor").cuda()
         c_ind = torch.compile(m_ind, fullgraph=True)
 
-        from spikingjelly.activation_based import functional
         with torch.no_grad():
             ms_tri = cuda_time_ms(lambda: m_tri(x),
                                   reset_hook=lambda: functional.reset_net(m_tri))

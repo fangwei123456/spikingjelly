@@ -1,10 +1,11 @@
+import math
+from contextlib import contextmanager
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
-import math
-from contextlib import contextmanager
 from torch import fx
+from torch import Tensor
 from torch.nn.utils.fusion import fuse_conv_bn_eval
 
 from .. import base, layer, neuron
@@ -229,11 +230,11 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
     The input model must be in ``eval()`` mode. The returned value is a fused
     ``fx.GraphModule``.
 
-    :param net: EN: Evaluation-mode module to transform. 中文：待变换的评估模式模型，必须已经调用 ``eval()``。
+    :param net: EN: Evaluation-mode module to transform. Chinese: 待变换的评估模式模型, 必须已经调用 ``eval()``。
     :type net: torch.nn.Module
-    :return: EN: Fused FX graph module. 中文：融合后的 FX 图模块。
+    :return: EN: Fused FX graph module. Chinese: 融合后的 FX 图模块。
     :rtype: torch.fx.GraphModule
-    :raises ValueError: EN: Raised when ``net`` is still in training mode. 中文：当 ``net`` 仍处于训练模式时抛出。
+    :raises ValueError: EN: Raised when ``net`` is still in training mode, or when a matched BatchNorm module does not track running statistics or lacks valid running mean/variance. Chinese: 当 ``net`` 仍处于训练模式时, 或者匹配到的 BatchNorm 模块未跟踪运行统计量、缺少有效的运行均值/方差时抛出。
     """
 
     if net.training:
@@ -307,11 +308,11 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
     The input model must be in ``train()`` mode. The returned value is the packed
     ``fx.GraphModule``.
 
-    :param net: EN: Training-mode module to transform. 中文：待变换的训练模式模型，必须已经调用 ``train()``。
+    :param net: EN: Training-mode module to transform. Chinese: 待变换的训练模式模型, 必须已经调用 ``train()``。
     :type net: torch.nn.Module
-    :return: EN: Packed FX graph module. 中文：打包后的 FX 图模块。
+    :return: EN: Packed FX graph module. Chinese: 打包后的 FX 图模块。
     :rtype: torch.fx.GraphModule
-    :raises ValueError: EN: Raised when ``net`` is not in training mode. 中文：当 ``net`` 不处于训练模式时抛出。
+    :raises ValueError: EN: Raised when ``net`` is not in training mode. Chinese: 当 ``net`` 不处于训练模式时抛出。
     """
     if not net.training:
         raise ValueError("pack_conv_bn_train_modules only supports train() models.")

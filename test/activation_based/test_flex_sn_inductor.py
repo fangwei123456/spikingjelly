@@ -39,6 +39,9 @@ from spikingjelly.activation_based.triton_kernel.flexsn.info import FlexSNInfo
 from spikingjelly.activation_based.triton_kernel.torch2triton import (
     graph2triton as graph2triton_module,
 )
+from spikingjelly.activation_based.triton_kernel.torch2triton import (
+    torch2graph as torch2graph_module,
+)
 
 
 def _lif_core(x: torch.Tensor, v: torch.Tensor):
@@ -232,6 +235,29 @@ def test_scan_backends_reject_mismatched_example_output_template():
             backend="inductor",
             example_inputs=(torch.zeros(3), torch.zeros(3)),
             example_outputs=(torch.zeros(4),),
+        )
+
+
+def test_scan_backends_reject_mismatched_example_input_numel():
+    with pytest.raises(ValueError, match="same number of elements"):
+        FlexSN(
+            core=_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="inductor",
+            example_inputs=(torch.zeros(2, 3), torch.zeros(5)),
+            example_outputs=(torch.zeros(2, 3),),
+        )
+
+
+def test_generate_forward_and_backward_graph_rejects_requires_grad_length_mismatch():
+    with pytest.raises(ValueError, match="requires_grad must have the same length"):
+        torch2graph_module.generate_forward_and_backward_graph(
+            _lif_core,
+            (torch.zeros(3), torch.zeros(3)),
+            requires_grad=(True,),
         )
 
 

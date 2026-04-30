@@ -1,5 +1,5 @@
 import warnings
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional, Sequence, Tuple
 
 import torch
 import torch.fx as fx
@@ -49,18 +49,22 @@ def _optimize_graph(graph: fx.Graph):
     return GraphOptimizer(fx.GraphModule({}, graph)).transform().graph
 
 
-def generate_inference_graph(fn: Callable, example_inputs: tuple):
-    """Generate an optimized inference graph from a PyTorch function.
+def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
+    """Generate an optimized inference FX graph.
 
-    For inference scenarios, all input tensors are set to `requires_grad=False`
-    to disable gradient tracking.
+    Chinese:
+        为给定的 PyTorch 函数生成优化后的推理 FX 图。
 
-    Args:
-        fn (Callable): The PyTorch function to generate the inference graph for.
-        example_inputs (tuple): A tuple of example inputs to trace the function's execution.
+    English:
+        Generate an optimized inference FX graph for a PyTorch callable.
 
-    Returns:
-        fx.Graph: The optimized inference graph.
+    :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
+    :type fn: Callable
+    :param example_inputs: EN: Example inputs used for tracing. Chinese: 用于追踪的示例输入。
+    :type example_inputs: tuple
+    :return: EN: Optimized forward FX graph. Chinese: 优化后的前向 FX 图。
+    :rtype: torch.fx.Graph
+    :raises ValueError: EN: Raised when the traced callable fails to produce a forward graph. Chinese: 当被追踪函数未能产生前向 FX 图时抛出。
     """
     collector = GraphCollector()
     f = aot_function(
@@ -75,27 +79,33 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple):
 
     # feed the fake inputs
     _ = f(*example_inputs)
+    if collector.fwd_graph is None:
+        raise ValueError(f"Failed to capture an inference graph for {fn}.")
     return _optimize_graph(collector.fwd_graph)
 
 
 def generate_forward_and_backward_graph(
-    fn: Callable, example_inputs: tuple, requires_grad: Optional[Tuple[bool]] = None
-):
-    """Generate optimized forward and backward graphs from a PyTorch function.
+    fn: Callable,
+    example_inputs: tuple,
+    requires_grad: Optional[Sequence[bool]] = None,
+) -> Tuple[fx.Graph, fx.Graph]:
+    """Generate optimized forward/backward FX graphs.
 
-    Allows specifying gradient requirements for input tensors; if not specified,
-    all tensors default to `requires_grad=True`.
+    Chinese:
+        为给定的 PyTorch 函数生成优化后的前向与反向 FX 图。
 
-    Args:
-        fn (Callable): The PyTorch function to generate the graphs for.
-        example_inputs (tuple): A tuple of example inputs to trace the function's execution.
-        requires_grad (Tuple[bool], optional): A tuple indicating whether each
-            input tensor requires gradient. If given, must match the length of
-            `example_inputs`. Defaults to None, where all input tensors are set
-            to `requires_grad=True`.
+    English:
+        Generate optimized forward and backward FX graphs for a PyTorch callable.
 
-    Returns:
-        Tuple[fx.Graph, fx.Graph]: the optimized forward and backward graph.
+    :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
+    :type fn: Callable
+    :param example_inputs: EN: Example inputs used for tracing. Chinese: 用于追踪的示例输入。
+    :type example_inputs: tuple
+    :param requires_grad: EN: Optional gradient-requirement flags for each example input. Chinese: 每个示例输入对应的可选求导标志。
+    :type requires_grad: Optional[Sequence[bool]]
+    :return: EN: Optimized forward and backward FX graphs. Chinese: 优化后的前向与反向 FX 图。
+    :rtype: Tuple[torch.fx.Graph, torch.fx.Graph]
+    :raises ValueError: EN: Raised when ``requires_grad`` length mismatches ``example_inputs``, when the callable does not return a tensor/list/tuple, or when no differentiable output exists. Chinese: 当 ``requires_grad`` 长度与 ``example_inputs`` 不匹配、函数返回值不是张量/列表/元组、或不存在可求导输出时抛出。
     """
     collector = GraphCollector()
     f = aot_function(
@@ -106,6 +116,10 @@ def generate_forward_and_backward_graph(
     )
 
     if requires_grad is not None:
+        if len(requires_grad) != len(example_inputs):
+            raise ValueError(
+                "requires_grad must have the same length as example_inputs"
+            )
         for i, r in zip(example_inputs, requires_grad):
             if isinstance(i, torch.Tensor):
                 i.requires_grad = r
@@ -120,21 +134,23 @@ def generate_forward_and_backward_graph(
     if isinstance(ys, torch.Tensor):
         ys = (ys,)
     elif not isinstance(ys, (list, tuple)):
-        raise ValueError(
-            f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}"
-        )
+        raise ValueError(f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}")
     diff_outputs = [
         y
         for y in ys
         if isinstance(y, torch.Tensor) and (y.requires_grad or y.grad_fn is not None)
     ]
     if not diff_outputs:
-        raise ValueError(f"No differentiable Tensor found in the output of the function {fn}")
+        raise ValueError(
+            f"No differentiable Tensor found in the output of the function {fn}"
+        )
     torch.autograd.backward(
         diff_outputs,
         [torch.randn_like(y) for y in diff_outputs],
     )
 
+    if collector.fwd_graph is None or collector.bwd_graph is None:
+        raise ValueError(f"Failed to capture both forward and backward graphs for {fn}.")
     collector.bwd_graph.lint()
 
     return (

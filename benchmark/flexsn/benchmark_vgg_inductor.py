@@ -14,10 +14,12 @@ Usage (run from repo root):
 import gc
 import os
 import sys
+from collections.abc import Callable
+from copy import deepcopy
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-from copy import deepcopy
 
 from spikingjelly.activation_based import neuron, functional
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
@@ -53,7 +55,12 @@ def make_flexsn_factory():
 # Timing helper
 # ---------------------------------------------------------------------------
 
-def cuda_time_ms(fn, warmup: int = 5, iters: int = 50, reset_hook=None) -> float:
+def cuda_time_ms(
+    fn: Callable[[], Any],
+    warmup: int = 5,
+    iters: int = 50,
+    reset_hook: Optional[Callable[[], Any]] = None,
+) -> float:
     for _ in range(warmup):
         if reset_hook is not None:
             reset_hook()

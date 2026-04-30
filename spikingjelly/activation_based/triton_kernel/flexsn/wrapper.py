@@ -32,6 +32,20 @@ _BACKWARD_XLARGE_MAX_NCL = 1 << 23
 
 
 def flexsn_backward_ncl_bucket(ncl: int) -> int:
+    """Bucket a flattened sequence size for backward-kernel tuning.
+
+    Chinese:
+        将展平后的单步元素数 ``NCL`` 映射到 backward kernel 的调优分桶。
+
+    English:
+        Map the flattened per-step element count ``NCL`` to the backward-kernel
+        autotuning bucket.
+
+    :param ncl: EN: Flattened element count per time step. Chinese: 单个时间步展平后的元素数。
+    :type ncl: int
+    :return: EN: Bucket index in ``[0, 4]``. Chinese: ``[0, 4]`` 范围内的分桶索引。
+    :rtype: int
+    """
     if ncl <= _BACKWARD_SMALL_MAX_NCL:
         return 0
     if ncl <= _BACKWARD_MEDIUM_MAX_NCL:
@@ -58,6 +72,20 @@ def _make_grid(ncl: int):
 
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
+    """Run the inference kernel for a multi-step FlexSN core.
+
+    Chinese:
+        执行 FlexSN 多步推理 kernel。
+
+    English:
+        Execute the FlexSN multi-step inference kernel.
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
+    :return: EN: Output/state sequences. When ``T == 0``, returns empty tensors with the expected templates. Chinese: 输出/状态序列；当 ``T == 0`` 时, 返回符合模板的空张量。
+    :rtype: tuple
+    """
     x_example = args[0]
     T = x_example.shape[0]
     NCL = _num_elements_per_step(x_example)
@@ -80,6 +108,20 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 
 
 def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
+    """Run the inference kernel and materialize final states.
+
+    Chinese:
+        执行带最终状态物化的 FlexSN 多步推理 kernel。
+
+    English:
+        Execute the FlexSN inference kernel and materialize final states.
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
+    :return: EN: Output sequences followed by final states. When ``T == 0``, output sequences are empty, provided initial states are cloned, and missing states are zero-filled. Chinese: 输出序列后接最终状态；当 ``T == 0`` 时, 输出序列为空, 已提供的初始状态会被克隆, 缺失状态会以零填充。
+    :rtype: tuple
+    """
     x_example = args[0]
     T = x_example.shape[0]
     NCL = _num_elements_per_step(x_example)
@@ -116,6 +158,20 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 
 
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
+    """Run the training forward kernel for FlexSN.
+
+    Chinese:
+        执行 FlexSN 训练前向 kernel。
+
+    English:
+        Execute the FlexSN training forward kernel.
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
+    :return: EN: Forward outputs plus any saved tensors required by backward. When ``T == 0``, returns empty tensors following the expected templates. Chinese: 前向输出以及 backward 所需的保存张量；当 ``T == 0`` 时, 返回符合模板的空张量。
+    :rtype: tuple
+    """
     x_example = args[0]
     T = x_example.shape[0]
     NCL = _num_elements_per_step(x_example)
@@ -136,6 +192,20 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
 
 
 def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
+    """Run the training backward kernel for FlexSN.
+
+    Chinese:
+        执行 FlexSN 训练反向 kernel。
+
+    English:
+        Execute the FlexSN training backward kernel.
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Gradients and saved tensors accepted by the kernel. Chinese: kernel 接收的梯度与保存张量。
+    :return: EN: Gradients for inputs and initial states. When ``T == 0``, returns zero-filled gradients. Chinese: 输入与初始状态的梯度；当 ``T == 0`` 时, 返回零填充梯度。
+    :rtype: tuple
+    """
     grad_example = args[0]
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
@@ -184,6 +254,14 @@ def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
 
 
 class FlexSNFunction(autograd.Function):
+    """Autograd bridge between FlexSN Python code and Triton kernels.
+
+    Chinese:
+        连接 FlexSN Python 逻辑与 Triton kernel 的 autograd 桥接类。
+
+    English:
+        Autograd bridge between FlexSN Python logic and Triton kernels.
+    """
     @staticmethod
     @contiguous_and_device_guard
     @amp_custom_fwd

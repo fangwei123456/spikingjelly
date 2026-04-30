@@ -432,6 +432,23 @@ def _validate_scan_backend_contract(
         device = example_inputs[0].device
         example_inputs = tuple(x.detach().to(device).clone() for x in example_inputs)
 
+    seq_template = example_inputs[0]
+    for i, tensor in enumerate(example_inputs[1:], start=1):
+        if tensor.numel() != seq_template.numel():
+            raise ValueError(
+                "FlexSN triton/inductor scan backends currently require every "
+                "example input and state tensor to have the same number of "
+                f"elements as the first example tensor ({seq_template.numel()}), "
+                f"but example #{i} has {tensor.numel()} elements."
+            )
+        if tensor.dtype != seq_template.dtype:
+            raise ValueError(
+                "FlexSN triton/inductor scan backends currently require every "
+                "example input and state tensor to match the first example "
+                f"tensor's dtype ({seq_template.dtype}), but example #{i} has "
+                f"dtype {tensor.dtype}."
+            )
+
     with torch.no_grad():
         returns = _as_tuple(core(*example_inputs))
 
@@ -442,7 +459,6 @@ def _validate_scan_backend_contract(
             f"{expected} (= num_outputs + num_states)."
         )
 
-    seq_template = example_inputs[0]
     for i, tensor in enumerate(returns):
         if not isinstance(tensor, torch.Tensor):
             raise TypeError(
