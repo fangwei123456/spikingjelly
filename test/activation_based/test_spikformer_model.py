@@ -1,7 +1,7 @@
 import torch
 
 from spikingjelly.activation_based import functional
-from spikingjelly.activation_based.model.spikformer import Spikformer, spikformer_ti
+from spikingjelly.activation_based.model import Spikformer, spikformer_ti
 
 
 def _reset_net(net):

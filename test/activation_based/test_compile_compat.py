@@ -229,6 +229,54 @@ def test_lif_inductor_backend_cache_key_tracks_tau_changes(monkeypatch):
 
 
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_cache_key_tracks_cuda_device_changes(kind, monkeypatch):
+    if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
+        pytest.skip("At least 2 CUDA devices are required for cache key device-index coverage.")
+
+    node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train().to("cuda:0")
+    captured_keys = []
+
+    def _fake_compile(cache_key, fn):
+        captured_keys.append(cache_key)
+        return fn
+
+    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    x0 = torch.randn(4, 2, 8, device="cuda:0")
+    x1 = torch.randn(4, 2, 8, device="cuda:1")
+
+    functional.reset_net(node)
+    node(x0)
+    node.to("cuda:1")
+    functional.reset_net(node)
+    node(x1)
+
+    assert len(captured_keys) == 2
+    assert captured_keys[0] != captured_keys[1]
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
+def test_standard_inductor_backend_cache_key_tracks_runtime_shape_changes(kind, monkeypatch):
+    node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train()
+    captured_keys = []
+
+    def _fake_compile(cache_key, fn):
+        captured_keys.append(cache_key)
+        return fn
+
+    monkeypatch.setattr(node, "_compile_inductor_graph", _fake_compile)
+    x3 = torch.randn(4, 2, 8)
+    x4 = torch.randn(4, 2, 2, 4)
+
+    functional.reset_net(node)
+    node(x3)
+    functional.reset_net(node)
+    node(x4)
+
+    assert len(captured_keys) == 2
+    assert captured_keys[0] != captured_keys[1]
+
+
+@pytest.mark.parametrize("kind", ["lif", "if", "plif"])
 @pytest.mark.parametrize("sg_name", ["Sigmoid", "ATan"])
 def test_triton_vs_torch_forward_backward_consistency(kind, sg_name):
     _require_cuda_triton_compile()

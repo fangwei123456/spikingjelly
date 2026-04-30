@@ -5,14 +5,14 @@ from .. import base, functional, layer, neuron
 from ..layer.attention import SpikingSelfAttention
 
 __all__ = [
+    "Spikformer",
+    "SpikformerBlock",
     "SpikformerConv2dBN",
     "SpikformerConv2dBNLIF",
-    "SpikformerPatchStem",
     "SpikformerMLP",
-    "SpikformerBlock",
-    "Spikformer",
-    "spikformer_ti",
+    "SpikformerPatchStem",
     "spikformer_s",
+    "spikformer_ti",
 ]
 
 
@@ -310,7 +310,7 @@ def spikformer_ti(
     img_size_w: int = 224,
     num_classes: int = 1000,
     backend: str = "torch",
-):
+) -> Spikformer:
     return Spikformer(
         T=T,
         in_channels=in_channels,
@@ -332,7 +332,7 @@ def spikformer_s(
     img_size_w: int = 224,
     num_classes: int = 1000,
     backend: str = "torch",
-):
+) -> Spikformer:
     return Spikformer(
         T=T,
         in_channels=in_channels,

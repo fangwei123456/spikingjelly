@@ -221,7 +221,9 @@ class ParametricLIFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
-        reciprocal_tau = self.w.sigmoid().to(x_seq)
+        x_seq = self._canonicalize_inductor_tensor(x_seq)
+        v_init = self._canonicalize_inductor_tensor(self.v)
+        reciprocal_tau = self._canonicalize_inductor_tensor(self.w.sigmoid().to(x_seq))
         graph = self._compile_inductor_graph(
             (
                 "plif",
@@ -231,10 +233,11 @@ class ParametricLIFNode(BaseNode):
                 self.v_reset,
                 self.detach_reset,
                 self._surrogate_inductor_cache_key(),
+                self._inductor_runtime_cache_key(x_seq, v_init, reciprocal_tau),
             ),
             self._build_inductor_multi_step_graph(),
         )
-        out = graph(x_seq, self.v, reciprocal_tau)
+        out = graph(x_seq, v_init, reciprocal_tau)
         if self.store_v_seq:
             spike_seq, self.v, self.v_seq = out
         else:

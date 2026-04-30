@@ -13,18 +13,26 @@ from torch.utils.data.distributed import DistributedSampler
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.distributed import (
     SNNDistributedConfig,
+    SNN_DISTRIBUTED_PREFERENCES,
     ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE,
+    apply_pipeline_stage_memopt,
     build_snn_optimizer,
+    configure_cifar10dvs_vgg_pipeline,
     configure_cifar10dvs_vgg_distributed,
     configure_cifar10dvs_vgg_fsdp2,
     configure_snn_distributed,
     ensure_distributed_initialized,
     materialize_dtensor_output,
+    PIPELINING_AVAILABLE,
+    recommended_pipeline_microbatches,
+    recommend_snn_distributed_strategy,
     resolve_data_parallel_partition,
     resolve_tensor_parallel_group_size,
 )
 from spikingjelly.activation_based.examples.memopt.data_module import CIFAR10DVSDataModule
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
+from spikingjelly.activation_based.examples.memopt.models import VGGBlock
+from spikingjelly.activation_based.memopt import memory_optimization
 
 
 @dataclass
@@ -53,7 +61,13 @@ def parse_args():
         "--distributed-mode",
         type=str,
         default="none",
-        choices=("none", "dp", "tp", "fsdp2", "fsdp2_tp"),
+        choices=("auto", "none", "dp", "tp", "fsdp2", "fsdp2_tp", "pp"),
+    )
+    parser.add_argument(
+        "--prefer",
+        type=str,
+        default=None,
+        choices=SNN_DISTRIBUTED_PREFERENCES,
     )
     parser.add_argument(
         "--mesh-shape",
@@ -69,9 +83,22 @@ def parse_args():
     parser.add_argument(
         "--optimizer-sharding",
         type=str,
-        default="none",
+        default=None,
         choices=("none", "zero"),
     )
+    parser.add_argument("--memopt-level", type=int, default=None)
+    parser.add_argument("--memopt-compress-x", action="store_true")
+    parser.add_argument("--pp-microbatches", type=int, default=None)
+    parser.add_argument("--pp-memopt-stage-budget-ratio", type=float, default=0.5)
+    parser.add_argument(
+        "--pp-schedule",
+        type=str,
+        default="auto",
+        choices=("auto", "gpipe", "1f1b", "interleaved", "zero_bubble"),
+    )
+    parser.add_argument("--pp-virtual-stages", type=int, default=1)
+    parser.add_argument("--pp-layout", type=str, default=None)
+    parser.add_argument("--pp-delay-wgrad", action="store_true")
     parser.add_argument("--print-summary", action="store_true")
     return parser.parse_args()
 
@@ -81,7 +108,9 @@ def _is_launched_with_torchrun() -> bool:
 
 
 def setup_runtime(args) -> DistributedRuntime:
-    if args.distributed_mode == "none":
+    if args.distributed_mode == "none" or (
+        args.distributed_mode == "auto" and not _is_launched_with_torchrun()
+    ):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return DistributedRuntime(
             mode=args.distributed_mode,
@@ -118,12 +147,122 @@ def setup_runtime(args) -> DistributedRuntime:
     )
 
 
+def resolve_strategy_args(args, runtime: DistributedRuntime):
+    recommendation = None
+    recommendation_notes = []
+    if args.prefer is not None:
+        recommendation = recommend_snn_distributed_strategy(
+            model="cifar10dvs_vgg",
+            world_size=runtime.world_size,
+            prefer=args.prefer,
+            batch_size=args.batch_size,
+            backend=args.backend,
+        )
+
+    if args.distributed_mode == "auto":
+        if recommendation is None:
+            raise ValueError(
+                "--distributed-mode auto requires --prefer speed|memory|capacity."
+            )
+        args.distributed_mode = recommendation.mode
+        args.optimizer_sharding = recommendation.optimizer_sharding
+        args.memopt_level = recommendation.memopt_level
+        if args.mesh_shape is None and recommendation.mesh_shape is not None:
+            args.mesh_shape = list(recommendation.mesh_shape)
+        if args.dp_mesh_dim is None:
+            args.dp_mesh_dim = recommendation.dp_mesh_dim
+        if args.tp_mesh_dim == 0:
+            args.tp_mesh_dim = recommendation.tp_mesh_dim
+        if args.pp_microbatches is None:
+            args.pp_microbatches = recommendation.pp_microbatches
+        args.pp_schedule = recommendation.pp_schedule
+        args.pp_virtual_stages = recommendation.pp_virtual_stages
+        if args.pp_layout is None and recommendation.pp_layout is not None:
+            args.pp_layout = "|".join(str(v) for v in recommendation.pp_layout)
+        args.pp_delay_wgrad = recommendation.pp_delay_wgrad
+        args.pp_memopt_stage_budget_ratio = recommendation.pp_memopt_stage_budget_ratio
+        recommendation_notes.append(
+            "Applied the full recommended distributed strategy because distributed-mode=auto."
+        )
+    elif recommendation is not None:
+        recommendation_notes.append(
+            f"Mode '{args.distributed_mode}' overrides the recommended mode '{recommendation.mode}'."
+        )
+        if args.memopt_level is None:
+            args.memopt_level = recommendation.memopt_level
+        if args.optimizer_sharding is None and args.distributed_mode == "dp":
+            args.optimizer_sharding = recommendation.optimizer_sharding
+        if args.mesh_shape is None and args.distributed_mode == "fsdp2_tp" and recommendation.mesh_shape is not None:
+            args.mesh_shape = list(recommendation.mesh_shape)
+        if args.pp_microbatches is None and args.distributed_mode == "pp":
+            args.pp_microbatches = recommendation.pp_microbatches
+        if args.distributed_mode == "pp":
+            if args.pp_schedule == "auto":
+                args.pp_schedule = recommendation.pp_schedule
+            if args.pp_virtual_stages == 1:
+                args.pp_virtual_stages = recommendation.pp_virtual_stages
+            if args.pp_layout is None and recommendation.pp_layout is not None:
+                args.pp_layout = "|".join(str(v) for v in recommendation.pp_layout)
+            if not args.pp_delay_wgrad:
+                args.pp_delay_wgrad = recommendation.pp_delay_wgrad
+
+    if args.optimizer_sharding is None:
+        args.optimizer_sharding = "none"
+    if args.memopt_level is None:
+        args.memopt_level = 0
+    if args.distributed_mode == "pp" and args.pp_microbatches is None:
+        logical_stages = runtime.world_size * max(1, args.pp_virtual_stages)
+        args.pp_microbatches = recommended_pipeline_microbatches(
+            args.batch_size,
+            logical_stages,
+        )
+    return recommendation, tuple(recommendation_notes)
+
+
 def build_model(args, runtime: DistributedRuntime):
     model = CIFAR10DVSVGG(dropout=0.25, backend=args.backend)
     model.to(runtime.device)
+    example_input = torch.randn(args.batch_size, args.T, 2, 48, 48, device=runtime.device)
+    tp_disabled = args.disable_classifier_tp and args.disable_conv_tp
+
+    defer_memopt_until_after_pp = args.distributed_mode == "pp" and args.memopt_level > 0
+    if args.memopt_level > 0 and not defer_memopt_until_after_pp:
+        model = memory_optimization(
+            model,
+            (VGGBlock,),
+            dummy_input=(example_input,),
+            compress_x=args.memopt_compress_x,
+            level=args.memopt_level,
+            verbose=False,
+        )
+        model = model.to(runtime.device)
 
     if args.distributed_mode == "none":
         return model, None, None
+    if args.distributed_mode == "pp":
+        if not PIPELINING_AVAILABLE:
+            raise RuntimeError(
+                "distributed_mode='pp' requires torch.distributed.pipelining support."
+            )
+        pipeline_runtime = configure_cifar10dvs_vgg_pipeline(
+            model,
+            example_input=example_input,
+            device=runtime.device,
+            n_microbatches=args.pp_microbatches,
+            pp_schedule=args.pp_schedule,
+            pp_virtual_stages=args.pp_virtual_stages,
+            pp_layout=args.pp_layout,
+            pp_delay_wgrad=args.pp_delay_wgrad,
+        )
+        if defer_memopt_until_after_pp:
+            pipeline_runtime, _, _ = apply_pipeline_stage_memopt(
+                pipeline_runtime,
+                memopt_level=args.memopt_level,
+                compress_x=args.memopt_compress_x,
+                stage_budget_ratio=args.pp_memopt_stage_budget_ratio,
+                use_plan_cache=True,
+            )
+        return pipeline_runtime, None, None
 
     mesh_shape = tuple(args.mesh_shape) if args.mesh_shape else None
 
@@ -138,6 +277,11 @@ def build_model(args, runtime: DistributedRuntime):
         return configure_snn_distributed(model, config)
 
     if args.distributed_mode == "tp":
+        if tp_disabled:
+            raise ValueError(
+                "tp mode requires at least one tensor-parallel target. "
+                "Do not disable both classifier TP and convolution TP."
+            )
         return configure_cifar10dvs_vgg_distributed(
             model,
             device_type=runtime.device.type,
@@ -160,9 +304,14 @@ def build_model(args, runtime: DistributedRuntime):
         )
 
     if args.distributed_mode == "fsdp2_tp":
-        if mesh_shape is None:
+        if mesh_shape is None or len(mesh_shape) != 2:
             raise ValueError(
                 "fsdp2_tp mode requires an explicit 2D mesh, e.g. --mesh-shape 2 4."
+            )
+        if tp_disabled:
+            raise ValueError(
+                "fsdp2_tp mode requires at least one tensor-parallel target. "
+                "Do not disable both classifier TP and convolution TP."
             )
         tp_mesh_dim = args.tp_mesh_dim if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None else 1
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
@@ -191,7 +340,10 @@ def build_data(args, runtime: DistributedRuntime, mesh):
 
     train_sampler = None
     val_sampler = None
-    if runtime.is_distributed:
+    if runtime.is_distributed and runtime.mode == "pp":
+        train_sampler = DistributedSampler(dm.train_set, num_replicas=1, rank=0, shuffle=True)
+        val_sampler = DistributedSampler(dm.test_set, num_replicas=1, rank=0, shuffle=False)
+    elif runtime.is_distributed:
         data_replicas, data_rank = resolve_data_parallel_partition(
             mesh,
             dp_mesh_dim=args.dp_mesh_dim
@@ -235,12 +387,18 @@ def reduce_mean(value: torch.Tensor) -> torch.Tensor:
     return value
 
 
+def reduce_classification_output(outputs: torch.Tensor, labels: torch.Tensor):
+    if outputs.ndim >= 3:
+        outputs = outputs.mean(dim=0)
+    if labels.ndim > 1:
+        labels = labels.argmax(dim=1)
+    return outputs, labels
+
+
 def forward_loss(model, criterion, images, labels):
     outputs = model(images.float())
     outputs = materialize_dtensor_output(outputs)
-    outputs = outputs.mean(dim=0)
-    if labels.ndim > 1:
-        labels = labels.argmax(dim=1)
+    outputs, labels = reduce_classification_output(outputs, labels)
     loss = criterion(outputs, labels)
     return outputs, loss
 
@@ -302,6 +460,56 @@ def train_one_epoch(
     return avg_loss, avg_acc, throughput
 
 
+def train_one_epoch_pipeline(
+    pipeline_runtime,
+    optimizer,
+    loader,
+    runtime: DistributedRuntime,
+):
+    total_loss = 0.0
+    total_correct = 0.0
+    total_samples = 0.0
+    start = time.time()
+
+    for images, labels in loader:
+        optimizer.zero_grad(set_to_none=True)
+        losses = [] if pipeline_runtime.is_last else None
+        step_args = ()
+        step_kwargs = {}
+        if pipeline_runtime.is_first:
+            images = images.to(runtime.device, non_blocking=True)
+            step_args = (images,)
+        if pipeline_runtime.is_last:
+            labels = labels.to(runtime.device, non_blocking=True)
+            if labels.ndim > 1:
+                labels = labels.argmax(dim=1)
+            step_kwargs = {"target": labels}
+        outputs = pipeline_runtime.schedule.step(*step_args, losses=losses, **step_kwargs)
+        optimizer.step()
+        functional.reset_net(pipeline_runtime.stage_module)
+
+        if pipeline_runtime.is_last:
+            outputs, labels = reduce_classification_output(outputs, labels)
+            preds = outputs.argmax(dim=1)
+            total_loss += torch.stack(losses).mean().detach() * labels.shape[0]
+            total_correct += (preds == labels).sum()
+            total_samples += float(labels.shape[0])
+
+    stat_tensor = torch.tensor(
+        [
+            float(total_loss.item()) if torch.is_tensor(total_loss) else float(total_loss),
+            float(total_correct.item()) if torch.is_tensor(total_correct) else float(total_correct),
+            total_samples,
+        ],
+        device=runtime.device,
+    )
+    if dist.is_initialized():
+        dist.all_reduce(stat_tensor)
+    denom = max(stat_tensor[2].item(), 1.0)
+    throughput = stat_tensor[2].item() / max(time.time() - start, 1e-6)
+    return stat_tensor[0].item() / denom, stat_tensor[1].item() / denom, throughput
+
+
 @torch.inference_mode()
 def evaluate(model, criterion, loader, runtime: DistributedRuntime, tp_group_size: int):
     model.eval()
@@ -338,6 +546,8 @@ def evaluate(model, criterion, loader, runtime: DistributedRuntime, tp_group_siz
 def main():
     args = parse_args()
     runtime = setup_runtime(args)
+    recommendation, recommendation_notes = resolve_strategy_args(args, runtime)
+    runtime.mode = args.distributed_mode
     if args.optimizer_sharding == "zero" and not ZERO_REDUNDANCY_OPTIMIZER_AVAILABLE:
         raise RuntimeError(
             "optimizer_sharding='zero' requires torch.distributed.optim.ZeroRedundancyOptimizer."
@@ -345,7 +555,7 @@ def main():
     model, mesh, analysis = build_model(args, runtime)
     train_loader, val_loader, train_sampler = build_data(args, runtime, mesh)
     optimizer = build_snn_optimizer(
-        model,
+        model.stage_module if args.distributed_mode == "pp" else model,
         mode=args.distributed_mode,
         lr=args.lr,
         weight_decay=args.weight_decay,
@@ -360,6 +570,10 @@ def main():
             print("analysis:", analysis)
         if mesh is not None:
             print("mesh:", mesh)
+        if recommendation is not None:
+            print("recommendation:", recommendation)
+        if recommendation_notes:
+            print("recommendation_notes:", recommendation_notes)
 
     tp_group_size = resolve_tensor_parallel_group_size(
         mesh,
@@ -370,10 +584,16 @@ def main():
     for epoch in range(args.epochs):
         if train_sampler is not None:
             train_sampler.set_epoch(epoch)
-        train_loss, train_acc, train_sps = train_one_epoch(
-            model, optimizer, criterion, train_loader, runtime, epoch, tp_group_size
-        )
-        val_loss, val_acc = evaluate(model, criterion, val_loader, runtime, tp_group_size)
+        if args.distributed_mode == "pp":
+            train_loss, train_acc, train_sps = train_one_epoch_pipeline(
+                model, optimizer, train_loader, runtime
+            )
+            val_loss, val_acc = float("nan"), float("nan")
+        else:
+            train_loss, train_acc, train_sps = train_one_epoch(
+                model, optimizer, criterion, train_loader, runtime, epoch, tp_group_size
+            )
+            val_loss, val_acc = evaluate(model, criterion, val_loader, runtime, tp_group_size)
         if runtime.rank == 0:
             print(
                 f"epoch={epoch} mode={args.distributed_mode} optimizer_sharding={args.optimizer_sharding} "
@@ -383,7 +603,6 @@ def main():
             )
 
     if dist.is_initialized():
-        dist.barrier()
         dist.destroy_process_group()
 
 

@@ -644,6 +644,8 @@ class LIFNode(BaseNode):
 
     def _inductor_multi_step_forward(self, x_seq: torch.Tensor):
         self.v_float_to_tensor(x_seq[0])
+        x_seq = self._canonicalize_inductor_tensor(x_seq)
+        v_init = self._canonicalize_inductor_tensor(self.v)
         graph = self._compile_inductor_graph(
             (
                 "lif",
@@ -654,10 +656,11 @@ class LIFNode(BaseNode):
                 self.v_reset,
                 self.detach_reset,
                 self._surrogate_inductor_cache_key(),
+                self._inductor_runtime_cache_key(x_seq, v_init),
             ),
             self._build_inductor_multi_step_graph(),
         )
-        out = graph(x_seq, self.v)
+        out = graph(x_seq, v_init)
         if self.store_v_seq:
             spike_seq, self.v, self.v_seq = out
         else:
