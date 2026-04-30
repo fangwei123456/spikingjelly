@@ -318,6 +318,10 @@ def flexsn_backward(
     grad_state_seq_examples = grad_output_args[
         info.num_outputs : info.num_outputs + info.num_states
     ]
+    grad_kernel_args = [
+        grad if grad is not None else torch.zeros_like(grad_example)
+        for grad in grad_output_args
+    ]
     # State-sequence gradients include the leading time dimension. The wrapper
     # returns gradients for the initial states, so their templates are shape[1:].
     grad_inputs += [
@@ -336,7 +340,8 @@ def flexsn_backward(
     grid = _make_grid(NCL)
 
     f[grid](
-        *args,
+        *grad_kernel_args,
+        *args[required_grad_count:],
         *grad_inputs,
         T=T,
         NCL=NCL,

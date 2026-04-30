@@ -1221,6 +1221,9 @@ def _register_dynamo_hop() -> None:
         if isinstance(original_make, staticmethod):
             return original_make.__func__(value, source=source, **kwargs)
         if original_make_is_bound:
+            original_make_func = getattr(original_make, "__func__", None)
+            if original_make_func is not None:
+                return original_make_func(cls, value, source=source, **kwargs)
             return original_make(value, source=source, **kwargs)
         return original_make(cls, value, source=source, **kwargs)
 

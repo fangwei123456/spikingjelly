@@ -685,6 +685,38 @@ def test_flexsn_wrapper_backward_requires_input_templates_for_multi_input_core()
         wrapper.flexsn_backward(None, info, grad_output)
 
 
+def test_flexsn_wrapper_backward_zero_fills_mixed_none_gradients(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    seen = {}
+
+    class _FakeKernel:
+        def __getitem__(self, grid):
+            def _run(*args, **kwargs):
+                seen["grad_output"] = args[0]
+                seen["grad_state_seq"] = args[1]
+                args[2].copy_(torch.ones_like(args[2]))
+                args[3].copy_(torch.ones_like(args[3]))
+
+            return _run
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=1)
+    grad_output = torch.randn(3, 4)
+    monkeypatch.setitem(wrapper.type_dict, grad_output.dtype, "float32")
+
+    grad_x, grad_v = wrapper.flexsn_backward(
+        _FakeKernel(),
+        info,
+        grad_output,
+        None,
+    )
+
+    torch.testing.assert_close(seen["grad_output"], grad_output)
+    torch.testing.assert_close(seen["grad_state_seq"], torch.zeros_like(grad_output))
+    torch.testing.assert_close(grad_x, torch.ones_like(grad_x))
+    torch.testing.assert_close(grad_v, torch.ones_like(grad_v))
+
+
 def test_inductor_final_state_warmup_args_use_example_shapes():
     info = SimpleNamespace(num_inputs=2, num_states=2)
     specs = (
