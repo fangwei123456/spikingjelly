@@ -3,7 +3,7 @@ from importlib.util import find_spec
 import pytest
 import torch
 
-from spikingjelly.activation_based import neuron, surrogate
+from spikingjelly.activation_based import functional, neuron, surrogate
 
 
 def _require_cuda_cupy():
@@ -11,6 +11,12 @@ def _require_cuda_cupy():
         pytest.skip("CUDA is required for CuPy backend tests.")
     if find_spec("cupy") is None:
         pytest.skip("CuPy package is required for CuPy backend tests.")
+
+
+def _require_cuda_cupy_compile():
+    _require_cuda_cupy()
+    if not hasattr(torch, "compile"):
+        pytest.skip("torch.compile is not available.")
 
 
 def _make_node(kind: str, backend: str, dtype: torch.dtype) -> torch.nn.Module:
@@ -46,6 +52,16 @@ def _assert_close(a: torch.Tensor, b: torch.Tensor, dtype: torch.dtype):
     else:
         atol, rtol = 1e-4, 1e-4
     torch.testing.assert_close(a, b, atol=atol, rtol=rtol)
+
+
+class _CompileProbeModel(torch.nn.Module):
+    def __init__(self, node: torch.nn.Module, features: int):
+        super().__init__()
+        self.proj = torch.nn.Linear(features, features, bias=False)
+        self.node = node
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.node(self.proj(x))
 
 
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
@@ -146,3 +162,79 @@ def test_cupy_batch_size_change_reconciles_v_state(kind, dtype):
     # Keep backend parity check under batch-size transition.
     _assert_close(s_cupy_second, s_torch_second, dtype)
     _assert_close(v_cupy_second, v_torch_second, dtype)
+
+
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_cupy_compile_inductor_runs_forward_backward(kind, dtype):
+    _require_cuda_cupy_compile()
+
+    seed = 20260430
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    node_cupy = _make_node(kind, backend="cupy", dtype=dtype)
+    model = _CompileProbeModel(node_cupy, features=12).to(device="cuda", dtype=dtype).train()
+
+    compiled_model = torch.compile(
+        model,
+        backend="inductor",
+        options={
+            "triton.cudagraphs": False,
+            "triton.cudagraph_trees": False,
+        },
+    )
+
+    for _ in range(2):
+        x = torch.randn(6, 4, 12, device="cuda", dtype=dtype, requires_grad=True)
+        functional.reset_net(model)
+        y = compiled_model(x)
+        assert y.shape == x.shape
+        loss = y.sum()
+        loss.backward()
+        assert x.grad is not None
+
+
+@pytest.mark.parametrize("kind", ["if", "lif", "plif"])
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
+def test_cupy_compile_inductor_matches_eager(kind, dtype):
+    _require_cuda_cupy_compile()
+
+    seed = 20260430
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    node_eager = _make_node(kind, backend="cupy", dtype=dtype)
+    node_compiled = _make_node(kind, backend="cupy", dtype=dtype)
+    node_compiled.load_state_dict(node_eager.state_dict(), strict=True)
+
+    eager_model = _CompileProbeModel(node_eager, features=10).to(device="cuda", dtype=dtype).train()
+    compiled_source_model = _CompileProbeModel(node_compiled, features=10).to(
+        device="cuda", dtype=dtype
+    ).train()
+    compiled_source_model.load_state_dict(eager_model.state_dict(), strict=True)
+
+    compiled_model = torch.compile(
+        compiled_source_model,
+        backend="inductor",
+        options={
+            "triton.cudagraphs": False,
+            "triton.cudagraph_trees": False,
+        },
+    )
+
+    x_ref = torch.randn(7, 3, 10, device="cuda", dtype=dtype)
+    x_eager = x_ref.clone().detach().requires_grad_(True)
+    x_compiled = x_ref.clone().detach().requires_grad_(True)
+
+    functional.reset_net(eager_model)
+    functional.reset_net(compiled_source_model)
+    y_eager = eager_model(x_eager)
+    y_compiled = compiled_model(x_compiled)
+
+    _assert_close(y_compiled, y_eager, dtype)
+
+    y_eager.sum().backward()
+    y_compiled.sum().backward()
+
+    _assert_close(x_compiled.grad, x_eager.grad, dtype)
