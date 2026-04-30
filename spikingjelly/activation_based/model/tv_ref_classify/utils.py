@@ -6,6 +6,8 @@ import os
 import statistics
 import time
 from collections import defaultdict, deque, OrderedDict
+from numbers import Number
+from typing import Optional, Sequence, Union
 
 import torch
 import torch.distributed as dist
@@ -90,19 +92,38 @@ class ThroughputValue:
         self.total_time += elapsed_time
 
     def synchronize_between_processes(self):
-        """Synchronize cumulative samples/time across ranks.
+        """Synchronize cumulative throughput statistics across ranks.
 
-        Windowed statistics stored in ``deque`` remain local to each rank.
+        Chinese:
+            同步跨进程的累计吞吐统计量。
+
+        English:
+            Synchronize cumulative throughput statistics across distributed ranks.
+
+        :return: EN: ``None``. Chinese: 无返回值。
+        :rtype: None
+
+        .. note::
+
+            English: ``total_samples`` is reduced with ``SUM`` across ranks,
+            while ``total_time`` is reduced with ``MAX`` so global throughput is
+            computed as ``sum(samples) / max(elapsed_time)``. Windowed
+            statistics stored in ``deque`` remain local to each rank.
+
+            Chinese: ``total_samples`` 会在各 rank 间执行 ``SUM`` 归约,
+            ``total_time`` 会执行 ``MAX`` 归约, 因此全局吞吐被定义为
+            ``sum(samples) / max(elapsed_time)``。保存在 ``deque`` 中的窗口统计
+            仍然保持各 rank 本地独立。
         """
         if not is_dist_avail_and_initialized():
             return
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        samples = torch.tensor(self.total_samples, device=device, dtype=torch.float64)
-        elapsed = torch.tensor(self.total_time, device=device, dtype=torch.float64)
-        dist.barrier()
-        dist.all_reduce(samples, op=dist.ReduceOp.SUM)
-        dist.all_reduce(elapsed, op=dist.ReduceOp.MAX)
+        samples = reduce_across_processes(
+            self.total_samples, op=dist.ReduceOp.SUM, dtype=torch.float64
+        )
+        elapsed = reduce_across_processes(
+            self.total_time, op=dist.ReduceOp.MAX, dtype=torch.float64
+        )
         self.total_samples = samples.item()
         self.total_time = elapsed.item()
 
@@ -506,12 +527,35 @@ def store_model_weights(model, checkpoint_path, checkpoint_key="model", strict=T
     return output_path
 
 
-def reduce_across_processes(val):
+def reduce_across_processes(
+    val: Union[int, float, torch.Tensor, Sequence[Number]],
+    op: dist.ReduceOp = dist.ReduceOp.SUM,
+    dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """EN: Reduce a scalar, tensor, or number sequence across distributed processes.
+    Chinese: 对标量、张量或数字序列在分布式进程间执行归约。
+
+    :param val: EN: Value to reduce. Chinese: 待归约的值。
+    :type val: Union[int, float, torch.Tensor, Sequence[Number]]
+    :param op: EN: Reduction operator, defaulting to SUM. Chinese: 归约操作符, 默认为 SUM。
+    :type op: torch.distributed.ReduceOp
+    :param dtype: EN: Optional output tensor dtype. Chinese: 可选的输出张量数据类型。
+    :type dtype: Optional[torch.dtype]
+    :return: EN: Reduced tensor placed on the backend-appropriate device. Chinese: 位于当前后端对应设备上的归约结果张量。
+    :rtype: torch.Tensor
+    """
     if not is_dist_avail_and_initialized():
         # nothing to sync, but we still convert to tensor for consistency with the distributed case.
-        return torch.tensor(val)
+        return torch.tensor(val, dtype=dtype)
 
-    t = torch.tensor(val, device="cuda")
-    dist.barrier()
-    dist.all_reduce(t)
+    backend = dist.get_backend()
+    backend_name = (
+        backend if isinstance(backend, str) else getattr(backend, "value", str(backend))
+    )
+    if "nccl" in backend_name.lower():
+        device = torch.device("cuda", torch.cuda.current_device())
+    else:
+        device = torch.device("cpu")
+    t = torch.tensor(val, device=device, dtype=dtype)
+    dist.all_reduce(t, op=op)
     return t

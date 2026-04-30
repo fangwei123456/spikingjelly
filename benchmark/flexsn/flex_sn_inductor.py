@@ -11,9 +11,12 @@ Usage (run from repo root):
 
 import os
 import sys
+from collections.abc import Callable
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
+from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
 # ---------------------------------------------------------------------------
@@ -44,18 +47,29 @@ def make_flexsn(backend: str) -> FlexSN:
 # ---------------------------------------------------------------------------
 
 
-def cuda_time_ms(fn, warmup: int = 10, iters: int = 200) -> float:
+def cuda_time_ms(
+    fn: Callable[[], Any],
+    warmup: int = 10,
+    iters: int = 200,
+    reset_hook: Optional[Callable[[], Any]] = None,
+) -> float:
     for _ in range(warmup):
+        if reset_hook is not None:
+            reset_hook()
         fn()
     torch.cuda.synchronize()
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
+    elapsed = 0.0
     for _ in range(iters):
+        if reset_hook is not None:
+            reset_hook()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
         fn()
-    end.record()
-    torch.cuda.synchronize()
-    return start.elapsed_time(end) / iters
+        end.record()
+        end.synchronize()
+        elapsed += start.elapsed_time(end)
+    return elapsed / iters
 
 
 def ratio_flag(r: float) -> str:
@@ -86,8 +100,8 @@ def bench_single_layer():
         c_ind = torch.compile(n_ind, fullgraph=True)
 
         with torch.no_grad():
-            ms_tri = cuda_time_ms(lambda: n_tri(x))
-            ms_ind = cuda_time_ms(lambda: c_ind(x))
+            ms_tri = cuda_time_ms(lambda: n_tri(x), reset_hook=n_tri.reset)
+            ms_ind = cuda_time_ms(lambda: c_ind(x), reset_hook=n_ind.reset)
 
         r = ms_ind / ms_tri
         print(
@@ -153,8 +167,10 @@ def bench_linear_flexsn_linear():
         c_ind = torch.compile(m_ind, fullgraph=True)
 
         with torch.no_grad():
-            ms_tri = cuda_time_ms(lambda: m_tri(x))
-            ms_ind = cuda_time_ms(lambda: c_ind(x))
+            ms_tri = cuda_time_ms(lambda: m_tri(x),
+                                  reset_hook=lambda: functional.reset_net(m_tri))
+            ms_ind = cuda_time_ms(lambda: c_ind(x),
+                                  reset_hook=lambda: functional.reset_net(m_ind))
 
         r = ms_ind / ms_tri
         print(
@@ -173,11 +189,12 @@ def main() -> None:
         sys.exit(1)
     if os.environ.get("PYTORCH_JIT", "1") != "0":
         print(
-            "Warning: PYTORCH_JIT != 0. "
+            "Error: PYTORCH_JIT != 0. "
             "The triton backend requires PYTORCH_JIT=0.\n"
-            "Run with:  PYTORCH_JIT=0 python flex_sn_inductor.py",
+            "Run with:  PYTORCH_JIT=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py",
             file=sys.stderr,
         )
+        sys.exit(1)
 
     print(f"GPU    : {torch.cuda.get_device_name(0)}")
     print(f"PyTorch: {torch.__version__}")
