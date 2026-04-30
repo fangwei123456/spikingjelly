@@ -1272,10 +1272,10 @@ def _register_dynamo_hop() -> None:
                     explicit_output_template_specs = (
                         output_template_specs_arg.as_python_constant()
                     )
-                except Exception:
+                except Exception as e:
                     raise hop_vars.unimplemented(
                         "flex_sn_scan output_template_specs must be a Python constant"
-                    )
+                    ) from e
 
             if len(args) < 4:
                 raise hop_vars.unimplemented(
