@@ -276,7 +276,7 @@ def lowerable_scan_available() -> bool:
         Return whether the current environment exposes PyTorch's built-in
         ``scan`` higher-order operator.
 
-    :returns: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
+    :return: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
         otherwise ``False``. Chinese: 若 ``torch.ops.higher_order.scan`` 可用则
         返回 ``True``，否则返回 ``False``。
     :rtype: bool
@@ -294,7 +294,7 @@ def dynamo_hop_available() -> bool:
         Return whether the FlexSN-specific Dynamo HigherOrderOperator
         registration has been installed successfully.
 
-    :returns: EN: ``True`` when the Dynamo compatibility shim for
+    :return: EN: ``True`` when the Dynamo compatibility shim for
         ``flex_sn_scan`` is registered; otherwise ``False``. Chinese:
         当 ``flex_sn_scan`` 的 Dynamo 兼容注册已完成时返回 ``True``，否则返回
         ``False``。
@@ -313,7 +313,7 @@ def lowerable_while_loop_available() -> bool:
         Return whether the current environment exposes PyTorch's built-in
         ``while_loop`` higher-order operator.
 
-    :returns: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
+    :return: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
         available; otherwise ``False``. Chinese: 若
         ``torch.ops.higher_order.while_loop`` 可用则返回 ``True``，否则返回
         ``False``。
@@ -330,6 +330,12 @@ def _callable_positional_arg_range(
         signature = inspect.signature(target)
     except (TypeError, ValueError):
         return None
+    for parameter in signature.parameters.values():
+        if (
+            parameter.kind == inspect.Parameter.KEYWORD_ONLY
+            and parameter.default is inspect.Parameter.empty
+        ):
+            return None
     min_required = 0
     positional_capacity = 0
     for parameter in signature.parameters.values():
@@ -348,6 +354,17 @@ def _callable_positional_arg_range(
 def _callable_accepts_positional_args(fn: Callable, n_args: int) -> bool | None:
     arg_range = _callable_positional_arg_range(fn)
     if arg_range is None:
+        target = fn.forward if isinstance(fn, torch.nn.Module) else fn
+        try:
+            signature = inspect.signature(target)
+        except (TypeError, ValueError):
+            return None
+        if any(
+            parameter.kind == inspect.Parameter.KEYWORD_ONLY
+            and parameter.default is inspect.Parameter.empty
+            for parameter in signature.parameters.values()
+        ):
+            return False
         return None
     min_required, capacity = arg_range
     if n_args < min_required:

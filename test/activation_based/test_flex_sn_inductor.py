@@ -1140,6 +1140,8 @@ def test_hop_rejects_mismatched_T():
 
 
 def test_hop_registers_with_dynamo():
+    _skip_if_dynamo_hop_unavailable()
+
     try:
         from torch._dynamo.variables.higher_order_ops import (
             TorchHigherOrderOperatorVariable,
@@ -1400,6 +1402,19 @@ def test_eager_scan_empty_sequence_validates_core_arity():
     with pytest.raises(ValueError, match="expected 2 tensor args"):
         eager_scan_final_state(
             bad_core, 1, 1, 1, x, v0, output_template_specs=specs
+        )
+
+    def bad_keyword_core(x_t, v_t, *, bias):
+        return x_t, v_t
+
+    with pytest.raises(ValueError, match="expected 2 tensor args"):
+        eager_scan(
+            bad_keyword_core, 1, 1, 1, x, v0, output_template_specs=specs
+        )
+
+    with pytest.raises(ValueError, match="expected 2 tensor args"):
+        eager_scan_final_state(
+            bad_keyword_core, 1, 1, 1, x, v0, output_template_specs=specs
         )
 
 
