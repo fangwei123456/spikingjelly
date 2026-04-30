@@ -641,9 +641,12 @@ class FlexSN(base.MemoryModule):
             ``state_seqs`` 是个列表，每个元素是形状为 ``[T, ...]`` 的张量。默认 ``False``。
         :type store_state_seqs: bool
 
-        :param example_outputs: ``core`` 的单步输出模板，形式为 ``[*outputs]``。
-            在空序列输入时用于构造输出张量的形状和 dtype，避免为了推断输出而执行 ``core``。
-            默认为 ``None``。
+        :param example_outputs: ``core`` 的单步输出模板，形式为 ``tuple([*outputs])``。
+            当 ``backend="torch"`` 且输入为空序列 ``T == 0`` 时, 需要用它来构造输出张量的
+            形状和 dtype, 从而避免为了推断输出而执行 ``core``。对于 scan 后端
+            (``"triton"``, ``"inductor"``, ``"hop"``), 若提供该参数, 每个模板张量都必须与
+            第一个 ``example_inputs`` 张量的单步形状和 dtype 相匹配。若不需要空序列模板,
+            则可以为 ``None``。默认 ``None``。
         :type example_outputs: Optional[Tuple[torch.Tensor]]
 
         ----
@@ -707,8 +710,12 @@ class FlexSN(base.MemoryModule):
         :type store_state_seqs: bool
 
         :param example_outputs: per-step output templates for ``core`` with the form of
-            ``[*outputs]``. They provide the empty-sequence output shapes and dtypes
-            without executing ``core`` for shape inference. Defaults to ``None``.
+            ``tuple([*outputs])``. When ``backend="torch"`` and the input sequence is
+            empty (``T == 0``), these templates are required to materialize output
+            shapes and dtypes without executing ``core``. For scan backends
+            (``"triton"``, ``"inductor"``, ``"hop"``), each provided template must match
+            the first ``example_inputs`` tensor's per-step shape and dtype. Defaults to
+            ``None`` when empty-sequence output templates are not needed.
         :type example_outputs: Optional[Tuple[torch.Tensor]]
         """
         super().__init__()

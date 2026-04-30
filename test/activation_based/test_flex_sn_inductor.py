@@ -557,6 +557,62 @@ def test_flexsn_wrapper_t0_backward_state_grads_use_state_templates(monkeypatch)
     torch.testing.assert_close(grad_v1, torch.zeros_like(grad_v1))
 
 
+def test_flexsn_wrapper_backward_uses_input_templates_for_state_only_core(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    class _FakeKernel:
+        def __getitem__(self, grid):
+            def _run(*args, **kwargs):
+                return None
+
+            return _run
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=0)
+    input_template = torch.empty(2, 2, 3)
+    grad_state_seq = torch.empty(2, 6)
+
+    monkeypatch.setitem(wrapper.type_dict, grad_state_seq.dtype, "float32")
+
+    grad_x, grad_v = wrapper.flexsn_backward(
+        _FakeKernel(),
+        info,
+        grad_state_seq,
+        input_templates=(input_template,),
+    )
+
+    assert grad_x.shape == input_template.shape
+    assert grad_v.shape == (6,)
+
+
+def test_flexsn_wrapper_t0_backward_uses_input_templates_for_state_only_core(monkeypatch):
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    class _FakeKernel:
+        def __getitem__(self, grid):
+            def _run(*args, **kwargs):
+                return None
+
+            return _run
+
+    info = SimpleNamespace(num_inputs=1, num_states=1, num_outputs=0)
+    input_template = torch.empty(0, 2, 3)
+    grad_state_seq = torch.empty(0, 6)
+
+    monkeypatch.setitem(wrapper.type_dict, grad_state_seq.dtype, "float32")
+
+    grad_x, grad_v = wrapper.flexsn_backward(
+        _FakeKernel(),
+        info,
+        grad_state_seq,
+        input_templates=(input_template,),
+    )
+
+    assert grad_x.shape == input_template.shape
+    assert grad_v.shape == (6,)
+    torch.testing.assert_close(grad_x, torch.zeros_like(input_template))
+    torch.testing.assert_close(grad_v, torch.zeros_like(grad_v))
+
+
 def test_inductor_final_state_warmup_args_use_example_shapes():
     info = SimpleNamespace(num_inputs=2, num_states=2)
     specs = (

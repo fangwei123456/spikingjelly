@@ -191,7 +191,12 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     return tuple(returns)
 
 
-def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
+def flexsn_backward(
+    f,
+    info: FlexSNInfo,
+    *args,
+    input_templates=None,
+) -> tuple:
     """Run the training backward kernel for FlexSN.
 
     Chinese:
@@ -209,13 +214,19 @@ def flexsn_backward(f, info: FlexSNInfo, *args) -> tuple:
     grad_example = args[0]
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
+    if input_templates is None:
+        input_templates = tuple(grad_example for _ in range(info.num_inputs))
+    if len(input_templates) != info.num_inputs:
+        raise ValueError(
+            "input_templates must provide one template per FlexSN input sequence"
+        )
     grad_inputs = [
         (
-            torch.zeros_like(grad_example)
+            torch.zeros_like(input_templates[i])
             if T == 0
-            else torch.empty_like(grad_example)
+            else torch.empty_like(input_templates[i])
         )
-        for _ in range(info.num_inputs)
+        for i in range(info.num_inputs)
     ]
     grad_state_seq_examples = args[
         info.num_outputs : info.num_outputs + info.num_states
@@ -282,6 +293,10 @@ class FlexSNFunction(autograd.Function):
             ctx.save_for_backward(*to_save)
             ctx.fn_bwd = fn_bwd
             ctx.info = info
+            ctx.input_template_specs = tuple(
+                (tuple(arg.shape), arg.dtype, arg.device)
+                for arg in args[: info.num_inputs]
+            )
         else:
             outputs_states = flexsn_inference(fn_inf, info, *args)
         if len(outputs_states) == 1:
@@ -295,5 +310,15 @@ class FlexSNFunction(autograd.Function):
     def backward(ctx, *args):  # len(args) = num_outputs + num_states
         required_results = ctx.saved_tensors
         fn_bwd = ctx.fn_bwd
-        grads = flexsn_backward(fn_bwd, ctx.info, *args, *required_results)
+        input_templates = tuple(
+            torch.empty(shape, dtype=dtype, device=device)
+            for shape, dtype, device in getattr(ctx, "input_template_specs", ())
+        )
+        grads = flexsn_backward(
+            fn_bwd,
+            ctx.info,
+            *args,
+            *required_results,
+            input_templates=input_templates,
+        )
         return None, None, None, None, *grads
