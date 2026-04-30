@@ -110,9 +110,8 @@ def main() -> None:
          lambda: build_vgg(make_flexsn_factory())),
     ]
 
-    scale_label = "ImageNet-scale" if H >= 224 and W >= 224 else "CIFAR-scale"
-    print(f"Input : T={T}, B={B}, {C}x{H}x{W}  ({scale_label})")
-    print("Model : SpikingVGG-16-BN")
+    print(f"Input : T={T}, B={B}, {C}×{H}×{W}  (ImageNet-scale)")
+    print(f"Model : SpikingVGG-16-BN")
     print()
     print(f"  {'backend':<30}  {'ms/iter':>9}  {'img/s':>9}  {'vs torch':>10}")
     print("-" * 68)
@@ -120,20 +119,13 @@ def main() -> None:
     baseline_ms = None
     for label, build_fn in configs:
         model = build_fn()
-        model.train()
+        model.eval()
 
-        def step(model=model):
-            functional.reset_net(model)
-            model.zero_grad(set_to_none=True)
-            outputs = model(x)
-            outputs = outputs if isinstance(outputs, (tuple, list)) else (outputs,)
-            loss = sum(out.float().sum() for out in outputs)
-            loss.backward()
-
-        # One extra iteration to initialize states and trigger Triton JIT +
-        # autotune before timing begins (avoids measuring compile cost).
-        step()
-        ms = cuda_time_ms(step)
+        with torch.no_grad():
+            # One extra forward to initialise states and trigger Triton JIT +
+            # autotune before timing begins (avoids measuring compile cost).
+            model(x)
+            ms = cuda_time_ms(lambda: (functional.reset_net(model), model(x)))
 
         imgs_per_sec = B * 1000 / ms
         rel = f"{ms / baseline_ms:.2f}×" if baseline_ms is not None else "1.00×"

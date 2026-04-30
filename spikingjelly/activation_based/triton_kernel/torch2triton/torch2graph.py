@@ -3,7 +3,7 @@ from typing import Callable, Optional, Tuple
 
 import torch
 import torch.fx as fx
-from functorch.compile import aot_function
+from functorch.compile import aot_function, min_cut_rematerialization_partition
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
@@ -49,12 +49,6 @@ def _optimize_graph(graph: fx.Graph):
     return GraphOptimizer(fx.GraphModule({}, graph)).transform().graph
 
 
-def _normalize_outputs(outputs):
-    if isinstance(outputs, torch.Tensor):
-        return (outputs,)
-    return tuple(outputs)
-
-
 def generate_inference_graph(fn: Callable, example_inputs: tuple):
     """Generate an optimized inference graph from a PyTorch function.
 
@@ -80,7 +74,7 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple):
             i.requires_grad = False  # for inference
 
     # feed the fake inputs
-    ys = _normalize_outputs(f(*example_inputs))
+    _ = f(*example_inputs)
     return _optimize_graph(collector.fwd_graph)
 
 
@@ -108,6 +102,7 @@ def generate_forward_and_backward_graph(
         fn,
         fw_compiler=collector.get_forward_compiler(),
         bw_compiler=collector.get_backward_compiler(),
+        partition_fn=min_cut_rematerialization_partition,
     )
 
     if requires_grad is not None:
@@ -120,7 +115,14 @@ def generate_forward_and_backward_graph(
                 i.requires_grad = True
 
     # feed the fake inputs
-    ys = _normalize_outputs(f(*example_inputs))
+    ys = f(*example_inputs)
+    # Normalise to tuple so iteration always walks outputs, not tensor dimensions
+    if isinstance(ys, torch.Tensor):
+        ys = (ys,)
+    elif not isinstance(ys, (list, tuple)):
+        raise ValueError(
+            f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}"
+        )
     # choose a differentiable Tensor in ys as the starting point of .backward()
     # (some outputs, e.g. spike signals from comparisons, have no grad_fn)
     o = None
