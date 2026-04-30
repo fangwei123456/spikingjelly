@@ -1179,8 +1179,8 @@ def test_dynamo_body_result_templates_use_speculated_outputs():
     )
 
     assert specs == (
-        ((2,), torch.float64, torch.device("cpu")),
-        ((3,), torch.float16, torch.device("cpu")),
+        ((2,), torch.float64),
+        ((3,), torch.float16),
     )
 
 

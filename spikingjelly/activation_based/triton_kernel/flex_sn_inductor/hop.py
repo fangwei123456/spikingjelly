@@ -262,21 +262,63 @@ def _output_template_specs_from_dynamo_body_result(
         example_value = _dynamo_leaf_example_value(leaf)
         if not isinstance(example_value, torch.Tensor):
             return None
-        specs.append(
-            (tuple(example_value.shape), example_value.dtype, example_value.device)
-        )
+        specs.append((tuple(example_value.shape), example_value.dtype))
     return tuple(specs)
 
 
 def lowerable_scan_available() -> bool:
+    """Report whether PyTorch's built-in ``scan`` HOP is available.
+
+    Chinese:
+        返回当前环境是否提供 PyTorch 内置 ``scan`` HOP。
+
+    English:
+        Return whether the current environment exposes PyTorch's built-in
+        ``scan`` higher-order operator.
+
+    :returns: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
+        otherwise ``False``. Chinese: 若 ``torch.ops.higher_order.scan`` 可用则
+        返回 ``True``，否则返回 ``False``。
+    :rtype: bool
+    """
     return _torch_scan_op is not None
 
 
 def dynamo_hop_available() -> bool:
+    """Report whether the FlexSN Dynamo HOP registration succeeded.
+
+    Chinese:
+        返回 FlexSN 的 Dynamo HOP 注册是否成功。
+
+    English:
+        Return whether the FlexSN-specific Dynamo HigherOrderOperator
+        registration has been installed successfully.
+
+    :returns: EN: ``True`` when the Dynamo compatibility shim for
+        ``flex_sn_scan`` is registered; otherwise ``False``. Chinese:
+        当 ``flex_sn_scan`` 的 Dynamo 兼容注册已完成时返回 ``True``，否则返回
+        ``False``。
+    :rtype: bool
+    """
     return _DYNAMO_HOP_REGISTERED
 
 
 def lowerable_while_loop_available() -> bool:
+    """Report whether PyTorch's built-in ``while_loop`` HOP is available.
+
+    Chinese:
+        返回当前环境是否提供 PyTorch 内置 ``while_loop`` HOP。
+
+    English:
+        Return whether the current environment exposes PyTorch's built-in
+        ``while_loop`` higher-order operator.
+
+    :returns: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
+        available; otherwise ``False``. Chinese: 若
+        ``torch.ops.higher_order.while_loop`` 可用则返回 ``True``，否则返回
+        ``False``。
+    :rtype: bool
+    """
     return _torch_while_loop is not None
 
 
