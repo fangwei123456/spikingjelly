@@ -280,7 +280,9 @@ def lowerable_while_loop_available() -> bool:
     return _torch_while_loop is not None
 
 
-def _callable_positional_arg_range(fn: Callable) -> tuple[int, int | None] | None:
+def _callable_positional_arg_range(
+    fn: Callable,
+) -> Optional[Tuple[int, Optional[int]]]:
     target = fn.forward if isinstance(fn, torch.nn.Module) else fn
     try:
         signature = inspect.signature(target)
