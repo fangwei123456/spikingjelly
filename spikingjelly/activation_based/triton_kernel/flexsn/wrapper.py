@@ -1,4 +1,6 @@
 import torch
+from typing import Optional, Tuple
+
 from torch import autograd
 
 try:
@@ -202,8 +204,8 @@ def flexsn_backward(
     f,
     info: FlexSNInfo,
     *args,
-    input_templates=None,
-    state_templates=None,
+    input_templates: Optional[Tuple[torch.Tensor, ...]] = None,
+    state_templates: Optional[Tuple[torch.Tensor, ...]] = None,
 ) -> tuple:
     """Run the training backward kernel for FlexSN.
 
@@ -215,8 +217,29 @@ def flexsn_backward(
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
-    :param args: EN: Gradients and saved tensors accepted by the kernel. Chinese: kernel 接收的梯度与保存张量。
-    :return: EN: Gradients for inputs and initial states. When ``T == 0``, returns zero-filled gradients. Chinese: 输入与初始状态的梯度；当 ``T == 0`` 时, 返回零填充梯度。
+    :param args: EN: Gradients followed by any saved tensors accepted by the kernel.
+        The leading ``info.num_outputs + info.num_states`` entries correspond to
+        output/state-sequence gradients, and the remaining entries are saved tensors
+        from the forward pass. Chinese: kernel 接收的梯度与保存张量。前
+        ``info.num_outputs + info.num_states`` 个参数对应输出/状态序列梯度, 其余参数
+        为前向保存张量。
+    :type args: tuple
+    :param input_templates: EN: Per-input-sequence templates used to allocate input
+        gradients. They are required when all incoming gradients are ``None`` and
+        ensure that state-only cores still return correctly shaped input-sequence
+        gradients. Chinese: 每个输入序列的模板, 用于分配输入梯度。当所有传入梯度都为
+        ``None`` 时必须提供, 并确保仅有状态输出的 core 仍返回形状正确的输入梯度。
+    :type input_templates: Optional[Tuple[torch.Tensor, ...]]
+    :param state_templates: EN: Per-initial-state templates used to allocate initial
+        state gradients. When provided, the returned state gradients preserve the
+        original initial-state shapes instead of inferring them from state-sequence
+        gradients. Chinese: 每个初始状态的模板, 用于分配初始状态梯度。提供后, 返回的
+        状态梯度会保持初始状态原始形状, 而不是从状态序列梯度中推断。
+    :type state_templates: Optional[Tuple[torch.Tensor, ...]]
+    :return: EN: Gradients for inputs and initial states. When ``T == 0`` or all
+        incoming gradients are ``None``, returns zero-filled gradients that follow
+        the provided templates. Chinese: 输入与初始状态的梯度；当 ``T == 0`` 或所有传入
+        梯度都为 ``None`` 时, 返回符合模板的零梯度。
     :rtype: tuple
     """
     required_grad_count = info.num_outputs + info.num_states

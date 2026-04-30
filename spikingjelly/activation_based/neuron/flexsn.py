@@ -488,6 +488,7 @@ def _validate_scan_backend_contract(
                 f"{seq_template.device}), but return #{i} is "
                 f"({tensor.dtype}, {tensor.device})."
             )
+    return example_inputs
 
 
 class FlexSNKernel:
@@ -652,9 +653,10 @@ class FlexSN(base.MemoryModule):
         :param example_outputs: ``core`` 的单步输出模板，形式为 ``tuple([*outputs])``。
             当 ``backend="torch"`` 且输入为空序列 ``T == 0`` 时, 需要用它来构造输出张量的
             形状和 dtype, 从而避免为了推断输出而执行 ``core``。对于 scan 后端
-            (``"triton"``, ``"inductor"``, ``"hop"``), 若提供该参数, 每个模板张量都必须与
-            第一个 ``example_inputs`` 张量的单步形状和 dtype 相匹配。若不需要空序列模板,
-            则可以为 ``None``。默认 ``None``。
+            ``"triton"`` 和 ``"inductor"``, 若提供该参数, 每个模板张量都必须与第一个
+            ``example_inputs`` 张量的单步形状和 dtype 相匹配。``"hop"`` 后端会保留任意
+            输出模板, 并在空序列/HOP 路径中按运行时输入设备物化它们, 不执行上述形状/dtype
+            校验。若不需要空序列模板, 则可以为 ``None``。默认 ``None``。
         :type example_outputs: Optional[Tuple[torch.Tensor]]
 
         ----
@@ -721,8 +723,11 @@ class FlexSN(base.MemoryModule):
             ``tuple([*outputs])``. When ``backend="torch"`` and the input sequence is
             empty (``T == 0``), these templates are required to materialize output
             shapes and dtypes without executing ``core``. For scan backends
-            (``"triton"``, ``"inductor"``, ``"hop"``), each provided template must match
-            the first ``example_inputs`` tensor's per-step shape and dtype. Defaults to
+            ``"triton"`` and ``"inductor"``, each provided template must match the
+            first ``example_inputs`` tensor's per-step shape and dtype. The ``"hop"``
+            backend intentionally allows arbitrary output templates and materializes
+            them on the runtime input device for empty-sequence/HOP paths, so it
+            does not enforce that scan-backend shape/dtype check. Defaults to
             ``None`` when empty-sequence output templates are not needed.
         :type example_outputs: Optional[Tuple[torch.Tensor]]
         """
@@ -749,12 +754,12 @@ class FlexSN(base.MemoryModule):
         )
 
         if backend in ("triton", "inductor"):
+            validated_example_inputs = _validate_scan_backend_contract(
+                core, num_inputs, num_states, num_outputs, example_inputs
+            )
             _validate_scan_backend_output_template_specs(
                 self._explicit_output_template_specs,
-                example_inputs,
-            )
-            _validate_scan_backend_contract(
-                core, num_inputs, num_states, num_outputs, example_inputs
+                validated_example_inputs,
             )
         elif backend == "hop":
             if _flexsn_eager_scan is None:

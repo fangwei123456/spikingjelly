@@ -238,6 +238,19 @@ def test_scan_backends_reject_mismatched_example_output_template():
         )
 
 
+def test_scan_backends_reject_mismatched_example_output_template_without_example_inputs():
+    with pytest.raises(ValueError, match="example_outputs"):
+        FlexSN(
+            core=_lif_core,
+            num_inputs=1,
+            num_states=1,
+            num_outputs=1,
+            step_mode="m",
+            backend="inductor",
+            example_outputs=(torch.zeros(4),),
+        )
+
+
 def test_scan_backends_reject_mismatched_example_input_numel():
     with pytest.raises(ValueError, match="same number of elements"):
         FlexSN(
