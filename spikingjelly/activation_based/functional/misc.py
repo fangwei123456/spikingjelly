@@ -228,6 +228,12 @@ def fuse_conv_bn_eval_modules(net: nn.Module) -> fx.GraphModule:
 
     The input model must be in ``eval()`` mode. The returned value is a fused
     ``fx.GraphModule``.
+
+    :param net: EN: Evaluation-mode module to transform. 中文：待变换的评估模式模型，必须已经调用 ``eval()``。
+    :type net: torch.nn.Module
+    :return: EN: Fused FX graph module. 中文：融合后的 FX 图模块。
+    :rtype: torch.fx.GraphModule
+    :raises ValueError: EN: Raised when ``net`` is still in training mode. 中文：当 ``net`` 仍处于训练模式时抛出。
     """
 
     if net.training:
@@ -300,6 +306,12 @@ def pack_conv_bn_train_modules(net: nn.Module) -> fx.GraphModule:
 
     The input model must be in ``train()`` mode. The returned value is the packed
     ``fx.GraphModule``.
+
+    :param net: EN: Training-mode module to transform. 中文：待变换的训练模式模型，必须已经调用 ``train()``。
+    :type net: torch.nn.Module
+    :return: EN: Packed FX graph module. 中文：打包后的 FX 图模块。
+    :rtype: torch.fx.GraphModule
+    :raises ValueError: EN: Raised when ``net`` is not in training mode. 中文：当 ``net`` 不处于训练模式时抛出。
     """
     if not net.training:
         raise ValueError("pack_conv_bn_train_modules only supports train() models.")

@@ -20,8 +20,27 @@ __all__ = [
     "flexsn_inference_final_state",
     "flexsn_forward",
     "flexsn_backward",
+    "flexsn_backward_ncl_bucket",
     "FlexSNFunction",
 ]
+
+
+_BACKWARD_SMALL_MAX_NCL = 1 << 12
+_BACKWARD_MEDIUM_MAX_NCL = 1 << 17
+_BACKWARD_LARGE_MAX_NCL = 1 << 20
+_BACKWARD_XLARGE_MAX_NCL = 1 << 23
+
+
+def flexsn_backward_ncl_bucket(ncl: int) -> int:
+    if ncl <= _BACKWARD_SMALL_MAX_NCL:
+        return 0
+    if ncl <= _BACKWARD_MEDIUM_MAX_NCL:
+        return 1
+    if ncl <= _BACKWARD_LARGE_MAX_NCL:
+        return 2
+    if ncl <= _BACKWARD_XLARGE_MAX_NCL:
+        return 3
+    return 4
 
 
 def _num_elements_per_step(x: torch.Tensor) -> int:

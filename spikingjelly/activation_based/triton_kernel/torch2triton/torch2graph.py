@@ -123,19 +123,17 @@ def generate_forward_and_backward_graph(
         raise ValueError(
             f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}"
         )
-    # choose a differentiable Tensor in ys as the starting point of .backward()
-    # (some outputs, e.g. spike signals from comparisons, have no grad_fn)
-    o = None
-    for y in ys:
-        if isinstance(y, torch.Tensor) and (y.requires_grad or y.grad_fn is not None):
-            o = y
-            break
-    if o is None:
+    diff_outputs = [
+        y
+        for y in ys
+        if isinstance(y, torch.Tensor) and (y.requires_grad or y.grad_fn is not None)
+    ]
+    if not diff_outputs:
         raise ValueError(f"No differentiable Tensor found in the output of the function {fn}")
-    # create a fake gradient
-    g = torch.randn_like(o)
-    # backward
-    o.backward(g)
+    torch.autograd.backward(
+        diff_outputs,
+        [torch.randn_like(y) for y in diff_outputs],
+    )
 
     collector.bwd_graph.lint()
 

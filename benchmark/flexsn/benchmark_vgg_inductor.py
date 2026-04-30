@@ -53,18 +53,24 @@ def make_flexsn_factory():
 # Timing helper
 # ---------------------------------------------------------------------------
 
-def cuda_time_ms(fn, warmup: int = 5, iters: int = 50) -> float:
+def cuda_time_ms(fn, warmup: int = 5, iters: int = 50, reset_hook=None) -> float:
     for _ in range(warmup):
+        if reset_hook is not None:
+            reset_hook()
         fn()
     torch.cuda.synchronize()
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
+    elapsed = 0.0
     for _ in range(iters):
+        if reset_hook is not None:
+            reset_hook()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
         fn()
-    end.record()
-    torch.cuda.synchronize()
-    return start.elapsed_time(end) / iters
+        end.record()
+        end.synchronize()
+        elapsed += start.elapsed_time(end)
+    return elapsed / iters
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +116,9 @@ def main() -> None:
          lambda: build_vgg(make_flexsn_factory())),
     ]
 
-    print(f"Input : T={T}, B={B}, {C}×{H}×{W}  (ImageNet-scale)")
-    print(f"Model : SpikingVGG-16-BN")
+    scale = "ImageNet-scale" if H >= 224 and W >= 224 else "CIFAR-scale"
+    print(f"Input : T={T}, B={B}, {C}x{H}x{W}  ({scale})")
+    print("Model : SpikingVGG-16-BN")
     print()
     print(f"  {'backend':<30}  {'ms/iter':>9}  {'img/s':>9}  {'vs torch':>10}")
     print("-" * 68)
@@ -125,7 +132,7 @@ def main() -> None:
             # One extra forward to initialise states and trigger Triton JIT +
             # autotune before timing begins (avoids measuring compile cost).
             model(x)
-            ms = cuda_time_ms(lambda: (functional.reset_net(model), model(x)))
+            ms = cuda_time_ms(lambda: model(x), reset_hook=lambda: functional.reset_net(model))
 
         imgs_per_sec = B * 1000 / ms
         rel = f"{ms / baseline_ms:.2f}×" if baseline_ms is not None else "1.00×"

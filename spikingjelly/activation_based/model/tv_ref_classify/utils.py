@@ -6,6 +6,8 @@ import os
 import statistics
 import time
 from collections import defaultdict, deque, OrderedDict
+from numbers import Number
+from typing import Optional, Sequence, Union
 
 import torch
 import torch.distributed as dist
@@ -92,7 +94,10 @@ class ThroughputValue:
     def synchronize_between_processes(self):
         """Synchronize cumulative samples/time across ranks.
 
-        Windowed statistics stored in ``deque`` remain local to each rank.
+        ``total_samples`` is reduced with ``SUM`` across all ranks, while
+        ``total_time`` is reduced with ``MAX`` so global throughput is computed
+        as ``sum(samples) / max(elapsed_time)``. Windowed statistics stored in
+        ``deque`` remain local to each rank.
         """
         if not is_dist_avail_and_initialized():
             return
@@ -506,7 +511,23 @@ def store_model_weights(model, checkpoint_path, checkpoint_key="model", strict=T
     return output_path
 
 
-def reduce_across_processes(val, op=dist.ReduceOp.SUM, dtype=None):
+def reduce_across_processes(
+    val: Union[int, float, torch.Tensor, Sequence[Number]],
+    op: dist.ReduceOp = dist.ReduceOp.SUM,
+    dtype: Optional[torch.dtype] = None,
+) -> torch.Tensor:
+    """EN: Reduce a scalar, tensor, or number sequence across distributed processes.
+    中文：对标量、张量或数字序列在分布式进程间执行归约。
+
+    :param val: EN: Value to reduce. 中文：待归约的值。
+    :type val: Union[int, float, torch.Tensor, Sequence[Number]]
+    :param op: EN: Reduction operator, defaulting to SUM. 中文：归约操作符，默认为 SUM。
+    :type op: torch.distributed.ReduceOp
+    :param dtype: EN: Optional output tensor dtype. 中文：可选的输出张量数据类型。
+    :type dtype: Optional[torch.dtype]
+    :return: EN: Reduced tensor placed on the backend-appropriate device. 中文：位于当前后端对应设备上的归约结果张量。
+    :rtype: torch.Tensor
+    """
     if not is_dist_avail_and_initialized():
         # nothing to sync, but we still convert to tensor for consistency with the distributed case.
         return torch.tensor(val, dtype=dtype)

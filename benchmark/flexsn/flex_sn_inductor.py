@@ -44,23 +44,24 @@ def make_flexsn(backend: str) -> FlexSN:
 # ---------------------------------------------------------------------------
 
 
-def cuda_time_ms(fn, warmup: int = 10, iters: int = 200,
-                 reset_hook=None) -> float:
+def cuda_time_ms(fn, warmup: int = 10, iters: int = 200, reset_hook=None) -> float:
     for _ in range(warmup):
         if reset_hook is not None:
             reset_hook()
         fn()
     torch.cuda.synchronize()
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
+    elapsed = 0.0
     for _ in range(iters):
         if reset_hook is not None:
             reset_hook()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
         fn()
-    end.record()
-    torch.cuda.synchronize()
-    return start.elapsed_time(end) / iters
+        end.record()
+        end.synchronize()
+        elapsed += start.elapsed_time(end)
+    return elapsed / iters
 
 
 def ratio_flag(r: float) -> str:
