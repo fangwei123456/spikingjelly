@@ -18,12 +18,12 @@ from .info import FlexSNInfo
 
 
 __all__ = [
-    "flexsn_inference",
-    "flexsn_inference_final_state",
-    "flexsn_forward",
+    "FlexSNFunction",
     "flexsn_backward",
     "flexsn_backward_ncl_bucket",
-    "FlexSNFunction",
+    "flexsn_forward",
+    "flexsn_inference",
+    "flexsn_inference_final_state",
 ]
 
 
@@ -78,6 +78,35 @@ def _first_non_none_tensor(tensors):
         if tensor is not None:
             return tensor
     return None
+
+
+def _allocate_state_grad(
+    i: int,
+    T: int,
+    state_templates: Optional[Tuple[torch.Tensor, ...]],
+    grad_state_seq_examples,
+    grad_example: torch.Tensor,
+) -> torch.Tensor:
+    if state_templates is not None:
+        return (
+            torch.zeros_like(state_templates[i])
+            if T == 0
+            else torch.empty_like(state_templates[i])
+        )
+
+    if i < len(grad_state_seq_examples) and grad_state_seq_examples[i] is not None:
+        example = grad_state_seq_examples[i]
+        return (
+            example.new_zeros(example.shape[1:])
+            if T == 0
+            else example.new_empty(example.shape[1:])
+        )
+
+    return (
+        grad_example.new_zeros(grad_example.shape[1:])
+        if T == 0
+        else grad_example.new_empty(grad_example.shape[1:])
+    )
 
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
@@ -227,8 +256,12 @@ def flexsn_backward(
     :param input_templates: EN: Per-input-sequence templates used to allocate input
         gradients. They are required when all incoming gradients are ``None`` and
         ensure that state-only cores still return correctly shaped input-sequence
-        gradients. Chinese: 每个输入序列的模板, 用于分配输入梯度。当所有传入梯度都为
-        ``None`` 时必须提供, 并确保仅有状态输出的 core 仍返回形状正确的输入梯度。
+        gradients. When omitted, the fallback allocation path is only valid for
+        single-input cores because it infers the input gradient shape from the
+        first non-``None`` incoming gradient. Chinese: 每个输入序列的模板, 用于分配
+        输入梯度。当所有传入梯度都为 ``None`` 时必须提供, 并确保仅有状态输出的 core
+        仍返回形状正确的输入梯度。若省略该参数, 当前仅支持单输入 core, 因为回退路径会从
+        第一个非 ``None`` 的传入梯度推断输入梯度形状。
     :type input_templates: Optional[Tuple[torch.Tensor, ...]]
     :param state_templates: EN: Per-initial-state templates used to allocate initial
         state gradients. When provided, the returned state gradients preserve the
@@ -249,6 +282,10 @@ def flexsn_backward(
         if grad_example is None:
             raise ValueError(
                 "input_templates are required when all incoming FlexSN gradients are None"
+            )
+        if info.num_inputs != 1:
+            raise ValueError(
+                "input_templates are required when FlexSN has multiple input sequences"
             )
         input_templates = tuple(grad_example for _ in range(info.num_inputs))
     if len(input_templates) != info.num_inputs:
@@ -284,24 +321,12 @@ def flexsn_backward(
     # State-sequence gradients include the leading time dimension. The wrapper
     # returns gradients for the initial states, so their templates are shape[1:].
     grad_inputs += [
-        (
-            torch.zeros_like(state_templates[i])
-            if T == 0
-            else torch.empty_like(state_templates[i])
-        )
-        if state_templates is not None
-        else (
-            grad_state_seq_examples[i].new_zeros(grad_state_seq_examples[i].shape[1:])
-            if T == 0
-            else grad_state_seq_examples[i].new_empty(
-                grad_state_seq_examples[i].shape[1:]
-            )
-        )
-        if i < len(grad_state_seq_examples) and grad_state_seq_examples[i] is not None
-        else (
-            grad_example.new_zeros(grad_example.shape[1:])
-            if T == 0
-            else grad_example.new_empty(grad_example.shape[1:])
+        _allocate_state_grad(
+            i,
+            T,
+            state_templates,
+            grad_state_seq_examples,
+            grad_example,
         )
         for i in range(info.num_states)
     ]

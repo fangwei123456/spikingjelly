@@ -1149,6 +1149,10 @@ class FlexSN(base.MemoryModule):
             can_elide_zero_states = (
                 self.states is None and _can_elide_zero_state_inputs(self)
             )
+            # The first init_states branch handles the case where zero-state elision
+            # is impossible. _no_grad then determines whether use_implicit_zero_states
+            # can skip explicit state tensors entirely. The second init_states branch
+            # only runs if self.states is still None, so re-initialization cannot occur.
             if self.states is None and not can_elide_zero_states:
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
             _no_grad = not torch.is_grad_enabled() or (

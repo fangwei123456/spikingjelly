@@ -560,7 +560,9 @@ def _flexsn_training_backward(ctx, grad_out: List[Optional[torch.Tensor]]):
         _grad_or_zeros(grad_out, i, ctx.output_template_specs[i])
         for i in range(required_grads)
     ]
-    input_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
+    # ctx.input_template_specs mirrors the full flat argument list passed into the
+    # training custom op: input sequences first, then any explicit initial states.
+    arg_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
     try:
         if ctx._active_ref_finalizer.alive:
             ctx._active_ref_finalizer.detach()
@@ -569,7 +571,7 @@ def _flexsn_training_backward(ctx, grad_out: List[Optional[torch.Tensor]]):
                 ctx.handle,
                 grad_inputs,
                 list(ctx.saved_tensors),
-                input_templates,
+                arg_templates,
             )
         )
         if len(grads) != len(ctx.input_template_specs):
@@ -608,7 +610,9 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
             seq_grad[-1].copy_(final_grad)
         state_grads.append(seq_grad)
 
-    input_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
+    # ctx.input_template_specs already includes both input-sequence and initial-state
+    # templates, and flexsn_inductor_backward splits them back apart internally.
+    arg_templates = [_materialize_template(spec) for spec in ctx.input_template_specs]
     try:
         if ctx._active_ref_finalizer.alive:
             ctx._active_ref_finalizer.detach()
@@ -617,7 +621,7 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
                 ctx.handle,
                 [*output_grads, *state_grads],
                 list(ctx.saved_tensors),
-                input_templates,
+                arg_templates,
             )
         )
         if len(grads) != len(ctx.input_template_specs):

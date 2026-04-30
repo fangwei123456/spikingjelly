@@ -675,6 +675,16 @@ def test_flexsn_wrapper_backward_all_none_gradients_use_templates():
     torch.testing.assert_close(grad_v, torch.zeros_like(state_template))
 
 
+def test_flexsn_wrapper_backward_requires_input_templates_for_multi_input_core():
+    from spikingjelly.activation_based.triton_kernel.flexsn import wrapper
+
+    info = SimpleNamespace(num_inputs=2, num_states=0, num_outputs=1)
+    grad_output = torch.randn(3, 4)
+
+    with pytest.raises(ValueError, match="multiple input sequences"):
+        wrapper.flexsn_backward(None, info, grad_output)
+
+
 def test_inductor_final_state_warmup_args_use_example_shapes():
     info = SimpleNamespace(num_inputs=2, num_states=2)
     specs = (
@@ -1398,8 +1408,8 @@ def test_compile_fullgraph_lowerable_while_loop_matches_eager(rng):
     compiled_out = torch.compile(run_scan, fullgraph=True)(x_compiled, v0_compiled)
 
     assert len(compiled_out) == len(eager_out)
-    for i in range(len(eager_out)):
-        torch.testing.assert_close(compiled_out[i], eager_out[i])
+    for compiled_tensor, eager_tensor in zip(compiled_out, eager_out, strict=True):
+        torch.testing.assert_close(compiled_tensor, eager_tensor)
 
 
 def test_compile_fullgraph_hop_backend_matches_eager_with_lowerable_while_loop(
