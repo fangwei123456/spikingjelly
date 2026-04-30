@@ -146,5 +146,7 @@ dmypy.json
 uv.lock
 events.out.tfevents.*
 .ruff_cache/
+/plan*.md
+AGENTS.md
 workspace/
 /w1.py

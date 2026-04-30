@@ -28,8 +28,8 @@
     :caption: 高级
 
     /tutorials/cn/cupy_neuron
-    /tutorials/cn/triton_flexsn
-    /tutorials/cn/flexsn_inductor
+    /tutorials/cn/triton_backend
+    /tutorials/cn/flexsn
     /tutorials/cn/memopt
     /tutorials/cn/distributed_training
     /tutorials/cn/dsqn
