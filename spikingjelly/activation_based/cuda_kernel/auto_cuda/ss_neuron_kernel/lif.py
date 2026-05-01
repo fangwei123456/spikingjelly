@@ -7,7 +7,7 @@ from ...cuda_utils import (
     resolve_python_object,
     use_cupy_custom_op,
 )
-from .integrate_and_fire import _replay_and_grad
+from .common import replay_and_grad
 from .ss_neuron_kernel_base import (
     NeuronATGFBase,
     NeuronBPKernel,
@@ -215,7 +215,7 @@ if use_cupy_custom_op() and cupy is not None:
         ) = ctx.inputs
         forward_kernel = ctx.forward_kernel
         backward_kernel = ctx.backward_kernel
-        grads = _replay_and_grad(
+        grads = replay_and_grad(
             LIFNodeATGF.apply,
             (x, v),
             (

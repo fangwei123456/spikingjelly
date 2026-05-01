@@ -7,6 +7,7 @@ from ...cuda_utils import (
     resolve_python_object,
     use_cupy_custom_op,
 )
+from .common import replay_and_grad
 from .ss_neuron_kernel_base import (
     NeuronATGFBase,
     NeuronBPKernel,
@@ -85,26 +86,6 @@ class IFNodeATGF(torch.autograd.Function):
         return py_dict["grad_x"], py_dict["grad_v"], None, None, None, None
 
 
-def _replay_and_grad(op, tensor_args, static_args, grad_outputs):
-    replay_inputs = []
-    grad_inputs = []
-    for x in tensor_args:
-        t = x.detach().requires_grad_(x.requires_grad)
-        replay_inputs.append(t)
-        grad_inputs.append(t)
-    with torch.enable_grad():
-        outputs = op(*replay_inputs, *static_args)
-    if not isinstance(outputs, tuple):
-        outputs = (outputs,)
-    grads = torch.autograd.grad(
-        outputs=outputs,
-        inputs=grad_inputs,
-        grad_outputs=grad_outputs[: len(outputs)],
-        allow_unused=True,
-    )
-    return grads
-
-
 if use_cupy_custom_op() and cupy is not None:
 
     @torch.library.custom_op("sj::cupy_ss_if_forward", mutates_args=())
@@ -148,7 +129,7 @@ if use_cupy_custom_op() and cupy is not None:
         )
         forward_kernel = ctx.forward_kernel
         backward_kernel = ctx.backward_kernel
-        grads = _replay_and_grad(
+        grads = replay_and_grad(
             IFNodeATGF.apply,
             (x, v),
             (
