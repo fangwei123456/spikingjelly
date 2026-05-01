@@ -279,7 +279,7 @@ class spikeLinear(torch.autograd.Function):
 _CUSTOM_SPIKE_OP_READY = False
 
 
-if use_cupy_custom_op() and cpp_wrapper is not None:
+if use_cupy_custom_op():
     @torch.library.custom_op("sj::cupy_spike_linear_forward", mutates_args=())
     def cupy_spike_linear_forward(
         spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]
