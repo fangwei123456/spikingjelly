@@ -99,6 +99,20 @@ def resolve_python_object(obj_id: int) -> Any:
         return obj
 
 
+def python_object_registry_key(obj: Any) -> str:
+    cls = obj.__class__
+    key_parts: list[Any] = [cls.__module__, cls.__qualname__]
+    kernel_name = getattr(obj, "kernel_name", None)
+    full_codes = getattr(obj, "full_codes", None)
+    if isinstance(kernel_name, str):
+        key_parts.append(("kernel_name", kernel_name))
+    if isinstance(full_codes, str):
+        key_parts.append(("full_codes", full_codes))
+    if len(key_parts) == 2:
+        key_parts.append(("repr", repr(obj)))
+    return repr(tuple(key_parts))
+
+
 def cpu_timer(f: Callable, *args, **kwargs):
     """
     * :ref:`API in English <cpu_timer-en>`

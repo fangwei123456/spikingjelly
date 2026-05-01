@@ -3,6 +3,7 @@ from typing import Callable, Optional
 import torch
 
 from ...cuda_utils import (
+    python_object_registry_key,
     register_python_object,
     resolve_python_object,
     use_cupy_custom_op,
@@ -244,8 +245,12 @@ if use_cupy_custom_op() and cupy is not None:
 
 def ss_lif_step(x, v, v_th, v_reset, decay, forward_kernel, backward_kernel):
     if use_cupy_custom_op() and cupy is not None:
-        fk = register_python_object(forward_kernel, repr(forward_kernel))
-        bk = register_python_object(backward_kernel, repr(backward_kernel))
+        fk = register_python_object(
+            forward_kernel, python_object_registry_key(forward_kernel)
+        )
+        bk = register_python_object(
+            backward_kernel, python_object_registry_key(backward_kernel)
+        )
         vr = float("nan") if v_reset is None else float(v_reset)
         return cupy_ss_lif_forward(x, v, v_th, vr, v_reset is None, decay, fk, bk)
     return LIFNodeATGF.apply(
