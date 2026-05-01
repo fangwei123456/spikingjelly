@@ -3929,9 +3929,15 @@ def multistep_qif_ptt(
     x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, surrogate_function
 ):
     if use_cupy_custom_op() and cupy is not None:
-        sg_id = None
         try:
             sg_id = _sg_obj_id(surrogate_function)
+        except TypeError as e:
+            logging.debug(
+                "multistep_qif_ptt: preflight fallback (surrogate=%s): %s",
+                type(surrogate_function).__name__,
+                e,
+            )
+        else:
             v_reset_value = float("nan") if v_reset is None else float(v_reset)
             return cupy_multistep_qif_forward(
                 x_seq,
@@ -3944,10 +3950,6 @@ def multistep_qif_ptt(
                 a0,
                 detach_reset,
                 sg_id,
-            )
-        except Exception as e:
-            logging.debug(
-                "multistep_qif_ptt: custom op fallback (sg_id=%s): %s", sg_id, e
             )
     return MultiStepQIFNodePTT.apply(
         x_seq,
@@ -3980,9 +3982,15 @@ def multistep_izhikevich_ptt(
     surrogate_function,
 ):
     if use_cupy_custom_op() and cupy is not None:
-        sg_id = None
         try:
             sg_id = _sg_obj_id(surrogate_function)
+        except TypeError as e:
+            logging.debug(
+                "multistep_izhikevich_ptt: preflight fallback (surrogate=%s): %s",
+                type(surrogate_function).__name__,
+                e,
+            )
+        else:
             v_reset_value = float("nan") if v_reset is None else float(v_reset)
             return cupy_multistep_izhikevich_forward(
                 x_seq,
@@ -3999,12 +4007,6 @@ def multistep_izhikevich_ptt(
                 a0,
                 detach_reset,
                 sg_id,
-            )
-        except Exception as e:
-            logging.debug(
-                "multistep_izhikevich_ptt: custom op fallback (sg_id=%s): %s",
-                sg_id,
-                e,
             )
     return MultiStepIzhikevichNodePTT.apply(
         x_seq,
@@ -4037,9 +4039,15 @@ def multistep_eif_ptt(
     surrogate_function,
 ):
     if use_cupy_custom_op() and cupy is not None:
-        sg_id = None
         try:
             sg_id = _sg_obj_id(surrogate_function)
+        except TypeError as e:
+            logging.debug(
+                "multistep_eif_ptt: preflight fallback (surrogate=%s): %s",
+                type(surrogate_function).__name__,
+                e,
+            )
+        else:
             v_reset_value = float("nan") if v_reset is None else float(v_reset)
             return cupy_multistep_eif_forward(
                 x_seq,
@@ -4052,10 +4060,6 @@ def multistep_eif_ptt(
                 delta_T,
                 detach_reset,
                 sg_id,
-            )
-        except Exception as e:
-            logging.debug(
-                "multistep_eif_ptt: custom op fallback (sg_id=%s): %s", sg_id, e
             )
     return MultiStepEIFNodePTT.apply(
         x_seq,

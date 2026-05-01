@@ -2,12 +2,15 @@ import torch
 
 
 def sg_registry_key(sg) -> str:
+    params = getattr(sg, "_sg_params", {})
+    if isinstance(params, dict):
+        params = tuple(sorted(params.items()))
     return repr(
         (
             sg.__class__.__module__,
             sg.__class__.__qualname__,
             getattr(sg, "spiking", True),
-            getattr(sg, "_sg_params", {}),
+            params,
         )
     )
 
@@ -42,4 +45,3 @@ def replay_and_grad(op, tensor_args, static_args, grad_outputs):
     for idx, grad in zip(grad_input_indices, grads):
         mapped_grads[idx] = grad
     return tuple(mapped_grads)
-
