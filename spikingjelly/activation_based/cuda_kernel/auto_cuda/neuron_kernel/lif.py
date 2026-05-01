@@ -286,15 +286,16 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
             "decay": decay,
         }
         _, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+        # Avoid aliasing between custom_op outputs by replacing split-backed buffers
+        # with independent storages before kernel writes.
+        py_dict["spike_seq"] = torch.empty_like(py_dict["spike_seq"])
+        py_dict["h_seq"] = torch.empty_like(py_dict["h_seq"])
+        py_dict["v_v_seq"] = torch.empty_like(py_dict["v_v_seq"])
+        py_dict["v_v_seq"][0].copy_(v_init)
         if py_dict["v_reset"] is None:
             py_dict.pop("v_reset")
         forward_kernel((blocks,), (threads,), py_dict)
-        # custom_op outputs must not alias inputs or one another.
-        return (
-            py_dict["spike_seq"].clone(),
-            py_dict["v_v_seq"][1:,].clone(),
-            py_dict["h_seq"].clone(),
-        )
+        return py_dict["spike_seq"], py_dict["v_v_seq"][1:,], py_dict["h_seq"]
 
 
     @torch.library.register_fake("sj::cupy_multistep_lif_forward")

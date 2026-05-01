@@ -411,7 +411,7 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
         decay: torch.Tensor,
         decay_input: bool,
         sg_cupy_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         if x_seq.dtype == torch.float16 and v_init.numel() % 2 != 0:
             raise ValueError(
                 "When using the the PLIF neuron with half2 cupy backend, the numer of neurons should be even to avoid the wrong gradient of tau caused by padding!"
@@ -432,14 +432,19 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
             "decay": decay,
         }
         _, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+        # Avoid aliasing between custom_op outputs by replacing split-backed buffers
+        # with independent storages before kernel writes.
+        py_dict["spike_seq"] = torch.empty_like(py_dict["spike_seq"])
+        py_dict["h_seq"] = torch.empty_like(py_dict["h_seq"])
+        py_dict["v_v_seq"] = torch.empty_like(py_dict["v_v_seq"])
+        py_dict["v_v_seq"][0].copy_(v_init)
         if py_dict["v_reset"] is None:
             py_dict.pop("v_reset")
         forward_kernel((blocks,), (threads,), py_dict)
         return (
-            py_dict["spike_seq"].clone(),
-            py_dict["v_v_seq"][1:,].clone(),
-            py_dict["h_seq"].clone(),
-            py_dict["v_v_seq"].clone(),
+            py_dict["spike_seq"],
+            py_dict["v_v_seq"][1:,],
+            py_dict["h_seq"],
         )
 
 
@@ -455,20 +460,18 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
         decay_input: bool,
         sg_cupy_id: int,
     ):
-        T = x_seq.shape[0]
         return (
             x_seq.new_empty(x_seq.shape),
             x_seq.new_empty(x_seq.shape),
             x_seq.new_empty(x_seq.shape),
-            x_seq.new_empty((T + 1, *x_seq.shape[1:])),
         )
 
 
     def _setup_cupy_multistep_plif_context(ctx, inputs, output):
-        _, _, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = inputs
+        _, v_init, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = inputs
         h_seq = output[2]
-        v_v_seq = output[3]
-        ctx.save_for_backward(h_seq, v_v_seq, decay)
+        v_seq = output[1]
+        ctx.save_for_backward(h_seq, v_seq, v_init, decay)
         ctx.v_th = v_th
         ctx.v_reset = None if soft_reset else v_reset
         ctx.detach_reset = detach_reset
@@ -476,15 +479,14 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
         ctx.sg_cupy_id = sg_cupy_id
 
 
-    def _cupy_multistep_plif_backward(
-        ctx, grad_spike_seq, grad_v_seq, grad_h_seq, grad_v_v_seq
-    ):
+    def _cupy_multistep_plif_backward(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
         del grad_h_seq
-        del grad_v_v_seq
-        h_seq, v_v_seq, decay = ctx.saved_tensors
+        h_seq, v_seq, v_init, decay = ctx.saved_tensors
+        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0)
         grad_spike_seq = grad_spike_seq.contiguous()
         grad_v_seq = grad_v_seq.contiguous()
         h_seq = h_seq.contiguous()
+        v_v_seq = v_v_seq.contiguous()
         dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
         hard_reset = ctx.v_reset is not None
         backward_kernel = _get_plif_backward_kernel(
@@ -665,7 +667,7 @@ def multistep_plif(
         else:
             soft_reset = v_reset is None
             v_reset_value = 0.0 if v_reset is None else float(v_reset)
-            s_seq, v_seq, _, _ = cupy_multistep_plif_forward(
+            s_seq, v_seq, _ = cupy_multistep_plif_forward(
                 x_seq,
                 v_init,
                 v_threshold,
