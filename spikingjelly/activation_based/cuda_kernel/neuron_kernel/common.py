@@ -1,4 +1,5 @@
 import logging
+import math
 
 try:
     import cupy
@@ -40,6 +41,11 @@ __all__ = [
     "multistep_izhikevich_ptt",
     "multistep_eif_ptt",
 ]
+
+
+def _decode_v_reset(v_reset_value: float):
+    # NaN is used as a sentinel for soft reset (v_reset=None) in custom-op calls.
+    return None if math.isnan(v_reset_value) else v_reset_value
 
 
 class MultiStepIFNodePTT(torch.autograd.Function):
@@ -3640,7 +3646,7 @@ if use_cupy_custom_op() and cupy is not None:
                 v_init,
                 tau,
                 v_threshold,
-                None if v_reset != v_reset else v_reset,
+                _decode_v_reset(v_reset),
                 v_rest,
                 v_c,
                 a0,
@@ -3662,7 +3668,7 @@ if use_cupy_custom_op() and cupy is not None:
 
 
     def _qif_bw(ctx, grad_spike_seq, grad_v_seq):
-        x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, sg_id = (
+        x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, _sg_id = (
             ctx.inputs
         )
         sg = ctx.sg
@@ -3672,7 +3678,7 @@ if use_cupy_custom_op() and cupy is not None:
             (
                 tau,
                 v_threshold,
-                None if v_reset != v_reset else v_reset,
+                _decode_v_reset(v_reset),
                 v_rest,
                 v_c,
                 a0,
@@ -3715,7 +3721,7 @@ if use_cupy_custom_op() and cupy is not None:
                 w_init,
                 tau,
                 v_threshold,
-                None if v_reset != v_reset else v_reset,
+                _decode_v_reset(v_reset),
                 v_rest,
                 a,
                 b,
@@ -3757,7 +3763,7 @@ if use_cupy_custom_op() and cupy is not None:
             v_c,
             a0,
             detach_reset,
-            sg_id,
+            _sg_id,
         ) = ctx.inputs
         sg = ctx.sg
         grads = _replay_and_grad(
@@ -3766,7 +3772,7 @@ if use_cupy_custom_op() and cupy is not None:
             (
                 tau,
                 v_threshold,
-                None if v_reset != v_reset else v_reset,
+                _decode_v_reset(v_reset),
                 v_rest,
                 a,
                 b,
@@ -3822,7 +3828,7 @@ if use_cupy_custom_op() and cupy is not None:
                 v_init,
                 tau,
                 v_threshold,
-                None if v_reset != v_reset else v_reset,
+                _decode_v_reset(v_reset),
                 v_rest,
                 theta_rh,
                 delta_T,
@@ -3853,7 +3859,7 @@ if use_cupy_custom_op() and cupy is not None:
             theta_rh,
             delta_T,
             detach_reset,
-            sg_id,
+            _sg_id,
         ) = ctx.inputs
         sg = ctx.sg
         grads = _replay_and_grad(
@@ -3862,7 +3868,7 @@ if use_cupy_custom_op() and cupy is not None:
             (
                 tau,
                 v_threshold,
-                None if v_reset != v_reset else v_reset,
+                _decode_v_reset(v_reset),
                 v_rest,
                 theta_rh,
                 delta_T,
@@ -3923,6 +3929,7 @@ def multistep_qif_ptt(
     x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, surrogate_function
 ):
     if use_cupy_custom_op() and cupy is not None:
+        sg_id = None
         try:
             sg_id = _sg_obj_id(surrogate_function)
             v_reset_value = float("nan") if v_reset is None else float(v_reset)
@@ -3938,8 +3945,10 @@ def multistep_qif_ptt(
                 detach_reset,
                 sg_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(
+                "multistep_qif_ptt: custom op fallback (sg_id=%s): %s", sg_id, e
+            )
     return MultiStepQIFNodePTT.apply(
         x_seq,
         v_init,
@@ -3971,6 +3980,7 @@ def multistep_izhikevich_ptt(
     surrogate_function,
 ):
     if use_cupy_custom_op() and cupy is not None:
+        sg_id = None
         try:
             sg_id = _sg_obj_id(surrogate_function)
             v_reset_value = float("nan") if v_reset is None else float(v_reset)
@@ -3990,8 +4000,12 @@ def multistep_izhikevich_ptt(
                 detach_reset,
                 sg_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(
+                "multistep_izhikevich_ptt: custom op fallback (sg_id=%s): %s",
+                sg_id,
+                e,
+            )
     return MultiStepIzhikevichNodePTT.apply(
         x_seq,
         v_init,
@@ -4023,6 +4037,7 @@ def multistep_eif_ptt(
     surrogate_function,
 ):
     if use_cupy_custom_op() and cupy is not None:
+        sg_id = None
         try:
             sg_id = _sg_obj_id(surrogate_function)
             v_reset_value = float("nan") if v_reset is None else float(v_reset)
@@ -4038,8 +4053,10 @@ def multistep_eif_ptt(
                 detach_reset,
                 sg_id,
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(
+                "multistep_eif_ptt: custom op fallback (sg_id=%s): %s", sg_id, e
+            )
     return MultiStepEIFNodePTT.apply(
         x_seq,
         v_init,

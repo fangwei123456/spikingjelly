@@ -406,7 +406,11 @@ def spike_linear(
     if spike.get_device() < 0:
         return F.linear(spike, weight, bias)
     else:
-        if _CUSTOM_SPIKE_OP_READY and use_cupy_custom_op():
+        if (
+            _CUSTOM_SPIKE_OP_READY
+            and use_cupy_custom_op()
+            and not isinstance(padding, str)
+        ):
             return cupy_spike_linear_forward(spike, weight, bias)
         return spikeLinear.apply(spike, weight, bias)
 
@@ -454,7 +458,11 @@ def spike_conv1d(
     if spike.get_device() < 0:
         return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
     else:
-        if _CUSTOM_SPIKE_OP_READY and use_cupy_custom_op():
+        if (
+            _CUSTOM_SPIKE_OP_READY
+            and use_cupy_custom_op()
+            and not isinstance(padding, str)
+        ):
             return cupy_spike_convolution_forward(
                 spike,
                 weight,
@@ -512,7 +520,11 @@ def spike_conv2d(
     if spike.get_device() < 0:
         return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
     else:
-        if _CUSTOM_SPIKE_OP_READY and use_cupy_custom_op():
+        if (
+            _CUSTOM_SPIKE_OP_READY
+            and use_cupy_custom_op()
+            and not isinstance(padding, str)
+        ):
             return cupy_spike_convolution_forward(
                 spike,
                 weight,

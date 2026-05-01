@@ -103,8 +103,9 @@ def test_multistep_ptt_wrappers_cuda_forward_backward(kernel_fn, args_builder):
     v_init = torch.zeros(64, device="cuda", requires_grad=True)
 
     if kernel_fn is multistep_izhikevich_ptt:
-        w_init = args_builder(sg)[0]
-        other = args_builder(sg)[1:]
+        args = args_builder(sg)
+        w_init = args[0]
+        other = args[1:]
         spike_seq, v_seq, w_seq = kernel_fn(x_seq, v_init, w_init, *other)
         loss = spike_seq.mean() + v_seq.mean() + w_seq.mean()
     else:

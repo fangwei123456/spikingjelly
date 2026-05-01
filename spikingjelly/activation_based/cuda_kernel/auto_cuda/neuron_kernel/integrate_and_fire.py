@@ -1,5 +1,6 @@
 from typing import Optional
 
+import logging
 import torch
 
 from .common import (
@@ -298,8 +299,8 @@ def multistep_if(
                 sg_cupy_id,
             )
             return s_seq, v_seq
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug("multistep_if custom-op fallback: %s", e)
 
     return _legacy_multistep_if(
         x_seq=x_seq,

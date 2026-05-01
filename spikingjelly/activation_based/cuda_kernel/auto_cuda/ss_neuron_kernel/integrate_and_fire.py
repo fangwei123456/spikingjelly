@@ -124,7 +124,7 @@ if use_cupy_custom_op() and cupy is not None:
         ctx.backward_kernel = resolve_python_object(backward_kernel_id)
 
     def _ss_if_bw(ctx, grad_spike, grad_v_next):
-        x, v, v_th, v_reset, soft_reset, forward_kernel_id, backward_kernel_id = (
+        x, v, v_th, v_reset, soft_reset, _forward_kernel_id, _backward_kernel_id = (
             ctx.inputs
         )
         forward_kernel = ctx.forward_kernel

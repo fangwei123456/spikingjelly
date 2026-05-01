@@ -534,32 +534,6 @@ flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
 flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
 
 
-def _patch_dynamo_hop_make_for_flexsn():
-    try:
-        from torch._dynamo.variables.higher_order_ops import (
-            TorchHigherOrderOperatorVariable,
-        )
-    except BaseException:
-        return
-
-    if getattr(TorchHigherOrderOperatorVariable, "_sj_flexsn_patch_applied", False):
-        return
-
-    original_make = TorchHigherOrderOperatorVariable.make
-
-    @staticmethod
-    def _patched_make(value, source=None, **kwargs):
-        if value is flex_sn_scan:
-            return TorchHigherOrderOperatorVariable(value, source, **kwargs)
-        return original_make(value, source=source, **kwargs)
-
-    TorchHigherOrderOperatorVariable.make = _patched_make
-    TorchHigherOrderOperatorVariable._sj_flexsn_patch_applied = True
-
-
-_patch_dynamo_hop_make_for_flexsn()
-
-
 def eager_scan_final_state(
     core_fn: Callable,
     num_inputs: int,
@@ -1293,16 +1267,6 @@ def lowerable_while_loop_scan_final_state(
     final_states = final[pending_seq_end:states_end]
     final_output_buffers = final[states_end:outputs_end]
     return (*final_output_buffers, *final_states)
-
-
-flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
-# HOPs route every tensor call through the Autograd dispatch key even when
-# ``requires_grad=False``. Re-entering ``eager_scan`` from Autograd is
-# correct: the inner ``core_fn`` invocations build a standard per-timestep
-# autograd graph which is chained via ``torch.stack``/indexing, giving a
-# full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
-# graph natively by unrolling; see module docstring.
-flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
 
 
 def _register_dynamo_hop() -> None:

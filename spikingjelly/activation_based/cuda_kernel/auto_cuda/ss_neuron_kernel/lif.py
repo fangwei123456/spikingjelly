@@ -210,8 +210,8 @@ if use_cupy_custom_op() and cupy is not None:
             v_reset,
             soft_reset,
             decay,
-            forward_kernel_id,
-            backward_kernel_id,
+            _forward_kernel_id,
+            _backward_kernel_id,
         ) = ctx.inputs
         forward_kernel = ctx.forward_kernel
         backward_kernel = ctx.backward_kernel

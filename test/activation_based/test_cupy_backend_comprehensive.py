@@ -64,6 +64,51 @@ class _CompileProbeModel(torch.nn.Module):
         return self.node(self.proj(x))
 
 
+def _install_cupy_path_sentinel(monkeypatch, kind: str):
+    hits = {"count": 0}
+
+    if kind == "if":
+        from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import (
+            integrate_and_fire as ac_if,
+        )
+
+        original = ac_if.multistep_if
+
+        def _wrapped(*args, **kwargs):
+            hits["count"] += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(ac_if, "multistep_if", _wrapped)
+    elif kind == "lif":
+        from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import (
+            lif as ac_lif,
+        )
+
+        original = ac_lif.multistep_lif
+
+        def _wrapped(*args, **kwargs):
+            hits["count"] += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(ac_lif, "multistep_lif", _wrapped)
+    elif kind == "plif":
+        from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import (
+            plif as ac_plif,
+        )
+
+        original = ac_plif.multistep_plif
+
+        def _wrapped(*args, **kwargs):
+            hits["count"] += 1
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(ac_plif, "multistep_plif", _wrapped)
+    else:
+        raise ValueError(kind)
+
+    return hits
+
+
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
 def test_cupy_vs_torch_multistep_forward_backward(kind, dtype):
@@ -166,12 +211,13 @@ def test_cupy_batch_size_change_reconciles_v_state(kind, dtype):
 
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_cupy_compile_inductor_runs_forward_backward(kind, dtype):
+def test_cupy_compile_inductor_runs_forward_backward(kind, dtype, monkeypatch):
     _require_cuda_cupy_compile()
 
     seed = 20260430
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    cupy_hits = _install_cupy_path_sentinel(monkeypatch, kind)
 
     node_cupy = _make_node(kind, backend="cupy", dtype=dtype)
     model = _CompileProbeModel(node_cupy, features=12).to(device="cuda", dtype=dtype).train()
@@ -193,16 +239,18 @@ def test_cupy_compile_inductor_runs_forward_backward(kind, dtype):
         loss = y.sum()
         loss.backward()
         assert x.grad is not None
+    assert cupy_hits["count"] > 0
 
 
 @pytest.mark.parametrize("kind", ["if", "lif", "plif"])
 @pytest.mark.parametrize("dtype", [torch.float32, torch.float16])
-def test_cupy_compile_inductor_matches_eager(kind, dtype):
+def test_cupy_compile_inductor_matches_eager(kind, dtype, monkeypatch):
     _require_cuda_cupy_compile()
 
     seed = 20260430
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
+    cupy_hits = _install_cupy_path_sentinel(monkeypatch, kind)
 
     node_eager = _make_node(kind, backend="cupy", dtype=dtype)
     node_compiled = _make_node(kind, backend="cupy", dtype=dtype)
@@ -238,3 +286,4 @@ def test_cupy_compile_inductor_matches_eager(kind, dtype):
     y_compiled.sum().backward()
 
     _assert_close(x_compiled.grad, x_eager.grad, dtype)
+    assert cupy_hits["count"] > 0

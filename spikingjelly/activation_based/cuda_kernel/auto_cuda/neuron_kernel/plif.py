@@ -1,5 +1,6 @@
 from typing import Optional, Callable
 
+import logging
 import torch
 
 from .common import (
@@ -671,8 +672,8 @@ def multistep_plif(
                 sg_cupy_id,
             )
             return s_seq, v_seq
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug("multistep_plif custom-op fallback: %s", e)
 
     return _legacy_multistep_plif(
         x_seq=x_seq,

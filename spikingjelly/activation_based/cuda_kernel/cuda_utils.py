@@ -24,7 +24,7 @@ try:
         hasattr(torch.library, name)
         for name in ("custom_op", "register_fake", "register_autograd")
     )
-except BaseException:
+except Exception:
     _CUSTOM_OP_AVAILABLE = False
 
 
