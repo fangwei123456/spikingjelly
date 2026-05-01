@@ -28,12 +28,28 @@ try:
     )
     cpp_wrapper = load_inline(
         name="cpp_wrapper",
-        cpp_sources="using namespace at;",
-        functions=[
-            "cudnn_convolution_backward",
-            "cudnn_convolution_backward_input",
-            "cudnn_convolution_backward_weight",
-        ],
+        cpp_sources=r"""
+        #include <ATen/ATen.h>
+        #include <array>
+        #include <tuple>
+        #include <vector>
+
+        std::tuple<at::Tensor, at::Tensor> cudnn_convolution_backward(
+            const at::Tensor& input, const at::Tensor& grad_output, const at::Tensor& weight,
+            at::IntArrayRef padding, at::IntArrayRef stride, at::IntArrayRef dilation, int64_t groups,
+            bool benchmark, bool deterministic, bool allow_tf32, std::array<bool, 2> output_mask) {
+            (void)benchmark;
+            (void)deterministic;
+            (void)allow_tf32;
+            auto output_padding = std::vector<int64_t>(stride.size(), 0);
+            auto grads = at::convolution_backward(
+                grad_output, input, weight, c10::nullopt,
+                stride, padding, dilation, false, output_padding, groups,
+                {output_mask[0], output_mask[1], false});
+            return std::make_tuple(std::get<0>(grads), std::get<1>(grads));
+        }
+        """,
+        functions=["cudnn_convolution_backward"],
         with_cuda=True,
     )
 except BaseException as e:
@@ -82,66 +98,31 @@ at::Tensor cudnn_convolution_backward_weight(
 """
 
 
-def _conv_backward_input(
-    input_shape,
-    grad_output: torch.Tensor,
-    weight: torch.Tensor,
-    stride,
-    padding,
-    dilation,
-    groups: int,
-) -> torch.Tensor:
-    if grad_output.dim() == 3:
-        return torch.nn.grad.conv1d_input(
-            input_shape, weight, grad_output, stride, padding, dilation, groups
-        )
-    if grad_output.dim() == 4:
-        return torch.nn.grad.conv2d_input(
-            input_shape, weight, grad_output, stride, padding, dilation, groups
-        )
-    return torch.nn.grad.conv3d_input(
-        input_shape, weight, grad_output, stride, padding, dilation, groups
-    )
-
-
-def _conv_backward_weight(
-    spike: torch.Tensor,
-    weight_shape,
-    grad_output: torch.Tensor,
-    stride,
-    padding,
-    dilation,
-    groups: int,
-) -> torch.Tensor:
-    if grad_output.dim() == 3:
-        return torch.nn.grad.conv1d_weight(
-            spike, weight_shape, grad_output, stride, padding, dilation, groups
-        )
-    if grad_output.dim() == 4:
-        return torch.nn.grad.conv2d_weight(
-            spike, weight_shape, grad_output, stride, padding, dilation, groups
-        )
-    return torch.nn.grad.conv3d_weight(
-        spike, weight_shape, grad_output, stride, padding, dilation, groups
-    )
-
-
 class spikeConvolution(torch.autograd.Function):
     # Pytorch only provides cudnn_convolution without bias.
     # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
     @staticmethod
     @amp_custom_fwd
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
+        if cpp_wrapper is None and (
+            ctx.needs_input_grad[0]
+            or ctx.needs_input_grad[1]
+            or ctx.needs_input_grad[2]
+        ):
+            raise RuntimeError(
+                "cpp_wrapper is unavailable for spike convolution backward. "
+                "Please ensure the inline extension can be built in this environment."
+            )
         if (
             ctx.needs_input_grad[0]
             or ctx.needs_input_grad[1]
             or ctx.needs_input_grad[2]
         ):
-            ctx.s_shape = spike.shape
-            if ctx.needs_input_grad[1]:
+            if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
+                ctx.s_shape = spike.shape
                 ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
 
-            if ctx.needs_input_grad[0]:
+            if ctx.needs_input_grad[0] or ctx.needs_input_grad[1]:
                 ctx.save_for_backward(weight)
 
             ctx.padding = padding
@@ -191,92 +172,55 @@ class spikeConvolution(torch.autograd.Function):
             weight = ctx.saved_tensors[0]
             spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
             weight = weight.to(grad_output.dtype)
-            if cpp_wrapper is None:
-                grad_spike = _conv_backward_input(
-                    ctx.s_shape,
-                    grad_output,
-                    weight,
-                    ctx.stride,
-                    ctx.padding,
-                    ctx.dilation,
-                    ctx.groups,
-                )
-                grad_weight = _conv_backward_weight(
-                    spike,
-                    ctx.weight_shape,
-                    grad_output,
-                    ctx.stride,
-                    ctx.padding,
-                    ctx.dilation,
-                    ctx.groups,
-                )
-            else:
-                grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(
-                    spike,
-                    grad_output,
-                    weight,
-                    ctx.padding,
-                    ctx.stride,
-                    ctx.dilation,
-                    ctx.groups,
-                    torch.backends.cudnn.benchmark,
-                    torch.backends.cudnn.deterministic,
-                    torch.backends.cudnn.allow_tf32,
-                    (True, True),
-                )
+            grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(
+                spike,
+                grad_output,
+                weight,
+                ctx.padding,
+                ctx.stride,
+                ctx.dilation,
+                ctx.groups,
+                torch.backends.cudnn.benchmark,
+                torch.backends.cudnn.deterministic,
+                torch.backends.cudnn.allow_tf32,
+                (True, True),
+            )
 
         elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
+            weight = ctx.saved_tensors[0]
             spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-            if cpp_wrapper is None:
-                grad_weight = _conv_backward_weight(
-                    spike,
-                    ctx.weight_shape,
-                    grad_output,
-                    ctx.stride,
-                    ctx.padding,
-                    ctx.dilation,
-                    ctx.groups,
-                )
-            else:
-                grad_weight = cpp_wrapper.cudnn_convolution_backward_weight(
-                    ctx.weight_shape,
-                    grad_output,
-                    spike,
-                    ctx.padding,
-                    ctx.stride,
-                    ctx.dilation,
-                    ctx.groups,
-                    torch.backends.cudnn.benchmark,
-                    torch.backends.cudnn.deterministic,
-                    torch.backends.cudnn.allow_tf32,
-                )
+            weight = weight.to(grad_output.dtype)
+            _, grad_weight = cpp_wrapper.cudnn_convolution_backward(
+                spike,
+                grad_output,
+                weight,
+                ctx.padding,
+                ctx.stride,
+                ctx.dilation,
+                ctx.groups,
+                torch.backends.cudnn.benchmark,
+                torch.backends.cudnn.deterministic,
+                torch.backends.cudnn.allow_tf32,
+                (False, True),
+            )
 
         elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
             weight = ctx.saved_tensors[0]
+            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
             weight = weight.to(grad_output.dtype)
-            if cpp_wrapper is None:
-                grad_spike = _conv_backward_input(
-                    ctx.s_shape,
-                    grad_output,
-                    weight,
-                    ctx.stride,
-                    ctx.padding,
-                    ctx.dilation,
-                    ctx.groups,
-                )
-            else:
-                grad_spike = cpp_wrapper.cudnn_convolution_backward_input(
-                    ctx.s_shape,
-                    grad_output,
-                    weight,
-                    ctx.padding,
-                    ctx.stride,
-                    ctx.dilation,
-                    ctx.groups,
-                    torch.backends.cudnn.benchmark,
-                    torch.backends.cudnn.deterministic,
-                    torch.backends.cudnn.allow_tf32,
-                )
+            grad_spike, _ = cpp_wrapper.cudnn_convolution_backward(
+                spike,
+                grad_output,
+                weight,
+                ctx.padding,
+                ctx.stride,
+                ctx.dilation,
+                ctx.groups,
+                torch.backends.cudnn.benchmark,
+                torch.backends.cudnn.deterministic,
+                torch.backends.cudnn.allow_tf32,
+                (True, False),
+            )
 
         if ctx.needs_input_grad[2]:
             # grad_output.shape = [N, C, *]
@@ -335,7 +279,7 @@ class spikeLinear(torch.autograd.Function):
 _CUSTOM_SPIKE_OP_READY = False
 
 
-if use_cupy_custom_op():
+if use_cupy_custom_op() and cpp_wrapper is not None:
     @torch.library.custom_op("sj::cupy_spike_linear_forward", mutates_args=())
     def cupy_spike_linear_forward(
         spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]
@@ -424,39 +368,19 @@ if use_cupy_custom_op():
         (weight,) = ctx.saved_tensors
         spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
         weight = weight.to(grad_output.dtype)
-        if cpp_wrapper is None:
-            grad_spike = _conv_backward_input(
-                ctx.s_shape,
-                grad_output,
-                weight,
-                ctx.stride,
-                ctx.padding,
-                ctx.dilation,
-                ctx.groups,
-            )
-            grad_weight = _conv_backward_weight(
-                spike,
-                ctx.weight_shape,
-                grad_output,
-                ctx.stride,
-                ctx.padding,
-                ctx.dilation,
-                ctx.groups,
-            )
-        else:
-            grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(
-                spike,
-                grad_output,
-                weight,
-                ctx.padding,
-                ctx.stride,
-                ctx.dilation,
-                ctx.groups,
-                torch.backends.cudnn.benchmark,
-                torch.backends.cudnn.deterministic,
-                torch.backends.cudnn.allow_tf32,
-                (True, True),
-            )
+        grad_spike, grad_weight = cpp_wrapper.cudnn_convolution_backward(
+            spike,
+            grad_output,
+            weight,
+            ctx.padding,
+            ctx.stride,
+            ctx.dilation,
+            ctx.groups,
+            torch.backends.cudnn.benchmark,
+            torch.backends.cudnn.deterministic,
+            torch.backends.cudnn.allow_tf32,
+            (True, True),
+        )
         if ctx.has_bias:
             out_channels = grad_output.shape[1]
             grad_bias = grad_output.transpose(0, 1).reshape(out_channels, -1).sum(1)
