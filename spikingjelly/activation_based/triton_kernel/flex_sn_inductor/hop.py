@@ -154,6 +154,32 @@ flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
 flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
 
 
+def _patch_dynamo_hop_make_for_flexsn():
+    try:
+        from torch._dynamo.variables.higher_order_ops import (
+            TorchHigherOrderOperatorVariable,
+        )
+    except BaseException:
+        return
+
+    if getattr(TorchHigherOrderOperatorVariable, "_sj_flexsn_patch_applied", False):
+        return
+
+    original_make = TorchHigherOrderOperatorVariable.make
+
+    @staticmethod
+    def _patched_make(value, source=None, **kwargs):
+        if value is flex_sn_scan:
+            return TorchHigherOrderOperatorVariable(value, source, **kwargs)
+        return original_make(value, source=source, **kwargs)
+
+    TorchHigherOrderOperatorVariable.make = _patched_make
+    TorchHigherOrderOperatorVariable._sj_flexsn_patch_applied = True
+
+
+_patch_dynamo_hop_make_for_flexsn()
+
+
 def eager_scan_final_state(
     core_fn: Callable,
     num_inputs: int,

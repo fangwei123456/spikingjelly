@@ -8,9 +8,18 @@ except BaseException as e:
 
 import torch
 import torch.nn.functional as F
-from . import cuda_utils, tensor_cache
-from .. import surrogate
-from ... import configure
+from .. import cuda_utils, tensor_cache
+from ..cuda_utils import (
+    register_python_object,
+    resolve_python_object,
+    use_cupy_custom_op,
+)
+from .helpers import (
+    replay_and_grad as _replay_and_grad,
+    sg_registry_key as _sg_registry_key,
+)
+from ... import surrogate
+from .... import configure
 import numpy as np
 
 
@@ -24,6 +33,12 @@ __all__ = [
     "check_multi_step_neuron_output_and_grad",
     "check_single_step_neuron_output_and_grad",
     "save_cuda_codes",
+    "multistep_if_ptt",
+    "multistep_lif_ptt",
+    "multistep_plif_ptt",
+    "multistep_qif_ptt",
+    "multistep_izhikevich_ptt",
+    "multistep_eif_ptt",
 ]
 
 
@@ -3597,6 +3612,443 @@ class MultiStepEIFNodePTT(torch.autograd.Function):
                 None,
                 None,
             )
+
+
+def _sg_obj_id(sg) -> int:
+    return register_python_object(sg, _sg_registry_key(sg))
+
+
+if use_cupy_custom_op() and cupy is not None:
+
+    @torch.library.custom_op("sj::cupy_multistep_qif_forward", mutates_args=())
+    def cupy_multistep_qif_forward(
+        x_seq: torch.Tensor,
+        v_init: torch.Tensor,
+        tau: float,
+        v_threshold: float,
+        v_reset: float,
+        v_rest: float,
+        v_c: float,
+        a0: float,
+        detach_reset: bool,
+        sg_id: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            sg = resolve_python_object(sg_id)
+            return MultiStepQIFNodePTT.apply(
+                x_seq,
+                v_init,
+                tau,
+                v_threshold,
+                None if v_reset != v_reset else v_reset,
+                v_rest,
+                v_c,
+                a0,
+                detach_reset,
+                sg.cuda_code,
+            )
+
+
+    @torch.library.register_fake("sj::cupy_multistep_qif_forward")
+    def _cupy_multistep_qif_forward_fake(
+        x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, sg_id
+    ):
+        return x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape)
+
+
+    def _setup_qif_ctx(ctx, inputs, output):
+        ctx.inputs = inputs
+
+
+    def _qif_bw(ctx, grad_spike_seq, grad_v_seq):
+        x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, sg_id = (
+            ctx.inputs
+        )
+        sg = resolve_python_object(sg_id)
+        grads = _replay_and_grad(
+            MultiStepQIFNodePTT.apply,
+            (x_seq, v_init),
+            (
+                tau,
+                v_threshold,
+                None if v_reset != v_reset else v_reset,
+                v_rest,
+                v_c,
+                a0,
+                detach_reset,
+                sg.cuda_code,
+            ),
+            (grad_spike_seq, grad_v_seq),
+        )
+        return grads[0], grads[1], None, None, None, None, None, None, None, None
+
+
+    torch.library.register_autograd(
+        "sj::cupy_multistep_qif_forward",
+        _qif_bw,
+        setup_context=_setup_qif_ctx,
+    )
+
+    @torch.library.custom_op("sj::cupy_multistep_izhikevich_forward", mutates_args=())
+    def cupy_multistep_izhikevich_forward(
+        x_seq: torch.Tensor,
+        v_init: torch.Tensor,
+        w_init: torch.Tensor,
+        tau: float,
+        v_threshold: float,
+        v_reset: float,
+        v_rest: float,
+        a: float,
+        b: float,
+        tau_w: float,
+        v_c: float,
+        a0: float,
+        detach_reset: bool,
+        sg_id: int,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            sg = resolve_python_object(sg_id)
+            return MultiStepIzhikevichNodePTT.apply(
+                x_seq,
+                v_init,
+                w_init,
+                tau,
+                v_threshold,
+                None if v_reset != v_reset else v_reset,
+                v_rest,
+                a,
+                b,
+                tau_w,
+                v_c,
+                a0,
+                detach_reset,
+                sg.cuda_code,
+            )
+
+
+    @torch.library.register_fake("sj::cupy_multistep_izhikevich_forward")
+    def _cupy_multistep_izhikevich_forward_fake(*args):
+        x_seq = args[0]
+        return (
+            x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty(x_seq.shape),
+        )
+
+
+    def _setup_iz_ctx(ctx, inputs, output):
+        ctx.inputs = inputs
+
+
+    def _iz_bw(ctx, grad_spike_seq, grad_v_seq, grad_w_seq):
+        (
+            x_seq,
+            v_init,
+            w_init,
+            tau,
+            v_threshold,
+            v_reset,
+            v_rest,
+            a,
+            b,
+            tau_w,
+            v_c,
+            a0,
+            detach_reset,
+            sg_id,
+        ) = ctx.inputs
+        sg = resolve_python_object(sg_id)
+        grads = _replay_and_grad(
+            MultiStepIzhikevichNodePTT.apply,
+            (x_seq, v_init, w_init),
+            (
+                tau,
+                v_threshold,
+                None if v_reset != v_reset else v_reset,
+                v_rest,
+                a,
+                b,
+                tau_w,
+                v_c,
+                a0,
+                detach_reset,
+                sg.cuda_code,
+            ),
+            (grad_spike_seq, grad_v_seq, grad_w_seq),
+        )
+        return (
+            grads[0],
+            grads[1],
+            grads[2],
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+
+
+    torch.library.register_autograd(
+        "sj::cupy_multistep_izhikevich_forward",
+        _iz_bw,
+        setup_context=_setup_iz_ctx,
+    )
+
+    @torch.library.custom_op("sj::cupy_multistep_eif_forward", mutates_args=())
+    def cupy_multistep_eif_forward(
+        x_seq: torch.Tensor,
+        v_init: torch.Tensor,
+        tau: float,
+        v_threshold: float,
+        v_reset: float,
+        v_rest: float,
+        theta_rh: float,
+        delta_T: float,
+        detach_reset: bool,
+        sg_id: int,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        with torch.no_grad():
+            sg = resolve_python_object(sg_id)
+            return MultiStepEIFNodePTT.apply(
+                x_seq,
+                v_init,
+                tau,
+                v_threshold,
+                None if v_reset != v_reset else v_reset,
+                v_rest,
+                theta_rh,
+                delta_T,
+                detach_reset,
+                sg.cuda_code,
+            )
+
+
+    @torch.library.register_fake("sj::cupy_multistep_eif_forward")
+    def _cupy_multistep_eif_forward_fake(*args):
+        x_seq = args[0]
+        return x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape)
+
+
+    def _setup_eif_ctx(ctx, inputs, output):
+        ctx.inputs = inputs
+
+
+    def _eif_bw(ctx, grad_spike_seq, grad_v_seq):
+        (
+            x_seq,
+            v_init,
+            tau,
+            v_threshold,
+            v_reset,
+            v_rest,
+            theta_rh,
+            delta_T,
+            detach_reset,
+            sg_id,
+        ) = ctx.inputs
+        sg = resolve_python_object(sg_id)
+        grads = _replay_and_grad(
+            MultiStepEIFNodePTT.apply,
+            (x_seq, v_init),
+            (
+                tau,
+                v_threshold,
+                None if v_reset != v_reset else v_reset,
+                v_rest,
+                theta_rh,
+                delta_T,
+                detach_reset,
+                sg.cuda_code,
+            ),
+            (grad_spike_seq, grad_v_seq),
+        )
+        return grads[0], grads[1], None, None, None, None, None, None, None, None
+
+
+    torch.library.register_autograd(
+        "sj::cupy_multistep_eif_forward",
+        _eif_bw,
+        setup_context=_setup_eif_ctx,
+    )
+
+
+def multistep_if_ptt(
+    x_seq, v_init, v_threshold, v_reset, detach_reset, surrogate_function
+):
+    return MultiStepIFNodePTT.apply(
+        x_seq, v_init, v_threshold, v_reset, detach_reset, surrogate_function.cuda_code
+    )
+
+
+def multistep_lif_ptt(
+    x_seq, v_init, decay_input, tau, v_threshold, v_reset, detach_reset, surrogate_function
+):
+    return MultiStepLIFNodePTT.apply(
+        x_seq,
+        v_init,
+        decay_input,
+        tau,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        surrogate_function.cuda_code,
+    )
+
+
+def multistep_plif_ptt(
+    x_seq, v_init, reciprocal_tau, decay_input, v_threshold, v_reset, detach_reset, surrogate_function
+):
+    return MultiStepParametricLIFNodePTT.apply(
+        x_seq,
+        v_init,
+        reciprocal_tau,
+        decay_input,
+        v_threshold,
+        v_reset,
+        detach_reset,
+        surrogate_function.cuda_code,
+    )
+
+
+def multistep_qif_ptt(
+    x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, surrogate_function
+):
+    if use_cupy_custom_op() and cupy is not None:
+        try:
+            sg_id = _sg_obj_id(surrogate_function)
+            v_reset_value = float("nan") if v_reset is None else float(v_reset)
+            return cupy_multistep_qif_forward(
+                x_seq,
+                v_init,
+                tau,
+                v_threshold,
+                v_reset_value,
+                v_rest,
+                v_c,
+                a0,
+                detach_reset,
+                sg_id,
+            )
+        except Exception:
+            pass
+    return MultiStepQIFNodePTT.apply(
+        x_seq,
+        v_init,
+        tau,
+        v_threshold,
+        v_reset,
+        v_rest,
+        v_c,
+        a0,
+        detach_reset,
+        surrogate_function.cuda_code,
+    )
+
+
+def multistep_izhikevich_ptt(
+    x_seq,
+    v_init,
+    w_init,
+    tau,
+    v_threshold,
+    v_reset,
+    v_rest,
+    a,
+    b,
+    tau_w,
+    v_c,
+    a0,
+    detach_reset,
+    surrogate_function,
+):
+    if use_cupy_custom_op() and cupy is not None:
+        try:
+            sg_id = _sg_obj_id(surrogate_function)
+            v_reset_value = float("nan") if v_reset is None else float(v_reset)
+            return cupy_multistep_izhikevich_forward(
+                x_seq,
+                v_init,
+                w_init,
+                tau,
+                v_threshold,
+                v_reset_value,
+                v_rest,
+                a,
+                b,
+                tau_w,
+                v_c,
+                a0,
+                detach_reset,
+                sg_id,
+            )
+        except Exception:
+            pass
+    return MultiStepIzhikevichNodePTT.apply(
+        x_seq,
+        v_init,
+        w_init,
+        tau,
+        v_threshold,
+        v_reset,
+        v_rest,
+        a,
+        b,
+        tau_w,
+        v_c,
+        a0,
+        detach_reset,
+        surrogate_function.cuda_code,
+    )
+
+
+def multistep_eif_ptt(
+    x_seq,
+    v_init,
+    tau,
+    v_threshold,
+    v_reset,
+    v_rest,
+    theta_rh,
+    delta_T,
+    detach_reset,
+    surrogate_function,
+):
+    if use_cupy_custom_op() and cupy is not None:
+        try:
+            sg_id = _sg_obj_id(surrogate_function)
+            v_reset_value = float("nan") if v_reset is None else float(v_reset)
+            return cupy_multistep_eif_forward(
+                x_seq,
+                v_init,
+                tau,
+                v_threshold,
+                v_reset_value,
+                v_rest,
+                theta_rh,
+                delta_T,
+                detach_reset,
+                sg_id,
+            )
+        except Exception:
+            pass
+    return MultiStepEIFNodePTT.apply(
+        x_seq,
+        v_init,
+        tau,
+        v_threshold,
+        v_reset,
+        v_rest,
+        theta_rh,
+        delta_T,
+        detach_reset,
+        surrogate_function.cuda_code,
+    )
 
 
 def save_cuda_codes(

@@ -271,23 +271,25 @@ class IzhikevichNode(AdaptBaseNode):
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
             self.w_float_to_tensor(x_seq[0])
-
-            spike_seq, v_seq, w_seq = cuda_kernel.MultiStepIzhikevichNodePTT.apply(
-                x_seq.flatten(1),
-                self.v.flatten(0),
-                self.w.flatten(0),
-                self.tau,
-                self.v_threshold,
-                self.v_reset,
-                self.v_rest,
-                self.a,
-                self.b,
-                self.tau_w,
-                self.v_c,
-                self.a0,
-                self.detach_reset,
-                self.surrogate_function.cuda_code,
-            )
+            try:
+                spike_seq, v_seq, w_seq = cuda_kernel.multistep_izhikevich_ptt(
+                    x_seq.flatten(1),
+                    self.v.flatten(0),
+                    self.w.flatten(0),
+                    self.tau,
+                    self.v_threshold,
+                    self.v_reset,
+                    self.v_rest,
+                    self.a,
+                    self.b,
+                    self.tau_w,
+                    self.v_c,
+                    self.a0,
+                    self.detach_reset,
+                    self.surrogate_function,
+                )
+            except Exception:
+                return super().multi_step_forward(x_seq)
 
             spike_seq = spike_seq.reshape(x_seq.shape)
             v_seq = v_seq.reshape(x_seq.shape)

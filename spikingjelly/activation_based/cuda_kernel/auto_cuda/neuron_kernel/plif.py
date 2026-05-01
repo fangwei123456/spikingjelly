@@ -657,34 +657,22 @@ def multistep_plif(
     if _use_cupy_custom_op():
         try:
             sg_cupy_id, _ = resolve_sg_cupy_id_and_key(surrogate_function)
-        except TypeError:
-            return _legacy_multistep_plif(
-                x_seq=x_seq,
-                v_init=v_init,
-                v_th=v_threshold,
-                v_reset=v_reset,
-                decay=decay,
-                decay_input=decay_input,
-                surrogate_function=surrogate_function,
-                detach_reset=detach_reset,
-                forward_kernel=forward_kernel,
-                backward_kernel=backward_kernel,
+            soft_reset = v_reset is None
+            v_reset_value = 0.0 if v_reset is None else float(v_reset)
+            s_seq, v_seq, _, _ = cupy_multistep_plif_forward(
+                x_seq,
+                v_init,
+                v_threshold,
+                v_reset_value,
+                soft_reset,
+                detach_reset,
+                decay,
+                decay_input,
+                sg_cupy_id,
             )
-
-        soft_reset = v_reset is None
-        v_reset_value = 0.0 if v_reset is None else float(v_reset)
-        s_seq, v_seq, _, _ = cupy_multistep_plif_forward(
-            x_seq,
-            v_init,
-            v_threshold,
-            v_reset_value,
-            soft_reset,
-            detach_reset,
-            decay,
-            decay_input,
-            sg_cupy_id,
-        )
-        return s_seq, v_seq
+            return s_seq, v_seq
+        except Exception:
+            pass
 
     return _legacy_multistep_plif(
         x_seq=x_seq,

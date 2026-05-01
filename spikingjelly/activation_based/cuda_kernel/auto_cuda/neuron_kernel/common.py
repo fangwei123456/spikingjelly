@@ -1,10 +1,11 @@
-from typing import Callable, Iterable
-import torch
-import numpy as np
 import logging
 import math
 import os
 import threading
+from typing import Callable, Iterable
+
+import numpy as np
+import torch
 
 try:
     import cupy
@@ -15,9 +16,9 @@ except BaseException as e:
     cupy = None
 
 
-from ... import cuda_utils
-from ..... import surrogate
 from ..... import configure
+from .... import surrogate
+from ... import cuda_utils
 from .. import base, cfunction
 
 try:
@@ -532,7 +533,6 @@ class NeuronBPTTKernel(base.CKernel2D):
 
         self._core = core_codes.codes
         return self._core
-
 
 
 def if_requires_grad(items: Iterable):

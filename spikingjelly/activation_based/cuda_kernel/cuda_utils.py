@@ -1,15 +1,66 @@
+import functools
 import logging
-import torch
+import os
+import threading
 import time
+from typing import Any, Callable, Union
+
 import numpy as np
+import torch
+from packaging import version
+
 from ... import configure
-from typing import Callable, Union
 
 try:
     import cupy
 except BaseException as e:
     logging.info(f"spikingjelly.activation_based.cuda_kernel.cuda_utils: {e}")
     cupy = None
+
+
+try:
+    _CUSTOM_OP_AVAILABLE = all(
+        hasattr(torch.library, name)
+        for name in ("custom_op", "register_fake", "register_autograd")
+    )
+except BaseException:
+    _CUSTOM_OP_AVAILABLE = False
+
+
+def env_flag_enabled(var_name: str) -> bool:
+    v = os.getenv(var_name)
+    if v is None:
+        return True
+    return v.strip().lower() not in ("0", "false", "off", "no")
+
+
+def use_cupy_custom_op() -> bool:
+    return _CUSTOM_OP_AVAILABLE and env_flag_enabled("SJ_USE_CUPY_OP")
+
+
+_PYOBJ_LOCK = threading.Lock()
+_PYOBJ_NEXT_ID = 0
+_PYOBJ_ID_TO_OBJ: dict[int, Any] = {}
+_PYOBJ_KEY_TO_ID: dict[str, int] = {}
+
+
+def register_python_object(obj: Any, key: str) -> int:
+    global _PYOBJ_NEXT_ID
+    with _PYOBJ_LOCK:
+        obj_id = _PYOBJ_KEY_TO_ID.get(key)
+        if obj_id is None:
+            obj_id = _PYOBJ_NEXT_ID
+            _PYOBJ_NEXT_ID += 1
+            _PYOBJ_KEY_TO_ID[key] = obj_id
+            _PYOBJ_ID_TO_OBJ[obj_id] = obj
+    return obj_id
+
+
+def resolve_python_object(obj_id: int) -> Any:
+    obj = _PYOBJ_ID_TO_OBJ.get(obj_id)
+    if obj is None:
+        raise RuntimeError(f"Unknown python object id={obj_id}.")
+    return obj
 
 
 def cpu_timer(f: Callable, *args, **kwargs):
@@ -316,3 +367,16 @@ class DeviceEnvironment:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.previous_device is not None:
             torch.cuda.set_device(self.previous_device)
+
+
+@functools.lru_cache(maxsize=None)
+def _check_pytorch_version(version_s: str = "2.4") -> bool:
+    return version.parse(torch.__version__) >= version.parse(version_s)
+
+
+if _check_pytorch_version("2.4"):
+    amp_custom_fwd = functools.partial(torch.amp.custom_fwd, device_type="cuda")
+    amp_custom_bwd = functools.partial(torch.amp.custom_bwd, device_type="cuda")
+else:
+    amp_custom_fwd = torch.cuda.amp.custom_fwd
+    amp_custom_bwd = torch.cuda.amp.custom_bwd
