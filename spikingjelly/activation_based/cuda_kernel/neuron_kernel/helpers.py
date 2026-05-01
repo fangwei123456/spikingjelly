@@ -3,13 +3,16 @@ import torch
 
 def sg_registry_key(sg) -> str:
     params = getattr(sg, "_sg_params", {})
+    spiking = bool(getattr(sg, "spiking", True))
     if isinstance(params, dict):
         params = tuple(sorted(params.items()))
+    elif params is None:
+        params = ()
     return repr(
         (
             sg.__class__.__module__,
             sg.__class__.__qualname__,
-            getattr(sg, "spiking", True),
+            spiking,
             params,
         )
     )
