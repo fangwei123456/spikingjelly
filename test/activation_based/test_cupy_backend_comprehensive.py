@@ -66,43 +66,34 @@ class _CompileProbeModel(torch.nn.Module):
 
 def _install_cupy_path_sentinel(monkeypatch, kind: str):
     hits = {"count": 0}
+    from spikingjelly.activation_based.cuda_kernel.auto_cuda import (
+        neuron_kernel as ac_neuron_kernel,
+    )
 
     if kind == "if":
-        from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import (
-            integrate_and_fire as ac_if,
-        )
-
-        original = ac_if.multistep_if
+        original = ac_neuron_kernel.multistep_if
 
         def _wrapped(*args, **kwargs):
             hits["count"] += 1
             return original(*args, **kwargs)
 
-        monkeypatch.setattr(ac_if, "multistep_if", _wrapped)
+        monkeypatch.setattr(ac_neuron_kernel, "multistep_if", _wrapped)
     elif kind == "lif":
-        from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import (
-            lif as ac_lif,
-        )
-
-        original = ac_lif.multistep_lif
+        original = ac_neuron_kernel.multistep_lif
 
         def _wrapped(*args, **kwargs):
             hits["count"] += 1
             return original(*args, **kwargs)
 
-        monkeypatch.setattr(ac_lif, "multistep_lif", _wrapped)
+        monkeypatch.setattr(ac_neuron_kernel, "multistep_lif", _wrapped)
     elif kind == "plif":
-        from spikingjelly.activation_based.cuda_kernel.auto_cuda.neuron_kernel import (
-            plif as ac_plif,
-        )
-
-        original = ac_plif.multistep_plif
+        original = ac_neuron_kernel.multistep_plif
 
         def _wrapped(*args, **kwargs):
             hits["count"] += 1
             return original(*args, **kwargs)
 
-        monkeypatch.setattr(ac_plif, "multistep_plif", _wrapped)
+        monkeypatch.setattr(ac_neuron_kernel, "multistep_plif", _wrapped)
     else:
         raise ValueError(kind)
 

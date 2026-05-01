@@ -12,6 +12,7 @@ from .common import (
     surrogate,
     _CUPY_CUSTOM_OP_AVAILABLE,
     _dtype_to_cupy_kernel_dtype,
+    scalar_to_cupy,
     _surrogate_cuda_codes_from_id,
     _use_cupy_custom_op,
     resolve_sg_cupy_id_and_key,
@@ -190,7 +191,12 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
         if py_dict["v_reset"] is None:
             py_dict.pop("v_reset")
         forward_kernel((blocks,), (threads,), py_dict)
-        return py_dict["spike_seq"], py_dict["v_v_seq"][1:,], py_dict["h_seq"]
+        # custom_op outputs must not alias inputs or one another.
+        return (
+            py_dict["spike_seq"].clone(),
+            py_dict["v_v_seq"][1:,].clone(),
+            py_dict["h_seq"].clone(),
+        )
 
 
     @torch.library.register_fake("sj::cupy_multistep_if_forward")
@@ -261,6 +267,7 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
             "v_th": ctx.v_th,
             "v_reset": ctx.v_reset,
         }
+        scalar_to_cupy(py_dict, ref="grad_spike_seq")
         if py_dict["v_reset"] is None:
             py_dict.pop("v_reset")
         backward_kernel((blocks,), (threads,), py_dict)
