@@ -364,8 +364,8 @@ if use_cupy_custom_op():
             )
 
         if ctx.has_bias and ctx.need_grad_bias:
-            out_channels = grad_output.shape[1]
-            grad_bias = grad_output.transpose(0, 1).reshape(out_channels, -1).sum(1)
+            reduce_dims = (0, *range(2, grad_output.dim()))
+            grad_bias = grad_output.sum(dim=reduce_dims)
         else:
             grad_bias = None
         return grad_spike, grad_weight, grad_bias, None, None, None, None
