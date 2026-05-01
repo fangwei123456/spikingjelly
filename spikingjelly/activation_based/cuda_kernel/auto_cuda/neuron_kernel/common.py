@@ -565,6 +565,26 @@ def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
                 py_dict[key] = cupy.asarray(value)
 
 
+def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
+    device = py_dict[ref].get_device()
+    scalar_to_cupy(py_dict, ref=ref)
+
+    numel = py_dict[ref].numel()
+    N = py_dict[ref].shape[1]
+    threads = configure.cuda_threads
+    if py_dict[ref].dtype == torch.float16:
+        # Use half2 path: two neurons packed as one lane.
+        N = math.ceil(N / 2)
+        numel = N * py_dict[ref].shape[0]
+    blocks = cuda_utils.cal_blocks(N)
+
+    with cuda_utils.DeviceEnvironment(device):
+        py_dict["numel"] = cupy.asarray(numel)
+        py_dict["N"] = cupy.asarray(N)
+
+    return blocks, threads, py_dict
+
+
 def new_tensors(news: tuple, py_dict: dict, ref: str = "x_seq"):
     ref = py_dict[ref]
     zero_shape = list(ref.shape)

@@ -401,7 +401,11 @@ def _check_lifted_arg_arity(
     num_inputs: int,
     num_states: int,
     lifted_args: Tuple[torch.Tensor, ...],
+    *,
+    skip_check: bool = False,
 ) -> None:
+    if skip_check:
+        return
     expected = num_inputs + num_states
     total = expected + len(lifted_args)
     accepts = _callable_accepts_positional_args(core_fn, total)
@@ -476,7 +480,17 @@ def eager_scan(
     inputs_seq = flat_args[:num_inputs]
     states = list(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and inputs_seq[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -590,7 +604,17 @@ def eager_scan_final_state(
     inputs_seq = flat_args[:num_inputs]
     states = list(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and inputs_seq[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -697,7 +721,17 @@ def lowerable_scan(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -822,7 +856,17 @@ def lowerable_scan_final_state(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -973,7 +1017,17 @@ def lowerable_while_loop_scan(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
     lifted_args = tuple(_ensure_contiguous(arg) for arg in lifted_args)
 
     T = input_seqs[0].shape[0]
@@ -1161,7 +1215,17 @@ def lowerable_while_loop_scan_final_state(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
     lifted_args = tuple(_ensure_contiguous(arg) for arg in lifted_args)
 
     T = input_seqs[0].shape[0]

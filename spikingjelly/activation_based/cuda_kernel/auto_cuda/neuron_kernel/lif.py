@@ -13,6 +13,7 @@ from .common import (
     _CUPY_CUSTOM_OP_AVAILABLE,
     _dtype_to_cupy_kernel_dtype,
     scalar_to_cupy,
+    prepare_forward_meta,
     _surrogate_cuda_codes_from_id,
     _use_cupy_custom_op,
     resolve_sg_cupy_id_and_key,
@@ -285,13 +286,11 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
             "v_reset": None if soft_reset else v_reset,
             "decay": decay,
         }
-        _, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
-        # Avoid aliasing between custom_op outputs by replacing split-backed buffers
-        # with independent storages before kernel writes.
-        py_dict["spike_seq"] = torch.empty_like(py_dict["spike_seq"])
-        py_dict["h_seq"] = torch.empty_like(py_dict["h_seq"])
-        py_dict["v_v_seq"] = torch.empty_like(py_dict["v_v_seq"])
-        py_dict["v_v_seq"][0].copy_(v_init)
+        blocks, threads, py_dict = prepare_forward_meta(py_dict)
+        py_dict["spike_seq"] = torch.empty_like(x_seq)
+        py_dict["h_seq"] = torch.empty_like(x_seq)
+        py_dict["v_v_seq"] = x_seq.new_empty((x_seq.shape[0] + 1, *x_seq.shape[1:]))
+        py_dict["v_v_seq"][0].copy_(py_dict.pop("v_init"))
         if py_dict["v_reset"] is None:
             py_dict.pop("v_reset")
         forward_kernel((blocks,), (threads,), py_dict)
