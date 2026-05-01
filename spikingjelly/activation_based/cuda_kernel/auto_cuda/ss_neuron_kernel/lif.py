@@ -196,6 +196,10 @@ if use_cupy_custom_op() and cupy is not None:
 
     def _setup_ss_lif_ctx(ctx, inputs, output):
         ctx.inputs = inputs
+        _, _, _, _, _, _, forward_kernel_id, backward_kernel_id = inputs
+        # Pin kernels until backward finishes to avoid weak-ref eviction.
+        ctx.forward_kernel = resolve_python_object(forward_kernel_id)
+        ctx.backward_kernel = resolve_python_object(backward_kernel_id)
 
 
     def _ss_lif_bw(ctx, grad_spike, grad_v_next):
@@ -209,8 +213,8 @@ if use_cupy_custom_op() and cupy is not None:
             forward_kernel_id,
             backward_kernel_id,
         ) = ctx.inputs
-        forward_kernel = resolve_python_object(forward_kernel_id)
-        backward_kernel = resolve_python_object(backward_kernel_id)
+        forward_kernel = ctx.forward_kernel
+        backward_kernel = ctx.backward_kernel
         grads = _replay_and_grad(
             LIFNodeATGF.apply,
             (x, v),

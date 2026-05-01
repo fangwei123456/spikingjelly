@@ -3658,13 +3658,14 @@ if use_cupy_custom_op() and cupy is not None:
 
     def _setup_qif_ctx(ctx, inputs, output):
         ctx.inputs = inputs
+        ctx.sg = resolve_python_object(inputs[-1])
 
 
     def _qif_bw(ctx, grad_spike_seq, grad_v_seq):
         x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, sg_id = (
             ctx.inputs
         )
-        sg = resolve_python_object(sg_id)
+        sg = ctx.sg
         grads = _replay_and_grad(
             MultiStepQIFNodePTT.apply,
             (x_seq, v_init),
@@ -3738,6 +3739,7 @@ if use_cupy_custom_op() and cupy is not None:
 
     def _setup_iz_ctx(ctx, inputs, output):
         ctx.inputs = inputs
+        ctx.sg = resolve_python_object(inputs[-1])
 
 
     def _iz_bw(ctx, grad_spike_seq, grad_v_seq, grad_w_seq):
@@ -3757,7 +3759,7 @@ if use_cupy_custom_op() and cupy is not None:
             detach_reset,
             sg_id,
         ) = ctx.inputs
-        sg = resolve_python_object(sg_id)
+        sg = ctx.sg
         grads = _replay_and_grad(
             MultiStepIzhikevichNodePTT.apply,
             (x_seq, v_init, w_init),
@@ -3837,6 +3839,7 @@ if use_cupy_custom_op() and cupy is not None:
 
     def _setup_eif_ctx(ctx, inputs, output):
         ctx.inputs = inputs
+        ctx.sg = resolve_python_object(inputs[-1])
 
 
     def _eif_bw(ctx, grad_spike_seq, grad_v_seq):
@@ -3852,7 +3855,7 @@ if use_cupy_custom_op() and cupy is not None:
             detach_reset,
             sg_id,
         ) = ctx.inputs
-        sg = resolve_python_object(sg_id)
+        sg = ctx.sg
         grads = _replay_and_grad(
             MultiStepEIFNodePTT.apply,
             (x_seq, v_init),

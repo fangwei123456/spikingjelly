@@ -3,6 +3,7 @@ import logging
 import os
 import threading
 import time
+import weakref
 from typing import Any, Callable, Union
 
 import numpy as np
@@ -40,27 +41,62 @@ def use_cupy_custom_op() -> bool:
 
 _PYOBJ_LOCK = threading.Lock()
 _PYOBJ_NEXT_ID = 0
-_PYOBJ_ID_TO_OBJ: dict[int, Any] = {}
+_PYOBJ_ID_TO_REF: dict[int, Any] = {}
+_PYOBJ_ID_TO_KEY: dict[int, str] = {}
 _PYOBJ_KEY_TO_ID: dict[str, int] = {}
+
+
+def _entry_to_object(entry: Any) -> Any:
+    if isinstance(entry, weakref.ReferenceType):
+        return entry()
+    return entry
+
+
+def _drop_python_object_locked(obj_id: int) -> None:
+    _PYOBJ_ID_TO_REF.pop(obj_id, None)
+    key = _PYOBJ_ID_TO_KEY.pop(obj_id, None)
+    if key is not None and _PYOBJ_KEY_TO_ID.get(key) == obj_id:
+        _PYOBJ_KEY_TO_ID.pop(key, None)
+
+
+def _on_python_object_finalize(obj_id: int) -> None:
+    with _PYOBJ_LOCK:
+        _drop_python_object_locked(obj_id)
 
 
 def register_python_object(obj: Any, key: str) -> int:
     global _PYOBJ_NEXT_ID
     with _PYOBJ_LOCK:
         obj_id = _PYOBJ_KEY_TO_ID.get(key)
-        if obj_id is None:
-            obj_id = _PYOBJ_NEXT_ID
-            _PYOBJ_NEXT_ID += 1
-            _PYOBJ_KEY_TO_ID[key] = obj_id
-            _PYOBJ_ID_TO_OBJ[obj_id] = obj
+        if obj_id is not None:
+            entry = _PYOBJ_ID_TO_REF.get(obj_id)
+            if _entry_to_object(entry) is not None:
+                return obj_id
+            _drop_python_object_locked(obj_id)
+
+        obj_id = _PYOBJ_NEXT_ID
+        _PYOBJ_NEXT_ID += 1
+        _PYOBJ_KEY_TO_ID[key] = obj_id
+        _PYOBJ_ID_TO_KEY[obj_id] = key
+
+        try:
+            _PYOBJ_ID_TO_REF[obj_id] = weakref.ref(
+                obj, lambda _ref, _id=obj_id: _on_python_object_finalize(_id)
+            )
+        except TypeError:
+            # Fallback for objects that do not support weak references.
+            _PYOBJ_ID_TO_REF[obj_id] = obj
     return obj_id
 
 
 def resolve_python_object(obj_id: int) -> Any:
-    obj = _PYOBJ_ID_TO_OBJ.get(obj_id)
-    if obj is None:
-        raise RuntimeError(f"Unknown python object id={obj_id}.")
-    return obj
+    with _PYOBJ_LOCK:
+        entry = _PYOBJ_ID_TO_REF.get(obj_id)
+        obj = _entry_to_object(entry)
+        if obj is None:
+            _drop_python_object_locked(obj_id)
+            raise RuntimeError(f"Unknown python object id={obj_id}.")
+        return obj
 
 
 def cpu_timer(f: Callable, *args, **kwargs):

@@ -129,24 +129,25 @@ if use_cupy_custom_op() and cupy is not None:
                 backward_kernel,
             )
 
-
     @torch.library.register_fake("sj::cupy_ss_if_forward")
     def _cupy_ss_if_forward_fake(
         x, v, v_th, v_reset, soft_reset, forward_kernel_id, backward_kernel_id
     ):
         return x.new_empty(x.shape), x.new_empty(x.shape)
 
-
     def _setup_ss_if_ctx(ctx, inputs, output):
         ctx.inputs = inputs
-
+        _, _, _, _, _, forward_kernel_id, backward_kernel_id = inputs
+        # Pin kernels until backward finishes to avoid weak-ref eviction.
+        ctx.forward_kernel = resolve_python_object(forward_kernel_id)
+        ctx.backward_kernel = resolve_python_object(backward_kernel_id)
 
     def _ss_if_bw(ctx, grad_spike, grad_v_next):
         x, v, v_th, v_reset, soft_reset, forward_kernel_id, backward_kernel_id = (
             ctx.inputs
         )
-        forward_kernel = resolve_python_object(forward_kernel_id)
-        backward_kernel = resolve_python_object(backward_kernel_id)
+        forward_kernel = ctx.forward_kernel
+        backward_kernel = ctx.backward_kernel
         grads = _replay_and_grad(
             IFNodeATGF.apply,
             (x, v),
@@ -159,7 +160,6 @@ if use_cupy_custom_op() and cupy is not None:
             (grad_spike, grad_v_next),
         )
         return grads[0], grads[1], None, None, None, None, None
-
 
     torch.library.register_autograd(
         "sj::cupy_ss_if_forward",
