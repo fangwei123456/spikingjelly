@@ -328,9 +328,17 @@ if use_cupy_custom_op():
 
     def _setup_cupy_spike_convolution_context(ctx, inputs, output):
         spike, weight, bias, stride, padding, dilation, groups = inputs
-        ctx.s_shape = spike.shape
-        ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-        ctx.save_for_backward(weight)
+        ctx.need_grad_spike = bool(spike.requires_grad)
+        ctx.need_grad_weight = bool(weight.requires_grad)
+        ctx.need_grad_bias = bool(bias is not None and bias.requires_grad)
+        if ctx.need_grad_spike or ctx.need_grad_weight:
+            ctx.s_shape = spike.shape
+            ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
+            ctx.save_for_backward(weight)
+        else:
+            ctx.s_shape = None
+            ctx.s_tk = None
+            ctx.save_for_backward()
         ctx.stride = tuple(stride)
         ctx.padding = tuple(padding)
         ctx.dilation = tuple(dilation)
@@ -338,20 +346,24 @@ if use_cupy_custom_op():
         ctx.has_bias = bias is not None
 
     def _cupy_spike_convolution_backward(ctx, grad_output):
-        (weight,) = ctx.saved_tensors
-        spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-        weight = weight.to(grad_output.dtype)
-        grad_spike, grad_weight = _spike_conv_backward_common(
-            spike,
-            grad_output,
-            weight,
-            ctx.padding,
-            ctx.stride,
-            ctx.dilation,
-            ctx.groups,
-            (True, True),
-        )
-        if ctx.has_bias:
+        grad_spike = None
+        grad_weight = None
+        if ctx.need_grad_spike or ctx.need_grad_weight:
+            (weight,) = ctx.saved_tensors
+            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
+            weight = weight.to(grad_output.dtype)
+            grad_spike, grad_weight = _spike_conv_backward_common(
+                spike,
+                grad_output,
+                weight,
+                ctx.padding,
+                ctx.stride,
+                ctx.dilation,
+                ctx.groups,
+                (ctx.need_grad_spike, ctx.need_grad_weight),
+            )
+
+        if ctx.has_bias and ctx.need_grad_bias:
             out_channels = grad_output.shape[1]
             grad_bias = grad_output.transpose(0, 1).reshape(out_channels, -1).sum(1)
         else:
