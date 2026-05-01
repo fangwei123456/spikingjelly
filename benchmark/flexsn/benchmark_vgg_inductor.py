@@ -14,10 +14,12 @@ Usage (run from repo root):
 import gc
 import os
 import sys
+from collections.abc import Callable
+from copy import deepcopy
+from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-from copy import deepcopy
 
 from spikingjelly.activation_based import neuron, functional
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
@@ -53,18 +55,29 @@ def make_flexsn_factory():
 # Timing helper
 # ---------------------------------------------------------------------------
 
-def cuda_time_ms(fn, warmup: int = 5, iters: int = 50) -> float:
+def cuda_time_ms(
+    fn: Callable[[], Any],
+    warmup: int = 5,
+    iters: int = 50,
+    reset_hook: Optional[Callable[[], Any]] = None,
+) -> float:
     for _ in range(warmup):
+        if reset_hook is not None:
+            reset_hook()
         fn()
     torch.cuda.synchronize()
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-    start.record()
+    elapsed = 0.0
     for _ in range(iters):
+        if reset_hook is not None:
+            reset_hook()
+        start = torch.cuda.Event(enable_timing=True)
+        end = torch.cuda.Event(enable_timing=True)
+        start.record()
         fn()
-    end.record()
-    torch.cuda.synchronize()
-    return start.elapsed_time(end) / iters
+        end.record()
+        end.synchronize()
+        elapsed += start.elapsed_time(end)
+    return elapsed / iters
 
 
 # ---------------------------------------------------------------------------
@@ -110,8 +123,8 @@ def main() -> None:
          lambda: build_vgg(make_flexsn_factory())),
     ]
 
-    scale_label = "ImageNet-scale" if H >= 224 and W >= 224 else "CIFAR-scale"
-    print(f"Input : T={T}, B={B}, {C}x{H}x{W}  ({scale_label})")
+    scale = "ImageNet-scale" if H >= 224 and W >= 224 else "CIFAR-scale"
+    print(f"Input : T={T}, B={B}, {C}x{H}x{W}  ({scale})")
     print("Model : SpikingVGG-16-BN")
     print()
     print(f"  {'backend':<30}  {'ms/iter':>9}  {'img/s':>9}  {'vs torch':>10}")
@@ -120,20 +133,13 @@ def main() -> None:
     baseline_ms = None
     for label, build_fn in configs:
         model = build_fn()
-        model.train()
+        model.eval()
 
-        def step(model=model):
-            functional.reset_net(model)
-            model.zero_grad(set_to_none=True)
-            outputs = model(x)
-            outputs = outputs if isinstance(outputs, (tuple, list)) else (outputs,)
-            loss = sum(out.float().sum() for out in outputs)
-            loss.backward()
-
-        # One extra iteration to initialize states and trigger Triton JIT +
-        # autotune before timing begins (avoids measuring compile cost).
-        step()
-        ms = cuda_time_ms(step)
+        with torch.no_grad():
+            # One extra forward to initialise states and trigger Triton JIT +
+            # autotune before timing begins (avoids measuring compile cost).
+            model(x)
+            ms = cuda_time_ms(lambda: model(x), reset_hook=lambda: functional.reset_net(model))
 
         imgs_per_sec = B * 1000 / ms
         rel = f"{ms / baseline_ms:.2f}×" if baseline_ms is not None else "1.00×"
