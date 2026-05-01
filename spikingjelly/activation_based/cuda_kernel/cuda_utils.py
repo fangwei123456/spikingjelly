@@ -4,6 +4,7 @@ import os
 import threading
 import time
 import weakref
+from collections import OrderedDict
 from typing import Any, Callable, Union
 
 import numpy as np
@@ -44,6 +45,8 @@ _PYOBJ_NEXT_ID = 0
 _PYOBJ_ID_TO_REF: dict[int, Any] = {}
 _PYOBJ_ID_TO_KEY: dict[int, str] = {}
 _PYOBJ_KEY_TO_ID: dict[str, int] = {}
+_PYOBJ_STRONG_REF_MAX = max(1, int(os.getenv("SJ_PYOBJ_STRONG_REF_MAX", "4096")))
+_PYOBJ_STRONG_IDS: OrderedDict[int, None] = OrderedDict()
 
 
 def _entry_to_object(entry: Any) -> Any:
@@ -53,6 +56,7 @@ def _entry_to_object(entry: Any) -> Any:
 
 
 def _drop_python_object_locked(obj_id: int) -> None:
+    _PYOBJ_STRONG_IDS.pop(obj_id, None)
     _PYOBJ_ID_TO_REF.pop(obj_id, None)
     key = _PYOBJ_ID_TO_KEY.pop(obj_id, None)
     if key is not None and _PYOBJ_KEY_TO_ID.get(key) == obj_id:
@@ -71,6 +75,8 @@ def register_python_object(obj: Any, key: str) -> int:
         if obj_id is not None:
             entry = _PYOBJ_ID_TO_REF.get(obj_id)
             if _entry_to_object(entry) is not None:
+                if not isinstance(entry, weakref.ReferenceType):
+                    _PYOBJ_STRONG_IDS.move_to_end(obj_id, last=True)
                 return obj_id
             _drop_python_object_locked(obj_id)
 
@@ -86,6 +92,10 @@ def register_python_object(obj: Any, key: str) -> int:
         except TypeError:
             # Fallback for objects that do not support weak references.
             _PYOBJ_ID_TO_REF[obj_id] = obj
+            _PYOBJ_STRONG_IDS[obj_id] = None
+            while len(_PYOBJ_STRONG_IDS) > _PYOBJ_STRONG_REF_MAX:
+                stale_id, _ = _PYOBJ_STRONG_IDS.popitem(last=False)
+                _drop_python_object_locked(stale_id)
     return obj_id
 
 
