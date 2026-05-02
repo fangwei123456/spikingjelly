@@ -3624,6 +3624,20 @@ def _sg_obj_id(sg) -> int:
     return register_python_object(sg, _sg_registry_key(sg))
 
 
+def _resolve_sg_cuda_code_fun(sg):
+    cuda_code = getattr(sg, "cuda_code", None)
+    if callable(cuda_code):
+        return cuda_code
+
+    cuda_codes = getattr(sg, "cuda_codes", None)
+    if callable(cuda_codes):
+        return lambda x, y, dtype="fp32": cuda_codes(y=y, x=x, dtype=dtype)
+
+    raise TypeError(
+        f"surrogate function {type(sg).__name__} must provide callable cuda_code or cuda_codes"
+    )
+
+
 if use_cupy_custom_op() and cupy is not None:
 
     @torch.library.custom_op("sj::cupy_multistep_qif_forward", mutates_args=())
@@ -3651,7 +3665,7 @@ if use_cupy_custom_op() and cupy is not None:
                 v_c,
                 a0,
                 detach_reset,
-                sg.cuda_code,
+                _resolve_sg_cuda_code_fun(sg),
             )
 
 
@@ -3683,7 +3697,7 @@ if use_cupy_custom_op() and cupy is not None:
                 v_c,
                 a0,
                 detach_reset,
-                sg.cuda_code,
+                _resolve_sg_cuda_code_fun(sg),
             ),
             (grad_spike_seq, grad_v_seq),
         )
@@ -3729,7 +3743,7 @@ if use_cupy_custom_op() and cupy is not None:
                 v_c,
                 a0,
                 detach_reset,
-                sg.cuda_code,
+                _resolve_sg_cuda_code_fun(sg),
             )
 
 
@@ -3780,7 +3794,7 @@ if use_cupy_custom_op() and cupy is not None:
                 v_c,
                 a0,
                 detach_reset,
-                sg.cuda_code,
+                _resolve_sg_cuda_code_fun(sg),
             ),
             (grad_spike_seq, grad_v_seq, grad_w_seq),
         )
@@ -3833,7 +3847,7 @@ if use_cupy_custom_op() and cupy is not None:
                 theta_rh,
                 delta_T,
                 detach_reset,
-                sg.cuda_code,
+                _resolve_sg_cuda_code_fun(sg),
             )
 
 
@@ -3873,7 +3887,7 @@ if use_cupy_custom_op() and cupy is not None:
                 theta_rh,
                 delta_T,
                 detach_reset,
-                sg.cuda_code,
+                _resolve_sg_cuda_code_fun(sg),
             ),
             (grad_spike_seq, grad_v_seq),
         )
@@ -3891,7 +3905,7 @@ def multistep_if_ptt(
     x_seq, v_init, v_threshold, v_reset, detach_reset, surrogate_function
 ):
     return MultiStepIFNodePTT.apply(
-        x_seq, v_init, v_threshold, v_reset, detach_reset, surrogate_function.cuda_code
+        x_seq, v_init, v_threshold, v_reset, detach_reset, _resolve_sg_cuda_code_fun(surrogate_function)
     )
 
 
@@ -3906,7 +3920,7 @@ def multistep_lif_ptt(
         v_threshold,
         v_reset,
         detach_reset,
-        surrogate_function.cuda_code,
+        _resolve_sg_cuda_code_fun(surrogate_function),
     )
 
 
@@ -3921,7 +3935,7 @@ def multistep_plif_ptt(
         v_threshold,
         v_reset,
         detach_reset,
-        surrogate_function.cuda_code,
+        _resolve_sg_cuda_code_fun(surrogate_function),
     )
 
 
@@ -3961,7 +3975,7 @@ def multistep_qif_ptt(
         v_c,
         a0,
         detach_reset,
-        surrogate_function.cuda_code,
+        _resolve_sg_cuda_code_fun(surrogate_function),
     )
 
 
@@ -4022,7 +4036,7 @@ def multistep_izhikevich_ptt(
         v_c,
         a0,
         detach_reset,
-        surrogate_function.cuda_code,
+        _resolve_sg_cuda_code_fun(surrogate_function),
     )
 
 
@@ -4071,7 +4085,7 @@ def multistep_eif_ptt(
         theta_rh,
         delta_T,
         detach_reset,
-        surrogate_function.cuda_code,
+        _resolve_sg_cuda_code_fun(surrogate_function),
     )
 
 
