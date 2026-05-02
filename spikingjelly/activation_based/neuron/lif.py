@@ -519,16 +519,16 @@ class LIFNode(BaseNode):
 
                 self.v_float_to_tensor(x_seq[0])
                 spike_seq, v_seq = ac_neuron_kernel.multistep_lif(
-                    x_seq.flatten(1),
-                    self.v.flatten(0),
-                    self.decay_input,
-                    self.tau,
-                    self.v_threshold,
-                    self.v_reset,
-                    self.detach_reset,
-                    self.surrogate_function,
-                    self.forward_kernel,
-                    self.backward_kernel,
+                    x_seq=x_seq.flatten(1),
+                    v_init=self.v.flatten(0),
+                    decay_input=self.decay_input,
+                    tau=self.tau,
+                    v_threshold=self.v_threshold,
+                    v_reset=self.v_reset,
+                    detach_reset=self.detach_reset,
+                    surrogate_function=self.surrogate_function,
+                    forward_kernel=self.forward_kernel,
+                    backward_kernel=self.backward_kernel,
                 )
                 spike_seq = spike_seq.reshape(x_seq.shape)
                 v_seq = v_seq.reshape(x_seq.shape)
