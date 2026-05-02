@@ -3,12 +3,14 @@ from typing import Callable, Optional
 import torch
 
 from ...cuda_utils import (
+    DeviceEnvironment,
+    cal_blocks,
     python_object_registry_key,
     register_python_object,
     resolve_python_object,
     use_cupy_custom_op,
 )
-from .common import replay_and_grad
+from ..... import configure
 from .ss_neuron_kernel_base import (
     NeuronATGFBase,
     NeuronBPKernel,
@@ -173,62 +175,70 @@ if use_cupy_custom_op() and cupy is not None:
         decay: float,
         forward_kernel_id: int,
         backward_kernel_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         forward_kernel = resolve_python_object(forward_kernel_id)
-        backward_kernel = resolve_python_object(backward_kernel_id)
-        with torch.no_grad():
-            return LIFNodeATGF.apply(
-                x,
-                v,
-                v_th,
-                None if soft_reset else v_reset,
-                decay,
-                forward_kernel,
-                backward_kernel,
-            )
+        py_dict = {
+            "x": x,
+            "v": v,
+            "v_th": v_th,
+            "v_reset": None if soft_reset else v_reset,
+            "decay": decay,
+        }
+        _, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
+        if py_dict["v_reset"] is None:
+            py_dict.pop("v_reset")
+        forward_kernel((blocks,), (threads,), py_dict)
+        return py_dict["spike"], py_dict["v_next"], py_dict["h"]
 
 
     @torch.library.register_fake("sj::cupy_ss_lif_forward")
     def _cupy_ss_lif_forward_fake(
         x, v, v_th, v_reset, soft_reset, decay, forward_kernel_id, backward_kernel_id
     ):
-        return x.new_empty(x.shape), x.new_empty(x.shape)
+        return x.new_empty(x.shape), x.new_empty(x.shape), x.new_empty(x.shape)
 
 
     def _setup_ss_lif_ctx(ctx, inputs, output):
-        ctx.inputs = inputs
-        _, _, _, _, _, _, forward_kernel_id, backward_kernel_id = inputs
-        # Pin kernels until backward finishes to avoid weak-ref eviction.
-        ctx.forward_kernel = resolve_python_object(forward_kernel_id)
+        x, _, v_th, v_reset, soft_reset, decay, _, backward_kernel_id = inputs
+        h = output[2]
+        ctx.save_for_backward(h)
         ctx.backward_kernel = resolve_python_object(backward_kernel_id)
+        ctx.blocks = cal_blocks((x.numel() + 1) // 2 if x.dtype == torch.float16 else x.numel())
+        ctx.threads = configure.cuda_threads
+        with DeviceEnvironment(x.get_device()):
+            numel = x.numel()
+            if x.dtype == torch.float16:
+                numel = (numel + 1) // 2
+            ctx.numel = cupy.asarray(numel)
+            if x.dtype == torch.float32:
+                ctx.v_th = cupy.asarray(v_th, dtype=cupy.float32)
+                ctx.v_reset = (
+                    None
+                    if soft_reset
+                    else cupy.asarray(v_reset, dtype=cupy.float32)
+                )
+                ctx.decay = cupy.asarray(decay, dtype=cupy.float32)
+            elif x.dtype == torch.float16:
+                ctx.v_th = cupy.asarray([v_th, v_th], dtype=cupy.float16)
+                ctx.v_reset = (
+                    None
+                    if soft_reset
+                    else cupy.asarray([v_reset, v_reset], dtype=cupy.float16)
+                )
+                ctx.decay = cupy.asarray([decay, decay], dtype=cupy.float16)
+            else:
+                raise NotImplementedError(x.dtype)
 
 
     def _ss_lif_bw(ctx, grad_spike, grad_v_next):
-        (
-            x,
-            v,
-            v_th,
-            v_reset,
-            soft_reset,
-            decay,
-            _forward_kernel_id,
-            _backward_kernel_id,
-        ) = ctx.inputs
-        forward_kernel = ctx.forward_kernel
-        backward_kernel = ctx.backward_kernel
-        grads = replay_and_grad(
-            LIFNodeATGF.apply,
-            (x, v),
-            (
-                v_th,
-                None if soft_reset else v_reset,
-                decay,
-                forward_kernel,
-                backward_kernel,
-            ),
-            (grad_spike, grad_v_next),
+        backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(
+            ctx, grad_spike, grad_v_next
         )
-        return grads[0], grads[1], None, None, None, None, None, None
+        py_dict["decay"] = ctx.decay
+        if py_dict["v_reset"] is None:
+            py_dict.pop("v_reset")
+        backward_kernel((blocks,), (threads,), py_dict)
+        return py_dict["grad_x"], py_dict["grad_v"], None, None, None, None, None, None
 
 
     torch.library.register_autograd(
@@ -239,15 +249,8 @@ if use_cupy_custom_op() and cupy is not None:
 
 
 def ss_lif_step(x, v, v_th, v_reset, decay, forward_kernel, backward_kernel):
-    if use_cupy_custom_op() and cupy is not None:
-        fk = register_python_object(
-            forward_kernel, python_object_registry_key(forward_kernel)
-        )
-        bk = register_python_object(
-            backward_kernel, python_object_registry_key(backward_kernel)
-        )
-        vr = float("nan") if v_reset is None else float(v_reset)
-        return cupy_ss_lif_forward(x, v, v_th, vr, v_reset is None, decay, fk, bk)
-    return LIFNodeATGF.apply(
-        x, v, v_th, v_reset, decay, forward_kernel, backward_kernel
-    )
+    fk = register_python_object(forward_kernel, python_object_registry_key(forward_kernel))
+    bk = register_python_object(backward_kernel, python_object_registry_key(backward_kernel))
+    vr = float("nan") if v_reset is None else float(v_reset)
+    spike, v_next, _ = cupy_ss_lif_forward(x, v, v_th, vr, v_reset is None, decay, fk, bk)
+    return spike, v_next

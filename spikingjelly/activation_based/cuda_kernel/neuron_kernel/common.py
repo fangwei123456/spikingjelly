@@ -1,5 +1,6 @@
 import logging
 import math
+import threading
 
 try:
     import cupy
@@ -16,7 +17,6 @@ from ..cuda_utils import (
     use_cupy_custom_op,
 )
 from .helpers import (
-    replay_and_grad as _replay_and_grad,
     sg_registry_key as _sg_registry_key,
 )
 from ... import surrogate
@@ -3624,6 +3624,36 @@ def _sg_obj_id(sg) -> int:
     return register_python_object(sg, _sg_registry_key(sg))
 
 
+class _CapturedAutogradCtx:
+    def __init__(self):
+        self.saved_tensors = ()
+
+    def save_for_backward(self, *tensors):
+        self.saved_tensors = tensors
+
+
+_CAPTURE_CTX_LOCK = threading.Lock()
+_CAPTURE_CTX_NEXT_ID = 0
+_CAPTURE_CTX_BY_ID: dict[int, _CapturedAutogradCtx] = {}
+
+
+def _stash_capture_ctx(captured_ctx: _CapturedAutogradCtx) -> int:
+    global _CAPTURE_CTX_NEXT_ID
+    with _CAPTURE_CTX_LOCK:
+        capture_id = _CAPTURE_CTX_NEXT_ID
+        _CAPTURE_CTX_NEXT_ID += 1
+        _CAPTURE_CTX_BY_ID[capture_id] = captured_ctx
+        return capture_id
+
+
+def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
+    with _CAPTURE_CTX_LOCK:
+        captured_ctx = _CAPTURE_CTX_BY_ID.pop(capture_id, None)
+    if captured_ctx is None:
+        raise RuntimeError(f"Unknown captured context id={capture_id}.")
+    return captured_ctx
+
+
 def _resolve_sg_cuda_code_fun(sg):
     cuda_code = getattr(sg, "cuda_code", None)
     if callable(cuda_code):
@@ -3652,55 +3682,53 @@ if use_cupy_custom_op() and cupy is not None:
         a0: float,
         detach_reset: bool,
         sg_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            sg = resolve_python_object(sg_id)
-            return MultiStepQIFNodePTT.apply(
-                x_seq,
-                v_init,
-                tau,
-                v_threshold,
-                _decode_v_reset(v_reset),
-                v_rest,
-                v_c,
-                a0,
-                detach_reset,
-                _resolve_sg_cuda_code_fun(sg),
-            )
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        sg = resolve_python_object(sg_id)
+        captured_ctx = _CapturedAutogradCtx()
+        spike_seq, v_seq = MultiStepQIFNodePTT.forward(
+            captured_ctx,
+            x_seq,
+            v_init,
+            tau,
+            v_threshold,
+            _decode_v_reset(v_reset),
+            v_rest,
+            v_c,
+            a0,
+            detach_reset,
+            _resolve_sg_cuda_code_fun(sg),
+        )
+        capture_id = _stash_capture_ctx(captured_ctx)
+        capture_token = torch.tensor(
+            capture_id, device=x_seq.device, dtype=torch.int64
+        )
+        return spike_seq, v_seq, capture_token
 
 
     @torch.library.register_fake("sj::cupy_multistep_qif_forward")
     def _cupy_multistep_qif_forward_fake(
         x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, sg_id
     ):
-        return x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape)
+        return (
+            x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty((), dtype=torch.int64),
+        )
 
 
     def _setup_qif_ctx(ctx, inputs, output):
-        ctx.inputs = inputs
-        ctx.sg = resolve_python_object(inputs[-1])
+        capture_token = output[2]
+        if capture_token.is_meta:
+            ctx.captured = None
+            return
+        ctx.captured = _take_capture_ctx(int(capture_token.item()))
 
 
-    def _qif_bw(ctx, grad_spike_seq, grad_v_seq):
-        x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, _sg_id = (
-            ctx.inputs
-        )
-        sg = ctx.sg
-        grads = _replay_and_grad(
-            MultiStepQIFNodePTT.apply,
-            (x_seq, v_init),
-            (
-                tau,
-                v_threshold,
-                _decode_v_reset(v_reset),
-                v_rest,
-                v_c,
-                a0,
-                detach_reset,
-                _resolve_sg_cuda_code_fun(sg),
-            ),
-            (grad_spike_seq, grad_v_seq),
-        )
+    def _qif_bw(ctx, grad_spike_seq, grad_v_seq, grad_capture_token):
+        del grad_capture_token
+        if ctx.captured is None:
+            raise RuntimeError("Missing captured context for qif backward.")
+        grads = MultiStepQIFNodePTT.backward(ctx.captured, grad_spike_seq, grad_v_seq)
         return grads[0], grads[1], None, None, None, None, None, None, None, None
 
 
@@ -3726,25 +3754,31 @@ if use_cupy_custom_op() and cupy is not None:
         a0: float,
         detach_reset: bool,
         sg_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            sg = resolve_python_object(sg_id)
-            return MultiStepIzhikevichNodePTT.apply(
-                x_seq,
-                v_init,
-                w_init,
-                tau,
-                v_threshold,
-                _decode_v_reset(v_reset),
-                v_rest,
-                a,
-                b,
-                tau_w,
-                v_c,
-                a0,
-                detach_reset,
-                _resolve_sg_cuda_code_fun(sg),
-            )
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        sg = resolve_python_object(sg_id)
+        captured_ctx = _CapturedAutogradCtx()
+        spike_seq, v_seq, w_seq = MultiStepIzhikevichNodePTT.forward(
+            captured_ctx,
+            x_seq,
+            v_init,
+            w_init,
+            tau,
+            v_threshold,
+            _decode_v_reset(v_reset),
+            v_rest,
+            a,
+            b,
+            tau_w,
+            v_c,
+            a0,
+            detach_reset,
+            _resolve_sg_cuda_code_fun(sg),
+        )
+        capture_id = _stash_capture_ctx(captured_ctx)
+        capture_token = torch.tensor(
+            capture_id, device=x_seq.device, dtype=torch.int64
+        )
+        return spike_seq, v_seq, w_seq, capture_token
 
 
     @torch.library.register_fake("sj::cupy_multistep_izhikevich_forward")
@@ -3754,49 +3788,24 @@ if use_cupy_custom_op() and cupy is not None:
             x_seq.new_empty(x_seq.shape),
             x_seq.new_empty(x_seq.shape),
             x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty((), dtype=torch.int64),
         )
 
 
     def _setup_iz_ctx(ctx, inputs, output):
-        ctx.inputs = inputs
-        ctx.sg = resolve_python_object(inputs[-1])
+        capture_token = output[3]
+        if capture_token.is_meta:
+            ctx.captured = None
+            return
+        ctx.captured = _take_capture_ctx(int(capture_token.item()))
 
 
-    def _iz_bw(ctx, grad_spike_seq, grad_v_seq, grad_w_seq):
-        (
-            x_seq,
-            v_init,
-            w_init,
-            tau,
-            v_threshold,
-            v_reset,
-            v_rest,
-            a,
-            b,
-            tau_w,
-            v_c,
-            a0,
-            detach_reset,
-            _sg_id,
-        ) = ctx.inputs
-        sg = ctx.sg
-        grads = _replay_and_grad(
-            MultiStepIzhikevichNodePTT.apply,
-            (x_seq, v_init, w_init),
-            (
-                tau,
-                v_threshold,
-                _decode_v_reset(v_reset),
-                v_rest,
-                a,
-                b,
-                tau_w,
-                v_c,
-                a0,
-                detach_reset,
-                _resolve_sg_cuda_code_fun(sg),
-            ),
-            (grad_spike_seq, grad_v_seq, grad_w_seq),
+    def _iz_bw(ctx, grad_spike_seq, grad_v_seq, grad_w_seq, grad_capture_token):
+        del grad_capture_token
+        if ctx.captured is None:
+            raise RuntimeError("Missing captured context for izhikevich backward.")
+        grads = MultiStepIzhikevichNodePTT.backward(
+            ctx.captured, grad_spike_seq, grad_v_seq, grad_w_seq
         )
         return (
             grads[0],
@@ -3834,63 +3843,52 @@ if use_cupy_custom_op() and cupy is not None:
         delta_T: float,
         detach_reset: bool,
         sg_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        with torch.no_grad():
-            sg = resolve_python_object(sg_id)
-            return MultiStepEIFNodePTT.apply(
-                x_seq,
-                v_init,
-                tau,
-                v_threshold,
-                _decode_v_reset(v_reset),
-                v_rest,
-                theta_rh,
-                delta_T,
-                detach_reset,
-                _resolve_sg_cuda_code_fun(sg),
-            )
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        sg = resolve_python_object(sg_id)
+        captured_ctx = _CapturedAutogradCtx()
+        spike_seq, v_seq = MultiStepEIFNodePTT.forward(
+            captured_ctx,
+            x_seq,
+            v_init,
+            tau,
+            v_threshold,
+            _decode_v_reset(v_reset),
+            v_rest,
+            theta_rh,
+            delta_T,
+            detach_reset,
+            _resolve_sg_cuda_code_fun(sg),
+        )
+        capture_id = _stash_capture_ctx(captured_ctx)
+        capture_token = torch.tensor(
+            capture_id, device=x_seq.device, dtype=torch.int64
+        )
+        return spike_seq, v_seq, capture_token
 
 
     @torch.library.register_fake("sj::cupy_multistep_eif_forward")
     def _cupy_multistep_eif_forward_fake(*args):
         x_seq = args[0]
-        return x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape)
+        return (
+            x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty(x_seq.shape),
+            x_seq.new_empty((), dtype=torch.int64),
+        )
 
 
     def _setup_eif_ctx(ctx, inputs, output):
-        ctx.inputs = inputs
-        ctx.sg = resolve_python_object(inputs[-1])
+        capture_token = output[2]
+        if capture_token.is_meta:
+            ctx.captured = None
+            return
+        ctx.captured = _take_capture_ctx(int(capture_token.item()))
 
 
-    def _eif_bw(ctx, grad_spike_seq, grad_v_seq):
-        (
-            x_seq,
-            v_init,
-            tau,
-            v_threshold,
-            v_reset,
-            v_rest,
-            theta_rh,
-            delta_T,
-            detach_reset,
-            _sg_id,
-        ) = ctx.inputs
-        sg = ctx.sg
-        grads = _replay_and_grad(
-            MultiStepEIFNodePTT.apply,
-            (x_seq, v_init),
-            (
-                tau,
-                v_threshold,
-                _decode_v_reset(v_reset),
-                v_rest,
-                theta_rh,
-                delta_T,
-                detach_reset,
-                _resolve_sg_cuda_code_fun(sg),
-            ),
-            (grad_spike_seq, grad_v_seq),
-        )
+    def _eif_bw(ctx, grad_spike_seq, grad_v_seq, grad_capture_token):
+        del grad_capture_token
+        if ctx.captured is None:
+            raise RuntimeError("Missing captured context for eif backward.")
+        grads = MultiStepEIFNodePTT.backward(ctx.captured, grad_spike_seq, grad_v_seq)
         return grads[0], grads[1], None, None, None, None, None, None, None, None
 
 
@@ -3942,41 +3940,21 @@ def multistep_plif_ptt(
 def multistep_qif_ptt(
     x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, surrogate_function
 ):
-    if use_cupy_custom_op() and cupy is not None:
-        try:
-            sg_id = _sg_obj_id(surrogate_function)
-        except TypeError as e:
-            logging.debug(
-                "multistep_qif_ptt: preflight fallback (surrogate=%s): %s",
-                type(surrogate_function).__name__,
-                e,
-            )
-        else:
-            v_reset_value = float("nan") if v_reset is None else float(v_reset)
-            return cupy_multistep_qif_forward(
-                x_seq,
-                v_init,
-                tau,
-                v_threshold,
-                v_reset_value,
-                v_rest,
-                v_c,
-                a0,
-                detach_reset,
-                sg_id,
-            )
-    return MultiStepQIFNodePTT.apply(
+    sg_id = _sg_obj_id(surrogate_function)
+    v_reset_value = float("nan") if v_reset is None else float(v_reset)
+    spike_seq, v_seq, _ = cupy_multistep_qif_forward(
         x_seq,
         v_init,
         tau,
         v_threshold,
-        v_reset,
+        v_reset_value,
         v_rest,
         v_c,
         a0,
         detach_reset,
-        _resolve_sg_cuda_code_fun(surrogate_function),
+        sg_id,
     )
+    return spike_seq, v_seq
 
 
 def multistep_izhikevich_ptt(
@@ -3995,40 +3973,15 @@ def multistep_izhikevich_ptt(
     detach_reset,
     surrogate_function,
 ):
-    if use_cupy_custom_op() and cupy is not None:
-        try:
-            sg_id = _sg_obj_id(surrogate_function)
-        except TypeError as e:
-            logging.debug(
-                "multistep_izhikevich_ptt: preflight fallback (surrogate=%s): %s",
-                type(surrogate_function).__name__,
-                e,
-            )
-        else:
-            v_reset_value = float("nan") if v_reset is None else float(v_reset)
-            return cupy_multistep_izhikevich_forward(
-                x_seq,
-                v_init,
-                w_init,
-                tau,
-                v_threshold,
-                v_reset_value,
-                v_rest,
-                a,
-                b,
-                tau_w,
-                v_c,
-                a0,
-                detach_reset,
-                sg_id,
-            )
-    return MultiStepIzhikevichNodePTT.apply(
+    sg_id = _sg_obj_id(surrogate_function)
+    v_reset_value = float("nan") if v_reset is None else float(v_reset)
+    spike_seq, v_seq, w_seq, _ = cupy_multistep_izhikevich_forward(
         x_seq,
         v_init,
         w_init,
         tau,
         v_threshold,
-        v_reset,
+        v_reset_value,
         v_rest,
         a,
         b,
@@ -4036,8 +3989,9 @@ def multistep_izhikevich_ptt(
         v_c,
         a0,
         detach_reset,
-        _resolve_sg_cuda_code_fun(surrogate_function),
+        sg_id,
     )
+    return spike_seq, v_seq, w_seq
 
 
 def multistep_eif_ptt(
@@ -4052,41 +4006,21 @@ def multistep_eif_ptt(
     detach_reset,
     surrogate_function,
 ):
-    if use_cupy_custom_op() and cupy is not None:
-        try:
-            sg_id = _sg_obj_id(surrogate_function)
-        except TypeError as e:
-            logging.debug(
-                "multistep_eif_ptt: preflight fallback (surrogate=%s): %s",
-                type(surrogate_function).__name__,
-                e,
-            )
-        else:
-            v_reset_value = float("nan") if v_reset is None else float(v_reset)
-            return cupy_multistep_eif_forward(
-                x_seq,
-                v_init,
-                tau,
-                v_threshold,
-                v_reset_value,
-                v_rest,
-                theta_rh,
-                delta_T,
-                detach_reset,
-                sg_id,
-            )
-    return MultiStepEIFNodePTT.apply(
+    sg_id = _sg_obj_id(surrogate_function)
+    v_reset_value = float("nan") if v_reset is None else float(v_reset)
+    spike_seq, v_seq, _ = cupy_multistep_eif_forward(
         x_seq,
         v_init,
         tau,
         v_threshold,
-        v_reset,
+        v_reset_value,
         v_rest,
         theta_rh,
         delta_T,
         detach_reset,
-        _resolve_sg_cuda_code_fun(surrogate_function),
+        sg_id,
     )
+    return spike_seq, v_seq
 
 
 def save_cuda_codes(
