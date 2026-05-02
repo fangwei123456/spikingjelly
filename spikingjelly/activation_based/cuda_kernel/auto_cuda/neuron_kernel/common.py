@@ -1,6 +1,5 @@
 import logging
 import math
-import os
 import threading
 from typing import Callable, Iterable
 
@@ -20,30 +19,6 @@ from ..... import configure
 from .... import surrogate
 from ... import cuda_utils
 from .. import base, cfunction
-
-try:
-    _CUPY_CUSTOM_OP_AVAILABLE = all(
-        hasattr(torch.library, name)
-        for name in ("custom_op", "register_fake", "register_autograd")
-    )
-except BaseException:
-    _CUPY_CUSTOM_OP_AVAILABLE = False
-
-
-def _env_flag_enabled(var_name: str) -> bool:
-    v = os.getenv(var_name)
-    if v is None:
-        return True
-    return v.strip().lower() not in ("0", "false", "off", "no")
-
-
-def _use_cupy_custom_op() -> bool:
-    return (
-        _CUPY_CUSTOM_OP_AVAILABLE
-        and cupy is not None
-        and _env_flag_enabled("SJ_USE_CUPY_OP")
-    )
-
 
 _SURROGATE_CUPY_REGISTRY_LOCK = threading.Lock()
 _SURROGATE_CUPY_NEXT_ID = 0

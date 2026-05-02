@@ -10,7 +10,6 @@ from torch.types import _int, _size
 from torch.utils.cpp_extension import load_inline
 
 from . import tensor_cache
-from .cuda_utils import amp_custom_bwd, amp_custom_fwd, use_cupy_custom_op
 
 try:
     import cupy
@@ -116,305 +115,139 @@ def _normalize_conv_hyperparams(
     )
 
 
-class spikeConvolution(torch.autograd.Function):
-    # Pytorch only provides cudnn_convolution without bias.
-    # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
-    @staticmethod
-    @amp_custom_fwd
-    def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
-        spike_dim = spike.dim()
-        stride, padding, dilation = _normalize_conv_hyperparams(
-            spike_dim, stride, padding, dilation
-        )
-        need_conv_grad = ctx.needs_input_grad[0] or ctx.needs_input_grad[1]
-        need_any_grad = need_conv_grad or ctx.needs_input_grad[2]
-        if cpp_wrapper is None and need_conv_grad:
-            raise RuntimeError(
-                "cpp_wrapper is unavailable for spike convolution backward. "
-                "Please ensure the inline extension can be built in this environment."
-            )
-        if need_any_grad:
-            if need_conv_grad:
-                ctx.s_shape = spike.shape
-                ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-
-            if need_conv_grad:
-                ctx.save_for_backward(weight)
-
-            ctx.padding = padding
-            ctx.stride = stride
-            ctx.dilation = dilation
-            ctx.groups = groups
-
-        if spike_dim == 3:
-            return F.conv1d(
-                input=spike,
-                weight=weight,
-                bias=bias,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                groups=groups,
-            )
-        elif spike_dim == 4:
-            return F.conv2d(
-                input=spike,
-                weight=weight,
-                bias=bias,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                groups=groups,
-            )
-        elif spike_dim == 5:
-            return F.conv3d(
-                input=spike,
-                weight=weight,
-                bias=bias,
-                stride=stride,
-                padding=padding,
-                dilation=dilation,
-                groups=groups,
-            )
-
-    @staticmethod
-    @amp_custom_bwd
-    def backward(ctx, grad_output):
-        grad_spike = None
-        grad_weight = None
-        grad_bias = None
-        if ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            weight = ctx.saved_tensors[0]
-            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-            weight = weight.to(grad_output.dtype)
-            grad_spike, grad_weight = _spike_conv_backward_common(
-                spike,
-                grad_output,
-                weight,
-                ctx.padding,
-                ctx.stride,
-                ctx.dilation,
-                ctx.groups,
-                (True, True),
-            )
-
-        elif not ctx.needs_input_grad[0] and ctx.needs_input_grad[1]:
-            weight = ctx.saved_tensors[0]
-            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-            weight = weight.to(grad_output.dtype)
-            _, grad_weight = _spike_conv_backward_common(
-                spike,
-                grad_output,
-                weight,
-                ctx.padding,
-                ctx.stride,
-                ctx.dilation,
-                ctx.groups,
-                (False, True),
-            )
-
-        elif ctx.needs_input_grad[0] and not ctx.needs_input_grad[1]:
-            weight = ctx.saved_tensors[0]
-            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-            weight = weight.to(grad_output.dtype)
-            grad_spike, _ = _spike_conv_backward_common(
-                spike,
-                grad_output,
-                weight,
-                ctx.padding,
-                ctx.stride,
-                ctx.dilation,
-                ctx.groups,
-                (True, False),
-            )
-
-        if ctx.needs_input_grad[2]:
-            # grad_output.shape = [N, C, *]
-            out_channels = grad_output.shape[1]
-            grad_bias = grad_output.transpose(0, 1).reshape(out_channels, -1).sum(1)
-        return grad_spike, grad_weight, grad_bias, None, None, None, None
+@torch.library.custom_op("sj::cupy_spike_linear_forward", mutates_args=())
+def cupy_spike_linear_forward(
+    spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]
+) -> torch.Tensor:
+    return F.linear(spike, weight, bias)
 
 
-class spikeLinear(torch.autograd.Function):
-    @staticmethod
-    @amp_custom_fwd
-    def forward(ctx, spike, weight, bias=None):
-        # spike.shape = [N, *, in_features]
-        # weight.shape = [out_features, in_features]
-        # bias.shape = [out_features]
-        if (
-            ctx.needs_input_grad[0]
-            or ctx.needs_input_grad[1]
-            or ctx.needs_input_grad[2]
-        ):
-            if ctx.needs_input_grad[1]:
-                ctx.s_shape = spike.shape
-                ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-            if ctx.needs_input_grad[0]:
-                ctx.save_for_backward(weight)
-        return F.linear(spike, weight, bias)
-
-    @staticmethod
-    @amp_custom_bwd
-    def backward(ctx, grad_output):
-        # grad_output.shape = [N, *, out_features]
-        if ctx.needs_input_grad[1]:
-            weight = ctx.saved_tensors[0]
-        if ctx.needs_input_grad[0]:
-            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-
-        grad_spike = grad_weight = grad_bias = None
-
-        if ctx.needs_input_grad[0]:
-            grad_spike = F.linear(grad_output, weight.t(), bias=None)
-        if ctx.needs_input_grad[1]:
-            in_features = spike.shape[-1]
-            out_features = grad_output.shape[-1]
-            # grad_output.reshape(-1, out_features).t().shape = [out_features, N*]
-            # spike.reshape(-1, in_features).shape = [N*, in_features]
-            grad_weight = torch.mm(
-                grad_output.reshape(-1, out_features).t(),
-                spike.reshape(-1, in_features).to(grad_output.dtype),
-            )
-        if ctx.needs_input_grad[2]:
-            out_features = grad_output.shape[-1]
-            grad_bias = grad_output.reshape(-1, out_features).sum(0)
-        return grad_spike, grad_weight, grad_bias
+@torch.library.register_fake("sj::cupy_spike_linear_forward")
+def _cupy_spike_linear_forward_fake(
+    spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]
+) -> torch.Tensor:
+    return F.linear(spike, weight, bias)
 
 
-_CUSTOM_SPIKE_OP_READY = False
+def _setup_cupy_spike_linear_context(ctx, inputs, output):
+    del output
+    spike, weight, bias = inputs
+    ctx.s_shape = spike.shape
+    ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
+    ctx.save_for_backward(weight)
+    ctx.has_bias = bias is not None
 
 
-if use_cupy_custom_op():
+def _cupy_spike_linear_backward(ctx, grad_output):
+    (weight,) = ctx.saved_tensors
+    spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
+    weight = weight.to(grad_output.dtype)
+    grad_spike = F.linear(grad_output, weight.t(), bias=None)
+    in_features = spike.shape[-1]
+    out_features = grad_output.shape[-1]
+    grad_weight = torch.mm(
+        grad_output.reshape(-1, out_features).t(),
+        spike.reshape(-1, in_features).to(grad_output.dtype),
+    )
+    grad_bias = grad_output.reshape(-1, out_features).sum(0) if ctx.has_bias else None
+    return grad_spike, grad_weight, grad_bias
 
-    @torch.library.custom_op("sj::cupy_spike_linear_forward", mutates_args=())
-    def cupy_spike_linear_forward(
-        spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]
-    ) -> torch.Tensor:
-        return F.linear(spike, weight, bias)
 
-    @torch.library.register_fake("sj::cupy_spike_linear_forward")
-    def _cupy_spike_linear_forward_fake(
-        spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]
-    ) -> torch.Tensor:
-        return F.linear(spike, weight, bias)
+torch.library.register_autograd(
+    "sj::cupy_spike_linear_forward",
+    _cupy_spike_linear_backward,
+    setup_context=_setup_cupy_spike_linear_context,
+)
 
-    def _setup_cupy_spike_linear_context(ctx, inputs, output):
-        spike, weight, bias = inputs
+
+@torch.library.custom_op("sj::cupy_spike_convolution_forward", mutates_args=())
+def cupy_spike_convolution_forward(
+    spike: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    stride: list[int],
+    padding: list[int],
+    dilation: list[int],
+    groups: int,
+) -> torch.Tensor:
+    if spike.dim() == 3:
+        return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
+    if spike.dim() == 4:
+        return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
+    return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
+
+
+@torch.library.register_fake("sj::cupy_spike_convolution_forward")
+def _cupy_spike_convolution_forward_fake(
+    spike: torch.Tensor,
+    weight: torch.Tensor,
+    bias: Optional[torch.Tensor],
+    stride: list[int],
+    padding: list[int],
+    dilation: list[int],
+    groups: int,
+) -> torch.Tensor:
+    if spike.dim() == 3:
+        return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
+    if spike.dim() == 4:
+        return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
+    return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
+
+
+def _setup_cupy_spike_convolution_context(ctx, inputs, output):
+    del output
+    spike, weight, bias, stride, padding, dilation, groups = inputs
+    stride, padding, dilation = _normalize_conv_hyperparams(
+        spike.dim(), stride, padding, dilation
+    )
+    ctx.need_grad_spike = bool(spike.requires_grad)
+    ctx.need_grad_weight = bool(weight.requires_grad)
+    ctx.need_grad_bias = bool(bias is not None and bias.requires_grad)
+    ctx.save_for_backward(weight)
+    if ctx.need_grad_spike or ctx.need_grad_weight:
         ctx.s_shape = spike.shape
         ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-        ctx.save_for_backward(weight)
-        ctx.has_bias = bias is not None
+    else:
+        ctx.s_shape = None
+        ctx.s_tk = None
+    ctx.stride = stride
+    ctx.padding = padding
+    ctx.dilation = dilation
+    ctx.groups = groups
+    ctx.has_bias = bias is not None
 
-    def _cupy_spike_linear_backward(ctx, grad_output):
+
+def _cupy_spike_convolution_backward(ctx, grad_output):
+    grad_spike = None
+    grad_weight = None
+    if ctx.need_grad_spike or ctx.need_grad_weight:
         (weight,) = ctx.saved_tensors
         spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
         weight = weight.to(grad_output.dtype)
-        grad_spike = F.linear(grad_output, weight.t(), bias=None)
-        in_features = spike.shape[-1]
-        out_features = grad_output.shape[-1]
-        grad_weight = torch.mm(
-            grad_output.reshape(-1, out_features).t(),
-            spike.reshape(-1, in_features).to(grad_output.dtype),
+        grad_spike, grad_weight = _spike_conv_backward_common(
+            spike,
+            grad_output,
+            weight,
+            ctx.padding,
+            ctx.stride,
+            ctx.dilation,
+            ctx.groups,
+            (ctx.need_grad_spike, ctx.need_grad_weight),
         )
-        grad_bias = (
-            grad_output.reshape(-1, out_features).sum(0) if ctx.has_bias else None
-        )
-        return grad_spike, grad_weight, grad_bias
 
-    torch.library.register_autograd(
-        "sj::cupy_spike_linear_forward",
-        _cupy_spike_linear_backward,
-        setup_context=_setup_cupy_spike_linear_context,
-    )
+    if ctx.has_bias and ctx.need_grad_bias:
+        reduce_dims = (0, *range(2, grad_output.dim()))
+        grad_bias = grad_output.sum(dim=reduce_dims)
+    else:
+        grad_bias = None
+    return grad_spike, grad_weight, grad_bias, None, None, None, None
 
-    @torch.library.custom_op("sj::cupy_spike_convolution_forward", mutates_args=())
-    def cupy_spike_convolution_forward(
-        spike: torch.Tensor,
-        weight: torch.Tensor,
-        bias: Optional[torch.Tensor],
-        stride: list[int],
-        padding: list[int],
-        dilation: list[int],
-        groups: int,
-    ) -> torch.Tensor:
-        if spike.dim() == 3:
-            return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
-        if spike.dim() == 4:
-            return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
-        return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
 
-    @torch.library.register_fake("sj::cupy_spike_convolution_forward")
-    def _cupy_spike_convolution_forward_fake(
-        spike: torch.Tensor,
-        weight: torch.Tensor,
-        bias: Optional[torch.Tensor],
-        stride: list[int],
-        padding: list[int],
-        dilation: list[int],
-        groups: int,
-    ) -> torch.Tensor:
-        if spike.dim() == 3:
-            return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
-        if spike.dim() == 4:
-            return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
-        return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
-
-    def _setup_cupy_spike_convolution_context(ctx, inputs, output):
-        spike, weight, bias, stride, padding, dilation, groups = inputs
-        stride, padding, dilation = _normalize_conv_hyperparams(
-            spike.dim(), stride, padding, dilation
-        )
-        ctx.need_grad_spike = bool(spike.requires_grad)
-        ctx.need_grad_weight = bool(weight.requires_grad)
-        ctx.need_grad_bias = bool(bias is not None and bias.requires_grad)
-        ctx.save_for_backward(weight)
-        if ctx.need_grad_spike or ctx.need_grad_weight:
-            ctx.s_shape = spike.shape
-            ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-        else:
-            ctx.s_shape = None
-            ctx.s_tk = None
-        ctx.stride = stride
-        ctx.padding = padding
-        ctx.dilation = dilation
-        ctx.groups = groups
-        ctx.has_bias = bias is not None
-
-    def _cupy_spike_convolution_backward(ctx, grad_output):
-        grad_spike = None
-        grad_weight = None
-        if ctx.need_grad_spike or ctx.need_grad_weight:
-            (weight,) = ctx.saved_tensors
-            spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
-            weight = weight.to(grad_output.dtype)
-            grad_spike, grad_weight = _spike_conv_backward_common(
-                spike,
-                grad_output,
-                weight,
-                ctx.padding,
-                ctx.stride,
-                ctx.dilation,
-                ctx.groups,
-                (ctx.need_grad_spike, ctx.need_grad_weight),
-            )
-
-        if ctx.has_bias and ctx.need_grad_bias:
-            reduce_dims = (0, *range(2, grad_output.dim()))
-            grad_bias = grad_output.sum(dim=reduce_dims)
-        else:
-            grad_bias = None
-        return grad_spike, grad_weight, grad_bias, None, None, None, None
-
-    torch.library.register_autograd(
-        "sj::cupy_spike_convolution_forward",
-        _cupy_spike_convolution_backward,
-        setup_context=_setup_cupy_spike_convolution_context,
-    )
-
-    _CUSTOM_SPIKE_OP_READY = True
-else:
-    _CUSTOM_SPIKE_OP_READY = False
+torch.library.register_autograd(
+    "sj::cupy_spike_convolution_forward",
+    _cupy_spike_convolution_backward,
+    setup_context=_setup_cupy_spike_convolution_context,
+)
 
 
 def spike_linear(
@@ -454,9 +287,7 @@ def spike_linear(
     if spike.get_device() < 0:
         return F.linear(spike, weight, bias)
     else:
-        if _CUSTOM_SPIKE_OP_READY and use_cupy_custom_op():
-            return cupy_spike_linear_forward(spike, weight, bias)
-        return spikeLinear.apply(spike, weight, bias)
+        return cupy_spike_linear_forward(spike, weight, bias)
 
 
 def spike_conv1d(
@@ -504,22 +335,14 @@ def spike_conv1d(
     else:
         if isinstance(padding, str):
             return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
-        if (
-            _CUSTOM_SPIKE_OP_READY
-            and use_cupy_custom_op()
-            and not isinstance(padding, str)
-        ):
-            return cupy_spike_convolution_forward(
-                spike,
-                weight,
-                bias,
-                list(_single(stride)),
-                list(_single(padding)),
-                list(_single(dilation)),
-                groups,
-            )
-        return spikeConvolution.apply(
-            spike, weight, bias, stride, padding, dilation, groups
+        return cupy_spike_convolution_forward(
+            spike,
+            weight,
+            bias,
+            list(_single(stride)),
+            list(_single(padding)),
+            list(_single(dilation)),
+            groups,
         )
 
 
@@ -568,22 +391,14 @@ def spike_conv2d(
     else:
         if isinstance(padding, str):
             return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
-        if (
-            _CUSTOM_SPIKE_OP_READY
-            and use_cupy_custom_op()
-            and not isinstance(padding, str)
-        ):
-            return cupy_spike_convolution_forward(
-                spike,
-                weight,
-                bias,
-                list(_pair(stride)),
-                list(_pair(padding)),
-                list(_pair(dilation)),
-                groups,
-            )
-        return spikeConvolution.apply(
-            spike, weight, bias, stride, padding, dilation, groups
+        return cupy_spike_convolution_forward(
+            spike,
+            weight,
+            bias,
+            list(_pair(stride)),
+            list(_pair(padding)),
+            list(_pair(dilation)),
+            groups,
         )
 
 
@@ -632,22 +447,14 @@ def spike_conv3d(
     else:
         if isinstance(padding, str):
             return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
-        if (
-            _CUSTOM_SPIKE_OP_READY
-            and use_cupy_custom_op()
-            and not isinstance(padding, str)
-        ):
-            return cupy_spike_convolution_forward(
-                spike,
-                weight,
-                bias,
-                list(_triple(stride)),
-                list(_triple(padding)),
-                list(_triple(dilation)),
-                groups,
-            )
-        return spikeConvolution.apply(
-            spike, weight, bias, stride, padding, dilation, groups
+        return cupy_spike_convolution_forward(
+            spike,
+            weight,
+            bias,
+            list(_triple(stride)),
+            list(_triple(padding)),
+            list(_triple(dilation)),
+            groups,
         )
 
 
