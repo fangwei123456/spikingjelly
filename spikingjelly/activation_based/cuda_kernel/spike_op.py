@@ -66,6 +66,8 @@ def _spike_conv_backward_common(
     groups: int,
     output_mask: tuple[bool, bool],
 ):
+    # This wrapper targets standard (non-transposed) convolution backward only.
+    # `output_padding` is fixed to zeros to match conv1d/2d/3d forward usage in this module.
     if cpp_wrapper is None:
         raise RuntimeError(
             "cpp_wrapper is unavailable for spike convolution backward. "
