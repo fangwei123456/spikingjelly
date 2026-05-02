@@ -201,12 +201,12 @@ class BaseNode(base.MemoryModule):
                 self.register_memory("v_seq", None)
 
     @staticmethod
-    def jit_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
+    def apply_hard_reset(v: torch.Tensor, spike: torch.Tensor, v_reset: float):
         v = (1.0 - spike) * v + spike * v_reset
         return v
 
     @staticmethod
-    def jit_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
+    def apply_soft_reset(v: torch.Tensor, spike: torch.Tensor, v_threshold: float):
         v = v - spike * v_threshold
         return v
 
@@ -285,11 +285,11 @@ class BaseNode(base.MemoryModule):
 
         if self.v_reset is None:
             # soft reset
-            self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold)
+            self.v = self.apply_soft_reset(self.v, spike_d, self.v_threshold)
 
         else:
             # hard reset
-            self.v = self.jit_hard_reset(self.v, spike_d, self.v_reset)
+            self.v = self.apply_hard_reset(self.v, spike_d, self.v_reset)
 
     def extra_repr(self):
         return f"v_threshold={self.v_threshold}, v_reset={self.v_reset}, detach_reset={self.detach_reset}, step_mode={self.step_mode}, backend={self.backend}"

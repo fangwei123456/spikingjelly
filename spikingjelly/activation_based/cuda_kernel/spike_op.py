@@ -56,6 +56,7 @@ except BaseException as e:
     logging.info(f"spikingjelly.activation_based.spike_op: {e}")
     cpp_wrapper = None
 
+
 def _spike_conv_backward_common(
     spike: torch.Tensor,
     grad_output: torch.Tensor,
@@ -285,6 +286,7 @@ _CUSTOM_SPIKE_OP_READY = False
 
 
 if use_cupy_custom_op():
+
     @torch.library.custom_op("sj::cupy_spike_linear_forward", mutates_args=())
     def cupy_spike_linear_forward(
         spike: torch.Tensor, weight: torch.Tensor, bias: Optional[torch.Tensor]

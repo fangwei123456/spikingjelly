@@ -1,11 +1,11 @@
+import torch
+
+from spikingjelly.activation_based import surrogate
 from spikingjelly.activation_based.cuda_kernel.auto_cuda.generator import (
     analyse_graph,
-    gen_forward_codes,
     gen_backward_codes,
+    gen_forward_codes,
 )
-from spikingjelly.activation_based import surrogate
-
-import torch
 
 if __name__ == "__main__":
 

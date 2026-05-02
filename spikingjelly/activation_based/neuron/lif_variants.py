@@ -518,20 +518,22 @@ class KLIFNode(BaseNode):
         if self.scale_reset:
             if self.v_reset is None:
                 # soft reset
-                self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold) / self.k
+                self.v = (
+                    self.apply_soft_reset(self.v, spike_d, self.v_threshold) / self.k
+                )
 
             else:
                 # hard reset
-                self.v = self.jit_hard_reset(self.v / self.k, spike_d, self.v_reset)
+                self.v = self.apply_hard_reset(self.v / self.k, spike_d, self.v_reset)
 
         else:
             if self.v_reset is None:
                 # soft reset
-                self.v = self.jit_soft_reset(self.v, spike_d, self.v_threshold)
+                self.v = self.apply_soft_reset(self.v, spike_d, self.v_threshold)
 
             else:
                 # hard reset
-                self.v = self.jit_hard_reset(self.v, spike_d, self.v_reset)
+                self.v = self.apply_hard_reset(self.v, spike_d, self.v_reset)
 
 
 class CUBALIFNode(BaseNode):
