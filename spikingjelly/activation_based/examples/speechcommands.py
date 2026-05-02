@@ -1,4 +1,4 @@
-"""
+r"""
 .. codeauthor:: Yanqi Chen <chyq@pku.edu.cn>, Ismail Khalfaoui Hassani <ismail.khalfaoui-hassani@univ-tlse3.fr>
 
 A reproduction of the paper `Technical report: supervised training of convolutional spiking neural networks with PyTorch <https://arxiv.org/pdf/1911.10124.pdf>`_\ .
@@ -328,11 +328,47 @@ class LIFWrapper(nn.Module):
         self.module = module
         self.flatten = flatten
 
-    def forward(self, x_seq: torch.Tensor):
-        """
-        :param x_seq: shape=[batch size, channel, T, n_mel]
+    def forward(self, x_seq: torch.Tensor) -> torch.Tensor:
+        r"""
+        **API Language:**
+
+        :ref:`中文 <LIFWrapper-forward-cn>` | :ref:`English <LIFWrapper-forward-en>`
+
+        ----
+
+        .. _LIFWrapper-forward-cn:
+
+        * **中文**
+
+        输入 ``x_seq`` 的形状为 ``[batch_size, channel, T, n_mel]``。在送入被包装模块前，
+        时间维和批量维会交换为 ``[T, channel, batch_size, n_mel]`` 以适配多步前向。
+        当 ``self.flatten=True`` 时，输出会重排并展平成
+        ``[batch_size, T, channel * n_mel]``；否则返回
+        ``[batch_size, channel, T, n_mel]``。
+
+        :param x_seq: 输入序列，shape=[batch_size, channel, T, n_mel]
         :type x_seq: torch.Tensor
-        :return: y_seq, shape=[batch size, channel, T, n_mel]
+        :return: 输出序列；当 ``self.flatten=True`` 时 shape=[batch_size, T, channel * n_mel]，
+            否则 shape=[batch_size, channel, T, n_mel]
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _LIFWrapper-forward-en:
+
+        * **English**
+
+        The input ``x_seq`` has shape ``[batch_size, channel, T, n_mel]``. Before
+        passing it to the wrapped module, the time and batch dimensions are swapped
+        to ``[T, channel, batch_size, n_mel]`` to match multi-step forward mode.
+        If ``self.flatten=True``, the output is permuted and flattened to
+        ``[batch_size, T, channel * n_mel]``; otherwise the output shape is
+        ``[batch_size, channel, T, n_mel]``.
+
+        :param x_seq: Input sequence, shape=[batch_size, channel, T, n_mel]
+        :type x_seq: torch.Tensor
+        :return: Output sequence; shape=[batch_size, T, channel * n_mel] when
+            ``self.flatten=True``, otherwise shape=[batch_size, channel, T, n_mel]
         :rtype: torch.Tensor
         """
         # Input: [batch size, channel, T, n_mel]
@@ -347,6 +383,32 @@ class LIFWrapper(nn.Module):
 
 class Net(nn.Module):
     def __init__(self):
+        r"""
+        **API Language:**
+
+        :ref:`中文 <Net-init-cn>` | :ref:`English <Net-init-en>`
+
+        ----
+
+        .. _Net-init-cn:
+
+        * **中文**
+
+        初始化语音命令识别网络。该网络由三层卷积-脉冲神经元模块组成，
+        最后一层输出会展平到 ``channel * n_mel`` 维度，再由全连接层映射到类别空间。
+        同时初始化训练过程统计字段。
+
+        ----
+
+        .. _Net-init-en:
+
+        * **English**
+
+        Initialize the speech command recognition network. The network stacks
+        three convolution-spiking blocks, flattens the final feature dimension to
+        ``channel * n_mel``, and maps features to class logits with a linear layer.
+        Training statistics fields are also initialized.
+        """
         super().__init__()
 
         self.train_times = 0
@@ -414,6 +476,40 @@ class Net(nn.Module):
         self.fc = nn.Linear(64 * 40, label_cnt)
 
     def forward(self, x):
+        r"""
+        **API Language:**
+
+        :ref:`中文 <Net-forward-cn>` | :ref:`English <Net-forward-en>`
+
+        ----
+
+        .. _Net-forward-cn:
+
+        * **中文**
+
+        对输入特征先经过卷积脉冲模块，得到按时间步展开的类别 logits，
+        然后沿时间维做均值池化，输出每个样本的最终分类 logits。
+
+        :param x: 输入特征，shape=[batch_size, delta_order + 1, T, n_mel]
+        :type x: torch.Tensor
+        :return: 分类 logits，shape=[batch_size, label_cnt]
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _Net-forward-en:
+
+        * **English**
+
+        Run the input features through the convolutional spiking stack to obtain
+        per-time-step class logits, then apply mean pooling over the time dimension
+        to produce final logits for each sample.
+
+        :param x: Input features, shape=[batch_size, delta_order + 1, T, n_mel]
+        :type x: torch.Tensor
+        :return: Classification logits, shape=[batch_size, label_cnt]
+        :rtype: torch.Tensor
+        """
         x = self.fc(self.conv(x))  # [batch size, T, #Class]
         return x.mean(dim=1)  # [batch size, #Class]
 

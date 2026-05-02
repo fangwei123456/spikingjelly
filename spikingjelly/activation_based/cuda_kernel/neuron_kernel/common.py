@@ -93,7 +93,11 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
     from . import eif, integrate_and_fire, izhikevich, lif, plif, qif
 
     kernels = [
-        ("MultiStepIFNodePTT", integrate_and_fire.create_fptt_kernel, integrate_and_fire.create_bptt_kernel),
+        (
+            "MultiStepIFNodePTT",
+            integrate_and_fire.create_fptt_kernel,
+            integrate_and_fire.create_bptt_kernel,
+        ),
         ("MultiStepLIFNodePTT", lif.create_fptt_kernel, lif.create_bptt_kernel),
         (
             "MultiStepParametricLIFNodePTT",
@@ -111,7 +115,7 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
 
     with open(cu_file_path, "w+") as cu_file:
         cu_file.write(
-            "// This file is created by spikingjelly.activation_based.neuron_kernel.save_cuda_codes.\n"
+            "// This file is created by spikingjelly.activation_based.cuda_kernel.neuron_kernel.save_cuda_codes.\n"
         )
         cu_file.write(
             "// Note that codes in this file will not be executed This file is just created for reading.\n"
@@ -123,7 +127,10 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
                     for dtype in ["fp32", "fp16"]:
                         # IF/QIF/EIF/Izh fptt signatures: (hard_reset, dtype)
                         # LIF/PLIF signatures include decay_input.
-                        if name in ("MultiStepLIFNodePTT", "MultiStepParametricLIFNodePTT"):
+                        if name in (
+                            "MultiStepLIFNodePTT",
+                            "MultiStepParametricLIFNodePTT",
+                        ):
                             for decay_input in [True, False]:
                                 cu_file.write(
                                     f"\n// {name} fptt {sg.__name__}, decay_input={decay_input}, hard_reset={hard_reset}, dtype={dtype}\n"
