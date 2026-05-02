@@ -36,12 +36,12 @@ try:
 
         std::tuple<at::Tensor, at::Tensor> cudnn_convolution_backward(
             const at::Tensor& input, const at::Tensor& grad_output, const at::Tensor& weight,
-            at::IntArrayRef padding, at::IntArrayRef stride, at::IntArrayRef dilation, int64_t groups,
+            at::IntArrayRef padding, at::IntArrayRef stride, at::IntArrayRef dilation,
+            at::IntArrayRef output_padding, int64_t groups,
             bool benchmark, bool deterministic, bool allow_tf32, std::array<bool, 2> output_mask) {
             (void)benchmark;
             (void)deterministic;
             (void)allow_tf32;
-            auto output_padding = std::vector<int64_t>(stride.size(), 0);
             auto grads = at::convolution_backward(
                 grad_output, input, weight, c10::nullopt,
                 stride, padding, dilation, false, output_padding, groups,
@@ -71,6 +71,7 @@ def _spike_conv_backward_common(
             "cpp_wrapper is unavailable for spike convolution backward. "
             "Please ensure the inline extension can be built in this environment."
         )
+    output_padding = [0] * (len(stride) if isinstance(stride, (list, tuple)) else 1)
     return cpp_wrapper.cudnn_convolution_backward(
         spike,
         grad_output,
@@ -78,6 +79,7 @@ def _spike_conv_backward_common(
         padding,
         stride,
         dilation,
+        output_padding,
         groups,
         torch.backends.cudnn.benchmark,
         torch.backends.cudnn.deterministic,
@@ -331,14 +333,13 @@ if use_cupy_custom_op():
         ctx.need_grad_spike = bool(spike.requires_grad)
         ctx.need_grad_weight = bool(weight.requires_grad)
         ctx.need_grad_bias = bool(bias is not None and bias.requires_grad)
+        ctx.save_for_backward(weight)
         if ctx.need_grad_spike or ctx.need_grad_weight:
             ctx.s_shape = spike.shape
             ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike)
-            ctx.save_for_backward(weight)
         else:
             ctx.s_shape = None
             ctx.s_tk = None
-            ctx.save_for_backward()
         ctx.stride = tuple(stride)
         ctx.padding = tuple(padding)
         ctx.dilation = tuple(dilation)

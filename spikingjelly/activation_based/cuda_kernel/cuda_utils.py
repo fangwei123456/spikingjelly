@@ -110,6 +110,21 @@ def resolve_python_object(obj_id: int) -> Any:
 
 
 def python_object_registry_key(obj: Any) -> str:
+    def _norm(v: Any) -> Any:
+        if isinstance(v, (bool, int, float, str, type(None))):
+            return v
+        if isinstance(v, tuple):
+            return tuple(_norm(x) for x in v)
+        if isinstance(v, list):
+            return tuple(_norm(x) for x in v)
+        if isinstance(v, dict):
+            return tuple(sorted((k, _norm(val)) for k, val in v.items()))
+        if isinstance(v, torch.Tensor):
+            if v.numel() == 1:
+                return v.item()
+            return ("tensor", tuple(v.shape), str(v.dtype), bool(v.requires_grad))
+        return repr(v)
+
     cls = obj.__class__
     key_parts: list[Any] = [cls.__module__, cls.__qualname__]
     kernel_name = getattr(obj, "kernel_name", None)
@@ -119,7 +134,16 @@ def python_object_registry_key(obj: Any) -> str:
     if isinstance(full_codes, str):
         key_parts.append(("full_codes", full_codes))
     if len(key_parts) == 2:
-        key_parts.append(("repr", repr(obj)))
+        state = getattr(obj, "__dict__", None)
+        if isinstance(state, dict):
+            key_parts.append(
+                (
+                    "state",
+                    tuple(sorted((k, _norm(v)) for k, v in state.items())),
+                )
+            )
+        else:
+            key_parts.append(("id", id(obj)))
     return repr(tuple(key_parts))
 
 
