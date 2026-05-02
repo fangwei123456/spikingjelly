@@ -286,6 +286,11 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
             "v_reset": None if soft_reset else v_reset,
             "decay": decay,
         }
+        if x_seq.dtype == torch.float16 and x_seq.shape[1] % 2 != 0:
+            raise ValueError(
+                "When using multi-step LIF with half2 cupy backend, the number "
+                "of neurons should be even."
+            )
         blocks, threads, py_dict = prepare_forward_meta(py_dict)
         py_dict["spike_seq"] = torch.empty_like(x_seq)
         py_dict["h_seq"] = torch.empty_like(x_seq)
