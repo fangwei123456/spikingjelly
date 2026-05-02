@@ -3,6 +3,7 @@ from typing import Optional
 import torch
 
 from ...cuda_utils import (
+    graph_capture_active,
     python_object_registry_key,
     register_python_object,
     resolve_python_object,
@@ -151,7 +152,7 @@ if use_cupy_custom_op() and cupy is not None:
 
 
 def ss_if_step(x, v, v_th, v_reset, forward_kernel, backward_kernel):
-    if use_cupy_custom_op() and cupy is not None:
+    if use_cupy_custom_op() and graph_capture_active() and cupy is not None:
         fk = register_python_object(
             forward_kernel, python_object_registry_key(forward_kernel)
         )

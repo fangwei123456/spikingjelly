@@ -11,6 +11,7 @@ import torch
 import torch.nn.functional as F
 from .. import cuda_utils, tensor_cache
 from ..cuda_utils import (
+    graph_capture_active,
     register_python_object,
     resolve_python_object,
     use_cupy_custom_op,
@@ -3942,7 +3943,7 @@ def multistep_plif_ptt(
 def multistep_qif_ptt(
     x_seq, v_init, tau, v_threshold, v_reset, v_rest, v_c, a0, detach_reset, surrogate_function
 ):
-    if use_cupy_custom_op() and cupy is not None:
+    if use_cupy_custom_op() and graph_capture_active() and cupy is not None:
         try:
             sg_id = _sg_obj_id(surrogate_function)
         except TypeError as e:
@@ -3995,7 +3996,7 @@ def multistep_izhikevich_ptt(
     detach_reset,
     surrogate_function,
 ):
-    if use_cupy_custom_op() and cupy is not None:
+    if use_cupy_custom_op() and graph_capture_active() and cupy is not None:
         try:
             sg_id = _sg_obj_id(surrogate_function)
         except TypeError as e:
@@ -4052,7 +4053,7 @@ def multistep_eif_ptt(
     detach_reset,
     surrogate_function,
 ):
-    if use_cupy_custom_op() and cupy is not None:
+    if use_cupy_custom_op() and graph_capture_active() and cupy is not None:
         try:
             sg_id = _sg_obj_id(surrogate_function)
         except TypeError as e:

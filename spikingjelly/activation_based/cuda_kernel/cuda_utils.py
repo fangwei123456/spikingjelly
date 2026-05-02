@@ -40,6 +40,32 @@ def use_cupy_custom_op() -> bool:
     return _CUSTOM_OP_AVAILABLE and env_flag_enabled("SJ_USE_CUPY_OP")
 
 
+def graph_capture_active() -> bool:
+    try:
+        compiler = getattr(torch, "compiler", None)
+        if compiler is not None and hasattr(compiler, "is_compiling"):
+            if compiler.is_compiling():
+                return True
+    except Exception:
+        pass
+
+    try:
+        dynamo = getattr(torch, "_dynamo", None)
+        if dynamo is not None and hasattr(dynamo, "is_compiling"):
+            if dynamo.is_compiling():
+                return True
+    except Exception:
+        pass
+
+    try:
+        if torch.jit.is_tracing():
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
 _PYOBJ_LOCK = threading.Lock()
 _PYOBJ_NEXT_ID = 0
 _PYOBJ_ID_TO_REF: dict[int, Any] = {}
@@ -149,7 +175,7 @@ def python_object_registry_key(obj: Any) -> str:
             else:
                 try:
                     tensor_identity = ("data_ptr", int(v.data_ptr()))
-                except (RuntimeError, NotImplementedError):
+                except Exception:
                     tensor_identity = ("fallback_id", id(v))
             return (
                 "tensor",
