@@ -562,7 +562,7 @@ def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
                 py_dict[key] = value
 
             elif isinstance(value, int):
-                py_dict[key] = cupy.asarray(value)
+                py_dict[key] = cupy.asarray(value, dtype=np.int32)
 
 
 def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
@@ -579,8 +579,8 @@ def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
     blocks = cuda_utils.cal_blocks(N)
 
     with cuda_utils.DeviceEnvironment(device):
-        py_dict["numel"] = cupy.asarray(numel)
-        py_dict["N"] = cupy.asarray(N)
+        py_dict["numel"] = cupy.asarray(numel, dtype=np.int32)
+        py_dict["N"] = cupy.asarray(N, dtype=np.int32)
 
     return blocks, threads, py_dict
 
@@ -684,8 +684,8 @@ class NeuronATGFBase:
         blocks = cuda_utils.cal_blocks(N)
 
         with cuda_utils.DeviceEnvironment(device):
-            numel = cupy.asarray(numel)
-            N = cupy.asarray(N)
+            numel = cupy.asarray(numel, dtype=np.int32)
+            N = cupy.asarray(N, dtype=np.int32)
 
         py_dict["numel"] = numel
         py_dict["N"] = N
