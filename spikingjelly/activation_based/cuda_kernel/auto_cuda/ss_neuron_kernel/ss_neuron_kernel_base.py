@@ -45,7 +45,7 @@ def scalar_to_cupy(py_dict: dict, ref: str = "x"):
                 py_dict[key] = value
 
             elif isinstance(value, int):
-                py_dict[key] = cupy.asarray(value)
+                py_dict[key] = cupy.asarray(value, dtype=np.int32)
 
 
 def new_tensors(news: tuple, py_dict: dict, ref: str = "x"):

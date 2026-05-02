@@ -1,6 +1,9 @@
 from typing import Callable
 
 import numpy as np
+import threading
+import weakref
+
 import torch
 import torch.nn.functional as F
 
@@ -102,6 +105,22 @@ class LIFNodeBPKernel(NeuronBPKernel):
             return f"const {self.dtype} grad_h_to_x = decay;"
 
 
+_KERNEL_OBJ_ID_LOCK = threading.Lock()
+_KERNEL_OBJ_ID_CACHE: "weakref.WeakKeyDictionary[object, int]" = weakref.WeakKeyDictionary()
+
+
+def _cached_kernel_obj_id(kernel_obj) -> int:
+    with _KERNEL_OBJ_ID_LOCK:
+        obj_id = _KERNEL_OBJ_ID_CACHE.get(kernel_obj)
+        if obj_id is not None:
+            return obj_id
+        obj_id = register_python_object(
+            kernel_obj, python_object_registry_key(kernel_obj)
+        )
+        _KERNEL_OBJ_ID_CACHE[kernel_obj] = obj_id
+        return obj_id
+
+
 @torch.library.custom_op("sj::cupy_ss_lif_forward", mutates_args=())
 def cupy_ss_lif_forward(
     x: torch.Tensor,
@@ -190,12 +209,8 @@ def ss_lif_step(x, v, v_th, v_reset, decay, forward_kernel, backward_kernel):
     if need_unpad:
         x = F.pad(x, (0, 1))
         v = F.pad(v, (0, 1))
-    fk = register_python_object(
-        forward_kernel, python_object_registry_key(forward_kernel)
-    )
-    bk = register_python_object(
-        backward_kernel, python_object_registry_key(backward_kernel)
-    )
+    fk = _cached_kernel_obj_id(forward_kernel)
+    bk = _cached_kernel_obj_id(backward_kernel)
     vr = float("nan") if v_reset is None else float(v_reset)
     spike, v_next, _ = cupy_ss_lif_forward(
         x, v, v_th, vr, v_reset is None, decay, fk, bk

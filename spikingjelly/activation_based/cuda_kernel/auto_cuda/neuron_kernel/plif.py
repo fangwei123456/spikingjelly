@@ -241,6 +241,15 @@ _PLIF_FWD_KERNEL_CACHE = {}
 _PLIF_BWD_KERNEL_CACHE = {}
 
 
+def _ensure_power_of_two_threads() -> None:
+    threads = configure.cuda_threads
+    if threads <= 0 or (threads & (threads - 1)) != 0:
+        raise ValueError(
+            "PLIF backward reduction kernel requires configure.cuda_threads to be "
+            f"a positive power of two, but got {threads}."
+        )
+
+
 def _get_plif_forward_kernel(
     *, decay_input: bool, hard_reset: bool, dtype: str
 ) -> ParametricLIFNodeFPTTKernel:
@@ -410,6 +419,7 @@ def cupy_multistep_plif_backward(
         N = math.ceil(N / 2)
         numel = N * grad_spike_seq.shape[0]
     blocks = cuda_utils.cal_blocks(N)
+    _ensure_power_of_two_threads()
     threads = configure.cuda_threads
     with cuda_utils.DeviceEnvironment(grad_spike_seq.get_device()):
         numel = cupy.asarray(numel)
