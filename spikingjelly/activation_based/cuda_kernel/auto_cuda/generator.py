@@ -1,9 +1,10 @@
 import logging
 import operator as _op
+import sys
 import typing
+
 import torch
 import torch.fx as _fx
-import sys
 
 
 def hash_str(x: object):
@@ -97,6 +98,7 @@ class VarNode:
     :return: A variable node object.
     :rtype: VarNode
     """
+
     def __init__(self, prefix: str, name: str, instance: object, value=None):
         self.debug_name = name  # 原始的name形如 %8, v_last.1
         # 将原始的name进行转换
@@ -277,7 +279,11 @@ def analyse_graph(custom_fun, requires_grad: tuple):
                     )
 
             var = VarNode(prefix="input", name=name, instance=inst)
-            if inst == "Tensor" and ph_idx < len(requires_grad) and requires_grad[ph_idx]:
+            if (
+                inst == "Tensor"
+                and ph_idx < len(requires_grad)
+                and requires_grad[ph_idx]
+            ):
                 var.requires_grad = True
 
             logging.debug(f"\ninput node [{ph_idx}] = {var}")
@@ -340,7 +346,9 @@ def analyse_graph(custom_fun, requires_grad: tuple):
             # 'float output_h = <input>;' declaration instead of referencing an
             # undeclared variable.
             if not any(out is h_var for out, _, _ in cmds):
-                cmds.append((h_var, "aten::add", (src, _make_const(0.0), _make_const(1))))
+                cmds.append(
+                    (h_var, "aten::add", (src, _make_const(0.0), _make_const(1)))
+                )
 
     for i, node in enumerate(inter_nodes.values()):
         logging.debug(f"\ninter node [{i}] = {node}")
@@ -724,12 +732,12 @@ def gen_backward_codes(
                     if y.cu_var_bp not in code_block_nodes:
                         code_block_nodes[y.cu_var_bp] = y
                         codes += "                 "
-                        codes += f"float {y.cu_var_bp} = {z.cu_var_bp} * {alpha.cu_var};\n"
+                        codes += (
+                            f"float {y.cu_var_bp} = {z.cu_var_bp} * {alpha.cu_var};\n"
+                        )
                     else:
                         codes += "                 "
-                        codes += (
-                            f"{y.cu_var_bp} += {z.cu_var_bp} * {alpha.cu_var};\n"
-                        )
+                        codes += f"{y.cu_var_bp} += {z.cu_var_bp} * {alpha.cu_var};\n"
 
         elif fun == "aten::sub":
             # z = x - y * alpha
@@ -765,12 +773,12 @@ def gen_backward_codes(
                     if y.cu_var_bp not in code_block_nodes:
                         code_block_nodes[y.cu_var_bp] = y
                         codes += "                 "
-                        codes += f"float {y.cu_var_bp} = - {z.cu_var_bp} * {alpha.cu_var};\n"
+                        codes += (
+                            f"float {y.cu_var_bp} = - {z.cu_var_bp} * {alpha.cu_var};\n"
+                        )
                     else:
                         codes += "                 "
-                        codes += (
-                            f"{y.cu_var_bp} += - {z.cu_var_bp} * {alpha.cu_var};\n"
-                        )
+                        codes += f"{y.cu_var_bp} += - {z.cu_var_bp} * {alpha.cu_var};\n"
 
         elif fun == "aten::mul":
             # z = x * y
@@ -784,7 +792,9 @@ def gen_backward_codes(
                 else:
                     codes += "                 "
                     codes += f"{x.cu_var_bp} += {z.cu_var_bp} * {y.cu_var};\n"
-                if y.value is None:  # constants are inlined via cu_var; no CUDA param needed
+                if (
+                    y.value is None
+                ):  # constants are inlined via cu_var; no CUDA param needed
                     input_bp_nodes[y.name] = y
             if y.requires_grad:
                 if y.cu_var_bp not in code_block_nodes:
@@ -878,7 +888,7 @@ def gen_backward_codes(
     {
         const int index = blockIdx.x * blockDim.x + threadIdx.x;
         if (index < neuron_num)
-        {   
+        {
             float grad_output_h = 0.0f;  // grad_output_h will be used recursively
             for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
             {

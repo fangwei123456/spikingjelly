@@ -1,22 +1,22 @@
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 import torch
+import torch.nn.functional as F
 
 from .common import (
-    cfunction,
-    cupy,
-    cuda_utils,
-    configure,
-    math,
-    surrogate,
-    _CUPY_CUSTOM_OP_AVAILABLE,
-    _dtype_to_cupy_kernel_dtype,
-    _surrogate_cuda_codes_from_id,
-    _use_cupy_custom_op,
-    resolve_sg_cupy_id_and_key,
-    NeuronATGFBase,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
+    _dtype_to_cupy_kernel_dtype,
+    _surrogate_cuda_codes_from_id,
+    cfunction,
+    configure,
+    cuda_utils,
+    cupy,
+    math,
+    prepare_forward_meta,
+    resolve_sg_cupy_id_and_key,
+    scalar_to_cupy,
+    surrogate,
 )
 
 
@@ -104,77 +104,6 @@ class LIFNodeBPTTKernel(NeuronBPTTKernel):
             return f"const {self.dtype} grad_h_to_x = decay;"
 
 
-class LIFNodeATGF(torch.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        x_seq: torch.Tensor,
-        v_init: torch.Tensor,
-        v_th: float,
-        v_reset: Optional[float],
-        decay: float,
-        forward_kernel: LIFNodeFPTTKernel,
-        backward_kernel: LIFNodeBPTTKernel,
-    ):
-        py_dict = {
-            "x_seq": x_seq,
-            "v_init": v_init,
-            "v_th": v_th,
-            "v_reset": v_reset,
-            "decay": decay,
-        }
-        requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
-
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-
-        forward_kernel((blocks,), (threads,), py_dict)
-
-        if "v_reset" not in py_dict:
-            py_dict["v_reset"] = None
-
-        NeuronATGFBase.ctx_save(
-            ctx,
-            requires_grad,
-            py_dict["h_seq"],
-            blocks=blocks,
-            threads=threads,
-            numel=py_dict["numel"],
-            N=py_dict["N"],
-            v_th=py_dict["v_th"],
-            v_reset=py_dict["v_reset"],
-            backward_kernel=backward_kernel,
-            decay=py_dict["decay"],
-        )
-
-        return py_dict["spike_seq"], py_dict["v_v_seq"][1:,]
-
-    @staticmethod
-    def backward(ctx, grad_spike_seq: torch.Tensor, grad_v_seq: torch.Tensor):
-        backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(
-            ctx, grad_spike_seq, grad_v_seq
-        )
-        py_dict["decay"] = ctx.decay
-
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-
-        backward_kernel((blocks,), (threads,), py_dict)
-
-        if "v_reset" not in py_dict:
-            py_dict["v_reset"] = None
-
-        return (
-            py_dict["grad_x_seq"],
-            py_dict["grad_v_init"],
-            None,
-            None,
-            None,
-            None,
-            None,
-        )
-
-
 _LIF_FWD_KERNEL_CACHE = {}
 _LIF_BWD_KERNEL_CACHE = {}
 
@@ -214,167 +143,188 @@ def _get_lif_backward_kernel(
     return kernel
 
 
-def _legacy_multistep_lif(
+@torch.library.custom_op("sj::cupy_multistep_lif_forward", mutates_args=())
+def cupy_multistep_lif_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
     v_th: float,
-    v_reset: Optional[float],
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
     decay: float,
     decay_input: bool,
-    surrogate_function: surrogate.SurrogateFunctionBase,
-    detach_reset: bool,
-    forward_kernel: Optional[LIFNodeFPTTKernel],
-    backward_kernel: Optional[LIFNodeBPTTKernel],
-):
-    hard_reset = v_reset is not None
+    sg_cupy_id: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    x_seq = x_seq.contiguous()
+    v_init = v_init.contiguous()
+    orig_n = x_seq.shape[1]
+    need_unpad = False
+    if x_seq.dtype == torch.float16 and orig_n % 2 != 0:
+        # Keep legacy behavior: pad odd neuron count for half2 kernels.
+        x_seq = F.pad(x_seq, (0, 1))
+        v_init = F.pad(v_init, (0, 1))
+        need_unpad = True
     dtype = _dtype_to_cupy_kernel_dtype(x_seq.dtype)
-    if forward_kernel is None:
-        forward_kernel = _get_lif_forward_kernel(
-            decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
-        )
-    if backward_kernel is None:
-        if not hasattr(surrogate_function, "cuda_codes"):
-            raise TypeError(
-                "surrogate_function for CuPy legacy path must provide cuda_codes."
-            )
-        backward_kernel = LIFNodeBPTTKernel(
-            decay_input=decay_input,
-            surrogate_function=surrogate_function.cuda_codes,
-            hard_reset=hard_reset,
-            detach_reset=detach_reset,
-            dtype=dtype,
-        )
-    return LIFNodeATGF.apply(
-        x_seq,
-        v_init,
-        v_th,
+    hard_reset = not soft_reset
+    forward_kernel = _get_lif_forward_kernel(
+        decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
+    )
+    py_dict = {
+        "x_seq": x_seq,
+        "v_init": v_init,
+        "v_th": v_th,
+        "v_reset": None if soft_reset else v_reset,
+        "decay": decay,
+    }
+    blocks, threads, py_dict = prepare_forward_meta(py_dict)
+    py_dict["spike_seq"] = torch.empty_like(x_seq)
+    py_dict["h_seq"] = torch.empty_like(x_seq)
+    py_dict["v_v_seq"] = x_seq.new_empty((x_seq.shape[0] + 1, *x_seq.shape[1:]))
+    py_dict["v_v_seq"][0].copy_(py_dict.pop("v_init"))
+    if py_dict["v_reset"] is None:
+        py_dict.pop("v_reset")
+    forward_kernel((blocks,), (threads,), py_dict)
+    spike_seq = py_dict["spike_seq"]
+    v_seq = py_dict["v_v_seq"][1:,]
+    h_seq = py_dict["h_seq"]
+    if need_unpad:
+        spike_seq = spike_seq[:, :orig_n]
+        v_seq = v_seq[:, :orig_n]
+        h_seq = h_seq[:, :orig_n]
+    return spike_seq, v_seq, h_seq
+
+
+@torch.library.register_fake("sj::cupy_multistep_lif_forward")
+def _cupy_multistep_lif_forward_fake(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    v_th: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    decay: float,
+    decay_input: bool,
+    sg_cupy_id: int,
+):
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+    )
+
+
+def _setup_cupy_multistep_lif_context(ctx, inputs, output):
+    _, _, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = (
+        inputs
+    )
+    h_seq = output[2]
+    ctx.save_for_backward(h_seq)
+    ctx.v_th = v_th
+    ctx.v_reset = None if soft_reset else v_reset
+    ctx.detach_reset = detach_reset
+    ctx.decay = decay
+    ctx.decay_input = decay_input
+    ctx.sg_cupy_id = sg_cupy_id
+
+
+@torch.library.custom_op("sj::cupy_multistep_lif_backward", mutates_args=())
+def cupy_multistep_lif_backward(
+    grad_spike_seq: torch.Tensor,
+    grad_v_seq: torch.Tensor,
+    h_seq: torch.Tensor,
+    v_th: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    decay: float,
+    decay_input: bool,
+    sg_cupy_id: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    grad_spike_seq = grad_spike_seq.contiguous()
+    grad_v_seq = grad_v_seq.contiguous()
+    h_seq = h_seq.contiguous()
+    dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
+    hard_reset = not soft_reset
+    backward_kernel = _get_lif_backward_kernel(
+        decay_input=decay_input,
+        sg_cupy_id=sg_cupy_id,
+        hard_reset=hard_reset,
+        detach_reset=detach_reset,
+        dtype=dtype,
+    )
+
+    numel = grad_spike_seq.numel()
+    N = grad_spike_seq.shape[1]
+    if grad_spike_seq.dtype == torch.float16:
+        N = math.ceil(N / 2)
+        numel = N * grad_spike_seq.shape[0]
+    blocks = cuda_utils.cal_blocks(N)
+    threads = configure.cuda_threads
+    with cuda_utils.DeviceEnvironment(grad_spike_seq.get_device()):
+        numel = cupy.asarray(numel)
+        N = cupy.asarray(N)
+    grad_x_seq = torch.empty_like(grad_spike_seq)
+    grad_v_init = torch.empty_like(grad_v_seq[0])
+    py_dict = {
+        "numel": numel,
+        "N": N,
+        "grad_spike_seq": grad_spike_seq,
+        "grad_v_seq": grad_v_seq,
+        "h_seq": h_seq,
+        "grad_x_seq": grad_x_seq,
+        "grad_v_init": grad_v_init,
+        "v_th": v_th,
+        "v_reset": None if soft_reset else v_reset,
+        "decay": decay,
+    }
+    scalar_to_cupy(py_dict, ref="grad_spike_seq")
+    if py_dict["v_reset"] is None:
+        py_dict.pop("v_reset")
+    backward_kernel((blocks,), (threads,), py_dict)
+    return py_dict["grad_x_seq"], py_dict["grad_v_init"]
+
+
+@torch.library.register_fake("sj::cupy_multistep_lif_backward")
+def _cupy_multistep_lif_backward_fake(
+    grad_spike_seq: torch.Tensor,
+    grad_v_seq: torch.Tensor,
+    h_seq: torch.Tensor,
+    v_th: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    decay: float,
+    decay_input: bool,
+    sg_cupy_id: int,
+):
+    return torch.empty_like(grad_spike_seq), torch.empty_like(grad_v_seq[0])
+
+
+def _cupy_multistep_lif_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
+    del grad_h_seq
+    (h_seq,) = ctx.saved_tensors
+    soft_reset = ctx.v_reset is None
+    v_reset = 0.0 if soft_reset else float(ctx.v_reset)
+    grad_x_seq, grad_v_init = cupy_multistep_lif_backward(
+        grad_spike_seq,
+        grad_v_seq,
+        h_seq,
+        ctx.v_th,
         v_reset,
-        decay,
-        forward_kernel,
-        backward_kernel,
+        soft_reset,
+        ctx.detach_reset,
+        ctx.decay,
+        ctx.decay_input,
+        ctx.sg_cupy_id,
     )
+    return grad_x_seq, grad_v_init, None, None, None, None, None, None, None
 
 
-if _CUPY_CUSTOM_OP_AVAILABLE:
-
-    @torch.library.custom_op("sj::cupy_multistep_lif_forward", mutates_args=())
-    def cupy_multistep_lif_forward(
-        x_seq: torch.Tensor,
-        v_init: torch.Tensor,
-        v_th: float,
-        v_reset: float,
-        soft_reset: bool,
-        detach_reset: bool,
-        decay: float,
-        decay_input: bool,
-        sg_cupy_id: int,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        x_seq = x_seq.contiguous()
-        v_init = v_init.contiguous()
-        dtype = _dtype_to_cupy_kernel_dtype(x_seq.dtype)
-        hard_reset = not soft_reset
-        forward_kernel = _get_lif_forward_kernel(
-            decay_input=decay_input, hard_reset=hard_reset, dtype=dtype
-        )
-        py_dict = {
-            "x_seq": x_seq,
-            "v_init": v_init,
-            "v_th": v_th,
-            "v_reset": None if soft_reset else v_reset,
-            "decay": decay,
-        }
-        _, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-        forward_kernel((blocks,), (threads,), py_dict)
-        return py_dict["spike_seq"], py_dict["v_v_seq"][1:,], py_dict["h_seq"]
-
-
-    @torch.library.register_fake("sj::cupy_multistep_lif_forward")
-    def _cupy_multistep_lif_forward_fake(
-        x_seq: torch.Tensor,
-        v_init: torch.Tensor,
-        v_th: float,
-        v_reset: float,
-        soft_reset: bool,
-        detach_reset: bool,
-        decay: float,
-        decay_input: bool,
-        sg_cupy_id: int,
-    ):
-        return (
-            x_seq.new_empty(x_seq.shape),
-            x_seq.new_empty(x_seq.shape),
-            x_seq.new_empty(x_seq.shape),
-        )
-
-
-    def _setup_cupy_multistep_lif_context(ctx, inputs, output):
-        _, _, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = inputs
-        h_seq = output[2]
-        ctx.save_for_backward(h_seq)
-        ctx.v_th = v_th
-        ctx.v_reset = None if soft_reset else v_reset
-        ctx.detach_reset = detach_reset
-        ctx.decay = decay
-        ctx.decay_input = decay_input
-        ctx.sg_cupy_id = sg_cupy_id
-
-
-    def _cupy_multistep_lif_backward(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
-        del grad_h_seq
-        (h_seq,) = ctx.saved_tensors
-        grad_spike_seq = grad_spike_seq.contiguous()
-        grad_v_seq = grad_v_seq.contiguous()
-        h_seq = h_seq.contiguous()
-        dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
-        hard_reset = ctx.v_reset is not None
-        backward_kernel = _get_lif_backward_kernel(
-            decay_input=ctx.decay_input,
-            sg_cupy_id=ctx.sg_cupy_id,
-            hard_reset=hard_reset,
-            detach_reset=ctx.detach_reset,
-            dtype=dtype,
-        )
-
-        numel = grad_spike_seq.numel()
-        N = grad_spike_seq.shape[1]
-        if grad_spike_seq.dtype == torch.float16:
-            N = math.ceil(N / 2)
-            numel = N * grad_spike_seq.shape[0]
-        blocks = cuda_utils.cal_blocks(N)
-        threads = configure.cuda_threads
-        with cuda_utils.DeviceEnvironment(grad_spike_seq.get_device()):
-            numel = cupy.asarray(numel)
-            N = cupy.asarray(N)
-        zero_shape = list(grad_spike_seq.shape)
-        zero_shape[0] += 1
-        zero_data = torch.zeros(
-            zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype
-        )
-        py_dict = {
-            "numel": numel,
-            "N": N,
-            "grad_spike_seq": grad_spike_seq,
-            "grad_v_seq": grad_v_seq,
-            "h_seq": h_seq,
-            "grad_x_seq": zero_data[0:-1],
-            "grad_v_init": zero_data[-1],
-            "v_th": ctx.v_th,
-            "v_reset": ctx.v_reset,
-            "decay": ctx.decay,
-        }
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-        backward_kernel((blocks,), (threads,), py_dict)
-        return py_dict["grad_x_seq"], py_dict["grad_v_init"], None, None, None, None, None, None, None
-
-
-    torch.library.register_autograd(
-        "sj::cupy_multistep_lif_forward",
-        _cupy_multistep_lif_backward,
-        setup_context=_setup_cupy_multistep_lif_context,
-    )
+torch.library.register_autograd(
+    "sj::cupy_multistep_lif_forward",
+    _cupy_multistep_lif_backward_autograd,
+    setup_context=_setup_cupy_multistep_lif_context,
+)
 
 
 def multistep_lif(
@@ -390,47 +340,19 @@ def multistep_lif(
     backward_kernel: Optional[LIFNodeBPTTKernel] = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     decay = 1.0 / tau
-    if _use_cupy_custom_op():
-        try:
-            sg_cupy_id, _ = resolve_sg_cupy_id_and_key(surrogate_function)
-        except TypeError:
-            return _legacy_multistep_lif(
-                x_seq=x_seq,
-                v_init=v_init,
-                v_th=v_threshold,
-                v_reset=v_reset,
-                decay=decay,
-                decay_input=decay_input,
-                surrogate_function=surrogate_function,
-                detach_reset=detach_reset,
-                forward_kernel=forward_kernel,
-                backward_kernel=backward_kernel,
-            )
-
-        soft_reset = v_reset is None
-        v_reset_value = 0.0 if v_reset is None else float(v_reset)
-        s_seq, v_seq, _ = cupy_multistep_lif_forward(
-            x_seq,
-            v_init,
-            v_threshold,
-            v_reset_value,
-            soft_reset,
-            detach_reset,
-            decay,
-            decay_input,
-            sg_cupy_id,
-        )
-        return s_seq, v_seq
-
-    return _legacy_multistep_lif(
-        x_seq=x_seq,
-        v_init=v_init,
-        v_th=v_threshold,
-        v_reset=v_reset,
-        decay=decay,
-        decay_input=decay_input,
-        surrogate_function=surrogate_function,
-        detach_reset=detach_reset,
-        forward_kernel=forward_kernel,
-        backward_kernel=backward_kernel,
+    del forward_kernel, backward_kernel
+    sg_cupy_id, _ = resolve_sg_cupy_id_and_key(surrogate_function)
+    soft_reset = v_reset is None
+    v_reset_value = 0.0 if v_reset is None else float(v_reset)
+    s_seq, v_seq, _ = cupy_multistep_lif_forward(
+        x_seq,
+        v_init,
+        v_threshold,
+        v_reset_value,
+        soft_reset,
+        detach_reset,
+        decay,
+        decay_input,
+        sg_cupy_id,
     )
+    return s_seq, v_seq

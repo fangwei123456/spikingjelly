@@ -37,8 +37,7 @@ def test_context_manager_basic():
         loss.backward()
         optimizer.step()
         functional.reset_net(net)
-        results = prof.export()
-    return results
+        prof.export()
 
 
 def test_layer_wise_profiling():

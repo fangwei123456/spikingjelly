@@ -337,13 +337,15 @@ class IFNode(BaseNode):
                     )
 
                 self.v_float_to_tensor(x_seq[0])
-                spike_seq, v_seq = ac_neuron_kernel.IFNodeATGF.apply(
-                    x_seq.flatten(1),
-                    self.v.flatten(0),
-                    self.v_threshold,
-                    self.v_reset,
-                    self.forward_kernel,
-                    self.backward_kernel,
+                spike_seq, v_seq = ac_neuron_kernel.multistep_if(
+                    x_seq=x_seq.flatten(1),
+                    v_init=self.v.flatten(0),
+                    v_threshold=self.v_threshold,
+                    v_reset=self.v_reset,
+                    detach_reset=self.detach_reset,
+                    surrogate_function=self.surrogate_function,
+                    forward_kernel=self.forward_kernel,
+                    backward_kernel=self.backward_kernel,
                 )
                 spike_seq = spike_seq.reshape(x_seq.shape)
                 v_seq = v_seq.reshape(x_seq.shape)
@@ -452,7 +454,7 @@ class IFNode(BaseNode):
                     )
 
                 self.v_float_to_tensor(x)
-                spike, v = ss_ac_neuron_kernel.IFNodeATGF.apply(
+                spike, v = ss_ac_neuron_kernel.ss_if_step(
                     x.flatten(0),
                     self.v.flatten(0),
                     self.v_threshold,

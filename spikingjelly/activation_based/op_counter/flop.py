@@ -97,7 +97,7 @@ def _flop_convolution(args, kwargs, out):
     args[2]: bias or None
     """
     x, w, bias = args[:3]
-    transposed = args[6]
+    transposed = kwargs.get("transposed", args[6] if len(args) > 6 else False)
 
     b = x.shape[0]
     c_out, c_in, *kernel_shape = w.shape

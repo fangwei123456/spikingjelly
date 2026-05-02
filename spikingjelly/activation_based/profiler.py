@@ -38,17 +38,20 @@ def _get_caller_info(depth=1):
 def _cuda_tensors():
     for obj in gc.get_objects():
         try:
-            if torch.is_tensor(obj):
-                tensor = obj
-            elif hasattr(obj, "data") and torch.is_tensor(obj.data):
-                tensor = obj.data
-            else:
+            if not torch.is_tensor(obj):
                 continue
-
+            tensor = obj
             if tensor.is_cuda:
                 yield tensor
         except Exception:
             pass
+
+
+def _get_data_ptr(tensor: torch.Tensor) -> Optional[int]:
+    try:
+        return tensor.data_ptr()
+    except (RuntimeError, AttributeError, NotImplementedError):
+        return None
 
 
 class BaseProfiler(abc.ABC):
@@ -219,12 +222,16 @@ class CategoryMemoryProfiler(BaseProfiler):
                 if param.is_cuda:
                     nbytes = param.element_size() * param.numel()
                     memory_usage["weight"] += nbytes
-                    weight_tensors.add(param.data_ptr())
+                    ptr = _get_data_ptr(param)
+                    if ptr is not None:
+                        weight_tensors.add(ptr)
             for buffer in model.buffers():
                 if buffer.is_cuda:
                     nbytes = buffer.element_size() * buffer.numel()
                     memory_usage["buffer"] += nbytes
-                    weight_tensors.add(buffer.data_ptr())
+                    ptr = _get_data_ptr(buffer)
+                    if ptr is not None:
+                        weight_tensors.add(ptr)
 
         # gradients
         gradient_tensors = set()
@@ -233,7 +240,9 @@ class CategoryMemoryProfiler(BaseProfiler):
                 if param.grad is not None and param.grad.is_cuda:
                     nbytes = param.grad.element_size() * param.grad.numel()
                     memory_usage["gradient"] += nbytes
-                    gradient_tensors.add(param.grad.data_ptr())
+                    ptr = _get_data_ptr(param.grad)
+                    if ptr is not None:
+                        gradient_tensors.add(ptr)
 
         # optimizer state
         optimizer_state_tensors = set()
@@ -246,14 +255,18 @@ class CategoryMemoryProfiler(BaseProfiler):
                             if torch.is_tensor(value) and value.is_cuda:
                                 nbytes = value.element_size() * value.numel()
                                 memory_usage["optimizer_state"] += nbytes
-                                optimizer_state_tensors.add(value.data_ptr())
+                                ptr = _get_data_ptr(value)
+                                if ptr is not None:
+                                    optimizer_state_tensors.add(ptr)
 
         classified_tensors = weight_tensors | gradient_tensors | optimizer_state_tensors
         for x in _cuda_tensors():
-            if x.data_ptr() not in classified_tensors:
-                nbytes = x.element_size() * x.numel()
-                memory_usage["input_or_state"] += nbytes
-                classified_tensors.add(x.data_ptr())
+            ptr = _get_data_ptr(x)
+            if ptr is None or ptr in classified_tensors:
+                continue
+            nbytes = x.element_size() * x.numel()
+            memory_usage["input_or_state"] += nbytes
+            classified_tensors.add(ptr)
 
         return memory_usage
 

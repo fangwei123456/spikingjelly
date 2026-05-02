@@ -186,8 +186,7 @@ class QIFNode(BaseNode):
             return super().multi_step_forward(x_seq)
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
-
-            spike_seq, v_seq = cuda_kernel.MultiStepQIFNodePTT.apply(
+            spike_seq, v_seq = cuda_kernel.multistep_qif_ptt(
                 x_seq.flatten(1),
                 self.v.flatten(0),
                 self.tau,
@@ -197,7 +196,7 @@ class QIFNode(BaseNode):
                 self.v_c,
                 self.a0,
                 self.detach_reset,
-                self.surrogate_function.cuda_code,
+                self.surrogate_function,
             )
 
             spike_seq = spike_seq.reshape(x_seq.shape)
@@ -395,8 +394,7 @@ class EIFNode(BaseNode):
             return super().multi_step_forward(x_seq)
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
-
-            spike_seq, v_seq = cuda_kernel.MultiStepEIFNodePTT.apply(
+            spike_seq, v_seq = cuda_kernel.multistep_eif_ptt(
                 x_seq.flatten(1),
                 self.v.flatten(0),
                 self.tau,
@@ -406,7 +404,7 @@ class EIFNode(BaseNode):
                 self.theta_rh,
                 self.delta_T,
                 self.detach_reset,
-                self.surrogate_function.cuda_code,
+                self.surrogate_function,
             )
 
             spike_seq = spike_seq.reshape(x_seq.shape)

@@ -20,6 +20,7 @@ try:
     import triton.language as tl
 except BaseException as e:
     import logging
+
     from .. import dummy
 
     logging.info(
@@ -165,10 +166,12 @@ FX_TO_TRITON = {
     "bitwise_not.default": lambda args, kwargs: f"~{_uw(args[0])}",
     # logical_* follow ATen truthiness: non-zero = True; bitwise ops would give
     # wrong results for numeric inputs (e.g. logical_not(2) → False, but ~2 = -3)
-    "logical_and.default": lambda args,
-    kwargs: f"({_uw(args[0])} != 0) & ({_uw(args[1])} != 0)",
-    "logical_or.default": lambda args,
-    kwargs: f"({_uw(args[0])} != 0) | ({_uw(args[1])} != 0)",
+    "logical_and.default": lambda args, kwargs: (
+        f"({_uw(args[0])} != 0) & ({_uw(args[1])} != 0)"
+    ),
+    "logical_or.default": lambda args, kwargs: (
+        f"({_uw(args[0])} != 0) | ({_uw(args[1])} != 0)"
+    ),
     "logical_not.default": lambda args, kwargs: f"({_uw(args[0])} == 0)",
     "eq.Tensor": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
     "eq.Scalar": lambda args, kwargs: f"{_uw(args[0])} == {_uw(args[1])}",
@@ -183,60 +186,71 @@ FX_TO_TRITON = {
     "reciprocal.default":  # may result in change of dtype!!!
     lambda args, kwargs: f"(1. / {_uw(args[0])}).to({_uw(args[0])}.dtype)",
     "neg.default": lambda args, kwargs: f"-{_uw(args[0])}",
-    "spike_fn.default": lambda args,
-    kwargs: f"({_uw(args[0])} >= 0.).to({_uw(args[0])}.dtype)",
+    "spike_fn.default": lambda args, kwargs: (
+        f"({_uw(args[0])} >= 0.).to({_uw(args[0])}.dtype)"
+    ),
     "detach.default": lambda args, kwargs: f"{_uw(args[0])}",
     "sigmoid.default":  # triton does not support exponential operations on fp16
-    lambda args,
-    kwargs: f"tl.sigmoid({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
+    lambda args, kwargs: (
+        f"tl.sigmoid({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
     "sigmoid_backward.default":  # args[1] is the output of sigmoid
-    lambda args, kwargs: (f"{_uw(args[0])} * {_uw(args[1])} * (1 - {_uw(args[1])})"),
+    lambda args, kwargs: f"{_uw(args[0])} * {_uw(args[1])} * (1 - {_uw(args[1])})",
     "tanh_backward.default":  # args[0]=grad_out, args[1]=tanh_output
     lambda args, kwargs: f"{_uw(args[0])} * (1 - {_uw(args[1])} * {_uw(args[1])})",
     "threshold_backward.default":  # args: grad, input, threshold
-    lambda args,
-    kwargs: f"tl.where({_uw(args[1])} > {_uw(args[2])}, {_uw(args[0])}, 0.0)",
-    "_to_copy.default": lambda args,
-    kwargs: f"{_uw(args[0])}.to({_uw(kwargs['dtype'])})",
-    "scalar_tensor.default": lambda args,
-    kwargs: f"tl.full([], {_uw(args[0])}, {_uw(kwargs['dtype'])})",
-    "where.self": lambda args,
-    kwargs: f"tl.where({_uw(args[0])}.to(tl.int1), {_uw(args[1])}, {_uw(args[2])})",
+    lambda args, kwargs: (
+        f"tl.where({_uw(args[1])} > {_uw(args[2])}, {_uw(args[0])}, 0.0)"
+    ),
+    "_to_copy.default": lambda args, kwargs: (
+        f"{_uw(args[0])}.to({_uw(kwargs['dtype'])})"
+    ),
+    "scalar_tensor.default": lambda args, kwargs: (
+        f"tl.full([], {_uw(args[0])}, {_uw(kwargs['dtype'])})"
+    ),
+    "where.self": lambda args, kwargs: (
+        f"tl.where({_uw(args[0])}.to(tl.int1), {_uw(args[1])}, {_uw(args[2])})"
+    ),
     # ---------- unary math (upcast fp16→fp32 for transcendentals) ----------
-    "exp.default": lambda args,
-    kwargs: f"tl.exp({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "log.default": lambda args,
-    kwargs: f"tl.log({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "log2.default": lambda args,
-    kwargs: f"tl.log2({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "sqrt.default": lambda args,
-    kwargs: f"tl.sqrt({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "rsqrt.default": lambda args,
-    kwargs: f"tl.rsqrt({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
+    "exp.default": lambda args, kwargs: (
+        f"tl.exp({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "log.default": lambda args, kwargs: (
+        f"tl.log({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "log2.default": lambda args, kwargs: (
+        f"tl.log2({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "sqrt.default": lambda args, kwargs: (
+        f"tl.sqrt({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "rsqrt.default": lambda args, kwargs: (
+        f"tl.rsqrt({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
     "abs.default": lambda args, kwargs: f"tl.abs({_uw(args[0])})",
-    "tanh.default": lambda args,
-    kwargs: (
+    "tanh.default": lambda args, kwargs: (
         f"tl.extra.cuda.libdevice.tanh("
         f"{_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
     ),
-    "sin.default": lambda args,
-    kwargs: f"tl.math.sin({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "cos.default": lambda args,
-    kwargs: f"tl.math.cos({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
-    "erf.default": lambda args,
-    kwargs: f"tl.math.erf({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)",
+    "sin.default": lambda args, kwargs: (
+        f"tl.math.sin({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "cos.default": lambda args, kwargs: (
+        f"tl.math.cos({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
+    "erf.default": lambda args, kwargs: (
+        f"tl.math.erf({_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
+    ),
     # ---------- rounding ----------
     "floor.default": lambda args, kwargs: f"tl.floor({_uw(args[0])})",
     "ceil.default": lambda args, kwargs: f"tl.ceil({_uw(args[0])})",
-    "round.default": lambda args,
-    kwargs: (
+    "round.default": lambda args, kwargs: (
         f"tl.extra.cuda.libdevice.round("
         f"{_uw(args[0])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
     ),
     # ---------- activation ----------
     "relu.default": lambda args, kwargs: f"tl.maximum({_uw(args[0])}, 0.0)",
-    "sign.default": lambda args,
-    kwargs: (
+    "sign.default": lambda args, kwargs: (
         f"({_uw(args[0])} > 0.).to({_uw(args[0])}.dtype)"
         f" - ({_uw(args[0])} < 0.).to({_uw(args[0])}.dtype)"
     ),
@@ -246,37 +260,36 @@ FX_TO_TRITON = {
         f" - ({_uw(args[0])} < 0.).to({_uw(args[0])}.dtype)"
     ),
     # ---------- binary element-wise ----------
-    "minimum.default": lambda args, kwargs: f"tl.minimum({_uw(args[0])}, {_uw(args[1])})",
-    "maximum.default": lambda args, kwargs: f"tl.maximum({_uw(args[0])}, {_uw(args[1])})",
+    "minimum.default": lambda args, kwargs: (
+        f"tl.minimum({_uw(args[0])}, {_uw(args[1])})"
+    ),
+    "maximum.default": lambda args, kwargs: (
+        f"tl.maximum({_uw(args[0])}, {_uw(args[1])})"
+    ),
     "ne.Scalar": lambda args, kwargs: f"{_uw(args[0])} != {_uw(args[1])}",
     "ne.Tensor": lambda args, kwargs: f"{_uw(args[0])} != {_uw(args[1])}",
-    "fmod.Scalar": lambda args,
-    kwargs: (
+    "fmod.Scalar": lambda args, kwargs: (
         f"tl.extra.cuda.libdevice.fmod("
         f"{_uw(args[0])}.to(tl.float32),"
         f" tl.full([], {_uw(args[1])}, tl.float32)).to({_uw(args[0])}.dtype)"
     ),
-    "fmod.Tensor": lambda args,
-    kwargs: (
+    "fmod.Tensor": lambda args, kwargs: (
         f"tl.extra.cuda.libdevice.fmod("
         f"{_uw(args[0])}.to(tl.float32),"
         f" {_uw(args[1])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
     ),
-    "pow.Tensor_Scalar": lambda args,
-    kwargs: (
+    "pow.Tensor_Scalar": lambda args, kwargs: (
         f"tl.extra.cuda.libdevice.pow("
         f"{_uw(args[0])}.to(tl.float32),"
         f" tl.full([], {_uw(args[1])}, tl.float32)).to({_uw(args[0])}.dtype)"
     ),
-    "pow.Tensor_Tensor": lambda args,
-    kwargs: (
+    "pow.Tensor_Tensor": lambda args, kwargs: (
         f"tl.extra.cuda.libdevice.pow("
         f"{_uw(args[0])}.to(tl.float32),"
         f" {_uw(args[1])}.to(tl.float32)).to({_uw(args[0])}.dtype)"
     ),
     # ---------- clamp ----------
-    "clamp.default": lambda args,
-    kwargs: (
+    "clamp.default": lambda args, kwargs: (
         # args: (tensor, min_val, max_val) — both optional
         f"tl.minimum(tl.maximum({_uw(args[0])}, {_uw(args[1])}), {_uw(args[2])})"
         if len(args) >= 3 and args[1] is not None and args[2] is not None
@@ -286,20 +299,28 @@ FX_TO_TRITON = {
         if len(args) >= 3 and args[2] is not None
         else _uw(args[0])
     ),
-    "clamp_min.default": lambda args, kwargs: f"tl.maximum({_uw(args[0])}, {_uw(args[1])})",
-    "clamp_max.default": lambda args, kwargs: f"tl.minimum({_uw(args[0])}, {_uw(args[1])})",
+    "clamp_min.default": lambda args, kwargs: (
+        f"tl.maximum({_uw(args[0])}, {_uw(args[1])})"
+    ),
+    "clamp_max.default": lambda args, kwargs: (
+        f"tl.minimum({_uw(args[0])}, {_uw(args[1])})"
+    ),
     # ---------- misc ----------
     "clone.default": lambda args, kwargs: f"{_uw(args[0])}",
     # Use tl.full to avoid propagating NaN/Inf from input values
-    "zeros_like.default": lambda args,
-    kwargs: f"tl.full({_uw(args[0])}.shape, 0, {_uw(args[0])}.dtype)",
-    "ones_like.default": lambda args,
-    kwargs: f"tl.full({_uw(args[0])}.shape, 1, {_uw(args[0])}.dtype)",
+    "zeros_like.default": lambda args, kwargs: (
+        f"tl.full({_uw(args[0])}.shape, 0, {_uw(args[0])}.dtype)"
+    ),
+    "ones_like.default": lambda args, kwargs: (
+        f"tl.full({_uw(args[0])}.shape, 1, {_uw(args[0])}.dtype)"
+    ),
     # masked_fill(tensor, mask, value): fill where mask=True with value
-    "masked_fill.Scalar": lambda args,
-    kwargs: f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})",
-    "masked_fill.Tensor": lambda args,
-    kwargs: f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})",
+    "masked_fill.Scalar": lambda args, kwargs: (
+        f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})"
+    ),
+    "masked_fill.Tensor": lambda args, kwargs: (
+        f"tl.where({_uw(args[1])}.to(tl.int1), {_uw(args[2])}, {_uw(args[0])})"
+    ),
 }
 
 INDENTATION = " " * 4  # four spaces

@@ -1,10 +1,10 @@
-from typing import Callable, Iterable
-import torch
-import numpy as np
 import logging
 import math
-import os
 import threading
+from typing import Callable, Iterable
+
+import numpy as np
+import torch
 
 try:
     import cupy
@@ -15,34 +15,10 @@ except BaseException as e:
     cupy = None
 
 
-from ... import cuda_utils
-from ..... import surrogate
 from ..... import configure
+from .... import surrogate
+from ... import cuda_utils
 from .. import base, cfunction
-
-try:
-    _CUPY_CUSTOM_OP_AVAILABLE = all(
-        hasattr(torch.library, name)
-        for name in ("custom_op", "register_fake", "register_autograd")
-    )
-except BaseException:
-    _CUPY_CUSTOM_OP_AVAILABLE = False
-
-
-def _env_flag_enabled(var_name: str) -> bool:
-    v = os.getenv(var_name)
-    if v is None:
-        return True
-    return v.strip().lower() not in ("0", "false", "off", "no")
-
-
-def _use_cupy_custom_op() -> bool:
-    return (
-        _CUPY_CUSTOM_OP_AVAILABLE
-        and cupy is not None
-        and _env_flag_enabled("SJ_USE_CUPY_OP")
-    )
-
 
 _SURROGATE_CUPY_REGISTRY_LOCK = threading.Lock()
 _SURROGATE_CUPY_NEXT_ID = 0
@@ -534,7 +510,6 @@ class NeuronBPTTKernel(base.CKernel2D):
         return self._core
 
 
-
 def if_requires_grad(items: Iterable):
     requires_grad = False
     for item in items:
@@ -544,6 +519,27 @@ def if_requires_grad(items: Iterable):
                 break
 
     return requires_grad
+
+
+_INT32_MAX = np.iinfo(np.int32).max
+
+
+def _as_cupy_int32(value: int, name: str):
+    if not (-_INT32_MAX - 1 <= value <= _INT32_MAX):
+        raise OverflowError(
+            f"{name}={value} exceeds int32 range required by CUDA kernel launch metadata."
+        )
+    return cupy.asarray(value, dtype=np.int32)
+
+
+def is_fake_or_meta_tensor(x) -> bool:
+    if not isinstance(x, torch.Tensor):
+        return False
+    if x.is_meta:
+        return True
+    if getattr(x, "fake_mode", None) is not None:
+        return True
+    return type(x).__name__ == "FakeTensor"
 
 
 def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
@@ -562,7 +558,27 @@ def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
                 py_dict[key] = value
 
             elif isinstance(value, int):
-                py_dict[key] = cupy.asarray(value)
+                py_dict[key] = _as_cupy_int32(value, key)
+
+
+def prepare_forward_meta(py_dict: dict, ref: str = "x_seq"):
+    device = py_dict[ref].get_device()
+    scalar_to_cupy(py_dict, ref=ref)
+
+    numel = py_dict[ref].numel()
+    N = py_dict[ref].shape[1]
+    threads = configure.cuda_threads
+    if py_dict[ref].dtype == torch.float16:
+        # Use half2 path: two neurons packed as one lane.
+        N = math.ceil(N / 2)
+        numel = N * py_dict[ref].shape[0]
+    blocks = cuda_utils.cal_blocks(N)
+
+    with cuda_utils.DeviceEnvironment(device):
+        py_dict["numel"] = _as_cupy_int32(numel, "numel")
+        py_dict["N"] = _as_cupy_int32(N, "N")
+
+    return blocks, threads, py_dict
 
 
 def new_tensors(news: tuple, py_dict: dict, ref: str = "x_seq"):
@@ -664,8 +680,8 @@ class NeuronATGFBase:
         blocks = cuda_utils.cal_blocks(N)
 
         with cuda_utils.DeviceEnvironment(device):
-            numel = cupy.asarray(numel)
-            N = cupy.asarray(N)
+            numel = _as_cupy_int32(numel, "numel")
+            N = _as_cupy_int32(N, "N")
 
         py_dict["numel"] = numel
         py_dict["N"] = N

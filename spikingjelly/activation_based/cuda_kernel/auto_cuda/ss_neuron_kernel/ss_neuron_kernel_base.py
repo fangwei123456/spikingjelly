@@ -1,7 +1,9 @@
-from typing import Optional
-import torch
-import numpy as np
 import logging
+import math
+from typing import Callable, Iterable
+
+import numpy as np
+import torch
 
 try:
     import cupy
@@ -11,11 +13,9 @@ except BaseException as e:
     )
     cupy = None
 
-from .... import configure
-from .. import cuda_utils
-from typing import Callable, Iterable
-from . import base, cfunction
-import math
+from ..... import configure
+from ... import cuda_utils
+from .. import base, cfunction
 
 
 def if_requires_grad(items: Iterable):
@@ -45,7 +45,7 @@ def scalar_to_cupy(py_dict: dict, ref: str = "x"):
                 py_dict[key] = value
 
             elif isinstance(value, int):
-                py_dict[key] = cupy.asarray(value)
+                py_dict[key] = cupy.asarray(value, dtype=np.int32)
 
 
 def new_tensors(news: tuple, py_dict: dict, ref: str = "x"):
@@ -447,7 +447,7 @@ class NeuronATGFBase:
         blocks = cuda_utils.cal_blocks(numel)
 
         with cuda_utils.DeviceEnvironment(device):
-            numel = cupy.asarray(numel)
+            numel = cupy.asarray(numel, dtype=np.int32)
 
         py_dict["numel"] = numel
 
@@ -521,215 +521,3 @@ class NeuronATGFBase:
         }
 
         return backward_kernel, blocks, threads, py_dict
-
-
-class IFNodeFPKernel(NeuronFPKernel):
-    def neuronal_charge(self) -> str:
-        return cfunction.add(z="h[index]", x="x[index]", y="v[index]", dtype=self.dtype)
-
-
-class IFNodeBPKernel(NeuronBPKernel):
-    def grad_h_to_v(self) -> str:
-        return cfunction.constant(
-            y=f"const {self.dtype} grad_h_to_v", x=1.0, dtype=self.dtype
-        )
-
-    def grad_h_to_x(self) -> str:
-        return cfunction.constant(
-            y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
-        )
-
-
-class IFNodeATGF(torch.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        x: torch.Tensor,
-        v: torch.Tensor,
-        v_th: float,
-        v_reset: Optional[float],
-        forward_kernel: IFNodeFPKernel,
-        backward_kernel: IFNodeBPKernel,
-    ):
-        py_dict = {"x": x, "v": v, "v_th": v_th, "v_reset": v_reset}
-        requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
-
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-
-        forward_kernel((blocks,), (threads,), py_dict)
-
-        if "v_reset" not in py_dict:
-            py_dict["v_reset"] = None
-
-        NeuronATGFBase.ctx_save(
-            ctx,
-            requires_grad,
-            py_dict["h"],
-            blocks=blocks,
-            threads=threads,
-            numel=py_dict["numel"],
-            v_th=py_dict["v_th"],
-            v_reset=py_dict["v_reset"],
-            backward_kernel=backward_kernel,
-        )
-
-        return py_dict["spike"], py_dict["v_next"]
-
-    @staticmethod
-    def backward(ctx, grad_spike: torch.Tensor, grad_v_next: torch.Tensor):
-        backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(
-            ctx, grad_spike, grad_v_next
-        )
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-
-        backward_kernel((blocks,), (threads,), py_dict)
-
-        if "v_reset" not in py_dict:
-            py_dict["v_reset"] = None
-
-        return py_dict["grad_x"], py_dict["grad_v"], None, None, None, None
-
-
-class LIFNodeFPKernel(NeuronFPKernel):
-    def __init__(self, decay_input: bool, hard_reset: bool, dtype: str):
-        super().__init__(hard_reset, dtype)
-        self.decay_input = decay_input
-        self.add_param(ctype=f"const {dtype} &", cname="decay")
-
-    def neuronal_charge(self) -> str:
-        if self.hard_reset:
-            codes = cfunction.sub(
-                z=f"{self.dtype} LIFNodeFPKernel_temp_var",
-                x="v[index]",
-                y="v_reset",
-                dtype=self.dtype,
-            )
-        else:
-            codes = f"{self.dtype} LIFNodeFPKernel_temp_var = v[index];"
-
-        if self.decay_input:
-            codes += cfunction.sub(
-                z="LIFNodeFPKernel_temp_var",
-                x="x[index]",
-                y="LIFNodeFPKernel_temp_var",
-                dtype=self.dtype,
-            )
-            codes += cfunction.mul(
-                z="LIFNodeFPKernel_temp_var",
-                x="decay",
-                y="LIFNodeFPKernel_temp_var",
-                dtype=self.dtype,
-            )
-        else:
-            codes += cfunction.mul(
-                z="LIFNodeFPKernel_temp_var",
-                x="decay",
-                y="LIFNodeFPKernel_temp_var",
-                dtype=self.dtype,
-            )
-            codes += cfunction.sub(
-                z="LIFNodeFPKernel_temp_var",
-                x="x[index]",
-                y="LIFNodeFPKernel_temp_var",
-                dtype=self.dtype,
-            )
-
-        codes += cfunction.add(
-            z="h[index]", x="LIFNodeFPKernel_temp_var", y="v[index]", dtype=self.dtype
-        )
-
-        return codes
-
-
-class LIFNodeBPKernel(NeuronBPKernel):
-    def __init__(
-        self,
-        decay_input: bool,
-        surrogate_function: Callable,
-        hard_reset: bool,
-        detach_reset: bool,
-        dtype: str,
-    ):
-        super().__init__(surrogate_function, hard_reset, detach_reset, dtype)
-        self.decay_input = decay_input
-        self.add_param(ctype=f"const {dtype} &", cname="decay")
-
-    def grad_h_to_v(self) -> str:
-        return cfunction.sub(
-            z=f"const {self.dtype} grad_h_to_v",
-            x=cfunction.constant(None, x=1.0, dtype=self.dtype),
-            y="decay",
-            dtype=self.dtype,
-        )
-
-    def grad_h_to_x(self) -> str:
-        if not self.decay_input:
-            return cfunction.constant(
-                y=f"const {self.dtype} grad_h_to_x", x=1.0, dtype=self.dtype
-            )
-        else:
-            return f"const {self.dtype} grad_h_to_x = decay;"
-
-
-class LIFNodeATGF(torch.autograd.Function):
-    @staticmethod
-    def forward(
-        ctx,
-        x: torch.Tensor,
-        v: torch.Tensor,
-        v_th: float,
-        v_reset: Optional[float],
-        decay: float,
-        forward_kernel: LIFNodeFPKernel,
-        backward_kernel: LIFNodeBPKernel,
-    ):
-        py_dict = {
-            "x": x,
-            "v": v,
-            "v_th": v_th,
-            "v_reset": v_reset,
-            "decay": decay,
-        }
-        requires_grad, blocks, threads, py_dict = NeuronATGFBase.pre_forward(py_dict)
-
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-
-        forward_kernel((blocks,), (threads,), py_dict)
-
-        if "v_reset" not in py_dict:
-            py_dict["v_reset"] = None
-
-        NeuronATGFBase.ctx_save(
-            ctx,
-            requires_grad,
-            py_dict["h"],
-            blocks=blocks,
-            threads=threads,
-            numel=py_dict["numel"],
-            v_th=py_dict["v_th"],
-            v_reset=py_dict["v_reset"],
-            backward_kernel=backward_kernel,
-            decay=py_dict["decay"],
-        )
-
-        return py_dict["spike"], py_dict["v_next"]
-
-    @staticmethod
-    def backward(ctx, grad_spike: torch.Tensor, grad_v_next: torch.Tensor):
-        backward_kernel, blocks, threads, py_dict = NeuronATGFBase.pre_backward(
-            ctx, grad_spike, grad_v_next
-        )
-        py_dict["decay"] = ctx.decay
-
-        if py_dict["v_reset"] is None:
-            py_dict.pop("v_reset")
-
-        backward_kernel((blocks,), (threads,), py_dict)
-
-        if "v_reset" not in py_dict:
-            py_dict["v_reset"] = None
-
-        return py_dict["grad_x"], py_dict["grad_v"], None, None, None, None, None

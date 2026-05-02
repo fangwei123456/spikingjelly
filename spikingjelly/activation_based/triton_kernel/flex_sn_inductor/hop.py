@@ -401,7 +401,11 @@ def _check_lifted_arg_arity(
     num_inputs: int,
     num_states: int,
     lifted_args: Tuple[torch.Tensor, ...],
+    *,
+    skip_check: bool = False,
 ) -> None:
+    if skip_check:
+        return
     expected = num_inputs + num_states
     total = expected + len(lifted_args)
     accepts = _callable_accepts_positional_args(core_fn, total)
@@ -476,7 +480,17 @@ def eager_scan(
     inputs_seq = flat_args[:num_inputs]
     states = list(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and inputs_seq[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -522,6 +536,16 @@ def eager_scan(
     output_seqs = tuple(torch.stack(buf, dim=0) for buf in output_buffers)
     state_seqs = tuple(torch.stack(buf, dim=0) for buf in state_buffers)
     return (*output_seqs, *state_seqs)
+
+
+flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
+# HOPs route every tensor call through the Autograd dispatch key even when
+# ``requires_grad=False``. Re-entering ``eager_scan`` from Autograd is
+# correct: the inner ``core_fn`` invocations build a standard per-timestep
+# autograd graph which is chained via ``torch.stack``/indexing, giving a
+# full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
+# graph natively by unrolling; see module docstring.
+flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
 
 
 def eager_scan_final_state(
@@ -580,7 +604,17 @@ def eager_scan_final_state(
     inputs_seq = flat_args[:num_inputs]
     states = list(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and inputs_seq[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     if num_inputs == 0:
         raise ValueError("flex_sn_scan requires at least one input sequence")
@@ -687,7 +721,17 @@ def lowerable_scan(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -812,7 +856,17 @@ def lowerable_scan_final_state(
     input_seqs = flat_args[:num_inputs]
     init_states = flat_args[num_inputs:expected]
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
 
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
@@ -963,7 +1017,17 @@ def lowerable_while_loop_scan(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
     lifted_args = tuple(_ensure_contiguous(arg) for arg in lifted_args)
 
     T = input_seqs[0].shape[0]
@@ -1151,7 +1215,17 @@ def lowerable_while_loop_scan_final_state(
     input_seqs = tuple(flat_args[:num_inputs])
     init_states = tuple(flat_args[num_inputs:expected])
     lifted_args = tuple(flat_args[expected:])
-    _check_lifted_arg_arity(core_fn, num_inputs, num_states, lifted_args)
+    _check_lifted_arg_arity(
+        core_fn,
+        num_inputs,
+        num_states,
+        lifted_args,
+        skip_check=(
+            num_inputs > 0
+            and input_seqs[0].shape[0] == 0
+            and isinstance(core_fn, torch.fx.GraphModule)
+        ),
+    )
     lifted_args = tuple(_ensure_contiguous(arg) for arg in lifted_args)
 
     T = input_seqs[0].shape[0]
@@ -1257,16 +1331,6 @@ def lowerable_while_loop_scan_final_state(
     final_states = final[pending_seq_end:states_end]
     final_output_buffers = final[states_end:outputs_end]
     return (*final_output_buffers, *final_states)
-
-
-flex_sn_scan.py_impl(torch._C.DispatchKey.CompositeExplicitAutograd)(eager_scan)
-# HOPs route every tensor call through the Autograd dispatch key even when
-# ``requires_grad=False``. Re-entering ``eager_scan`` from Autograd is
-# correct: the inner ``core_fn`` invocations build a standard per-timestep
-# autograd graph which is chained via ``torch.stack``/indexing, giving a
-# full BPTT graph. AOTAutograd (``aot_function`` / ``make_fx``) traces this
-# graph natively by unrolling; see module docstring.
-flex_sn_scan.py_impl(torch._C.DispatchKey.Autograd)(eager_scan)
 
 
 def _register_dynamo_hop() -> None:

@@ -1,9 +1,11 @@
+import logging
+from typing import Callable, Optional, Union
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import logging
-from typing import Union, Callable, Optional
-from . import neuron, base, surrogate
+
+from . import base, neuron, surrogate
 
 _hw_bits = 12
 
@@ -441,7 +443,7 @@ class CubaLIFNode(neuron.BaseNode):
         else:
             spike_d = spike
 
-        self.voltage_state = self.jit_hard_reset(
+        self.voltage_state = self.apply_hard_reset(
             self.voltage_state, spike_d, self.v_reset
         )
 

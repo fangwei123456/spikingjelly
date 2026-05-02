@@ -2,7 +2,6 @@ import argparse
 import os
 import time
 from dataclasses import dataclass
-from typing import Optional, Tuple
 
 import torch
 import torch.distributed as dist

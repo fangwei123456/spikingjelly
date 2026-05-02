@@ -1,5 +1,5 @@
-from typing import Optional
 import logging
+from typing import Optional
 
 import torch
 
@@ -90,7 +90,7 @@ class AdaptBaseNode(BaseNode):
         )
 
     @staticmethod
-    def jit_hard_reset(
+    def apply_hard_reset(
         v: torch.Tensor,
         w: torch.Tensor,
         spike_d: torch.Tensor,
@@ -103,7 +103,7 @@ class AdaptBaseNode(BaseNode):
         return v, w
 
     @staticmethod
-    def jit_soft_reset(
+    def apply_soft_reset(
         v: torch.Tensor,
         w: torch.Tensor,
         spike_d: torch.Tensor,
@@ -143,13 +143,13 @@ class AdaptBaseNode(BaseNode):
 
         if self.v_reset is None:
             # soft reset
-            self.v, self.w = self.jit_soft_reset(
+            self.v, self.w = self.apply_soft_reset(
                 self.v, self.w, spike_d, self.v_threshold, self.b, spike
             )
 
         else:
             # hard reset
-            self.v, self.w = self.jit_hard_reset(
+            self.v, self.w = self.apply_hard_reset(
                 self.v, self.w, spike_d, self.v_reset, self.b, spike
             )
 
@@ -271,8 +271,7 @@ class IzhikevichNode(AdaptBaseNode):
         elif self.backend == "cupy":
             self.v_float_to_tensor(x_seq[0])
             self.w_float_to_tensor(x_seq[0])
-
-            spike_seq, v_seq, w_seq = cuda_kernel.MultiStepIzhikevichNodePTT.apply(
+            spike_seq, v_seq, w_seq = cuda_kernel.multistep_izhikevich_ptt(
                 x_seq.flatten(1),
                 self.v.flatten(0),
                 self.w.flatten(0),
@@ -286,7 +285,7 @@ class IzhikevichNode(AdaptBaseNode):
                 self.v_c,
                 self.a0,
                 self.detach_reset,
-                self.surrogate_function.cuda_code,
+                self.surrogate_function,
             )
 
             spike_seq = spike_seq.reshape(x_seq.shape)

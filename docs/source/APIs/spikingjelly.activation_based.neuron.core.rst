@@ -31,7 +31,7 @@ Base Classes
    :members:
    :undoc-members:
    :show-inheritance:
-   :exclude-members: store_v_seq, extra_repr, v_float_to_tensor, jit_hard_reset, jit_soft_reset, jit_neuronal_adaptation
+   :exclude-members: store_v_seq, extra_repr, v_float_to_tensor, apply_hard_reset, apply_soft_reset, jit_neuronal_adaptation
 
 Integrate-and-fire (IF) Neurons
 ------------------------------------
