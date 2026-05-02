@@ -1,7 +1,10 @@
 from typing import Callable
 
+import numpy as np
 import torch
+import torch.nn.functional as F
 
+from ..... import configure
 from ...cuda_utils import (
     DeviceEnvironment,
     cal_blocks,
@@ -9,7 +12,6 @@ from ...cuda_utils import (
     register_python_object,
     resolve_python_object,
 )
-from ..... import configure
 from .ss_neuron_kernel_base import (
     NeuronATGFBase,
     NeuronBPKernel,
@@ -100,7 +102,6 @@ class LIFNodeBPKernel(NeuronBPKernel):
             return f"const {self.dtype} grad_h_to_x = decay;"
 
 
-
 @torch.library.custom_op("sj::cupy_ss_lif_forward", mutates_args=())
 def cupy_ss_lif_forward(
     x: torch.Tensor,
@@ -139,19 +140,19 @@ def _setup_ss_lif_ctx(ctx, inputs, output):
     h = output[2]
     ctx.save_for_backward(h)
     ctx.backward_kernel = resolve_python_object(backward_kernel_id)
-    ctx.blocks = cal_blocks((x.numel() + 1) // 2 if x.dtype == torch.float16 else x.numel())
+    ctx.blocks = cal_blocks(
+        (x.numel() + 1) // 2 if x.dtype == torch.float16 else x.numel()
+    )
     ctx.threads = configure.cuda_threads
     with DeviceEnvironment(x.get_device()):
         numel = x.numel()
         if x.dtype == torch.float16:
             numel = (numel + 1) // 2
-        ctx.numel = cupy.asarray(numel)
+        ctx.numel = cupy.asarray(numel, dtype=np.int32)
         if x.dtype == torch.float32:
             ctx.v_th = cupy.asarray(v_th, dtype=cupy.float32)
             ctx.v_reset = (
-                None
-                if soft_reset
-                else cupy.asarray(v_reset, dtype=cupy.float32)
+                None if soft_reset else cupy.asarray(v_reset, dtype=cupy.float32)
             )
             ctx.decay = cupy.asarray(decay, dtype=cupy.float32)
         elif x.dtype == torch.float16:
@@ -183,9 +184,23 @@ torch.library.register_autograd(
     setup_context=_setup_ss_lif_ctx,
 )
 
+
 def ss_lif_step(x, v, v_th, v_reset, decay, forward_kernel, backward_kernel):
-    fk = register_python_object(forward_kernel, python_object_registry_key(forward_kernel))
-    bk = register_python_object(backward_kernel, python_object_registry_key(backward_kernel))
+    need_unpad = x.dtype == torch.float16 and x.numel() % 2 != 0
+    if need_unpad:
+        x = F.pad(x, (0, 1))
+        v = F.pad(v, (0, 1))
+    fk = register_python_object(
+        forward_kernel, python_object_registry_key(forward_kernel)
+    )
+    bk = register_python_object(
+        backward_kernel, python_object_registry_key(backward_kernel)
+    )
     vr = float("nan") if v_reset is None else float(v_reset)
-    spike, v_next, _ = cupy_ss_lif_forward(x, v, v_th, vr, v_reset is None, decay, fk, bk)
+    spike, v_next, _ = cupy_ss_lif_forward(
+        x, v, v_th, vr, v_reset is None, decay, fk, bk
+    )
+    if need_unpad:
+        spike = spike[..., :-1]
+        v_next = v_next[..., :-1]
     return spike, v_next

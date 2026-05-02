@@ -9,6 +9,7 @@ from .common import (
     _CapturedAutogradCtx,
     _decode_v_reset,
     _resolve_sg_cuda_code_fun,
+    _should_stash_capture_ctx,
     _sg_obj_id,
     _stash_capture_ctx,
     _take_capture_ctx,
@@ -551,7 +552,11 @@ def cupy_multistep_if_forward(
         captured_ctx.saved_tensors = (out["h_seq"],)
     else:
         captured_ctx.saved_tensors = (out["h_seq"], out["spike_seq_full"])
-    capture_id = _stash_capture_ctx(captured_ctx)
+    capture_id = (
+        _stash_capture_ctx(captured_ctx)
+        if _should_stash_capture_ctx((x_seq, v_init))
+        else -1
+    )
     capture_token = torch.tensor(capture_id, device=x_seq.device, dtype=torch.int64)
     return out["spike_seq"], out["v_seq"], capture_token
 
@@ -606,7 +611,11 @@ def _setup_if_ctx(ctx, inputs, output):
     if capture_token.is_meta:
         ctx.captured = None
         return
-    ctx.captured = _take_capture_ctx(int(capture_token.item()))
+    capture_id = int(capture_token.item())
+    if capture_id < 0:
+        ctx.captured = None
+        return
+    ctx.captured = _take_capture_ctx(capture_id)
     ctx.detach_reset = inputs[4]
     ctx.sg = resolve_python_object(inputs[5])
 

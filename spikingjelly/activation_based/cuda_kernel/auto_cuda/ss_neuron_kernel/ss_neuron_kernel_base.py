@@ -447,7 +447,7 @@ class NeuronATGFBase:
         blocks = cuda_utils.cal_blocks(numel)
 
         with cuda_utils.DeviceEnvironment(device):
-            numel = cupy.asarray(numel)
+            numel = cupy.asarray(numel, dtype=np.int32)
 
         py_dict["numel"] = numel
 

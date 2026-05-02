@@ -1,22 +1,22 @@
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 import torch
 
 from .common import (
-    base,
-    cfunction,
-    cupy,
-    cuda_utils,
-    configure,
-    math,
-    surrogate,
-    _dtype_to_cupy_kernel_dtype,
-    scalar_to_cupy,
-    prepare_forward_meta,
-    _surrogate_cuda_codes_from_id,
-    resolve_sg_cupy_id_and_key,
     NeuronBPTTKernel,
     NeuronFPTTKernel,
+    _dtype_to_cupy_kernel_dtype,
+    _surrogate_cuda_codes_from_id,
+    base,
+    cfunction,
+    configure,
+    cuda_utils,
+    cupy,
+    math,
+    prepare_forward_meta,
+    resolve_sg_cupy_id_and_key,
+    scalar_to_cupy,
+    surrogate,
 )
 
 
@@ -237,7 +237,6 @@ class ParametricLIFNodeBPTTKernel(NeuronBPTTKernel):
         return codes
 
 
-
 _PLIF_FWD_KERNEL_CACHE = {}
 _PLIF_BWD_KERNEL_CACHE = {}
 
@@ -275,7 +274,6 @@ def _get_plif_backward_kernel(
         )
         _PLIF_BWD_KERNEL_CACHE[key] = kernel
     return kernel
-
 
 
 @torch.library.custom_op("sj::cupy_multistep_plif_forward", mutates_args=())
@@ -355,7 +353,17 @@ def _recover_v_v_seq_view(v_seq: torch.Tensor):
 
 
 def _setup_cupy_multistep_plif_context(ctx, inputs, output):
-    _, v_init, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = inputs
+    (
+        _,
+        v_init,
+        v_th,
+        v_reset,
+        soft_reset,
+        detach_reset,
+        decay,
+        decay_input,
+        sg_cupy_id,
+    ) = inputs
     h_seq = output[2]
     v_seq = output[1]
     v_v_seq = _recover_v_v_seq_view(v_seq)
@@ -476,6 +484,7 @@ torch.library.register_autograd(
     _cupy_multistep_plif_backward_autograd,
     setup_context=_setup_cupy_multistep_plif_context,
 )
+
 
 def multistep_plif(
     x_seq: torch.Tensor,

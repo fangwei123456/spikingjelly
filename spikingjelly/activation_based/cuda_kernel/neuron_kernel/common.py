@@ -2,6 +2,8 @@ import logging
 import math
 import threading
 
+import torch
+
 try:
     import cupy
 except BaseException as e:
@@ -57,6 +59,13 @@ def _stash_capture_ctx(captured_ctx: _CapturedAutogradCtx) -> int:
         capture_id = _CAPTURE_CTX_NEXT_ID
         _CAPTURE_CTX_BY_ID[capture_id] = captured_ctx
     return capture_id
+
+
+def _should_stash_capture_ctx(inputs) -> bool:
+    for item in inputs:
+        if isinstance(item, torch.Tensor) and item.requires_grad:
+            return True
+    return False
 
 
 def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
