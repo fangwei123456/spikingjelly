@@ -1,3 +1,708 @@
-from .common import MultiStepLIFNodePTT, multistep_lif_ptt
+import numpy as np
+import torch
+import torch.nn.functional as F
 
-__all__ = ["MultiStepLIFNodePTT", "multistep_lif_ptt"]
+from .... import configure
+from .. import cuda_utils, tensor_cache
+from ..cuda_utils import resolve_python_object
+from .common import (
+    _CapturedAutogradCtx,
+    _decode_v_reset,
+    _resolve_sg_cuda_code_fun,
+    _sg_obj_id,
+    _stash_capture_ctx,
+    _take_capture_ctx,
+    cupy,
+)
+
+
+__all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_lif_ptt"]
+
+def create_fptt_kernel(
+    decay_input: bool,
+    hard_reset: bool,
+    dtype: str,
+    kernel_name_prefix: str = "LIFNode",
+):
+    kernel_name = f"{kernel_name_prefix}_fptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
+
+    if dtype == "fp32":
+        code = rf"""
+        extern "C" __global__
+        void {kernel_name}(const float* x_seq, float* v_v_seq, float* h_seq, float* spike_seq,
+        const float & reciprocal_tau,
+        const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
+        const int & neuron_num, const int & numel)
+        """
+        code += r"""
+        {
+        const int index = blockIdx.x * blockDim.x + threadIdx.x;
+        if (index < neuron_num)
+        {
+            const int dt = neuron_num;
+            for(int mem_offset = 0; mem_offset < numel; mem_offset += neuron_num)
+            {
+                const int t = index + mem_offset;
+        """
+
+        if hard_reset:
+            if decay_input:
+                code += r"""
+                    h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t] + v_reset);
+                """
+            else:
+                code += r"""
+                    h_seq[t] = v_v_seq[t] - reciprocal_tau * (v_v_seq[t] - v_reset) + x_seq[t];
+                """
+            code += r"""
+                if (h_seq[t] >= v_threshold)
+                {
+                    spike_seq[t] = 1.0f;
+                    v_v_seq[t + dt] = v_reset;
+                }
+            """
+        else:
+            if decay_input:
+                code += r"""
+                    h_seq[t] = v_v_seq[t] + reciprocal_tau * (x_seq[t] - v_v_seq[t]);
+                """
+            else:
+                code += r"""
+                    h_seq[t] = v_v_seq[t] * (1.0f - reciprocal_tau) + x_seq[t];
+                """
+            code += r"""
+                if (h_seq[t] >= v_threshold)
+                {
+                    spike_seq[t] = 1.0f;
+                    v_v_seq[t + dt] = h_seq[t] - v_threshold;
+                }
+            """
+
+        code += r"""
+                else
+                {
+                    spike_seq[t] = 0.0f;
+                    v_v_seq[t + dt] = h_seq[t];
+                }
+
+            }
+        }
+        }
+        """
+
+    elif dtype == "fp16":
+        code = rf"""
+        #include <cuda_fp16.h>
+        extern "C" __global__
+        void {kernel_name}(const half2* x_seq, half2* v_v_seq, half2* h_seq, half2* spike_seq,
+        const half & reciprocal_tau,
+        const half & v_threshold, {"const half & v_reset," if hard_reset else ""}
+        const int & neuron_num, const int & numel)
+        """
+
+        code += r"""
+        {
+        const int index = blockIdx.x * blockDim.x + threadIdx.x;
+        const int stride = neuron_num >> 1;
+        if (index < stride)
+        {
+            const int numel_2 = numel >> 1;
+            const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+            const half2 v_threshold_half2 = __half2half2(v_threshold);
+        """
+
+        if hard_reset:
+            code += r"""
+                const half2 v_reset_half2 = __half2half2(v_reset);
+            """
+
+        code += r"""
+            for(int mem_offset = 0; mem_offset < numel_2; mem_offset += stride)
+            {
+                const int t = index + mem_offset;
+        """
+        if hard_reset:
+            if decay_input:
+                code += r"""
+                    h_seq[t] = __hfma2(__hadd2(__hsub2(x_seq[t], v_v_seq[t]), v_reset_half2), reciprocal_tau_half2, v_v_seq[t]);
+                """
+            else:
+                code += r"""
+                    // h_seq[t] = v_v_seq[t] - reciprocal_tau * (v_v_seq[t] - v_reset) + x_seq[t];
+                    // = reciprocal_tau * (v_reset - v_v_seq[t]) + v_v_seq[t] + x_seq[t];
+                    h_seq[t] = __hadd2(__hfma2(__hsub2(v_reset_half2,  v_v_seq[t]), reciprocal_tau_half2, v_v_seq[t]), x_seq[t]);
+                """
+            code += r"""
+                spike_seq[t] = __hgeu2(h_seq[t], v_threshold_half2);
+                v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], v_reset_half2), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
+            """
+        else:
+            if decay_input:
+                code += r"""
+                    h_seq[t] = __hfma2(__hsub2(x_seq[t], v_v_seq[t]), reciprocal_tau_half2, v_v_seq[t]);
+                """
+            else:
+                code += r"""
+                    // h_seq[t] = v_v_seq[t] * (1.0f - reciprocal_tau) + x_seq[t];
+                    h_seq[t] = __hfma2(__hsub2(__float2half2_rn(1.0f), reciprocal_tau_half2), v_v_seq[t], x_seq[t]);
+                """
+            code += r"""
+                spike_seq[t] = __hgeu2(h_seq[t], v_threshold_half2);
+                v_v_seq[t + stride] = __hadd2(__hmul2(spike_seq[t], __hsub2(h_seq[t], v_threshold_half2)), __hmul2(__hsub2(__float2half2_rn(1.0f), spike_seq[t]), h_seq[t]));
+            """
+
+        code += r"""
+            }
+        }
+        }
+        """
+    else:
+        raise TypeError
+    return cupy.RawKernel(
+        code,
+        kernel_name,
+        options=configure.cuda_compiler_options,
+        backend=configure.cuda_compiler_backend,
+    )
+
+
+def create_bptt_kernel(
+    sg_cuda_code_fun,
+    decay_input: bool,
+    hard_reset: bool,
+    detach_reset: bool,
+    dtype: str,
+):
+    kernel_name = f"LIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
+
+    code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
+
+    if dtype == "fp32":
+        code = rf"""
+        extern "C" __global__
+        void {kernel_name}(
+        const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq,
+        float* grad_x_seq, float* grad_v_init,
+        const float & reciprocal_tau, const float & one_sub_reciprocal_tau,
+        const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
+        const int & neuron_num, const int & numel)
+        """
+
+        code += r"""
+        {
+            const int index = blockIdx.x * blockDim.x + threadIdx.x;
+            if (index < neuron_num)
+            {
+                float grad_h = 0.0f;  // grad_h will be used recursively
+                for(int mem_offset = numel - neuron_num; mem_offset >= 0; mem_offset -= neuron_num)
+                {
+                    const int t = index + mem_offset;
+                    const float over_th = h_seq[t] - v_threshold;
+        """
+        code += code_grad_s_to_h
+        if detach_reset:
+            if hard_reset:
+                code_grad_v_to_h = r"""
+                const float grad_v_to_h = 1.0f - spike_seq[t];
+                """
+            else:
+                code_grad_v_to_h = r"""
+                const float grad_v_to_h = 1.0f;
+                """
+        else:
+            if hard_reset:
+                code_grad_v_to_h = r"""
+                const float grad_v_to_h = 1.0f - spike_seq[t] + (v_reset - h_seq[t]) * grad_s_to_h;
+                // const float grad_v_to_h = fmaf(v_reset - h_seq[t], grad_s_to_h, 1.0f - spike_seq[t]);
+                """
+            else:
+                code_grad_v_to_h = r"""
+                const float grad_v_to_h = 1.0f - v_threshold * grad_s_to_h;
+                // const float grad_v_to_h = fmaf(-grad_s_to_h, v_threshold, 1.0f);
+                """
+
+        code += code_grad_v_to_h
+        code += r"""
+            grad_h = grad_spike_seq[t] * grad_s_to_h + (grad_v_seq[t] + grad_h * one_sub_reciprocal_tau) * grad_v_to_h;
+            // grad_h = fmaf(grad_spike_seq[t], grad_s_to_h, fmaf(grad_h, one_sub_reciprocal_tau, grad_v_seq[t]) * grad_v_to_h);
+        """
+        if decay_input:
+            code += r"""
+                grad_x_seq[t] = grad_h * reciprocal_tau;
+            """
+        else:
+            code += r"""
+                grad_x_seq[t] = grad_h;
+            """
+        code += r"""
+            }
+        grad_v_init[index] = grad_h * one_sub_reciprocal_tau;
+        }
+        }
+        """
+
+    elif dtype == "fp16":
+        code = rf"""
+        #include <cuda_fp16.h>
+        extern "C" __global__
+        void {kernel_name}(
+        const half2* grad_spike_seq, const half2* grad_v_seq, const half2* h_seq, const half2* spike_seq,
+        half2* grad_x_seq, half2* grad_v_init,
+        const half & reciprocal_tau, const half & one_sub_reciprocal_tau,
+        const half & v_threshold, {"const half & v_reset," if hard_reset else ""}
+        const int & neuron_num, const int & numel)
+        """
+        code += r"""
+        {
+        const int index = blockIdx.x * blockDim.x + threadIdx.x;
+        const int stride = neuron_num >> 1;
+        if (index < stride)
+        {
+            const half2 reciprocal_tau_half2 = __half2half2(reciprocal_tau);
+            const half2 one_sub_reciprocal_tau_half2 = __half2half2(one_sub_reciprocal_tau);
+            const half2 v_threshold_half2 = __half2half2(v_threshold);
+        """
+
+        if hard_reset:
+            code += r"""
+                const half2 v_reset_half2 = __half2half2(v_reset);
+            """
+
+        code += r"""
+            half2 grad_h = __float2half2_rn(0.0f);  // grad_h will be used recursively
+            for(int mem_offset = (numel >> 1) - stride; mem_offset >= 0; mem_offset -= stride)
+            {
+                const int t = index + mem_offset;
+
+                const half2 over_th = __hsub2(h_seq[t], v_threshold_half2);
+        """
+
+        code += code_grad_s_to_h
+
+        if detach_reset:
+            if hard_reset:
+                code_grad_v_to_h = r"""
+                const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), spike_seq[t]);
+                """
+            else:
+                code_grad_v_to_h = r"""
+                const half2 grad_v_to_h = __float2half2_rn(1.0f);
+                """
+        else:
+            if hard_reset:
+                code_grad_v_to_h = r"""
+                const half2 grad_v_to_h = __hfma2(__hsub2(v_reset_half2, h_seq[t]),  grad_s_to_h, __hsub2(__float2half2_rn(1.0f), spike_seq[t]));
+                """
+            else:
+                code_grad_v_to_h = r"""
+                const half2 grad_v_to_h = __hsub2(__float2half2_rn(1.0f), __hmul2(v_threshold_half2, grad_s_to_h));
+                """
+
+        code += code_grad_v_to_h
+        code += r"""
+                grad_h = __hfma2(__hfma2(grad_h, one_sub_reciprocal_tau_half2, grad_v_seq[t]), grad_v_to_h, __hmul2(grad_spike_seq[t], grad_s_to_h));
+        """
+        if decay_input:
+            code += r"""
+                    grad_x_seq[t] = __hmul2(grad_h, reciprocal_tau_half2);
+            """
+        else:
+            code += r"""
+                    grad_x_seq[t] = grad_h;
+            """
+        code += r"""
+            }
+        grad_v_init[index] = __hmul2(grad_h, one_sub_reciprocal_tau_half2);
+        }
+        }
+        """
+
+    else:
+        raise TypeError
+    return cupy.RawKernel(
+        code,
+        kernel_name,
+        options=configure.cuda_compiler_options,
+        backend=configure.cuda_compiler_backend,
+    )
+
+
+def _lif_forward(
+    ctx,
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    decay_input: bool,
+    tau: float,
+    v_threshold: float,
+    v_reset: float,
+    detach_reset: bool,
+    sg_cuda_code_fun,
+):
+    requires_grad = x_seq.requires_grad or v_init.requires_grad
+    device = x_seq.get_device()
+    if x_seq.dtype == torch.float32:
+        dtype = "fp32"
+        cp_dtype = np.float32
+    elif x_seq.dtype == torch.float16:
+        dtype = "fp16"
+        cp_dtype = np.half
+    else:
+        raise NotImplementedError
+
+    use_pad = False
+    if dtype == "fp16" and v_init.numel() % 2 != 0:
+        # only fp16 needs even numel because we use half2 to accelerate
+        # when numel is odd, we will pad x_seq
+        use_pad = True
+        x_seq = F.pad(x_seq, (0, 1))  # [T, N] -> [T, N + 1]
+        v_init = F.pad(v_init, (0, 1))  # [N] -> [N + 1]
+
+    zero_shape = list(x_seq.shape)
+    zero_shape[0] *= 3
+    v_seq, h_seq, spike_seq = torch.split(
+        torch.zeros(zero_shape, device=x_seq.device, dtype=x_seq.dtype),
+        x_seq.shape[0],
+    )
+
+    v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq))
+
+    with cuda_utils.DeviceEnvironment(device):
+        numel = x_seq.numel()
+        neuron_num = numel // x_seq.shape[0]
+
+        threads = configure.cuda_threads
+        if dtype == "fp16":
+            assert neuron_num % 2 == 0
+            blocks = cuda_utils.cal_blocks(neuron_num >> 1)
+            # we will take two neurons to calculate as one neuron in cuda half2
+        else:
+            blocks = cuda_utils.cal_blocks(neuron_num)
+
+        cp_numel = cupy.asarray(numel)
+        cp_neuron_num = cupy.asarray(neuron_num)
+        cp_v_threshold = cupy.asarray(v_threshold, dtype=cp_dtype)
+        cp_reciprocal_tau = cupy.asarray(1.0 / tau, dtype=cp_dtype)
+        cp_one_sub_reciprocal_tau = cupy.asarray(1.0 - 1.0 / tau, dtype=cp_dtype)
+
+        if v_reset is None:
+            cp_v_reset = None
+            hard_reset = False
+            (
+                x_seq,
+                v_v_seq,
+                h_seq,
+                spike_seq,
+                cp_reciprocal_tau,
+                cp_v_threshold,
+                cp_neuron_num,
+                cp_numel,
+            ) = cuda_utils.get_contiguous(
+                x_seq,
+                v_v_seq,
+                h_seq,
+                spike_seq,
+                cp_reciprocal_tau,
+                cp_v_threshold,
+                cp_neuron_num,
+                cp_numel,
+            )
+            kernel_args = [
+                x_seq,
+                v_v_seq,
+                h_seq,
+                spike_seq,
+                cp_reciprocal_tau,
+                cp_v_threshold,
+                cp_neuron_num,
+                cp_numel,
+            ]
+        else:
+            cp_v_reset = cupy.asarray(v_reset, dtype=cp_dtype)
+            hard_reset = True
+            (
+                x_seq,
+                v_v_seq,
+                h_seq,
+                spike_seq,
+                cp_reciprocal_tau,
+                cp_v_threshold,
+                cp_v_reset,
+                cp_neuron_num,
+                cp_numel,
+            ) = cuda_utils.get_contiguous(
+                x_seq,
+                v_v_seq,
+                h_seq,
+                spike_seq,
+                cp_reciprocal_tau,
+                cp_v_threshold,
+                cp_v_reset,
+                cp_neuron_num,
+                cp_numel,
+            )
+            kernel_args = [
+                x_seq,
+                v_v_seq,
+                h_seq,
+                spike_seq,
+                cp_reciprocal_tau,
+                cp_v_threshold,
+                cp_v_reset,
+                cp_neuron_num,
+                cp_numel,
+            ]
+
+        kernel = create_fptt_kernel(
+            decay_input, hard_reset, dtype
+        )
+        kernel(
+            (blocks,),
+            (threads,),
+            cuda_utils.wrap_args_to_raw_kernel(device, *kernel_args),
+        )
+
+    if requires_grad:
+        ctx.decay_input = decay_input
+        ctx.use_pad = use_pad
+        if configure.save_spike_as_bool_in_neuron_kernel:
+            ctx.s_shape = spike_seq.shape
+            ctx.s_tk = tensor_cache.BOOL_TENSOR_CACHE.store_bool(spike_seq)
+            ctx.save_for_backward(h_seq)
+        else:
+            ctx.save_for_backward(h_seq, spike_seq)
+        ctx.blocks = blocks
+        ctx.threads = threads
+        ctx.cp_numel = cp_numel
+        ctx.cp_neuron_num = cp_neuron_num
+        ctx.cp_reciprocal_tau = cp_reciprocal_tau
+        ctx.cp_one_sub_reciprocal_tau = cp_one_sub_reciprocal_tau
+        ctx.cp_v_threshold = cp_v_threshold
+        ctx.cp_v_reset = cp_v_reset
+        ctx.detach_reset = detach_reset
+        ctx.sg_cuda_code_fun = sg_cuda_code_fun
+
+    if use_pad:
+        return spike_seq[..., :-1], v_v_seq[1:, ..., :-1]
+    else:
+        return spike_seq, v_v_seq[1:,]
+
+
+def _lif_backward(ctx, grad_spike_seq, grad_v_seq):
+    if ctx.use_pad:
+        # grad_spike_seq.shape = [T, N]
+        # grad_v_seq.shape = [T, N]
+        # h_seq.shape = [T, N + 1]
+        # spike_seq.shape = [T, N + 1]
+        grad_spike_seq = F.pad(grad_spike_seq, (0, 1))
+        grad_v_seq = F.pad(grad_v_seq, (0, 1))
+
+    device = grad_spike_seq.get_device()
+    if configure.save_spike_as_bool_in_neuron_kernel:
+        h_seq = ctx.saved_tensors[0]
+        spike_seq = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
+    else:
+        h_seq, spike_seq = ctx.saved_tensors
+    zero_shape = list(grad_spike_seq.shape)
+    zero_shape[0] += 1
+    zero_data = torch.zeros(
+        zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype
+    )
+    grad_x_seq = zero_data[0:-1]
+    grad_v_init = zero_data[-1]
+
+    if ctx.cp_v_reset is None:
+        hard_reset = False
+    else:
+        hard_reset = True
+
+    if grad_spike_seq.dtype == torch.float32:
+        dtype = "fp32"
+    elif grad_spike_seq.dtype == torch.float16:
+        dtype = "fp16"
+    else:
+        raise NotImplementedError
+
+    kernel = create_bptt_kernel(
+        ctx.sg_cuda_code_fun, ctx.decay_input, hard_reset, ctx.detach_reset, dtype
+    )
+
+    with cuda_utils.DeviceEnvironment(device):
+        if hard_reset:
+            (
+                grad_spike_seq,
+                grad_v_seq,
+                h_seq,
+                spike_seq,
+                grad_x_seq,
+                grad_v_init,
+                ctx.cp_reciprocal_tau,
+                ctx.cp_one_sub_reciprocal_tau,
+                ctx.cp_v_threshold,
+                ctx.cp_v_reset,
+                ctx.cp_neuron_num,
+                ctx.cp_numel,
+            ) = cuda_utils.get_contiguous(
+                grad_spike_seq,
+                grad_v_seq,
+                h_seq,
+                spike_seq,
+                grad_x_seq,
+                grad_v_init,
+                ctx.cp_reciprocal_tau,
+                ctx.cp_one_sub_reciprocal_tau,
+                ctx.cp_v_threshold,
+                ctx.cp_v_reset,
+                ctx.cp_neuron_num,
+                ctx.cp_numel,
+            )
+            kernel_args = [
+                grad_spike_seq,
+                grad_v_seq,
+                h_seq,
+                spike_seq,
+                grad_x_seq,
+                grad_v_init,
+                ctx.cp_reciprocal_tau,
+                ctx.cp_one_sub_reciprocal_tau,
+                ctx.cp_v_threshold,
+                ctx.cp_v_reset,
+                ctx.cp_neuron_num,
+                ctx.cp_numel,
+            ]
+        else:
+            (
+                grad_spike_seq,
+                grad_v_seq,
+                h_seq,
+                spike_seq,
+                grad_x_seq,
+                grad_v_init,
+                ctx.cp_reciprocal_tau,
+                ctx.cp_one_sub_reciprocal_tau,
+                ctx.cp_v_threshold,
+                ctx.cp_neuron_num,
+                ctx.cp_numel,
+            ) = cuda_utils.get_contiguous(
+                grad_spike_seq,
+                grad_v_seq,
+                h_seq,
+                spike_seq,
+                grad_x_seq,
+                grad_v_init,
+                ctx.cp_reciprocal_tau,
+                ctx.cp_one_sub_reciprocal_tau,
+                ctx.cp_v_threshold,
+                ctx.cp_neuron_num,
+                ctx.cp_numel,
+            )
+            kernel_args = [
+                grad_spike_seq,
+                grad_v_seq,
+                h_seq,
+                spike_seq,
+                grad_x_seq,
+                grad_v_init,
+                ctx.cp_reciprocal_tau,
+                ctx.cp_one_sub_reciprocal_tau,
+                ctx.cp_v_threshold,
+                ctx.cp_neuron_num,
+                ctx.cp_numel,
+            ]
+
+        kernel(
+            (ctx.blocks,),
+            (ctx.threads,),
+            cuda_utils.wrap_args_to_raw_kernel(device, *kernel_args),
+        )
+    if ctx.use_pad:
+        return (
+            grad_x_seq[..., :-1],
+            grad_v_init[..., :-1],
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+    else:
+        return grad_x_seq, grad_v_init, None, None, None, None, None, None
+
+
+@torch.library.custom_op("sj::cupy_multistep_lif_forward", mutates_args=())
+def cupy_multistep_lif_forward(
+    x_seq: torch.Tensor,
+    v_init: torch.Tensor,
+    decay_input: bool,
+    tau: float,
+    v_threshold: float,
+    v_reset: float,
+    detach_reset: bool,
+    sg_id: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    sg = resolve_python_object(sg_id)
+    captured_ctx = _CapturedAutogradCtx()
+    out = _lif_forward(
+        captured_ctx,
+        x_seq,
+        v_init,
+        decay_input,
+        tau,
+        v_threshold,
+        _decode_v_reset(v_reset),
+        detach_reset,
+
+        _resolve_sg_cuda_code_fun(sg),
+    )
+    capture_id = _stash_capture_ctx(captured_ctx)
+    capture_token = torch.tensor(capture_id, device=x_seq.device, dtype=torch.int64)
+    return (*out, capture_token)
+
+
+@torch.library.register_fake("sj::cupy_multistep_lif_forward")
+def _cupy_multistep_lif_forward_fake(*args):
+    x_seq = args[0]
+    return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
+
+
+def _setup_ctx(ctx, inputs, output):
+    capture_token = output[-1]
+    if capture_token.is_meta:
+        ctx.captured = None
+        return
+    ctx.captured = _take_capture_ctx(int(capture_token.item()))
+
+
+def _bw(ctx, *grad_outputs):
+    if ctx.captured is None:
+        raise RuntimeError("Missing captured context for backward.")
+    grads = _lif_backward(ctx.captured, *grad_outputs[:-1])
+    return grads[0], grads[1], None, None, None, None, None, None
+
+
+torch.library.register_autograd("sj::cupy_multistep_lif_forward", _bw, setup_context=_setup_ctx)
+
+
+def multistep_lif_ptt(
+    x_seq,
+    v_init,
+    decay_input,
+    tau,
+    v_threshold,
+    v_reset,
+    detach_reset,
+    surrogate_function,
+):
+    sg_id = _sg_obj_id(surrogate_function)
+    v_reset_value = float("nan") if v_reset is None else float(v_reset)
+    return cupy_multistep_lif_forward(
+        x_seq,
+        v_init,
+        decay_input,
+        tau,
+        v_threshold,
+        v_reset_value,
+        detach_reset,
+
+        sg_id,
+    )[:-1]
