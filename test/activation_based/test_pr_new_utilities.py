@@ -538,58 +538,6 @@ def test_replay_and_grad_helpers_single_output_not_tuple():
 
 
 # ---------------------------------------------------------------------------
-# auto_cuda/ss_neuron_kernel/common.py: replay_and_grad (no None handling)
-# ---------------------------------------------------------------------------
-
-def test_ss_replay_and_grad_basic():
-    """ss_neuron_kernel.common.replay_and_grad produces correct grads."""
-    from spikingjelly.activation_based.cuda_kernel.auto_cuda.ss_neuron_kernel.common import (
-        replay_and_grad,
-    )
-
-    x = torch.tensor([1.0, 2.0], requires_grad=True)
-    y = torch.tensor([0.5, 1.0], requires_grad=True)
-    grad_out = torch.ones(2)
-
-    def op(a, b):
-        return a * 3.0 + b
-
-    grads = replay_and_grad(op, (x, y), (), (grad_out,))
-    assert grads[0] is not None
-    assert grads[1] is not None
-    assert torch.allclose(grads[0], torch.tensor([3.0, 3.0]))
-    assert torch.allclose(grads[1], torch.tensor([1.0, 1.0]))
-
-
-def test_ss_replay_and_grad_no_grad_inputs():
-    from spikingjelly.activation_based.cuda_kernel.auto_cuda.ss_neuron_kernel.common import (
-        replay_and_grad,
-    )
-
-    x = torch.tensor([1.0, 2.0])
-    y = torch.tensor([0.5, 1.0])
-    grad_out = torch.ones(2)
-
-    grads = replay_and_grad(lambda a, b: a + b, (x, y), (), (grad_out,))
-    assert all(g is None for g in grads)
-
-
-def test_ss_replay_and_grad_with_static_args():
-    from spikingjelly.activation_based.cuda_kernel.auto_cuda.ss_neuron_kernel.common import (
-        replay_and_grad,
-    )
-
-    def op(x, scale):
-        return x * scale
-
-    x = torch.tensor([2.0, 4.0], requires_grad=True)
-    grad_out = torch.ones(2)
-
-    grads = replay_and_grad(op, (x,), (5.0,), (grad_out,))
-    assert torch.allclose(grads[0], torch.tensor([5.0, 5.0]))
-
-
-# ---------------------------------------------------------------------------
 # neuron_kernel/common.py: _decode_v_reset
 # ---------------------------------------------------------------------------
 

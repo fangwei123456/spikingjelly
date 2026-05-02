@@ -520,7 +520,10 @@ def _if_backward_impl(
     return grad_x_seq, grad_v_init
 
 
-@torch.library.custom_op("sj::cupy_multistep_if_forward", mutates_args=())
+_IF_OP_NAME = "sj::cupy_neuron_kernel_multistep_if_forward"
+
+
+@torch.library.custom_op(_IF_OP_NAME, mutates_args=())
 def cupy_multistep_if_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
@@ -553,7 +556,7 @@ def cupy_multistep_if_forward(
     return out["spike_seq"], out["v_seq"], capture_token
 
 
-@torch.library.register_fake("sj::cupy_multistep_if_forward")
+@torch.library.register_fake(_IF_OP_NAME)
 def _cupy_multistep_if_forward_fake(
     x_seq, v_init, v_threshold, v_reset, detach_reset, sg_id
 ):
@@ -609,7 +612,7 @@ def _setup_if_ctx(ctx, inputs, output):
 
 
 torch.library.register_autograd(
-    "sj::cupy_multistep_if_forward",
+    _IF_OP_NAME,
     _if_bw,
     setup_context=_setup_if_ctx,
 )

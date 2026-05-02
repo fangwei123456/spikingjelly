@@ -532,6 +532,16 @@ def _as_cupy_int32(value: int, name: str):
     return cupy.asarray(value, dtype=np.int32)
 
 
+def is_fake_or_meta_tensor(x) -> bool:
+    if not isinstance(x, torch.Tensor):
+        return False
+    if x.is_meta:
+        return True
+    if getattr(x, "fake_mode", None) is not None:
+        return True
+    return type(x).__name__ == "FakeTensor"
+
+
 def scalar_to_cupy(py_dict: dict, ref: str = "x_seq"):
     device = py_dict[ref].get_device()
     dtype = py_dict[ref].dtype

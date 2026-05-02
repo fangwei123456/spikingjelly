@@ -14,7 +14,6 @@ from .common import (
     _take_capture_ctx,
     cupy,
 )
-from .lif import create_bptt_kernel as lif_create_bptt_kernel
 from .lif import create_fptt_kernel as lif_create_fptt_kernel
 
 __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_plif_ptt"]
@@ -600,7 +599,10 @@ def _plif_backward(ctx, grad_spike_seq, grad_v_seq):
         )
 
 
-@torch.library.custom_op("sj::cupy_multistep_plif_forward", mutates_args=())
+_PLIF_OP_NAME = "sj::cupy_neuron_kernel_multistep_plif_forward"
+
+
+@torch.library.custom_op(_PLIF_OP_NAME, mutates_args=())
 def cupy_multistep_plif_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
@@ -630,7 +632,7 @@ def cupy_multistep_plif_forward(
     return (*out, capture_token)
 
 
-@torch.library.register_fake("sj::cupy_multistep_plif_forward")
+@torch.library.register_fake(_PLIF_OP_NAME)
 def _cupy_multistep_plif_forward_fake(*args):
     x_seq = args[0]
     return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
@@ -651,7 +653,7 @@ def _bw(ctx, *grad_outputs):
     return grads[0], grads[1], grads[2], None, None, None, None, None
 
 
-torch.library.register_autograd("sj::cupy_multistep_plif_forward", _bw, setup_context=_setup_ctx)
+torch.library.register_autograd(_PLIF_OP_NAME, _bw, setup_context=_setup_ctx)
 
 
 def multistep_plif_ptt(

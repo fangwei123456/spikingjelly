@@ -9,7 +9,7 @@ except BaseException as e:
     cupy = None
 
 from ... import surrogate
-from ..cuda_utils import register_python_object, resolve_python_object
+from ..cuda_utils import register_python_object
 from .helpers import sg_registry_key as _sg_registry_key
 
 __all__ = [
@@ -39,7 +39,10 @@ def _sg_obj_id(sg) -> int:
 
 
 class _CapturedAutogradCtx:
-    pass
+    saved_tensors = ()
+
+    def save_for_backward(self, *tensors):
+        self.saved_tensors = tensors
 
 
 _CAPTURE_CTX_LOCK = threading.Lock()

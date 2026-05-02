@@ -629,7 +629,10 @@ def _lif_backward(ctx, grad_spike_seq, grad_v_seq):
         return grad_x_seq, grad_v_init, None, None, None, None, None, None
 
 
-@torch.library.custom_op("sj::cupy_multistep_lif_forward", mutates_args=())
+_LIF_OP_NAME = "sj::cupy_neuron_kernel_multistep_lif_forward"
+
+
+@torch.library.custom_op(_LIF_OP_NAME, mutates_args=())
 def cupy_multistep_lif_forward(
     x_seq: torch.Tensor,
     v_init: torch.Tensor,
@@ -659,7 +662,7 @@ def cupy_multistep_lif_forward(
     return (*out, capture_token)
 
 
-@torch.library.register_fake("sj::cupy_multistep_lif_forward")
+@torch.library.register_fake(_LIF_OP_NAME)
 def _cupy_multistep_lif_forward_fake(*args):
     x_seq = args[0]
     return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
@@ -680,7 +683,7 @@ def _bw(ctx, *grad_outputs):
     return grads[0], grads[1], None, None, None, None, None, None
 
 
-torch.library.register_autograd("sj::cupy_multistep_lif_forward", _bw, setup_context=_setup_ctx)
+torch.library.register_autograd(_LIF_OP_NAME, _bw, setup_context=_setup_ctx)
 
 
 def multistep_lif_ptt(

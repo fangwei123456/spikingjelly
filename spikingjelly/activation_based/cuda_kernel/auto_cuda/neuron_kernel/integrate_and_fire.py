@@ -148,18 +148,26 @@ def _setup_cupy_multistep_if_context(ctx, inputs, output):
     ctx.sg_cupy_id = sg_cupy_id
 
 
-def _cupy_multistep_if_backward(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
-    del grad_h_seq
-    (h_seq,) = ctx.saved_tensors
+@torch.library.custom_op("sj::cupy_multistep_if_backward", mutates_args=())
+def cupy_multistep_if_backward(
+    grad_spike_seq: torch.Tensor,
+    grad_v_seq: torch.Tensor,
+    h_seq: torch.Tensor,
+    v_th: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    sg_cupy_id: int,
+) -> tuple[torch.Tensor, torch.Tensor]:
     grad_spike_seq = grad_spike_seq.contiguous()
     grad_v_seq = grad_v_seq.contiguous()
     h_seq = h_seq.contiguous()
     dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
-    hard_reset = ctx.v_reset is not None
+    hard_reset = not soft_reset
     backward_kernel = _get_if_backward_kernel(
-        sg_cupy_id=ctx.sg_cupy_id,
+        sg_cupy_id=sg_cupy_id,
         hard_reset=hard_reset,
-        detach_reset=ctx.detach_reset,
+        detach_reset=detach_reset,
         dtype=dtype,
     )
 
@@ -173,32 +181,61 @@ def _cupy_multistep_if_backward(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
     with cuda_utils.DeviceEnvironment(grad_spike_seq.get_device()):
         numel = cupy.asarray(numel)
         N = cupy.asarray(N)
-    zero_shape = list(grad_spike_seq.shape)
-    zero_shape[0] += 1
-    zero_data = torch.zeros(
-        zero_shape, device=grad_spike_seq.device, dtype=grad_spike_seq.dtype
-    )
+    grad_x_seq = torch.empty_like(grad_spike_seq)
+    grad_v_init = torch.empty_like(grad_v_seq[0])
     py_dict = {
         "numel": numel,
         "N": N,
         "grad_spike_seq": grad_spike_seq,
         "grad_v_seq": grad_v_seq,
         "h_seq": h_seq,
-        "grad_x_seq": zero_data[0:-1],
-        "grad_v_init": zero_data[-1],
-        "v_th": ctx.v_th,
-        "v_reset": ctx.v_reset,
+        "grad_x_seq": grad_x_seq,
+        "grad_v_init": grad_v_init,
+        "v_th": v_th,
+        "v_reset": None if soft_reset else v_reset,
     }
     scalar_to_cupy(py_dict, ref="grad_spike_seq")
     if py_dict["v_reset"] is None:
         py_dict.pop("v_reset")
     backward_kernel((blocks,), (threads,), py_dict)
-    return py_dict["grad_x_seq"], py_dict["grad_v_init"], None, None, None, None, None
+    return py_dict["grad_x_seq"], py_dict["grad_v_init"]
+
+
+@torch.library.register_fake("sj::cupy_multistep_if_backward")
+def _cupy_multistep_if_backward_fake(
+    grad_spike_seq: torch.Tensor,
+    grad_v_seq: torch.Tensor,
+    h_seq: torch.Tensor,
+    v_th: float,
+    v_reset: float,
+    soft_reset: bool,
+    detach_reset: bool,
+    sg_cupy_id: int,
+):
+    return torch.empty_like(grad_spike_seq), torch.empty_like(grad_v_seq[0])
+
+
+def _cupy_multistep_if_backward_autograd(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
+    del grad_h_seq
+    (h_seq,) = ctx.saved_tensors
+    soft_reset = ctx.v_reset is None
+    v_reset = 0.0 if soft_reset else float(ctx.v_reset)
+    grad_x_seq, grad_v_init = cupy_multistep_if_backward(
+        grad_spike_seq,
+        grad_v_seq,
+        h_seq,
+        ctx.v_th,
+        v_reset,
+        soft_reset,
+        ctx.detach_reset,
+        ctx.sg_cupy_id,
+    )
+    return grad_x_seq, grad_v_init, None, None, None, None, None
 
 
 torch.library.register_autograd(
     "sj::cupy_multistep_if_forward",
-    _cupy_multistep_if_backward,
+    _cupy_multistep_if_backward_autograd,
     setup_context=_setup_cupy_multistep_if_context,
 )
 

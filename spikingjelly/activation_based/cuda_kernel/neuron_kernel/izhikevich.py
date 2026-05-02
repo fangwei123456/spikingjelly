@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torch.nn.functional as F
 
 from .... import configure
 from .. import cuda_utils, tensor_cache
