@@ -481,11 +481,10 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
     def _cupy_multistep_plif_backward(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
         del grad_h_seq
         h_seq, v_seq, v_init, decay = ctx.saved_tensors
-        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0)
+        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0).contiguous()
         grad_spike_seq = grad_spike_seq.contiguous()
         grad_v_seq = grad_v_seq.contiguous()
         h_seq = h_seq.contiguous()
-        v_v_seq = v_v_seq.contiguous()
         dtype = _dtype_to_cupy_kernel_dtype(grad_spike_seq.dtype)
         hard_reset = ctx.v_reset is not None
         backward_kernel = _get_plif_backward_kernel(
