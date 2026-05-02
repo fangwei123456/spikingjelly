@@ -71,19 +71,34 @@ def _on_python_object_finalize(obj_id: int) -> None:
 def register_python_object(obj: Any, key: str) -> int:
     global _PYOBJ_NEXT_ID
     with _PYOBJ_LOCK:
-        obj_id = _PYOBJ_KEY_TO_ID.get(key)
+        actual_key = key
+        obj_id = _PYOBJ_KEY_TO_ID.get(actual_key)
         if obj_id is not None:
             entry = _PYOBJ_ID_TO_REF.get(obj_id)
-            if _entry_to_object(entry) is not None:
+            existing_obj = _entry_to_object(entry)
+            if existing_obj is obj:
                 if not isinstance(entry, weakref.ReferenceType):
                     _PYOBJ_STRONG_IDS.move_to_end(obj_id, last=True)
                 return obj_id
-            _drop_python_object_locked(obj_id)
+            if existing_obj is not None:
+                actual_key = f"{key}::objid={id(obj)}"
+                obj_id = _PYOBJ_KEY_TO_ID.get(actual_key)
+                if obj_id is not None:
+                    entry = _PYOBJ_ID_TO_REF.get(obj_id)
+                    existing_obj = _entry_to_object(entry)
+                    if existing_obj is obj:
+                        if not isinstance(entry, weakref.ReferenceType):
+                            _PYOBJ_STRONG_IDS.move_to_end(obj_id, last=True)
+                        return obj_id
+                    if existing_obj is None:
+                        _drop_python_object_locked(obj_id)
+            else:
+                _drop_python_object_locked(obj_id)
 
         obj_id = _PYOBJ_NEXT_ID
         _PYOBJ_NEXT_ID += 1
-        _PYOBJ_KEY_TO_ID[key] = obj_id
-        _PYOBJ_ID_TO_KEY[obj_id] = key
+        _PYOBJ_KEY_TO_ID[actual_key] = obj_id
+        _PYOBJ_ID_TO_KEY[obj_id] = actual_key
 
         try:
             _PYOBJ_ID_TO_REF[obj_id] = weakref.ref(

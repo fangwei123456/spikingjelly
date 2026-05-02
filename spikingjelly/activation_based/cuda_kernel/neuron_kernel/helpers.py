@@ -14,6 +14,7 @@ def sg_registry_key(sg) -> str:
             sg.__class__.__qualname__,
             spiking,
             params,
+            id(sg),
         )
     )
 
