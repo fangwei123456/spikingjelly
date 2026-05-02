@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from spikingjelly.activation_based import functional, layer
-from spikingjelly.activation_based.functional.misc import _TrainConvBnWrapper
+from spikingjelly.activation_based.functional.conv_bn_fusion import _TrainConvBnWrapper
 
 
 class _StepBlock(nn.Module):
