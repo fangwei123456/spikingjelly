@@ -466,11 +466,25 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
         )
 
 
+    def _recover_v_v_seq_view(v_seq: torch.Tensor):
+        base_offset = v_seq.storage_offset() - v_seq.stride()[0]
+        if base_offset < 0:
+            return None
+        full_shape = (v_seq.shape[0] + 1, *v_seq.shape[1:])
+        try:
+            return v_seq.as_strided(full_shape, v_seq.stride(), storage_offset=base_offset)
+        except RuntimeError:
+            return None
+
+
     def _setup_cupy_multistep_plif_context(ctx, inputs, output):
         _, v_init, v_th, v_reset, soft_reset, detach_reset, decay, decay_input, sg_cupy_id = inputs
         h_seq = output[2]
         v_seq = output[1]
-        ctx.save_for_backward(h_seq, v_seq, v_init, decay)
+        v_v_seq = _recover_v_v_seq_view(v_seq)
+        if v_v_seq is None:
+            v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0).contiguous()
+        ctx.save_for_backward(h_seq, v_v_seq, decay)
         ctx.v_th = v_th
         ctx.v_reset = None if soft_reset else v_reset
         ctx.detach_reset = detach_reset
@@ -480,8 +494,7 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
 
     def _cupy_multistep_plif_backward(ctx, grad_spike_seq, grad_v_seq, grad_h_seq):
         del grad_h_seq
-        h_seq, v_seq, v_init, decay = ctx.saved_tensors
-        v_v_seq = torch.cat((v_init.unsqueeze(0), v_seq), dim=0).contiguous()
+        h_seq, v_v_seq, decay = ctx.saved_tensors
         grad_spike_seq = grad_spike_seq.contiguous()
         grad_v_seq = grad_v_seq.contiguous()
         h_seq = h_seq.contiguous()
