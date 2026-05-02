@@ -99,11 +99,6 @@ if use_cupy_custom_op() and cupy is not None:
         forward_kernel_id: int,
         backward_kernel_id: int,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        if x.dtype == torch.float16 and v.numel() % 2 != 0:
-            raise ValueError(
-                "When using single-step IF with half2 cupy backend, the number "
-                "of neurons should be even."
-            )
         forward_kernel = resolve_python_object(forward_kernel_id)
         backward_kernel = resolve_python_object(backward_kernel_id)
         with torch.no_grad():

@@ -123,7 +123,15 @@ def python_object_registry_key(obj: Any) -> str:
             if v.numel() == 1:
                 return v.item()
             return ("tensor", tuple(v.shape), str(v.dtype), bool(v.requires_grad))
-        return repr(v)
+        obj_state = getattr(v, "__dict__", None)
+        if isinstance(obj_state, dict):
+            return (
+                "obj",
+                v.__class__.__module__,
+                v.__class__.__qualname__,
+                tuple(sorted((k, _norm(val)) for k, val in obj_state.items())),
+            )
+        return ("obj", v.__class__.__module__, v.__class__.__qualname__, id(v))
 
     cls = obj.__class__
     key_parts: list[Any] = [cls.__module__, cls.__qualname__]
