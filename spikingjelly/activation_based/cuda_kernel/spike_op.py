@@ -278,6 +278,7 @@ if use_cupy_custom_op():
     def _cupy_spike_linear_backward(ctx, grad_output):
         (weight,) = ctx.saved_tensors
         spike = tensor_cache.BOOL_TENSOR_CACHE.get_float(ctx.s_tk, ctx.s_shape)
+        weight = weight.to(grad_output.dtype)
         grad_spike = F.linear(grad_output, weight.t(), bias=None)
         in_features = spike.shape[-1]
         out_features = grad_output.shape[-1]

@@ -135,9 +135,14 @@ def python_object_registry_key(obj: Any) -> str:
         if isinstance(v, dict):
             return tuple(sorted((k, _norm(val)) for k, val in v.items()))
         if isinstance(v, torch.Tensor):
-            if v.numel() == 1:
-                return v.item()
-            return ("tensor", tuple(v.shape), str(v.dtype), bool(v.requires_grad))
+            return (
+                "tensor",
+                tuple(v.shape),
+                str(v.dtype),
+                bool(v.requires_grad),
+                str(v.device),
+                int(v.data_ptr()),
+            )
         obj_state = getattr(v, "__dict__", None)
         if isinstance(obj_state, dict):
             return (
