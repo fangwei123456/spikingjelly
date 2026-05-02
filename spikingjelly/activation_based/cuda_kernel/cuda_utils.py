@@ -125,6 +125,10 @@ def resolve_python_object(obj_id: int) -> Any:
 
 
 def python_object_registry_key(obj: Any) -> str:
+    def _sort_key_token(v: Any) -> tuple[str, str, str]:
+        cls = v.__class__
+        return (cls.__module__, cls.__qualname__, repr(v))
+
     def _norm(v: Any) -> Any:
         if isinstance(v, (bool, int, float, str, type(None))):
             return v
@@ -133,7 +137,12 @@ def python_object_registry_key(obj: Any) -> str:
         if isinstance(v, list):
             return tuple(_norm(x) for x in v)
         if isinstance(v, dict):
-            return tuple(sorted((k, _norm(val)) for k, val in v.items()))
+            return tuple(
+                sorted(
+                    ((_sort_key_token(k), _norm(val)) for k, val in v.items()),
+                    key=lambda item: item[0],
+                )
+            )
         if isinstance(v, torch.Tensor):
             if getattr(v, "is_meta", False):
                 tensor_identity = ("meta_id", id(v))
@@ -156,7 +165,15 @@ def python_object_registry_key(obj: Any) -> str:
                 "obj",
                 v.__class__.__module__,
                 v.__class__.__qualname__,
-                tuple(sorted((k, _norm(val)) for k, val in obj_state.items())),
+                tuple(
+                    sorted(
+                        (
+                            (_sort_key_token(k), _norm(val))
+                            for k, val in obj_state.items()
+                        ),
+                        key=lambda item: item[0],
+                    )
+                ),
             )
         return ("obj", v.__class__.__module__, v.__class__.__qualname__, id(v))
 
@@ -174,7 +191,12 @@ def python_object_registry_key(obj: Any) -> str:
             key_parts.append(
                 (
                     "state",
-                    tuple(sorted((k, _norm(v)) for k, v in state.items())),
+                    tuple(
+                        sorted(
+                            ((_sort_key_token(k), _norm(v)) for k, v in state.items()),
+                            key=lambda item: item[0],
+                        )
+                    ),
                 )
             )
         else:
