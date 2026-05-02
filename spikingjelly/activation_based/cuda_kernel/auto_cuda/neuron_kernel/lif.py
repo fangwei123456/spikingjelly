@@ -2,6 +2,7 @@ from typing import Optional, Callable
 
 import logging
 import torch
+import torch.nn.functional as F
 
 from .common import (
     cfunction,
@@ -274,6 +275,13 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x_seq = x_seq.contiguous()
         v_init = v_init.contiguous()
+        orig_n = x_seq.shape[1]
+        need_unpad = False
+        if x_seq.dtype == torch.float16 and orig_n % 2 != 0:
+            # Keep legacy behavior: pad odd neuron count for half2 kernels.
+            x_seq = F.pad(x_seq, (0, 1))
+            v_init = F.pad(v_init, (0, 1))
+            need_unpad = True
         dtype = _dtype_to_cupy_kernel_dtype(x_seq.dtype)
         hard_reset = not soft_reset
         forward_kernel = _get_lif_forward_kernel(
@@ -286,11 +294,6 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
             "v_reset": None if soft_reset else v_reset,
             "decay": decay,
         }
-        if x_seq.dtype == torch.float16 and x_seq.shape[1] % 2 != 0:
-            raise ValueError(
-                "When using multi-step LIF with half2 cupy backend, the number "
-                "of neurons should be even."
-            )
         blocks, threads, py_dict = prepare_forward_meta(py_dict)
         py_dict["spike_seq"] = torch.empty_like(x_seq)
         py_dict["h_seq"] = torch.empty_like(x_seq)
@@ -299,7 +302,14 @@ if _CUPY_CUSTOM_OP_AVAILABLE:
         if py_dict["v_reset"] is None:
             py_dict.pop("v_reset")
         forward_kernel((blocks,), (threads,), py_dict)
-        return py_dict["spike_seq"], py_dict["v_v_seq"][1:,], py_dict["h_seq"]
+        spike_seq = py_dict["spike_seq"]
+        v_seq = py_dict["v_v_seq"][1:,]
+        h_seq = py_dict["h_seq"]
+        if need_unpad:
+            spike_seq = spike_seq[:, :orig_n]
+            v_seq = v_seq[:, :orig_n]
+            h_seq = h_seq[:, :orig_n]
+        return spike_seq, v_seq, h_seq
 
 
     @torch.library.register_fake("sj::cupy_multistep_lif_forward")
