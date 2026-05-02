@@ -88,12 +88,41 @@ def _spike_conv_backward_common(
     )
 
 
+def _normalize_conv_hyperparams(
+    spike_dim: int, stride, padding, dilation
+) -> tuple[tuple[int, ...], Union[str, tuple[int, ...]], tuple[int, ...]]:
+    if isinstance(padding, str):
+        if spike_dim == 3:
+            return tuple(_single(stride)), padding, tuple(_single(dilation))
+        if spike_dim == 4:
+            return tuple(_pair(stride)), padding, tuple(_pair(dilation))
+        if spike_dim == 5:
+            return tuple(_triple(stride)), padding, tuple(_triple(dilation))
+        raise ValueError(
+            f"spikeConvolution only supports 3D/4D/5D input, but got dim={spike_dim}."
+        )
+
+    if spike_dim == 3:
+        return tuple(_single(stride)), tuple(_single(padding)), tuple(_single(dilation))
+    if spike_dim == 4:
+        return tuple(_pair(stride)), tuple(_pair(padding)), tuple(_pair(dilation))
+    if spike_dim == 5:
+        return tuple(_triple(stride)), tuple(_triple(padding)), tuple(_triple(dilation))
+    raise ValueError(
+        f"spikeConvolution only supports 3D/4D/5D input, but got dim={spike_dim}."
+    )
+
+
 class spikeConvolution(torch.autograd.Function):
     # Pytorch only provides cudnn_convolution without bias.
     # Refer to https://github.com/pytorch/pytorch/issues/3823 for more details.
     @staticmethod
     @amp_custom_fwd
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
+        spike_dim = spike.dim()
+        stride, padding, dilation = _normalize_conv_hyperparams(
+            spike_dim, stride, padding, dilation
+        )
         need_conv_grad = ctx.needs_input_grad[0] or ctx.needs_input_grad[1]
         need_any_grad = need_conv_grad or ctx.needs_input_grad[2]
         if cpp_wrapper is None and need_conv_grad:
@@ -114,7 +143,7 @@ class spikeConvolution(torch.autograd.Function):
             ctx.dilation = dilation
             ctx.groups = groups
 
-        if spike.dim() == 3:
+        if spike_dim == 3:
             return F.conv1d(
                 input=spike,
                 weight=weight,
@@ -124,7 +153,7 @@ class spikeConvolution(torch.autograd.Function):
                 dilation=dilation,
                 groups=groups,
             )
-        elif spike.dim() == 4:
+        elif spike_dim == 4:
             return F.conv2d(
                 input=spike,
                 weight=weight,
@@ -134,7 +163,7 @@ class spikeConvolution(torch.autograd.Function):
                 dilation=dilation,
                 groups=groups,
             )
-        elif spike.dim() == 5:
+        elif spike_dim == 5:
             return F.conv3d(
                 input=spike,
                 weight=weight,
@@ -329,6 +358,9 @@ if use_cupy_custom_op():
 
     def _setup_cupy_spike_convolution_context(ctx, inputs, output):
         spike, weight, bias, stride, padding, dilation, groups = inputs
+        stride, padding, dilation = _normalize_conv_hyperparams(
+            spike.dim(), stride, padding, dilation
+        )
         ctx.need_grad_spike = bool(spike.requires_grad)
         ctx.need_grad_weight = bool(weight.requires_grad)
         ctx.need_grad_bias = bool(bias is not None and bias.requires_grad)
@@ -339,9 +371,9 @@ if use_cupy_custom_op():
         else:
             ctx.s_shape = None
             ctx.s_tk = None
-        ctx.stride = tuple(stride)
-        ctx.padding = tuple(padding)
-        ctx.dilation = tuple(dilation)
+        ctx.stride = stride
+        ctx.padding = padding
+        ctx.dilation = dilation
         ctx.groups = groups
         ctx.has_bias = bias is not None
 
@@ -466,6 +498,8 @@ def spike_conv1d(
     if spike.get_device() < 0:
         return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
     else:
+        if isinstance(padding, str):
+            return F.conv1d(spike, weight, bias, stride, padding, dilation, groups)
         if (
             _CUSTOM_SPIKE_OP_READY
             and use_cupy_custom_op()
@@ -528,6 +562,8 @@ def spike_conv2d(
     if spike.get_device() < 0:
         return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
     else:
+        if isinstance(padding, str):
+            return F.conv2d(spike, weight, bias, stride, padding, dilation, groups)
         if (
             _CUSTOM_SPIKE_OP_READY
             and use_cupy_custom_op()
@@ -590,6 +626,8 @@ def spike_conv3d(
     if spike.get_device() < 0:
         return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
     else:
+        if isinstance(padding, str):
+            return F.conv3d(spike, weight, bias, stride, padding, dilation, groups)
         if (
             _CUSTOM_SPIKE_OP_READY
             and use_cupy_custom_op()
