@@ -96,9 +96,7 @@ class spikeConvolution(torch.autograd.Function):
     def forward(ctx, spike, weight, bias, stride, padding, dilation, groups):
         need_conv_grad = ctx.needs_input_grad[0] or ctx.needs_input_grad[1]
         need_any_grad = need_conv_grad or ctx.needs_input_grad[2]
-        if cpp_wrapper is None and (
-            need_any_grad
-        ):
+        if cpp_wrapper is None and need_conv_grad:
             raise RuntimeError(
                 "cpp_wrapper is unavailable for spike convolution backward. "
                 "Please ensure the inline extension can be built in this environment."
