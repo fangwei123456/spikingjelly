@@ -12,12 +12,10 @@ Usage (run from repo root):
 """
 
 import gc
-import os
 import sys
 
 import torch
 import torch.nn as nn
-from copy import deepcopy
 
 from spikingjelly.activation_based import neuron, functional
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn

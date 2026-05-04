@@ -13,7 +13,6 @@ Usage (run from repo root):
     python benchmark/flexsn/benchmark_vgg_train.py
 """
 import gc
-import os
 import sys
 
 import torch
@@ -99,8 +98,8 @@ def main() -> None:
     ]
 
     print(f"Input : T={T}, B={B}, {C}×{H}×{W}  (CIFAR-10 scale)")
-    print(f"Model : SpikingVGG-16-BN  |  Loss: CrossEntropy")
-    print(f"Warmup: 5 iters, Timed: 30 iters (forward + backward)")
+    print("Model : SpikingVGG-16-BN  |  Loss: CrossEntropy")
+    print("Warmup: 5 iters, Timed: 30 iters (forward + backward)")
     print()
     print(f"  {'backend':<30}  {'ms/iter':>9}  {'img/s':>9}  {'vs torch':>10}")
     print("-" * 68)

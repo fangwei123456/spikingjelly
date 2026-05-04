@@ -1,7 +1,12 @@
 import torch
 import torch.nn as nn
 from spikingjelly.activation_based import op_counter
-from spikingjelly.activation_based.op_counter import neuromc_counters
+from spikingjelly.activation_based.op_counter.neuromc.memory_residency_counter import (
+    _access_convolution_backward,
+)
+from spikingjelly.activation_based.op_counter.neuromc.residency import (
+    MemoryResidencySimulator,
+)
 
 
 def test_neuromc_runtime_sparse_changes_counts():
@@ -280,7 +285,7 @@ def test_neuromc_access_convolution_backward_fixed_output_slots():
         output_mask,
     )
 
-    reads, writes = neuromc_counters._access_convolution_backward(args, {}, out)
+    reads, writes = _access_convolution_backward(args, {}, out)
 
     assert any(t is grad_weight for t in writes)
     assert any(t is grad_bias for t in writes)
@@ -289,7 +294,7 @@ def test_neuromc_access_convolution_backward_fixed_output_slots():
 def test_memory_residency_reg_hit_updates_sram_lru():
     cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(memory_model="residency")
     cfg.capacity_bits.update({"reg": 1024.0, "sram": 1024.0, "dram": float("inf")})
-    sim = neuromc_counters.MemoryResidencySimulator(cfg)
+    sim = MemoryResidencySimulator(cfg)
 
     a = torch.randn(16)
     b = torch.randn(16)

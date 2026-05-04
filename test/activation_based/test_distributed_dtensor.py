@@ -24,7 +24,6 @@ from spikingjelly.activation_based.distributed import (
     TensorShardMemoryModule,
     analyze_snn_distributed_capability,
     apply_pipeline_stage_memopt,
-    apply_snn_fsdp2,
     auto_build_tensor_parallel_plan,
     build_snn_optimizer,
     configure_cifar10dvs_vgg_distributed,

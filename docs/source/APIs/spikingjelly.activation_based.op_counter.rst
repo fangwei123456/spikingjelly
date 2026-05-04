@@ -43,18 +43,10 @@ MAC / AC / SynOp Counters
    :undoc-members:
    :show-inheritance:
 
-NeuroMC Runtime Counters
-+++++++++++++++++++++++++
+NeuroMC Energy Profiler
++++++++++++++++++++++++++++
 
-.. automodule:: spikingjelly.activation_based.op_counter.neuromc_counters
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-NeuroMC Runtime Energy Estimator
-+++++++++++++++++++++++++++++++++
-
-.. automodule:: spikingjelly.activation_based.op_counter.neuromc_energy
+.. automodule:: spikingjelly.activation_based.op_counter.neuromc.core
    :members:
    :undoc-members:
    :show-inheritance:

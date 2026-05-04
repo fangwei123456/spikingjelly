@@ -2,8 +2,8 @@ import os
 import inspect
 import copy
 import time
-from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
 
 import torch
 import torch.distributed as dist

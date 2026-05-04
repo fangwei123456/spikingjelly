@@ -8,17 +8,15 @@ import torch.nn as nn
 from torch.overrides import resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
 
-from .base import DispatchCounterMode
-from .neuromc_counters import (
-    MemoryHierarchyConfig,
-    NeuroMCAddCounter,
-    NeuroMCCmpCounter,
-    NeuroMCMemoryResidencyCounter,
-    NeuroMCMemoryTrafficCounter,
-    NeuroMCMulCounter,
-    NeuroMCMuxCounter,
-    NeuroMCSqrtCounter,
-)
+from ..base import DispatchCounterMode
+from .add_counter import NeuroMCAddCounter
+from .cmp_counter import NeuroMCCmpCounter
+from .config import MemoryHierarchyConfig
+from .memory_residency_counter import NeuroMCMemoryResidencyCounter
+from .memory_traffic_counter import NeuroMCMemoryTrafficCounter
+from .mul_counter import NeuroMCMulCounter
+from .mux_counter import NeuroMCMuxCounter
+from .sqrt_counter import NeuroMCSqrtCounter
 
 __all__ = [
     "MemoryHierarchyConfig",
@@ -59,6 +57,54 @@ _IGNORED_OP_PREFIXES = (
 
 @dataclass
 class NeuroMCRuntimeEnergyReport:
+    r"""
+    **API Language:**
+    :ref:`中文 <NeuroMCRuntimeEnergyReport-cn>` | :ref:`English <NeuroMCRuntimeEnergyReport-en>`
+
+    ----
+
+    .. _NeuroMCRuntimeEnergyReport-cn:
+
+    * **中文**
+
+    NeuroMC runtime 能耗统计报告结构体。
+    ``NeuroMCEnergyProfiler.get_report`` 与 ``estimate_neuromc_runtime_energy`` 的返回对象，包含总能耗、分项能耗、
+    primitive 计数、分层访存统计以及警告信息。
+
+    字段说明：
+
+    - ``energy_total_pj`` ：总能耗（pJ）
+    - ``energy_compute_pj`` ：计算能耗（pJ）
+    - ``energy_memory_pj`` ：访存能耗（pJ）
+    - ``energy_by_stage`` ：按阶段聚合的能耗
+    - ``energy_by_op`` ：按 aten 算子聚合的能耗
+    - ``primitive_counts`` ：primitive 统计（总量/分阶段/分算子）
+    - ``memory_bits_by_level`` ：分层级/分阶段/分算子的 bit 统计
+    - ``warnings`` ：模型边界和不支持算子的提示
+
+    ----
+
+    .. _NeuroMCRuntimeEnergyReport-en:
+
+    * **English**
+
+    Runtime energy report data structure for NeuroMC profiling.
+    Returned by ``NeuroMCEnergyProfiler.get_report`` and
+    ``estimate_neuromc_runtime_energy``, including total and breakdown energy,
+    primitive counts, memory-bit statistics, and warnings.
+
+    Field summary:
+
+    - ``energy_total_pj`` : total energy in pJ
+    - ``energy_compute_pj`` : compute energy in pJ
+    - ``energy_memory_pj`` : memory energy in pJ
+    - ``energy_by_stage`` : stage-wise energy
+    - ``energy_by_op`` : aten-op-wise energy
+    - ``primitive_counts`` : primitive statistics (total/by stage/by op)
+    - ``memory_bits_by_level`` : memory-bit statistics by level/stage/op
+    - ``warnings`` : model-boundary and unsupported-op warnings
+    """
+
     energy_total_pj: float
     energy_compute_pj: float
     energy_memory_pj: float
@@ -156,6 +202,75 @@ class NeuroMCEnergyProfiler:
         verbose: bool = False,
         extra_ignore_modules: list[nn.Module] = [],
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuroMCEnergyProfiler.__init__-cn>` | :ref:`English <NeuroMCEnergyProfiler.__init__-en>`
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.__init__-cn:
+
+        * **中文**
+
+        NeuroMC 能耗统计器，可以作为上下文管理器使用： ``with NeuroMCEnergyProfiler(...) as p: ...``
+
+        - 在上下文内通过 ``with p.stage("阶段名")`` 标注统计阶段
+        - 结束后调用 ``p.get_report()`` 生成能耗报告
+
+        :param core_type: 计算核心类型标识，会写入报告 ``primitive_counts["core_type"]``
+        :type core_type: str
+
+        :param op_cost_pj: primitive 单位能耗映射（pJ/op），可覆盖默认值
+        :type op_cost_pj: dict[str, float] | None
+
+        :param memory_config: 访存层级配置，未提供时使用 ``MemoryHierarchyConfig.neuromc_like_v1()``
+        :type memory_config: MemoryHierarchyConfig | None
+
+        :param memory_level_weights: ``memory_model="weighted"`` 时使用的层级加权系数
+        :type memory_level_weights: dict[str, float] | None
+
+        :param strict: 透传给 ``DispatchCounterMode`` 的严格模式开关
+        :type strict: bool
+
+        :param verbose: 透传给 ``DispatchCounterMode`` 的详细日志开关
+        :type verbose: bool
+
+        :param extra_ignore_modules: 额外需要忽略的模块列表
+        :type extra_ignore_modules: list[nn.Module]
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.__init__-en:
+
+        * **English**
+
+        Runtime energy profiler for NeuroMC-style estimation. Should be used as a context manager:
+        ``with NeuroMCEnergyProfiler(...) as p: ...``
+
+        - mark stages with ``with p.stage("stage_name")``
+        - generate report via ``p.get_report()`` at the end
+
+        :param core_type: compute-core label stored in ``primitive_counts["core_type"]``
+        :type core_type: str
+
+        :param op_cost_pj: per-primitive energy map (pJ/op), overrides defaults
+        :type op_cost_pj: dict[str, float] | None
+
+        :param memory_config: memory hierarchy config; defaults to ``MemoryHierarchyConfig.neuromc_like_v1()``
+        :type memory_config: MemoryHierarchyConfig | None
+
+        :param memory_level_weights: per-level weights used when ``memory_model="weighted"``
+        :type memory_level_weights: dict[str, float] | None
+
+        :param strict: strict-mode flag forwarded to ``DispatchCounterMode``
+        :type strict: bool
+
+        :param verbose: verbose flag forwarded to ``DispatchCounterMode``
+        :type verbose: bool
+
+        :param extra_ignore_modules: extra modules to ignore
+        :type extra_ignore_modules: list[nn.Module]
+        """
         self.core_type = core_type
         self.op_cost = dict(_DEFAULT_OP_COST_PJ)
         if op_cost_pj is not None:
@@ -261,6 +376,36 @@ class NeuroMCEnergyProfiler:
 
     @contextmanager
     def stage(self, name: str):
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuroMCEnergyProfiler.stage-cn>` | :ref:`English <NeuroMCEnergyProfiler.stage-en>`
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.stage-cn:
+
+        * **中文**
+
+        标注一个统计阶段（例如 ``forward`` / ``backward`` / ``optimizer`` 或自定义阶段名）。
+        该方法必须在 profiler 激活的上下文内调用，且目前不支持 stage 嵌套。
+
+        :param name: 阶段名
+        :type name: str
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.stage-en:
+
+        * **English**
+
+        Mark one profiling stage (e.g., ``forward`` / ``backward`` /
+        ``optimizer`` or any custom stage name).
+        Must be used inside an active profiler context; nested stages are not
+        supported in v1.
+
+        :param name: stage name
+        :type name: str
+        """
         if not self._active:
             raise RuntimeError(
                 "stage() can only be used inside active profiler context."
@@ -277,7 +422,7 @@ class NeuroMCEnergyProfiler:
             after = self._snapshot_state()
             self._accumulate_stage_delta(name, before, after)
 
-    def add_warning(self, message: str):
+    def _add_warning(self, message: str):
         self._warnings.append(message)
 
     def _snapshot_state(self):
@@ -352,6 +497,38 @@ class NeuroMCEnergyProfiler:
         return supported_ops
 
     def get_report(self) -> NeuroMCRuntimeEnergyReport:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuroMCEnergyProfiler.get_report-cn>` | :ref:`English <NeuroMCEnergyProfiler.get_report-en>`
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.get_report-cn:
+
+        * **中文**
+
+        生成并返回完整能耗报告。
+        报告包含：总能耗、计算/访存分项、按阶段统计、按算子统计、
+        primitive 计数、访存 bit 统计以及 warnings。
+        见 :class:`NeuroMCRuntimeEnergyReport` 字段说明。
+
+        :return: NeuroMC runtime 能耗报告
+        :rtype: NeuroMCRuntimeEnergyReport
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.get_report-en:
+
+        * **English**
+
+        Build and return the full runtime energy report, including:
+        total energy, compute/memory breakdown, stage-wise and op-wise energy,
+        primitive counts, memory-bit statistics, and warnings.
+        See the field descriptions in :class:`NeuroMCRuntimeEnergyReport` for details.
+
+        :return: NeuroMC runtime energy report
+        :rtype: NeuroMCRuntimeEnergyReport
+        """
         primitive_totals = {
             "mul": self._counters["mul"].get_total(),
             "add": self._counters["add"].get_total(),
@@ -530,9 +707,72 @@ class NeuroMCEnergyProfiler:
         )
 
     def get_total(self) -> float:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuroMCEnergyProfiler.get_total-cn>` | :ref:`English <NeuroMCEnergyProfiler.get_total-en>`
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.get_total-cn:
+
+        * **中文**
+
+        返回总能耗（pJ）。等价于 ``self.get_report().energy_total_pj``。
+
+        :return: 总能耗（pJ）
+        :rtype: float
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.get_total-en:
+
+        * **English**
+
+        Return total energy (pJ). Equivalent to
+        ``self.get_report().energy_total_pj``.
+
+        :return: total energy in pJ
+        :rtype: float
+        """
         return self.get_report().energy_total_pj
 
     def get_counts(self) -> dict[str, Any]:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuroMCEnergyProfiler.get_counts-cn>` | :ref:`English <NeuroMCEnergyProfiler.get_counts-en>`
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.get_counts-cn:
+
+        * **中文**
+
+        返回计数结果字典，包含：
+
+        - ``primitive_counts``
+        - ``memory_bits_by_level``
+
+        便于与现有 ``op_counter`` 计数接口风格对齐。
+
+        :return: 计数字典
+        :rtype: dict[str, Any]
+
+        ----
+
+        .. _NeuroMCEnergyProfiler.get_counts-en:
+
+        * **English**
+
+        Return count dictionaries containing:
+
+        - ``primitive_counts``
+        - ``memory_bits_by_level``
+
+        This keeps alignment with existing ``op_counter`` count-style outputs.
+
+        :return: count dictionary
+        :rtype: dict[str, Any]
+        """
         report = self.get_report()
         return {
             "primitive_counts": report.primitive_counts,
@@ -557,11 +797,131 @@ def estimate_neuromc_runtime_energy(
     verbose: bool = False,
     extra_ignore_modules: list[nn.Module] = [],
 ) -> NeuroMCRuntimeEnergyReport:
-    """
-    Estimate runtime energy from one actual model execution trace.
+    r"""
+    **API Language:**
+    :ref:`中文 <estimate_neuromc_runtime_energy-cn>` | :ref:`English <estimate_neuromc_runtime_energy-en>`
 
-    The convenience API runs a standard forward/backward/optimizer workflow and
-    internally uses :class:`NeuroMCRuntimeEnergyCounter` with explicit stage tags.
+    ----
+
+    .. _estimate_neuromc_runtime_energy-cn:
+
+    * **中文**
+
+    NeuroMC runtime 便捷估计入口。
+    该接口会执行一次真实运行流程并统计能耗：
+
+    - ``forward`` 阶段：执行 ``model(inputs)``
+    - 若提供 ``loss_fn`` 与 ``target``：执行 ``backward`` 阶段
+    - 若同时提供 ``optimizer``：执行 ``optimizer`` 阶段（``step`` + ``zero_grad``）
+
+    该函数内部基于 ``NeuroMCEnergyProfiler`` ，自动打阶段标签并生成报告。
+
+    :param model: 待统计模型
+    :type model: nn.Module
+
+    :param inputs: 输入数据；若为 tuple/list 则按 ``model(*inputs)`` 调用
+    :type inputs: Any
+
+    :param target: 监督目标；当提供 ``loss_fn`` 时必填
+    :type target: torch.Tensor | None
+
+    :param loss_fn: 损失函数或可调用对象
+    :type loss_fn: Callable | None
+
+    :param optimizer: 优化器；仅当存在 ``loss_fn`` 时才会执行 ``step``
+    :type optimizer: torch.optim.Optimizer | None
+
+    :param core_type: 计算核心类型标识，会写入报告
+    :type core_type: str
+
+    :param op_cost_pj: primitive 单位能耗映射（pJ/op）
+    :type op_cost_pj: dict[str, float] | None
+
+    :param memory_cost_pj_per_bit: 覆盖 ``memory_config.energy_pj_per_bit`` 的单位 bit 成本
+    :type memory_cost_pj_per_bit: dict[str, float] | None
+
+    :param memory_level_weights: ``memory_model="weighted"`` 时的层级权重
+    :type memory_level_weights: dict[str, float] | None
+
+    :param memory_model: 可选覆盖 ``memory_config.memory_model``
+    :type memory_model: str | None
+
+    :param memory_config: 访存配置，默认使用 ``MemoryHierarchyConfig.neuromc_like_v1()``
+    :type memory_config: MemoryHierarchyConfig | None
+
+    :param strict: 透传给 ``DispatchCounterMode`` 的严格模式开关
+    :type strict: bool
+
+    :param verbose: 透传给 ``DispatchCounterMode`` 的详细日志开关
+    :type verbose: bool
+
+    :param extra_ignore_modules: 额外忽略模块
+    :type extra_ignore_modules: list[nn.Module]
+
+    :return: NeuroMC runtime 能耗报告
+    :rtype: NeuroMCRuntimeEnergyReport
+
+    ----
+
+    .. _estimate_neuromc_runtime_energy-en:
+
+    * **English**
+
+    Convenience entry for NeuroMC runtime energy estimation.
+    It runs one real execution flow and profiles energy:
+
+    - ``forward`` stage: run ``model(inputs)``
+    - if ``loss_fn`` and ``target`` are provided: run ``backward`` stage
+    - if ``optimizer`` is also provided: run ``optimizer`` stage
+      (``step`` + ``zero_grad``)
+
+    Internally, this function uses ``NeuroMCEnergyProfiler`` with explicit
+    stage tags and returns a report.
+
+    :param model: model to profile
+    :type model: nn.Module
+
+    :param inputs: model input; tuple/list will be passed as ``model(*inputs)``
+    :type inputs: Any
+
+    :param target: supervision target; required when ``loss_fn`` is provided
+    :type target: torch.Tensor | None
+
+    :param loss_fn: loss function or callable
+    :type loss_fn: Callable | None
+
+    :param optimizer: optimizer; ``step`` is only executed when ``loss_fn`` exists
+    :type optimizer: torch.optim.Optimizer | None
+
+    :param core_type: compute-core label stored in report
+    :type core_type: str
+
+    :param op_cost_pj: per-primitive energy map (pJ/op)
+    :type op_cost_pj: dict[str, float] | None
+
+    :param memory_cost_pj_per_bit: per-bit cost override for ``memory_config.energy_pj_per_bit``
+    :type memory_cost_pj_per_bit: dict[str, float] | None
+
+    :param memory_level_weights: per-level weights for ``memory_model="weighted"``
+    :type memory_level_weights: dict[str, float] | None
+
+    :param memory_model: optional override for ``memory_config.memory_model``
+    :type memory_model: str | None
+
+    :param memory_config: memory hierarchy config; defaults to ``MemoryHierarchyConfig.neuromc_like_v1()``
+    :type memory_config: MemoryHierarchyConfig | None
+
+    :param strict: strict-mode flag forwarded to ``DispatchCounterMode``
+    :type strict: bool
+
+    :param verbose: verbose flag forwarded to ``DispatchCounterMode``
+    :type verbose: bool
+
+    :param extra_ignore_modules: extra modules to ignore
+    :type extra_ignore_modules: list[nn.Module]
+
+    :return: NeuroMC runtime energy report
+    :rtype: NeuroMCRuntimeEnergyReport
     """
 
     cfg = (memory_config or MemoryHierarchyConfig.neuromc_like_v1()).copy()
@@ -598,7 +958,7 @@ def estimate_neuromc_runtime_energy(
                     optimizer.step()
                     optimizer.zero_grad(set_to_none=True)
         elif optimizer is not None:
-            profiler.add_warning(
+            profiler._add_warning(
                 "optimizer is provided without loss_fn; optimizer.step() is skipped."
             )
 
