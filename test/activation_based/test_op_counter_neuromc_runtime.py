@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-
 from spikingjelly.activation_based import op_counter
+from spikingjelly.activation_based.op_counter import neuromc_counters
 
 
 def test_neuromc_runtime_sparse_changes_counts():
@@ -146,3 +146,162 @@ def test_neuromc_runtime_addmm_beta_scaled_bias_no_extra_add():
 
     expected_add = m * n * (k - 1) + m * n
     assert report.primitive_counts["totals"]["add"] == expected_add
+
+
+def test_neuromc_runtime_profiler_arbitrary_inference_flow():
+    model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4)).eval()
+    x = torch.randn(5, 8)
+
+    with op_counter.NeuroMCEnergyProfiler() as profiler:
+        with profiler.stage("custom_inference"):
+            _ = model(x)
+    report = profiler.get_report()
+
+    assert report.energy_by_stage.get("custom_inference", 0.0) > 0.0
+    assert "backward" not in report.energy_by_stage
+
+
+def test_neuromc_runtime_profiler_arbitrary_online_like_training_flow():
+    model = nn.Linear(6, 3)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    loss_fn = nn.MSELoss()
+    xs = torch.randn(3, 4, 6)
+    targets = torch.randn(3, 4, 3)
+
+    with op_counter.NeuroMCEnergyProfiler() as profiler:
+        for t in range(xs.shape[0]):
+            with profiler.stage(f"t{t}_forward"):
+                out = model(xs[t])
+                loss = loss_fn(out, targets[t])
+            with profiler.stage(f"t{t}_backward"):
+                loss.backward()
+            with profiler.stage(f"t{t}_update"):
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+    report = profiler.get_report()
+
+    assert report.energy_by_stage.get("t0_forward", 0.0) > 0.0
+    assert report.energy_by_stage.get("t1_backward", 0.0) > 0.0
+    assert report.energy_by_stage.get("t2_update", 0.0) >= 0.0
+    assert abs(sum(report.energy_by_stage.values()) - report.energy_total_pj) < 1e-3
+
+
+def test_neuromc_runtime_residency_reuse_lowers_dram_traffic():
+    x = torch.randn(1024)
+    xs = [torch.randn(1024) for _ in range(13)]
+
+    with op_counter.NeuroMCEnergyProfiler(
+        memory_config=op_counter.MemoryHierarchyConfig.neuromc_like_v1(
+            memory_model="residency"
+        )
+    ) as reuse_profiler:
+        with reuse_profiler.stage("reuse"):
+            y = x
+            for _ in range(12):
+                y = torch.add(y, x)
+    reuse_report = reuse_profiler.get_report()
+
+    with op_counter.NeuroMCEnergyProfiler(
+        memory_config=op_counter.MemoryHierarchyConfig.neuromc_like_v1(
+            memory_model="residency"
+        )
+    ) as non_reuse_profiler:
+        with non_reuse_profiler.stage("non_reuse"):
+            y = xs[0]
+            for i in range(1, len(xs)):
+                y = torch.add(y, xs[i])
+    non_reuse_report = non_reuse_profiler.get_report()
+
+    reuse_dram_bits = reuse_report.memory_bits_by_level["totals"].get("dram", 0)
+    non_reuse_dram_bits = non_reuse_report.memory_bits_by_level["totals"].get("dram", 0)
+    assert non_reuse_dram_bits > reuse_dram_bits
+
+
+def test_neuromc_runtime_residency_small_capacity_triggers_eviction():
+    tiny_cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(
+        memory_model="residency"
+    )
+    tiny_cfg.capacity_bits["reg"] = float(1024)
+    tiny_cfg.capacity_bits["sram"] = float(2048)
+
+    xs = [torch.randn(16) for _ in range(12)]
+    with op_counter.NeuroMCEnergyProfiler(memory_config=tiny_cfg) as profiler:
+        with profiler.stage("eviction"):
+            y = xs[0]
+            for i in range(1, len(xs)):
+                y = torch.add(y, xs[i])
+    report = profiler.get_report()
+    move_bits = report.memory_bits_by_level["move_bits_by_edge"]
+    assert move_bits.get("sram->dram", 0) > 0
+
+
+def test_neuromc_runtime_weighted_model_compatibility():
+    model = nn.Linear(16, 8, bias=False)
+    x = torch.randn(4, 16)
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, x, memory_model="weighted"
+    )
+
+    assert report.memory_bits_by_level["memory_model"] == "weighted"
+    assert report.energy_memory_pj > 0
+
+
+def test_neuromc_runtime_memory_config_model_preserved():
+    model = nn.Linear(16, 8, bias=False)
+    x = torch.randn(4, 16)
+    cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(memory_model="weighted")
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x, memory_config=cfg)
+
+    assert report.memory_bits_by_level["memory_model"] == "weighted"
+
+
+def test_neuromc_access_convolution_backward_fixed_output_slots():
+    grad_out = torch.randn(2, 4, 8, 8)
+    x = torch.randn(2, 3, 8, 8)
+    w = torch.randn(4, 3, 3, 3)
+    output_mask = (False, True, True)
+
+    grad_input = None
+    grad_weight = torch.randn_like(w)
+    grad_bias = torch.randn(w.shape[0])
+    out = (grad_input, grad_weight, grad_bias)
+    args = (
+        grad_out,
+        x,
+        w,
+        None,
+        [1, 1],
+        [1, 1],
+        [1, 1],
+        False,
+        [0, 0],
+        1,
+        output_mask,
+    )
+
+    reads, writes = neuromc_counters._access_convolution_backward(args, {}, out)
+
+    assert any(t is grad_weight for t in writes)
+    assert any(t is grad_bias for t in writes)
+
+
+def test_memory_residency_reg_hit_updates_sram_lru():
+    cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(memory_model="residency")
+    cfg.capacity_bits.update({"reg": 1024.0, "sram": 1024.0, "dram": float("inf")})
+    sim = neuromc_counters.MemoryResidencySimulator(cfg)
+
+    a = torch.randn(16)
+    b = torch.randn(16)
+    c = torch.randn(16)
+
+    sim.on_tensor_read(a, "op")
+    sim.on_tensor_read(b, "op")
+    for _ in range(3):
+        sim.on_tensor_read(a, "op")
+    sim.on_tensor_read(c, "op")
+
+    key_a = sim._tensor_key(a)
+    key_b = sim._tensor_key(b)
+    assert key_a in sim.sram_cache
+    assert key_b not in sim.sram_cache
