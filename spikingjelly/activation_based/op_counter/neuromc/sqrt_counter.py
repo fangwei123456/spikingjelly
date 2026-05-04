@@ -25,9 +25,11 @@ def _sqrt_native_batch_norm(args, kwargs, out):
 class NeuroMCSqrtCounter(NeuroMCBaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = {
             aten.sqrt.default: _sqrt_op,

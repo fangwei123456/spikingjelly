@@ -86,7 +86,10 @@ def _access_convolution_backward(args, kwargs, out):
 
 def _access_native_batch_norm(args, kwargs, out):
     x, gamma, beta, mean, var, train = args[:6]
-    reads = [x, gamma, beta, mean, var]
+    reads = [x]
+    for tensor in (gamma, beta, mean, var):
+        if torch.is_tensor(tensor):
+            reads.append(tensor)
     writes = [out[0]]
     if train:
         writes.extend([out[1], out[2]])
@@ -162,9 +165,11 @@ class NeuroMCMemoryResidencyCounter(NeuroMCBaseCounter):
     def __init__(
         self,
         memory_config: MemoryHierarchyConfig | None = None,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = dict(_RESIDENCY_ACCESS_RULES)
         self.rules.update(extra_rules)

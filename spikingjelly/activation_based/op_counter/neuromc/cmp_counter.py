@@ -26,9 +26,11 @@ def _cmp_max_pool2d_with_indices(args, kwargs, out):
 class NeuroMCCmpCounter(NeuroMCBaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = {
             aten.eq.Tensor: _cmp_element_wise,

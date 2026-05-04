@@ -15,11 +15,16 @@ __all__ = ["NeuroMCBaseCounter"]
 class NeuroMCBaseCounter(BaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
+        if extra_ignore_modules is None:
+            extra_ignore_modules = []
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {}
+        self.rules.update(extra_rules)
         self.ignore_modules: list[nn.Module] = []
         self.ignore_modules.extend(extra_ignore_modules)
         self.stage_records: dict[str, int] = defaultdict(int)

@@ -32,11 +32,29 @@ def _add_mm(args, kwargs, out):
     nnz_x = _spike_nnz(x)
     nnz_y = _spike_nnz(y)
     if nnz_x is not None and nnz_y is not None:
-        return int(out.sum().item())
+        with torch.no_grad():
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                out_counts = torch.ops.aten.mm.default(x.double(), y.double())
+                add = torch.clamp(out_counts - 1.0, min=0.0).sum()
+        return int(add.item())
     if nnz_x is not None:
-        return nnz_x * y.shape[1]
+        with torch.no_grad():
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                row_nnz = x.double().sum(dim=1)
+                add = torch.clamp(row_nnz - 1.0, min=0.0).sum()
+        return int(add.item() * y.shape[1])
     if nnz_y is not None:
-        return nnz_y * x.shape[0]
+        with torch.no_grad():
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                col_nnz = y.double().sum(dim=0)
+                add = torch.clamp(col_nnz - 1.0, min=0.0).sum()
+        return int(add.item() * x.shape[0])
     m, k = x.shape
     _, n = y.shape
     return int(m * n * max(k - 1, 0))
@@ -56,11 +74,29 @@ def _add_bmm(args, kwargs, out):
     nnz_x = _spike_nnz(x)
     nnz_y = _spike_nnz(y)
     if nnz_x is not None and nnz_y is not None:
-        return int(out.sum().item())
+        with torch.no_grad():
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                out_counts = torch.ops.aten.bmm.default(x.double(), y.double())
+                add = torch.clamp(out_counts - 1.0, min=0.0).sum()
+        return int(add.item())
     if nnz_x is not None:
-        return nnz_x * y.shape[2]
+        with torch.no_grad():
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                row_nnz = x.double().sum(dim=2)
+                add = torch.clamp(row_nnz - 1.0, min=0.0).sum()
+        return int(add.item() * y.shape[2])
     if nnz_y is not None:
-        return nnz_y * x.shape[1]
+        with torch.no_grad():
+            with torch._C._ExcludeDispatchKeyGuard(
+                torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
+            ):
+                col_nnz = y.double().sum(dim=1)
+                add = torch.clamp(col_nnz - 1.0, min=0.0).sum()
+        return int(add.item() * x.shape[1])
     b, m, k = x.shape
     _, _, n = y.shape
     return int(b * m * n * max(k - 1, 0))
@@ -166,7 +202,7 @@ def _add_element_wise(args, kwargs, out):
 
 def _add_sum(args, kwargs, out):
     x = args[0]
-    return int(x.numel() - out.numel())
+    return int(max(x.numel() - out.numel(), 0))
 
 
 def _add_mean(args, kwargs, out):
@@ -217,9 +253,11 @@ def _add_native_batch_norm_backward(args, kwargs, out):
 class NeuroMCAddCounter(NeuroMCBaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = {
             aten.mm.default: _add_mm,

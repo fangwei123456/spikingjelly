@@ -118,9 +118,11 @@ class NeuroMCMemoryTrafficCounter(NeuroMCBaseCounter):
     def __init__(
         self,
         level_weights: dict[str, float] | None = None,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = {
             aten.mm.default: _memory_mm,

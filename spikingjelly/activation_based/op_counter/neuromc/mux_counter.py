@@ -19,9 +19,11 @@ def _mux_where(args, kwargs, out):
 class NeuroMCMuxCounter(NeuroMCBaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = {
             aten.where.self: _mux_where,

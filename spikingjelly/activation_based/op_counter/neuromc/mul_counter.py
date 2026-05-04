@@ -44,9 +44,7 @@ def _mul_addmm(args, kwargs, out):
     if alpha != 1:
         mul += out.numel()
     if beta not in (0, 1):
-        bias = args[0]
-        if torch.is_tensor(bias):
-            mul += bias.numel()
+        mul += out.numel()
     return int(mul)
 
 
@@ -67,9 +65,7 @@ def _mul_baddbmm(args, kwargs, out):
     if alpha != 1:
         mul += out.numel()
     if beta not in (0, 1):
-        bias = args[0]
-        if torch.is_tensor(bias):
-            mul += bias.numel()
+        mul += out.numel()
     return int(mul)
 
 
@@ -170,9 +166,11 @@ def _mul_native_batch_norm_backward(args, kwargs, out):
 class NeuroMCMulCounter(NeuroMCBaseCounter):
     def __init__(
         self,
-        extra_rules: dict[Any, Callable] = {},
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_rules: dict[Any, Callable] | None = None,
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        if extra_rules is None:
+            extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)
         self.rules = {
             aten.mm.default: _mul_mm,

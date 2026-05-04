@@ -200,7 +200,7 @@ class NeuroMCEnergyProfiler:
         memory_level_weights: dict[str, float] | None = None,
         strict: bool = False,
         verbose: bool = False,
-        extra_ignore_modules: list[nn.Module] = [],
+        extra_ignore_modules: list[nn.Module] | None = None,
     ):
         r"""
         **API Language:**
@@ -285,6 +285,8 @@ class NeuroMCEnergyProfiler:
         )
         self.strict = strict
         self.verbose = verbose
+        if extra_ignore_modules is None:
+            extra_ignore_modules = []
         self.extra_ignore_modules = list(extra_ignore_modules)
 
         self._stage_stack: list[str] = []
@@ -795,7 +797,7 @@ def estimate_neuromc_runtime_energy(
     memory_config: MemoryHierarchyConfig | None = None,
     strict: bool = False,
     verbose: bool = False,
-    extra_ignore_modules: list[nn.Module] = [],
+    extra_ignore_modules: list[nn.Module] | None = None,
 ) -> NeuroMCRuntimeEnergyReport:
     r"""
     **API Language:**
