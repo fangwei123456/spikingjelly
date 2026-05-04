@@ -142,6 +142,15 @@ def _resolve_loss_fn(loss_fn: Callable | None):
     return loss_fn
 
 
+def _clear_existing_grads(model: nn.Module, optimizer: torch.optim.Optimizer | None):
+    if optimizer is not None:
+        optimizer.zero_grad(set_to_none=True)
+        return
+
+    for p in model.parameters():
+        p.grad = None
+
+
 def _filter_unsupported_ops(
     op_counts: dict[str, int], supported_ops: set[str]
 ) -> list[str]:
@@ -554,6 +563,50 @@ class NeuroMCEnergyProfiler:
             for level, bits in level_info.items():
                 level_labeled_totals[level] += bits
 
+        rw_by_stage = {
+            stage: {level: dict(rw_info) for level, rw_info in level_info.items()}
+            for stage, level_info in self._stage_memory_level_rw_bits.items()
+        }
+        by_stage_op = {
+            stage: {op: dict(level_info) for op, level_info in op_info.items()}
+            for stage, op_info in self._stage_memory_op_level_bits.items()
+        }
+        move_bits_by_stage = {
+            stage: dict(edge_info)
+            for stage, edge_info in self._stage_move_bits_by_edge.items()
+        }
+        move_bits_by_stage_op = {
+            stage: {op: dict(edge_info) for op, edge_info in op_info.items()}
+            for stage, op_info in self._stage_move_bits_by_op.items()
+        }
+
+        rw_labeled_totals: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        for level_info in rw_by_stage.values():
+            for level, rw_info in level_info.items():
+                for rw_name, bits in rw_info.items():
+                    rw_labeled_totals[level][rw_name] += bits
+
+        op_level_labeled_totals: dict[str, dict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
+        for op_info in by_stage_op.values():
+            for op_name, level_info in op_info.items():
+                for level, bits in level_info.items():
+                    op_level_labeled_totals[op_name][level] += bits
+
+        move_edge_labeled_totals = defaultdict(int)
+        for edge_info in move_bits_by_stage.values():
+            for edge, bits in edge_info.items():
+                move_edge_labeled_totals[edge] += bits
+
+        move_op_labeled_totals: dict[str, dict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
+        for op_info in move_bits_by_stage_op.values():
+            for op_name, edge_info in op_info.items():
+                for edge, bits in edge_info.items():
+                    move_op_labeled_totals[op_name][edge] += bits
+
         unlabeled_primitive = {
             p_name: primitive_totals[p_name] - primitive_labeled_totals[p_name]
             for p_name in primitive_totals
@@ -561,6 +614,34 @@ class NeuroMCEnergyProfiler:
         unlabeled_level = {
             level: level_bits.get(level, 0) - int(level_labeled_totals.get(level, 0))
             for level in level_bits
+        }
+        unlabeled_rw = {
+            level: {
+                rw_name: level_rw_bits.get(level, {}).get(rw_name, 0)
+                - int(rw_labeled_totals[level].get(rw_name, 0))
+                for rw_name in level_rw_bits.get(level, {})
+            }
+            for level in level_rw_bits
+        }
+        unlabeled_op_level = {
+            op_name: {
+                level: op_level_bits.get(op_name, {}).get(level, 0)
+                - int(op_level_labeled_totals[op_name].get(level, 0))
+                for level in op_level_bits.get(op_name, {})
+            }
+            for op_name in op_level_bits
+        }
+        unlabeled_move_edge = {
+            edge: move_bits_by_edge.get(edge, 0) - int(move_edge_labeled_totals.get(edge, 0))
+            for edge in move_bits_by_edge
+        }
+        unlabeled_move_op = {
+            op_name: {
+                edge: move_bits_by_op.get(op_name, {}).get(edge, 0)
+                - int(move_op_labeled_totals[op_name].get(edge, 0))
+                for edge in move_bits_by_op.get(op_name, {})
+            }
+            for op_name in move_bits_by_op
         }
 
         if any(v != 0 for v in unlabeled_primitive.values()):
@@ -570,6 +651,40 @@ class NeuroMCEnergyProfiler:
         if any(v != 0 for v in unlabeled_level.values()):
             stage_level_bits.setdefault("unlabeled", {})
             _add_nested(stage_level_bits["unlabeled"], unlabeled_level)
+
+        if any(
+            bits != 0
+            for level_info in unlabeled_rw.values()
+            for bits in level_info.values()
+        ):
+            rw_by_stage.setdefault("unlabeled", {})
+            for level, rw_info in unlabeled_rw.items():
+                rw_by_stage["unlabeled"].setdefault(level, {})
+                _add_nested(rw_by_stage["unlabeled"][level], rw_info)
+
+        if any(
+            bits != 0
+            for level_info in unlabeled_op_level.values()
+            for bits in level_info.values()
+        ):
+            by_stage_op.setdefault("unlabeled", {})
+            for op_name, level_info in unlabeled_op_level.items():
+                by_stage_op["unlabeled"].setdefault(op_name, {})
+                _add_nested(by_stage_op["unlabeled"][op_name], level_info)
+
+        if any(v != 0 for v in unlabeled_move_edge.values()):
+            move_bits_by_stage.setdefault("unlabeled", {})
+            _add_nested(move_bits_by_stage["unlabeled"], unlabeled_move_edge)
+
+        if any(
+            bits != 0
+            for edge_info in unlabeled_move_op.values()
+            for bits in edge_info.values()
+        ):
+            move_bits_by_stage_op.setdefault("unlabeled", {})
+            for op_name, edge_info in unlabeled_move_op.items():
+                move_bits_by_stage_op["unlabeled"].setdefault(op_name, {})
+                _add_nested(move_bits_by_stage_op["unlabeled"][op_name], edge_info)
 
         energy_compute_pj = (
             primitive_totals["mul"] * self.op_cost["mul"]
@@ -650,25 +765,13 @@ class NeuroMCEnergyProfiler:
             "totals": level_bits,
             "rw_totals": level_rw_bits,
             "by_stage": stage_level_bits,
-            "rw_by_stage": {
-                stage: {level: dict(rw_info) for level, rw_info in level_info.items()}
-                for stage, level_info in self._stage_memory_level_rw_bits.items()
-            },
+            "rw_by_stage": rw_by_stage,
             "by_op": op_level_bits,
-            "by_stage_op": {
-                stage: {op: dict(level_info) for op, level_info in op_info.items()}
-                for stage, op_info in self._stage_memory_op_level_bits.items()
-            },
+            "by_stage_op": by_stage_op,
             "move_bits_by_edge": move_bits_by_edge,
-            "move_bits_by_stage": {
-                stage: dict(edge_info)
-                for stage, edge_info in self._stage_move_bits_by_edge.items()
-            },
+            "move_bits_by_stage": move_bits_by_stage,
             "move_bits_by_op": move_bits_by_op,
-            "move_bits_by_stage_op": {
-                stage: {op: dict(edge_info) for op, edge_info in op_info.items()}
-                for stage, op_info in self._stage_move_bits_by_op.items()
-            },
+            "move_bits_by_stage_op": move_bits_by_stage_op,
         }
 
         return NeuroMCRuntimeEnergyReport(
@@ -908,6 +1011,7 @@ def estimate_neuromc_runtime_energy(
     cfg.validate()
 
     resolved_loss_fn = _resolve_loss_fn(loss_fn)
+    _clear_existing_grads(model, optimizer)
 
     with NeuroMCEnergyProfiler(
         core_type=core_type,

@@ -38,9 +38,13 @@ def test_neuromc_runtime_backward_optimizer_stage():
         model, x, target=target, loss_fn=loss_fn, optimizer=optimizer
     )
 
-    assert report.energy_by_stage.get("forward", 0.0) > 0.0
-    assert report.energy_by_stage.get("backward", 0.0) > 0.0
-    assert report.energy_by_stage.get("optimizer", 0.0) >= 0.0
+    assert "forward" in report.energy_by_stage
+    assert "backward" in report.energy_by_stage
+    assert "optimizer" in report.energy_by_stage
+    assert "unlabeled" not in report.energy_by_stage
+    assert report.energy_by_stage["forward"] > 0.0
+    assert report.energy_by_stage["backward"] > 0.0
+    assert report.energy_by_stage["optimizer"] >= 0.0
     assert abs(sum(report.energy_by_stage.values()) - report.energy_total_pj) < 1e-3
 
 
@@ -204,9 +208,13 @@ def test_neuromc_runtime_profiler_arbitrary_online_like_training_flow():
                 optimizer.zero_grad(set_to_none=True)
     report = profiler.get_report()
 
-    assert report.energy_by_stage.get("t0_forward", 0.0) > 0.0
-    assert report.energy_by_stage.get("t1_backward", 0.0) > 0.0
-    assert report.energy_by_stage.get("t2_update", 0.0) >= 0.0
+    assert "t0_forward" in report.energy_by_stage
+    assert "t1_backward" in report.energy_by_stage
+    assert "t2_update" in report.energy_by_stage
+    assert "unlabeled" not in report.energy_by_stage
+    assert report.energy_by_stage["t0_forward"] > 0.0
+    assert report.energy_by_stage["t1_backward"] > 0.0
+    assert report.energy_by_stage["t2_update"] >= 0.0
     assert abs(sum(report.energy_by_stage.values()) - report.energy_total_pj) < 1e-3
 
 
