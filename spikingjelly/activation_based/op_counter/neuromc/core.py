@@ -17,6 +17,7 @@ from .memory_traffic_counter import NeuroMCMemoryTrafficCounter
 from .mul_counter import NeuroMCMulCounter
 from .mux_counter import NeuroMCMuxCounter
 from .sqrt_counter import NeuroMCSqrtCounter
+from .utils import _add_nested, _diff_nested_dict, _diff_simple_dict
 
 __all__ = [
     "MemoryHierarchyConfig",
@@ -154,11 +155,6 @@ def _filter_unsupported_ops(
     return sorted(unsupported)
 
 
-def _add_nested(dst: dict[str, int], src: dict[str, int]):
-    for k, v in src.items():
-        dst[k] = dst.get(k, 0) + v
-
-
 def _rule_key_to_name(rule_key: Any) -> str | None:
     if isinstance(rule_key, str):
         return rule_key
@@ -166,28 +162,6 @@ def _rule_key_to_name(rule_key: Any) -> str | None:
         return resolve_name(rule_key)
     except Exception:
         return None
-
-
-def _diff_simple_dict(new: dict[str, int], old: dict[str, int]) -> dict[str, int]:
-    keys = set(new.keys()) | set(old.keys())
-    out: dict[str, int] = {}
-    for k in keys:
-        delta = int(new.get(k, 0) - old.get(k, 0))
-        if delta != 0:
-            out[k] = delta
-    return out
-
-
-def _diff_nested_dict(
-    new: dict[str, dict[str, int]], old: dict[str, dict[str, int]]
-) -> dict[str, dict[str, int]]:
-    keys = set(new.keys()) | set(old.keys())
-    out: dict[str, dict[str, int]] = {}
-    for k in keys:
-        delta = _diff_simple_dict(new.get(k, {}), old.get(k, {}))
-        if delta:
-            out[k] = delta
-    return out
 
 
 class NeuroMCEnergyProfiler:

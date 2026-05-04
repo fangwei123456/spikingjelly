@@ -87,6 +87,25 @@ def test_neuromc_runtime_bn_conv_where_sqrt_nonzero():
     assert totals["mux"] > 0
 
 
+def test_neuromc_runtime_sparse_conv_add_counts_actual_additions():
+    class ConvModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv = nn.Conv2d(1, 1, kernel_size=2, bias=False)
+            with torch.no_grad():
+                self.conv.weight.fill_(1.0)
+
+        def forward(self, x):
+            return self.conv(x)
+
+    model = ConvModel().eval()
+    x = torch.tensor([[[[1.0, 0.0], [0.0, 0.0]]]])
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    assert report.primitive_counts["totals"]["add"] == 0
+
+
 def test_neuromc_runtime_unsupported_warning():
     class UnsupportedModel(nn.Module):
         def forward(self, x):

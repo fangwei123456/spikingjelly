@@ -131,7 +131,7 @@ def _add_convolution(args, kwargs, out):
                     output_padding,
                     groups,
                 )
-        return int(result.sum().item())
+        return int(torch.clamp(result - 1.0, min=0.0).sum().item())
     if nnz_x is not None:
         w_ones = torch.ones(w.shape, dtype=torch.float64, device=x.device)
         with torch.no_grad():
@@ -149,7 +149,7 @@ def _add_convolution(args, kwargs, out):
                     output_padding,
                     groups,
                 )
-        return int(result.sum().item())
+        return int(torch.clamp(result - 1.0, min=0.0).sum().item())
     if nnz_w is not None:
         ref = x if transposed else out
         return int(nnz_w * ref.shape[0] * _prod(ref.shape[2:]))

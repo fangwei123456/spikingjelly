@@ -7,6 +7,9 @@ from torch.overrides import resolve_name
 from torch.utils._pytree import tree_flatten
 
 __all__ = [
+    "_add_nested",
+    "_diff_simple_dict",
+    "_diff_nested_dict",
     "_prod",
     "_is_spike",
     "_spike_nnz",
@@ -32,6 +35,33 @@ def _prod(dims) -> int:
     for v in dims:
         p *= int(v)
     return p
+
+
+def _add_nested(dst: dict[str, int], src: dict[str, int]):
+    for k, v in src.items():
+        dst[k] = dst.get(k, 0) + v
+
+
+def _diff_simple_dict(new: dict[str, int], old: dict[str, int]) -> dict[str, int]:
+    keys = set(new.keys()) | set(old.keys())
+    out: dict[str, int] = {}
+    for k in keys:
+        delta = int(new.get(k, 0) - old.get(k, 0))
+        if delta != 0:
+            out[k] = delta
+    return out
+
+
+def _diff_nested_dict(
+    new: dict[str, dict[str, int]], old: dict[str, dict[str, int]]
+) -> dict[str, dict[str, int]]:
+    keys = set(new.keys()) | set(old.keys())
+    out: dict[str, dict[str, int]] = {}
+    for k in keys:
+        delta = _diff_simple_dict(new.get(k, {}), old.get(k, {}))
+        if delta:
+            out[k] = delta
+    return out
 
 
 def _is_spike(x: torch.Tensor | None) -> bool:
