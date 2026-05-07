@@ -5,6 +5,7 @@ Three entry points:
 * build_inference_final_state_kernel — inference path that returns final states only
 * build_training_kernels  — forward + backward kernels for full BPTT training
 """
+
 from __future__ import annotations
 
 from typing import Callable, List, Optional, Tuple
@@ -28,8 +29,7 @@ def _prepare_example_inputs(
     build_device = _example_build_device(example_inputs)
     if example_inputs is None:
         return tuple(
-            torch.zeros(1, device=build_device)
-            for _ in range(num_inputs + num_states)
+            torch.zeros(1, device=build_device) for _ in range(num_inputs + num_states)
         )
     # .clone() breaks aliasing: in-place ops inside core_fn during tracing
     # must not silently mutate the caller's original buffers.
@@ -64,8 +64,9 @@ def build_inference_kernel(
         :func:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.flexsn_inference`.
     """
     from torch.fx.experimental.proxy_tensor import make_fx
-    from ..torch2triton import generate_triton_code_str
+
     from ..flexsn import extract_info, get_flexsn_inference_kernel
+    from ..torch2triton import generate_triton_code_str
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -116,8 +117,9 @@ def build_inference_final_state_kernel(
         and ``extract_info``.
     """
     from torch.fx.experimental.proxy_tensor import make_fx
-    from ..torch2triton import generate_triton_code_str
+
     from ..flexsn import extract_info, get_flexsn_inference_final_state_kernel
+    from ..torch2triton import generate_triton_code_str
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -157,8 +159,13 @@ def _diff_mask(
     ]
 
 
-def _make_bwd_shim(bwd_fn_name: str, n_saved: int, num_outputs: int, num_states: int,
-                   diff_mask: List[bool]) -> Tuple[str, str]:
+def _make_bwd_shim(
+    bwd_fn_name: str,
+    n_saved: int,
+    num_outputs: int,
+    num_states: int,
+    diff_mask: List[bool],
+) -> Tuple[str, str]:
     """Wrap the AOT backward function to match the template's calling convention.
 
     The template calls bwd_fn(saved..., grad_out0..., grad_state0...) for ALL
@@ -167,20 +174,21 @@ def _make_bwd_shim(bwd_fn_name: str, n_saved: int, num_outputs: int, num_states:
     actual backward function may accept fewer arguments.  This shim accepts
     the full template signature and forwards only the used arguments.
     """
-    all_grads = (["gs_" + str(i) for i in range(num_outputs)] +
-                 ["gv_" + str(i) for i in range(num_states)])
+    all_grads = ["gs_" + str(i) for i in range(num_outputs)] + [
+        "gv_" + str(i) for i in range(num_states)
+    ]
     if len(diff_mask) != len(all_grads):
         raise ValueError(
             f"diff_mask length {len(diff_mask)} != "
             f"num_outputs+num_states {len(all_grads)}"
         )
     shim_args = ["sv_" + str(i) for i in range(n_saved)] + all_grads
-    fwd_call  = (["sv_" + str(i) for i in range(n_saved)] +
-                 [name for name, d in zip(all_grads, diff_mask) if d])
+    fwd_call = ["sv_" + str(i) for i in range(n_saved)] + [
+        name for name, d in zip(all_grads, diff_mask) if d
+    ]
     shim_name = bwd_fn_name + "_shim"
     shim_code = (
-        "\n@triton.jit\ndef " + shim_name +
-        "(" + ", ".join(shim_args) + "):\n"
+        "\n@triton.jit\ndef " + shim_name + "(" + ", ".join(shim_args) + "):\n"
         "    return " + bwd_fn_name + "(" + ", ".join(fwd_call) + ")\n"
     )
     return shim_code, shim_name
@@ -209,8 +217,15 @@ def build_training_kernels(
         ``(fwd_kernel, bwd_kernel, info)`` — compatible with
         :class:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.FlexSNFunction`.
     """
-    from ..torch2triton import generate_forward_and_backward_graph, generate_triton_code_str
-    from ..flexsn import extract_info, get_flexsn_forward_kernel, get_flexsn_backward_kernel
+    from ..flexsn import (
+        extract_info,
+        get_flexsn_backward_kernel,
+        get_flexsn_forward_kernel,
+    )
+    from ..torch2triton import (
+        generate_forward_and_backward_graph,
+        generate_triton_code_str,
+    )
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 

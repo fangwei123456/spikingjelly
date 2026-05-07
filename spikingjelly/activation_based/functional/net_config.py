@@ -1,10 +1,9 @@
 import logging
-from typing import Union, Optional
+from typing import Optional, Union
 
 import torch.nn as nn
 
 from .. import base
-
 
 __all__ = ["reset_net", "set_step_mode", "set_backend", "detach_net"]
 
@@ -106,9 +105,9 @@ def set_step_mode(net: nn.Module, step_mode: str):
     :return: None
     """
     from ..layer import (
-        StepModeContainer,
         ElementWiseRecurrentContainer,
         LinearRecurrentContainer,
+        StepModeContainer,
     )
 
     keep_step_mode_instance = (

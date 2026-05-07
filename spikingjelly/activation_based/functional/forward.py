@@ -1,9 +1,8 @@
 from typing import Callable, Union
 
 import torch
-from torch import Tensor
 import torch.nn as nn
-
+from torch import Tensor
 
 __all__ = [
     "multi_step_forward",
