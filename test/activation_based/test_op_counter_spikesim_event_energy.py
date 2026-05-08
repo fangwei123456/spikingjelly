@@ -48,6 +48,31 @@ def test_spikesim_event_energy_dense_equivalence():
     assert report.energy_total_pj == pytest.approx(expected)
 
 
+def test_spikesim_event_energy_dense_xbar_component_equivalence():
+    config = op_counter.SpikeSimEnergyConfig(xbar_size=4)
+    model = nn.Conv2d(5, 4, kernel_size=3, padding=0, bias=False).eval()
+    x = torch.ones(2, 5, 8, 8)
+
+    report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
+
+    out = model(x)
+    stage = next(iter(report.energy_by_stage))
+    xbar_pj = report.energy_by_component["by_stage"][stage]["xbar_pj"]
+    p_i = math.ceil(5 / config.xbar_size)
+    q_i = math.ceil(4 / config.xbar_size)
+    num_sites = out.shape[0] * out.shape[2] * out.shape[3]
+    expected_xbar = (
+        p_i
+        * q_i
+        * num_sites
+        * (config.xbar_size / 8.0)
+        * 3
+        * 3
+        * config.xbar_array_energy_pj
+    )
+    assert xbar_pj == pytest.approx(expected_xbar)
+
+
 def test_spikesim_event_energy_sparse_counts_hand_checked():
     config = op_counter.SpikeSimEnergyConfig(xbar_size=2)
     model = nn.Conv2d(2, 2, kernel_size=2, bias=False).eval()

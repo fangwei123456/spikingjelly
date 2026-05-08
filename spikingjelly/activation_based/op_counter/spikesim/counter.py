@@ -92,6 +92,7 @@ class SpikeSimEventCounter(BaseCounter):
         self.stage_metadata: dict[str, _StageMetadata] = {}
         self.warnings: list[str] = []
         self._warning_keys: set[str] = set()
+        self._ones_kernel_cache: dict[tuple[int, int, int, torch.device], torch.Tensor] = {}
         self.rules = {
             aten.convolution.default: self._count_convolution,
             aten.add.Tensor: self._count_merge,
@@ -167,15 +168,17 @@ class SpikeSimEventCounter(BaseCounter):
         if padded_channels == c_in:
             x_padded = x
         else:
-            x_padded = x.new_zeros(
-                (x.shape[0], padded_channels, x.shape[2], x.shape[3]),
-            )
-            x_padded[:, :c_in] = x
+            x_padded = F.pad(x, (0, 0, 0, 0, 0, padded_channels - c_in))
 
         tile_sums = x_padded.view(
             x.shape[0], num_tiles, xbar_size, x.shape[2], x.shape[3]
         ).sum(dim=2).to(dtype=torch.float32)
-        ones_kernel = tile_sums.new_ones((num_tiles, 1, k_h, k_w))
+        cache_key = (num_tiles, k_h, k_w, tile_sums.device)
+        if cache_key not in self._ones_kernel_cache:
+            self._ones_kernel_cache[cache_key] = tile_sums.new_ones(
+                (num_tiles, 1, k_h, k_w)
+            )
+        ones_kernel = self._ones_kernel_cache[cache_key]
         with torch.no_grad():
             with _exclude_python_dispatch_guard():
                 occupancy = F.conv2d(

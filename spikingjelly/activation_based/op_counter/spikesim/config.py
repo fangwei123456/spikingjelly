@@ -4,6 +4,7 @@ import math
 from dataclasses import dataclass, replace
 
 __all__ = ["SpikeSimEnergyConfig"]
+_SPIKESIM_XBAR_ROW_DIVISOR = 8.0
 
 
 @dataclass
@@ -122,4 +123,6 @@ class SpikeSimEnergyConfig:
             raise ValueError(f"tile_channels must be positive, got {tile_channels}.")
         padded_ratio = math.ceil(tile_channels / self.xbar_size)
         padded_ratio = padded_ratio * self.xbar_size / float(tile_channels)
-        return (self.xbar_array_energy_pj / 8.0) * padded_ratio
+        # Keep the row-level basis aligned with the released SpikeSim dense
+        # energy path, whose xbar contribution scales as (xbar_size / 8) * k^2.
+        return (self.xbar_array_energy_pj / _SPIKESIM_XBAR_ROW_DIVISOR) * padded_ratio
