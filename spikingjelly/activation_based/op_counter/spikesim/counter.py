@@ -165,21 +165,17 @@ class SpikeSimEventCounter(BaseCounter):
         k_h, k_w = w.shape[2], w.shape[3]
         padded_channels = num_tiles * xbar_size
         if padded_channels == c_in:
-            x_padded = x.to(dtype=torch.float32)
+            x_padded = x
         else:
-            x_padded = torch.zeros(
+            x_padded = x.new_zeros(
                 (x.shape[0], padded_channels, x.shape[2], x.shape[3]),
-                dtype=torch.float32,
-                device=x.device,
             )
             x_padded[:, :c_in] = x
 
         tile_sums = x_padded.view(
             x.shape[0], num_tiles, xbar_size, x.shape[2], x.shape[3]
-        ).sum(dim=2)
-        ones_kernel = torch.ones(
-            (num_tiles, 1, k_h, k_w), dtype=tile_sums.dtype, device=tile_sums.device
-        )
+        ).sum(dim=2).to(dtype=torch.float32)
+        ones_kernel = tile_sums.new_ones((num_tiles, 1, k_h, k_w))
         with torch.no_grad():
             with _exclude_python_dispatch_guard():
                 occupancy = F.conv2d(
