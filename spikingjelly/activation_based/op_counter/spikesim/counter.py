@@ -122,6 +122,9 @@ class SpikeSimEventCounter(BaseCounter):
         self.record(scope, func, value)
         return value
 
+    def has_rule(self, func) -> bool:
+        return func in self.rules
+
     def _warn_or_raise(self, key: str, message: str) -> None:
         if key in self._warning_keys:
             return
