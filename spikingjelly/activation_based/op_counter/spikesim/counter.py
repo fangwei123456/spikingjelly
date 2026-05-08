@@ -179,7 +179,7 @@ class SpikeSimEventCounter(BaseCounter):
         k_h, k_w = w.shape[2], w.shape[3]
         for start in range(0, x.shape[1], self.config.xbar_size):
             end = min(start + self.config.xbar_size, x.shape[1])
-            tile_x = x[:, start:end].to(dtype=torch.float64)
+            tile_x = x[:, start:end].to(dtype=torch.float32)
             tile_sum = tile_x.sum(dim=1, keepdim=True)
             ones_kernel = torch.ones(
                 (1, 1, k_h, k_w), dtype=tile_sum.dtype, device=tile_sum.device

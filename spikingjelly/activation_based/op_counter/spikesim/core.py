@@ -147,14 +147,22 @@ class SpikeSimEventEnergyProfiler:
 
     def __enter__(self):
         self._tracker.__enter__()
-        self._trace_mode.__enter__()
+        try:
+            self._trace_mode.__enter__()
+        except Exception:
+            self._tracker.__exit__(None, None, None)
+            raise
         self._active = True
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        trace_ret = self._trace_mode.__exit__(exc_type, exc, tb)
-        tracker_ret = self._tracker.__exit__(exc_type, exc, tb)
         self._active = False
+        trace_ret = False
+        tracker_ret = False
+        try:
+            trace_ret = self._trace_mode.__exit__(exc_type, exc, tb)
+        finally:
+            tracker_ret = self._tracker.__exit__(exc_type, exc, tb)
         return trace_ret or tracker_ret
 
     def get_report(self) -> SpikeSimEventEnergyReport:

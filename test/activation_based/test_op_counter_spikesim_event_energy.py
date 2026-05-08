@@ -189,6 +189,26 @@ def test_spikesim_event_energy_shape_mismatch_warns_without_crash():
     assert any("inconsistent shapes" in msg for msg in report.warnings)
 
 
+def test_spikesim_event_energy_profiler_context_cleanup_on_enter_failure():
+    profiler = op_counter.SpikeSimEventEnergyProfiler()
+    baseline_parents = set(profiler._tracker.parents)
+    baseline_active_modules = set(profiler._tracker.active_modules)
+
+    original_enter = profiler._trace_mode.__enter__
+
+    def raising_enter():
+        raise RuntimeError("boom")
+
+    profiler._trace_mode.__enter__ = raising_enter
+    try:
+        with pytest.raises(RuntimeError):
+            profiler.__enter__()
+        assert profiler._tracker.parents == baseline_parents
+        assert profiler._tracker.active_modules == baseline_active_modules
+    finally:
+        profiler._trace_mode.__enter__ = original_enter
+
+
 def test_spikesim_event_energy_grouped_conv_warns_or_raises():
     config = op_counter.SpikeSimEnergyConfig(xbar_size=4)
     grouped = nn.Conv2d(4, 4, kernel_size=3, padding=1, groups=2, bias=False).eval()

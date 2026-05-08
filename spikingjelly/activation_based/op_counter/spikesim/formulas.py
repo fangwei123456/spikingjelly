@@ -23,6 +23,13 @@ def compute_spikesim_event_energy_breakdown(
     active_row_count_by_tile = stats.get("active_row_count_by_tile")
     input_tile_channels = metadata.get("input_tile_channels")
     if active_row_count_by_tile is not None and input_tile_channels is not None:
+        if len(active_row_count_by_tile) != len(input_tile_channels):
+            raise ValueError(
+                "active_row_count_by_tile and input_tile_channels must have the "
+                f"same length, but got len(active_row_count_by_tile)="
+                f"{len(active_row_count_by_tile)} and len(input_tile_channels)="
+                f"{len(input_tile_channels)}."
+            )
         xbar_rows = 0.0
         for row_count, tile_channels in zip(
             active_row_count_by_tile, input_tile_channels
@@ -53,15 +60,13 @@ def _compute_spikesim_dense_stage_energy(
     *,
     in_channels: int,
     out_channels: int,
-    out_height: int,
-    out_width: int,
     kernel_size: tuple[int, int],
     num_sites: int,
     config: SpikeSimEnergyConfig,
 ) -> float:
     p_i = math.ceil(in_channels / config.xbar_size)
     q_i = math.ceil(out_channels / config.xbar_size)
-    dense_pe_cycles = p_i * q_i * out_height * out_width * num_sites
+    dense_pe_cycles = p_i * q_i * num_sites
     k_h, k_w = kernel_size
     pe_cycle_energy = (
         config.patch_control_energy_pj
