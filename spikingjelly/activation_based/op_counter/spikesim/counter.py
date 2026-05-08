@@ -194,7 +194,8 @@ class SpikeSimEventCounter(BaseCounter):
         active_patch = occupancy.gt(0)
         active_patch_tile_count = int(active_patch.sum().item())
         active_row_count_by_tile = [
-            int(v) for v in occupancy.sum(dim=(0, 2, 3)).tolist()
+            int(v)
+            for v in occupancy.sum(dim=(0, 2, 3), dtype=torch.float64).tolist()
         ]
         active_row_count = int(sum(active_row_count_by_tile))
         active_site_mask = active_patch.any(dim=1)
