@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any
+from typing import Any, Mapping
 
 from .config import SpikeSimEnergyConfig
 
@@ -11,7 +11,9 @@ __all__ = [
 
 
 def compute_spikesim_event_energy_breakdown(
-    stats: dict[str, int], metadata: dict[str, Any], config: SpikeSimEnergyConfig
+    stats: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    config: SpikeSimEnergyConfig,
 ) -> dict[str, float]:
     p_i = math.ceil(metadata["in_channels"] / config.xbar_size)
 

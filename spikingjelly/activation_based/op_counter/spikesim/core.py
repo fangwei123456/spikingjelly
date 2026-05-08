@@ -209,11 +209,12 @@ class SpikeSimEventEnergyProfiler:
                 "No supported Conv2d stages were profiled by SpikeSim event energy."
             )
 
+        totals_dict = dict(component_totals)
         return SpikeSimEventEnergyReport(
-            energy_total_pj=component_totals["total_pj"],
+            energy_total_pj=totals_dict.get("total_pj", 0.0),
             energy_by_stage=energy_by_stage,
             energy_by_component={
-                "totals": component_totals,
+                "totals": totals_dict,
                 "by_stage": component_by_stage,
             },
             event_stats_by_stage=event_stats_by_stage,
