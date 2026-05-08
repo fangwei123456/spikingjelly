@@ -1,0 +1,28 @@
+name: Hermes PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  notify-hermes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Forward PR event to Hermes Agent
+        env:
+          PAYLOAD: ${{ toJSON(github.event) }}
+          HERMES_WEBHOOK_URL: ${{ secrets.ALLENYOLK_HERMES_WEBHOOK_URL }}
+          HERMES_WEBHOOK_SECRET: ${{ secrets.ALLENYOLK_HERMES_WEBHOOK_SECRET }}
+        run: |
+          SIGNATURE="sha256=$(echo -n "$PAYLOAD" | openssl dgst -sha256 -hmac "$HERMES_WEBHOOK_SECRET" | awk '{print $NF}')"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "X-Hub-Signature-256: $SIGNATURE" \
+            -d "$PAYLOAD" \
+            "$HERMES_WEBHOOK_URL")
+          echo "Hermes webhook responded with HTTP $HTTP_CODE"
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Hermes webhook failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
