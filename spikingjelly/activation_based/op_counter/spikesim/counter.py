@@ -170,7 +170,7 @@ class SpikeSimEventCounter(BaseCounter):
         else:
             x_padded = F.pad(x, (0, 0, 0, 0, 0, padded_channels - c_in))
 
-        tile_sums = x_padded.view(
+        tile_sums = x_padded.reshape(
             x.shape[0], num_tiles, xbar_size, x.shape[2], x.shape[3]
         ).sum(dim=2).to(dtype=torch.float32)
         cache_key = (num_tiles, k_h, k_w, tile_sums.device)

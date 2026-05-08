@@ -21,7 +21,7 @@ class SpikeSimEnergyConfig:
 
     SpikeSim 事件驱动能耗估计器的运行时能耗配置。
 
-    默认系数有意与已发布的 ``ela_spikesim.py`` 能耗路径保持一致，
+    默认系数有意与已发布的 ``ela_spikesim.py`` 能耗路径保持一致,
     但计数逻辑已替换为基于运行时事件的分析。
 
     ----
