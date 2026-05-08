@@ -14,18 +14,6 @@ from .config import SpikeSimEnergyConfig
 __all__ = []
 aten = torch.ops.aten
 
-_LINEAR_OPS = {
-    aten.mm.default,
-    aten.addmm.default,
-    aten.bmm.default,
-    aten.baddbmm.default,
-}
-_MERGE_OPS = {
-    aten.add.Tensor,
-    aten.add_.Tensor,
-}
-_CONCAT_OPS = {aten.cat.default}
-
 
 def _shape_tuple(x: torch.Tensor) -> tuple[int, ...]:
     return tuple(int(v) for v in x.shape)
@@ -171,51 +159,47 @@ class SpikeSimEventCounter(BaseCounter):
         out: torch.Tensor,
         out_channel_tiles: int,
     ) -> tuple[int, int, list[int], int]:
-        active_patch_counts: list[torch.Tensor] = []
-        active_row_counts: list[torch.Tensor] = []
-        active_site_mask = torch.zeros(
-            (out.shape[0], out.shape[2], out.shape[3]),
-            dtype=torch.bool,
-            device=out.device,
-        )
+        xbar_size = self.config.xbar_size
+        c_in = x.shape[1]
+        num_tiles = math.ceil(c_in / xbar_size)
         k_h, k_w = w.shape[2], w.shape[3]
-        ones_kernel = torch.ones(
-            (1, 1, k_h, k_w), dtype=torch.float32, device=x.device
-        )
-        for start in range(0, x.shape[1], self.config.xbar_size):
-            end = min(start + self.config.xbar_size, x.shape[1])
-            tile_x = x[:, start:end].to(dtype=torch.float32)
-            tile_sum = tile_x.sum(dim=1, keepdim=True)
-            with torch.no_grad():
-                with _exclude_python_dispatch_guard():
-                    occupancy = F.conv2d(
-                        tile_sum,
-                        ones_kernel,
-                        None,
-                        stride,
-                        padding,
-                        dilation,
-                        1,
-                    )
-            active_patch = occupancy.gt(0)
-            active_patch_counts.append(active_patch.sum())
-            active_row_counts.append(occupancy.sum())
-            active_site_mask.logical_or_(active_patch.squeeze(1))
-
-        if active_patch_counts:
-            active_patch_tensor = torch.stack(active_patch_counts)
-            active_row_tensor = torch.stack(active_row_counts)
-            active_patch_tile_count = int(active_patch_tensor.sum().item())
-            active_row_count_by_tile = [int(v) for v in active_row_tensor.tolist()]
-            active_row_count = int(active_row_tensor.sum().item())
+        padded_channels = num_tiles * xbar_size
+        if padded_channels == c_in:
+            x_padded = x.to(dtype=torch.float32)
         else:
-            active_patch_tile_count = 0
-            active_row_count_by_tile = []
-            active_row_count = 0
+            x_padded = torch.zeros(
+                (x.shape[0], padded_channels, x.shape[2], x.shape[3]),
+                dtype=torch.float32,
+                device=x.device,
+            )
+            x_padded[:, :c_in] = x
 
-        active_output_tile_site_count = (
-            out_channel_tiles * int(active_site_mask.sum().item())
+        tile_sums = x_padded.view(
+            x.shape[0], num_tiles, xbar_size, x.shape[2], x.shape[3]
+        ).sum(dim=2)
+        ones_kernel = torch.ones(
+            (num_tiles, 1, k_h, k_w), dtype=tile_sums.dtype, device=tile_sums.device
         )
+        with torch.no_grad():
+            with _exclude_python_dispatch_guard():
+                occupancy = F.conv2d(
+                    tile_sums,
+                    ones_kernel,
+                    None,
+                    stride,
+                    padding,
+                    dilation,
+                    num_tiles,
+                )
+
+        active_patch = occupancy.gt(0)
+        active_patch_tile_count = int(active_patch.sum().item())
+        active_row_count_by_tile = [
+            int(v) for v in occupancy.sum(dim=(0, 2, 3)).tolist()
+        ]
+        active_row_count = int(sum(active_row_count_by_tile))
+        active_site_mask = active_patch.any(dim=1)
+        active_output_tile_site_count = out_channel_tiles * int(active_site_mask.sum().item())
         return (
             active_patch_tile_count,
             active_row_count,
