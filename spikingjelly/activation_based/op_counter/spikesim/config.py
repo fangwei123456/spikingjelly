@@ -19,10 +19,10 @@ class SpikeSimEnergyConfig:
 
     * **中文**
 
-    Runtime energy configuration for the event-driven SpikeSim estimator.
+    SpikeSim 事件驱动能耗估计器的运行时能耗配置。
 
-    The default coefficients intentionally match the released ``ela_spikesim.py``
-    energy path, while the counting logic is replaced by runtime event analysis.
+    默认系数有意与已发布的 ``ela_spikesim.py`` 能耗路径保持一致，
+    但计数逻辑已替换为基于运行时事件的分析。
 
     ----
 
@@ -85,7 +85,7 @@ class SpikeSimEnergyConfig:
 
         * **中文**
 
-        校验配置是否合法；不合法时抛出 ``ValueError``。
+        校验配置是否合法; 不合法时抛出 ``ValueError``。
 
         ----
 
@@ -104,7 +104,9 @@ class SpikeSimEnergyConfig:
     def xbar_array_energy_pj(self) -> float:
         if self.device == "rram":
             return self.rram_xbar_pj
-        return self.sram_xbar_pj
+        if self.device == "sram":
+            return self.sram_xbar_pj
+        raise ValueError(f"device must be 'rram' or 'sram', got {self.device}.")
 
     @property
     def patch_control_energy_pj(self) -> float:
@@ -121,6 +123,8 @@ class SpikeSimEnergyConfig:
     def xbar_row_energy_pj(self, tile_channels: int) -> float:
         if tile_channels <= 0:
             raise ValueError(f"tile_channels must be positive, got {tile_channels}.")
+        if self.xbar_size <= 0:
+            raise ValueError(f"xbar_size must be positive, got {self.xbar_size}.")
         padded_ratio = math.ceil(tile_channels / self.xbar_size)
         padded_ratio = padded_ratio * self.xbar_size / float(tile_channels)
         # Keep the row-level basis aligned with the released SpikeSim dense

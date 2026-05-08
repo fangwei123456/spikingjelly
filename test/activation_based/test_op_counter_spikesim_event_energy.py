@@ -190,6 +190,13 @@ def test_spikesim_event_energy_config_validation():
         op_counter.SpikeSimEnergyConfig(device="foo").validate()
 
 
+def test_spikesim_event_energy_config_properties_are_defensive():
+    with pytest.raises(ValueError):
+        _ = op_counter.SpikeSimEnergyConfig(device="foo").xbar_array_energy_pj
+    with pytest.raises(ValueError):
+        _ = op_counter.SpikeSimEnergyConfig(xbar_size=0).xbar_row_energy_pj(1)
+
+
 def test_spikesim_event_energy_no_supported_stage_warning():
     model = nn.ReLU().eval()
     x = torch.randn(2, 3)
