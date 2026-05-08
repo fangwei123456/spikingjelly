@@ -24,6 +24,11 @@ def compute_spikesim_event_energy_breakdown(
     )
     active_row_count_by_tile = stats.get("active_row_count_by_tile")
     input_tile_channels = metadata.get("input_tile_channels")
+    if (active_row_count_by_tile is None) != (input_tile_channels is None):
+        raise ValueError(
+            "active_row_count_by_tile and input_tile_channels must either both "
+            "be present or both be absent."
+        )
     if active_row_count_by_tile is not None and input_tile_channels is not None:
         if len(active_row_count_by_tile) != len(input_tile_channels):
             raise ValueError(

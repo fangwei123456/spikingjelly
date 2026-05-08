@@ -4,6 +4,9 @@ import pytest
 import torch
 import torch.nn as nn
 from spikingjelly.activation_based import layer, op_counter
+from spikingjelly.activation_based.op_counter.spikesim.formulas import (
+    compute_spikesim_event_energy_breakdown,
+)
 
 
 def _dense_stage_energy(
@@ -187,6 +190,23 @@ def test_spikesim_event_energy_shape_mismatch_warns_without_crash():
     report = op_counter.estimate_spikesim_event_energy(model, x, config=config)
 
     assert any("inconsistent shapes" in msg for msg in report.warnings)
+
+
+def test_spikesim_event_energy_formula_requires_both_tile_inputs():
+    config = op_counter.SpikeSimEnergyConfig(xbar_size=4)
+    stats = {
+        "active_patch_tile_count": 1,
+        "active_row_count": 1,
+        "active_output_tile_site_count": 1,
+        "active_row_count_by_tile": [1],
+    }
+    metadata = {
+        "in_channels": 4,
+        "out_channel_tiles": 1,
+    }
+
+    with pytest.raises(ValueError, match="both be present or both be absent"):
+        compute_spikesim_event_energy_breakdown(stats, metadata, config)
 
 
 def test_spikesim_event_energy_profiler_context_cleanup_on_enter_failure():
