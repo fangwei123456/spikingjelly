@@ -42,7 +42,7 @@ def _pair_tuple(x: Any) -> tuple[int, int]:
 def _is_spike_like(x: torch.Tensor) -> bool:
     if x.dtype == torch.bool:
         return True
-    return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
+    return not bool(((x != 0) & (x != 1)).any().item())
 
 
 def _exclude_python_dispatch_guard():
@@ -171,22 +171,21 @@ class SpikeSimEventCounter(BaseCounter):
         out: torch.Tensor,
         out_channel_tiles: int,
     ) -> tuple[int, int, list[int], int]:
-        active_patch_tile_count = 0
-        active_row_count = 0
-        active_row_count_by_tile: list[int] = []
+        active_patch_counts: list[torch.Tensor] = []
+        active_row_counts: list[torch.Tensor] = []
         active_site_mask = torch.zeros(
             (out.shape[0], out.shape[2], out.shape[3]),
             dtype=torch.bool,
             device=out.device,
         )
         k_h, k_w = w.shape[2], w.shape[3]
+        ones_kernel = torch.ones(
+            (1, 1, k_h, k_w), dtype=torch.float32, device=x.device
+        )
         for start in range(0, x.shape[1], self.config.xbar_size):
             end = min(start + self.config.xbar_size, x.shape[1])
             tile_x = x[:, start:end].to(dtype=torch.float32)
             tile_sum = tile_x.sum(dim=1, keepdim=True)
-            ones_kernel = torch.ones(
-                (1, 1, k_h, k_w), dtype=tile_sum.dtype, device=tile_sum.device
-            )
             with torch.no_grad():
                 with _exclude_python_dispatch_guard():
                     occupancy = F.conv2d(
@@ -199,14 +198,23 @@ class SpikeSimEventCounter(BaseCounter):
                         1,
                     )
             active_patch = occupancy.gt(0)
-            active_patch_tile_count += int(active_patch.sum().item())
-            tile_row_count = int(occupancy.sum().item())
-            active_row_count += tile_row_count
-            active_row_count_by_tile.append(tile_row_count)
+            active_patch_counts.append(active_patch.sum())
+            active_row_counts.append(occupancy.sum())
             active_site_mask.logical_or_(active_patch.squeeze(1))
 
-        active_output_tile_site_count = out_channel_tiles * int(
-            active_site_mask.sum().item()
+        if active_patch_counts:
+            active_patch_tensor = torch.stack(active_patch_counts)
+            active_row_tensor = torch.stack(active_row_counts)
+            active_patch_tile_count = int(active_patch_tensor.sum().item())
+            active_row_count_by_tile = [int(v) for v in active_row_tensor.tolist()]
+            active_row_count = int(active_row_tensor.sum().item())
+        else:
+            active_patch_tile_count = 0
+            active_row_count_by_tile = []
+            active_row_count = 0
+
+        active_output_tile_site_count = (
+            out_channel_tiles * int(active_site_mask.sum().item())
         )
         return (
             active_patch_tile_count,
