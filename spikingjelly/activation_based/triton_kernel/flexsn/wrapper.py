@@ -1,21 +1,25 @@
-import torch
 from typing import Optional, Tuple
 
+import torch
 from torch import autograd
 
 try:
     import triton
 except BaseException as e:
     import logging
+
     from .. import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.wrapper: {e}")
     triton = dummy.DummyImport()
 
-from ..triton_utils import type_dict, contiguous_and_device_guard
-from ..triton_utils import amp_custom_fwd, amp_custom_bwd
+from ..triton_utils import (
+    amp_custom_bwd,
+    amp_custom_fwd,
+    contiguous_and_device_guard,
+    type_dict,
+)
 from .info import FlexSNInfo
-
 
 __all__ = [
     "FlexSNFunction",
@@ -310,7 +314,9 @@ def flexsn_backward(
             )
         grad_inputs = [torch.zeros_like(template) for template in input_templates]
         if state_templates is not None:
-            grad_inputs.extend(torch.zeros_like(template) for template in state_templates)
+            grad_inputs.extend(
+                torch.zeros_like(template) for template in state_templates
+            )
         return tuple(grad_inputs)
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
@@ -373,6 +379,7 @@ class FlexSNFunction(autograd.Function):
     English:
         Autograd bridge between FlexSN Python logic and Triton kernels.
     """
+
     @staticmethod
     @contiguous_and_device_guard
     @amp_custom_fwd

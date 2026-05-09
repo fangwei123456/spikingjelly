@@ -65,8 +65,8 @@ def build_inference_kernel(
     """
     from torch.fx.experimental.proxy_tensor import make_fx
 
-    from .. import extract_info, get_flexsn_inference_kernel
-    from ...torch2triton import generate_triton_code_str
+    from ..torch2triton import generate_triton_code_str
+    from . import extract_info, get_flexsn_inference_kernel
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -118,8 +118,8 @@ def build_inference_final_state_kernel(
     """
     from torch.fx.experimental.proxy_tensor import make_fx
 
-    from .. import extract_info, get_flexsn_inference_final_state_kernel
-    from ...torch2triton import generate_triton_code_str
+    from ..torch2triton import generate_triton_code_str
+    from . import extract_info, get_flexsn_inference_final_state_kernel
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -200,6 +200,7 @@ def build_training_kernels(
     num_states: int,
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
+    requires_grad: Optional[Tuple[bool, ...]] = None,
 ):
     """Build forward + backward Triton scan kernels for BPTT training.
 
@@ -217,14 +218,14 @@ def build_training_kernels(
         ``(fwd_kernel, bwd_kernel, info)`` — compatible with
         :class:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.FlexSNFunction`.
     """
-    from .. import (
+    from ..torch2triton import (
+        generate_forward_and_backward_graph,
+        generate_triton_code_str,
+    )
+    from . import (
         extract_info,
         get_flexsn_backward_kernel,
         get_flexsn_forward_kernel,
-    )
-    from ...torch2triton import (
-        generate_forward_and_backward_graph,
-        generate_triton_code_str,
     )
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
@@ -232,13 +233,24 @@ def build_training_kernels(
     # Build requires_grad mask: only float/complex tensors support autograd.
     # Passing the mask prevents generate_forward_and_backward_graph from calling
     # requires_grad_(True) on int/bool inputs, which would error during tracing.
-    requires_grad = tuple(
-        t.is_floating_point() or t.is_complex() for t in example_inputs
-    )
+    if requires_grad is None:
+        requires_grad_mask = tuple(
+            t.is_floating_point() or t.is_complex() for t in example_inputs
+        )
+    else:
+        if len(requires_grad) != len(example_inputs):
+            raise ValueError(
+                "requires_grad must have the same length as example_inputs "
+                f"({len(example_inputs)}), but got {len(requires_grad)}."
+            )
+        requires_grad_mask = tuple(
+            bool(flag) and (tensor.is_floating_point() or tensor.is_complex())
+            for flag, tensor in zip(requires_grad, example_inputs)
+        )
 
     # Trace forward AND backward (aot_function, no PYTORCH_JIT=0 needed)
     fwd_graph, bwd_graph = generate_forward_and_backward_graph(
-        core_fn, example_inputs, requires_grad=requires_grad
+        core_fn, example_inputs, requires_grad=requires_grad_mask
     )
     info = extract_info(fwd_graph, num_inputs, num_states, num_outputs)
 

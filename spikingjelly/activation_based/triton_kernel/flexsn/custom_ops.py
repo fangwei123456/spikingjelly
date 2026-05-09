@@ -1,7 +1,6 @@
 """Opaque custom ops for FlexSN inductor kernels.
 
-This module is the bridge between FlexSN's per-layer Triton kernels and
-``torch.compile``:
+This module is the bridge between FlexSN Triton kernels and ``torch.compile``:
 
 * Triton kernels and metadata are stored in a Python-side registry and
   referenced from graphs by a lightweight integer handle.
@@ -16,21 +15,21 @@ This module is the bridge between FlexSN's per-layer Triton kernels and
 from __future__ import annotations
 
 import contextlib
+import weakref
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 from itertools import count
 from threading import Lock
-import weakref
+from typing import Dict, List, Optional
 
 import torch
 
-from ..wrapper import (
+from .info import FlexSNInfo
+from .wrapper import (
     flexsn_backward,
     flexsn_forward,
     flexsn_inference,
     flexsn_inference_final_state,
 )
-from ..info import FlexSNInfo
 
 
 @dataclass
@@ -51,7 +50,7 @@ _KERNEL_REGISTRY_LOCK = Lock()
 _KERNEL_ID_GEN = count(1)
 
 
-def _normalize_kernel_handle(handle: int) -> int:
+def _normalize_kernel_handle(handle) -> int:
     if isinstance(handle, int):
         return handle
     if isinstance(handle, torch.Tensor):
@@ -90,14 +89,6 @@ def register_flexsn_kernel_handle(
             training_info=training_info,
         )
     return handle
-
-
-def unregister_flexsn_kernel_handle(handle: int) -> None:
-    with _KERNEL_REGISTRY_LOCK:
-        bundle = _KERNEL_REGISTRY.pop(handle, None)
-    if bundle is None:
-        return
-    _cleanup_kernel_handle(bundle)
 
 
 def _cleanup_kernel_handle(bundle: FlexSNKernelHandle) -> None:
@@ -196,7 +187,7 @@ def _make_state_templates_like(
 ) -> List[torch.Tensor]:
     if not flat_args:
         raise ValueError("Expected at least one input tensor for FlexSN fake op.")
-    explicit_states = flat_args[info.num_inputs: info.num_inputs + info.num_states]
+    explicit_states = flat_args[info.num_inputs : info.num_inputs + info.num_states]
     if len(explicit_states) == info.num_states:
         return [state.new_empty(state.shape) for state in explicit_states]
     seq_template = flat_args[0]
@@ -204,10 +195,7 @@ def _make_state_templates_like(
         state_shape = ()
     else:
         state_shape = tuple(seq_template.shape[1:])
-    return [
-        seq_template.new_empty(state_shape)
-        for _ in range(info.num_states)
-    ]
+    return [seq_template.new_empty(state_shape) for _ in range(info.num_states)]
 
 
 def _device_guard(tensors: List[torch.Tensor]):
@@ -215,15 +203,6 @@ def _device_guard(tensors: List[torch.Tensor]):
         if isinstance(tensor, torch.Tensor) and tensor.is_cuda:
             return torch.cuda.device(tensor.device)
     return contextlib.nullcontext()
-
-
-def _visible_fwd_return_count(info: FlexSNInfo) -> int:
-    return info.num_outputs + info.num_states
-
-
-def _extra_saved_return_indices(info: FlexSNInfo) -> List[int]:
-    visible = _visible_fwd_return_count(info)
-    return [idx for idx in info.c2k_return_mapping if idx >= visible]
 
 
 def _final_state_saved_return_indices(info: FlexSNInfo) -> List[int]:
@@ -241,9 +220,7 @@ def _materialize_zero_state_args(
         if info.num_inputs == 0:
             raise ValueError("FlexSN custom ops require at least one input sequence.")
         seq0 = flat_args[0]
-        zero_states = [
-            seq0.new_zeros(seq0.shape[1:]) for _ in range(info.num_states)
-        ]
+        zero_states = [seq0.new_zeros(seq0.shape[1:]) for _ in range(info.num_states)]
         return [*flat_args, *zero_states]
     return flat_args
 
@@ -309,7 +286,9 @@ def _flexsn_inductor_training_final_state_impl(
         (init_states[i] if state_seq.shape[0] == 0 else state_seq[-1]).clone()
         for i, state_seq in enumerate(state_seqs)
     ]
-    extra_saved_tensors = [full_returns[i] for i in _final_state_saved_return_indices(info)]
+    extra_saved_tensors = [
+        full_returns[i] for i in _final_state_saved_return_indices(info)
+    ]
     return [*visible_outputs, *final_states, *extra_saved_tensors]
 
 
@@ -340,7 +319,9 @@ def _flexsn_inductor_backward_impl(
 
 
 @torch.library.custom_op("sj::flexsn_inductor_inference", mutates_args=())
-def flexsn_inductor_inference(handle: int, flat_args: List[torch.Tensor]) -> List[torch.Tensor]:
+def flexsn_inductor_inference(
+    handle: int, flat_args: List[torch.Tensor]
+) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
     if bundle.inference_kernel is None or bundle.inference_info is None:
         raise RuntimeError("FlexSN inference kernel is unavailable for this handle.")
@@ -348,13 +329,17 @@ def flexsn_inductor_inference(handle: int, flat_args: List[torch.Tensor]) -> Lis
 
 
 @torch.library.custom_op("sj::flexsn_inductor_inference_final_state", mutates_args=())
-def flexsn_inductor_inference_final_state(handle: int, flat_args: List[torch.Tensor]) -> List[torch.Tensor]:
+def flexsn_inductor_inference_final_state(
+    handle: int, flat_args: List[torch.Tensor]
+) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
     if (
         bundle.inference_final_state_kernel is None
         or bundle.inference_final_state_info is None
     ):
-        raise RuntimeError("FlexSN inference-final-state kernel is unavailable for this handle.")
+        raise RuntimeError(
+            "FlexSN inference-final-state kernel is unavailable for this handle."
+        )
     return _flexsn_inductor_inference_final_state_impl(bundle, flat_args)
 
 
@@ -393,7 +378,9 @@ def _flexsn_inductor_inference_final_state_fake(
 
 
 @torch.library.custom_op("sj::flexsn_inductor_training", mutates_args=())
-def flexsn_inductor_training(handle: int, flat_args: List[torch.Tensor]) -> List[torch.Tensor]:
+def flexsn_inductor_training(
+    handle: int, flat_args: List[torch.Tensor]
+) -> List[torch.Tensor]:
     bundle = _lookup_kernel_handle(handle)
     if (
         bundle.forward_kernel is None
@@ -487,7 +474,9 @@ def _flexsn_inductor_backward_fake(
     ]
     state_offset = bundle.training_info.num_inputs
     state_grads = [
-        input_templates[state_offset + i].new_empty(input_templates[state_offset + i].shape)
+        input_templates[state_offset + i].new_empty(
+            input_templates[state_offset + i].shape
+        )
         for i in range(bundle.training_info.num_states)
     ]
     return [*seq_grads, *state_grads]
@@ -506,7 +495,9 @@ def _flexsn_training_setup_context(ctx, inputs, output):
     ctx.input_template_specs = [_template_spec(t) for t in inputs[1]]
     ctx.output_template_specs = [
         _template_spec(t)
-        for t in output[: bundle.training_info.num_outputs + bundle.training_info.num_states]
+        for t in output[
+            : bundle.training_info.num_outputs + bundle.training_info.num_states
+        ]
     ]
     saved = [output[i] for i in bundle.training_info.c2k_return_mapping]
     ctx.save_for_backward(*saved)
@@ -597,9 +588,7 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
         )
         final_grad_index = bundle.training_info.num_outputs + i
         final_grad = (
-            grad_out[final_grad_index]
-            if final_grad_index < len(grad_out)
-            else None
+            grad_out[final_grad_index] if final_grad_index < len(grad_out) else None
         )
         seq_grad = torch.zeros(
             state_seq_shape,
@@ -630,9 +619,7 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
         for i in range(bundle.training_info.num_states):
             final_grad_index = bundle.training_info.num_outputs + i
             final_grad = (
-                grad_out[final_grad_index]
-                if final_grad_index < len(grad_out)
-                else None
+                grad_out[final_grad_index] if final_grad_index < len(grad_out) else None
             )
             state_seq_shape = ctx.state_seq_template_specs[i][0]
             grad_index = explicit_state_start + i

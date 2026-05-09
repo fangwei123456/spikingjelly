@@ -54,7 +54,7 @@ Current limitations:
 
 Usage::
 
-    from spikingjelly.activation_based.triton_kernel.flexsn.inductor import flex_sn_scan
+    from spikingjelly.activation_based.triton_kernel.flexsn import flex_sn_scan
 
     # inputs_seq: tuple of T-leading tensors, e.g. shape [T, N, ...]
     # init_states: tuple of per-step state tensors, e.g. shape [N, ...]
