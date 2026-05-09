@@ -647,7 +647,6 @@ class FlexSNKernel:
         use_training = torch.is_grad_enabled() and (
             self._core_requires_grad
             or any(tensor.requires_grad for tensor in flat_args)
-            or _core_requires_grad(self._core)
         )
         if use_training:
             outputs = flexsn_inductor_training(self._handle, flat_args)[
@@ -832,6 +831,11 @@ class FlexSN(base.MemoryModule):
             self._explicit_output_template_specs
         )
 
+        if step_mode == "m" and num_inputs == 0:
+            raise ValueError(
+                "FlexSN step_mode='m' requires at least one input sequence to "
+                "derive T; got num_inputs=0."
+            )
         if _is_flexsn_cuda_scan_backend(backend):
             validated_example_inputs = _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
