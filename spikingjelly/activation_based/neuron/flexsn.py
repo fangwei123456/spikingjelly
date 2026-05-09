@@ -1020,15 +1020,30 @@ class FlexSN(base.MemoryModule):
         result = cls.__new__(cls)
         memo[id(self)] = result
 
+        # CUDA-scan handle/kernel state is intentionally not propagated to the
+        # copy: the compiled kernels reference the original module's ``core``,
+        # and some kernel objects are not safely deep-copyable. The copy falls
+        # back to the HOP/eager path with its own deep-copied ``core``.
+        _cuda_scan_skip_keys = {
+            "_inductor_handle",
+            "_inductor_handle_finalizer",
+            "_inductor_inference_available",
+            "_inductor_inference_final_state_available",
+            "_inductor_training_available",
+            "_inductor_scan_kernel",
+            "_inductor_scan_info",
+            "_inductor_scan_final_state_kernel",
+            "_inductor_scan_final_state_info",
+            "_inductor_fwd_kernel",
+            "_inductor_bwd_kernel",
+            "_inductor_train_info",
+        }
         for key, value in self.__dict__.items():
-            if key == "_inductor_handle_finalizer":
+            if key in _cuda_scan_skip_keys:
                 continue
             result.__dict__[key] = copy.deepcopy(value, memo)
 
-        # Do not retain the original CUDA-scan handle across deepcopy.
-        # The handle references kernels compiled from the original module's
-        # ``core``; the copy must fall back to HOP/eager with its own
-        # deep-copied ``core`` until it is (re)initialized.
+        # Explicitly reset CUDA-scan state on the copy.
         result._inductor_handle = None
         result._inductor_handle_finalizer = None
         result._inductor_inference_available = False
