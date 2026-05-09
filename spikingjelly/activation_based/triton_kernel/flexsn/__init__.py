@@ -4,6 +4,7 @@ try:
     from . import kernel as kernel
     from . import template as template
     from . import wrapper as wrapper
+    from . import custom_ops as custom_ops
 except Exception as e:
     import logging
 
@@ -13,6 +14,7 @@ except Exception as e:
     kernel = None
     template = None
     wrapper = None
+    custom_ops = None
 else:
     from .info import *
     from .hop import *

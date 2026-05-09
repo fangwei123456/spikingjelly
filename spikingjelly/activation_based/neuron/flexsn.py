@@ -550,6 +550,7 @@ class FlexSNKernel:
             num_outputs,
             example_inputs=example_inputs,
         )
+        self._core = core
         self._core_requires_grad = _core_requires_grad(core)
         self.f_fwd, self.f_bwd, self.info = build_training_kernels(
             core,
@@ -582,6 +583,43 @@ class FlexSNKernel:
         )
         self._handle_finalizer = attach_flexsn_handle_finalizer(self, self._handle)
 
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+
+        shared_runtime_keys = {
+            "_core",
+            "_core_requires_grad",
+            "f_inf",
+            "f_fwd",
+            "f_bwd",
+            "info",
+            "_num_visible_returns",
+            "_handle",
+        }
+        for key, value in self.__dict__.items():
+            if key == "_handle_finalizer":
+                continue
+            if key in shared_runtime_keys:
+                result.__dict__[key] = value
+            else:
+                result.__dict__[key] = copy.deepcopy(value, memo)
+
+        handle = result.__dict__.get("_handle")
+        if handle is not None:
+            from ..triton_kernel.flexsn.custom_ops import (
+                attach_flexsn_handle_finalizer,
+                retain_owner_flexsn_kernel_handle,
+            )
+
+            retain_owner_flexsn_kernel_handle(handle)
+            result._handle_finalizer = attach_flexsn_handle_finalizer(result, handle)
+        else:
+            result._handle_finalizer = None
+
+        return result
+
     def __call__(self, *args):  # args: [*input_seqs, *states]
         from ..triton_kernel.flexsn.custom_ops import (
             flexsn_inductor_inference,
@@ -606,8 +644,10 @@ class FlexSNKernel:
                 "to be CUDA tensors on the same device."
             )
 
+        current_core_requires_grad = _core_requires_grad(self._core)
         use_training = torch.is_grad_enabled() and (
             self._core_requires_grad
+            or current_core_requires_grad
             or any(tensor.requires_grad for tensor in flat_args)
         )
         if use_training:
@@ -1012,6 +1052,13 @@ class FlexSN(base.MemoryModule):
             )
         if value not in ("triton", "inductor"):
             base.check_backend_library(value)
+        elif getattr(self, "_inductor_handle", None) is None:
+            logging.warning(
+                "Switching FlexSN.backend to %s without prebuilt CUDA scan kernels; "
+                "this module will fall back to the HOP/eager path until it is "
+                "reinitialized with a CUDA scan backend.",
+                value,
+            )
         self._backend = value
 
     @property
