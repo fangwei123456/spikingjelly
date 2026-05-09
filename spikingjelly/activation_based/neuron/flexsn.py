@@ -589,6 +589,15 @@ class FlexSNKernel:
         )
 
         flat_args = list(args)
+        expected = self.info.num_inputs + self.info.num_states
+        if len(flat_args) != expected:
+            raise ValueError(
+                "FlexSNKernel expected "
+                f"{expected} tensors "
+                f"({self.info.num_inputs} input sequences + "
+                f"{self.info.num_states} initial states), "
+                f"but got {len(flat_args)}."
+            )
         all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
         same_device = len({t.device for t in flat_args}) == 1 if flat_args else False
         if self._handle is None or not all_cuda or not same_device:

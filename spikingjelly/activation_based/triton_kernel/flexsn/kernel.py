@@ -236,13 +236,14 @@ def _diff_mask(
     num_outputs: int,
     num_states: int,
     example_inputs: Tuple[torch.Tensor, ...],
+    requires_grad_mask: Tuple[bool, ...],
 ) -> List[bool]:
     """Return which of core_fn's outputs are differentiable."""
     # Only float/complex tensors support requires_grad; skip int/bool inputs.
     ex = []
-    for t in example_inputs:
+    for i, t in enumerate(example_inputs):
         probe = t.clone().detach()
-        if probe.is_floating_point() or probe.is_complex():
+        if requires_grad_mask[i] and (probe.is_floating_point() or probe.is_complex()):
             probe.requires_grad_(True)
         ex.append(probe)
     with torch.enable_grad():
@@ -406,7 +407,13 @@ def build_training_kernels(
     info = extract_info(fwd_graph, num_inputs, num_states, num_outputs)
 
     # Determine which outputs have gradients in the AOT backward graph
-    mask = _diff_mask(core_fn, num_outputs, num_states, example_inputs)
+    mask = _diff_mask(
+        core_fn,
+        num_outputs,
+        num_states,
+        example_inputs,
+        requires_grad_mask,
+    )
     expected = num_outputs + num_states
     if len(mask) != expected:
         raise ValueError(
