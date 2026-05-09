@@ -1,4 +1,4 @@
-"""Build Triton scan kernels from a user-defined core_fn for FlexSN inductor backend.
+"""Build Triton scan kernels for FlexSN's triton / inductor backend.
 
 Three entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)
@@ -11,6 +11,12 @@ from __future__ import annotations
 from typing import Callable, List, Optional, Tuple
 
 import torch
+
+__all__ = [
+    "build_inference_kernel",
+    "build_inference_final_state_kernel",
+    "build_training_kernels",
+]
 
 
 def _example_build_device(example_inputs: Optional[Tuple[torch.Tensor, ...]]):
@@ -43,30 +49,71 @@ def build_inference_kernel(
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
 ):
-    """Build a single-pass scan inference kernel for *core_fn*.
+    """
+    **API Language:**
+    :ref:`中文 <build_inference_kernel-cn>` | :ref:`English <build_inference_kernel-en>`
 
-    The kernel wraps ``core_fn``'s per-step computation in a
-    ``tl.static_range(T)`` loop, producing a single Triton kernel
-    launch regardless of T.
+    ----
 
-    Args:
-        core_fn: single-step dynamics callable with signature
-            ``(*inputs, *states) -> (*outputs, *updated_states)``.
-        num_inputs: number of per-step input tensors.
-        num_states: number of state tensors.
-        num_outputs: number of per-step output tensors.
-        example_inputs: optional example tensors ``[*inputs, *states]``
-            on CUDA.  If *None*, unit-sized float32 CUDA tensors are used.
+    .. _build_inference_kernel-cn:
 
-    Returns:
-        ``(kernel, info)`` — the compiled Triton kernel and the
-        :class:`FlexSNInfo` metadata needed to call it via
-        :func:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.flexsn_inference`.
+    * **中文**
+
+    为 ``core_fn`` 构建单次 scan 的推理 Triton kernel。
+    构建出的 kernel 会把 ``core_fn`` 的单步计算包裹在 ``tl.static_range(T)``
+    时间循环中，因此无论 ``T`` 多大，单次推理都只触发一次 kernel launch。
+
+    :param core_fn: 单步动力学函数，签名应为
+        ``(*inputs, *states) -> (*outputs, *updated_states)``
+    :type core_fn: Callable
+    :param num_inputs: 每个时间步输入张量的数量
+    :type num_inputs: int
+    :param num_states: 状态张量的数量
+    :type num_states: int
+    :param num_outputs: 每个时间步输出张量的数量
+    :type num_outputs: int
+    :param example_inputs: 可选的示例张量 ``[*inputs, *states]`` 。若为
+        ``None`` ，则自动构造单位大小的 CUDA ``float32`` 张量
+    :type example_inputs: Optional[Tuple[torch.Tensor, ...]]
+    :return: ``(kernel, info)`` ，其中 ``kernel`` 为编译后的 Triton
+        kernel， ``info`` 为调用
+        :func:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.flexsn_inference`
+        所需的 :class:`FlexSNInfo`
+    :rtype: Tuple[object, FlexSNInfo]
+
+    ----
+
+    .. _build_inference_kernel-en:
+
+    * **English**
+
+    Build a single-pass scan inference Triton kernel for ``core_fn``.
+    The generated kernel wraps ``core_fn``'s per-step computation in a
+    ``tl.static_range(T)`` loop, so one inference call launches exactly one
+    kernel regardless of ``T``.
+
+    :param core_fn: Single-step dynamics callable with signature
+        ``(*inputs, *states) -> (*outputs, *updated_states)``
+    :type core_fn: Callable
+    :param num_inputs: Number of per-step input tensors
+    :type num_inputs: int
+    :param num_states: Number of state tensors
+    :type num_states: int
+    :param num_outputs: Number of per-step output tensors
+    :type num_outputs: int
+    :param example_inputs: Optional example tensors ``[*inputs, *states]``.
+        If ``None``, unit-sized CUDA ``float32`` tensors are created
+    :type example_inputs: Optional[Tuple[torch.Tensor, ...]]
+    :return: ``(kernel, info)`` where ``kernel`` is the compiled Triton
+        kernel and ``info`` is the :class:`FlexSNInfo` metadata required by
+        :func:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.flexsn_inference`
+    :rtype: Tuple[object, FlexSNInfo]
     """
     from torch.fx.experimental.proxy_tensor import make_fx
 
     from ..torch2triton import generate_triton_code_str
-    from . import extract_info, get_flexsn_inference_kernel
+    from .info import extract_info
+    from .template import get_flexsn_inference_kernel
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -98,28 +145,66 @@ def build_inference_final_state_kernel(
     num_outputs: int,
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
 ):
-    """Build an inference kernel that returns output sequences and final states.
+    """
+    **API Language:**
+    :ref:`中文 <build_inference_final_state_kernel-cn>` | :ref:`English <build_inference_final_state_kernel-en>`
 
-    This final-state variant traces ``core_fn`` and generates a Triton kernel
-    like :func:`build_inference_kernel`, but returns only the final state
-    tensors instead of full state sequences.
+    ----
 
-    Args:
-        core_fn: single-step dynamics callable with signature
-            ``(*inputs, *states) -> (*outputs, *updated_states)``.
-        num_inputs: number of per-step input tensors.
-        num_states: number of state tensors.
-        num_outputs: number of per-step output tensors.
-        example_inputs: optional example tensors ``[*inputs, *states]``.
+    .. _build_inference_final_state_kernel-cn:
 
-    Returns:
-        ``(kernel, info)`` from ``get_flexsn_inference_final_state_kernel``
-        and ``extract_info``.
+    * **中文**
+
+    为 ``core_fn`` 构建返回输出序列与最终状态的推理 Triton kernel。
+    该变体与 :func:`build_inference_kernel` 一样会追踪 ``core_fn`` 并生成
+    scan kernel，但它只返回最终状态张量，而不是完整状态序列。
+
+    :param core_fn: 单步动力学函数，签名应为
+        ``(*inputs, *states) -> (*outputs, *updated_states)``
+    :type core_fn: Callable
+    :param num_inputs: 每个时间步输入张量的数量
+    :type num_inputs: int
+    :param num_states: 状态张量的数量
+    :type num_states: int
+    :param num_outputs: 每个时间步输出张量的数量
+    :type num_outputs: int
+    :param example_inputs: 可选的示例张量 ``[*inputs, *states]``
+    :type example_inputs: Optional[Tuple[torch.Tensor, ...]]
+    :return: ``(kernel, info)`` ，分别来自
+        ``get_flexsn_inference_final_state_kernel`` 和 ``extract_info``
+    :rtype: Tuple[object, FlexSNInfo]
+
+    ----
+
+    .. _build_inference_final_state_kernel-en:
+
+    * **English**
+
+    Build an inference Triton kernel that returns output sequences and final
+    states for ``core_fn``. This variant traces ``core_fn`` like
+    :func:`build_inference_kernel`, but materializes final state tensors
+    instead of full state sequences.
+
+    :param core_fn: Single-step dynamics callable with signature
+        ``(*inputs, *states) -> (*outputs, *updated_states)``
+    :type core_fn: Callable
+    :param num_inputs: Number of per-step input tensors
+    :type num_inputs: int
+    :param num_states: Number of state tensors
+    :type num_states: int
+    :param num_outputs: Number of per-step output tensors
+    :type num_outputs: int
+    :param example_inputs: Optional example tensors ``[*inputs, *states]``
+    :type example_inputs: Optional[Tuple[torch.Tensor, ...]]
+    :return: ``(kernel, info)`` produced by
+        ``get_flexsn_inference_final_state_kernel`` and ``extract_info``
+    :rtype: Tuple[object, FlexSNInfo]
     """
     from torch.fx.experimental.proxy_tensor import make_fx
 
     from ..torch2triton import generate_triton_code_str
-    from . import extract_info, get_flexsn_inference_final_state_kernel
+    from .info import extract_info
+    from .template import get_flexsn_inference_final_state_kernel
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -202,31 +287,86 @@ def build_training_kernels(
     example_inputs: Optional[Tuple[torch.Tensor, ...]] = None,
     requires_grad: Optional[Tuple[bool, ...]] = None,
 ):
-    """Build forward + backward Triton scan kernels for BPTT training.
+    """
+    **API Language:**
+    :ref:`中文 <build_training_kernels-cn>` | :ref:`English <build_training_kernels-en>`
 
-    Uses ``aot_function`` (no ``PYTORCH_JIT=0`` required) to trace both the
-    forward and backward of ``core_fn``, then builds:
+    ----
 
-    * a forward scan kernel that saves the intermediates needed for backward
+    .. _build_training_kernels-cn:
+
+    * **中文**
+
+    为 BPTT 训练构建 FlexSN 的前向与反向 Triton scan kernel。
+    该函数会使用 ``aot_function`` 追踪 ``core_fn`` 的正向与反向图，并生成：
+
+    * 保存反向所需中间量的前向 scan kernel
+    * 执行逆时间反向传播的 backward scan kernel
+
+    若某些输出（例如硬阈值脉冲）不可微，AOT backward 会省略对应梯度参数，
+    此函数会自动生成 shim 以对齐 kernel template 的调用约定。
+
+    :param core_fn: 单步动力学函数，签名应为
+        ``(*inputs, *states) -> (*outputs, *updated_states)``
+    :type core_fn: Callable
+    :param num_inputs: 每个时间步输入张量的数量
+    :type num_inputs: int
+    :param num_states: 状态张量的数量
+    :type num_states: int
+    :param num_outputs: 每个时间步输出张量的数量
+    :type num_outputs: int
+    :param example_inputs: 可选的示例张量 ``[*inputs, *states]``
+    :type example_inputs: Optional[Tuple[torch.Tensor, ...]]
+    :param requires_grad: 指示 ``example_inputs`` 中每个参数是否需要梯度。
+        若为 ``None`` ，则对所有浮点/复数输入启用梯度追踪
+    :type requires_grad: Optional[Tuple[bool, ...]]
+    :return: ``(fwd_kernel, bwd_kernel, info)`` ，可直接接入 FlexSN
+        当前共享的 custom-op 执行路径
+    :rtype: Tuple[object, object, FlexSNInfo]
+
+    ----
+
+    .. _build_training_kernels-en:
+
+    * **English**
+
+    Build FlexSN forward and backward Triton scan kernels for BPTT training.
+    This function uses ``aot_function`` to trace both the forward and backward
+    of ``core_fn`` and then produces:
+
+    * a forward scan kernel that saves intermediates needed by backward
     * a backward scan kernel that runs the reverse-time pass
 
-    A shim is generated automatically when some outputs (e.g. spike signals)
-    are non-differentiable, since AOT drops their gradient from the backward
-    graph but the kernel template still passes them.
+    When some outputs (for example, hard-threshold spike signals) are
+    non-differentiable, AOT backward drops the corresponding gradient inputs.
+    This function automatically generates a shim so the kernel template
+    calling convention stays aligned.
 
-    Returns:
-        ``(fwd_kernel, bwd_kernel, info)`` — compatible with
-        :class:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.FlexSNFunction`.
+    :param core_fn: Single-step dynamics callable with signature
+        ``(*inputs, *states) -> (*outputs, *updated_states)``
+    :type core_fn: Callable
+    :param num_inputs: Number of per-step input tensors
+    :type num_inputs: int
+    :param num_states: Number of state tensors
+    :type num_states: int
+    :param num_outputs: Number of per-step output tensors
+    :type num_outputs: int
+    :param example_inputs: Optional example tensors ``[*inputs, *states]``
+    :type example_inputs: Optional[Tuple[torch.Tensor, ...]]
+    :param requires_grad: Flags indicating whether each example input should
+        require gradients. If ``None``, all floating-point and complex inputs
+        are traced as differentiable
+    :type requires_grad: Optional[Tuple[bool, ...]]
+    :return: ``(fwd_kernel, bwd_kernel, info)`` suitable for FlexSN's shared
+        custom-op execution path
+    :rtype: Tuple[object, object, FlexSNInfo]
     """
     from ..torch2triton import (
         generate_forward_and_backward_graph,
         generate_triton_code_str,
     )
-    from . import (
-        extract_info,
-        get_flexsn_backward_kernel,
-        get_flexsn_forward_kernel,
-    )
+    from .info import extract_info
+    from .template import get_flexsn_backward_kernel, get_flexsn_forward_kernel
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 

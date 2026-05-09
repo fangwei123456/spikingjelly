@@ -1,22 +1,29 @@
 """
-Benchmark: FlexSN inductor backend vs triton baseline.
+Benchmark: FlexSN CUDA backend variants vs torch reference.
 
-Tests two scenarios from the FlexSN inductor backend design:
-  1. Pure single FlexSN layer                    (G2 criterion)
-  2. Linear -> FlexSN -> Linear fusion           (G3 criterion)
+Tests two scenarios:
+  1. Pure single FlexSN layer
+  2. Linear -> FlexSN -> Linear fusion
+
+Compared variants:
+  - backend="torch"
+  - backend="inductor"
+  - backend="inductor" + torch.compile(fullgraph=True)
+
+In FlexSN, ``backend="triton"`` and ``backend="inductor"`` are equivalent
+CUDA backend labels. This benchmark measures the triton / inductor backend once via
+the ``inductor`` label.
 
 Usage (run from repo root):
-  PYTORCH_JIT=0 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py
+  CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py
 """
 
-import os
 import sys
 from collections.abc import Callable
 from typing import Any, Optional
 
 import torch
 import torch.nn as nn
-
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
@@ -64,62 +71,55 @@ def cuda_time_ms(
     return elapsed / iters
 
 
-def ratio_flag(r: float) -> str:
-    if r <= 1.1:
-        return "OK"
-    if r <= 1.5:
-        return "CLOSE"
-    return "CONSIDER M3.b"
+def speedup(base_ms: float, candidate_ms: float) -> float:
+    return base_ms / candidate_ms
+
+
+def speedup_flag(ratio: float) -> str:
+    if ratio >= 1.5:
+        return "FAST"
+    if ratio >= 1.1:
+        return "GOOD"
+    return "CLOSE"
 
 
 def bench_single_layer():
-    print("=" * 70)
+    print("=" * 92)
     print("Benchmark 1 — single FlexSN layer (forward only, no grad)")
     print(
-        f"  {'T':>4} {'B':>5} {'N':>6}  {'triton':>10}  {'inductor':>10}  {'ratio':>7}  flag"
+        f"  {'T':>4} {'B':>5} {'N':>6}  "
+        f"{'torch':>10}  {'inductor':>10}  {'compile':>10}  "
+        f"{'ind/torch':>9}  {'cmp/torch':>9}"
     )
-    print("-" * 70)
+    print("-" * 92)
 
     configs = [(8, 128, 1024), (32, 128, 1024), (8, 128, 4096)]
     for T, B, N in configs:
         x = torch.randn(T, B, N, device="cuda")
 
-        n_tri = make_flexsn("triton")
-        n_ind = make_flexsn("inductor")
-        c_ind = torch.compile(n_ind, fullgraph=True)
+        n_torch = make_flexsn("torch")
+        n_ind_eager = make_flexsn("inductor")
+        n_ind_comp = make_flexsn("inductor")
+        c_ind = torch.compile(n_ind_comp, fullgraph=True)
 
         with torch.no_grad():
-            ms_tri = cuda_time_ms(lambda: n_tri(x), reset_hook=n_tri.reset)
-            ms_ind = cuda_time_ms(lambda: c_ind(x), reset_hook=n_ind.reset)
+            ms_torch = cuda_time_ms(lambda: n_torch(x), reset_hook=n_torch.reset)
+            ms_ind_eager = cuda_time_ms(
+                lambda: n_ind_eager(x), reset_hook=n_ind_eager.reset
+            )
+            ms_ind_comp = cuda_time_ms(lambda: c_ind(x), reset_hook=n_ind_comp.reset)
 
-        r = ms_ind / ms_tri
+        eager_speedup = speedup(ms_torch, ms_ind_eager)
+        compile_speedup = speedup(ms_torch, ms_ind_comp)
         print(
-            f"  {T:>4} {B:>5} {N:>6}  {ms_tri:>9.3f}  {ms_ind:>9.3f}  {r:>6.2f}x  [{ratio_flag(r)}]"
+            f"  {T:>4} {B:>5} {N:>6}  "
+            f"{ms_torch:>9.3f}  {ms_ind_eager:>9.3f}  {ms_ind_comp:>9.3f}  "
+            f"{eager_speedup:>8.2f}x  {compile_speedup:>8.2f}x"
         )
 
 
-class SeqModel(nn.Module):
-    def __init__(self, hidden: int, backend: str) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(hidden, hidden, bias=False)
-        self.neuron = make_flexsn(backend)
-        self.fc2 = nn.Linear(hidden, hidden, bias=False)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        T = x.shape[0]
-        out = []
-        for t in range(T):
-            out.append(self.fc1(x[t]))
-        x_proj = torch.stack(out, dim=0)
-        spike = self.neuron(x_proj)
-        out2 = []
-        for t in range(T):
-            out2.append(self.fc2(spike[t]))
-        return torch.stack(out2, dim=0)
-
-
 class SeqModelFused(nn.Module):
-    """Linear -> FlexSN -> Linear with batch-matmul over T for full compile."""
+    """Linear -> FlexSN -> Linear with batch-matmul over T for compile coverage."""
 
     def __init__(self, hidden: int, backend: str) -> None:
         super().__init__()
@@ -137,34 +137,44 @@ class SeqModelFused(nn.Module):
 
 def bench_linear_flexsn_linear():
     print()
-    print("=" * 70)
+    print("=" * 92)
     print("Benchmark 2 — Linear -> FlexSN -> Linear (forward only, no grad)")
     print(
-        f"  {'T':>4} {'B':>5} {'N':>6}  {'triton':>10}  {'inductor':>10}  {'ratio':>7}  flag"
+        f"  {'T':>4} {'B':>5} {'N':>6}  "
+        f"{'torch':>10}  {'inductor':>10}  {'compile':>10}  "
+        f"{'ind/torch':>9}  {'cmp/torch':>9}"
     )
-    print("-" * 70)
+    print("-" * 92)
 
     configs = [(8, 128, 1024), (32, 128, 1024)]
     for T, B, N in configs:
         x = torch.randn(T, B, N, device="cuda")
 
-        m_tri = SeqModelFused(N, "triton").cuda()
-        m_ind = SeqModelFused(N, "inductor").cuda()
-        c_ind = torch.compile(m_ind, fullgraph=True)
+        m_torch = SeqModelFused(N, "torch").cuda()
+        m_ind_eager = SeqModelFused(N, "inductor").cuda()
+        m_ind_comp = SeqModelFused(N, "inductor").cuda()
+        c_ind = torch.compile(m_ind_comp, fullgraph=True)
 
         with torch.no_grad():
-            ms_tri = cuda_time_ms(
-                lambda: m_tri(x),
-                reset_hook=lambda: functional.reset_net(m_tri),
+            ms_torch = cuda_time_ms(
+                lambda: m_torch(x),
+                reset_hook=lambda: functional.reset_net(m_torch),
             )
-            ms_ind = cuda_time_ms(
+            ms_ind_eager = cuda_time_ms(
+                lambda: m_ind_eager(x),
+                reset_hook=lambda: functional.reset_net(m_ind_eager),
+            )
+            ms_ind_comp = cuda_time_ms(
                 lambda: c_ind(x),
-                reset_hook=lambda: functional.reset_net(m_ind),
+                reset_hook=lambda: functional.reset_net(m_ind_comp),
             )
 
-        r = ms_ind / ms_tri
+        eager_speedup = speedup(ms_torch, ms_ind_eager)
+        compile_speedup = speedup(ms_torch, ms_ind_comp)
         print(
-            f"  {T:>4} {B:>5} {N:>6}  {ms_tri:>9.3f}  {ms_ind:>9.3f}  {r:>6.2f}x  [{ratio_flag(r)}]"
+            f"  {T:>4} {B:>5} {N:>6}  "
+            f"{ms_torch:>9.3f}  {ms_ind_eager:>9.3f}  {ms_ind_comp:>9.3f}  "
+            f"{eager_speedup:>8.2f}x  {compile_speedup:>8.2f}x"
         )
 
 
@@ -172,20 +182,15 @@ def main() -> None:
     if not torch.cuda.is_available():
         print("CUDA not available — skipping benchmark", file=sys.stderr)
         sys.exit(1)
-    if os.environ.get("PYTORCH_JIT", "1") != "0":
-        print(
-            "Error: PYTORCH_JIT != 0. "
-            "The triton backend requires PYTORCH_JIT=0.\n"
-            "Run with:  PYTORCH_JIT=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py",
-            file=sys.stderr,
-        )
-        sys.exit(1)
 
     print(f"GPU    : {torch.cuda.get_device_name(0)}")
     print(f"PyTorch: {torch.__version__}")
     print()
-    print("Columns: triton (ms) | inductor (ms) | ratio")
-    print("G2 criterion: ratio <= 1.1 => OK; <= 1.5 => CLOSE; > 1.5 => CONSIDER M3.b")
+    print("Columns: torch (ms) | inductor eager (ms) | inductor compile (ms)")
+    print(
+        "Ratios : speedup over backend=torch; higher is better "
+        f"([{speedup_flag(1.5)} >= 1.5x, {speedup_flag(1.1)} >= 1.1x])."
+    )
     print()
 
     bench_single_layer()
