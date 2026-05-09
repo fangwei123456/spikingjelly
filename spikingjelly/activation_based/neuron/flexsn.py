@@ -644,11 +644,10 @@ class FlexSNKernel:
                 "to be CUDA tensors on the same device."
             )
 
-        current_core_requires_grad = _core_requires_grad(self._core)
         use_training = torch.is_grad_enabled() and (
             self._core_requires_grad
-            or current_core_requires_grad
             or any(tensor.requires_grad for tensor in flat_args)
+            or _core_requires_grad(self._core)
         )
         if use_training:
             outputs = flexsn_inductor_training(self._handle, flat_args)[
@@ -1377,4 +1376,6 @@ class FlexSN(base.MemoryModule):
             f"num_inputs={self.num_inputs}, "
             f"num_states={self.num_states}, "
             f"num_outputs={self.num_outputs}, "
+            f"step_mode={self.step_mode!r}, "
+            f"backend={self.backend!r}"
         )
