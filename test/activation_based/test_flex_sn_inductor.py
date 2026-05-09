@@ -1182,7 +1182,7 @@ def test_set_backend_accepts_triton_for_flexsn():
         assert module.backend == "triton"
 
 
-def test_triton_backend_matches_inductor_backend(rng):
+def test_triton_and_inductor_labels_share_dispatch(rng):
     T, N = 6, 16
     x_t = torch.randn(T, N, generator=rng, requires_grad=True)
     x_i = x_t.detach().clone().requires_grad_(True)

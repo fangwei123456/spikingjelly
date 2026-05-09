@@ -332,7 +332,7 @@ def _validate_scan_backend_output_template_specs(
         shape, dtype = spec[:2]
         if tuple(shape) != expected_shape or dtype != expected_dtype:
             raise ValueError(
-                "FlexSN inductor scan backend requires example_outputs "
+                "FlexSN CUDA scan backend (triton/inductor) requires example_outputs "
                 "to match the first example input's per-step shape and dtype "
                 f"({expected_shape}, {expected_dtype}), but example output "
                 f"#{i} is ({tuple(shape)}, {dtype})."
@@ -421,7 +421,7 @@ def _validate_scan_backend_contract(
         raise ValueError("FlexSN requires at least one input or state tensor.")
     if num_inputs == 0:
         raise ValueError(
-            "FlexSN inductor scan backend requires at least one input "
+            "FlexSN CUDA scan backend (triton/inductor) requires at least one input "
             "sequence to derive T."
         )
 
@@ -438,14 +438,14 @@ def _validate_scan_backend_contract(
     for i, tensor in enumerate(example_inputs[1:], start=1):
         if tensor.numel() != seq_template.numel():
             raise ValueError(
-                "FlexSN inductor scan backend currently requires every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "example input and state tensor to have the same number of "
                 f"elements as the first example tensor ({seq_template.numel()}), "
                 f"but example #{i} has {tensor.numel()} elements."
             )
         if tensor.dtype != seq_template.dtype:
             raise ValueError(
-                "FlexSN inductor scan backend currently requires every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "example input and state tensor to match the first example "
                 f"tensor's dtype ({seq_template.dtype}), but example #{i} has "
                 f"dtype {tensor.dtype}."
@@ -469,14 +469,14 @@ def _validate_scan_backend_contract(
             )
         if tensor.shape != seq_template.shape:
             raise ValueError(
-                "FlexSN inductor scan backend currently requires every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "per-step output and updated state to have the same shape as "
                 f"the first example tensor {tuple(seq_template.shape)}, but "
                 f"return #{i} has shape {tuple(tensor.shape)}."
             )
         if tensor.dtype != seq_template.dtype or tensor.device != seq_template.device:
             raise ValueError(
-                "FlexSN inductor scan backend currently requires every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "per-step output and updated state to match the first example "
                 f"tensor's dtype/device ({seq_template.dtype}, "
                 f"{seq_template.device}), but return #{i} is "
@@ -550,6 +550,7 @@ class FlexSNKernel:
             num_outputs,
             example_inputs=example_inputs,
         )
+        self._core_requires_grad = _core_requires_grad(core)
         self.f_fwd, self.f_bwd, self.info = build_training_kernels(
             core,
             num_inputs,
@@ -596,8 +597,9 @@ class FlexSNKernel:
                 "to be CUDA tensors on the same device."
             )
 
-        use_training = torch.is_grad_enabled() and any(
-            tensor.requires_grad for tensor in flat_args
+        use_training = torch.is_grad_enabled() and (
+            self._core_requires_grad
+            or any(tensor.requires_grad for tensor in flat_args)
         )
         if use_training:
             outputs = flexsn_inductor_training(self._handle, flat_args)[

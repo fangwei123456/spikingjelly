@@ -4,7 +4,7 @@ import torch
 
 try:
     import triton
-except BaseException as e:
+except Exception as e:
     import logging
 
     from .. import dummy

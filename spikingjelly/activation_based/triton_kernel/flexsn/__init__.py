@@ -4,7 +4,7 @@ try:
     from .kernel import *
     from .template import *
     from .wrapper import *
-except BaseException as e:
+except Exception as e:
     import logging
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn: {e}")

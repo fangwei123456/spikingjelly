@@ -18,6 +18,7 @@ Usage (run from repo root):
   CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$(pwd) python benchmark/flexsn/flex_sn_inductor.py
 """
 
+import math
 import sys
 from collections.abc import Callable
 from typing import Any, Optional
@@ -72,10 +73,14 @@ def cuda_time_ms(
 
 
 def speedup(base_ms: float, candidate_ms: float) -> float:
+    if candidate_ms <= 0:
+        return float("inf")
     return base_ms / candidate_ms
 
 
 def speedup_flag(ratio: float) -> str:
+    if math.isinf(ratio):
+        return "FAST"
     if ratio >= 1.5:
         return "FAST"
     if ratio >= 1.1:
@@ -103,11 +108,17 @@ def bench_single_layer():
         c_ind = torch.compile(n_ind_comp, fullgraph=True)
 
         with torch.no_grad():
-            ms_torch = cuda_time_ms(lambda: n_torch(x), reset_hook=n_torch.reset)
-            ms_ind_eager = cuda_time_ms(
-                lambda: n_ind_eager(x), reset_hook=n_ind_eager.reset
+            ms_torch = cuda_time_ms(
+                lambda n=n_torch, x=x: n(x), reset_hook=(lambda r=n_torch.reset: r())
             )
-            ms_ind_comp = cuda_time_ms(lambda: c_ind(x), reset_hook=n_ind_comp.reset)
+            ms_ind_eager = cuda_time_ms(
+                lambda n=n_ind_eager, x=x: n(x),
+                reset_hook=(lambda r=n_ind_eager.reset: r()),
+            )
+            ms_ind_comp = cuda_time_ms(
+                lambda c=c_ind, x=x: c(x),
+                reset_hook=(lambda r=n_ind_comp.reset: r()),
+            )
 
         eager_speedup = speedup(ms_torch, ms_ind_eager)
         compile_speedup = speedup(ms_torch, ms_ind_comp)
@@ -157,16 +168,16 @@ def bench_linear_flexsn_linear():
 
         with torch.no_grad():
             ms_torch = cuda_time_ms(
-                lambda: m_torch(x),
-                reset_hook=lambda: functional.reset_net(m_torch),
+                lambda m=m_torch, x=x: m(x),
+                reset_hook=(lambda m=m_torch: functional.reset_net(m)),
             )
             ms_ind_eager = cuda_time_ms(
-                lambda: m_ind_eager(x),
-                reset_hook=lambda: functional.reset_net(m_ind_eager),
+                lambda m=m_ind_eager, x=x: m(x),
+                reset_hook=(lambda m=m_ind_eager: functional.reset_net(m)),
             )
             ms_ind_comp = cuda_time_ms(
-                lambda: c_ind(x),
-                reset_hook=lambda: functional.reset_net(m_ind_comp),
+                lambda c=c_ind, x=x: c(x),
+                reset_hook=(lambda m=m_ind_comp: functional.reset_net(m)),
             )
 
         eager_speedup = speedup(ms_torch, ms_ind_eager)

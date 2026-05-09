@@ -24,6 +24,11 @@ def _example_build_device(example_inputs: Optional[Tuple[torch.Tensor, ...]]):
         for tensor in example_inputs:
             if tensor.device.type == "cuda":
                 return tensor.device
+    if not torch.cuda.is_available():
+        raise RuntimeError(
+            "No CUDA available for building FlexSN Triton kernel; provide "
+            "example_inputs on CUDA or enable CUDA."
+        )
     return torch.device("cuda", torch.cuda.current_device())
 
 
@@ -32,10 +37,16 @@ def _prepare_example_inputs(
     num_inputs: int,
     num_states: int,
 ) -> Tuple[torch.Tensor, ...]:
+    expected = num_inputs + num_states
+    if example_inputs is not None and len(example_inputs) != expected:
+        raise ValueError(
+            "example_inputs must have the same length as num_inputs + num_states "
+            f"({expected}), but got {len(example_inputs)}."
+        )
     build_device = _example_build_device(example_inputs)
     if example_inputs is None:
         return tuple(
-            torch.zeros(1, device=build_device) for _ in range(num_inputs + num_states)
+            torch.zeros(1, device=build_device) for _ in range(expected)
         )
     # .clone() breaks aliasing: in-place ops inside core_fn during tracing
     # must not silently mutate the caller's original buffers.
