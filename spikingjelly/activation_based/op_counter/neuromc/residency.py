@@ -7,6 +7,7 @@ import torch
 from .config import MemoryHierarchyConfig
 from .utils import _tensor_bits
 
+
 class MemoryResidencySimulator:
     def __init__(self, config: MemoryHierarchyConfig):
         r"""
@@ -706,5 +707,3 @@ class MemoryResidencySimulator:
         :rtype: dict[str, dict[str, int]]
         """
         return {op: dict(d) for op, d in self.move_bits_by_op.items()}
-
-

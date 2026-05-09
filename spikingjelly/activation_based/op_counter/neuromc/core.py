@@ -580,7 +580,9 @@ class NeuroMCEnergyProfiler:
             for stage, op_info in self._stage_move_bits_by_op.items()
         }
 
-        rw_labeled_totals: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        rw_labeled_totals: dict[str, dict[str, int]] = defaultdict(
+            lambda: defaultdict(int)
+        )
         for level_info in rw_by_stage.values():
             for level, rw_info in level_info.items():
                 for rw_name, bits in rw_info.items():
@@ -632,7 +634,8 @@ class NeuroMCEnergyProfiler:
             for op_name in op_level_bits
         }
         unlabeled_move_edge = {
-            edge: move_bits_by_edge.get(edge, 0) - int(move_edge_labeled_totals.get(edge, 0))
+            edge: move_bits_by_edge.get(edge, 0)
+            - int(move_edge_labeled_totals.get(edge, 0))
             for edge in move_bits_by_edge
         }
         unlabeled_move_op = {

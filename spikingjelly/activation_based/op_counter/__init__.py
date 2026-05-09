@@ -5,3 +5,4 @@ from .ac import *
 from .synop import *
 from .mac import *
 from .neuromc import *
+from .spikesim import *

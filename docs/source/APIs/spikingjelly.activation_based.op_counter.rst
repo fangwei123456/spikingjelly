@@ -50,3 +50,11 @@ NeuroMC Energy Profiler
    :members:
    :undoc-members:
    :show-inheritance:
+
+SpikeSim Event-Driven Energy Profiler
++++++++++++++++++++++++++++++++++++
+
+.. automodule:: spikingjelly.activation_based.op_counter.spikesim
+   :members:
+   :undoc-members:
+   :show-inheritance:
