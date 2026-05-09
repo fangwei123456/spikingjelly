@@ -15,7 +15,7 @@ try:
 except Exception as e:
     import logging
 
-    logging.info(f"spikingjelly.activation_based.triton_kernel.flex_sn_inductor: {e}")
+    logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.inductor: {e}")
     flex_sn_scan = None
     FlexSNScan = None
     eager_scan = None

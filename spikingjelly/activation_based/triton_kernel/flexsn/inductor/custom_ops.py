@@ -24,13 +24,13 @@ import weakref
 
 import torch
 
-from ..flexsn.wrapper import (
+from ..wrapper import (
     flexsn_backward,
     flexsn_forward,
     flexsn_inference,
     flexsn_inference_final_state,
 )
-from ..flexsn.info import FlexSNInfo
+from ..info import FlexSNInfo
 
 
 @dataclass

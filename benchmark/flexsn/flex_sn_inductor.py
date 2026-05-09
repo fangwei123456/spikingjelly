@@ -1,7 +1,7 @@
 """
 Benchmark: FlexSN inductor backend vs triton baseline.
 
-Tests three scenarios from design doc (feature/flexsn-inductor-backend):
+Tests two scenarios from the FlexSN inductor backend design:
   1. Pure single FlexSN layer                    (G2 criterion)
   2. Linear -> FlexSN -> Linear fusion           (G3 criterion)
 
@@ -16,12 +16,9 @@ from typing import Any, Optional
 
 import torch
 import torch.nn as nn
+
 from spikingjelly.activation_based import functional
 from spikingjelly.activation_based.neuron.flexsn import FlexSN
-
-# ---------------------------------------------------------------------------
-# LIF core
-# ---------------------------------------------------------------------------
 
 
 def lif_core(x: torch.Tensor, v: torch.Tensor):
@@ -40,11 +37,6 @@ def make_flexsn(backend: str) -> FlexSN:
         step_mode="m",
         backend=backend,
     ).cuda()
-
-
-# ---------------------------------------------------------------------------
-# Timing helpers
-# ---------------------------------------------------------------------------
 
 
 def cuda_time_ms(
@@ -80,15 +72,12 @@ def ratio_flag(r: float) -> str:
     return "CONSIDER M3.b"
 
 
-# ---------------------------------------------------------------------------
-# Benchmark 1: single FlexSN layer
-# ---------------------------------------------------------------------------
-
-
 def bench_single_layer():
     print("=" * 70)
     print("Benchmark 1 — single FlexSN layer (forward only, no grad)")
-    print(f"  {'T':>4} {'B':>5} {'N':>6}  {'triton':>10}  {'inductor':>10}  {'ratio':>7}  flag")
+    print(
+        f"  {'T':>4} {'B':>5} {'N':>6}  {'triton':>10}  {'inductor':>10}  {'ratio':>7}  flag"
+    )
     print("-" * 70)
 
     configs = [(8, 128, 1024), (32, 128, 1024), (8, 128, 4096)]
@@ -107,11 +96,6 @@ def bench_single_layer():
         print(
             f"  {T:>4} {B:>5} {N:>6}  {ms_tri:>9.3f}  {ms_ind:>9.3f}  {r:>6.2f}x  [{ratio_flag(r)}]"
         )
-
-
-# ---------------------------------------------------------------------------
-# Benchmark 2: Linear -> FlexSN -> Linear fusion (G3)
-# ---------------------------------------------------------------------------
 
 
 class SeqModel(nn.Module):
@@ -145,17 +129,19 @@ class SeqModelFused(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         T, B, N = x.shape
-        x_flat = x.view(T * B, N)
-        h = self.fc1(x_flat).view(T, B, N)
+        x_flat = x.reshape(T * B, N)
+        h = self.fc1(x_flat).reshape(T, B, N)
         spike = self.neuron(h)
-        return self.fc2(spike.view(T * B, N)).view(T, B, N)
+        return self.fc2(spike.reshape(T * B, N)).reshape(T, B, N)
 
 
 def bench_linear_flexsn_linear():
     print()
     print("=" * 70)
     print("Benchmark 2 — Linear -> FlexSN -> Linear (forward only, no grad)")
-    print(f"  {'T':>4} {'B':>5} {'N':>6}  {'triton':>10}  {'inductor':>10}  {'ratio':>7}  flag")
+    print(
+        f"  {'T':>4} {'B':>5} {'N':>6}  {'triton':>10}  {'inductor':>10}  {'ratio':>7}  flag"
+    )
     print("-" * 70)
 
     configs = [(8, 128, 1024), (32, 128, 1024)]
@@ -167,20 +153,19 @@ def bench_linear_flexsn_linear():
         c_ind = torch.compile(m_ind, fullgraph=True)
 
         with torch.no_grad():
-            ms_tri = cuda_time_ms(lambda: m_tri(x),
-                                  reset_hook=lambda: functional.reset_net(m_tri))
-            ms_ind = cuda_time_ms(lambda: c_ind(x),
-                                  reset_hook=lambda: functional.reset_net(m_ind))
+            ms_tri = cuda_time_ms(
+                lambda: m_tri(x),
+                reset_hook=lambda: functional.reset_net(m_tri),
+            )
+            ms_ind = cuda_time_ms(
+                lambda: c_ind(x),
+                reset_hook=lambda: functional.reset_net(m_ind),
+            )
 
         r = ms_ind / ms_tri
         print(
             f"  {T:>4} {B:>5} {N:>6}  {ms_tri:>9.3f}  {ms_ind:>9.3f}  {r:>6.2f}x  [{ratio_flag(r)}]"
         )
-
-
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
 
 
 def main() -> None:

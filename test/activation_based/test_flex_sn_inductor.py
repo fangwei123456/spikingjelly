@@ -22,7 +22,7 @@ from spikingjelly.activation_based.neuron.flexsn import (
 from spikingjelly.activation_based.neuron import flexsn as flexsn_module
 from spikingjelly.activation_based import base as base_module
 from spikingjelly.activation_based.model.spiking_vgg import spiking_vgg16_bn
-from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+from spikingjelly.activation_based.triton_kernel.flexsn.inductor import (
     dynamo_hop_available,
     eager_scan,
     eager_scan_final_state,
@@ -33,7 +33,7 @@ from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
     lowerable_while_loop_scan,
     lowerable_while_loop_available,
 )
-from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import hop as hop_module
+from spikingjelly.activation_based.triton_kernel.flexsn.inductor import hop as hop_module
 from spikingjelly.activation_based.triton_kernel.flexsn import template as template_module
 from spikingjelly.activation_based.triton_kernel.flexsn.info import FlexSNInfo
 from spikingjelly.activation_based.triton_kernel.torch2triton import (
@@ -789,7 +789,7 @@ def test_inductor_final_state_wrapper_t0_returns_non_aliased_states():
 def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
     monkeypatch,
 ):
-    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    from spikingjelly.activation_based.triton_kernel.flexsn.inductor import (
         custom_ops,
     )
 
@@ -828,7 +828,7 @@ def test_inductor_training_final_state_impl_t0_returns_non_aliased_states(
 
 
 def test_inductor_fake_final_state_templates_use_explicit_states():
-    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    from spikingjelly.activation_based.triton_kernel.flexsn.inductor import (
         custom_ops,
     )
 
@@ -847,7 +847,7 @@ def test_inductor_fake_final_state_templates_use_explicit_states():
 
 
 def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
-    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    from spikingjelly.activation_based.triton_kernel.flexsn.inductor import (
         custom_ops,
     )
 
@@ -900,7 +900,7 @@ def test_inductor_training_final_state_backward_pads_missing_grads(monkeypatch):
 
 
 def test_inductor_backward_impl_passes_state_templates_to_wrapper(monkeypatch):
-    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import (
+    from spikingjelly.activation_based.triton_kernel.flexsn.inductor import (
         custom_ops,
     )
 

@@ -16,28 +16,28 @@ except (ImportError, AttributeError) as e:
     triton_kernel = None
 
 try:
-    from ..triton_kernel.flex_sn_inductor import eager_scan as _flexsn_eager_scan
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import eager_scan as _flexsn_eager_scan
+    from ..triton_kernel.flexsn.inductor import (
         eager_scan_final_state as _flexsn_eager_scan_final_state,
     )
-    from ..triton_kernel.flex_sn_inductor import flex_sn_scan as _flexsn_hop_scan
-    from ..triton_kernel.flex_sn_inductor import lowerable_scan as _flexsn_lowerable_scan
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import flex_sn_scan as _flexsn_hop_scan
+    from ..triton_kernel.flexsn.inductor import lowerable_scan as _flexsn_lowerable_scan
+    from ..triton_kernel.flexsn.inductor import (
         lowerable_scan_final_state as _flexsn_lowerable_scan_final_state,
     )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import (
         lowerable_while_loop_scan as _flexsn_lowerable_while_loop_scan,
     )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import (
         lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
     )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import (
         lowerable_scan_available as _flexsn_lowerable_scan_available,
     )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import (
         dynamo_hop_available as _flexsn_dynamo_hop_available,
     )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn.inductor import (
         lowerable_while_loop_available as _flexsn_lowerable_while_loop_available,
     )
 except (ImportError, AttributeError) as e:
@@ -173,14 +173,14 @@ def _run_hop_scan(
         os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
     )
     is_compiling = _is_compiling()
-    # flex_sn_inductor imports HOP helpers as an all-or-none group and sets all
+    # flexsn.inductor imports HOP helpers as an all-or-none group and sets all
     # of them to None on failure, so _flexsn_eager_scan is the availability
     # sentinel for this backend family.
     if _flexsn_eager_scan is None:
         raise RuntimeError(
             "FlexSN HOP backend is unavailable: eager_scan failed to import. "
             "See logs from "
-            "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+            "spikingjelly.activation_based.triton_kernel.flexsn.inductor."
         )
 
     lowerable_while_loop_impl = (
@@ -786,10 +786,10 @@ class FlexSN(base.MemoryModule):
                 example_inputs
             ) or torch.device("cuda", torch.cuda.current_device())
             try:
-                from ..triton_kernel.flex_sn_inductor.kernel import (
+                from ..triton_kernel.flexsn.inductor.kernel import (
                     build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,
                 )
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                from ..triton_kernel.flexsn.inductor.custom_ops import (
                     attach_flexsn_handle_finalizer,
                     register_flexsn_kernel_handle,
                 )
@@ -926,7 +926,7 @@ class FlexSN(base.MemoryModule):
         handle = result.__dict__.get("_inductor_handle")
         if handle is not None:
             try:
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                from ..triton_kernel.flexsn.inductor.custom_ops import (
                     attach_flexsn_handle_finalizer,
                     retain_owner_flexsn_kernel_handle,
                 )
@@ -1168,7 +1168,7 @@ class FlexSN(base.MemoryModule):
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
             same_device = len({t.device for t in flat_args}) == 1
             if self._inductor_handle is not None and all_cuda and same_device:
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                from ..triton_kernel.flexsn.inductor.custom_ops import (
                     flexsn_inductor_inference,
                     flexsn_inductor_inference_final_state,
                     flexsn_inductor_training,

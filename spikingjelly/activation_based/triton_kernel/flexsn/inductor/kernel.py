@@ -65,8 +65,8 @@ def build_inference_kernel(
     """
     from torch.fx.experimental.proxy_tensor import make_fx
 
-    from ..flexsn import extract_info, get_flexsn_inference_kernel
-    from ..torch2triton import generate_triton_code_str
+    from .. import extract_info, get_flexsn_inference_kernel
+    from ...torch2triton import generate_triton_code_str
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -118,8 +118,8 @@ def build_inference_final_state_kernel(
     """
     from torch.fx.experimental.proxy_tensor import make_fx
 
-    from ..flexsn import extract_info, get_flexsn_inference_final_state_kernel
-    from ..torch2triton import generate_triton_code_str
+    from .. import extract_info, get_flexsn_inference_final_state_kernel
+    from ...torch2triton import generate_triton_code_str
 
     example_inputs = _prepare_example_inputs(example_inputs, num_inputs, num_states)
 
@@ -217,12 +217,12 @@ def build_training_kernels(
         ``(fwd_kernel, bwd_kernel, info)`` — compatible with
         :class:`spikingjelly.activation_based.triton_kernel.flexsn.wrapper.FlexSNFunction`.
     """
-    from ..flexsn import (
+    from .. import (
         extract_info,
         get_flexsn_backward_kernel,
         get_flexsn_forward_kernel,
     )
-    from ..torch2triton import (
+    from ...torch2triton import (
         generate_forward_and_backward_graph,
         generate_triton_code_str,
     )

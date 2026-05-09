@@ -43,7 +43,7 @@ FlexSN Inductor Backend
 .. toctree::
    :maxdepth: 3
 
-   spikingjelly.activation_based.triton_kernel.flex_sn_inductor
+   spikingjelly.activation_based.triton_kernel.flexsn.inductor
 
 Torch-to-Triton Transpiler
 -----------------------------------------------------------------------------
