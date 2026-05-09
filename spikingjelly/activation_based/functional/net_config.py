@@ -163,7 +163,8 @@ def set_backend(
 
     * **中文**
 
-    将 ``net`` 中所有类型为 ``instance`` 且具有 ``backend`` 属性的模块后端更改为 ``backend`` 。
+    将 ``net`` 中所有满足 ``isinstance(m, instance)`` 且具有 ``backend`` 属性的模块后端更改为 ``backend`` 。
+    只有当 ``backend`` 在模块的 ``supported_backends`` 中时才会实际更新；否则会记录告警并保留原有后端。
 
     :param net: 一个神经网络
     :type net: torch.nn.Module
@@ -171,7 +172,7 @@ def set_backend(
     :param backend: 使用哪个后端
     :type backend: str
 
-    :param instance: 类型为 ``instance`` 且具有 ``backend`` 属性的模块后端会被改变。
+    :param instance: 传给 ``isinstance`` 的筛选类型。满足该筛选且具有 ``backend`` 属性的模块后端会被检查。
         若为 ``None`` ，则所有具有 ``backend`` 属性的模块都会被检查
     :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
 
@@ -185,7 +186,10 @@ def set_backend(
     * **English**
 
     Sets the backend of all modules in ``net`` whose type matches ``instance``
-    and that have a ``backend`` attribute to ``backend``.
+    and that have a ``backend`` attribute to ``backend``. The backend is only
+    updated when ``backend`` is contained in the module's
+    ``supported_backends``; otherwise a warning is logged and the current
+    backend is kept unchanged.
 
     :param net: a network
     :type net: torch.nn.Module
@@ -193,7 +197,8 @@ def set_backend(
     :param backend: the backend to be set
     :type backend: str
 
-    :param instance: module type or tuple of module types to be updated. If
+    :param instance: the type filter passed to ``isinstance``. Modules that
+        match this filter and have a ``backend`` attribute will be checked. If
         ``None``, all modules with a ``backend`` attribute will be checked
     :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
 

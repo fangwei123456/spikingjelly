@@ -291,7 +291,11 @@ def t_last_seq_to_ann_forward(
     .. note::
         SpikingJelly中默认序列数据形状为 ``shape=[T, batch_size, ...]``。
         但此函数是用于另一种格式，即 ``shape=[batch_size, ..., T]``。
-        当 ``torch.vmap`` 可用时，此函数会并行地对时间维执行前向传播。
+        当 ``torch.vmap`` 可用时，此函数会直接调用
+        ``torch.vmap(stateless_module, in_dims=-1, out_dims=-1)`` 并行地对时间维执行前向传播。
+        因此此路径要求 ``stateless_module`` 是可直接调用的对象，例如 ``nn.Module`` 或
+        ``nn.Sequential``。普通的 ``list`` 或 ``tuple`` 仅在 ``torch.vmap`` 不可用、退化到
+        :func:`t_last_multi_step_forward` 时才可用。
 
     .. note::
         不能用于BN层，因为BN层的running mean/var是输入依赖的。
@@ -317,12 +321,24 @@ def t_last_seq_to_ann_forward(
     .. admonition:: Note
         :class: note
 
-        The default shape of sequence data in SpikingJelly is ``shape=[T, batch_size, ...]``. However, this function is used for the other data format where ``shape=[batch_size, ..., T]``. When ``torch.vmap`` is available, this function applies the forward pass over the time dimension in parallel.
+        The default shape of sequence data in SpikingJelly is
+        ``shape=[T, batch_size, ...]``. However, this function is used for the
+        other data format where ``shape=[batch_size, ..., T]``. When
+        ``torch.vmap`` is available, this function calls
+        ``torch.vmap(stateless_module, in_dims=-1, out_dims=-1)`` to apply the
+        forward pass over the time dimension in parallel. Therefore, this path
+        requires ``stateless_module`` to be directly callable, e.g.
+        ``nn.Module`` or ``nn.Sequential``. Plain ``list`` and ``tuple`` inputs
+        only work on the fallback path that uses
+        :func:`t_last_multi_step_forward` when ``torch.vmap`` is unavailable.
 
     .. admonition:: Note
         :class: note
 
-        This function can not be applied to wrap BN because its running mean/var depends on inputs. The BN can be computed in parallel as long as the input is regarded as ``shape = [N, C, ..]``, which can be implemented by user manually.
+        This function can not be applied to wrap BN because its running mean/var
+        depends on inputs. The BN can be computed in parallel as long as the
+        input is regarded as ``shape = [N, C, ..]``, which can be implemented
+        by user manually.
 
     :param x_seq: the input tensor with ``shape=[batch_size, ..., T]``
     :type x_seq: torch.Tensor

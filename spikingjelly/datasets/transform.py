@@ -100,6 +100,30 @@ def random_temporal_delete(
 
 
 class RandomTemporalDelete(torch.nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <RandomTemporalDelete-cn>` | :ref:`English <RandomTemporalDelete-en>`
+
+    ----
+
+    .. _RandomTemporalDelete-cn:
+
+    * **中文**
+
+    :func:`random_temporal_delete` 的 ``torch.nn.Module`` 封装。前向传播时会使用构造时给定的
+    ``T_remain`` 和 ``batch_first`` 调用 :func:`random_temporal_delete`。
+
+    ----
+
+    .. _RandomTemporalDelete-en:
+
+    * **English**
+
+    A ``torch.nn.Module`` wrapper around :func:`random_temporal_delete`. During
+    ``forward``, it calls :func:`random_temporal_delete` with the ``T_remain``
+    and ``batch_first`` values provided at construction time.
+    """
+
     def __init__(self, T_remain: int, batch_first: bool):
         r"""
         **API Language:**

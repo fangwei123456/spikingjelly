@@ -75,7 +75,39 @@ def save_as_pic(
     pic_first_name: str = "pic",
 ) -> None:
     r"""
+    **API Language:**
+    :ref:`中文 <save_as_pic-cn>` | :ref:`English <save_as_pic-en>`
+
+    ----
+
+    .. _save_as_pic-cn:
+
+    * **中文**
+
+    将事件帧 ``x`` 保存为一组图片。函数会将 ``x[:, 0]`` 写入绿色通道、``x[:, 1]`` 写入蓝色通道，
+    并按 ``{pic_first_name}_{t}.png`` 的格式逐帧保存。
+
+    :param x: 形状为 ``[T, 2, H, W]`` 的帧序列
+    :type x: Union[torch.Tensor, np.ndarray]
+
+    :param save_pic_to: 图片保存目录
+    :type save_pic_to: str
+
+    :param pic_first_name: 图片文件名前缀，保存文件名形如 ``f"{pic_first_name}_{t}.png"``
+    :type pic_first_name: str
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _save_as_pic-en:
+
     * **English**
+
+    Save event frames in ``x`` as images. The function writes ``x[:, 0]`` to the
+    green channel, ``x[:, 1]`` to the blue channel, and stores each frame as
+    ``{pic_first_name}_{t}.png``.
 
     :param x: frames with ``shape=[T, 2, H, W]``
     :type x: Union[torch.Tensor, np.ndarray]
@@ -87,6 +119,7 @@ def save_as_pic(
     :type pic_first_name: str
 
     :return: None
+    :rtype: None
 
     ----
 
@@ -783,7 +816,53 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     print_save: bool = False,
 ) -> None:
     """
-    Integrate a events file to frames by fixed frames number and save it.
+    **API Language:**
+    :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_frames_number-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_frames_number-en>`
+
+    ----
+
+    .. _integrate_events_file_to_frames_file_by_fixed_frames_number-cn:
+
+    * **中文**
+
+    将单个事件文件按固定帧数积分成帧，并将结果保存到 ``output_dir`` 下与 ``events_np_file`` 同名的
+    ``.npz`` 文件中。保存文件包含键 ``frames``。
+
+    :param loader: 从 ``events_np_file`` 加载事件字典的函数
+    :type loader: Callable
+
+    :param events_np_file: 事件文件路径
+    :type events_np_file: str
+
+    :param output_dir: 帧文件输出目录
+    :type output_dir: str
+
+    :param split_by: ``'time'`` 或 ``'number'``
+    :type split_by: str
+
+    :param frames_num: 帧数量
+    :type frames_num: int
+
+    :param H: 帧高度
+    :type H: int
+
+    :param W: 帧宽度
+    :type W: int
+
+    :param print_save: 若为 ``True``，则打印保存路径
+    :type print_save: bool
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _integrate_events_file_to_frames_file_by_fixed_frames_number-en:
+
+    * **English**
+
+    Integrate an event file to frames by a fixed frame count and save it. The
+    saved archive contains the ``frames`` key.
     See :func:`cal_fixed_frames_number_segment_index` and
     :func:`integrate_events_segment_to_frame` for more details.
 
@@ -805,13 +884,14 @@ def integrate_events_file_to_frames_file_by_fixed_frames_number(
     :param H: the height of frame
     :type H: int
 
-    :param W: the weight of frame
+    :param W: the width of frame
     :type W: int
 
     :param print_save: If ``True``, this function will print saved files' paths.
     :type print_save: bool
 
     :return: None
+    :rtype: None
     """
     fname = os.path.join(output_dir, os.path.basename(events_np_file))
     np_savez(
@@ -1252,9 +1332,33 @@ def fast_split_to_train_test_set(
 
 def pad_sequence_collate(batch: list):
     """
+    **API Language:**
+    :ref:`中文 <pad_sequence_collate-cn>` | :ref:`English <pad_sequence_collate-en>`
+
+    ----
+
+    .. _pad_sequence_collate-cn:
+
+    * **中文**
+
+    可作为 ``DataLoader`` 的 ``collate_fn`` 处理变长序列样本，例如按固定时长积分为帧的
+    ``NeuromorphicDatasetFolder``。函数会将每个 ``x`` 转成 ``torch.Tensor``，再用
+    ``torch.nn.utils.rnn.pad_sequence(..., batch_first=True)`` 补齐。
+
+    :param batch: 样本列表，每个样本形如 ``(x, y)``，其中 ``x`` 是长度可变的序列，``y`` 是标签
+    :type batch: list
+
+    :return: ``(x_p, y, x_len)``，其中 ``x_p`` 是按相同长度补齐后的批数据，
+        ``y`` 是标签张量，``x_len`` 是各样本原始长度
+    :rtype: tuple
+
+    ----
+
+    .. _pad_sequence_collate-en:
+
     * **English**
 
-    This function can be use as the ``collate_fn`` for ``DataLoader`` to process
+    This function can be used as the ``collate_fn`` for ``DataLoader`` to process
     the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with
     fixed duration to integrate events to frames.
 
@@ -1262,8 +1366,9 @@ def pad_sequence_collate(batch: list):
         list containing sequences with different length and ``y`` is the label
     :type batch: list
 
-    :return: batched samples ``(x_p, y, x_len), where ``x_p`` is padded ``x``
-        to the same length, `y`` is the label, and ``x_len`` is the length of the ``x``
+    :return: batched samples ``(x_p, y, x_len)``, where ``x_p`` is padded ``x``
+        to the same length, ``y`` is the label, and ``x_len`` is the length of
+        ``x``
     :rtype: tuple
 
     ----
@@ -1321,13 +1426,47 @@ def pad_sequence_collate(batch: list):
 
 def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
     r"""
-    * **English**
+    **API Language:**
+    :ref:`中文 <padded_sequence_mask-cn>` | :ref:`English <padded_sequence_mask-en>`
 
-    :param sequence_len: a tensor ``shape = [N]`` that contains sequences lengths of each batch element
+    ----
+
+    .. _padded_sequence_mask-cn:
+
+    * **中文**
+
+    根据每个样本的有效序列长度生成形状为 ``[T, N]`` 的布尔掩码。若 ``T`` 为 ``None``，
+    则使用 ``sequence_len`` 中的最大值。若 ``sequence_len`` 位于 CUDA 且可用 ``cupy``，
+    则调用自定义 CuPy kernel；否则使用 PyTorch 广播计算。
+
+    :param sequence_len: 形状为 ``[N]`` 的张量，包含每个 batch 元素的序列长度
     :type sequence_len: torch.Tensor
 
-    :param T: The maximum length of sequences. If ``None``, the maximum element in ``sequence_len`` will be seen as ``T``
-    :type T: int
+    :param T: 序列最大长度。若为 ``None``，则取 ``sequence_len`` 中的最大值
+    :type T: Optional[int]
+
+    :return: 形状为 ``[T, N]`` 的布尔掩码，填充位置为 ``False``
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _padded_sequence_mask-en:
+
+    * **English**
+
+    Generate a bool mask with shape ``[T, N]`` from the valid sequence length of
+    each sample. If ``T`` is ``None``, the maximum element in ``sequence_len``
+    will be used. When ``sequence_len`` is on CUDA and ``cupy`` is available,
+    this function uses the custom CuPy kernel; otherwise it falls back to
+    PyTorch broadcasting.
+
+    :param sequence_len: a tensor ``shape = [N]`` that contains sequence lengths
+        of each batch element
+    :type sequence_len: torch.Tensor
+
+    :param T: the maximum length of sequences. If ``None``, the maximum element
+        in ``sequence_len`` will be used as ``T``
+    :type T: Optional[int]
 
     :return: a bool mask with shape = [T, N], where the padded position is ``False``
     :rtype: torch.Tensor
@@ -1397,6 +1536,41 @@ def create_sub_dataset(
     source_dir: str, target_dir: str, ratio: float, use_soft_link=True, randomly=False
 ):
     """
+    **API Language:**
+    :ref:`中文 <create_sub_dataset-cn>` | :ref:`English <create_sub_dataset-en>`
+
+    ----
+
+    .. _create_sub_dataset-cn:
+
+    * **中文**
+
+    从原始数据集中按类别子目录结构复制一个子数据集。每个叶子目录会按 ``ratio`` 选择样本；
+    若 ``use_soft_link`` 为 ``True`` 则创建软链接，否则复制文件。若 ``randomly`` 为 ``True``，
+    则使用 ``numpy.random.shuffle`` 随机打乱待选文件顺序。
+
+    :param source_dir: 原始数据集目录
+    :type source_dir: str
+
+    :param target_dir: 子数据集目录
+    :type target_dir: str
+
+    :param ratio: 子数据集从原始数据集中复制的样本比例
+    :type ratio: float
+
+    :param use_soft_link: 若为 ``True``，则使用软链接；否则直接复制文件
+    :type use_soft_link: bool
+
+    :param randomly: 若为 ``True``，则随机选择复制的文件。随机性由 ``numpy.random.seed`` 控制
+    :type randomly: bool
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _create_sub_dataset-en:
+
     * **English**
 
     Create a sub dataset with copy ``ratio`` of samples from the origin dataset.
@@ -1407,15 +1581,21 @@ def create_sub_dataset(
     :param target_dir: the directory path of the sub dataset
     :type target_dir: str
 
-    :param ratio: the ratio of samples sub dataset will copy from the origin dataset
+    :param ratio: the ratio of samples the sub dataset will copy from the
+        origin dataset
     :type ratio: float
 
-    :param use_soft_link: if ``True``, the sub dataset will use soft link to copy; else, the sub dataset will copy files
+    :param use_soft_link: if ``True``, the sub dataset will use soft links;
+        otherwise, it will copy files
     :type use_soft_link: bool
 
-    :param randomly: if ``True``, the files copy from the origin dataset will be picked up randomly.
+    :param randomly: if ``True``, the files copied from the origin dataset will
+        be picked up randomly.
         The randomness is controlled by ``numpy.random.seed``
     :type randomly: bool
+
+    :return: None
+    :rtype: None
     """
     if not os.path.exists(target_dir):
         os.makedirs(target_dir)
