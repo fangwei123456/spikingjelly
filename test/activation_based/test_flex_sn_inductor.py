@@ -9,6 +9,7 @@ non-CUDA portions still run on a plain development machine.
 from __future__ import annotations
 
 import sys
+import copy
 from types import SimpleNamespace
 
 import pytest
@@ -1968,6 +1969,32 @@ def test_flexsnkernel_matches_inductor_backend(rng):
     torch.testing.assert_close(v_seq_kernel, v_seq_inductor)
     torch.testing.assert_close(x_kernel.grad, x_inductor.grad)
     torch.testing.assert_close(v0_kernel.grad, v0_inductor.grad)
+
+
+def test_flexsnkernel_deepcopy_preserves_handle_lifetime(rng):
+    if not torch.cuda.is_available():
+        pytest.skip("FlexSNKernel deepcopy coverage is exercised on CUDA")
+    if base_module.triton is None:
+        pytest.skip("Triton package is required for FlexSNKernel deepcopy coverage")
+
+    N = 16
+    kernel = FlexSNKernel(
+        core=_differentiable_lif_core,
+        num_inputs=1,
+        num_states=1,
+        num_outputs=1,
+        example_inputs=(torch.zeros(N, device="cuda"), torch.zeros(N, device="cuda")),
+    )
+    kernel_copy = copy.deepcopy(kernel)
+
+    x = torch.randn(4, N, generator=rng).to("cuda")
+    v0 = torch.randn(N, generator=rng).to("cuda")
+
+    y_ref, v_ref = kernel(x, v0)
+    y_copy, v_copy = kernel_copy(x, v0)
+
+    torch.testing.assert_close(y_copy, y_ref)
+    torch.testing.assert_close(v_copy, v_ref)
 
 
 def test_inductor_backend_backward_matches_torch_backend(rng):
