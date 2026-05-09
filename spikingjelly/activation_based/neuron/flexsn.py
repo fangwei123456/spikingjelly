@@ -1020,22 +1020,15 @@ class FlexSN(base.MemoryModule):
                 continue
             result.__dict__[key] = copy.deepcopy(value, memo)
 
-        handle = result.__dict__.get("_inductor_handle")
-        if handle is not None:
-            try:
-                from ..triton_kernel.flexsn.custom_ops import (
-                    attach_flexsn_handle_finalizer,
-                    retain_owner_flexsn_kernel_handle,
-                )
-            except (ImportError, RuntimeError):
-                result._inductor_handle_finalizer = None
-            else:
-                retain_owner_flexsn_kernel_handle(handle)
-                result._inductor_handle_finalizer = attach_flexsn_handle_finalizer(
-                    result, handle
-                )
-        else:
-            result._inductor_handle_finalizer = None
+        # Do not retain the original CUDA-scan handle across deepcopy.
+        # The handle references kernels compiled from the original module's
+        # ``core``; the copy must fall back to HOP/eager with its own
+        # deep-copied ``core`` until it is (re)initialized.
+        result._inductor_handle = None
+        result._inductor_handle_finalizer = None
+        result._inductor_inference_available = False
+        result._inductor_inference_final_state_available = False
+        result._inductor_training_available = False
 
         return result
 
