@@ -637,6 +637,20 @@ class FlexSNKernel:
                 f"{self.info.num_states} initial states), "
                 f"but got {len(flat_args)}."
             )
+        bad_arg = next(
+            (
+                (i, type(arg).__name__)
+                for i, arg in enumerate(flat_args)
+                if not isinstance(arg, torch.Tensor)
+            ),
+            None,
+        )
+        if bad_arg is not None:
+            index, type_name = bad_arg
+            raise TypeError(
+                f"FlexSNKernel expected tensor arguments, but arg #{index} is "
+                f"{type_name}."
+            )
         all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
         same_device = len({t.device for t in flat_args}) == 1 if flat_args else False
         if self._handle is None or not all_cuda or not same_device:
@@ -1071,11 +1085,10 @@ class FlexSN(base.MemoryModule):
             )
         if value not in ("triton", "inductor"):
             base.check_backend_library(value)
-        elif getattr(self, "_inductor_handle", None) is None:
+        elif "_inductor_handle" in self.__dict__ and self._inductor_handle is None:
             logging.warning(
                 "Switching FlexSN.backend to %s without prebuilt CUDA scan kernels; "
-                "this module will fall back to the HOP/eager path until it is "
-                "reinitialized with a CUDA scan backend.",
+                "this module will fall back to the HOP/eager path.",
                 value,
             )
         self._backend = value
