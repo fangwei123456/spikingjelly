@@ -1051,7 +1051,10 @@ class FlexSN(base.MemoryModule):
             )
         if value not in ("triton", "inductor"):
             base.check_backend_library(value)
-        elif getattr(self, "_inductor_handle", None) is None:
+        elif (
+            hasattr(self, "_inductor_handle")
+            and getattr(self, "_inductor_handle", None) is None
+        ):
             logging.warning(
                 "Switching FlexSN.backend to %s without prebuilt CUDA scan kernels; "
                 "this module will fall back to the HOP/eager path until it is "
@@ -1371,8 +1374,9 @@ class FlexSN(base.MemoryModule):
         return output[0] if len(output) == 1 else output
 
     def extra_repr(self):
+        core_name = getattr(self.core, "__name__", type(self.core).__name__)
         return (
-            f"core={self.core.__name__}, "
+            f"core={core_name}, "
             f"num_inputs={self.num_inputs}, "
             f"num_states={self.num_states}, "
             f"num_outputs={self.num_outputs}, "
