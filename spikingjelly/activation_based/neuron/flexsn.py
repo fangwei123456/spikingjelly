@@ -8,6 +8,12 @@ from typing import Callable, List, Optional, Tuple
 import torch
 
 from .. import base
+from ..triton_kernel.flexsn.custom_ops import (
+    flexsn_inductor_inference,
+    flexsn_inductor_inference_final_state,
+    flexsn_inductor_training,
+    flexsn_inductor_training_final_state,
+)
 
 try:
     from ..triton_kernel.flexsn import (
@@ -621,11 +627,6 @@ class FlexSNKernel:
         return result
 
     def __call__(self, *args):  # args: [*input_seqs, *states]
-        from ..triton_kernel.flexsn.custom_ops import (
-            flexsn_inductor_inference,
-            flexsn_inductor_training,
-        )
-
         flat_args = list(args)
         expected = self.info.num_inputs + self.info.num_states
         if len(flat_args) != expected:
@@ -1033,6 +1034,13 @@ class FlexSN(base.MemoryModule):
         result._inductor_inference_available = False
         result._inductor_inference_final_state_available = False
         result._inductor_training_available = False
+        result._inductor_scan_kernel = None
+        result._inductor_scan_info = None
+        result._inductor_scan_final_state_kernel = None
+        result._inductor_scan_final_state_info = None
+        result._inductor_fwd_kernel = None
+        result._inductor_bwd_kernel = None
+        result._inductor_train_info = None
 
         return result
 
@@ -1048,10 +1056,7 @@ class FlexSN(base.MemoryModule):
             )
         if value not in ("triton", "inductor"):
             base.check_backend_library(value)
-        elif (
-            hasattr(self, "_inductor_handle")
-            and getattr(self, "_inductor_handle", None) is None
-        ):
+        elif getattr(self, "_inductor_handle", None) is None:
             logging.warning(
                 "Switching FlexSN.backend to %s without prebuilt CUDA scan kernels; "
                 "this module will fall back to the HOP/eager path until it is "
@@ -1270,13 +1275,6 @@ class FlexSN(base.MemoryModule):
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
             same_device = len({t.device for t in flat_args}) == 1
             if self._inductor_handle is not None and all_cuda and same_device:
-                from ..triton_kernel.flexsn.custom_ops import (
-                    flexsn_inductor_inference,
-                    flexsn_inductor_inference_final_state,
-                    flexsn_inductor_training,
-                    flexsn_inductor_training_final_state,
-                )
-
                 if _no_grad:
                     if (
                         not self.store_state_seqs
@@ -1372,6 +1370,8 @@ class FlexSN(base.MemoryModule):
 
     def extra_repr(self):
         core_name = getattr(self.core, "__name__", type(self.core).__name__)
+        if isinstance(self.core, functools.partial):
+            core_name = f"partial({getattr(self.core.func, '__name__', type(self.core.func).__name__)})"
         return (
             f"core={core_name}, "
             f"num_inputs={self.num_inputs}, "
