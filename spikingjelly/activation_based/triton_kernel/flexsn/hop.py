@@ -54,7 +54,7 @@ Current limitations:
 
 Usage::
 
-    from spikingjelly.activation_based.triton_kernel.flex_sn_inductor import flex_sn_scan
+    from spikingjelly.activation_based.triton_kernel.flexsn import flex_sn_scan
 
     # inputs_seq: tuple of T-leading tensors, e.g. shape [T, N, ...]
     # init_states: tuple of per-step state tensors, e.g. shape [N, ...]
@@ -83,6 +83,21 @@ try:
     from torch._higher_order_ops.while_loop import while_loop as _torch_while_loop
 except (ImportError, AttributeError):
     _torch_while_loop = None
+
+
+__all__ = [
+    "dynamo_hop_available",
+    "eager_scan",
+    "eager_scan_final_state",
+    "flex_sn_scan",
+    "FlexSNScan",
+    "lowerable_scan",
+    "lowerable_scan_available",
+    "lowerable_scan_final_state",
+    "lowerable_while_loop_scan",
+    "lowerable_while_loop_available",
+    "lowerable_while_loop_scan_final_state",
+]
 
 
 class FlexSNScan(HigherOrderOperator):

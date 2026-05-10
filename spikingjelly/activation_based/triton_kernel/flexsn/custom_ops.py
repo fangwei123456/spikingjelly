@@ -1,40 +1,115 @@
-"""Opaque custom ops for FlexSN inductor kernels.
+"""
+**API Language:**
+:ref:`中文 <flexsn.custom_ops-cn>` | :ref:`English <flexsn.custom_ops-en>`
 
-This module is the bridge between FlexSN's per-layer Triton kernels and
-``torch.compile``:
+----
 
-* Triton kernels and metadata are stored in a Python-side registry and
-  referenced from graphs by a lightweight integer handle.
-* Forward and backward are exposed as opaque ``torch.library`` custom ops so
-  Dynamo / AOTAutograd no longer trace into Python kernel objects or Triton
-  launcher internals.
-* Tensor inputs/outputs are passed as ``list[Tensor]`` because FlexSN has a
-  variable number of inputs, outputs, and states while ``custom_op`` does not
-  support ``*args`` schemas.
+.. _flexsn.custom_ops-cn:
+
+* **中文**
+
+``custom_ops`` 模块为 FlexSN 的共享 CUDA 路径提供底层 opaque custom op。
+它负责在 Python 侧保存 Triton kernel 与元数据，并通过轻量级整数 ``handle``
+把这些 kernel 暴露给 ``torch.compile`` / AOTAutograd。
+
+该模块的主要职责包括：
+
+* 在 Python 注册表中维护 FlexSN kernel handle；
+* 将前向 / 反向封装为 ``torch.library`` custom op，避免编译器追踪 Python
+  kernel 对象与 Triton launcher 细节；
+* 为 fake tensor、autograd setup/backward、final-state fast path 提供辅助实现。
+
+通常用户不需要直接调用这些函数；它们主要由
+:class:`spikingjelly.activation_based.neuron.flexsn.FlexSN` 与
+:class:`spikingjelly.activation_based.neuron.flexsn.FlexSNKernel` 间接使用。
+
+----
+
+.. _flexsn.custom_ops-en:
+
+* **English**
+
+The ``custom_ops`` module provides the low-level opaque custom ops used by
+FlexSN's shared CUDA execution path. It stores Triton kernels and metadata in
+a Python-side registry and exposes them to ``torch.compile`` / AOTAutograd
+through lightweight integer ``handle`` values.
+
+Its main responsibilities are:
+
+* maintaining the Python-side FlexSN kernel-handle registry;
+* wrapping forward and backward as ``torch.library`` custom ops so the
+  compiler does not trace Python kernel objects or Triton launcher internals;
+* providing helpers for fake tensors, autograd setup/backward, and final-state
+  fast paths.
+
+Most users do not need to call these functions directly; they are primarily
+used indirectly by
+:class:`spikingjelly.activation_based.neuron.flexsn.FlexSN` and
+:class:`spikingjelly.activation_based.neuron.flexsn.FlexSNKernel`.
 """
 
 from __future__ import annotations
 
 import contextlib
+import weakref
 from dataclasses import dataclass
-from typing import Dict, List, Optional
 from itertools import count
 from threading import Lock
-import weakref
+from typing import Dict, List, Optional
 
 import torch
 
-from ..flexsn.wrapper import (
+from .info import FlexSNInfo
+from .wrapper import (
     flexsn_backward,
     flexsn_forward,
     flexsn_inference,
     flexsn_inference_final_state,
 )
-from ..flexsn.info import FlexSNInfo
+
+__all__ = [
+    "FlexSNKernelHandle",
+    "register_flexsn_kernel_handle",
+    "retain_flexsn_kernel_handle",
+    "retain_owner_flexsn_kernel_handle",
+    "release_flexsn_kernel_handle",
+    "release_active_flexsn_kernel_handle",
+    "flexsn_inductor_inference",
+    "flexsn_inductor_inference_final_state",
+    "flexsn_inductor_training",
+    "flexsn_inductor_training_final_state",
+    "flexsn_inductor_backward",
+    "attach_flexsn_handle_finalizer",
+]
 
 
 @dataclass
 class FlexSNKernelHandle:
+    """
+    **API Language:**
+    :ref:`中文 <FlexSNKernelHandle-cn>` | :ref:`English <FlexSNKernelHandle-en>`
+
+    ----
+
+    .. _FlexSNKernelHandle-cn:
+
+    * **中文**
+
+    保存 FlexSN kernel 句柄所关联的 Triton kernel、元数据和引用计数信息。
+    该结构由 ``custom_ops`` 模块内部注册表维护，用于把 Python 侧 kernel 对象
+    绑定到整数 ``handle`` 。
+
+    ----
+
+    .. _FlexSNKernelHandle-en:
+
+    * **English**
+
+    Store the Triton kernels, metadata, and reference-counting state associated
+    with a FlexSN kernel handle. Instances are managed by the internal
+    ``custom_ops`` registry and bind Python-side kernel objects to integer
+    ``handle`` values.
+    """
     inference_kernel: Optional[object]
     inference_info: Optional[FlexSNInfo]
     inference_final_state_kernel: Optional[object]
@@ -51,7 +126,7 @@ _KERNEL_REGISTRY_LOCK = Lock()
 _KERNEL_ID_GEN = count(1)
 
 
-def _normalize_kernel_handle(handle: int) -> int:
+def _normalize_kernel_handle(handle) -> int:
     if isinstance(handle, int):
         return handle
     if isinstance(handle, torch.Tensor):
@@ -78,6 +153,49 @@ def register_flexsn_kernel_handle(
     backward_kernel,
     training_info,
 ) -> int:
+    """
+    **API Language:**
+    :ref:`中文 <register_flexsn_kernel_handle-cn>` | :ref:`English <register_flexsn_kernel_handle-en>`
+
+    ----
+
+    .. _register_flexsn_kernel_handle-cn:
+
+    * **中文**
+
+    将一组 FlexSN Triton kernel 与对应元数据注册到 Python 侧注册表，并返回
+    一个整数 ``handle`` 。该 ``handle`` 可在后续 custom op 调用中引用这组 kernel。
+
+    :param inference_kernel: 推理 kernel
+    :param inference_info: 推理路径对应的 :class:`FlexSNInfo`
+    :param inference_final_state_kernel: 仅返回最终状态的推理 kernel
+    :param inference_final_state_info: 最终状态推理路径对应的 :class:`FlexSNInfo`
+    :param forward_kernel: 训练前向 kernel
+    :param backward_kernel: 训练反向 kernel
+    :param training_info: 训练路径对应的 :class:`FlexSNInfo`
+    :return: 新注册的整数句柄
+    :rtype: int
+
+    ----
+
+    .. _register_flexsn_kernel_handle-en:
+
+    * **English**
+
+    Register a bundle of FlexSN Triton kernels and their metadata in the
+    Python-side registry and return an integer ``handle``. The returned handle
+    can be referenced by later custom-op calls.
+
+    :param inference_kernel: Inference kernel
+    :param inference_info: :class:`FlexSNInfo` for the inference path
+    :param inference_final_state_kernel: Inference kernel that returns final states only
+    :param inference_final_state_info: :class:`FlexSNInfo` for the inference-final-state path
+    :param forward_kernel: Training forward kernel
+    :param backward_kernel: Training backward kernel
+    :param training_info: :class:`FlexSNInfo` for the training path
+    :return: Newly registered integer handle
+    :rtype: int
+    """
     with _KERNEL_REGISTRY_LOCK:
         handle = next(_KERNEL_ID_GEN)
         _KERNEL_REGISTRY[handle] = FlexSNKernelHandle(
@@ -90,14 +208,6 @@ def register_flexsn_kernel_handle(
             training_info=training_info,
         )
     return handle
-
-
-def unregister_flexsn_kernel_handle(handle: int) -> None:
-    with _KERNEL_REGISTRY_LOCK:
-        bundle = _KERNEL_REGISTRY.pop(handle, None)
-    if bundle is None:
-        return
-    _cleanup_kernel_handle(bundle)
 
 
 def _cleanup_kernel_handle(bundle: FlexSNKernelHandle) -> None:
@@ -121,6 +231,39 @@ def _lookup_kernel_handle(handle: int) -> FlexSNKernelHandle:
 
 
 def retain_flexsn_kernel_handle(handle: int) -> None:
+    """
+    **API Language:**
+    :ref:`中文 <retain_flexsn_kernel_handle-cn>` | :ref:`English <retain_flexsn_kernel_handle-en>`
+
+    ----
+
+    .. _retain_flexsn_kernel_handle-cn:
+
+    * **中文**
+
+    增加指定 FlexSN kernel handle 的活动引用计数。通常在 autograd context
+    保存该 handle 时调用，确保相关 kernel 在 backward 完成前不会被清理。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _retain_flexsn_kernel_handle-en:
+
+    * **English**
+
+    Increase the active-reference count of the specified FlexSN kernel handle.
+    This is typically used when an autograd context needs to keep the handle
+    alive until backward finishes.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+    """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _lookup_kernel_handle(handle)
@@ -128,6 +271,39 @@ def retain_flexsn_kernel_handle(handle: int) -> None:
 
 
 def retain_owner_flexsn_kernel_handle(handle: int) -> None:
+    """
+    **API Language:**
+    :ref:`中文 <retain_owner_flexsn_kernel_handle-cn>` | :ref:`English <retain_owner_flexsn_kernel_handle-en>`
+
+    ----
+
+    .. _retain_owner_flexsn_kernel_handle-cn:
+
+    * **中文**
+
+    增加指定 FlexSN kernel handle 的所有者引用计数。通常在对象拷贝或新的拥有者
+    接管该 handle 时调用。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _retain_owner_flexsn_kernel_handle-en:
+
+    * **English**
+
+    Increase the owner-reference count of the specified FlexSN kernel handle.
+    This is typically used when an object copy or another owner takes over the
+    handle.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+    """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _lookup_kernel_handle(handle)
@@ -135,6 +311,38 @@ def retain_owner_flexsn_kernel_handle(handle: int) -> None:
 
 
 def release_flexsn_kernel_handle(handle: int) -> None:
+    """
+    **API Language:**
+    :ref:`中文 <release_flexsn_kernel_handle-cn>` | :ref:`English <release_flexsn_kernel_handle-en>`
+
+    ----
+
+    .. _release_flexsn_kernel_handle-cn:
+
+    * **中文**
+
+    释放一个所有者引用。若所有者引用与活动引用都归零，则相关 kernel 会从注册表中
+    删除并尝试执行清理。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _release_flexsn_kernel_handle-en:
+
+    * **English**
+
+    Release one owner reference. When both owner and active references reach
+    zero, the associated kernels are removed from the registry and cleaned up.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+    """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
@@ -149,6 +357,38 @@ def release_flexsn_kernel_handle(handle: int) -> None:
 
 
 def release_active_flexsn_kernel_handle(handle: int) -> None:
+    """
+    **API Language:**
+    :ref:`中文 <release_active_flexsn_kernel_handle-cn>` | :ref:`English <release_active_flexsn_kernel_handle-en>`
+
+    ----
+
+    .. _release_active_flexsn_kernel_handle-cn:
+
+    * **中文**
+
+    释放一个活动引用。若所有者引用与活动引用都归零，则相关 kernel 会从注册表中
+    删除并尝试执行清理。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _release_active_flexsn_kernel_handle-en:
+
+    * **English**
+
+    Release one active reference. When both owner and active references reach
+    zero, the associated kernels are removed from the registry and cleaned up.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: None
+    :rtype: None
+    """
     handle = _normalize_kernel_handle(handle)
     with _KERNEL_REGISTRY_LOCK:
         bundle = _KERNEL_REGISTRY.get(handle)
@@ -196,7 +436,7 @@ def _make_state_templates_like(
 ) -> List[torch.Tensor]:
     if not flat_args:
         raise ValueError("Expected at least one input tensor for FlexSN fake op.")
-    explicit_states = flat_args[info.num_inputs: info.num_inputs + info.num_states]
+    explicit_states = flat_args[info.num_inputs : info.num_inputs + info.num_states]
     if len(explicit_states) == info.num_states:
         return [state.new_empty(state.shape) for state in explicit_states]
     seq_template = flat_args[0]
@@ -204,10 +444,7 @@ def _make_state_templates_like(
         state_shape = ()
     else:
         state_shape = tuple(seq_template.shape[1:])
-    return [
-        seq_template.new_empty(state_shape)
-        for _ in range(info.num_states)
-    ]
+    return [seq_template.new_empty(state_shape) for _ in range(info.num_states)]
 
 
 def _device_guard(tensors: List[torch.Tensor]):
@@ -215,15 +452,6 @@ def _device_guard(tensors: List[torch.Tensor]):
         if isinstance(tensor, torch.Tensor) and tensor.is_cuda:
             return torch.cuda.device(tensor.device)
     return contextlib.nullcontext()
-
-
-def _visible_fwd_return_count(info: FlexSNInfo) -> int:
-    return info.num_outputs + info.num_states
-
-
-def _extra_saved_return_indices(info: FlexSNInfo) -> List[int]:
-    visible = _visible_fwd_return_count(info)
-    return [idx for idx in info.c2k_return_mapping if idx >= visible]
 
 
 def _final_state_saved_return_indices(info: FlexSNInfo) -> List[int]:
@@ -241,9 +469,7 @@ def _materialize_zero_state_args(
         if info.num_inputs == 0:
             raise ValueError("FlexSN custom ops require at least one input sequence.")
         seq0 = flat_args[0]
-        zero_states = [
-            seq0.new_zeros(seq0.shape[1:]) for _ in range(info.num_states)
-        ]
+        zero_states = [seq0.new_zeros(seq0.shape[1:]) for _ in range(info.num_states)]
         return [*flat_args, *zero_states]
     return flat_args
 
@@ -309,7 +535,9 @@ def _flexsn_inductor_training_final_state_impl(
         (init_states[i] if state_seq.shape[0] == 0 else state_seq[-1]).clone()
         for i, state_seq in enumerate(state_seqs)
     ]
-    extra_saved_tensors = [full_returns[i] for i in _final_state_saved_return_indices(info)]
+    extra_saved_tensors = [
+        full_returns[i] for i in _final_state_saved_return_indices(info)
+    ]
     return [*visible_outputs, *final_states, *extra_saved_tensors]
 
 
@@ -340,7 +568,45 @@ def _flexsn_inductor_backward_impl(
 
 
 @torch.library.custom_op("sj::flexsn_inductor_inference", mutates_args=())
-def flexsn_inductor_inference(handle: int, flat_args: List[torch.Tensor]) -> List[torch.Tensor]:
+def flexsn_inductor_inference(
+    handle: int, flat_args: List[torch.Tensor]
+) -> List[torch.Tensor]:
+    """
+    **API Language:**
+    :ref:`中文 <flexsn_inductor_inference-cn>` | :ref:`English <flexsn_inductor_inference-en>`
+
+    ----
+
+    .. _flexsn_inductor_inference-cn:
+
+    * **中文**
+
+    执行 FlexSN 的推理 custom op，返回输出序列与状态序列。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: 扁平化参数列表，顺序为 ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: ``[*output_seqs, *state_seqs]``
+    :rtype: List[torch.Tensor]
+
+    ----
+
+    .. _flexsn_inductor_inference-en:
+
+    * **English**
+
+    Execute the FlexSN inference custom op and return output sequences together
+    with state sequences.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: Flattened argument list in the order
+        ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: ``[*output_seqs, *state_seqs]``
+    :rtype: List[torch.Tensor]
+    """
     bundle = _lookup_kernel_handle(handle)
     if bundle.inference_kernel is None or bundle.inference_info is None:
         raise RuntimeError("FlexSN inference kernel is unavailable for this handle.")
@@ -348,13 +614,53 @@ def flexsn_inductor_inference(handle: int, flat_args: List[torch.Tensor]) -> Lis
 
 
 @torch.library.custom_op("sj::flexsn_inductor_inference_final_state", mutates_args=())
-def flexsn_inductor_inference_final_state(handle: int, flat_args: List[torch.Tensor]) -> List[torch.Tensor]:
+def flexsn_inductor_inference_final_state(
+    handle: int, flat_args: List[torch.Tensor]
+) -> List[torch.Tensor]:
+    """
+    **API Language:**
+    :ref:`中文 <flexsn_inductor_inference_final_state-cn>` | :ref:`English <flexsn_inductor_inference_final_state-en>`
+
+    ----
+
+    .. _flexsn_inductor_inference_final_state-cn:
+
+    * **中文**
+
+    执行仅返回最终状态的 FlexSN 推理 custom op，返回输出序列与最终状态张量。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: 扁平化参数列表，顺序为 ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: ``[*output_seqs, *final_states]``
+    :rtype: List[torch.Tensor]
+
+    ----
+
+    .. _flexsn_inductor_inference_final_state-en:
+
+    * **English**
+
+    Execute the FlexSN inference custom op that returns final states only, and
+    produce output sequences together with final state tensors.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: Flattened argument list in the order
+        ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: ``[*output_seqs, *final_states]``
+    :rtype: List[torch.Tensor]
+    """
     bundle = _lookup_kernel_handle(handle)
     if (
         bundle.inference_final_state_kernel is None
         or bundle.inference_final_state_info is None
     ):
-        raise RuntimeError("FlexSN inference-final-state kernel is unavailable for this handle.")
+        raise RuntimeError(
+            "FlexSN inference-final-state kernel is unavailable for this handle."
+        )
     return _flexsn_inductor_inference_final_state_impl(bundle, flat_args)
 
 
@@ -393,7 +699,45 @@ def _flexsn_inductor_inference_final_state_fake(
 
 
 @torch.library.custom_op("sj::flexsn_inductor_training", mutates_args=())
-def flexsn_inductor_training(handle: int, flat_args: List[torch.Tensor]) -> List[torch.Tensor]:
+def flexsn_inductor_training(
+    handle: int, flat_args: List[torch.Tensor]
+) -> List[torch.Tensor]:
+    """
+    **API Language:**
+    :ref:`中文 <flexsn_inductor_training-cn>` | :ref:`English <flexsn_inductor_training-en>`
+
+    ----
+
+    .. _flexsn_inductor_training-cn:
+
+    * **中文**
+
+    执行 FlexSN 的训练前向 custom op，返回可见输出与 backward 所需保存张量。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: 扁平化参数列表，顺序为 ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: 前向可见输出与 backward 保存张量组成的列表
+    :rtype: List[torch.Tensor]
+
+    ----
+
+    .. _flexsn_inductor_training-en:
+
+    * **English**
+
+    Execute the FlexSN training-forward custom op and return visible outputs
+    together with the saved tensors required by backward.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: Flattened argument list in the order
+        ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: A list containing visible forward outputs and backward-saved tensors
+    :rtype: List[torch.Tensor]
+    """
     bundle = _lookup_kernel_handle(handle)
     if (
         bundle.forward_kernel is None
@@ -408,6 +752,42 @@ def flexsn_inductor_training(handle: int, flat_args: List[torch.Tensor]) -> List
 def flexsn_inductor_training_final_state(
     handle: int, flat_args: List[torch.Tensor]
 ) -> List[torch.Tensor]:
+    """
+    **API Language:**
+    :ref:`中文 <flexsn_inductor_training_final_state-cn>` | :ref:`English <flexsn_inductor_training_final_state-en>`
+
+    ----
+
+    .. _flexsn_inductor_training_final_state-cn:
+
+    * **中文**
+
+    执行 FlexSN 的训练前向 custom op，并仅物化最终状态而非完整状态序列。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: 扁平化参数列表，顺序为 ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: ``[*output_seqs, *final_states, *saved_tensors]``
+    :rtype: List[torch.Tensor]
+
+    ----
+
+    .. _flexsn_inductor_training_final_state-en:
+
+    * **English**
+
+    Execute the FlexSN training-forward custom op while materializing final
+    states only instead of full state sequences.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param flat_args: Flattened argument list in the order
+        ``[*input_seqs, *init_states]``
+    :type flat_args: List[torch.Tensor]
+    :return: ``[*output_seqs, *final_states, *saved_tensors]``
+    :rtype: List[torch.Tensor]
+    """
     bundle = _lookup_kernel_handle(handle)
     if (
         bundle.forward_kernel is None
@@ -460,6 +840,49 @@ def flexsn_inductor_backward(
     saved_tensors: List[torch.Tensor],
     input_templates: List[torch.Tensor],
 ) -> List[torch.Tensor]:
+    """
+    **API Language:**
+    :ref:`中文 <flexsn_inductor_backward-cn>` | :ref:`English <flexsn_inductor_backward-en>`
+
+    ----
+
+    .. _flexsn_inductor_backward-cn:
+
+    * **中文**
+
+    执行 FlexSN 的 backward custom op，返回输入序列与初始状态的梯度。
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param grad_outputs: 输出序列/状态序列对应的梯度列表
+    :type grad_outputs: List[torch.Tensor]
+    :param saved_tensors: 前向保存张量列表
+    :type saved_tensors: List[torch.Tensor]
+    :param input_templates: 输入与初始状态模板，用于分配梯度张量
+    :type input_templates: List[torch.Tensor]
+    :return: 输入序列与初始状态的梯度列表
+    :rtype: List[torch.Tensor]
+
+    ----
+
+    .. _flexsn_inductor_backward-en:
+
+    * **English**
+
+    Execute the FlexSN backward custom op and return gradients for input
+    sequences and initial states.
+
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :param grad_outputs: Gradient list for output sequences and state sequences
+    :type grad_outputs: List[torch.Tensor]
+    :param saved_tensors: Saved tensors from the forward pass
+    :type saved_tensors: List[torch.Tensor]
+    :param input_templates: Input/state templates used to allocate gradient tensors
+    :type input_templates: List[torch.Tensor]
+    :return: Gradient list for input sequences and initial states
+    :rtype: List[torch.Tensor]
+    """
     bundle = _lookup_kernel_handle(handle)
     if bundle.backward_kernel is None or bundle.training_info is None:
         raise RuntimeError("FlexSN backward kernel is unavailable for this handle.")
@@ -487,7 +910,9 @@ def _flexsn_inductor_backward_fake(
     ]
     state_offset = bundle.training_info.num_inputs
     state_grads = [
-        input_templates[state_offset + i].new_empty(input_templates[state_offset + i].shape)
+        input_templates[state_offset + i].new_empty(
+            input_templates[state_offset + i].shape
+        )
         for i in range(bundle.training_info.num_states)
     ]
     return [*seq_grads, *state_grads]
@@ -506,7 +931,9 @@ def _flexsn_training_setup_context(ctx, inputs, output):
     ctx.input_template_specs = [_template_spec(t) for t in inputs[1]]
     ctx.output_template_specs = [
         _template_spec(t)
-        for t in output[: bundle.training_info.num_outputs + bundle.training_info.num_states]
+        for t in output[
+            : bundle.training_info.num_outputs + bundle.training_info.num_states
+        ]
     ]
     saved = [output[i] for i in bundle.training_info.c2k_return_mapping]
     ctx.save_for_backward(*saved)
@@ -597,9 +1024,7 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
         )
         final_grad_index = bundle.training_info.num_outputs + i
         final_grad = (
-            grad_out[final_grad_index]
-            if final_grad_index < len(grad_out)
-            else None
+            grad_out[final_grad_index] if final_grad_index < len(grad_out) else None
         )
         seq_grad = torch.zeros(
             state_seq_shape,
@@ -630,9 +1055,7 @@ def _flexsn_training_final_state_backward(ctx, grad_out: List[Optional[torch.Ten
         for i in range(bundle.training_info.num_states):
             final_grad_index = bundle.training_info.num_outputs + i
             final_grad = (
-                grad_out[final_grad_index]
-                if final_grad_index < len(grad_out)
-                else None
+                grad_out[final_grad_index] if final_grad_index < len(grad_out) else None
             )
             state_seq_shape = ctx.state_seq_template_specs[i][0]
             grad_index = explicit_state_start + i
@@ -661,4 +1084,38 @@ torch.library.register_autograd(
 
 
 def attach_flexsn_handle_finalizer(owner, handle: int):
+    """
+    **API Language:**
+    :ref:`中文 <attach_flexsn_handle_finalizer-cn>` | :ref:`English <attach_flexsn_handle_finalizer-en>`
+
+    ----
+
+    .. _attach_flexsn_handle_finalizer-cn:
+
+    * **中文**
+
+    为指定 ``owner`` 绑定一个 ``weakref.finalize`` ，在对象销毁时自动释放对应的
+    FlexSN kernel handle。
+
+    :param owner: 句柄所有者对象
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: 绑定好的 finalizer
+    :rtype: weakref.finalize
+
+    ----
+
+    .. _attach_flexsn_handle_finalizer-en:
+
+    * **English**
+
+    Attach a ``weakref.finalize`` object to ``owner`` so the corresponding
+    FlexSN kernel handle is released automatically when the owner is destroyed.
+
+    :param owner: Owner object of the handle
+    :param handle: FlexSN kernel handle
+    :type handle: int
+    :return: Attached finalizer
+    :rtype: weakref.finalize
+    """
     return weakref.finalize(owner, release_flexsn_kernel_handle, handle)

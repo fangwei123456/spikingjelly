@@ -1,44 +1,44 @@
-import copy
 import contextlib
+import copy
 import functools
-import os
-from typing import Callable, Optional, Tuple, List
 import logging
+import os
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import torch
 
 from .. import base
+from ..triton_kernel.flexsn.custom_ops import (
+    flexsn_inductor_inference,
+    flexsn_inductor_inference_final_state,
+    flexsn_inductor_training,
+    flexsn_inductor_training_final_state,
+)
 
 try:
-    from .. import triton_kernel
-except (ImportError, AttributeError) as e:
-    logging.info(f"spikingjelly.activation_based.neuron: {e}")
-    triton_kernel = None
-
-try:
-    from ..triton_kernel.flex_sn_inductor import eager_scan as _flexsn_eager_scan
-    from ..triton_kernel.flex_sn_inductor import (
-        eager_scan_final_state as _flexsn_eager_scan_final_state,
-    )
-    from ..triton_kernel.flex_sn_inductor import flex_sn_scan as _flexsn_hop_scan
-    from ..triton_kernel.flex_sn_inductor import lowerable_scan as _flexsn_lowerable_scan
-    from ..triton_kernel.flex_sn_inductor import (
-        lowerable_scan_final_state as _flexsn_lowerable_scan_final_state,
-    )
-    from ..triton_kernel.flex_sn_inductor import (
-        lowerable_while_loop_scan as _flexsn_lowerable_while_loop_scan,
-    )
-    from ..triton_kernel.flex_sn_inductor import (
-        lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
-    )
-    from ..triton_kernel.flex_sn_inductor import (
-        lowerable_scan_available as _flexsn_lowerable_scan_available,
-    )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn import (
         dynamo_hop_available as _flexsn_dynamo_hop_available,
     )
-    from ..triton_kernel.flex_sn_inductor import (
+    from ..triton_kernel.flexsn import eager_scan as _flexsn_eager_scan
+    from ..triton_kernel.flexsn import (
+        eager_scan_final_state as _flexsn_eager_scan_final_state,
+    )
+    from ..triton_kernel.flexsn import flex_sn_scan as _flexsn_hop_scan
+    from ..triton_kernel.flexsn import lowerable_scan as _flexsn_lowerable_scan
+    from ..triton_kernel.flexsn import (
+        lowerable_scan_available as _flexsn_lowerable_scan_available,
+    )
+    from ..triton_kernel.flexsn import (
+        lowerable_scan_final_state as _flexsn_lowerable_scan_final_state,
+    )
+    from ..triton_kernel.flexsn import (
         lowerable_while_loop_available as _flexsn_lowerable_while_loop_available,
+    )
+    from ..triton_kernel.flexsn import (
+        lowerable_while_loop_scan as _flexsn_lowerable_while_loop_scan,
+    )
+    from ..triton_kernel.flexsn import (
+        lowerable_while_loop_scan_final_state as _flexsn_lowerable_while_loop_scan_final_state,
     )
 except (ImportError, AttributeError) as e:
     logging.info(f"spikingjelly.activation_based.neuron.flexsn: {e}")
@@ -55,6 +55,10 @@ except (ImportError, AttributeError) as e:
 
 
 __all__ = ["FlexSNKernel", "FlexSN"]
+
+
+def _is_flexsn_cuda_scan_backend(backend: str) -> bool:
+    return backend in ("triton", "inductor")
 
 
 def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
@@ -85,9 +89,7 @@ def _warmup_inductor_inference_final_state_kernel(module: "FlexSN") -> None:
     )
 
     device_guard = (
-        torch.cuda.device(device)
-        if device.type == "cuda"
-        else contextlib.nullcontext()
+        torch.cuda.device(device) if device.type == "cuda" else contextlib.nullcontext()
     )
     with torch.no_grad(), device_guard:
         flexsn_inference_final_state(
@@ -104,8 +106,7 @@ def _make_inductor_final_state_warmup_specs(
     if example_inputs is None or len(example_inputs) < expected:
         return None
     return tuple(
-        (tuple(tensor.shape), tensor.dtype)
-        for tensor in example_inputs[:expected]
+        (tuple(tensor.shape), tensor.dtype) for tensor in example_inputs[:expected]
     )
 
 
@@ -143,6 +144,17 @@ def _as_tuple(outputs):
     return tuple(outputs)
 
 
+def _flat_args_on_single_cuda_device(
+    flat_args: Sequence[torch.Tensor],
+) -> Tuple[bool, bool]:
+    if len(flat_args) == 0:
+        return False, False
+    first = flat_args[0]
+    all_cuda = all(t.is_cuda for t in flat_args)
+    same_device = all(t.device == first.device for t in flat_args)
+    return all_cuda, same_device
+
+
 def _is_compiling() -> bool:
     compiler = getattr(torch, "compiler", None)
     is_compiling = getattr(compiler, "is_compiling", None)
@@ -173,14 +185,14 @@ def _run_hop_scan(
         os.environ.get("SJ_ENABLE_EXPERIMENTAL_LOWERABLE_SCAN", "0") == "1"
     )
     is_compiling = _is_compiling()
-    # flex_sn_inductor imports HOP helpers as an all-or-none group and sets all
+    # flexsn imports scan helpers as an all-or-none group and sets all
     # of them to None on failure, so _flexsn_eager_scan is the availability
     # sentinel for this backend family.
     if _flexsn_eager_scan is None:
         raise RuntimeError(
             "FlexSN HOP backend is unavailable: eager_scan failed to import. "
             "See logs from "
-            "spikingjelly.activation_based.triton_kernel.flex_sn_inductor."
+            "spikingjelly.activation_based.triton_kernel.flexsn."
         )
 
     lowerable_while_loop_impl = (
@@ -250,7 +262,7 @@ def _run_hop_scan(
 
 def _can_elide_zero_state_inputs(module: "FlexSN") -> bool:
     return (
-        module.backend == "inductor"
+        _is_flexsn_cuda_scan_backend(module.backend)
         and module._inductor_handle is not None
         and module._memories_rv.get("states") is None
         and module.__class__.init_states is FlexSN.init_states
@@ -337,7 +349,7 @@ def _validate_scan_backend_output_template_specs(
         shape, dtype = spec[:2]
         if tuple(shape) != expected_shape or dtype != expected_dtype:
             raise ValueError(
-                "FlexSN triton/inductor scan backends require example_outputs "
+                "FlexSN CUDA scan backend (triton/inductor) requires example_outputs "
                 "to match the first example input's per-step shape and dtype "
                 f"({expected_shape}, {expected_dtype}), but example output "
                 f"#{i} is ({tuple(shape)}, {dtype})."
@@ -400,8 +412,7 @@ def _value_requires_grad(value) -> bool:
         return value.requires_grad
     if isinstance(value, torch.nn.Module):
         return any(
-            tensor.requires_grad
-            for tensor in [*value.parameters(), *value.buffers()]
+            tensor.requires_grad for tensor in [*value.parameters(), *value.buffers()]
         )
     if isinstance(value, functools.partial):
         return (
@@ -427,7 +438,7 @@ def _validate_scan_backend_contract(
         raise ValueError("FlexSN requires at least one input or state tensor.")
     if num_inputs == 0:
         raise ValueError(
-            "FlexSN triton/inductor scan backends require at least one input "
+            "FlexSN CUDA scan backend (triton/inductor) requires at least one input "
             "sequence to derive T."
         )
 
@@ -444,14 +455,14 @@ def _validate_scan_backend_contract(
     for i, tensor in enumerate(example_inputs[1:], start=1):
         if tensor.numel() != seq_template.numel():
             raise ValueError(
-                "FlexSN triton/inductor scan backends currently require every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "example input and state tensor to have the same number of "
                 f"elements as the first example tensor ({seq_template.numel()}), "
                 f"but example #{i} has {tensor.numel()} elements."
             )
         if tensor.dtype != seq_template.dtype:
             raise ValueError(
-                "FlexSN triton/inductor scan backends currently require every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "example input and state tensor to match the first example "
                 f"tensor's dtype ({seq_template.dtype}), but example #{i} has "
                 f"dtype {tensor.dtype}."
@@ -475,14 +486,14 @@ def _validate_scan_backend_contract(
             )
         if tensor.shape != seq_template.shape:
             raise ValueError(
-                "FlexSN triton/inductor scan backends currently require every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "per-step output and updated state to have the same shape as "
                 f"the first example tensor {tuple(seq_template.shape)}, but "
                 f"return #{i} has shape {tuple(tensor.shape)}."
             )
         if tensor.dtype != seq_template.dtype or tensor.device != seq_template.device:
             raise ValueError(
-                "FlexSN triton/inductor scan backends currently require every "
+                "FlexSN CUDA scan backend (triton/inductor) currently requires every "
                 "per-step output and updated state to match the first example "
                 f"tensor's dtype/device ({seq_template.dtype}, "
                 f"{seq_template.device}), but return #{i} is "
@@ -512,9 +523,7 @@ class FlexSNKernel:
         * **中文**
 
         ``FlexSNKernel`` 可以根据自定义的 PyTorch 单步函数 ``core`` 生成 Triton 多步脉冲神经元核。
-        不同于 :class:`FlexSN` ， ``FlexSNKernel`` 只是对 autograd function
-        :class:`FlexSNFunction <spikingjelly.activation_based.triton_kernel.flexsn.wrapper.FlexSNFunction>`
-        的简单封装，实例化后得到一个可调用对象 ( ``Callable`` object) 。
+        不同于 :class:`FlexSN` ， ``FlexSNKernel`` 是对底层 custom op 调度的轻量 ``Callable`` 封装。
 
         实例化后， ``FlexSNKernel`` 对象接受的输入参数为 ``[*input_seqs, *states]`` ，其中 ``input_seqs`` 是
         ``num_inputs`` 个输入序列，``states`` 是 ``num_states`` 个初始状态；返回值为 ``[*output_seqs, *state_seqs]`` ，
@@ -528,10 +537,11 @@ class FlexSNKernel:
 
         * **English**
 
-        ``FlexSNKernel`` can generate Triton multi-step spiking neuron kernels from
-        a customized PyTorch single-step function ``core``. It is a simple ``Callable`` wrapper
-        for the autograd function
-        :class:`FlexSNFunction <spikingjelly.activation_based.triton_kernel.flexsn.wrapper.FlexSNFunction>`.
+        ``FlexSNKernel`` can generate Triton multi-step spiking neuron kernels
+        from a customized PyTorch single-step function ``core`` via FlexSN's
+        triton / inductor backend.
+        It is a lightweight ``Callable`` wrapper over the underlying FlexSN
+        custom-op dispatch path.
 
         The input arguments of a ``FlexSNKernel`` object is ``[*input_seqs, *states]`` , where ``input_seqs`` is
         a list of input sequences, ``states`` is a list of initial states; the return value is
@@ -541,50 +551,142 @@ class FlexSNKernel:
         For detailed information about arguments, refer to :class:`FlexSN`.
         """
         super().__init__()
-        if example_inputs is None:
-            example_inputs = [
-                torch.randn([1], device="cuda") for _ in range(num_inputs + num_states)
-            ]
-            example_inputs = tuple(example_inputs)
-        example_inputs = tuple(x.to("cuda") for x in example_inputs)
-
-        self.inf_graph = triton_kernel.torch2triton.generate_inference_graph(
-            core, example_inputs
-        )
-        self.fwd_graph, self.bwd_graph = (
-            triton_kernel.torch2triton.generate_forward_and_backward_graph(
-                core, example_inputs, requires_grad=requires_grad
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "FlexSNKernel requires CUDA, but torch.cuda.is_available() "
+                "is False. Use FlexSN with backend='torch' or backend='hop' "
+                "for non-CUDA paths."
             )
+        from ..triton_kernel.flexsn.custom_ops import (
+            attach_flexsn_handle_finalizer,
+            register_flexsn_kernel_handle,
         )
-        self.info = triton_kernel.flexsn.extract_info(
-            self.fwd_graph, num_inputs, num_states, num_outputs
-        )
-
-        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
-            self.inf_graph, core.__name__ + "_inference"
-        )
-        self.f_inf = triton_kernel.flexsn.get_flexsn_inference_kernel(
-            core_str, core_name, info=self.info
+        from ..triton_kernel.flexsn.kernel import (
+            build_inference_kernel,
+            build_training_kernels,
         )
 
-        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
-            self.fwd_graph, core.__name__ + "_forward"
+        self.f_inf, _inference_info = build_inference_kernel(
+            core,
+            num_inputs,
+            num_states,
+            num_outputs,
+            example_inputs=example_inputs,
         )
-        self.f_fwd = triton_kernel.flexsn.get_flexsn_forward_kernel(
-            core_str, core_name, info=self.info
+        self._core = core
+        self._core_requires_grad = _core_requires_grad(core)
+        self.f_fwd, self.f_bwd, self.info = build_training_kernels(
+            core,
+            num_inputs,
+            num_states,
+            num_outputs,
+            example_inputs=example_inputs,
+            requires_grad=requires_grad,
         )
 
-        core_str, core_name = triton_kernel.torch2triton.generate_triton_code_str(
-            self.bwd_graph, core.__name__ + "_backward"
+        if (
+            _inference_info.num_inputs != self.info.num_inputs
+            or _inference_info.num_states != self.info.num_states
+            or _inference_info.num_outputs != self.info.num_outputs
+        ):
+            raise RuntimeError(
+                "FlexSNKernel inference/training metadata mismatch when building "
+                "FlexSN CUDA kernels."
+            )
+
+        self._num_visible_returns = self.info.num_outputs + self.info.num_states
+        self._handle = register_flexsn_kernel_handle(
+            inference_kernel=self.f_inf,
+            inference_info=_inference_info,
+            inference_final_state_kernel=None,
+            inference_final_state_info=None,
+            forward_kernel=self.f_fwd,
+            backward_kernel=self.f_bwd,
+            training_info=self.info,
         )
-        self.f_bwd = triton_kernel.flexsn.get_flexsn_backward_kernel(
-            core_str, core_name, info=self.info
-        )
+        self._handle_finalizer = attach_flexsn_handle_finalizer(self, self._handle)
+
+    def __deepcopy__(self, memo):
+        cls = self.__class__
+        result = cls.__new__(cls)
+        memo[id(self)] = result
+
+        shared_runtime_keys = {
+            "_core",
+            "_core_requires_grad",
+            "f_inf",
+            "f_fwd",
+            "f_bwd",
+            "info",
+            "_num_visible_returns",
+            "_handle",
+        }
+        for key, value in self.__dict__.items():
+            if key == "_handle_finalizer":
+                continue
+            if key in shared_runtime_keys:
+                result.__dict__[key] = value
+            else:
+                result.__dict__[key] = copy.deepcopy(value, memo)
+
+        handle = result.__dict__.get("_handle")
+        if handle is not None:
+            from ..triton_kernel.flexsn.custom_ops import (
+                attach_flexsn_handle_finalizer,
+                retain_owner_flexsn_kernel_handle,
+            )
+
+            retain_owner_flexsn_kernel_handle(handle)
+            result._handle_finalizer = attach_flexsn_handle_finalizer(result, handle)
+        else:
+            result._handle_finalizer = None
+
+        return result
 
     def __call__(self, *args):  # args: [*input_seqs, *states]
-        return triton_kernel.flexsn.FlexSNFunction.apply(
-            self.f_inf, self.f_fwd, self.f_bwd, self.info, *args
-        )  # [*output_seqs, *state_seqs]
+        flat_args = list(args)
+        expected = self.info.num_inputs + self.info.num_states
+        if len(flat_args) != expected:
+            raise ValueError(
+                "FlexSNKernel expected "
+                f"{expected} tensors "
+                f"({self.info.num_inputs} input sequences + "
+                f"{self.info.num_states} initial states), "
+                f"but got {len(flat_args)}."
+            )
+        bad_arg = next(
+            (
+                (i, type(arg).__name__)
+                for i, arg in enumerate(flat_args)
+                if not isinstance(arg, torch.Tensor)
+            ),
+            None,
+        )
+        if bad_arg is not None:
+            index, type_name = bad_arg
+            raise TypeError(
+                f"FlexSNKernel expected tensor arguments, but arg #{index} is "
+                f"{type_name}."
+            )
+        all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
+        if self._handle is None or not all_cuda or not same_device:
+            raise RuntimeError(
+                "FlexSNKernel requires all input sequences and initial states "
+                "to be CUDA tensors on the same device."
+            )
+
+        use_training = torch.is_grad_enabled() and (
+            _core_requires_grad(self._core)
+            or any(tensor.requires_grad for tensor in flat_args)
+        )
+        if use_training:
+            outputs = flexsn_inductor_training(self._handle, flat_args)[
+                : self._num_visible_returns
+            ]
+        else:
+            outputs = flexsn_inductor_inference(self._handle, flat_args)
+
+        return tuple(outputs)
 
 
 class FlexSN(base.MemoryModule):
@@ -639,11 +741,13 @@ class FlexSN(base.MemoryModule):
             若为 ``None``，则所有参数均需梯度。默认 ``None``。
         :type requires_grad: Optional[Tuple[bool]]
 
-        :param step_mode: 步进模式。Triton 内核仅在 ``"m"`` 模式下可用。默认 ``"m"``。
+        :param step_mode: 步进模式。CUDA scan 内核仅在 ``"m"`` 模式下可用。默认 ``"m"``。
         :type step_mode: str
 
-        :param backend: 使用的后端。``"triton"``、``"inductor"`` 和 ``"hop"`` 仅在
-            ``step_mode="m"`` 时可用; ``"torch"`` 始终可用。默认 ``"triton"``。
+        :param backend: 使用的后端。``"triton"``、``"inductor"`` 和 ``"hop"``
+            仅在 ``step_mode="m"`` 时可用; ``"torch"`` 始终可用。``"triton"``
+            与 ``"inductor"`` 在 FlexSN 中是并列且等价的 CUDA 后端标签，
+            当前共享同一条维护中的执行路径。默认 ``"triton"``。
         :type backend: str
 
         :param store_state_seqs: 是否保存状态序列。如果为 ``True``，用户可以通过 ``state_seqs`` 属性访问。
@@ -652,9 +756,9 @@ class FlexSN(base.MemoryModule):
 
         :param example_outputs: ``core`` 的单步输出模板，形式为 ``tuple([*outputs])``。
             当 ``backend="torch"`` 且输入为空序列 ``T == 0`` 时, 需要用它来构造输出张量的
-            形状和 dtype, 从而避免为了推断输出而执行 ``core``。对于 scan 后端
-            ``"triton"`` 和 ``"inductor"``, 若提供该参数, 每个模板张量都必须与第一个
-            ``example_inputs`` 张量的单步形状和 dtype 相匹配。``"hop"`` 后端会保留任意
+            形状和 dtype, 从而避免为了推断输出而执行 ``core``。对于 ``"triton"``
+            与 ``"inductor"`` 这两个等价的 CUDA scan 后端, 若提供该参数, 每个模板张量都必须与第一个 ``example_inputs``
+            张量的单步形状和 dtype 相匹配。``"hop"`` 后端会保留任意
             输出模板, 并在空序列/HOP 路径中按运行时输入设备物化它们, 不执行上述形状/dtype
             校验。若不需要空序列模板, 则可以为 ``None``。默认 ``None``。
         :type example_outputs: Optional[Tuple[torch.Tensor]]
@@ -704,13 +808,15 @@ class FlexSN(base.MemoryModule):
             If None, all argument tensors require grad. Defaults to ``None``.
         :type requires_grad: Optional[Tuple[bool]]
 
-        :param step_mode: step mode. Triton kernel is available only in "m"
-            mode. Defaults to ``"m"``.
+        :param step_mode: step mode. CUDA scan kernels are available only in
+            "m" mode. Defaults to ``"m"``.
         :type step_mode: str
 
         :param backend: backend to use. ``"triton"``, ``"inductor"``, and
             ``"hop"`` are available only when ``step_mode="m"``. ``"torch"``
-            is always available. Defaults to ``"triton"``.
+            is always available. In FlexSN, ``"triton"`` and ``"inductor"``
+            are peer CUDA backend labels and currently dispatch the same
+            maintained execution path. Defaults to ``"triton"``.
         :type backend: str
 
         :param store_state_seqs: whether to store the state sequences. If ``True``,
@@ -722,9 +828,10 @@ class FlexSN(base.MemoryModule):
         :param example_outputs: per-step output templates for ``core`` with the form of
             ``tuple([*outputs])``. When ``backend="torch"`` and the input sequence is
             empty (``T == 0``), these templates are required to materialize output
-            shapes and dtypes without executing ``core``. For scan backends
-            ``"triton"`` and ``"inductor"``, each provided template must match the
-            first ``example_inputs`` tensor's per-step shape and dtype. The ``"hop"``
+            shapes and dtypes without executing ``core``. For the equivalent
+            ``"triton"`` / ``"inductor"`` CUDA scan backends, each provided
+            template must match the first
+            ``example_inputs`` tensor's per-step shape and dtype. The ``"hop"``
             backend intentionally allows arbitrary output templates and materializes
             them on the runtime input device for empty-sequence/HOP paths, so it
             does not enforce that scan-backend shape/dtype check. Defaults to
@@ -753,7 +860,12 @@ class FlexSN(base.MemoryModule):
             self._explicit_output_template_specs
         )
 
-        if backend in ("triton", "inductor"):
+        if step_mode == "m" and num_inputs == 0:
+            raise ValueError(
+                "FlexSN step_mode='m' requires at least one input sequence to "
+                "derive T; got num_inputs=0."
+            )
+        if _is_flexsn_cuda_scan_backend(backend):
             validated_example_inputs = _validate_scan_backend_contract(
                 core, num_inputs, num_states, num_outputs, example_inputs
             )
@@ -773,25 +885,21 @@ class FlexSN(base.MemoryModule):
                     "FlexSN HOP backend requires at least one input sequence to derive T."
                 )
 
-        if backend == "triton":
-            self.kernel = FlexSNKernel(
-                core, num_inputs, num_states, num_outputs, example_inputs, requires_grad
-            )
-        else:
-            self.kernel = None
         register_flexsn_kernel_handle = None
 
-        if backend == "inductor" and torch.cuda.is_available():
+        if _is_flexsn_cuda_scan_backend(backend) and torch.cuda.is_available():
             self._inductor_scan_final_state_device = _first_cuda_device(
                 example_inputs
             ) or torch.device("cuda", torch.cuda.current_device())
             try:
-                from ..triton_kernel.flex_sn_inductor.kernel import (
-                    build_inference_kernel, build_inference_final_state_kernel, build_training_kernels,
-                )
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
+                from ..triton_kernel.flexsn.custom_ops import (
                     attach_flexsn_handle_finalizer,
                     register_flexsn_kernel_handle,
+                )
+                from ..triton_kernel.flexsn.kernel import (
+                    build_inference_final_state_kernel,
+                    build_inference_kernel,
+                    build_training_kernels,
                 )
             except (ImportError, RuntimeError) as e:
                 logging.warning(
@@ -806,7 +914,13 @@ class FlexSN(base.MemoryModule):
             if build_inference_kernel is not None:
                 try:
                     self._inductor_scan_kernel, self._inductor_scan_info = (
-                        build_inference_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                        build_inference_kernel(
+                            core,
+                            num_inputs,
+                            num_states,
+                            num_outputs,
+                            example_inputs=example_inputs,
+                        )
                     )
                 except Exception as e:
                     logging.warning(
@@ -816,8 +930,15 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_kernel = None
                     self._inductor_scan_info = None
                 try:
-                    self._inductor_scan_final_state_kernel, self._inductor_scan_final_state_info = (
-                        build_inference_final_state_kernel(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                    (
+                        self._inductor_scan_final_state_kernel,
+                        self._inductor_scan_final_state_info,
+                    ) = build_inference_final_state_kernel(
+                        core,
+                        num_inputs,
+                        num_states,
+                        num_outputs,
+                        example_inputs=example_inputs,
                     )
                 except Exception as e:
                     # Triton/CUDA/driver compilation failures surface through
@@ -831,8 +952,17 @@ class FlexSN(base.MemoryModule):
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
                 try:
-                    self._inductor_fwd_kernel, self._inductor_bwd_kernel, self._inductor_train_info = (
-                        build_training_kernels(core, num_inputs, num_states, num_outputs, example_inputs=example_inputs)
+                    (
+                        self._inductor_fwd_kernel,
+                        self._inductor_bwd_kernel,
+                        self._inductor_train_info,
+                    ) = build_training_kernels(
+                        core,
+                        num_inputs,
+                        num_states,
+                        num_outputs,
+                        example_inputs=example_inputs,
+                        requires_grad=requires_grad,
                     )
                 except Exception as e:
                     logging.warning(
@@ -874,7 +1004,7 @@ class FlexSN(base.MemoryModule):
             and self._inductor_train_info is not None
         )
         if (
-            backend == "inductor"
+            _is_flexsn_cuda_scan_backend(backend)
             and register_flexsn_kernel_handle is not None
             and (
                 self._inductor_inference_available
@@ -901,8 +1031,7 @@ class FlexSN(base.MemoryModule):
                     logging.warning(
                         "FlexSN: could not warm up inductor inference-final-state "
                         "kernel (%s: %s); falling back to the regular inference "
-                        "kernel for store_state_seqs=False."
-                        % (type(e).__name__, e)
+                        "kernel for store_state_seqs=False." % (type(e).__name__, e)
                     )
                     self._inductor_scan_final_state_kernel = None
                     self._inductor_scan_final_state_info = None
@@ -918,29 +1047,129 @@ class FlexSN(base.MemoryModule):
         result = cls.__new__(cls)
         memo[id(self)] = result
 
+        # CUDA-scan handle/kernel state is intentionally not propagated to the
+        # copy: the compiled kernels reference the original module's ``core``,
+        # and some kernel objects are not safely deep-copyable. The copy falls
+        # back to the HOP/eager path with its own deep-copied ``core``.
+        _cuda_scan_skip_keys = {
+            "_inductor_handle",
+            "_inductor_handle_finalizer",
+            "_inductor_inference_available",
+            "_inductor_inference_final_state_available",
+            "_inductor_training_available",
+            "_inductor_scan_kernel",
+            "_inductor_scan_info",
+            "_inductor_scan_final_state_kernel",
+            "_inductor_scan_final_state_info",
+            "_inductor_fwd_kernel",
+            "_inductor_bwd_kernel",
+            "_inductor_train_info",
+        }
         for key, value in self.__dict__.items():
-            if key == "_inductor_handle_finalizer":
+            if key in _cuda_scan_skip_keys:
                 continue
             result.__dict__[key] = copy.deepcopy(value, memo)
 
-        handle = result.__dict__.get("_inductor_handle")
-        if handle is not None:
-            try:
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
-                    attach_flexsn_handle_finalizer,
-                    retain_owner_flexsn_kernel_handle,
-                )
-            except (ImportError, RuntimeError):
-                result._inductor_handle_finalizer = None
-            else:
-                retain_owner_flexsn_kernel_handle(handle)
-                result._inductor_handle_finalizer = attach_flexsn_handle_finalizer(
-                    result, handle
-                )
-        else:
-            result._inductor_handle_finalizer = None
+        # Explicitly reset CUDA-scan state on the copy.
+        result._inductor_handle = None
+        result._inductor_handle_finalizer = None
+        result._inductor_inference_available = False
+        result._inductor_inference_final_state_available = False
+        result._inductor_training_available = False
+        result._inductor_scan_kernel = None
+        result._inductor_scan_info = None
+        result._inductor_scan_final_state_kernel = None
+        result._inductor_scan_final_state_info = None
+        result._inductor_fwd_kernel = None
+        result._inductor_bwd_kernel = None
+        result._inductor_train_info = None
 
         return result
+
+    @property
+    def kernel(self):
+        return self._kernel_accessor
+
+    def _kernel_accessor(self, *args):
+        flat_args = list(args)
+        expected = self.num_inputs + self.num_states
+        if len(flat_args) != expected:
+            raise ValueError(
+                "FlexSN.kernel expected "
+                f"{expected} tensors "
+                f"({self.num_inputs} input sequences + "
+                f"{self.num_states} initial states), "
+                f"but got {len(flat_args)}."
+            )
+        bad_arg = next(
+            (
+                (i, type(arg).__name__)
+                for i, arg in enumerate(flat_args)
+                if not isinstance(arg, torch.Tensor)
+            ),
+            None,
+        )
+        if bad_arg is not None:
+            index, type_name = bad_arg
+            raise TypeError(
+                f"FlexSN.kernel expected tensor arguments, but arg #{index} is "
+                f"{type_name}."
+            )
+
+        all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
+        if self._inductor_handle is None or not all_cuda or not same_device:
+            raise RuntimeError(
+                "FlexSN.kernel is unavailable: FlexSN CUDA scan kernels are not "
+                "ready, or inputs are not CUDA tensors on a single device."
+            )
+
+        use_training = torch.is_grad_enabled() and (
+            _core_requires_grad(self.core)
+            or any(tensor.requires_grad for tensor in flat_args)
+        )
+        if use_training:
+            if not self._inductor_training_available:
+                raise RuntimeError(
+                    "FlexSN.kernel training path is unavailable for the current "
+                    "CUDA scan handle."
+                )
+            return tuple(
+                flexsn_inductor_training(self._inductor_handle, flat_args)[
+                    : self.num_outputs + self.num_states
+                ]
+            )
+
+        if not self._inductor_inference_available:
+            raise RuntimeError(
+                "FlexSN.kernel inference path is unavailable for the current "
+                "CUDA scan handle."
+            )
+        return tuple(flexsn_inductor_inference(self._inductor_handle, flat_args))
+
+    @property
+    def backend(self):
+        return self._backend
+
+    @backend.setter
+    def backend(self, value: str):
+        if value not in self.supported_backends:
+            raise NotImplementedError(
+                f"{value} is not a supported backend of {self._get_name()}!"
+            )
+        if _is_flexsn_cuda_scan_backend(value) and self.step_mode != "m":
+            raise RuntimeError(
+                f"Cannot set backend={value!r} when step_mode={self.step_mode!r}; "
+                f"CUDA-scan backends require step_mode='m'."
+            )
+        if not _is_flexsn_cuda_scan_backend(value):
+            base.check_backend_library(value)
+        elif "_inductor_handle" in self.__dict__ and self._inductor_handle is None:
+            logging.warning(
+                "Switching FlexSN.backend to %s without prebuilt CUDA scan kernels; "
+                "this module will fall back to the HOP/eager path.",
+                value,
+            )
+        self._backend = value
 
     @property
     def supported_backends(self):
@@ -1078,9 +1307,7 @@ class FlexSN(base.MemoryModule):
                 use_template_device=False,
             )
             if self.store_state_seqs:
-                self.state_seqs = [
-                    s.new_empty((0, *s.shape)) for s in self.states
-                ]
+                self.state_seqs = [s.new_empty((0, *s.shape)) for s in self.states]
             return output_seqs
 
         if self.backend == "torch":
@@ -1102,20 +1329,6 @@ class FlexSN(base.MemoryModule):
                 self.state_seqs = [torch.stack(v, dim=0) for v in state_seqs]
 
             return [torch.stack(y, dim=0) for y in output_seqs]
-
-        elif self.backend == "triton":
-            if self.states is None:
-                self.states = self.init_states(self.num_states, self.step_mode, *args)
-            result_seqs = self.kernel(*args, *self.states)
-            output_seqs = result_seqs[: self.num_outputs]
-            state_seqs = result_seqs[self.num_outputs :]
-            self.states = [
-                _last_state_or_current(v, self.states[i])
-                for i, v in enumerate(state_seqs)
-            ]
-            if self.store_state_seqs:
-                self.state_seqs = state_seqs
-            return output_seqs
 
         elif self.backend == "hop":
             if self.states is None:
@@ -1144,7 +1357,7 @@ class FlexSN(base.MemoryModule):
                 self.states = state_results
             return output_seqs
 
-        elif self.backend == "inductor":
+        elif _is_flexsn_cuda_scan_backend(self.backend):
             result_has_state_seqs = self.store_state_seqs
             can_elide_zero_states = (
                 self.states is None and _can_elide_zero_state_inputs(self)
@@ -1165,16 +1378,8 @@ class FlexSN(base.MemoryModule):
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
             state_args = [] if use_implicit_zero_states else list(self.states)
             flat_args = [*args, *state_args]
-            all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
-            same_device = len({t.device for t in flat_args}) == 1
+            all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
             if self._inductor_handle is not None and all_cuda and same_device:
-                from ..triton_kernel.flex_sn_inductor.custom_ops import (
-                    flexsn_inductor_inference,
-                    flexsn_inductor_inference_final_state,
-                    flexsn_inductor_training,
-                    flexsn_inductor_training_final_state,
-                )
-
                 if _no_grad:
                     if (
                         not self.store_state_seqs
@@ -1216,7 +1421,9 @@ class FlexSN(base.MemoryModule):
 
             if result_seqs is None:
                 if self.states is None:
-                    self.states = self.init_states(self.num_states, self.step_mode, *args)
+                    self.states = self.init_states(
+                        self.num_states, self.step_mode, *args
+                    )
                 state_args = [state.contiguous() for state in self.states]
                 result_seqs = _run_hop_scan(
                     self.core,
@@ -1233,7 +1440,9 @@ class FlexSN(base.MemoryModule):
             state_seqs = list(result_seqs[self.num_outputs :])
             if result_has_state_seqs:
                 if self.states is None:
-                    self.states = self.init_states(self.num_states, self.step_mode, *args)
+                    self.states = self.init_states(
+                        self.num_states, self.step_mode, *args
+                    )
                 self.states = [
                     _last_state_or_current(v, self.states[i])
                     for i, v in enumerate(state_seqs)
@@ -1265,9 +1474,14 @@ class FlexSN(base.MemoryModule):
         return output[0] if len(output) == 1 else output
 
     def extra_repr(self):
+        core_name = getattr(self.core, "__name__", type(self.core).__name__)
+        if isinstance(self.core, functools.partial):
+            core_name = f"partial({getattr(self.core.func, '__name__', type(self.core.func).__name__)})"
         return (
-            f"core={self.core.__name__}, "
+            f"core={core_name}, "
             f"num_inputs={self.num_inputs}, "
             f"num_states={self.num_states}, "
             f"num_outputs={self.num_outputs}, "
+            f"step_mode={self.step_mode!r}, "
+            f"backend={self.backend!r}"
         )

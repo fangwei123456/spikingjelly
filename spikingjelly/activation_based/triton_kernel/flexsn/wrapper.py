@@ -1,24 +1,21 @@
-import torch
 from typing import Optional, Tuple
 
-from torch import autograd
+import torch
 
 try:
     import triton
-except BaseException as e:
+except Exception as e:
     import logging
+
     from .. import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.wrapper: {e}")
     triton = dummy.DummyImport()
 
-from ..triton_utils import type_dict, contiguous_and_device_guard
-from ..triton_utils import amp_custom_fwd, amp_custom_bwd
+from ..triton_utils import type_dict
 from .info import FlexSNInfo
 
-
 __all__ = [
-    "FlexSNFunction",
     "flexsn_backward",
     "flexsn_backward_ncl_bucket",
     "flexsn_forward",
@@ -310,7 +307,9 @@ def flexsn_backward(
             )
         grad_inputs = [torch.zeros_like(template) for template in input_templates]
         if state_templates is not None:
-            grad_inputs.extend(torch.zeros_like(template) for template in state_templates)
+            grad_inputs.extend(
+                torch.zeros_like(template) for template in state_templates
+            )
         return tuple(grad_inputs)
     T = grad_example.shape[0]
     NCL = _num_elements_per_step(grad_example)
@@ -362,72 +361,3 @@ def flexsn_backward(
         dtype=type_dict[dtype],
     )
     return tuple(grad_inputs)
-
-
-class FlexSNFunction(autograd.Function):
-    """Autograd bridge between FlexSN Python code and Triton kernels.
-
-    Chinese:
-        连接 FlexSN Python 逻辑与 Triton kernel 的 autograd 桥接类。
-
-    English:
-        Autograd bridge between FlexSN Python logic and Triton kernels.
-    """
-    @staticmethod
-    @contiguous_and_device_guard
-    @amp_custom_fwd
-    def forward(
-        ctx,
-        fn_inf,
-        fn_fwd,
-        fn_bwd,
-        info: FlexSNInfo,
-        *args,  # len = num_inputs; including initial states
-    ):
-        if any(ctx.needs_input_grad):
-            results = flexsn_forward(fn_fwd, info, *args)
-            outputs_states = results[: info.num_outputs + info.num_states]
-            to_save = []
-            for i in info.c2k_return_mapping:
-                to_save.append(results[i])
-            ctx.save_for_backward(*to_save)
-            ctx.fn_bwd = fn_bwd
-            ctx.info = info
-            ctx.input_template_specs = tuple(
-                (tuple(arg.shape), arg.dtype, arg.device)
-                for arg in args[: info.num_inputs]
-            )
-            ctx.state_template_specs = tuple(
-                (tuple(arg.shape), arg.dtype, arg.device)
-                for arg in args[info.num_inputs : info.num_inputs + info.num_states]
-            )
-        else:
-            outputs_states = flexsn_inference(fn_inf, info, *args)
-        if len(outputs_states) == 1:
-            return outputs_states[0]
-        else:
-            return outputs_states
-
-    @staticmethod
-    @contiguous_and_device_guard
-    @amp_custom_bwd
-    def backward(ctx, *args):  # len(args) = num_outputs + num_states
-        required_results = ctx.saved_tensors
-        fn_bwd = ctx.fn_bwd
-        input_templates = tuple(
-            torch.empty(shape, dtype=dtype, device=device)
-            for shape, dtype, device in getattr(ctx, "input_template_specs", ())
-        )
-        state_templates = tuple(
-            torch.empty(shape, dtype=dtype, device=device)
-            for shape, dtype, device in getattr(ctx, "state_template_specs", ())
-        )
-        grads = flexsn_backward(
-            fn_bwd,
-            ctx.info,
-            *args,
-            *required_results,
-            input_templates=input_templates,
-            state_templates=state_templates,
-        )
-        return None, None, None, None, *grads

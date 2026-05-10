@@ -2,10 +2,13 @@ import copy
 
 import pytest
 import torch
+from spikingjelly.activation_based import layer
+from spikingjelly.activation_based.functional.conv_bn_fusion import (
+    _TrainConvBnWrapper,
+    fuse_conv_bn_eval_modules,
+    pack_conv_bn_train_modules,
+)
 from torch import nn
-
-from spikingjelly.activation_based import functional, layer
-from spikingjelly.activation_based.functional.conv_bn_fusion import _TrainConvBnWrapper
 
 
 class _StepBlock(nn.Module):
@@ -113,7 +116,7 @@ def test_fuse_conv_bn_eval_modules_matches_step_block():
 
     with torch.no_grad():
         y_ref = model(x)
-        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
         y_fused = fused(x)
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
@@ -127,7 +130,7 @@ def test_fuse_conv_bn_eval_modules_matches_native_block():
 
     with torch.no_grad():
         y_ref = model(x)
-        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
         y_fused = fused(x)
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
@@ -138,7 +141,7 @@ def test_fuse_conv_bn_eval_modules_rejects_missing_running_stats():
     model = _NoRunningStatsBlock().eval()
 
     with pytest.raises(ValueError, match="track running stats"):
-        functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        fuse_conv_bn_eval_modules(copy.deepcopy(model))
 
 
 def test_fuse_conv_bn_eval_modules_handles_shared_conv_bn_pairs():
@@ -148,7 +151,7 @@ def test_fuse_conv_bn_eval_modules_handles_shared_conv_bn_pairs():
 
     with torch.no_grad():
         y_ref = model(x)
-        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
         y_fused = fused(x)
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
@@ -162,7 +165,7 @@ def test_fuse_conv_bn_eval_modules_skips_shared_conv_with_different_bn():
 
     with torch.no_grad():
         y_ref = model(x)
-        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
         y_fused = fused(x)
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
@@ -176,7 +179,7 @@ def test_fuse_conv_bn_eval_modules_skips_partial_conv_bn_callsites():
 
     with torch.no_grad():
         y_ref = model(x)
-        fused = functional.fuse_conv_bn_eval_modules(copy.deepcopy(model))
+        fused = fuse_conv_bn_eval_modules(copy.deepcopy(model))
         y_fused = fused(x)
 
     torch.testing.assert_close(y_fused, y_ref, atol=1e-5, rtol=1e-4)
@@ -186,7 +189,7 @@ def test_fuse_conv_bn_eval_modules_skips_partial_conv_bn_callsites():
 def test_pack_conv_bn_train_modules_matches_step_block():
     torch.manual_seed(0)
     model = _StepBlock().train()
-    packed = functional.pack_conv_bn_train_modules(copy.deepcopy(model))
+    packed = pack_conv_bn_train_modules(copy.deepcopy(model))
     x = torch.randn(4, 2, 3, 16, 16, requires_grad=True)
     x_packed = x.detach().clone().requires_grad_(True)
 
@@ -212,7 +215,7 @@ def test_pack_conv_bn_train_modules_matches_step_block():
 def test_pack_conv_bn_train_modules_matches_native_block():
     torch.manual_seed(0)
     model = _NativeStepBlock().train()
-    packed = functional.pack_conv_bn_train_modules(copy.deepcopy(model))
+    packed = pack_conv_bn_train_modules(copy.deepcopy(model))
     x = torch.randn(2, 3, 16, 16, requires_grad=True)
     x_packed = x.detach().clone().requires_grad_(True)
 
@@ -238,7 +241,9 @@ def test_pack_conv_bn_train_modules_matches_native_block():
 def test_train_conv_bn_wrapper_packs_native_multistep_inputs():
     torch.manual_seed(0)
     model = _NativeStepBlock().train()
-    wrapped = _TrainConvBnWrapper(copy.deepcopy(model.conv), copy.deepcopy(model.bn)).train()
+    wrapped = _TrainConvBnWrapper(
+        copy.deepcopy(model.conv), copy.deepcopy(model.bn)
+    ).train()
     x = torch.randn(4, 2, 3, 16, 16, requires_grad=True)
     x_packed = x.detach().clone().requires_grad_(True)
 
@@ -265,7 +270,9 @@ def test_train_conv_bn_wrapper_packs_native_multistep_inputs():
 def test_train_conv_bn_wrapper_keeps_conv_hooks_active():
     torch.manual_seed(0)
     model = _StepBlock().train()
-    wrapped = _TrainConvBnWrapper(copy.deepcopy(model.conv), copy.deepcopy(model.bn)).train()
+    wrapped = _TrainConvBnWrapper(
+        copy.deepcopy(model.conv), copy.deepcopy(model.bn)
+    ).train()
     x = torch.randn(4, 2, 3, 16, 16)
     hook_calls = []
 
@@ -284,7 +291,7 @@ def test_train_conv_bn_wrapper_keeps_conv_hooks_active():
 def test_pack_conv_bn_train_modules_handles_shared_conv_bn_pairs():
     torch.manual_seed(0)
     model = _SharedTrainConvBnBlock().train()
-    packed = functional.pack_conv_bn_train_modules(copy.deepcopy(model))
+    packed = pack_conv_bn_train_modules(copy.deepcopy(model))
     x = torch.randn(2, 3, 16, 16, requires_grad=True)
     x_packed = x.detach().clone().requires_grad_(True)
 
@@ -303,7 +310,7 @@ def test_pack_conv_bn_train_modules_handles_shared_conv_bn_pairs():
 def test_pack_conv_bn_train_modules_skips_shared_conv_with_different_bn():
     torch.manual_seed(0)
     model = _SharedConvDifferentBnTrainBlock().train()
-    packed = functional.pack_conv_bn_train_modules(copy.deepcopy(model))
+    packed = pack_conv_bn_train_modules(copy.deepcopy(model))
     x = torch.randn(2, 3, 16, 16, requires_grad=True)
     x_packed = x.detach().clone().requires_grad_(True)
 
@@ -323,7 +330,7 @@ def test_pack_conv_bn_train_modules_skips_shared_conv_with_different_bn():
 def test_pack_conv_bn_train_modules_skips_partial_conv_bn_callsites():
     torch.manual_seed(0)
     model = _PartialConvBnBlock().train()
-    packed = functional.pack_conv_bn_train_modules(copy.deepcopy(model))
+    packed = pack_conv_bn_train_modules(copy.deepcopy(model))
     x = torch.randn(2, 3, 16, 16, requires_grad=True)
     x_packed = x.detach().clone().requires_grad_(True)
 
