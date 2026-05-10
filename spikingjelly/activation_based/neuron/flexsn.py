@@ -540,6 +540,12 @@ class FlexSNKernel:
         For detailed information about arguments, refer to :class:`FlexSN`.
         """
         super().__init__()
+        if not torch.cuda.is_available():
+            raise RuntimeError(
+                "FlexSNKernel requires CUDA, but torch.cuda.is_available() "
+                "is False. Use FlexSN with backend='torch' or backend='hop' "
+                "for non-CUDA paths."
+            )
         from ..triton_kernel.flexsn.custom_ops import (
             attach_flexsn_handle_finalizer,
             register_flexsn_kernel_handle,
@@ -660,7 +666,7 @@ class FlexSNKernel:
             )
 
         use_training = torch.is_grad_enabled() and (
-            self._core_requires_grad
+            _core_requires_grad(self._core)
             or any(tensor.requires_grad for tensor in flat_args)
         )
         if use_training:
@@ -1083,7 +1089,7 @@ class FlexSN(base.MemoryModule):
             raise NotImplementedError(
                 f"{value} is not a supported backend of {self._get_name()}!"
             )
-        if value not in ("triton", "inductor"):
+        if not _is_flexsn_cuda_scan_backend(value):
             base.check_backend_library(value)
         elif "_inductor_handle" in self.__dict__ and self._inductor_handle is None:
             logging.warning(
