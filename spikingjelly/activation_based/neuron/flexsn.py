@@ -658,7 +658,7 @@ class FlexSNKernel:
                 f"{type_name}."
             )
         all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
-        same_device = len({t.device for t in flat_args}) == 1 if flat_args else False
+        same_device = all(t.device == flat_args[0].device for t in flat_args) if flat_args else False
         if self._handle is None or not all_cuda or not same_device:
             raise RuntimeError(
                 "FlexSNKernel requires all input sequences and initial states "
@@ -1089,6 +1089,11 @@ class FlexSN(base.MemoryModule):
             raise NotImplementedError(
                 f"{value} is not a supported backend of {self._get_name()}!"
             )
+        if _is_flexsn_cuda_scan_backend(value) and self.step_mode != "m":
+            raise RuntimeError(
+                f"Cannot set backend={value!r} when step_mode={self.step_mode!r}; "
+                f"CUDA-scan backends require step_mode='m'."
+            )
         if not _is_flexsn_cuda_scan_backend(value):
             base.check_backend_library(value)
         elif "_inductor_handle" in self.__dict__ and self._inductor_handle is None:
@@ -1307,7 +1312,7 @@ class FlexSN(base.MemoryModule):
             state_args = [] if use_implicit_zero_states else list(self.states)
             flat_args = [*args, *state_args]
             all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
-            same_device = len({t.device for t in flat_args}) == 1
+            same_device = all(t.device == flat_args[0].device for t in flat_args) if flat_args else True
             if self._inductor_handle is not None and all_cuda and same_device:
                 if _no_grad:
                     if (
