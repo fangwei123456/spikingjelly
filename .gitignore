@@ -150,3 +150,7 @@ events.out.tfevents.*
 AGENTS.md
 workspace/
 /w1.py
+
+# Hermes Agent & Codex local state
+.hermes/
+.codex/
