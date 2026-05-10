@@ -3,7 +3,7 @@ import copy
 import functools
 import logging
 import os
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, Optional, Sequence, Tuple
 
 import torch
 
@@ -142,6 +142,17 @@ def _as_tuple(outputs):
     if isinstance(outputs, torch.Tensor):
         return (outputs,)
     return tuple(outputs)
+
+
+def _flat_args_on_single_cuda_device(
+    flat_args: Sequence[torch.Tensor],
+) -> Tuple[bool, bool]:
+    if len(flat_args) == 0:
+        return False, False
+    first = flat_args[0]
+    all_cuda = all(t.is_cuda for t in flat_args)
+    same_device = all(t.device == first.device for t in flat_args)
+    return all_cuda, same_device
 
 
 def _is_compiling() -> bool:
@@ -657,8 +668,7 @@ class FlexSNKernel:
                 f"FlexSNKernel expected tensor arguments, but arg #{index} is "
                 f"{type_name}."
             )
-        all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
-        same_device = all(t.device == flat_args[0].device for t in flat_args) if flat_args else False
+        all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
         if self._handle is None or not all_cuda or not same_device:
             raise RuntimeError(
                 "FlexSNKernel requires all input sequences and initial states "
@@ -676,8 +686,6 @@ class FlexSNKernel:
         else:
             outputs = flexsn_inductor_inference(self._handle, flat_args)
 
-        if len(outputs) == 1:
-            return outputs[0]
         return tuple(outputs)
 
 
@@ -877,7 +885,6 @@ class FlexSN(base.MemoryModule):
                     "FlexSN HOP backend requires at least one input sequence to derive T."
                 )
 
-        self.kernel = None
         register_flexsn_kernel_handle = None
 
         if _is_flexsn_cuda_scan_backend(backend) and torch.cuda.is_available():
@@ -1078,6 +1085,66 @@ class FlexSN(base.MemoryModule):
         result._inductor_train_info = None
 
         return result
+
+    @property
+    def kernel(self):
+        return self._kernel_accessor
+
+    def _kernel_accessor(self, *args):
+        flat_args = list(args)
+        expected = self.num_inputs + self.num_states
+        if len(flat_args) != expected:
+            raise ValueError(
+                "FlexSN.kernel expected "
+                f"{expected} tensors "
+                f"({self.num_inputs} input sequences + "
+                f"{self.num_states} initial states), "
+                f"but got {len(flat_args)}."
+            )
+        bad_arg = next(
+            (
+                (i, type(arg).__name__)
+                for i, arg in enumerate(flat_args)
+                if not isinstance(arg, torch.Tensor)
+            ),
+            None,
+        )
+        if bad_arg is not None:
+            index, type_name = bad_arg
+            raise TypeError(
+                f"FlexSN.kernel expected tensor arguments, but arg #{index} is "
+                f"{type_name}."
+            )
+
+        all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
+        if self._inductor_handle is None or not all_cuda or not same_device:
+            raise RuntimeError(
+                "FlexSN.kernel is unavailable: FlexSN CUDA scan kernels are not "
+                "ready, or inputs are not CUDA tensors on a single device."
+            )
+
+        use_training = torch.is_grad_enabled() and (
+            _core_requires_grad(self.core)
+            or any(tensor.requires_grad for tensor in flat_args)
+        )
+        if use_training:
+            if not self._inductor_training_available:
+                raise RuntimeError(
+                    "FlexSN.kernel training path is unavailable for the current "
+                    "CUDA scan handle."
+                )
+            return tuple(
+                flexsn_inductor_training(self._inductor_handle, flat_args)[
+                    : self.num_outputs + self.num_states
+                ]
+            )
+
+        if not self._inductor_inference_available:
+            raise RuntimeError(
+                "FlexSN.kernel inference path is unavailable for the current "
+                "CUDA scan handle."
+            )
+        return tuple(flexsn_inductor_inference(self._inductor_handle, flat_args))
 
     @property
     def backend(self):
@@ -1311,8 +1378,7 @@ class FlexSN(base.MemoryModule):
                 self.states = self.init_states(self.num_states, self.step_mode, *args)
             state_args = [] if use_implicit_zero_states else list(self.states)
             flat_args = [*args, *state_args]
-            all_cuda = len(flat_args) > 0 and all(t.is_cuda for t in flat_args)
-            same_device = all(t.device == flat_args[0].device for t in flat_args) if flat_args else True
+            all_cuda, same_device = _flat_args_on_single_cuda_device(flat_args)
             if self._inductor_handle is not None and all_cuda and same_device:
                 if _no_grad:
                     if (

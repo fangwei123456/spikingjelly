@@ -1106,7 +1106,7 @@ def test_inductor_backend_store_state_seqs(rng):
     )
 
 
-def test_inductor_backend_skips_flex_sn_kernel_construction():
+def test_inductor_backend_exposes_kernel_accessor():
     neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,
@@ -1115,7 +1115,7 @@ def test_inductor_backend_skips_flex_sn_kernel_construction():
         step_mode="m",
         backend="inductor",
     )
-    assert neuron.kernel is None
+    assert callable(neuron.kernel)
 
 
 def test_triton_backend_is_supported():
@@ -1128,10 +1128,10 @@ def test_triton_backend_is_supported():
         backend="triton",
     )
     assert neuron.backend == "triton"
-    assert neuron.kernel is None
+    assert callable(neuron.kernel)
 
 
-def test_triton_backend_setter_preserves_backend_name():
+def test_set_backend_to_triton():
     neuron = FlexSN(
         core=_lif_core,
         num_inputs=1,
