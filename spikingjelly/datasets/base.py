@@ -911,6 +911,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         the original dataset. Processed dataset is generated based on the raw dataset.
 
         :return: default to ``root/events_np``
+        :rtype: pathlib.Path
         """
         return self.cfg.root / "events_np"
 
@@ -1129,7 +1130,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         这些扩展名将传递给 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`
         以识别有效的数据文件。
 
-        :return: 支持的文件扩展名元组。
+        :return: 支持的文件扩展名元组，当前为 ``('.npy', '.npz')``。
         :rtype: Tuple[str]
 
         ----
@@ -1143,7 +1144,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         These extensions are passed to :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`
         to identify valid data files.
 
-        :return: tuple of supported file extensions.
+        :return: tuple of supported file extensions, currently ``('.npy', '.npz')``.
         :rtype: Tuple[str]
         """
         return (".npy", ".npz")

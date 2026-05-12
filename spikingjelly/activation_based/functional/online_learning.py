@@ -32,8 +32,8 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     :param optimizer: 网络使用的优化器
     :type optimizer: torch.optim.Optimizer
 
-    :return: 与优化器参数顺序对齐的运行平均列表
-    :rtype: list
+    :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前的 ``w.data``
+    :rtype: list[torch.Tensor]
 
     ----
 
@@ -49,8 +49,9 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     :param optimizer: the optimizer for the network
     :type optimizer: torch.optim.Optimizer
 
-    :return: a list containing running averages of parameters
-    :rtype: list
+    :return: a list aligned with optimizer parameter order whose elements are
+        the current ``w.data`` tensors
+    :rtype: list[torch.Tensor]
     """
     w_ra = []
     for item in optimizer.param_groups:
@@ -101,8 +102,9 @@ def fptt_online_training(
     :param alpha: FPTT 使用的超参数
     :type alpha: float
 
-    :param w_ra: 由 :func:`fptt_online_training_init_w_ra` 初始化的运行平均列表
-    :type w_ra: list
+    :param w_ra: 由 :func:`fptt_online_training_init_w_ra` 初始化的运行平均列表，
+        其中每个元素与一个优化器参数对应
+    :type w_ra: list[torch.Tensor]
 
     :return: None
     :rtype: None
@@ -138,9 +140,10 @@ def fptt_online_training(
     :param alpha: the hyper-parameter
     :type alpha: float
 
-    :param w_ra: the running average of parameters, which can be initialized by
-        :func:`fptt_online_training_init_w_ra`
-    :type w_ra: list
+    :param w_ra: the running-average list initialized by
+        :func:`fptt_online_training_init_w_ra`, where each element corresponds
+        to one optimizer parameter
+    :type w_ra: list[torch.Tensor]
 
     :return: None
     :rtype: None

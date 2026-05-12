@@ -190,6 +190,9 @@ class RandomTemporalDelete(torch.nn.Module):
         :return: 随机删除时间切片后的序列。
         :rtype: Union[torch.Tensor, np.ndarray]
 
+        :raises ValueError: 当 ``self.T_remain`` 非法时，由
+            :func:`random_temporal_delete` 内部的 ``numpy.random.choice`` 抛出
+
         ----
 
         .. _RandomTemporalDelete.forward-en:
@@ -205,5 +208,8 @@ class RandomTemporalDelete(torch.nn.Module):
 
         :return: sequence after random temporal deletion.
         :rtype: Union[torch.Tensor, np.ndarray]
+
+        :raises ValueError: raised by ``numpy.random.choice`` inside
+            :func:`random_temporal_delete` when ``self.T_remain`` is invalid
         """
         return random_temporal_delete(x_seq, self.T_remain, self.batch_first)

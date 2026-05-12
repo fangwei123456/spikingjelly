@@ -1200,8 +1200,9 @@ def split_to_train_test_set(
         随机性由 ``numpy.random.seed`` 控制
     :type random_split: bool
 
-    :return: 一个元组 ``(train_set, test_set)``
-    :rtype: tuple
+    :return: 一个元组 ``(train_set, test_set)``，二者均为基于 ``origin_dataset`` 构造的
+        :class:`torch.utils.data.Subset`
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
 
     ----
 
@@ -1224,8 +1225,9 @@ def split_to_train_test_set(
         The randomness is controlled by ``numpy.random.seed``
     :type random_split: bool
 
-    :return: a tuple ``(train_set, test_set)``
-    :rtype: tuple
+    :return: a tuple ``(train_set, test_set)``, where both elements are
+        :class:`torch.utils.data.Subset` instances built from ``origin_dataset``
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
     """
     label_idx = []
     for i in range(num_classes):
@@ -1286,8 +1288,9 @@ def fast_split_to_train_test_set(
     :param batch_size: 每个批次处理的样本数量
     :type batch_size: int
 
-    :return: 一个元组 ``(train_set, test_set)``
-    :rtype: tuple
+    :return: 一个元组 ``(train_set, test_set)``，二者均为基于 ``origin_dataset`` 构造的
+        :class:`torch.utils.data.Subset`
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
 
     ----
 
@@ -1313,8 +1316,9 @@ def fast_split_to_train_test_set(
     :param batch_size: the number of samples to process in each batch
     :type batch_size: int
 
-    :return: a tuple ``(train_set, test_set)``
-    :rtype: tuple
+    :return: a tuple ``(train_set, test_set)``, where both elements are
+        :class:`torch.utils.data.Subset` instances built from ``origin_dataset``
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
     """
     label_idx = [[] for _ in range(num_classes)]
 
@@ -1371,8 +1375,8 @@ def pad_sequence_collate(batch: list):
     :type batch: list
 
     :return: ``(x_p, y, x_len)``，其中 ``x_p`` 是按相同长度补齐后的批数据，
-        ``y`` 是标签张量，``x_len`` 是各样本原始长度
-    :rtype: tuple
+        ``y`` 是标签张量，``x_len`` 是各样本原始长度张量
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
 
@@ -1384,14 +1388,14 @@ def pad_sequence_collate(batch: list):
     the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with
     fixed duration to integrate events to frames.
 
-    :param batch: a list of samples that contains ``(x, y)``, where ``x`` is a
-        list containing sequences with different length and ``y`` is the label
+    :param batch: a list of samples ``(x, y)``, where ``x`` is a variable-length
+        sequence and ``y`` is the label
     :type batch: list
 
     :return: batched samples ``(x_p, y, x_len)``, where ``x_p`` is padded ``x``
         to the same length, ``y`` is the label, and ``x_len`` is the length of
         ``x``
-    :rtype: tuple
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
 
