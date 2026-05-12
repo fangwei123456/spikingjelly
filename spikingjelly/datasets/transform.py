@@ -34,6 +34,8 @@ def random_temporal_delete(
     :return: 长度为 `T_remain` 的序列，通过随机移除 `T - T_remain` 个切片获得
     :rtype: Union[torch.Tensor, np.ndarray]
 
+    :raises ValueError: 当 ``T_remain`` 为负数，或大于当前时间维长度时由 ``numpy.random.choice`` 抛出。
+
     ----
 
     .. _random_temporal_delete-en:
@@ -53,6 +55,9 @@ def random_temporal_delete(
 
     :return: the sequence with length `T_remain`, which is obtained by randomly removing `T - T_remain` slices
     :rtype: Union[torch.Tensor, np.ndarray]
+
+    :raises ValueError: raised by ``numpy.random.choice`` when ``T_remain`` is
+        negative or larger than the current time dimension length.
 
     ----
 
@@ -164,4 +169,39 @@ class RandomTemporalDelete(torch.nn.Module):
         self.batch_first = batch_first
 
     def forward(self, x_seq: Union[torch.Tensor, np.ndarray]):
+        r"""
+        **API Language:**
+        :ref:`中文 <RandomTemporalDelete.forward-cn>` | :ref:`English <RandomTemporalDelete.forward-en>`
+
+        ----
+
+        .. _RandomTemporalDelete.forward-cn:
+
+        * **中文**
+
+        使用当前模块保存的 ``T_remain`` 和 ``batch_first`` 配置，对输入序列执行
+        :func:`random_temporal_delete`。
+
+        :param x_seq: 输入序列。其时间维布局由 ``batch_first`` 决定。
+        :type x_seq: Union[torch.Tensor, np.ndarray]
+
+        :return: 随机删除时间切片后的序列。
+        :rtype: Union[torch.Tensor, np.ndarray]
+
+        ----
+
+        .. _RandomTemporalDelete.forward-en:
+
+        * **English**
+
+        Apply :func:`random_temporal_delete` to the input sequence with the
+        ``T_remain`` and ``batch_first`` configuration stored in this module.
+
+        :param x_seq: input sequence. The time-dimension layout is determined
+            by ``batch_first``.
+        :type x_seq: Union[torch.Tensor, np.ndarray]
+
+        :return: sequence after random temporal deletion.
+        :rtype: Union[torch.Tensor, np.ndarray]
+        """
         return random_temporal_delete(x_seq, self.T_remain, self.batch_first)

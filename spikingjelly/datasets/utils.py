@@ -163,6 +163,8 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
     * **中文**
 
+    将指定 DVS 数据集的每个样本按固定帧数加载为帧数据，并将所有帧逐张保存为图片。
+
     :param dataset: 要保存的数据集名称。当前可用的选项有：DVS128Gesture、CIFAR10DVS 和 NCaltech101。
     :type dataset: str
 
@@ -178,11 +180,20 @@ def save_every_frame_of_an_entire_DVS_dataset(
     :param number_of_threads: 用于保存图像的线程数。
     :type number_of_threads: int
 
+    :return: None
+    :rtype: None
+
+    :raises ValueError: 当必要参数为空，或 ``dataset`` 不是 ``"DVS128Gesture"``、
+        ``"CIFAR10DVS"``、``"NCaltech101"`` 之一时抛出。
+
     ----
 
     .. _save_every_frame_of_an_entire_DVS_dataset-en:
 
     * **English**
+
+    Load every sample from the specified DVS dataset as frame data with a fixed
+    frame count, and save every frame as an image.
 
     :param dataset: name of the dataset to be saved. The current available options
         are: DVS128Gesture, CIFAR10DVS and NCaltech101.
@@ -199,6 +210,13 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
     :param number_of_threads: how many threads are used to save images.
     :type number_of_threads: int
+
+    :return: None
+    :rtype: None
+
+    :raises ValueError: raised when required arguments are empty, or when
+        ``dataset`` is not one of ``"DVS128Gesture"``, ``"CIFAR10DVS"``, or
+        ``"NCaltech101"``.
 
     ----
 
@@ -281,6 +299,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
     :type save_gif_to: str
 
     :return: None
+    :rtype: None
     ----
 
     .. _play_frame-en:
@@ -296,6 +315,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
     :type save_gif_to: str
 
     :return: None
+    :rtype: None
     """
     if isinstance(x, np.ndarray):
         x = torch.from_numpy(x)
@@ -423,8 +443,8 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
     位 23: 极性（0 表示 OFF，1 表示 ON）
     位 22 - 0: 时间戳（以微秒为单位）
 
-    :param file_name: aedat v3 文件的路径
-    :type file_name: str
+    :param file_name: ATIS 二进制文件的路径
+    :type file_name: Union[str, pathlib.Path]
 
     :return: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
     :rtype: dict
@@ -442,8 +462,8 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
     bit 23: Polarity (0 for OFF, 1 for ON)
     bit 22 - 0: Timestamp (in microseconds)
 
-    :param file_name: path of the aedat v3 file
-    :type file_name: str
+    :param file_name: path of the ATIS binary file
+    :type file_name: Union[str, pathlib.Path]
 
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: dict
@@ -472,7 +492,7 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     * **中文**
 
     :param file_name: 保存帧的 npz 文件的路径
-    :type file_name: str
+    :type file_name: Union[str, pathlib.Path]
 
     :return: 帧
     :rtype: np.ndarray
@@ -484,7 +504,7 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     * **English**
 
     :param file_name: path of the npz file that saves the frames
-    :type file_name: str
+    :type file_name: Union[str, pathlib.Path]
 
     :return: frames
     :rtype: np.ndarray
@@ -538,9 +558,9 @@ def integrate_events_segment_to_frame(
     :type j_l: int
 
     :param j_r: 积分区间的右端索引（不包含）
-    :type j_r:
+    :type j_r: int
 
-    :return: 帧
+    :return: 单个双通道帧
     :rtype: np.ndarray
 
     ----
@@ -569,16 +589,16 @@ def integrate_events_segment_to_frame(
     :param H: height of the frame
     :type H: int
 
-    :param W: weight of the frame
+    :param W: width of the frame
     :type W: int
 
     :param j_l: the start index of the integral interval, which is included
     :type j_l: int
 
     :param j_r: the right index of the integral interval, which is not included
-    :type j_r:
+    :type j_r: int
 
-    :return: frames
+    :return: a single two-channel frame
     :rtype: np.ndarray
     """
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及

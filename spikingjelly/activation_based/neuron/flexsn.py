@@ -529,7 +529,28 @@ class FlexSNKernel:
         ``num_inputs`` 个输入序列，``states`` 是 ``num_states`` 个初始状态；返回值为 ``[*output_seqs, *state_seqs]`` ，
         其中 ``output_seqs`` 是 ``num_outputs`` 个输出序列，``state_seqs`` 是 ``num_states`` 个状态序列。
 
-        阅读 :class:`FlexSN` 文档以获取参数的详细信息。
+        :param core: 描述单步前向推理的函数，签名应为
+            ``[*inputs, *states] -> [*outputs, *updated_states]``，其中输入、输出和状态均为张量。
+        :type core: Callable
+
+        :param num_inputs: 输入序列的数量。
+        :type num_inputs: int
+
+        :param num_states: 初始状态张量的数量，同时也应与返回的更新后状态数量一致。
+        :type num_states: int
+
+        :param num_outputs: 输出序列的数量。
+        :type num_outputs: int
+
+        :param example_inputs: 传给 ``core`` 的示例张量，形式为 ``[*inputs, *states]``，用于辅助构建推理与训练 kernel。
+            若为 ``None``，则由底层构建器使用默认示例张量。
+        :type example_inputs: Optional[Tuple[torch.Tensor]]
+
+        :param requires_grad: 指示 ``core`` 各个输入参数是否需要梯度的布尔元组，仅用于训练 kernel 的构建。
+            若为 ``None``，则由底层构建器采用默认行为。
+        :type requires_grad: Optional[Tuple[bool]]
+
+        :raises RuntimeError: 当前环境未启用 CUDA 时抛出，因为 ``FlexSNKernel`` 仅支持 CUDA kernel 路径。
 
         ----
 
@@ -548,7 +569,35 @@ class FlexSNKernel:
         ``[*output_seqs, *state_seqs]`` , where ``output_seqs`` is a list of output sequences, and
         ``state_seqs`` is a list of state sequences.
 
-        For detailed information about arguments, refer to :class:`FlexSN`.
+        :param core: function describing the single-step inference dynamics with
+            signature ``[*inputs, *states] -> [*outputs, *updated_states]``.
+            Inputs, outputs, and states should all be tensors.
+        :type core: Callable
+
+        :param num_inputs: number of input sequences.
+        :type num_inputs: int
+
+        :param num_states: number of initial state tensors, which should also
+            match the number of updated states returned by ``core``.
+        :type num_states: int
+
+        :param num_outputs: number of output sequences.
+        :type num_outputs: int
+
+        :param example_inputs: example tensors passed to ``core`` in the form
+            ``[*inputs, *states]``. They are used to help build inference and
+            training kernels. If ``None``, the backend builders use their
+            default example tensors.
+        :type example_inputs: Optional[Tuple[torch.Tensor]]
+
+        :param requires_grad: tuple indicating whether each argument of
+            ``core`` requires gradients. It is only used when building the
+            training kernels. If ``None``, the backend builders use their
+            default behavior.
+        :type requires_grad: Optional[Tuple[bool]]
+
+        :raises RuntimeError: raised when CUDA is unavailable, because
+            ``FlexSNKernel`` only supports the CUDA kernel path.
         """
         super().__init__()
         if not torch.cuda.is_available():

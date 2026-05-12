@@ -1120,7 +1120,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         * **English**
 
-        :return: a tuple ``(H, W)``, where ``H`` is the height of the data and ``W`` is the weight of the data.
+        :return: a tuple ``(H, W)``, where ``H`` is the height of the data and ``W`` is the width of the data.
             For example, this function returns ``(128, 128)`` for the DVS128 Gesture dataset.
         :rtype: Tuple[int]
         """
@@ -1129,10 +1129,27 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @classmethod
     @abc.abstractmethod
     def resource_url_md5(cls) -> list:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.resource_url_md5-cn>` | :ref:`English <NeuromorphicDatasetFolder.resource_url_md5-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.resource_url_md5-cn:
+
+        * **中文**
+
+        :return: 一个列表 ``url``，其中 ``url[i]`` 是一个元组，包含第 ``i`` 个数据文件的文件名、下载链接和 MD5。
+        :rtype: list
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.resource_url_md5-en:
+
         * **English**
 
-        :return: a list ``url`` that ``url[i]`` is a tuple, which contains the i-th file's name, download link, and MD5
+        :return: a list ``url`` where ``url[i]`` is a tuple containing the
+            i-th file's name, download link, and MD5 checksum.
         :rtype: list
         """
         pass
@@ -1140,10 +1157,27 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @classmethod
     @abc.abstractmethod
     def downloadable(cls) -> bool:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.downloadable-cn>` | :ref:`English <NeuromorphicDatasetFolder.downloadable-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.downloadable-cn:
+
+        * **中文**
+
+        :return: 数据集是否可以通过 Python 代码直接下载。若返回 ``False``，则需要用户手动下载。
+        :rtype: bool
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.downloadable-en:
+
         * **English**
 
-        :return: whether the dataset can be directly downloaded by python codes. If not, the user have to download it manually
+        :return: whether the dataset can be downloaded directly by Python code.
+            If ``False``, users need to download it manually.
         :rtype: bool
         """
         pass
@@ -1151,37 +1185,89 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @classmethod
     @abc.abstractmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
-        """
-        * **English**
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.extract_downloaded_files-cn>` | :ref:`English <NeuromorphicDatasetFolder.extract_downloaded_files-en>`
 
-        This function defines how to extract downloaded files.
+        ----
 
-        :param download_root: root directory path which saves downloaded dataset files
+        .. _NeuromorphicDatasetFolder.extract_downloaded_files-cn:
+
+        * **中文**
+
+        定义如何解压已下载的数据文件。
+
+        :param download_root: 保存已下载数据文件的根目录。
         :type download_root: pathlib.Path
 
-        :param extract_root: root directory path which saves extracted files from downloaded files
+        :param extract_root: 保存解压后文件的根目录。
         :type extract_root: pathlib.Path
 
         :return: None
+        :rtype: None
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.extract_downloaded_files-en:
+
+        * **English**
+
+        Define how downloaded dataset files are extracted.
+
+        :param download_root: root directory that stores downloaded dataset
+            files.
+        :type download_root: pathlib.Path
+
+        :param extract_root: root directory that stores files extracted from
+            the downloaded archives.
+        :type extract_root: pathlib.Path
+
+        :return: None
+        :rtype: None
         """
         pass
 
     @classmethod
     @abc.abstractmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
-        """
-        * **English**
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.create_raw_from_extracted-cn>` | :ref:`English <NeuromorphicDatasetFolder.create_raw_from_extracted-en>`
 
-        This function defines how to convert the extracted dataset in
-        ``extract_root`` to raw dataset and save the converted files to
-        ``raw_root``.
+        ----
 
-        :param extract_root: root directory where extracted files are saved
+        .. _NeuromorphicDatasetFolder.create_raw_from_extracted-cn:
+
+        * **中文**
+
+        定义如何将 ``extract_root`` 中的解压数据转换为原始数据集格式，并保存到 ``raw_root``。
+
+        :param extract_root: 保存解压后文件的根目录。
         :type extract_root: pathlib.Path
 
-        :param raw_root: root directory where raw dataset files are saved
+        :param raw_root: 保存转换后原始数据集文件的根目录。
         :type raw_root: pathlib.Path
 
         :return: None
+        :rtype: None
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.create_raw_from_extracted-en:
+
+        * **English**
+
+        Define how to convert the extracted dataset in ``extract_root`` to the
+        raw dataset format and save the converted files to ``raw_root``.
+
+        :param extract_root: root directory where extracted files are saved.
+        :type extract_root: pathlib.Path
+
+        :param raw_root: root directory where converted raw dataset files are
+            saved.
+        :type raw_root: pathlib.Path
+
+        :return: None
+        :rtype: None
         """
         pass

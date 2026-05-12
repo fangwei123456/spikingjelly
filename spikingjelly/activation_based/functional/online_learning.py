@@ -95,7 +95,7 @@ def fptt_online_training(
     :param target_seq: 目标序列
     :type target_seq: torch.Tensor
 
-    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(x_t, y_t) -> torch.Tensor``
+    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param alpha: FPTT 使用的超参数
@@ -132,7 +132,7 @@ def fptt_online_training(
     :type target_seq: torch.Tensor
 
     :param f_loss_t: the loss function, which should have the formulation of
-        ``def f_loss_t(x_t, y_t) -> torch.Tensor``
+        ``def f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param alpha: the hyper-parameter
@@ -274,7 +274,7 @@ def ottt_online_training(
     :param target_seq: 目标序列，形状为 ``[B, T, ...]``
     :type target_seq: torch.Tensor
 
-    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(x_t, y_t) -> torch.Tensor``
+    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param online: 是否在每个时间步在线更新参数；若为 ``False``，则仅在整段序列结束后更新一次
@@ -311,7 +311,7 @@ def ottt_online_training(
     :type target_seq: torch.Tensor
 
     :param f_loss_t: the loss function, which should have the formulation of
-        ``def f_loss_t(x_t, y_t) -> torch.Tensor``
+        ``def f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param online: whether to update parameters online at each time step or to
