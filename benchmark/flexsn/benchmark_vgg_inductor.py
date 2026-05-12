@@ -27,6 +27,7 @@ from spikingjelly.activation_based.neuron.flexsn import FlexSN
 # LIF core for FlexSN — matches LIFNode defaults (decay_input=True, hard reset)
 # ---------------------------------------------------------------------------
 
+
 def _lif_core(x: torch.Tensor, v: torch.Tensor):
     tau, v_th = 2.0, 1.0
     h = v + (x - v) / tau
@@ -36,6 +37,7 @@ def _lif_core(x: torch.Tensor, v: torch.Tensor):
 
 def make_flexsn_factory():
     """Return a neuron factory compatible with SpikingVGG's spiking_neuron kwarg."""
+
     def factory(**kwargs):
         step_mode = kwargs.get("step_mode", "m")
         return FlexSN(
@@ -46,12 +48,14 @@ def make_flexsn_factory():
             step_mode=step_mode,
             backend="inductor",
         )
+
     return factory
 
 
 # ---------------------------------------------------------------------------
 # Timing helper
 # ---------------------------------------------------------------------------
+
 
 def cuda_time_ms(
     fn: Callable[[], Any],
@@ -82,6 +86,7 @@ def cuda_time_ms(
 # Build model helpers
 # ---------------------------------------------------------------------------
 
+
 def build_vgg(neuron_factory, **neuron_kwargs) -> nn.Module:
     model = spiking_vgg16_bn(
         spiking_neuron=neuron_factory,
@@ -96,6 +101,7 @@ def build_vgg(neuron_factory, **neuron_kwargs) -> nn.Module:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     if not torch.cuda.is_available():
         print("CUDA not available — skipping.", file=sys.stderr)
@@ -105,20 +111,23 @@ def main() -> None:
     print(f"PyTorch: {torch.__version__}")
     print()
 
-    T   = 4        # timesteps (typical SNN setting)
-    B   = 64       # batch size (CIFAR-10 scale)
-    C, H, W = 3, 32, 32   # CIFAR-10 resolution (standard spiking-VGG benchmark)
+    T = 4  # timesteps (typical SNN setting)
+    B = 64  # batch size (CIFAR-10 scale)
+    C, H, W = 3, 32, 32  # CIFAR-10 resolution (standard spiking-VGG benchmark)
 
     torch.manual_seed(0)
     x = torch.randn(T, B, C, H, W, device="cuda")
 
     configs = [
-        ("LIFNode  backend=torch  ",
-         lambda: build_vgg(neuron.LIFNode, backend="torch")),
-        ("LIFNode  backend=triton ",
-         lambda: build_vgg(neuron.LIFNode, backend="triton")),
-        ("FlexSN   backend=inductor",
-         lambda: build_vgg(make_flexsn_factory())),
+        (
+            "LIFNode  backend=torch  ",
+            lambda: build_vgg(neuron.LIFNode, backend="torch"),
+        ),
+        (
+            "LIFNode  backend=triton ",
+            lambda: build_vgg(neuron.LIFNode, backend="triton"),
+        ),
+        ("FlexSN   backend=inductor", lambda: build_vgg(make_flexsn_factory())),
     ]
 
     scale = "ImageNet-scale" if H >= 224 and W >= 224 else "CIFAR-scale"
@@ -137,7 +146,9 @@ def main() -> None:
             # One extra forward to initialise states and trigger Triton JIT +
             # autotune before timing begins (avoids measuring compile cost).
             model(x)
-            ms = cuda_time_ms(lambda: model(x), reset_hook=lambda: functional.reset_net(model))
+            ms = cuda_time_ms(
+                lambda: model(x), reset_hook=lambda: functional.reset_net(model)
+            )
 
         imgs_per_sec = B * 1000 / ms
         rel = f"{ms / baseline_ms:.2f}×" if baseline_ms is not None else "1.00×"

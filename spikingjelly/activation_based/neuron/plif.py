@@ -194,7 +194,9 @@ class ParametricLIFNode(BaseNode):
         detach_reset = self.detach_reset
         decay_input = self.decay_input
 
-        def _graph(x_seq: torch.Tensor, v_init: torch.Tensor, reciprocal_tau: torch.Tensor):
+        def _graph(
+            x_seq: torch.Tensor, v_init: torch.Tensor, reciprocal_tau: torch.Tensor
+        ):
             v = v_init
             spike_seq = torch.empty_like(x_seq)
             if store_v_seq:

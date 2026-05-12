@@ -40,7 +40,10 @@ from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 from spikingjelly.activation_based.examples.memopt.models import VGGBlock
 from spikingjelly.activation_based.memopt import memory_optimization
 from spikingjelly.activation_based.model import spikformer
-from spikingjelly.activation_based.model.spikformer import SpikformerConv2dBNLIF, SpikformerMLP
+from spikingjelly.activation_based.model.spikformer import (
+    SpikformerConv2dBNLIF,
+    SpikformerMLP,
+)
 from spikingjelly.activation_based.layer.attention import SpikingSelfAttention
 
 
@@ -59,7 +62,9 @@ def _non_negative_int(value: str) -> int:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Benchmark distributed SNN training modes.")
+    parser = argparse.ArgumentParser(
+        description="Benchmark distributed SNN training modes."
+    )
     parser.add_argument("--batch-size", type=_positive_int, default=8)
     parser.add_argument("--T", type=_positive_int, default=10)
     parser.add_argument("--steps", type=_positive_int, default=20)
@@ -115,7 +120,9 @@ def parse_args():
     return parser.parse_args()
 
 
-def _reduce_classification_output(out: torch.Tensor, target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+def _reduce_classification_output(
+    out: torch.Tensor, target: torch.Tensor
+) -> Tuple[torch.Tensor, torch.Tensor]:
     if out.ndim >= 3:
         out = out.mean(dim=0)
     if target.ndim > 1:
@@ -251,7 +258,9 @@ def resolve_strategy_args(args, world_size: int):
             args.pp_layout = "|".join(str(v) for v in recommendation.pp_layout)
         args.pp_delay_wgrad = recommendation.pp_delay_wgrad
         args.pp_memopt_stage_budget_ratio = recommendation.pp_memopt_stage_budget_ratio
-        recommendation_notes.append("Applied the full recommended distributed strategy because mode=auto.")
+        recommendation_notes.append(
+            "Applied the full recommended distributed strategy because mode=auto."
+        )
     elif recommendation is not None:
         recommendation_notes.append(
             f"Mode '{args.mode}' overrides the recommended mode '{recommendation.mode}'."
@@ -260,7 +269,11 @@ def resolve_strategy_args(args, world_size: int):
             args.memopt_level = recommendation.memopt_level
         if args.optimizer_sharding is None and args.mode == "dp":
             args.optimizer_sharding = recommendation.optimizer_sharding
-        if args.mesh_shape is None and args.mode == "fsdp2_tp" and recommendation.mesh_shape is not None:
+        if (
+            args.mesh_shape is None
+            and args.mode == "fsdp2_tp"
+            and recommendation.mesh_shape is not None
+        ):
             args.mesh_shape = list(recommendation.mesh_shape)
         if args.pp_microbatches is None and args.mode == "pp":
             args.pp_microbatches = recommendation.pp_microbatches
@@ -287,7 +300,9 @@ def resolve_strategy_args(args, world_size: int):
     return recommendation, tuple(recommendation_notes)
 
 
-def _aggregate_event_counts(counter: _LinePatternCounter, device: torch.device) -> Dict[str, int]:
+def _aggregate_event_counts(
+    counter: _LinePatternCounter, device: torch.device
+) -> Dict[str, int]:
     values = torch.tensor(
         [counter.warning_count, counter.recompile_count, counter.graph_break_count],
         device=device,
@@ -340,7 +355,9 @@ def _comparison_key(record: Dict[str, object]) -> Dict[str, object]:
     return {key: _normalize_json_value(record.get(key)) for key in keys}
 
 
-def _append_benchmark_record(path: str, record: Dict[str, object]) -> Optional[Dict[str, object]]:
+def _append_benchmark_record(
+    path: str, record: Dict[str, object]
+) -> Optional[Dict[str, object]]:
     result_path = Path(path)
     result_path.parent.mkdir(parents=True, exist_ok=True)
     comparison_key = _comparison_key(record)
@@ -397,7 +414,11 @@ def setup_runtime(mode: str):
     ensure_distributed_initialized()
     rank = dist.get_rank()
     world_size = dist.get_world_size()
-    device = torch.device("cuda", local_rank) if torch.cuda.is_available() else torch.device("cpu")
+    device = (
+        torch.device("cuda", local_rank)
+        if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
     return device, rank, world_size
 
 
@@ -453,8 +474,12 @@ def build_model(args, device, world_size):
             num_classes=args.num_classes,
             backend=args.backend,
         ).to(device)
-        sample_input = torch.randn(args.batch_size, 3, args.image_size, args.image_size, device=device)
-    defer_memopt_until_after_tp = args.mode in ("tp", "fsdp2_tp") and args.memopt_level == 1
+        sample_input = torch.randn(
+            args.batch_size, 3, args.image_size, args.image_size, device=device
+        )
+    defer_memopt_until_after_tp = (
+        args.mode in ("tp", "fsdp2_tp") and args.memopt_level == 1
+    )
     defer_memopt_until_after_pp = args.mode == "pp" and args.memopt_level > 0
     optimize_ms = 0.0
     if not defer_memopt_until_after_tp and not defer_memopt_until_after_pp:
@@ -553,7 +578,11 @@ def build_model(args, device, world_size):
             raise ValueError(
                 "fsdp2_tp mode requires an explicit 2D mesh, e.g. --mesh-shape 2 4."
             )
-        tp_mesh_dim = args.tp_mesh_dim if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None else 1
+        tp_mesh_dim = (
+            args.tp_mesh_dim
+            if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None
+            else 1
+        )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
         if args.model == "cifar10dvs_vgg":
             if defer_memopt_until_after_tp:
@@ -595,7 +624,9 @@ def build_model(args, device, world_size):
                 )
                 model, optimize_ms = maybe_apply_memopt(args, model, sample_input)
                 num_blocks = len(getattr(model, "blocks", ()))
-                shard_roots = ["patch_embed"] + [f"blocks.{i}" for i in range(num_blocks)]
+                shard_roots = ["patch_embed"] + [
+                    f"blocks.{i}" for i in range(num_blocks)
+                ]
                 model = apply_snn_fsdp2(
                     model,
                     device_mesh=mesh,
@@ -634,7 +665,11 @@ def benchmark(args, counter: _LinePatternCounter):
     )
     data_replicas, data_rank = resolve_data_parallel_partition(
         mesh,
-        dp_mesh_dim=args.dp_mesh_dim if args.dp_mesh_dim is not None else (0 if args.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None else None),
+        dp_mesh_dim=args.dp_mesh_dim
+        if args.dp_mesh_dim is not None
+        else (
+            0 if args.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None else None
+        ),
         sharded_by_data_parallel=args.mode in ("dp", "fsdp2", "fsdp2_tp"),
     )
     seed = 20260428 + data_rank
@@ -689,7 +724,9 @@ def benchmark(args, counter: _LinePatternCounter):
         x = torch.randn(args.batch_size, args.T, 2, 48, 48, device=device)
         y = torch.randint(0, 10, (args.batch_size,), device=device)
     else:
-        x = torch.randn(args.batch_size, 3, args.image_size, args.image_size, device=device)
+        x = torch.randn(
+            args.batch_size, 3, args.image_size, args.image_size, device=device
+        )
         y = torch.randint(0, args.num_classes, (args.batch_size,), device=device)
 
     if device.type == "cuda":
@@ -758,7 +795,9 @@ def benchmark(args, counter: _LinePatternCounter):
             "steps": args.steps,
             "warmup": args.warmup,
             "image_size": args.image_size,
-            "mesh_shape": tuple(args.mesh_shape) if args.mesh_shape is not None else None,
+            "mesh_shape": tuple(args.mesh_shape)
+            if args.mesh_shape is not None
+            else None,
             "tp_mesh_dim": args.tp_mesh_dim,
             "dp_mesh_dim": args.dp_mesh_dim,
             "memopt_compress_x": args.memopt_compress_x,
@@ -771,8 +810,12 @@ def benchmark(args, counter: _LinePatternCounter):
             "step_ms": step_ms,
             "global_samples_per_second": global_samples_per_second,
             "peak_allocated_mb": peak_allocated_mb,
-            "recommendation_mode": recommendation.mode if recommendation is not None else None,
-            "recommendation_rationale": recommendation.rationale if recommendation is not None else (),
+            "recommendation_mode": recommendation.mode
+            if recommendation is not None
+            else None,
+            "recommendation_rationale": recommendation.rationale
+            if recommendation is not None
+            else (),
             "recommendation_notes": recommendation_notes,
             **event_counts,
         }
@@ -863,7 +906,9 @@ def benchmark_pipeline(
             "steps": args.steps,
             "warmup": args.warmup,
             "image_size": args.image_size,
-            "mesh_shape": tuple(args.mesh_shape) if args.mesh_shape is not None else None,
+            "mesh_shape": tuple(args.mesh_shape)
+            if args.mesh_shape is not None
+            else None,
             "tp_mesh_dim": args.tp_mesh_dim,
             "dp_mesh_dim": args.dp_mesh_dim,
             "memopt_compress_x": args.memopt_compress_x,
@@ -877,8 +922,12 @@ def benchmark_pipeline(
             "step_ms": step_ms,
             "global_samples_per_second": global_samples_per_second,
             "peak_allocated_mb": peak_tensor.item(),
-            "recommendation_mode": recommendation.mode if recommendation is not None else None,
-            "recommendation_rationale": recommendation.rationale if recommendation is not None else (),
+            "recommendation_mode": recommendation.mode
+            if recommendation is not None
+            else None,
+            "recommendation_rationale": recommendation.rationale
+            if recommendation is not None
+            else (),
             "recommendation_notes": recommendation_notes,
             **event_counts,
         }
@@ -895,7 +944,9 @@ if __name__ == "__main__":
             record = benchmark(args, event_counter)
         if record is not None:
             previous = _append_benchmark_record(args.result_log, record)
-            record["comparison_to_previous"] = _summarize_benchmark_comparison(record, previous)
+            record["comparison_to_previous"] = _summarize_benchmark_comparison(
+                record, previous
+            )
             print(record)
     finally:
         if dist.is_available() and dist.is_initialized():

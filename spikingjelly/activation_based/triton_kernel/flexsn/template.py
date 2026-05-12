@@ -25,6 +25,7 @@ INDENTATION = " " * 4
 def _signature(names):
     return f",\n{INDENTATION}".join(names)
 
+
 init_state_load_template = """
     {name}_init_ptrs = tl.make_block_ptr(
         {name}_init_ptr,

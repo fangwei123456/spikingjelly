@@ -334,6 +334,35 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         pass
 
     def build(self) -> Tuple[Path, Callable]:
+        r"""
+        **API Language:**
+        :ref:`中文 <EventBuilder.build-cn>` | :ref:`English <EventBuilder.build-en>`
+
+        ----
+
+        .. _EventBuilder.build-cn:
+
+        * **中文**
+
+        直接使用原始数据集目录作为处理后的数据集目录，不做额外处理。
+
+        :return: 元组 ``(processed_root, loader)``，其中 ``processed_root`` 为原始数据集目录，
+            loader 为 ``np.load``。
+        :rtype: Tuple[pathlib.Path, Callable]
+
+        ----
+
+        .. _EventBuilder.build-en:
+
+        * **English**
+
+        Use the raw dataset directory as the processed dataset directory directly
+        without any additional preprocessing.
+
+        :return: a tuple ``(processed_root, loader)``, where ``processed_root``
+            is the raw dataset directory and the loader is ``np.load``.
+        :rtype: Tuple[pathlib.Path, Callable]
+        """
         return self.processed_root, self.get_loader()
 
     @property
@@ -649,13 +678,13 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     def __init__(
         self,
         root: Union[str, Path],
-        train: bool = None,
+        train: Optional[bool] = None,
         data_type: str = "event",
-        frames_number: int = None,
-        split_by: str = None,
-        duration: int = None,
-        custom_integrate_function: Callable = None,
-        custom_integrated_frames_dir_name: str = None,
+        frames_number: Optional[int] = None,
+        split_by: Optional[str] = None,
+        duration: Optional[int] = None,
+        custom_integrate_function: Optional[Callable] = None,
+        custom_integrated_frames_dir_name: Optional[str] = None,
         transform: Optional[Callable] = None,
         target_transform: Optional[Callable] = None,
     ):
@@ -707,7 +736,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param train: 是否使用训练集。对于提供训练/测试划分的数据集，设置为 ``True`` 或 ``False``，例如 DVS128 Gesture。
             如果数据集不提供训练/测试划分，例如 CIFAR10-DVS，请设置为 ``None`` 并使用 :func:`split_to_train_test_set <spikingjelly.datasets.utils.split_to_train_test_set>`
             函数来获取训练/测试集
-        :type train: bool
+        :type train: Optional[bool]
 
         :param data_type: ``"event"`` 或 ``"frame"``
         :type data_type: str
@@ -787,7 +816,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             If the dataset does not provide train/test division, e.g., CIFAR10-DVS,
             please set to ``None`` and use :func:`split_to_train_test_set <spikingjelly.datasets.utils.split_to_train_test_set>`
             function to get train/test set
-        :type train: bool
+        :type train: Optional[bool]
 
         :param data_type: ``"event"`` or ``"frame"``
         :type data_type: str
@@ -1086,6 +1115,27 @@ class NeuromorphicDatasetFolder(DatasetFolder):
     @classmethod
     def get_extensions(cls) -> Tuple[str]:
         r"""
+        **API Language:**
+        :ref:`中文 <NeuromorphicDatasetFolder.get_extensions-cn>` | :ref:`English <NeuromorphicDatasetFolder.get_extensions-en>`
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_extensions-cn:
+
+        * **中文**
+
+        返回处理后的数据集样本的有效文件扩展名。
+
+        这些扩展名将传递给 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`
+        以识别有效的数据文件。
+
+        :return: 支持的文件扩展名元组。
+        :rtype: Tuple[str]
+
+        ----
+
+        .. _NeuromorphicDatasetFolder.get_extensions-en:
+
         * **English**
 
         Return valid file extensions for processed dataset samples.

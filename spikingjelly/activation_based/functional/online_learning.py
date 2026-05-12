@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Callable
+from typing import Callable, Tuple
 
 from .. import base
 from .net_config import detach_net
@@ -246,7 +246,7 @@ def ottt_online_training(
     target_seq: torch.Tensor,
     f_loss_t: Callable,
     online: bool,
-) -> None:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     **API Language:**
     :ref:`中文 <ottt_online_training-cn>` | :ref:`English <ottt_online_training-en>`

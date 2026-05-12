@@ -7,8 +7,12 @@ import pytest
 import torch
 
 
-_BENCHMARK_PATH = Path(__file__).resolve().parents[2] / "benchmark" / "benchmark_snn_distributed.py"
-_BENCHMARK_SPEC = importlib.util.spec_from_file_location("benchmark_snn_distributed", _BENCHMARK_PATH)
+_BENCHMARK_PATH = (
+    Path(__file__).resolve().parents[2] / "benchmark" / "benchmark_snn_distributed.py"
+)
+_BENCHMARK_SPEC = importlib.util.spec_from_file_location(
+    "benchmark_snn_distributed", _BENCHMARK_PATH
+)
 bench = importlib.util.module_from_spec(_BENCHMARK_SPEC)
 assert _BENCHMARK_SPEC.loader is not None
 _BENCHMARK_SPEC.loader.exec_module(bench)

@@ -39,7 +39,6 @@ class IFNodeBPTTKernel(NeuronBPTTKernel):
         )
 
 
-
 _IF_FWD_KERNEL_CACHE = {}
 _IF_BWD_KERNEL_CACHE = {}
 
@@ -71,7 +70,6 @@ def _get_if_backward_kernel(
         )
         _IF_BWD_KERNEL_CACHE[key] = kernel
     return kernel
-
 
 
 @torch.library.custom_op("sj::cupy_multistep_if_forward", mutates_args=())
@@ -238,6 +236,7 @@ torch.library.register_autograd(
     _cupy_multistep_if_backward_autograd,
     setup_context=_setup_cupy_multistep_if_context,
 )
+
 
 def multistep_if(
     x_seq: torch.Tensor,

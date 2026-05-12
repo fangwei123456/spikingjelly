@@ -59,12 +59,14 @@ Usage::
     # inputs_seq: tuple of T-leading tensors, e.g. shape [T, N, ...]
     # init_states: tuple of per-step state tensors, e.g. shape [N, ...]
     # returns: (*output_seqs, *state_seqs) — each with shape [T, ...]
-    result = flex_sn_scan(core_fn, num_inputs, num_states, num_outputs,
-                         *inputs_seq, *init_states)
+    result = flex_sn_scan(
+        core_fn, num_inputs, num_states, num_outputs, *inputs_seq, *init_states
+    )
 
 Captured tensor freevars from ``core_fn`` are appended after the
 ``[*inputs_seq, *init_states]`` segment when Dynamo rewrites the HOP call.
 """
+
 from __future__ import annotations
 import inspect
 import warnings
@@ -513,18 +515,13 @@ def eager_scan(
     T = inputs_seq[0].shape[0]
     for i, x in enumerate(inputs_seq):
         if x.shape[0] != T:
-            raise ValueError(
-                f"input {i} has leading dim {x.shape[0]}, expected {T}"
-            )
+            raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
         empty_outputs = _empty_outputs_from_template(
             inputs_seq, num_outputs, output_template_specs
         )
-        empty_states = tuple(
-            state.new_empty((0, *state.shape))
-            for state in states
-        )
+        empty_states = tuple(state.new_empty((0, *state.shape)) for state in states)
         return (*empty_outputs, *empty_states)
 
     output_buffers = [[] for _ in range(num_outputs)]
@@ -637,9 +634,7 @@ def eager_scan_final_state(
     T = inputs_seq[0].shape[0]
     for i, x in enumerate(inputs_seq):
         if x.shape[0] != T:
-            raise ValueError(
-                f"input {i} has leading dim {x.shape[0]}, expected {T}"
-            )
+            raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
         empty_outputs = _empty_outputs_from_template(
@@ -751,17 +746,14 @@ def lowerable_scan(
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
         if x.shape[0] != T:
-            raise ValueError(
-                f"input {i} has leading dim {x.shape[0]}, expected {T}"
-            )
+            raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
         empty_outputs = _empty_outputs_from_template(
             input_seqs, num_outputs, output_template_specs
         )
         empty_states = tuple(
-            state.new_empty((0, *state.shape))
-            for state in init_states
+            state.new_empty((0, *state.shape)) for state in init_states
         )
         return (*empty_outputs, *empty_states)
 
@@ -770,7 +762,9 @@ def lowerable_scan(
         step_inputs = tuple(step_inputs)
         additional_inputs = tuple(additional_inputs)
         results = core_fn(*step_inputs, *carry, *additional_inputs)
-        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        results = (
+            tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        )
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "
@@ -886,9 +880,7 @@ def lowerable_scan_final_state(
     T = input_seqs[0].shape[0]
     for i, x in enumerate(input_seqs):
         if x.shape[0] != T:
-            raise ValueError(
-                f"input {i} has leading dim {x.shape[0]}, expected {T}"
-            )
+            raise ValueError(f"input {i} has leading dim {x.shape[0]}, expected {T}")
 
     if T == 0:
         empty_outputs = _empty_outputs_from_template(
@@ -902,7 +894,9 @@ def lowerable_scan_final_state(
         step_inputs = tuple(step_inputs)
         additional_inputs = tuple(additional_inputs)
         results = core_fn(*step_inputs, *carry, *additional_inputs)
-        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        results = (
+            tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        )
         if len(results) != num_outputs + num_states:
             raise ValueError(
                 f"core returned {len(results)} values, "
@@ -1055,8 +1049,7 @@ def lowerable_while_loop_scan(
             input_seqs, num_outputs, output_template_specs
         )
         empty_states = tuple(
-            state.new_empty((0, *state.shape))
-            for state in init_states
+            state.new_empty((0, *state.shape)) for state in init_states
         )
         return (*empty_outputs, *empty_states)
 
@@ -1110,7 +1103,9 @@ def lowerable_while_loop_scan(
 
         step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
         results = core_fn(*step_inputs, *states, *lifted)
-        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        results = (
+            tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        )
         if len(results) != len(first_results):
             raise ValueError(
                 f"core returned {len(results)} values at runtime, "
@@ -1127,8 +1122,7 @@ def lowerable_while_loop_scan(
                 f"expected {len(outputs_acc)}"
             )
         next_output_acc = tuple(
-            _append_to_tail(outputs_acc[i], outputs[i])
-            for i in range(len(outputs_acc))
+            _append_to_tail(outputs_acc[i], outputs[i]) for i in range(len(outputs_acc))
         )
         if len(states_acc) != len(next_states):
             raise ValueError(
@@ -1300,7 +1294,9 @@ def lowerable_while_loop_scan_final_state(
 
         step_inputs = tuple(_ensure_contiguous(queue[0]) for queue in step_input_queues)
         results = core_fn(*step_inputs, *states, *lifted)
-        results = tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        results = (
+            tuple(results) if not isinstance(results, torch.Tensor) else (results,)
+        )
         if len(results) != len(first_results):
             raise ValueError(
                 f"core returned {len(results)} values at runtime, "
@@ -1317,8 +1313,7 @@ def lowerable_while_loop_scan_final_state(
                 f"expected {len(outputs_acc)}"
             )
         next_output_acc = tuple(
-            _append_to_tail(outputs_acc[i], outputs[i])
-            for i in range(len(outputs_acc))
+            _append_to_tail(outputs_acc[i], outputs[i]) for i in range(len(outputs_acc))
         )
         return (
             t + 1,
@@ -1393,6 +1388,7 @@ def _register_dynamo_hop() -> None:
 
     install_subgraph = getattr(hop_vars, "add_subgraph", None)
     if install_subgraph is None:
+
         def install_subgraph(tx, source, name, gm):
             return tx.output.install_subgraph(name, gm)
 
@@ -1424,7 +1420,9 @@ def _register_dynamo_hop() -> None:
                 )
 
             body_fn = args[0]
-            if not isinstance(body_fn, (UserFunctionVariable, NestedUserFunctionVariable)):
+            if not isinstance(
+                body_fn, (UserFunctionVariable, NestedUserFunctionVariable)
+            ):
                 raise hop_vars.unimplemented(
                     "flex_sn_scan expects a user-defined Python function body"
                 )
@@ -1587,10 +1585,7 @@ def _register_dynamo_hop() -> None:
                     num_inputs,
                     num_states,
                     num_outputs,
-                    *(
-                        arg.as_proxy().node.meta["example_value"]
-                        for arg in flat_args
-                    ),
+                    *(arg.as_proxy().node.meta["example_value"] for arg in flat_args),
                     *(
                         freevar.node.meta["example_value"]
                         for freevar in lifted_freevars

@@ -5,7 +5,7 @@ import shutil
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 import torch
@@ -811,7 +811,7 @@ def integrate_events_by_fixed_frames_number(
     :param H: the height of frame
     :type H: int
 
-    :param W: the weight of frame
+    :param W: the width of frame
     :type W: int
 
     :return: frames
@@ -971,7 +971,7 @@ def integrate_events_by_fixed_duration(
     :param H: the height of frame
     :type H: int
 
-    :param W: the weight of frame
+    :param W: the width of frame
     :type W: int
 
     :return: frames
@@ -1007,7 +1007,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     H: int,
     W: int,
     print_save: bool = False,
-) -> None:
+) -> int:
     r"""
     **API Language:**
     :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_duration-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_duration-en>`
@@ -1041,7 +1041,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param print_save: 如果 ``True``，此函数将打印保存的文件的路径。
     :type print_save: bool
 
-    :return: None
+    :return: 帧的数量
+    :rtype: int
 
     ----
 
@@ -1072,7 +1073,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param print_save: If ``True``, this function will print saved files' paths.
     :type print_save: bool
 
-    :return: None
+    :return: number of frames saved
+    :rtype: int
     """
     frames = integrate_events_by_fixed_duration(loader(events_np_file), duration, H, W)
     fname, _ = os.path.splitext(os.path.basename(events_np_file))
@@ -1196,7 +1198,7 @@ def split_to_train_test_set(
     :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
         如果 ``True``，此函数将随机划分每个类别的样本。
         随机性由 ``numpy.random.seed`` 控制
-    :type random_split: int
+    :type random_split: bool
 
     :return: 一个元组 ``(train_set, test_set)``
     :rtype: tuple
@@ -1220,7 +1222,7 @@ def split_to_train_test_set(
         be included in train set, while the reset will be included in test set.
         If ``True``, this function will split samples in each classes randomly.
         The randomness is controlled by ``numpy.random.seed``
-    :type random_split: int
+    :type random_split: bool
 
     :return: a tuple ``(train_set, test_set)``
     :rtype: tuple
@@ -1279,7 +1281,7 @@ def fast_split_to_train_test_set(
     :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
         如果 ``True``，此函数将随机划分每个类别的样本。随机性由
         ``numpy.random.seed`` 控制
-    :type random_split: int
+    :type random_split: bool
 
     :param batch_size: 每个批次处理的样本数量
     :type batch_size: int
@@ -1306,7 +1308,7 @@ def fast_split_to_train_test_set(
         be included in train set, while the reset will be included in test set.
         If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
         ``numpy.random.seed``
-    :type random_split: int
+    :type random_split: bool
 
     :param batch_size: the number of samples to process in each batch
     :type batch_size: int
@@ -1444,7 +1446,7 @@ def pad_sequence_collate(batch: list):
     )
 
 
-def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
+def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     r"""
     **API Language:**
     :ref:`中文 <padded_sequence_mask-cn>` | :ref:`English <padded_sequence_mask-en>`

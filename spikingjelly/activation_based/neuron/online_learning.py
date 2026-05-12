@@ -237,7 +237,12 @@ class OTTTLIFNode(LIFNode):
                 raise ValueError(self.backend)
         else:
             spike, self.v = self._eval_single_step_forward(
-                x, self.v, self.v_threshold, self.v_reset, self.tau, self.decay_input,
+                x,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
+                self.tau,
+                self.decay_input,
             )
             return spike
 
@@ -425,6 +430,11 @@ class SLTTLIFNode(LIFNode):
                 raise ValueError(self.backend)
         else:
             spike, self.v = self._eval_single_step_forward(
-                x, self.v, self.v_threshold, self.v_reset, self.tau, self.decay_input,
+                x,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
+                self.tau,
+                self.decay_input,
             )
             return spike

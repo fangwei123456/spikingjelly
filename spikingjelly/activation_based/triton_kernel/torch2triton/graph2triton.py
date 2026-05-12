@@ -111,11 +111,7 @@ def _resolve_codegen_cache_dir() -> Path:
                         pass
                     st = cache_dir.stat()
                 mode = stat.S_IMODE(st.st_mode)
-                if (
-                    st.st_uid != uid
-                    or not (mode & stat.S_IWUSR)
-                    or (mode & 0o077)
-                ):
+                if st.st_uid != uid or not (mode & stat.S_IWUSR) or (mode & 0o077):
                     continue
             with tempfile.NamedTemporaryFile(dir=cache_dir, delete=True):
                 pass

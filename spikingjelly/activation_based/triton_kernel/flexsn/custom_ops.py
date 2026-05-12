@@ -110,6 +110,7 @@ class FlexSNKernelHandle:
     ``custom_ops`` registry and bind Python-side kernel objects to integer
     ``handle`` values.
     """
+
     inference_kernel: Optional[object]
     inference_info: Optional[FlexSNInfo]
     inference_final_state_kernel: Optional[object]

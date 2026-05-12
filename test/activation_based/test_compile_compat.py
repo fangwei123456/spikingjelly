@@ -162,7 +162,9 @@ def test_standard_inductor_backend_matches_torch_backend(kind):
     torch.cuda.manual_seed_all(20260429)
 
     torch_node = _build_node(kind, "torch", _make_surrogate("Sigmoid")).cuda().train()
-    inductor_node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).cuda().train()
+    inductor_node = (
+        _build_node(kind, "inductor", _make_surrogate("Sigmoid")).cuda().train()
+    )
     inductor_node.load_state_dict(torch_node.state_dict(), strict=True)
 
     x_ref = torch.randn(9, 3, 18, device="cuda", dtype=torch.float32)
@@ -186,7 +188,9 @@ def test_standard_inductor_backend_matches_torch_backend(kind):
 
 
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-def test_standard_inductor_backend_cache_key_tracks_threshold_changes(kind, monkeypatch):
+def test_standard_inductor_backend_cache_key_tracks_threshold_changes(
+    kind, monkeypatch
+):
     node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train()
     captured_keys = []
 
@@ -229,11 +233,17 @@ def test_lif_inductor_backend_cache_key_tracks_tau_changes(monkeypatch):
 
 
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-def test_standard_inductor_backend_cache_key_tracks_cuda_device_changes(kind, monkeypatch):
+def test_standard_inductor_backend_cache_key_tracks_cuda_device_changes(
+    kind, monkeypatch
+):
     if not torch.cuda.is_available() or torch.cuda.device_count() < 2:
-        pytest.skip("At least 2 CUDA devices are required for cache key device-index coverage.")
+        pytest.skip(
+            "At least 2 CUDA devices are required for cache key device-index coverage."
+        )
 
-    node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train().to("cuda:0")
+    node = (
+        _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train().to("cuda:0")
+    )
     captured_keys = []
 
     def _fake_compile(cache_key, fn):
@@ -255,7 +265,9 @@ def test_standard_inductor_backend_cache_key_tracks_cuda_device_changes(kind, mo
 
 
 @pytest.mark.parametrize("kind", ["lif", "if", "plif"])
-def test_standard_inductor_backend_cache_key_tracks_runtime_shape_changes(kind, monkeypatch):
+def test_standard_inductor_backend_cache_key_tracks_runtime_shape_changes(
+    kind, monkeypatch
+):
     node = _build_node(kind, "inductor", _make_surrogate("Sigmoid")).train()
     captured_keys = []
 
@@ -446,9 +458,11 @@ def test_triton_unsupported_surrogate_raises_not_implemented(kind):
     torch.manual_seed(20260419)
     torch.cuda.manual_seed_all(20260419)
 
-    node = _build_node(
-        kind, "triton", surrogate.PiecewiseLeakyReLU(w=1.0, c=0.01)
-    ).cuda().train()
+    node = (
+        _build_node(kind, "triton", surrogate.PiecewiseLeakyReLU(w=1.0, c=0.01))
+        .cuda()
+        .train()
+    )
     x = torch.randn(6, 2, 9, device="cuda", requires_grad=True)
 
     with pytest.raises(NotImplementedError, match="PiecewiseLeakyReLU"):

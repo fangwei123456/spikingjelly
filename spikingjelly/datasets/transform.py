@@ -8,7 +8,7 @@ __all__ = ["random_temporal_delete", "RandomTemporalDelete"]
 
 
 def random_temporal_delete(
-    x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first
+    x_seq: Union[torch.Tensor, np.ndarray], T_remain: int, batch_first: bool
 ):
     r"""
     **API Language:**
@@ -168,7 +168,9 @@ class RandomTemporalDelete(torch.nn.Module):
         self.T_remain = T_remain
         self.batch_first = batch_first
 
-    def forward(self, x_seq: Union[torch.Tensor, np.ndarray]):
+    def forward(
+        self, x_seq: Union[torch.Tensor, np.ndarray]
+    ) -> Union[torch.Tensor, np.ndarray]:
         r"""
         **API Language:**
         :ref:`中文 <RandomTemporalDelete.forward-cn>` | :ref:`English <RandomTemporalDelete.forward-en>`

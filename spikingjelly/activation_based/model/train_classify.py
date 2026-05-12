@@ -565,9 +565,7 @@ class Trainer:
             collate_fn=collate_fn,
             worker_init_fn=seed_worker,
             persistent_workers=args.persistent_workers and args.workers > 0,
-            prefetch_factor=(
-                args.prefetch_factor if args.workers > 0 else None
-            ),
+            prefetch_factor=(args.prefetch_factor if args.workers > 0 else None),
         )
 
         data_loader_test = torch.utils.data.DataLoader(
@@ -578,9 +576,7 @@ class Trainer:
             pin_memory=not args.disable_pinmemory,
             worker_init_fn=seed_worker,
             persistent_workers=args.persistent_workers and args.workers > 0,
-            prefetch_factor=(
-                args.prefetch_factor if args.workers > 0 else None
-            ),
+            prefetch_factor=(args.prefetch_factor if args.workers > 0 else None),
         )
 
         print("Creating model")
