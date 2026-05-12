@@ -16,6 +16,7 @@ SpikingJelly中主要提供了如下几种包装器：
 .. code-block:: python
 
     import torch
+    import torch.nn as nn
     from spikingjelly.activation_based import neuron, functional, layer
 
     net_s = neuron.IFNode(step_mode='s')

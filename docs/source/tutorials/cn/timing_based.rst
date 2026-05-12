@@ -165,15 +165,14 @@ Tempotron的膜电位定义为：
     class Tempotron(nn.Module):
         ...
         @staticmethod
-        def mse_loss(v_max, v_threshold, label, num_classes):
+        def mse_loss(v_max, label):
             '''
             :param v_max: Tempotron神经元在仿真周期内输出的最大电压值，与forward函数在ret_type == 'v_max'时的返回值相\
             同。shape=[batch_size, out_features]的tensor
-            :param v_threshold: Tempotron的阈值电压，float或shape=[batch_size, out_features]的tensor
             :param label: 样本的真实标签，shape=[batch_size]的tensor
-            :param num_classes: 样本的类别总数，int
             :return: 分类错误的神经元的电压，与阈值电压之差的均方误差
             '''
+            v_threshold = 1.0
             wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
             return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
 

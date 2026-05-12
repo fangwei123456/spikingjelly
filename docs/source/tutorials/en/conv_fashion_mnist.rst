@@ -272,6 +272,10 @@ Let us load the trained model, set ``batch_size=4``, which means we only save 4 
 
     python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
 
+.. note::
+
+    The checkpoint was trained with ``batch_size=256`` (denoted by ``b256`` in the checkpoint path), while the inference command above uses ``batch_size=4`` to save only 4 samples for visualization.
+
 Images and spikes will be saved in ``./logs/visualization``. Here are two images and spikes encoded from them:
 
 .. image:: ../../_static/tutorials/conv_fashion_mnist/visualization/0/input.*

@@ -26,6 +26,16 @@ First, import the relevant modules:
     from spikingjelly.activation_based import neuron
 
 
+    class MLP(nn.Module):
+        def __init__(self, in_features, hidden_features):
+            super().__init__()
+            self.fc1 = nn.Linear(in_features, hidden_features)
+            self.fc2 = nn.Linear(hidden_features, in_features)
+
+        def forward(self, x):
+            return self.fc2(nn.functional.gelu(self.fc1(x)))
+
+
 In the Spiking Self Attention mechanism, Query, Key, and Value are all spike sequences. The specific approach is to add spike neurons to the output of the three tensors, coupling spiking neurons to avoid introducing negative values. The Softmax function is removed, constructing the Spiking Self Attention mechanism:
 
 .. code-block:: python

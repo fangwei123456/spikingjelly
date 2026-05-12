@@ -54,7 +54,7 @@ Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度
             neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
 
             layer.Linear(512, n_actions),
-            neuron.NonSpikingLIFNode(decode=dec_type)
+            neuron.NonSpikingLIFNode(decode='max-mem')
         )
 
 其中非脉冲神经元的膜电压编码方法需要通过参数\ ``dec_type``\ 设置，替代函数这里选择\ ``surrogate.ATan``\。

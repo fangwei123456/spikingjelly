@@ -103,7 +103,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 
 #. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。:class:`spikingjelly.activation_based.neuron` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset` 中可以找到膜电位重置的代码：
+可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。:class:`spikingjelly.activation_based.neuron` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset` 中可以找到膜电位重置的代码：
 
 .. code-block:: python
 
@@ -212,10 +212,10 @@ Soft方式重置方程为：
 
 结果如下：
 
-.. image:: ../../_static/tutorials/0_neuron/1.*
+.. image:: ../../_static/tutorials/neuron/1.*
     :width: 100%
 
-.. image:: ../../_static/tutorials/0_neuron/2.*
+.. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
 步进模式和后端

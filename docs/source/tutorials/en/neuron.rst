@@ -66,7 +66,7 @@ We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons
 
 Note that the spiking neurons are stateful. So, we must call ``reset()`` before we give a new input sample to the spiking neurons.
 
-What is teh realization between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
+What is the realization between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
 
 We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` to describe the charging of continuous-time spiking neurons. For the IF neuron, the charging function is:
 
@@ -107,7 +107,7 @@ Firing spike will consume the accumulated potential, and make the potential decr
 #. #. Soft reset: the membrane potential will decrease the threshold potential after firing: :math:`V[t] = V[t] - V_{threshold}`
 
 We can find that the neuron that uses soft reset does not need the attribute :math:`V_{reset}`. The default value of ``v_reset`` in the ``__init__`` function of :class:`spikingjelly.activation_based.neuron` is ``1.0`` and the neuron will use hard reset by default.\
-If we set ``v_reset = None``, then the neuron will use the soft reset. We can find the codes for neuronal reset in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset`:
+If we set ``v_reset = None``, then the neuron will use the soft reset. We can find the codes for neuronal reset in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset`:
 
 .. code-block:: python
 
@@ -214,10 +214,10 @@ Reset the neurons layer, and give the input with ``shape=[32]``. Then we can che
 
 The results are:
 
-.. image:: ../../_static/tutorials/0_neuron/1.*
+.. image:: ../../_static/tutorials/neuron/1.*
     :width: 100%
 
-.. image:: ../../_static/tutorials/0_neuron/2.*
+.. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
 Step mode and backend

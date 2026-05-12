@@ -272,6 +272,10 @@ English version: :doc:`../en/conv_fashion_mnist`
 
     python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
 
+.. note::
+
+    检查点使用 ``batch_size=256`` 进行训练（检查点路径中的 ``b256`` 表示），而上述推理命令使用 ``batch_size=4`` 仅保存4个样本用于可视化。
+
 
 运行后图片会保存到 ``./logs/visualization`` 文件夹中。下面展示2个输入图片，和对应的编码后的脉冲：
 

@@ -18,6 +18,7 @@ and :class:`MultiStepContainer <spikingjelly.activation_based.layer.MultiStepCon
 .. code-block:: python
 
     import torch
+    import torch.nn as nn
     from spikingjelly.activation_based import neuron, functional, layer
 
     net_s = neuron.IFNode(step_mode='s')
