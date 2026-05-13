@@ -216,8 +216,7 @@ efforts. For example, :class:`spikingjelly.activation_based.model.train_classify
           elif opt_name == "adamw":
               optimizer = torch.optim.AdamW(parameters, lr=args.lr, weight_decay=args.weight_decay)
           else:
-              raise RuntimeError(f"Invalid optimizer
-               {args.opt}. Only SGD, RMSprop and AdamW are supported.")
+              optimizer = None
           return optimizer
 
       def main(self, args):
@@ -369,11 +368,11 @@ we can train large-scale SNNs easily. Here are the example codes:
   class SResNetTrainer(train_classify.Trainer):
       def preprocess_train_sample(self, args, x: torch.Tensor):
           # define how to process train sample before send it to model
-          return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+          return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
 
       def preprocess_test_sample(self, args, x: torch.Tensor):
           # define how to process test sample before send it to model
-          return x.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+          return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
 
       def process_model_output(self, args, y: torch.Tensor):
           return y.mean(0)  # return firing rate

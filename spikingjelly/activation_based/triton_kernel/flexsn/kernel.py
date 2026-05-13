@@ -1,4 +1,4 @@
-"""Build Triton scan kernels for FlexSN's triton / inductor backend.
+"""Build Triton scan kernels for FlexSN's Triton/Inductor backends.
 
 Three entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)

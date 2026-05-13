@@ -157,24 +157,28 @@ Tempotron的膜电位定义为：
 
     train_batch_accuracy = (out_spikes_counter_frequency.max(1)[1] == label.to(device)).float().mean().item()
 
-我们使用的损失函数与 [#f1]_ 中的类似，但所有不同。对于分类错误的神经元，误差为其峰值电压与阈值电压之差的平方，损失函数可以\
-在 ``timing_based.neuron`` 中找到源代码：
+我们使用的损失函数与 [#f1]_ 中的类似，但并不完全相同。对于分类错误的神经元，误差为其峰值电压与阈值电压之差的平方，损失函数可以\
+在 ``timing_based.neuron`` 中找到源代码。当前实现中， ``mse_loss`` 是 ``Tempotron`` 的实例方法：
 
 .. code-block:: python
 
     class Tempotron(nn.Module):
         ...
-        @staticmethod
-        def mse_loss(v_max, label):
+        def mse_loss(self, v_max, label):
             '''
             :param v_max: Tempotron神经元在仿真周期内输出的最大电压值，与forward函数在ret_type == 'v_max'时的返回值相\
             同。shape=[batch_size, out_features]的tensor
             :param label: 样本的真实标签，shape=[batch_size]的tensor
             :return: 分类错误的神经元的电压，与阈值电压之差的均方误差
             '''
-            v_threshold = 1.0
-            wrong_mask = ((v_max >= v_threshold).float() != F.one_hot(label, 10)).float()
-            return torch.sum(torch.pow((v_max - v_threshold) * wrong_mask, 2)) / label.shape[0]
+            wrong_mask = (
+                (v_max >= self.model.cfg.threshold_voltage).float()
+                != F.one_hot(label, self.model.cfg.out_neurons_count)
+            ).float()
+            squared_error = torch.pow(
+                (v_max - self.model.cfg.threshold_voltage) * wrong_mask, 2
+            )
+            return torch.sum(squared_error) / label.shape[0]
 
 下面我们直接运行代码。完整的源代码位于 ``spikingjelly/timing_based/examples/tempotron_mnist.py``：
 

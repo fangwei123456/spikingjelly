@@ -200,4 +200,3 @@ Currently, :func:`import_from_nir <spikingjelly.activation_based.nir_exchange.fr
         x = torch.rand(7, 9, 3, 32, 32) # [T, B, C, H, W]
         y = gm(x)
         print("y.shape =", y[0].shape)
-

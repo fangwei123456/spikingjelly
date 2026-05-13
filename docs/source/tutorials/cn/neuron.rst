@@ -103,7 +103,7 @@ IF神经元层有一些构造参数，在API文档中对这些参数有详细的
 
 #. Soft方式：释放脉冲后，膜电位减去阈值电压：:math:`V[t] = V[t] - V_{threshold}`
 
-可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。:class:`spikingjelly.activation_based.neuron` 中的神经元，在构造函数的参数之一 ``v_reset``，默认为 ``1.0`` ，表示神经元使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset` 中可以找到膜电位重置的代码：
+可以发现，对于使用Soft方式的神经元，并不需要重置电压 :math:`V_{reset}` 这个变量。在当前实现中， :class:`spikingjelly.activation_based.neuron` 中的大多数神经元构造函数中的 ``v_reset`` 默认值均为 ``0.0`` ，表示神经元默认使用Hard方式；若设置为 ``None``，则会使用Soft方式。在 :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset` 中可以找到膜电位重置的代码：
 
 .. code-block:: python
 
@@ -238,7 +238,7 @@ Soft方式重置方程为：
     y_seq = if_layer(x_seq)
     if_layer.reset()
 
-此外，部分神经元在多步模式下支持 ``cupy`` 后端； ``IFNode`` , ``LIFNode`` 和 ``ParametricLIFNode`` 等神经元在多步模式下支持 ``triton`` 后端。设置 ``backend`` 之后，前反向传播会使用对应后端进行加速。
+此外，部分神经元在单步和多步模式下都支持 ``cupy`` 后端； ``IFNode`` , ``LIFNode`` 和 ``ParametricLIFNode`` 等神经元在多步模式下还支持 ``triton`` 后端。设置 ``backend`` 之后，前反向传播会使用对应后端进行加速。
 
 .. code-block:: python
 
@@ -250,7 +250,7 @@ Soft方式重置方程为：
     # if_layer.backend=torch
 
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=s, supported_backends=('torch',)
+    # step_mode=s, supported_backends=('torch', 'cupy')
 
     if_layer.step_mode = 'm'
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
