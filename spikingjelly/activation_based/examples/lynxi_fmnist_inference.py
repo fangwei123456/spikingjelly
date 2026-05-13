@@ -1,10 +1,12 @@
+import argparse
+
 import torch
 import torch.nn as nn
-import argparse
-from spikingjelly.activation_based import lynxi_exchange
-from spikingjelly.activation_based.examples import conv_fashion_mnist
 import torchvision
 import tqdm
+
+from spikingjelly.activation_based import lynxi_exchange
+from spikingjelly.activation_based.examples import conv_fashion_mnist
 
 """
 python w1.py -T 4 -device cuda:0 -b 128 -epochs 64 -data-dir /datasets/FashionMNIST/ -cupy -opt sgd -lr 0.1 -j 8
@@ -68,6 +70,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     print(args)
+    if args.data_dir is None:
+        raise ValueError("-data-dir must be provided")
     batch_size = args.b
     net_sj = conv_fashion_mnist.CSNN(T=args.T, channels=args.channels)
     net_sj.eval()
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     net_lynxi = lynxi_exchange.load_lynxi_model(device_id, output_path)
 
     test_set = torchvision.datasets.FashionMNIST(
-        root="/home/cxhpc/fangwei/FashionMNIST",
+        root=args.data_dir,
         train=False,
         transform=torchvision.transforms.ToTensor(),
         download=True,
