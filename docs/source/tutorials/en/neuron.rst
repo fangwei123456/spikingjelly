@@ -66,7 +66,7 @@ We can find that ``if_layer.v`` is ``0.0`` because we have not given the neurons
 
 Note that the spiking neurons are stateful. So, we must call ``reset()`` before we give a new input sample to the spiking neurons.
 
-What is teh realization between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
+What is the relationship between :math:`V[t]` and :math:`X[t]`? In spiking neurons, :math:`V[t]` is not determined by the input :math:`X[t]` at the current time-step ``t``, but also by the membrane potential :math:`V[t-1]` at the last time-step ``t-1``.
 
 We use the sub-threshold neuronal dynamics :math:`\frac{\mathrm{d}V(t)}{\mathrm{d}t} = f(V(t), X(t))` to describe the charging of continuous-time spiking neurons. For the IF neuron, the charging function is:
 
@@ -106,8 +106,8 @@ Firing spike will consume the accumulated potential, and make the potential decr
 
 #. #. Soft reset: the membrane potential will decrease the threshold potential after firing: :math:`V[t] = V[t] - V_{threshold}`
 
-We can find that the neuron that uses soft reset does not need the attribute :math:`V_{reset}`. The default value of ``v_reset`` in the ``__init__`` function of :class:`spikingjelly.activation_based.neuron` is ``1.0`` and the neuron will use hard reset by default.\
-If we set ``v_reset = None``, then the neuron will use the soft reset. We can find the codes for neuronal reset in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_fire.neuronal_reset`:
+We can find that the neuron that uses soft reset does not need the attribute :math:`V_{reset}`. In the current implementation of :class:`spikingjelly.activation_based.neuron`, the default value of ``v_reset`` is ``0.0``, which means the neuron will use hard reset by default.\
+If we set ``v_reset = None``, then the neuron will use the soft reset. We can find the codes for neuronal reset in :class:`spikingjelly.activation_based.neuron.BaseNode.neuronal_reset`:
 
 .. code-block:: python
 
@@ -178,7 +178,6 @@ Now let us give inputs to the spiking neurons step-by-step, check the membrane p
                                     v_reset=if_layer.v_reset,
                                     figsize=figsize, dpi=dpi)
     plt.show()
- 
 The input has ``shape=[1]``. So, there is only 1 neuron. Its membrane potential and output spikes are:
 
 .. image:: ../../_static/tutorials/neuron/0.*
@@ -214,10 +213,10 @@ Reset the neurons layer, and give the input with ``shape=[32]``. Then we can che
 
 The results are:
 
-.. image:: ../../_static/tutorials/0_neuron/1.*
+.. image:: ../../_static/tutorials/neuron/1.*
     :width: 100%
 
-.. image:: ../../_static/tutorials/0_neuron/2.*
+.. image:: ../../_static/tutorials/neuron/2.*
     :width: 100%
 
 Step mode and backend
@@ -241,7 +240,7 @@ By setting ``step_mode``, we can switch to multi-step easily:
     y_seq = if_layer(x_seq)
     if_layer.reset()
 
-Some neurons support for ``cupy`` backend when using multi-step mode. In addition, ``triton`` backend is also available for ``IFNode``, ``LIFNode``, ``ParametricLIFNode``, etc. ``cupy`` and ``triton`` backend can accelerate forward and backward.
+Some neurons support the ``cupy`` backend in both single-step and multi-step modes. In addition, ``triton`` backend is also available for multi-step ``IFNode``, ``LIFNode``, ``ParametricLIFNode``, etc. These accelerated backends can speed up forward and backward.
 
 .. code-block:: python
 
@@ -253,7 +252,7 @@ Some neurons support for ``cupy`` backend when using multi-step mode. In additio
     # if_layer.backend=torch
 
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')
-    # step_mode=s, supported_backends=('torch',)
+    # step_mode=s, supported_backends=('torch', 'cupy')
 
     if_layer.step_mode = 'm'
     print(f'step_mode={if_layer.step_mode}, supported_backends={if_layer.supported_backends}')

@@ -525,7 +525,7 @@ Training on CIFAR10-DVS with ``batch_size=32`` and ``T=10`` gives the following 
     Epoch 5/100: peak_allocated=1973.11767578125 MB, peak_reserved=2770.0 MB
     Epoch 5/100: train_loss=1.64, train_acc=47.89%
 
-We observe a dramatic reduction in peak memory with an acceptable slowdown. The optimized Triton network is not exactly equivalent to the unoptimized one because the BN layers operate with temporal chunking; see Appendix G in the original paper [#huang2026gc]_. Fully runnable code is available in `spikingjelly.activation.example.memopt <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_.
+We observe a dramatic reduction in peak memory with an acceptable slowdown. The optimized Triton network is not exactly equivalent to the unoptimized one because the BN layers operate with temporal chunking; see Appendix G in the original paper [#huang2026gc]_. Fully runnable code is available in `spikingjelly.activation_based.examples.memopt <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_.
 
 .. note::
 

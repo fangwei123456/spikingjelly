@@ -74,7 +74,7 @@ For faster training speed, we use the multi-step mode and use the ``cupy`` backe
 Recently, sending the image to SNN directly is a popular method in deep SNNs, which we will also use in this tutorial. In this case, the ``image-spike`` encoding is implemented by the first three layers of the network, \
 which are ``{Conv2d-BatchNorm2d-IFNode}``.
 
-The input image has ``shape=[N, C, H, W]``. We add an additional time-step dimension, repeat it ``T`` times, and get the input sequence with ``shape=[T, N, C, H, W]``. \
+The input image has ``shape=[N, C, H, W]``. We add an additional time-step dimension and expand it to a sequence with ``shape=[T, N, C, H, W]``. \
 The output is defined by the firing rate of the last spiking neurons layer. Thus, the forward function is defined by:
 
 .. code-block:: python
@@ -83,7 +83,7 @@ The output is defined by the firing rate of the last spiking neurons layer. Thus
     class CSNN(nn.Module):
         def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
-        x_seq = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+        x_seq = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
         x_seq = self.conv_fc(x_seq)
         fr = x_seq.mean(0)
         return fr
@@ -235,7 +235,7 @@ Now let us extract the encoder ``{Conv2d-BatchNorm2d-IFNode}``, give images to t
                         img = img.to(args.device)
                         label = label.to(args.device)
                         # img.shape = [N, C, H, W]
-                        img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+                        img_seq = img.unsqueeze(0).expand(net.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
                         spike_seq = encoder(img_seq)
                         functional.reset_net(encoder)
                         to_pil_img = torchvision.transforms.ToPILImage()
@@ -271,6 +271,10 @@ Let us load the trained model, set ``batch_size=4``, which means we only save 4 
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
+
+.. note::
+
+    The checkpoint was trained with ``batch_size=256`` (denoted by ``b256`` in the checkpoint path), while the inference command above uses ``batch_size=4`` to save only 4 samples for visualization.
 
 Images and spikes will be saved in ``./logs/visualization``. Here are two images and spikes encoded from them:
 

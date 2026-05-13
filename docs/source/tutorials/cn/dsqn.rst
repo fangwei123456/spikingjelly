@@ -54,10 +54,10 @@ Atari游戏的观察经过预处理成为尺寸为 :math:`84\times 84` 的灰度
             neuron.LIFNode(surrogate_function=surrogate.ATan(), detach_reset=True),
 
             layer.Linear(512, n_actions),
-            neuron.NonSpikingLIFNode(decode=dec_type)
+            neuron.NonSpikingLIFNode(decode='max-mem')
         )
 
-其中非脉冲神经元的膜电压编码方法需要通过参数\ ``dec_type``\ 设置，替代函数这里选择\ ``surrogate.ATan``\。
+其中非脉冲神经元的膜电压编码方法由 ``neuron.NonSpikingLIFNode(decode=...)`` 的 ``decode`` 参数控制；而示例训练脚本中的命令行参数 ``--dec_type`` 会被传递到这个 ``decode`` 参数。替代函数这里选择\ ``surrogate.ATan``\。
 
 SpikingJelly中提供了4种膜电压编码方法，用作非脉冲神经元中膜电压序列的统计量，其中\ ``last-mem``\代表最终膜电压，\ ``max-mem``\代表最大膜电压，\ ``max-abs-mem``\代表最大绝对值的膜电压，而\ ``mean-mem``\代表平均膜电压。通过这种方式，SNN可以输出任意大小的浮点值，适用于强化学习中的Q值。
 

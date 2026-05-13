@@ -79,10 +79,10 @@ def set_threshold_margin(
     :type label_one_hot: torch.Tensor
 
     :param eval_threshold: Voltage threshold of neurons in output layer when evaluating (inference)
-    :type threshold0: float
+    :type eval_threshold: float
 
     :param threshold0: Voltage threshold of the corresponding neurons of **negative** samples in output layer when training
-    :type threshold1: float
+    :type threshold0: float
 
     :param threshold1: Voltage threshold of the corresponding neurons of **positive** samples in output layer when training
     :type threshold1: float
@@ -247,6 +247,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     :type net: torch.nn.Module
 
     :return: None
+    :rtype: None
 
     ----
 
@@ -262,6 +263,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     :type net: torch.nn.Module
 
     :return: None
+    :rtype: None
     """
     for m in net.modules():
         if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):

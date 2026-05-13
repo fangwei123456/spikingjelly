@@ -1,4 +1,4 @@
-"""Build Triton scan kernels for FlexSN's triton / inductor backend.
+"""Build Triton scan kernels for FlexSN's Triton/Inductor backends.
 
 Three entry points:
 * build_inference_kernel  — no-grad fast path (make_fx, no PYTORCH_JIT=0 needed)
@@ -45,9 +45,7 @@ def _prepare_example_inputs(
         )
     build_device = _example_build_device(example_inputs)
     if example_inputs is None:
-        return tuple(
-            torch.zeros(1, device=build_device) for _ in range(expected)
-        )
+        return tuple(torch.zeros(1, device=build_device) for _ in range(expected))
     # .clone() breaks aliasing: in-place ops inside core_fn during tracing
     # must not silently mutate the caller's original buffers.
     return tuple(x.detach().to(build_device).clone() for x in example_inputs)

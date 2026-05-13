@@ -24,7 +24,6 @@ English version: :doc:`../en/spikformer`
     import numpy as np
     from spikingjelly.activation_based import neuron
 
-
 脉冲自注意力机制的Query、Key和Value均为脉冲序列，具体做法是在三个张量输出时添加脉冲神经元，耦合脉冲神经元来避免引入负值，取消了Softmax函数，构建脉冲自注意力机制：
 
 .. code-block:: python

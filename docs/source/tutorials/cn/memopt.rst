@@ -525,7 +525,7 @@ Step 3. 调用工具函数
     Epoch 5/100: peak_allocated=1973.11767578125 MB, peak_reserved=2770.0 MB
     Epoch 5/100: train_loss=1.64, train_acc=47.89%
 
-可见，训练峰值显存显著降低，而训练速度的降低可以接受。优化后的Triton后端网络与未经优化的Triton后端网络并非完全等价，是对BN层的计算做时间分段的结果，详见原论文 Appendix G [#huang2026gc]_ 。完整可运行的示例代码位于 `spikingjelly.activation.example.memopt <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_ 中。
+可见，训练峰值显存显著降低，而训练速度的降低可以接受。优化后的Triton后端网络与未经优化的Triton后端网络并非完全等价，是对BN层的计算做时间分段的结果，详见原论文 Appendix G [#huang2026gc]_ 。完整可运行的示例代码位于 `spikingjelly.activation_based.examples.memopt <https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/examples/memopt>`_ 中。
 
 .. note::
 

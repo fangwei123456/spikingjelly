@@ -211,7 +211,11 @@ def test_cupy_compile_inductor_runs_forward_backward(kind, dtype, monkeypatch):
     cupy_hits = _install_cupy_path_sentinel(monkeypatch, kind)
 
     node_cupy = _make_node(kind, backend="cupy", dtype=dtype)
-    model = _CompileProbeModel(node_cupy, features=12).to(device="cuda", dtype=dtype).train()
+    model = (
+        _CompileProbeModel(node_cupy, features=12)
+        .to(device="cuda", dtype=dtype)
+        .train()
+    )
 
     compiled_model = torch.compile(
         model,
@@ -247,10 +251,16 @@ def test_cupy_compile_inductor_matches_eager(kind, dtype, monkeypatch):
     node_compiled = _make_node(kind, backend="cupy", dtype=dtype)
     node_compiled.load_state_dict(node_eager.state_dict(), strict=True)
 
-    eager_model = _CompileProbeModel(node_eager, features=10).to(device="cuda", dtype=dtype).train()
-    compiled_source_model = _CompileProbeModel(node_compiled, features=10).to(
-        device="cuda", dtype=dtype
-    ).train()
+    eager_model = (
+        _CompileProbeModel(node_eager, features=10)
+        .to(device="cuda", dtype=dtype)
+        .train()
+    )
+    compiled_source_model = (
+        _CompileProbeModel(node_compiled, features=10)
+        .to(device="cuda", dtype=dtype)
+        .train()
+    )
     compiled_source_model.load_state_dict(eager_model.state_dict(), strict=True)
 
     compiled_model = torch.compile(

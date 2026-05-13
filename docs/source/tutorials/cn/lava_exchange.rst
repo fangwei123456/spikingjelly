@@ -298,7 +298,7 @@ MNIST CSNN示例
         optimizer.zero_grad()
         img = img.to(args.device)
         label = label.to(args.device)
-        img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+        img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
         fr = net(encoder(img)).mean(0)
         loss = F.cross_entropy(fr, label)
@@ -319,7 +319,7 @@ MNIST CSNN示例
         for img, label in test_data_loader:
             img = img.to(args.device)
             label = label.to(args.device)
-            img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+            img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
             img = encoder(img)
             img = lava_exchange.TNX_to_NXT(img)
             fr = net_ladl(img).mean(-1)
@@ -389,4 +389,3 @@ MNIST CSNN示例
     save net.state_dict() to ./net.pt
     save net_ladl.state_dict() to ./net_ladl.pt
     export net_ladl to ./net_la.net
-

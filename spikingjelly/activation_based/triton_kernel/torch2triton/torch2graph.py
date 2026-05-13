@@ -134,7 +134,9 @@ def generate_forward_and_backward_graph(
     if isinstance(ys, torch.Tensor):
         ys = (ys,)
     elif not isinstance(ys, (list, tuple)):
-        raise ValueError(f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}")
+        raise ValueError(
+            f"Expected {fn} to return a tuple/list of Tensors, got {type(ys)}"
+        )
     diff_outputs = [
         y
         for y in ys
@@ -150,7 +152,9 @@ def generate_forward_and_backward_graph(
     )
 
     if collector.fwd_graph is None or collector.bwd_graph is None:
-        raise ValueError(f"Failed to capture both forward and backward graphs for {fn}.")
+        raise ValueError(
+            f"Failed to capture both forward and backward graphs for {fn}."
+        )
     collector.bwd_graph.lint()
 
     return (

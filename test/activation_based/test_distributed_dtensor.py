@@ -131,12 +131,17 @@ def _single_rank_process_group():
 
 def test_analyze_snn_distributed_capability_finds_state_and_linear_targets():
     model = ToyDistributedSNN()
-    analysis = analyze_snn_distributed_capability(model, tensor_parallel_roots=["features"])
+    analysis = analyze_snn_distributed_capability(
+        model, tensor_parallel_roots=["features"]
+    )
 
     assert "features.1" in analysis.memory_module_names
     assert analysis.tensor_parallel_candidate_names == ("features.0", "features.2")
     assert analysis.unsupported_tensor_parallel_names == ()
-    assert any("Stateful neuron modules remain local/replicated" in note for note in analysis.notes)
+    assert any(
+        "Stateful neuron modules remain local/replicated" in note
+        for note in analysis.notes
+    )
 
 
 @pytest.mark.skipif(
@@ -171,7 +176,9 @@ def test_auto_tensor_parallel_plan_and_forward_match_single_rank():
         torch.testing.assert_close(reference, result)
         assert isinstance(distributed_model.features[1], TensorShardMemoryModule)
 
-        plan = auto_build_tensor_parallel_plan(candidate, tensor_parallel_roots=["features"])
+        plan = auto_build_tensor_parallel_plan(
+            candidate, tensor_parallel_roots=["features"]
+        )
         assert set(plan.keys()) == {"features.0", "features.2"}
 
 
@@ -318,9 +325,18 @@ def test_partition_helpers_respect_2d_mesh_coordinates():
             dp_mesh_dim=0,
         )
         _, mesh, _ = configure_snn_distributed(model, config)
-        assert resolve_data_parallel_partition(mesh, dp_mesh_dim=0, sharded_by_data_parallel=False) == (1, 0)
-        assert resolve_data_parallel_partition(mesh, dp_mesh_dim=0, sharded_by_data_parallel=True) == (1, 0)
-        assert resolve_tensor_parallel_group_size(mesh, tp_mesh_dim=1, tensor_parallel_enabled=True) == 1
+        assert resolve_data_parallel_partition(
+            mesh, dp_mesh_dim=0, sharded_by_data_parallel=False
+        ) == (1, 0)
+        assert resolve_data_parallel_partition(
+            mesh, dp_mesh_dim=0, sharded_by_data_parallel=True
+        ) == (1, 0)
+        assert (
+            resolve_tensor_parallel_group_size(
+                mesh, tp_mesh_dim=1, tensor_parallel_enabled=True
+            )
+            == 1
+        )
 
 
 @pytest.mark.skipif(
@@ -354,9 +370,15 @@ def test_configure_snn_distributed_supports_experimental_conv_tp_on_real_snn():
         result = materialize_dtensor_output(distributed_model(x))
 
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
-        assert "ChannelShardConv2d" in type(distributed_model.features[0].proj_bn[-2]).__name__
+        assert (
+            "ChannelShardConv2d"
+            in type(distributed_model.features[0].proj_bn[-2]).__name__
+        )
         assert isinstance(distributed_model.features[0].neuron, TensorShardMemoryModule)
-        assert distributed_model.features[0].neuron.inner.v.shape[1] == distributed_model.features[0].proj_bn[-2].out_channels
+        assert (
+            distributed_model.features[0].neuron.inner.v.shape[1]
+            == distributed_model.features[0].proj_bn[-2].out_channels
+        )
 
 
 @pytest.mark.skipif(
@@ -456,7 +478,9 @@ def test_cifar10dvs_vgg_tp_helper_after_memopt_level2_single_rank():
     not (DTENSOR_AVAILABLE and TENSOR_PARALLEL_AVAILABLE),
     reason="DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
-@pytest.mark.skip(reason="TP-aware memopt is validated by multi-rank CUDA benchmarks; single-rank smoke is unstable across runtimes.")
+@pytest.mark.skip(
+    reason="TP-aware memopt is validated by multi-rank CUDA benchmarks; single-rank smoke is unstable across runtimes."
+)
 def test_spikformer_tp_plus_memopt_level1_single_rank():
     pass
 
@@ -465,7 +489,9 @@ def test_spikformer_tp_plus_memopt_level1_single_rank():
     not (FSDP2_AVAILABLE and DTENSOR_AVAILABLE and TENSOR_PARALLEL_AVAILABLE),
     reason="FSDP2/DTensor tensor-parallel APIs are unavailable in the current PyTorch build.",
 )
-@pytest.mark.skip(reason="TP-aware memopt is validated by multi-rank CUDA benchmarks; single-rank smoke is unstable across runtimes.")
+@pytest.mark.skip(
+    reason="TP-aware memopt is validated by multi-rank CUDA benchmarks; single-rank smoke is unstable across runtimes."
+)
 def test_spikformer_fsdp2_tp_plus_memopt_level1_single_rank():
     pass
 
@@ -477,10 +503,14 @@ def test_spikformer_fsdp2_tp_plus_memopt_level1_single_rank():
 def test_spikformer_tp_helper_after_memopt_level2_single_rank():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        baseline = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        baseline = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         x = torch.randn(2, 3, 64, 64)
         candidate = copy.deepcopy(baseline).eval()
-        candidate.patch_embed.stages[0] = GCContainer(None, candidate.patch_embed.stages[0])
+        candidate.patch_embed.stages[0] = GCContainer(
+            None, candidate.patch_embed.stages[0]
+        )
         candidate.blocks[0] = GCContainer(None, candidate.blocks[0])
         distributed_model, _, _ = configure_spikformer_distributed(
             candidate,
@@ -503,7 +533,9 @@ def test_spikformer_tp_helper_after_memopt_level2_single_rank():
 def test_spikformer_head_tp_helper_single_rank():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        baseline = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        baseline = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         candidate = copy.deepcopy(baseline).eval()
         distributed_model, mesh, analysis = configure_spikformer_distributed(
             candidate,
@@ -520,8 +552,13 @@ def test_spikformer_head_tp_helper_single_rank():
         torch.testing.assert_close(reference, result, rtol=1e-5, atol=1e-6)
         assert mesh.ndim == 1
         assert analysis.tensor_parallel_candidate_names == ("head",)
-        assert isinstance(distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule)
-        assert "ChannelShardConv2d" in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
+        assert isinstance(
+            distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule
+        )
+        assert (
+            "ChannelShardConv2d"
+            in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
+        )
 
 
 @pytest.mark.skipif(
@@ -531,7 +568,9 @@ def test_spikformer_head_tp_helper_single_rank():
 def test_spikformer_fsdp2_helper_single_rank():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        baseline = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        baseline = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         candidate = copy.deepcopy(baseline).eval()
         distributed_model, mesh, _ = configure_spikformer_fsdp2(
             candidate,
@@ -565,7 +604,9 @@ def test_cifar10dvs_vgg_pipeline_module_matches_baseline():
 
 def test_spikformer_pipeline_module_matches_baseline():
     torch.manual_seed(0)
-    baseline = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+    baseline = spikformer_ti(
+        T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+    ).eval()
     x = torch.randn(2, 3, 64, 64)
     pipeline_module = distributed_dtensor._build_spikformer_pipeline_module(
         copy.deepcopy(baseline),
@@ -606,7 +647,9 @@ def test_cifar10dvs_vgg_pipeline_runtime_supports_interleaved_single_rank():
 )
 def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
     with _single_rank_process_group():
-        model = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        model = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         x = torch.randn(2, 3, 64, 64)
         runtime = distributed_dtensor.configure_spikformer_pipeline(
             copy.deepcopy(model),
@@ -623,7 +666,9 @@ def test_spikformer_pipeline_runtime_supports_zero_bubble_single_rank():
 
 
 def test_recommend_pipeline_memopt_stages_prefers_heavy_stages():
-    selected = recommend_pipeline_memopt_stages((1.0, 8.0, 3.0, 7.0), stage_budget_ratio=0.5)
+    selected = recommend_pipeline_memopt_stages(
+        (1.0, 8.0, 3.0, 7.0), stage_budget_ratio=0.5
+    )
     assert selected == (1, 3)
 
 
@@ -692,7 +737,9 @@ def test_apply_pipeline_stage_memopt_supports_legacy_memopt_signature(monkeypatc
 
     calls = {"count": 0}
 
-    def fake_memory_optimization(module, target_types, dummy_input, compress_x, level, verbose):
+    def fake_memory_optimization(
+        module, target_types, dummy_input, compress_x, level, verbose
+    ):
         calls["count"] += 1
         return module
 
@@ -808,9 +855,17 @@ def test_parse_pipeline_layout_validates_counts():
 
 
 def test_resolve_pipeline_schedule_kind_rules():
-    assert distributed_dtensor.resolve_pipeline_schedule_kind("auto", 1, False) == "1f1b"
-    assert distributed_dtensor.resolve_pipeline_schedule_kind("auto", 2, False) == "interleaved"
-    assert distributed_dtensor.resolve_pipeline_schedule_kind("auto", 2, True) == "zero_bubble"
+    assert (
+        distributed_dtensor.resolve_pipeline_schedule_kind("auto", 1, False) == "1f1b"
+    )
+    assert (
+        distributed_dtensor.resolve_pipeline_schedule_kind("auto", 2, False)
+        == "interleaved"
+    )
+    assert (
+        distributed_dtensor.resolve_pipeline_schedule_kind("auto", 2, True)
+        == "zero_bubble"
+    )
     with pytest.raises(ValueError, match="requires pp_virtual_stages >= 2"):
         distributed_dtensor.resolve_pipeline_schedule_kind("interleaved", 1, False)
     with pytest.raises(ValueError, match="does not support pp_virtual_stages=2"):
@@ -878,7 +933,9 @@ def test_spikformer_pipeline_attaches_patch_embed_to_first_non_empty_stage():
 def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        candidate = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        candidate = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         distributed_model, _, _ = configure_spikformer_distributed(
             candidate,
             device_type="cpu",
@@ -886,8 +943,13 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
             enable_data_parallel=False,
             enable_head_tensor_parallel=True,
         )
-        assert "ChannelShardConv2d" in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
-        assert isinstance(distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule)
+        assert (
+            "ChannelShardConv2d"
+            in type(distributed_model.patch_embed.stages[0].conv_bn.block[0]).__name__
+        )
+        assert isinstance(
+            distributed_model.patch_embed.stages[0].neuron, TensorShardMemoryModule
+        )
 
 
 @pytest.mark.skipif(
@@ -897,7 +959,9 @@ def test_spikformer_patch_stem_tp_helper_handles_patch_embed_root():
 def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        candidate = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        candidate = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         distributed_model, _, _ = configure_snn_distributed(
             candidate,
             SNNDistributedConfig(
@@ -924,7 +988,9 @@ def test_spikformer_patch_stem_tp_helper_handles_single_stage_root_colwise():
 def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
     with _single_rank_process_group():
         torch.manual_seed(0)
-        candidate = spikformer_ti(T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch").eval()
+        candidate = spikformer_ti(
+            T=2, img_size_h=64, img_size_w=64, num_classes=11, backend="torch"
+        ).eval()
         with pytest.raises(ValueError, match="at least two consecutive stem blocks"):
             configure_snn_distributed(
                 candidate,
@@ -933,7 +999,9 @@ def test_spikformer_patch_stem_tp_helper_rejects_unpaired_isolated_root():
                     mesh_shape=(1,),
                     auto_tensor_parallel=False,
                     experimental_spikformer_patch_stem_tensor_parallel=True,
-                    spikformer_patch_stem_tensor_parallel_roots=["patch_embed.stages.3"],
+                    spikformer_patch_stem_tensor_parallel_roots=[
+                        "patch_embed.stages.3"
+                    ],
                     enable_data_parallel=False,
                 ),
             )
@@ -968,7 +1036,9 @@ def test_train_distributed_build_model_rejects_tp_without_targets():
         pp_delay_wgrad=False,
         pp_memopt_stage_budget_ratio=0.5,
     )
-    with pytest.raises(ValueError, match="requires at least one tensor-parallel target"):
+    with pytest.raises(
+        ValueError, match="requires at least one tensor-parallel target"
+    ):
         train_distributed.build_model(args, runtime)
 
 
@@ -1009,7 +1079,9 @@ def test_train_distributed_reduce_classification_output_keeps_batch_major_logits
     train_distributed = _load_train_distributed_module()
     logits = torch.randn(4, 10)
     labels = torch.tensor([0, 1, 2, 3])
-    reduced_logits, reduced_labels = train_distributed.reduce_classification_output(logits, labels)
+    reduced_logits, reduced_labels = train_distributed.reduce_classification_output(
+        logits, labels
+    )
     torch.testing.assert_close(reduced_logits, logits)
     assert torch.equal(reduced_labels, labels)
     assert reduced_logits.shape == logits.shape
@@ -1020,7 +1092,9 @@ def test_train_distributed_reduce_classification_output_reduces_time_major_logit
     train_distributed = _load_train_distributed_module()
     logits = torch.randn(5, 4, 10)
     labels = torch.eye(10)[torch.tensor([0, 1, 2, 3])]
-    reduced_logits, reduced_labels = train_distributed.reduce_classification_output(logits, labels)
+    reduced_logits, reduced_labels = train_distributed.reduce_classification_output(
+        logits, labels
+    )
     torch.testing.assert_close(reduced_logits, logits.mean(dim=0))
     assert torch.equal(reduced_labels, torch.tensor([0, 1, 2, 3]))
     assert reduced_logits.shape == (4, 10)
@@ -1051,7 +1125,9 @@ def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypat
         dp_mesh_dim=None,
     )
 
-    train_loader, val_loader, train_sampler = train_distributed.build_data(args, runtime, mesh=None)
+    train_loader, val_loader, train_sampler = train_distributed.build_data(
+        args, runtime, mesh=None
+    )
     assert train_sampler is not None
     assert isinstance(train_loader.sampler, type(train_sampler))
     assert isinstance(val_loader.sampler, type(train_sampler))

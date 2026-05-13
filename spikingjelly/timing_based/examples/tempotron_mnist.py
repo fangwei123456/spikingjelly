@@ -177,9 +177,7 @@ def main():
             optimizer.zero_grad()
 
             v_max = net(in_spikes)
-            loss = neuron.Tempotron.mse_loss(
-                v_max, net.tempotron.v_threshold, label.to(device), 10
-            )
+            loss = net.tempotron.mse_loss(v_max, label.to(device))
             loss.backward()
             optimizer.step()
 

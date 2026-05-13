@@ -18,10 +18,9 @@ from .common import (
 
 __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_izhikevich_ptt"]
 
+
 def create_fptt_kernel(hard_reset: bool, dtype: str):
-    kernel_name = (
-        f"IzhikevichNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
-    )
+    kernel_name = f"IzhikevichNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
 
     if dtype == "fp32":
         code = rf"""
@@ -216,9 +215,7 @@ def _iz_forward(
         cp_reciprocal_tau_w = cupy.asarray(1.0 / tau_w, dtype=cp_dtype)
         cp_a0_over_tau = cupy.asarray(a0 / tau, dtype=cp_dtype)
         cp_a_over_tau_w = cupy.asarray(a / tau_w, dtype=cp_dtype)
-        cp_one_sub_reciprocal_tau_w = cupy.asarray(
-            1.0 - 1.0 / tau_w, dtype=cp_dtype
-        )
+        cp_one_sub_reciprocal_tau_w = cupy.asarray(1.0 - 1.0 / tau_w, dtype=cp_dtype)
         cp_neg_sum_v_rest_v_c = cupy.asarray(-v_rest - v_c, dtype=cp_dtype)
 
         if v_reset is None:
@@ -576,7 +573,6 @@ def cupy_multistep_izhikevich_forward(
         v_c,
         a0,
         detach_reset,
-
         _resolve_sg_cuda_code_fun(sg),
     )
     capture_id = (
@@ -591,7 +587,12 @@ def cupy_multistep_izhikevich_forward(
 @torch.library.register_fake("sj::cupy_multistep_izhikevich_forward")
 def _cupy_multistep_izhikevich_forward_fake(*args):
     x_seq = args[0]
-    return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty((), dtype=torch.int64),
+    )
 
 
 def _setup_ctx(ctx, inputs, output):
@@ -610,10 +611,27 @@ def _bw(ctx, *grad_outputs):
     if ctx.captured is None:
         raise RuntimeError("Missing captured context for backward.")
     grads = _iz_backward(ctx.captured, *grad_outputs[:-1])
-    return grads[0], grads[1], grads[2], None, None, None, None, None, None, None, None, None, None, None
+    return (
+        grads[0],
+        grads[1],
+        grads[2],
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
 
 
-torch.library.register_autograd("sj::cupy_multistep_izhikevich_forward", _bw, setup_context=_setup_ctx)
+torch.library.register_autograd(
+    "sj::cupy_multistep_izhikevich_forward", _bw, setup_context=_setup_ctx
+)
 
 
 def multistep_izhikevich_ptt(
@@ -648,6 +666,5 @@ def multistep_izhikevich_ptt(
         v_c,
         a0,
         detach_reset,
-
         sg_id,
     )[:-1]

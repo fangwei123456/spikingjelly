@@ -106,7 +106,9 @@ class LIFNodeBPKernel(NeuronBPKernel):
 
 
 _KERNEL_OBJ_ID_LOCK = threading.Lock()
-_KERNEL_OBJ_ID_CACHE: "weakref.WeakKeyDictionary[object, int]" = weakref.WeakKeyDictionary()
+_KERNEL_OBJ_ID_CACHE: "weakref.WeakKeyDictionary[object, int]" = (
+    weakref.WeakKeyDictionary()
+)
 
 
 def _cached_kernel_obj_id(kernel_obj) -> int:

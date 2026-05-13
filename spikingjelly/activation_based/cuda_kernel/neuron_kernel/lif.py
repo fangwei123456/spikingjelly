@@ -19,6 +19,7 @@ from .common import (
 
 __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_lif_ptt"]
 
+
 def create_fptt_kernel(
     decay_input: bool,
     hard_reset: bool,
@@ -453,9 +454,7 @@ def _lif_forward(
                 cp_numel,
             ]
 
-        kernel = create_fptt_kernel(
-            decay_input, hard_reset, dtype
-        )
+        kernel = create_fptt_kernel(decay_input, hard_reset, dtype)
         kernel(
             (blocks,),
             (threads,),
@@ -655,7 +654,6 @@ def cupy_multistep_lif_forward(
         v_threshold,
         _decode_v_reset(v_reset),
         detach_reset,
-
         _resolve_sg_cuda_code_fun(sg),
     )
     capture_id = (
@@ -670,7 +668,11 @@ def cupy_multistep_lif_forward(
 @torch.library.register_fake(_LIF_OP_NAME)
 def _cupy_multistep_lif_forward_fake(*args):
     x_seq = args[0]
-    return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty((), dtype=torch.int64),
+    )
 
 
 def _setup_ctx(ctx, inputs, output):
@@ -715,6 +717,5 @@ def multistep_lif_ptt(
         v_threshold,
         v_reset_value,
         detach_reset,
-
         sg_id,
     )[:-1]

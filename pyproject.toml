@@ -53,7 +53,7 @@ lightning = ["lightning", "jsonargparse[signatures]"]
 dev = [
     "pytest",
     "pydata-sphinx-theme>=0.16.1",
-    "sphinx>=8.0.0",
+    "sphinx>=8.0.0,<9",
 ]
 
 [project.urls]

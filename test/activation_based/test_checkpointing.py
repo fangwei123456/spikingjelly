@@ -250,9 +250,7 @@ def test_argument_separate_combine():
 
 def test_compressors_accept_tuple_shapes_on_decompress():
     bit_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    bit_spikes = torch.tensor(
-        [[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], device=bit_device
-    )
+    bit_spikes = torch.tensor([[1.0, 0.0, 1.0], [0.0, 1.0, 0.0]], device=bit_device)
     shape = tuple(bit_spikes.shape)
 
     bit = BitSpikeCompressor()
@@ -558,9 +556,7 @@ def test_memory_optimization_forwards_profile_worker_warmup_flag(monkeypatch):
         profile_flags.append(
             (kwargs.get("worker_warmup"), kwargs.get("return_peak", False))
         )
-        return _profile_result_with_optional_peak(
-            [], kwargs.get("return_peak", False)
-        )
+        return _profile_result_with_optional_peak([], kwargs.get("return_peak", False))
 
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
@@ -654,6 +650,7 @@ def test_ensure_cleanup_tmp_python_files_tracks_created_temp_files():
     from spikingjelly.activation_based.triton_kernel.triton_utils import (
         ensure_cleanup_tmp_python_files,
     )
+
     created = {"path": None}
 
     @ensure_cleanup_tmp_python_files
@@ -813,13 +810,17 @@ def test_memory_optimization_level2_spatially_splits_heavy_gc_container(monkeypa
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
     peak_calls = {"count": 0}
-    profile_values = iter([
-        _result_row("0"),
-        [],
-    ])
+    profile_values = iter(
+        [
+            _result_row("0"),
+            [],
+        ]
+    )
+
     def fake_train_peak_memory(*args, **kwargs):
         peak_calls["count"] += 1
         return (80, 80) if peak_calls["count"] == 1 else (60, 60)
+
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
@@ -853,9 +854,11 @@ def test_memory_optimization_level2_skips_unsplittable_hottest_candidate(monkeyp
             [],
         ]
     )
+
     def fake_train_peak_memory(*args, **kwargs):
         peak_calls["count"] += 1
         return (80, 80) if peak_calls["count"] == 1 else (60, 60)
+
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
@@ -923,7 +926,9 @@ def test_memory_optimization_level2_skips_when_no_spatial_split_candidates(
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_peak_memory",
-        lambda *args, **kwargs: peak_calls.__setitem__("count", peak_calls["count"] + 1),
+        lambda *args, **kwargs: peak_calls.__setitem__(
+            "count", peak_calls["count"] + 1
+        ),
     )
     monkeypatch.setattr(
         memopt_pipeline,
@@ -952,13 +957,17 @@ def test_memory_optimization_level3_temporally_splits_heavy_gc_container(monkeyp
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
     peak_calls = {"count": 0}
-    profile_values = iter([
-        _result_row("0"),
-        [],
-    ])
+    profile_values = iter(
+        [
+            _result_row("0"),
+            [],
+        ]
+    )
+
     def fake_train_peak_memory(*args, **kwargs):
         peak_calls["count"] += 1
         return (80, 80) if peak_calls["count"] == 1 else (60, 60)
+
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
@@ -993,7 +1002,9 @@ def test_memory_optimization_level3_skips_when_no_temporal_split_candidates(
     monkeypatch.setattr(
         memopt_pipeline,
         "_train_peak_memory",
-        lambda *args, **kwargs: peak_calls.__setitem__("count", peak_calls["count"] + 1),
+        lambda *args, **kwargs: peak_calls.__setitem__(
+            "count", peak_calls["count"] + 1
+        ),
     )
     monkeypatch.setattr(
         memopt_pipeline,
@@ -1091,6 +1102,7 @@ def test_memory_optimization_level3_retries_blocked_candidates_after_improvement
         if peak_calls["count"] == 2:
             return 60, 60
         return 50, 50
+
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,
@@ -1128,13 +1140,17 @@ def test_memory_optimization_level4_unwraps_gc_container_when_memory_allows(
     monkeypatch.setattr(memopt_pipeline, "resolve_device", lambda: "cpu")
 
     peak_calls = {"count": 0}
-    profile_values = iter([
-        [],
-        [],
-    ])
+    profile_values = iter(
+        [
+            [],
+            [],
+        ]
+    )
+
     def fake_train_peak_memory(*args, **kwargs):
         peak_calls["count"] += 1
         return (100, 100) if peak_calls["count"] == 1 else (90, 90)
+
     monkeypatch.setattr(memopt_pipeline, "_train_peak_memory", fake_train_peak_memory)
     monkeypatch.setattr(
         memopt_pipeline,

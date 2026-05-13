@@ -5,7 +5,7 @@ import shutil
 import struct
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Callable, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 import torch
@@ -163,6 +163,8 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
     * **中文**
 
+    将指定 DVS 数据集的每个样本按固定帧数加载为帧数据, 并将所有帧逐张保存为图片。
+
     :param dataset: 要保存的数据集名称。当前可用的选项有：DVS128Gesture、CIFAR10DVS 和 NCaltech101。
     :type dataset: str
 
@@ -178,11 +180,20 @@ def save_every_frame_of_an_entire_DVS_dataset(
     :param number_of_threads: 用于保存图像的线程数。
     :type number_of_threads: int
 
+    :return: None
+    :rtype: None
+
+    :raises ValueError: 当必要参数为空, 或 ``dataset`` 不是 ``"DVS128Gesture"``,
+        ``"CIFAR10DVS"``, ``"NCaltech101"`` 之一时抛出。
+
     ----
 
     .. _save_every_frame_of_an_entire_DVS_dataset-en:
 
     * **English**
+
+    Load every sample from the specified DVS dataset as frame data with a fixed
+    frame count, and save every frame as an image.
 
     :param dataset: name of the dataset to be saved. The current available options
         are: DVS128Gesture, CIFAR10DVS and NCaltech101.
@@ -199,6 +210,13 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
     :param number_of_threads: how many threads are used to save images.
     :type number_of_threads: int
+
+    :return: None
+    :rtype: None
+
+    :raises ValueError: raised when required arguments are empty, or when
+        ``dataset`` is not one of ``"DVS128Gesture"``, ``"CIFAR10DVS"``, or
+        ``"NCaltech101"``.
 
     ----
 
@@ -281,6 +299,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
     :type save_gif_to: str
 
     :return: None
+    :rtype: None
     ----
 
     .. _play_frame-en:
@@ -296,6 +315,7 @@ def play_frame(x: Union[torch.Tensor, np.ndarray], save_gif_to: str = None) -> N
     :type save_gif_to: str
 
     :return: None
+    :rtype: None
     """
     if isinstance(x, np.ndarray):
         x = torch.from_numpy(x)
@@ -423,8 +443,8 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
     位 23: 极性（0 表示 OFF，1 表示 ON）
     位 22 - 0: 时间戳（以微秒为单位）
 
-    :param file_name: aedat v3 文件的路径
-    :type file_name: str
+    :param file_name: ATIS 二进制文件的路径
+    :type file_name: Union[str, pathlib.Path]
 
     :return: 一个字典，其键为 ``['t', 'x', 'y', 'p']``，值为 ``numpy.ndarray``
     :rtype: dict
@@ -442,8 +462,8 @@ def load_ATIS_bin(file_name: Union[str, Path]) -> dict:
     bit 23: Polarity (0 for OFF, 1 for ON)
     bit 22 - 0: Timestamp (in microseconds)
 
-    :param file_name: path of the aedat v3 file
-    :type file_name: str
+    :param file_name: path of the ATIS binary file
+    :type file_name: Union[str, pathlib.Path]
 
     :return: a dict whose keys are ``['t', 'x', 'y', 'p']`` and values are ``numpy.ndarray``
     :rtype: dict
@@ -472,7 +492,7 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     * **中文**
 
     :param file_name: 保存帧的 npz 文件的路径
-    :type file_name: str
+    :type file_name: Union[str, pathlib.Path]
 
     :return: 帧
     :rtype: np.ndarray
@@ -484,7 +504,7 @@ def load_npz_frames(file_name: Union[str, Path]) -> np.ndarray:
     * **English**
 
     :param file_name: path of the npz file that saves the frames
-    :type file_name: str
+    :type file_name: Union[str, pathlib.Path]
 
     :return: frames
     :rtype: np.ndarray
@@ -538,9 +558,9 @@ def integrate_events_segment_to_frame(
     :type j_l: int
 
     :param j_r: 积分区间的右端索引（不包含）
-    :type j_r:
+    :type j_r: int
 
-    :return: 帧
+    :return: 单个双通道帧
     :rtype: np.ndarray
 
     ----
@@ -569,16 +589,16 @@ def integrate_events_segment_to_frame(
     :param H: height of the frame
     :type H: int
 
-    :param W: weight of the frame
+    :param W: width of the frame
     :type W: int
 
     :param j_l: the start index of the integral interval, which is included
     :type j_l: int
 
     :param j_r: the right index of the integral interval, which is not included
-    :type j_r:
+    :type j_r: int
 
-    :return: frames
+    :return: a single two-channel frame
     :rtype: np.ndarray
     """
     # 累计脉冲需要用bitcount而不能直接相加，原因可参考下面的示例代码，以及
@@ -791,7 +811,7 @@ def integrate_events_by_fixed_frames_number(
     :param H: the height of frame
     :type H: int
 
-    :param W: the weight of frame
+    :param W: the width of frame
     :type W: int
 
     :return: frames
@@ -951,7 +971,7 @@ def integrate_events_by_fixed_duration(
     :param H: the height of frame
     :type H: int
 
-    :param W: the weight of frame
+    :param W: the width of frame
     :type W: int
 
     :return: frames
@@ -987,7 +1007,7 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     H: int,
     W: int,
     print_save: bool = False,
-) -> None:
+) -> int:
     r"""
     **API Language:**
     :ref:`中文 <integrate_events_file_to_frames_file_by_fixed_duration-cn>` | :ref:`English <integrate_events_file_to_frames_file_by_fixed_duration-en>`
@@ -1021,7 +1041,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param print_save: 如果 ``True``，此函数将打印保存的文件的路径。
     :type print_save: bool
 
-    :return: None
+    :return: 帧的数量
+    :rtype: int
 
     ----
 
@@ -1052,7 +1073,8 @@ def integrate_events_file_to_frames_file_by_fixed_duration(
     :param print_save: If ``True``, this function will print saved files' paths.
     :type print_save: bool
 
-    :return: None
+    :return: number of frames saved
+    :rtype: int
     """
     frames = integrate_events_by_fixed_duration(loader(events_np_file), duration, H, W)
     fname, _ = os.path.splitext(os.path.basename(events_np_file))
@@ -1176,10 +1198,11 @@ def split_to_train_test_set(
     :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
         如果 ``True``，此函数将随机划分每个类别的样本。
         随机性由 ``numpy.random.seed`` 控制
-    :type random_split: int
+    :type random_split: bool
 
-    :return: 一个元组 ``(train_set, test_set)``
-    :rtype: tuple
+    :return: 一个元组 ``(train_set, test_set)``, 二者均为基于 ``origin_dataset`` 构造的
+        :class:`torch.utils.data.Subset`
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
 
     ----
 
@@ -1200,10 +1223,11 @@ def split_to_train_test_set(
         be included in train set, while the reset will be included in test set.
         If ``True``, this function will split samples in each classes randomly.
         The randomness is controlled by ``numpy.random.seed``
-    :type random_split: int
+    :type random_split: bool
 
-    :return: a tuple ``(train_set, test_set)``
-    :rtype: tuple
+    :return: a tuple ``(train_set, test_set)``, where both elements are
+        :class:`torch.utils.data.Subset` instances built from ``origin_dataset``
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
     """
     label_idx = []
     for i in range(num_classes):
@@ -1259,13 +1283,14 @@ def fast_split_to_train_test_set(
     :param random_split: 如果 ``False``，每个类的前半部分样本将包含在训练集中，其余部分包含在测试集中。
         如果 ``True``，此函数将随机划分每个类别的样本。随机性由
         ``numpy.random.seed`` 控制
-    :type random_split: int
+    :type random_split: bool
 
     :param batch_size: 每个批次处理的样本数量
     :type batch_size: int
 
-    :return: 一个元组 ``(train_set, test_set)``
-    :rtype: tuple
+    :return: 一个元组 ``(train_set, test_set)``, 二者均为基于 ``origin_dataset`` 构造的
+        :class:`torch.utils.data.Subset`
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
 
     ----
 
@@ -1286,13 +1311,14 @@ def fast_split_to_train_test_set(
         be included in train set, while the reset will be included in test set.
         If ``True``, this function will split samples in each classes randomly. The randomness is controlled by
         ``numpy.random.seed``
-    :type random_split: int
+    :type random_split: bool
 
     :param batch_size: the number of samples to process in each batch
     :type batch_size: int
 
-    :return: a tuple ``(train_set, test_set)``
-    :rtype: tuple
+    :return: a tuple ``(train_set, test_set)``, where both elements are
+        :class:`torch.utils.data.Subset` instances built from ``origin_dataset``
+    :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
     """
     label_idx = [[] for _ in range(num_classes)]
 
@@ -1348,9 +1374,9 @@ def pad_sequence_collate(batch: list):
     :param batch: 样本列表，每个样本形如 ``(x, y)``，其中 ``x`` 是长度可变的序列，``y`` 是标签
     :type batch: list
 
-    :return: ``(x_p, y, x_len)``，其中 ``x_p`` 是按相同长度补齐后的批数据，
-        ``y`` 是标签张量，``x_len`` 是各样本原始长度
-    :rtype: tuple
+    :return: ``(x_p, y, x_len)``, 其中 ``x_p`` 是按相同长度补齐后的批数据,
+        ``y`` 是标签张量, ``x_len`` 是各样本原始长度张量
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
 
@@ -1362,14 +1388,14 @@ def pad_sequence_collate(batch: list):
     the dataset with variable length, e.g., a ``NeuromorphicDatasetFolder`` with
     fixed duration to integrate events to frames.
 
-    :param batch: a list of samples that contains ``(x, y)``, where ``x`` is a
-        list containing sequences with different length and ``y`` is the label
+    :param batch: a list of samples ``(x, y)``, where ``x`` is a variable-length
+        sequence and ``y`` is the label
     :type batch: list
 
     :return: batched samples ``(x_p, y, x_len)``, where ``x_p`` is padded ``x``
         to the same length, ``y`` is the label, and ``x_len`` is the length of
         ``x``
-    :rtype: tuple
+    :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----
 
@@ -1424,7 +1450,7 @@ def pad_sequence_collate(batch: list):
     )
 
 
-def padded_sequence_mask(sequence_len: torch.Tensor, T=None):
+def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     r"""
     **API Language:**
     :ref:`中文 <padded_sequence_mask-cn>` | :ref:`English <padded_sequence_mask-en>`

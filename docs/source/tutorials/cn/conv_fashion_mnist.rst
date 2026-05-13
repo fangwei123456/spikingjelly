@@ -74,7 +74,7 @@ English version: :doc:`../en/conv_fashion_mnist`
 将图片直接输入到SNN，而不是编码后在输入，是近年来深度SNN的常见做法，我们在此教程中也使用这样的方法。在这种情况下，实际的 ``图片-脉冲`` 编码是由网络中的前三层，也就是 \
 ``{Conv2d-BatchNorm2d-IFNode}`` 完成。
 
-网络的输入直接是 ``shape=[N, C, H, W]`` 的图片，我们将其添加时间维度，并复制 ``T`` 次，得到 ``shape=[T, N, C, H, W]`` 的序列，然后送入到网络层。网络的输出定义为最后一层脉冲神经元的\
+网络的输入直接是 ``shape=[N, C, H, W]`` 的图片，我们将其添加时间维度，并扩展为 ``shape=[T, N, C, H, W]`` 的序列，然后送入到网络层。网络的输出定义为最后一层脉冲神经元的\
 脉冲发放频率。因而，网络的前向传播定义为：
 
 .. code-block:: python
@@ -83,7 +83,7 @@ English version: :doc:`../en/conv_fashion_mnist`
     class CSNN(nn.Module):
         def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
-        x_seq = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+        x_seq = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
         x_seq = self.conv_fc(x_seq)
         fr = x_seq.mean(0)
         return fr
@@ -235,7 +235,7 @@ English version: :doc:`../en/conv_fashion_mnist`
                         img = img.to(args.device)
                         label = label.to(args.device)
                         # img.shape = [N, C, H, W]
-                        img_seq = img.unsqueeze(0).repeat(net.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+                        img_seq = img.unsqueeze(0).expand(net.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
                         spike_seq = encoder(img_seq)
                         functional.reset_net(encoder)
                         to_pil_img = torchvision.transforms.ToPILImage()
@@ -271,6 +271,10 @@ English version: :doc:`../en/conv_fashion_mnist`
 .. code-block:: shell
 
     python -m spikingjelly.activation_based.examples.conv_fashion_mnist -T 4 -device cuda:0 -b 4 -epochs 64 -data-dir /datasets/FashionMNIST/ -amp -cupy -opt sgd -lr 0.1 -j 8 -resume ./logs/T4_b256_sgd_lr0.1_c128_amp_cupy/checkpoint_latest.pth -save-es ./logs
+
+.. note::
+
+    检查点使用 ``batch_size=256`` 进行训练（检查点路径中的 ``b256`` 表示），而上述推理命令使用 ``batch_size=4`` 仅保存4个样本用于可视化。
 
 
 运行后图片会保存到 ``./logs/visualization`` 文件夹中。下面展示2个输入图片，和对应的编码后的脉冲：

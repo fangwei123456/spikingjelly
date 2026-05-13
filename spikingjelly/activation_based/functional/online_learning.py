@@ -2,7 +2,7 @@ import copy
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Callable
+from typing import Callable, Tuple
 
 from .. import base
 from .net_config import detach_net
@@ -32,8 +32,8 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     :param optimizer: 网络使用的优化器
     :type optimizer: torch.optim.Optimizer
 
-    :return: 与优化器参数顺序对齐的运行平均列表
-    :rtype: list
+    :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前的 ``w.data``
+    :rtype: list[torch.Tensor]
 
     ----
 
@@ -49,8 +49,9 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     :param optimizer: the optimizer for the network
     :type optimizer: torch.optim.Optimizer
 
-    :return: a list containing running averages of parameters
-    :rtype: list
+    :return: a list aligned with optimizer parameter order whose elements are
+        the current ``w.data`` tensors
+    :rtype: list[torch.Tensor]
     """
     w_ra = []
     for item in optimizer.param_groups:
@@ -95,14 +96,15 @@ def fptt_online_training(
     :param target_seq: 目标序列
     :type target_seq: torch.Tensor
 
-    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(x_t, y_t) -> torch.Tensor``
+    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param alpha: FPTT 使用的超参数
     :type alpha: float
 
-    :param w_ra: 由 :func:`fptt_online_training_init_w_ra` 初始化的运行平均列表
-    :type w_ra: list
+    :param w_ra: 由 :func:`fptt_online_training_init_w_ra` 初始化的运行平均列表，
+        其中每个元素与一个优化器参数对应
+    :type w_ra: list[torch.Tensor]
 
     :return: None
     :rtype: None
@@ -132,15 +134,16 @@ def fptt_online_training(
     :type target_seq: torch.Tensor
 
     :param f_loss_t: the loss function, which should have the formulation of
-        ``def f_loss_t(x_t, y_t) -> torch.Tensor``
+        ``def f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param alpha: the hyper-parameter
     :type alpha: float
 
-    :param w_ra: the running average of parameters, which can be initialized by
-        :func:`fptt_online_training_init_w_ra`
-    :type w_ra: list
+    :param w_ra: the running-average list initialized by
+        :func:`fptt_online_training_init_w_ra`, where each element corresponds
+        to one optimizer parameter
+    :type w_ra: list[torch.Tensor]
 
     :return: None
     :rtype: None
@@ -246,7 +249,7 @@ def ottt_online_training(
     target_seq: torch.Tensor,
     f_loss_t: Callable,
     online: bool,
-) -> None:
+) -> Tuple[torch.Tensor, torch.Tensor]:
     """
     **API Language:**
     :ref:`中文 <ottt_online_training-cn>` | :ref:`English <ottt_online_training-en>`
@@ -274,7 +277,7 @@ def ottt_online_training(
     :param target_seq: 目标序列，形状为 ``[B, T, ...]``
     :type target_seq: torch.Tensor
 
-    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(x_t, y_t) -> torch.Tensor``
+    :param f_loss_t: 单个时间步的损失函数，调用形式应为 ``f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param online: 是否在每个时间步在线更新参数；若为 ``False``，则仅在整段序列结束后更新一次
@@ -311,7 +314,7 @@ def ottt_online_training(
     :type target_seq: torch.Tensor
 
     :param f_loss_t: the loss function, which should have the formulation of
-        ``def f_loss_t(x_t, y_t) -> torch.Tensor``
+        ``def f_loss_t(y_t, target_t) -> torch.Tensor``
     :type f_loss_t: Callable
 
     :param online: whether to update parameters online at each time step or to

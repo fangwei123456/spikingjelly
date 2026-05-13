@@ -15,6 +15,7 @@ from spikingjelly.activation_based import base, layer
 
 try:
     from torch.distributed._tensor import DeviceMesh, init_device_mesh
+
     try:
         from torch.distributed._tensor import DTensor
     except ImportError:
@@ -34,6 +35,7 @@ try:
         RowwiseParallel,
         parallelize_module,
     )
+
     try:
         from torch.distributed.tensor.parallel import make_output_tensor
     except ImportError:
@@ -144,7 +146,10 @@ class TensorShardMemoryModule(base.MemoryModule):
             raise ValueError(
                 f"shard_dim={self.shard_dim} is invalid for input with shape {tuple(x.shape)}."
             )
-        if self.expected_local_dim_size is not None and x.shape[shard_dim] != self.expected_local_dim_size:
+        if (
+            self.expected_local_dim_size is not None
+            and x.shape[shard_dim] != self.expected_local_dim_size
+        ):
             raise ValueError(
                 f"Expected local shard size {self.expected_local_dim_size} on dim {shard_dim}, "
                 f"but got input shape {tuple(x.shape)}."
@@ -217,7 +222,10 @@ class SNNPipelineRuntime:
 
     @property
     def is_last(self) -> bool:
-        return bool(self.local_stage_indices) and self.local_stage_indices[-1] == self.num_stages - 1
+        return (
+            bool(self.local_stage_indices)
+            and self.local_stage_indices[-1] == self.num_stages - 1
+        )
 
 
 SNN_DISTRIBUTED_PREFERENCES = ("speed", "memory", "capacity")
@@ -253,7 +261,9 @@ def ensure_distributed_initialized(
         return False
 
     if not dist.is_available():
-        raise RuntimeError("torch.distributed is not available in the current PyTorch build.")
+        raise RuntimeError(
+            "torch.distributed is not available in the current PyTorch build."
+        )
 
     if backend is None:
         backend = "nccl" if torch.cuda.is_available() else "gloo"
@@ -346,7 +356,10 @@ def _is_colwise_local_style(style: Union[str, "ParallelStyle"]) -> bool:
     if ColwiseParallel is not None and isinstance(style, ColwiseParallel):
         if hasattr(style, "use_local_output"):
             return bool(style.use_local_output)
-        if make_output_tensor is not None and getattr(style, "_prepare_output", None) is make_output_tensor:
+        if (
+            make_output_tensor is not None
+            and getattr(style, "_prepare_output", None) is make_output_tensor
+        ):
             return True
         return False
     return False
@@ -365,7 +378,9 @@ def _iter_named_modules_under_roots(
     named_children = dict(module.named_modules())
     for root in roots:
         if root not in named_children:
-            raise KeyError(f"tensor_parallel_roots contains unknown module path '{root}'.")
+            raise KeyError(
+                f"tensor_parallel_roots contains unknown module path '{root}'."
+            )
 
         root_module = named_children[root]
         for sub_name, child in root_module.named_modules():
@@ -447,7 +462,9 @@ def _make_pipeline_outputs_contiguous(value: Any) -> Any:
     if isinstance(value, list):
         return [_make_pipeline_outputs_contiguous(item) for item in value]
     if isinstance(value, Mapping):
-        return type(value)((k, _make_pipeline_outputs_contiguous(v)) for k, v in value.items())
+        return type(value)(
+            (k, _make_pipeline_outputs_contiguous(v)) for k, v in value.items()
+        )
     return value
 
 
@@ -478,7 +495,9 @@ def _clone_tensor_tree_for_autograd(value: Any) -> Any:
     if isinstance(value, list):
         return [_clone_tensor_tree_for_autograd(item) for item in value]
     if isinstance(value, Mapping):
-        return type(value)((k, _clone_tensor_tree_for_autograd(v)) for k, v in value.items())
+        return type(value)(
+            (k, _clone_tensor_tree_for_autograd(v)) for k, v in value.items()
+        )
     return value
 
 
@@ -607,7 +626,9 @@ def parse_pipeline_layout(
             f"but got {len(counts)} from {layout!r}."
         )
     if any(count < 0 for count in counts):
-        raise ValueError(f"Pipeline layout counts must be non-negative, but got {counts}.")
+        raise ValueError(
+            f"Pipeline layout counts must be non-negative, but got {counts}."
+        )
     if sum(counts) != total_units:
         raise ValueError(
             f"Pipeline layout {counts} covers {sum(counts)} units, but the model requires "
@@ -695,9 +716,15 @@ def recommend_snn_distributed_strategy(
         if zero_redundancy_optimizer_available is None
         else zero_redundancy_optimizer_available
     )
-    pipeline_available = PIPELINING_AVAILABLE if pipelining_available is None else pipelining_available
+    pipeline_available = (
+        PIPELINING_AVAILABLE if pipelining_available is None else pipelining_available
+    )
     fsdp_available = FSDP2_AVAILABLE if fsdp2_available is None else fsdp2_available
-    tp_available = TENSOR_PARALLEL_AVAILABLE if tensor_parallel_available is None else tensor_parallel_available
+    tp_available = (
+        TENSOR_PARALLEL_AVAILABLE
+        if tensor_parallel_available is None
+        else tensor_parallel_available
+    )
 
     model_family = "spikformer" if model.startswith("spikformer") else model
     rationale: List[str] = [
@@ -706,7 +733,9 @@ def recommend_snn_distributed_strategy(
 
     if world_size <= 1:
         if prefer == "speed":
-            rationale.append("Single-rank run keeps the simplest local path with no distributed overhead.")
+            rationale.append(
+                "Single-rank run keeps the simplest local path with no distributed overhead."
+            )
             return SNNDistributedRecommendation(
                 prefer=prefer,
                 model=model,
@@ -714,7 +743,9 @@ def recommend_snn_distributed_strategy(
                 mode="none",
                 rationale=tuple(rationale),
             )
-        rationale.append("Single-rank run falls back to local training and uses memopt for memory savings.")
+        rationale.append(
+            "Single-rank run falls back to local training and uses memopt for memory savings."
+        )
         return SNNDistributedRecommendation(
             prefer=prefer,
             model=model,
@@ -785,7 +816,9 @@ def recommend_snn_distributed_strategy(
                 rationale=tuple(rationale),
             )
         if fsdp_available:
-            rationale.append("Fall back to FSDP2 with memopt level 1 when TP is unavailable.")
+            rationale.append(
+                "Fall back to FSDP2 with memopt level 1 when TP is unavailable."
+            )
             return SNNDistributedRecommendation(
                 prefer=prefer,
                 model=model,
@@ -795,7 +828,9 @@ def recommend_snn_distributed_strategy(
                 dp_mesh_dim=0,
                 rationale=tuple(rationale),
             )
-        rationale.append("Fall back to DP + memopt level 1 because TP/FSDP2 are unavailable.")
+        rationale.append(
+            "Fall back to DP + memopt level 1 because TP/FSDP2 are unavailable."
+        )
         return SNNDistributedRecommendation(
             prefer=prefer,
             model=model,
@@ -831,7 +866,9 @@ def recommend_snn_distributed_strategy(
                 world_size=world_size,
                 mode="pp",
                 memopt_level=1,
-                pp_microbatches=recommended_pipeline_microbatches(batch_size, logical_stages),
+                pp_microbatches=recommended_pipeline_microbatches(
+                    batch_size, logical_stages
+                ),
                 pp_memopt_stage_budget_ratio=0.5,
                 pp_schedule=pp_schedule,
                 pp_virtual_stages=pp_virtual_stages,
@@ -839,7 +876,9 @@ def recommend_snn_distributed_strategy(
                 rationale=tuple(rationale),
             )
 
-    rationale.append("Pipeline APIs are unavailable, so capacity preference falls back to the strongest memory-oriented strategy.")
+    rationale.append(
+        "Pipeline APIs are unavailable, so capacity preference falls back to the strongest memory-oriented strategy."
+    )
     fallback = recommend_snn_distributed_strategy(
         model=model,
         world_size=world_size,
@@ -888,7 +927,9 @@ def _example_microbatch_args(
     return (example_input[:microbatch_size].contiguous(),)
 
 
-def snn_sequence_cross_entropy(outputs: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+def snn_sequence_cross_entropy(
+    outputs: torch.Tensor, target: torch.Tensor
+) -> torch.Tensor:
     if DTensor is not None and isinstance(outputs, DTensor):
         outputs = outputs.full_tensor()
     if outputs.ndim >= 3:
@@ -972,7 +1013,9 @@ class _SpikformerPipelineStage(nn.Module):
         if self.patch_embed is not None:
             if x.ndim == 4:
                 if self.T is None:
-                    raise RuntimeError("Spikformer pipeline stage requires T for 4D inputs.")
+                    raise RuntimeError(
+                        "Spikformer pipeline stage requires T for 4D inputs."
+                    )
                 x = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)
             elif x.ndim != 5:
                 raise ValueError(
@@ -998,7 +1041,9 @@ def _build_cifar10dvs_vgg_pipeline_module(
     if num_logical_stages < 2:
         raise ValueError("CIFAR10DVSVGG pipeline parallel requires at least 2 stages.")
     if not (hasattr(module, "features") and hasattr(module, "classifier")):
-        raise TypeError("Expected a CIFAR10DVSVGG-like module with features and classifier.")
+        raise TypeError(
+            "Expected a CIFAR10DVSVGG-like module with features and classifier."
+        )
 
     feature_modules = list(module.features.children())
     current = example_input.transpose(0, 1).contiguous()
@@ -1009,8 +1054,14 @@ def _build_cifar10dvs_vgg_pipeline_module(
     classifier_input = torch.flatten(current, 2)
     _, classifier_cost = _measure_module_cost(module.classifier, classifier_input)
     unit_costs = feature_costs + [classifier_cost]
-    feature_counts = list(layout_counts) if layout_counts is not None else _partition_costs_contiguously(unit_costs, num_logical_stages)
-    first_active_stage_idx = next((idx for idx, count in enumerate(feature_counts) if count > 0), None)
+    feature_counts = (
+        list(layout_counts)
+        if layout_counts is not None
+        else _partition_costs_contiguously(unit_costs, num_logical_stages)
+    )
+    first_active_stage_idx = next(
+        (idx for idx, count in enumerate(feature_counts) if count > 0), None
+    )
     stages: List[nn.Module] = []
     cursor = 0
     total_feature_modules = len(feature_modules)
@@ -1047,8 +1098,14 @@ def _build_spikformer_pipeline_module(
 ) -> _PipelineSequentialModule:
     if num_logical_stages < 2:
         raise ValueError("Spikformer pipeline parallel requires at least 2 stages.")
-    if not (hasattr(module, "patch_embed") and hasattr(module, "blocks") and hasattr(module, "head")):
-        raise TypeError("Expected a Spikformer-like module with patch_embed, blocks, and head.")
+    if not (
+        hasattr(module, "patch_embed")
+        and hasattr(module, "blocks")
+        and hasattr(module, "head")
+    ):
+        raise TypeError(
+            "Expected a Spikformer-like module with patch_embed, blocks, and head."
+        )
 
     blocks = list(module.blocks)
     current = example_input
@@ -1063,14 +1120,24 @@ def _build_spikformer_pipeline_module(
     head_input = current.flatten(3).mean(dim=-1)
     _, head_cost = _measure_module_cost(module.head, head_input)
     unit_costs.append(head_cost)
-    block_counts = list(layout_counts) if layout_counts is not None else _partition_costs_contiguously(unit_costs, num_logical_stages)
-    first_active_stage_idx = next((idx for idx, count in enumerate(block_counts) if count > 0), None)
+    block_counts = (
+        list(layout_counts)
+        if layout_counts is not None
+        else _partition_costs_contiguously(unit_costs, num_logical_stages)
+    )
+    first_active_stage_idx = next(
+        (idx for idx, count in enumerate(block_counts) if count > 0), None
+    )
     stages: List[nn.Module] = []
     cursor = 0
     unit_cursor = 0
     stage_costs: List[float] = []
     for stage_idx, count in enumerate(block_counts):
-        patch_embed = module.patch_embed if stage_idx == first_active_stage_idx and count > 0 else None
+        patch_embed = (
+            module.patch_embed
+            if stage_idx == first_active_stage_idx and count > 0
+            else None
+        )
         units_remaining = count
         if patch_embed is not None:
             units_remaining -= 1
@@ -1087,7 +1154,9 @@ def _build_spikformer_pipeline_module(
                 T=getattr(module, "T", None),
             )
         )
-        stage_costs.append(sum(float(cost) for cost in unit_costs[unit_cursor:unit_cursor + count]))
+        stage_costs.append(
+            sum(float(cost) for cost in unit_costs[unit_cursor : unit_cursor + count])
+        )
         unit_cursor += count
     pipeline_module = _PipelineSequentialModule(stages)
     pipeline_module.stage_costs = tuple(stage_costs)
@@ -1113,7 +1182,9 @@ def _build_snn_pipeline_runtime(
             "pipeline parallel support."
         )
     if not dist.is_initialized():
-        raise RuntimeError("Pipeline parallel requires torch.distributed to be initialized.")
+        raise RuntimeError(
+            "Pipeline parallel requires torch.distributed to be initialized."
+        )
     physical_num_stages = dist.get_world_size(group)
     if virtual_pipeline_size <= 0:
         raise ValueError(
@@ -1144,7 +1215,10 @@ def _build_snn_pipeline_runtime(
             f"virtual_pipeline_size={virtual_pipeline_size}."
         )
 
-    local_stage_indices = tuple(stage_index + physical_num_stages * offset for offset in range(virtual_pipeline_size))
+    local_stage_indices = tuple(
+        stage_index + physical_num_stages * offset
+        for offset in range(virtual_pipeline_size)
+    )
     stage_modules = tuple(
         _MicrobatchResetStage(pipeline_module.stages[logical_idx])
         for logical_idx in local_stage_indices
@@ -1285,7 +1359,11 @@ def apply_pipeline_stage_memopt(
     )
     runtime.memopt_selected_stage_indices = selected
     local_selected_pairs = [
-        (logical_idx, runtime.stage_modules[local_idx], runtime.stage_input_examples[local_idx])
+        (
+            logical_idx,
+            runtime.stage_modules[local_idx],
+            runtime.stage_input_examples[local_idx],
+        )
         for local_idx, logical_idx in enumerate(runtime.local_stage_indices)
         if logical_idx in selected
     ]
@@ -1293,9 +1371,10 @@ def apply_pipeline_stage_memopt(
         return runtime, 0.0, False
 
     from spikingjelly.activation_based.memopt import memory_optimization
-    supports_plan_cache = "use_plan_cache" in inspect.signature(
-        memory_optimization
-    ).parameters
+
+    supports_plan_cache = (
+        "use_plan_cache" in inspect.signature(memory_optimization).parameters
+    )
 
     start = time.time()
     for logical_idx, stage_wrapper, stage_input_example in local_selected_pairs:
@@ -1339,7 +1418,10 @@ def analyze_snn_distributed_capability(
     for name, child in _iter_named_modules_under_roots(module, tensor_parallel_roots):
         if isinstance(child, LinearLike):
             tensor_parallel_candidates.append(name)
-        elif isinstance(child, (nn.Conv1d, nn.Conv2d, nn.Conv3d, layer.Conv1d, layer.Conv2d, layer.Conv3d)):
+        elif isinstance(
+            child,
+            (nn.Conv1d, nn.Conv2d, nn.Conv3d, layer.Conv1d, layer.Conv2d, layer.Conv3d),
+        ):
             unsupported_tp.append(name)
 
     if memory_modules:
@@ -1352,7 +1434,9 @@ def analyze_snn_distributed_capability(
             "are auto-parallelized."
         )
     if not tensor_parallel_candidates:
-        notes.append("No Linear-like tensor-parallel candidates were found under the selected roots.")
+        notes.append(
+            "No Linear-like tensor-parallel candidates were found under the selected roots."
+        )
 
     return SNNDistributedAnalysis(
         memory_module_names=tuple(memory_modules),
@@ -1408,7 +1492,9 @@ def wrap_tp_memory_modules(
             if next_index >= len(parent):
                 continue
             next_module = parent[next_index]
-            next_name = f"{parent_name}.{next_index}" if parent_name else str(next_index)
+            next_name = (
+                f"{parent_name}.{next_index}" if parent_name else str(next_index)
+            )
             if next_name in wrapped:
                 continue
             if isinstance(next_module, base.MemoryModule):
@@ -1529,7 +1615,11 @@ def resolve_data_parallel_partition(
             raise ValueError(
                 "dp_mesh_dim must be specified for data-parallel sharding on a multi-dimensional mesh."
             )
-        rank = coordinate[0] if coordinate is not None else (dist.get_rank() if dist.is_initialized() else 0)
+        rank = (
+            coordinate[0]
+            if coordinate is not None
+            else (dist.get_rank() if dist.is_initialized() else 0)
+        )
         return mesh_shape[0], rank
 
     if dp_mesh_dim < 0 or dp_mesh_dim >= len(mesh_shape):
@@ -1537,7 +1627,9 @@ def resolve_data_parallel_partition(
             f"dp_mesh_dim={dp_mesh_dim} is out of range for a mesh with shape {mesh_shape}."
         )
     if coordinate is None:
-        raise ValueError("DeviceMesh does not expose coordinates for data partitioning.")
+        raise ValueError(
+            "DeviceMesh does not expose coordinates for data partitioning."
+        )
     return mesh_shape[dp_mesh_dim], coordinate[dp_mesh_dim]
 
 
@@ -1630,7 +1722,9 @@ def fully_shard_snn_module(
     mp_policy=None,
 ) -> nn.Module:
     if not FSDP2_AVAILABLE:
-        raise RuntimeError("FSDP2 fully_shard is unavailable in the current PyTorch build.")
+        raise RuntimeError(
+            "FSDP2 fully_shard is unavailable in the current PyTorch build."
+        )
 
     named_modules = dict(module.named_modules())
     shard_roots = list(shard_roots or [])
@@ -1645,7 +1739,11 @@ def fully_shard_snn_module(
 
     if shard_module_root:
         if mp_policy is None:
-            fully_shard(module, mesh=device_mesh, reshard_after_forward=root_reshard_after_forward)
+            fully_shard(
+                module,
+                mesh=device_mesh,
+                reshard_after_forward=root_reshard_after_forward,
+            )
         else:
             fully_shard(
                 module,
@@ -1699,7 +1797,9 @@ def _resolve_dp_group_from_mesh(device_mesh: "DeviceMesh", dp_mesh_dim: Optional
     elif hasattr(device_mesh, "get_all_groups"):
         dim_groups = device_mesh.get_all_groups()
     else:
-        raise AttributeError("DeviceMesh does not expose get_dim_groups() or get_all_groups().")
+        raise AttributeError(
+            "DeviceMesh does not expose get_dim_groups() or get_all_groups()."
+        )
 
     if dp_mesh_dim < 0 or dp_mesh_dim >= len(dim_groups):
         raise ValueError(
@@ -1714,7 +1814,9 @@ def _resolve_mesh_dim_group(device_mesh: "DeviceMesh", mesh_dim: int):
     elif hasattr(device_mesh, "get_all_groups"):
         dim_groups = device_mesh.get_all_groups()
     else:
-        raise AttributeError("DeviceMesh does not expose get_dim_groups() or get_all_groups().")
+        raise AttributeError(
+            "DeviceMesh does not expose get_dim_groups() or get_all_groups()."
+        )
 
     if mesh_dim < 0 or mesh_dim >= len(dim_groups):
         raise ValueError(
@@ -1826,7 +1928,9 @@ class ChannelShardConv2d(nn.Module):
         if self.step_mode != "m":
             raise ValueError(f"Unsupported step_mode='{self.step_mode}'.")
         if x.dim() != 5:
-            raise ValueError(f"expected x with shape [T, N, C, H, W], but got {x.shape}!")
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got {x.shape}!"
+            )
 
         y_shape = [x.shape[0], x.shape[1]]
         y = self._conv2d(x.flatten(0, 1))
@@ -1859,10 +1963,16 @@ class ChannelShardConv1d(nn.Module):
             _require_even_shard(source.out_channels, self.world_size, "out_channels")
             start, end = _shard_range(source.out_channels, self.rank, self.world_size)
             weight = source.weight.detach()[start:end].clone()
-            bias = source.bias.detach()[start:end].clone() if source.bias is not None else None
+            bias = (
+                source.bias.detach()[start:end].clone()
+                if source.bias is not None
+                else None
+            )
             self.local_out_channels = end - start
             self.register_parameter("weight", nn.Parameter(weight))
-            self.register_parameter("bias", nn.Parameter(bias) if bias is not None else None)
+            self.register_parameter(
+                "bias", nn.Parameter(bias) if bias is not None else None
+            )
         elif mode == "rowwise":
             _require_even_shard(source.in_channels, self.world_size, "in_channels")
             start, end = _shard_range(source.in_channels, self.rank, self.world_size)
@@ -1870,7 +1980,9 @@ class ChannelShardConv1d(nn.Module):
             bias = source.bias.detach().clone() if source.bias is not None else None
             self.local_in_channels = end - start
             self.register_parameter("weight", nn.Parameter(weight))
-            self.register_parameter("bias", nn.Parameter(bias) if bias is not None else None)
+            self.register_parameter(
+                "bias", nn.Parameter(bias) if bias is not None else None
+            )
         else:
             raise ValueError(f"Unsupported ChannelShardConv1d mode '{mode}'.")
 
@@ -1962,7 +2074,11 @@ class ChannelShardBatchNorm2d(nn.Module):
         return f"step_mode={self.step_mode}, num_features={self.num_features}"
 
     def _batch_norm(self, x: torch.Tensor) -> torch.Tensor:
-        if self.training and self.track_running_stats and self.num_batches_tracked is not None:
+        if (
+            self.training
+            and self.track_running_stats
+            and self.num_batches_tracked is not None
+        ):
             self.num_batches_tracked.add_(1)
         return F.batch_norm(
             x,
@@ -1982,7 +2098,9 @@ class ChannelShardBatchNorm2d(nn.Module):
         if self.step_mode != "m":
             raise ValueError(f"Unsupported step_mode='{self.step_mode}'.")
         if x.dim() != 5:
-            raise ValueError(f"expected x with shape [T, N, C, H, W], but got {x.shape}!")
+            raise ValueError(
+                f"expected x with shape [T, N, C, H, W], but got {x.shape}!"
+            )
         y_shape = [x.shape[0], x.shape[1]]
         y = self._batch_norm(x.flatten(0, 1))
         y_shape.extend(y.shape[1:])
@@ -2007,18 +2125,28 @@ class ChannelShardBatchNorm1d(nn.Module):
         start, end = _shard_range(source.num_features, self.rank, self.world_size)
 
         if self.affine:
-            self.register_parameter("weight", nn.Parameter(source.weight.detach()[start:end].clone()))
-            self.register_parameter("bias", nn.Parameter(source.bias.detach()[start:end].clone()))
+            self.register_parameter(
+                "weight", nn.Parameter(source.weight.detach()[start:end].clone())
+            )
+            self.register_parameter(
+                "bias", nn.Parameter(source.bias.detach()[start:end].clone())
+            )
         else:
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
 
         if self.track_running_stats:
-            self.register_buffer("running_mean", source.running_mean.detach()[start:end].clone())
-            self.register_buffer("running_var", source.running_var.detach()[start:end].clone())
+            self.register_buffer(
+                "running_mean", source.running_mean.detach()[start:end].clone()
+            )
+            self.register_buffer(
+                "running_var", source.running_var.detach()[start:end].clone()
+            )
             num_batches_tracked = getattr(source, "num_batches_tracked", None)
             if num_batches_tracked is not None:
-                self.register_buffer("num_batches_tracked", num_batches_tracked.detach().clone())
+                self.register_buffer(
+                    "num_batches_tracked", num_batches_tracked.detach().clone()
+                )
             else:
                 self.num_batches_tracked = None
         else:
@@ -2032,7 +2160,11 @@ class ChannelShardBatchNorm1d(nn.Module):
         return f"num_features={self.num_features}"
 
     def forward(self, x: torch.Tensor):
-        if self.training and self.track_running_stats and self.num_batches_tracked is not None:
+        if (
+            self.training
+            and self.track_running_stats
+            and self.num_batches_tracked is not None
+        ):
             self.num_batches_tracked.add_(1)
         return F.batch_norm(
             x,
@@ -2046,7 +2178,9 @@ class ChannelShardBatchNorm1d(nn.Module):
         )
 
 
-def _try_convert_vgg_like_block(block: nn.Module, process_group, mode: str) -> Optional[nn.Module]:
+def _try_convert_vgg_like_block(
+    block: nn.Module, process_group, mode: str
+) -> Optional[nn.Module]:
     if not (hasattr(block, "proj_bn") and hasattr(block, "neuron")):
         return None
     if not isinstance(block.proj_bn, nn.Sequential):
@@ -2115,7 +2249,9 @@ def _wrap_tensor_shard_memory_module(
     return None
 
 
-def _convert_trailing_conv2d_bn(container: nn.Module, process_group, mode: str) -> Optional[nn.Module]:
+def _convert_trailing_conv2d_bn(
+    container: nn.Module, process_group, mode: str
+) -> Optional[nn.Module]:
     if not isinstance(container, nn.Sequential):
         return None
     modules = list(container.children())
@@ -2127,11 +2263,15 @@ def _convert_trailing_conv2d_bn(container: nn.Module, process_group, mode: str) 
         return None
     converted = list(modules[:-2])
     converted.append(ChannelShardConv2d(conv, process_group, mode=mode))
-    converted.append(ChannelShardBatchNorm2d(bn, process_group) if mode == "colwise" else bn)
+    converted.append(
+        ChannelShardBatchNorm2d(bn, process_group) if mode == "colwise" else bn
+    )
     return nn.Sequential(*converted)
 
 
-def _convert_leading_conv2d_bn(container: nn.Module, process_group, mode: str) -> Optional[nn.Module]:
+def _convert_leading_conv2d_bn(
+    container: nn.Module, process_group, mode: str
+) -> Optional[nn.Module]:
     if not isinstance(container, layer.SeqToANNContainer):
         return None
     modules = list(container.children())
@@ -2142,12 +2282,16 @@ def _convert_leading_conv2d_bn(container: nn.Module, process_group, mode: str) -
     if not isinstance(conv, Conv2dLike) or not isinstance(bn, BatchNorm2dLike):
         return None
     converted = [ChannelShardConv2d(conv, process_group, mode=mode)]
-    converted.append(ChannelShardBatchNorm2d(bn, process_group) if mode == "colwise" else bn)
+    converted.append(
+        ChannelShardBatchNorm2d(bn, process_group) if mode == "colwise" else bn
+    )
     converted.extend(modules[2:])
     return layer.SeqToANNContainer(*converted)
 
 
-def _convert_vgg_like_tree(module: nn.Module, process_group, mode: str, state: Optional[dict] = None) -> bool:
+def _convert_vgg_like_tree(
+    module: nn.Module, process_group, mode: str, state: Optional[dict] = None
+) -> bool:
     if state is None:
         state = {"projection_converted": False, "memory_wrapped": mode != "colwise"}
 
@@ -2175,7 +2319,9 @@ def _convert_vgg_like_tree(module: nn.Module, process_group, mode: str, state: O
     for child_name, child in list(module.named_children()):
         replacement = child
         if state["projection_converted"] and not state["memory_wrapped"]:
-            wrapped = _wrap_tensor_shard_memory_module(child, process_group, shard_dim=2)
+            wrapped = _wrap_tensor_shard_memory_module(
+                child, process_group, shard_dim=2
+            )
             if wrapped is not None and wrapped is not child:
                 replacement = wrapped
                 state["memory_wrapped"] = True
@@ -2187,7 +2333,9 @@ def _convert_vgg_like_tree(module: nn.Module, process_group, mode: str, state: O
     return changed
 
 
-def _convert_seq_to_ann_conv1d_bn(container: nn.Module, process_group, mode: str) -> Optional[nn.Module]:
+def _convert_seq_to_ann_conv1d_bn(
+    container: nn.Module, process_group, mode: str
+) -> Optional[nn.Module]:
     if not isinstance(container, layer.SeqToANNContainer):
         return None
     modules = list(container.children())
@@ -2207,18 +2355,24 @@ def _convert_seq_to_ann_conv1d_bn(container: nn.Module, process_group, mode: str
     )
 
 
-def _try_convert_spiking_self_attention(attn: nn.Module, process_group) -> Optional[nn.Module]:
+def _try_convert_spiking_self_attention(
+    attn: nn.Module, process_group
+) -> Optional[nn.Module]:
     if not hasattr(attn, "qkv_conv_bn"):
         return None
 
-    converted = _convert_seq_to_ann_conv1d_bn(attn.qkv_conv_bn, process_group, mode="colwise")
+    converted = _convert_seq_to_ann_conv1d_bn(
+        attn.qkv_conv_bn, process_group, mode="colwise"
+    )
     if converted is not None:
         attn.qkv_conv_bn = converted
         if isinstance(attn.qkv_lif, base.MemoryModule):
             attn.qkv_lif = TensorShardMemoryModule(
                 attn.qkv_lif,
                 shard_dim=2,
-                logical_dim_size=getattr(attn, "dim", None) * 3 if getattr(attn, "dim", None) is not None else None,
+                logical_dim_size=getattr(attn, "dim", None) * 3
+                if getattr(attn, "dim", None) is not None
+                else None,
                 process_group=process_group,
             )
         if isinstance(attn.attn_lif, base.MemoryModule):
@@ -2228,7 +2382,9 @@ def _try_convert_spiking_self_attention(attn: nn.Module, process_group) -> Optio
                 logical_dim_size=None,
                 process_group=process_group,
             )
-    converted = _convert_seq_to_ann_conv1d_bn(attn.proj_conv_bn, process_group, mode="rowwise")
+    converted = _convert_seq_to_ann_conv1d_bn(
+        attn.proj_conv_bn, process_group, mode="rowwise"
+    )
     if converted is not None:
         attn.proj_conv_bn = converted
     return attn
@@ -2238,14 +2394,20 @@ def _try_convert_spikformer_mlp(mlp: nn.Module, process_group) -> Optional[nn.Mo
     if not (hasattr(mlp, "fc1") or hasattr(mlp, "fc2")):
         return None
     if hasattr(mlp, "fc1"):
-        converted = _convert_seq_to_ann_conv1d_bn(mlp.fc1, process_group, mode="colwise")
+        converted = _convert_seq_to_ann_conv1d_bn(
+            mlp.fc1, process_group, mode="colwise"
+        )
         if converted is not None:
             mlp.fc1 = converted
             if isinstance(mlp.neuron1, base.MemoryModule):
                 logical_dim = None
                 conv = list(mlp.fc1.children())[0]
                 if hasattr(conv, "out_channels"):
-                    logical_dim = conv.out_channels if not hasattr(conv, "local_out_channels") else conv.out_channels
+                    logical_dim = (
+                        conv.out_channels
+                        if not hasattr(conv, "local_out_channels")
+                        else conv.out_channels
+                    )
                 mlp.neuron1 = TensorShardMemoryModule(
                     mlp.neuron1,
                     shard_dim=2,
@@ -2253,7 +2415,9 @@ def _try_convert_spikformer_mlp(mlp: nn.Module, process_group) -> Optional[nn.Mo
                     process_group=process_group,
                 )
     if hasattr(mlp, "fc2"):
-        converted = _convert_seq_to_ann_conv1d_bn(mlp.fc2, process_group, mode="rowwise")
+        converted = _convert_seq_to_ann_conv1d_bn(
+            mlp.fc2, process_group, mode="rowwise"
+        )
         if converted is not None:
             mlp.fc2 = converted
     return mlp
@@ -2271,7 +2435,9 @@ def _convert_spiking_self_attention_tree(module: nn.Module, process_group) -> bo
     return changed
 
 
-def _convert_spikformer_mlp_tree(module: nn.Module, process_group, state: Optional[dict] = None) -> bool:
+def _convert_spikformer_mlp_tree(
+    module: nn.Module, process_group, state: Optional[dict] = None
+) -> bool:
     if state is None:
         state = {
             "fc1_converted": False,
@@ -2286,9 +2452,13 @@ def _convert_spikformer_mlp_tree(module: nn.Module, process_group, state: Option
         return True
 
     if not state["fc1_converted"]:
-        converted_fc1 = _convert_seq_to_ann_conv1d_bn(module, process_group, mode="colwise")
+        converted_fc1 = _convert_seq_to_ann_conv1d_bn(
+            module, process_group, mode="colwise"
+        )
         if converted_fc1 is not None:
-            if converted_fc1 is not module and isinstance(module, layer.SeqToANNContainer):
+            if converted_fc1 is not module and isinstance(
+                module, layer.SeqToANNContainer
+            ):
                 _overwrite_sequential_children(module, converted_fc1)
             state["fc1_converted"] = True
             return True
@@ -2300,9 +2470,13 @@ def _convert_spikformer_mlp_tree(module: nn.Module, process_group, state: Option
             return True
 
     if state["neuron1_wrapped"] and not state["fc2_converted"]:
-        converted_fc2 = _convert_seq_to_ann_conv1d_bn(module, process_group, mode="rowwise")
+        converted_fc2 = _convert_seq_to_ann_conv1d_bn(
+            module, process_group, mode="rowwise"
+        )
         if converted_fc2 is not None:
-            if converted_fc2 is not module and isinstance(module, layer.SeqToANNContainer):
+            if converted_fc2 is not module and isinstance(
+                module, layer.SeqToANNContainer
+            ):
                 _overwrite_sequential_children(module, converted_fc2)
             state["fc2_converted"] = True
             return True
@@ -2311,7 +2485,9 @@ def _convert_spikformer_mlp_tree(module: nn.Module, process_group, state: Option
     for child_name, child in list(module.named_children()):
         replacement = child
         if state["fc1_converted"] and not state["neuron1_wrapped"]:
-            wrapped = _wrap_tensor_shard_memory_module(child, process_group, shard_dim=2)
+            wrapped = _wrap_tensor_shard_memory_module(
+                child, process_group, shard_dim=2
+            )
             if wrapped is not None and wrapped is not child:
                 replacement = wrapped
                 state["neuron1_wrapped"] = True
@@ -2323,7 +2499,9 @@ def _convert_spikformer_mlp_tree(module: nn.Module, process_group, state: Option
     return changed
 
 
-def _try_convert_spikformer_block(block: nn.Module, process_group) -> Optional[nn.Module]:
+def _try_convert_spikformer_block(
+    block: nn.Module, process_group
+) -> Optional[nn.Module]:
     if not (hasattr(block, "attn") and hasattr(block, "mlp")):
         return None
 
@@ -2332,7 +2510,9 @@ def _try_convert_spikformer_block(block: nn.Module, process_group) -> Optional[n
     return block
 
 
-def _try_convert_spikformer_stem_block(block: nn.Module, process_group, mode: str) -> Optional[nn.Module]:
+def _try_convert_spikformer_stem_block(
+    block: nn.Module, process_group, mode: str
+) -> Optional[nn.Module]:
     if not (hasattr(block, "conv_bn") and hasattr(block, "neuron")):
         return None
     conv_bn = getattr(block, "conv_bn")
@@ -2363,7 +2543,9 @@ def _try_convert_spikformer_stem_block(block: nn.Module, process_group, mode: st
     return block
 
 
-def _convert_spikformer_stem_tree(module: nn.Module, process_group, mode: str, state: Optional[dict] = None) -> bool:
+def _convert_spikformer_stem_tree(
+    module: nn.Module, process_group, mode: str, state: Optional[dict] = None
+) -> bool:
     if state is None:
         state = {"projection_converted": False, "memory_wrapped": mode != "colwise"}
 
@@ -2375,7 +2557,9 @@ def _convert_spikformer_stem_tree(module: nn.Module, process_group, mode: str, s
 
     if not state["projection_converted"]:
         if hasattr(module, "block"):
-            converted_container = _convert_leading_conv2d_bn(module.block, process_group, mode)
+            converted_container = _convert_leading_conv2d_bn(
+                module.block, process_group, mode
+            )
             if converted_container is not None:
                 module.block = converted_container
                 state["projection_converted"] = True
@@ -2394,7 +2578,9 @@ def _convert_spikformer_stem_tree(module: nn.Module, process_group, mode: str, s
     for child_name, child in list(module.named_children()):
         replacement = child
         if state["projection_converted"] and not state["memory_wrapped"]:
-            wrapped = _wrap_tensor_shard_memory_module(child, process_group, shard_dim=2)
+            wrapped = _wrap_tensor_shard_memory_module(
+                child, process_group, shard_dim=2
+            )
             if wrapped is not None and wrapped is not child:
                 replacement = wrapped
                 state["memory_wrapped"] = True
@@ -2428,7 +2614,9 @@ def parallelize_snn_conv_blocks(
         for child_name, child in list(root_module.named_children()):
             mode = "colwise" if block_index % 2 == 0 else "rowwise"
             replacement = child
-            changed = _convert_vgg_like_tree(replacement, process_group=process_group, mode=mode)
+            changed = _convert_vgg_like_tree(
+                replacement, process_group=process_group, mode=mode
+            )
             if changed:
                 if replacement is not child:
                     root_module[int(child_name)] = replacement
@@ -2459,8 +2647,16 @@ def parallelize_spikformer_blocks(
         for child_name, child in list(root_module.named_children()):
             replacement = child
             changed = False
-            changed = _convert_spiking_self_attention_tree(replacement, process_group=process_group) or changed
-            changed = _convert_spikformer_mlp_tree(replacement, process_group=process_group) or changed
+            changed = (
+                _convert_spiking_self_attention_tree(
+                    replacement, process_group=process_group
+                )
+                or changed
+            )
+            changed = (
+                _convert_spikformer_mlp_tree(replacement, process_group=process_group)
+                or changed
+            )
             if changed and replacement is not child:
                 root_module[int(child_name)] = replacement
 
@@ -2480,7 +2676,9 @@ def parallelize_spikformer_patch_stem(
         if root not in named_modules:
             raise KeyError(f"Unknown Spikformer patch stem root '{root}'.")
         root_module = named_modules[root]
-        if hasattr(root_module, "stages") and hasattr(root_module, "positional_encoding"):
+        if hasattr(root_module, "stages") and hasattr(
+            root_module, "positional_encoding"
+        ):
             block_index = 0
             stage_sequence = getattr(root_module, "stages")
             for child_name, child in list(stage_sequence.named_children()):
@@ -2501,7 +2699,9 @@ def parallelize_spikformer_patch_stem(
             for child_name, child in list(root_module.named_children()):
                 mode = "colwise" if block_index % 2 == 0 else "rowwise"
                 replacement = child
-                changed = _convert_spikformer_stem_tree(replacement, process_group=process_group, mode=mode)
+                changed = _convert_spikformer_stem_tree(
+                    replacement, process_group=process_group, mode=mode
+                )
                 if changed:
                     if replacement is not child:
                         root_module[int(child_name)] = replacement
@@ -2510,7 +2710,10 @@ def parallelize_spikformer_patch_stem(
 
         parent_name, _, child_name = root.rpartition(".")
         parent_module = named_modules.get(parent_name) if parent_name else None
-        if isinstance(parent_module, (nn.Sequential, nn.ModuleList)) and child_name.isdigit():
+        if (
+            isinstance(parent_module, (nn.Sequential, nn.ModuleList))
+            and child_name.isdigit()
+        ):
             child_index = int(child_name)
             child_items = list(parent_module.named_children())
             remaining = len(child_items) - child_index
@@ -2565,7 +2768,11 @@ def configure_snn_distributed(
         device_mesh = config.device_mesh
 
     mesh_tensor = getattr(device_mesh, "mesh", None)
-    mesh_ndim = int(mesh_tensor.ndim) if mesh_tensor is not None else getattr(device_mesh, "ndim", 1)
+    mesh_ndim = (
+        int(mesh_tensor.ndim)
+        if mesh_tensor is not None
+        else getattr(device_mesh, "ndim", 1)
+    )
     if config.enable_data_parallel and mesh_ndim > 1 and config.dp_mesh_dim is None:
         raise ValueError(
             "dp_mesh_dim must be specified when enable_data_parallel=True on a multi-dimensional DeviceMesh."
@@ -2689,10 +2896,14 @@ def configure_cifar10dvs_vgg_distributed(
     config = SNNDistributedConfig(
         device_type=device_type,
         mesh_shape=mesh_shape,
-        tensor_parallel_roots=["classifier"] if enable_classifier_tensor_parallel else None,
+        tensor_parallel_roots=["classifier"]
+        if enable_classifier_tensor_parallel
+        else None,
         auto_tensor_parallel=enable_classifier_tensor_parallel,
         experimental_conv_tensor_parallel=enable_experimental_conv_tensor_parallel,
-        conv_tensor_parallel_roots=["features"] if enable_experimental_conv_tensor_parallel else None,
+        conv_tensor_parallel_roots=["features"]
+        if enable_experimental_conv_tensor_parallel
+        else None,
         enable_data_parallel=enable_data_parallel,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
@@ -2713,7 +2924,9 @@ def configure_cifar10dvs_vgg_fsdp2(
     fsdp_reduce_dtype: Optional[torch.dtype] = None,
     fsdp_output_dtype: Optional[torch.dtype] = None,
 ) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
-    tp_enabled = enable_classifier_tensor_parallel or enable_experimental_conv_tensor_parallel
+    tp_enabled = (
+        enable_classifier_tensor_parallel or enable_experimental_conv_tensor_parallel
+    )
     fsdp_shard_roots = ["features"]
     if not enable_classifier_tensor_parallel:
         fsdp_shard_roots.append("classifier")
@@ -2727,10 +2940,14 @@ def configure_cifar10dvs_vgg_fsdp2(
         fsdp_param_dtype=fsdp_param_dtype,
         fsdp_reduce_dtype=fsdp_reduce_dtype,
         fsdp_output_dtype=fsdp_output_dtype,
-        tensor_parallel_roots=["classifier"] if enable_classifier_tensor_parallel else None,
+        tensor_parallel_roots=["classifier"]
+        if enable_classifier_tensor_parallel
+        else None,
         auto_tensor_parallel=enable_classifier_tensor_parallel,
         experimental_conv_tensor_parallel=enable_experimental_conv_tensor_parallel,
-        conv_tensor_parallel_roots=["features"] if enable_experimental_conv_tensor_parallel else None,
+        conv_tensor_parallel_roots=["features"]
+        if enable_experimental_conv_tensor_parallel
+        else None,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
     )
@@ -2752,9 +2969,13 @@ def configure_spikformer_distributed(
         tensor_parallel_roots=["head"] if enable_head_tensor_parallel else None,
         auto_tensor_parallel=enable_head_tensor_parallel,
         experimental_spikformer_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_tensor_parallel_roots=["blocks"] if enable_head_tensor_parallel else None,
+        spikformer_tensor_parallel_roots=["blocks"]
+        if enable_head_tensor_parallel
+        else None,
         experimental_spikformer_patch_stem_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_patch_stem_tensor_parallel_roots=["patch_embed"] if enable_head_tensor_parallel else None,
+        spikformer_patch_stem_tensor_parallel_roots=["patch_embed"]
+        if enable_head_tensor_parallel
+        else None,
         enable_data_parallel=enable_data_parallel,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
@@ -2792,9 +3013,13 @@ def configure_spikformer_fsdp2(
         tensor_parallel_roots=["head"] if enable_head_tensor_parallel else None,
         auto_tensor_parallel=enable_head_tensor_parallel,
         experimental_spikformer_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_tensor_parallel_roots=["blocks"] if enable_head_tensor_parallel else None,
+        spikformer_tensor_parallel_roots=["blocks"]
+        if enable_head_tensor_parallel
+        else None,
         experimental_spikformer_patch_stem_tensor_parallel=enable_head_tensor_parallel,
-        spikformer_patch_stem_tensor_parallel_roots=["patch_embed"] if enable_head_tensor_parallel else None,
+        spikformer_patch_stem_tensor_parallel_roots=["patch_embed"]
+        if enable_head_tensor_parallel
+        else None,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
     )

@@ -95,15 +95,15 @@
             # Define Layers
             hidden_layers = OrderedDict([
                 ('Linear0', layer.Linear(in_pop_dim, hidden_sizes[0])),
-                (neuron_type + '0', neuron.CUBALIFNode(surrogate_function=surrogate.Rect()))
+                ('CUBALIFNode0', neuron.CUBALIFNode(surrogate_function=surrogate.Rect()))
             ])
             if self.hidden_num > 1:
                 for hidden_layer in range(1, self.hidden_num):
                     hidden_layers['Linear' + str(hidden_layer)] = layer.Linear(hidden_sizes[hidden_layer-1], hidden_sizes[hidden_layer])
-                    hidden_layers[neuron_type + str(hidden_layer)] = neuron.CUBALIFNode(surrogate_function=surrogate.Rect())
+                    hidden_layers['CUBALIFNode' + str(hidden_layer)] = neuron.CUBALIFNode(surrogate_function=surrogate.Rect())
 
             hidden_layers['Linear' + str(self.hidden_num)] = layer.Linear(hidden_sizes[-1], self.out_pop_dim)
-            hidden_layers[neuron_type + str(self.hidden_num)] = neuron.ILCCUBALIFNode(act_dim, dec_pop_dim, surrogate_function=surrogate.Rect())
+            hidden_layers['ILCCUBALIFNode' + str(self.hidden_num)] = neuron.ILCCUBALIFNode(act_dim, dec_pop_dim, surrogate_function=surrogate.Rect())
 
             self.hidden_layers = nn.Sequential(hidden_layers)
 

@@ -5,9 +5,8 @@ Author: `Yifan Huang (AllenYolk) <https://github.com/AllenYolk>`_, `wei.fang <ht
 
 中文版: :doc:`../cn/flexsn`
 
-This tutorial focuses on ``FlexSN``. If you have not read the Triton backend basics yet, it is recommended to read :doc:`./triton_backend` first to understand the usage and constraints of predefined Triton neuron kernels.
-
-``FlexSN`` can generate high-performance multi-step kernels from a user-defined single-step neuronal dynamics function ``core``. For CUDA execution, ``backend="triton"`` and ``backend="inductor"`` are peer, equivalent backend labels in FlexSN; they currently dispatch the same maintained Triton scan implementation.
+This tutorial focuses on ``FlexSN``. ``FlexSN`` can generate high-performance multi-step kernels from a user-defined single-step neuronal dynamics function ``core``.
+If you have not read the Triton backend basics yet, it is recommended to read :doc:`./triton_backend` first to understand the usage and constraints of predefined Triton neuron kernels.
 
 Using FlexSN to Customize Triton Neuron Kernels
 -----------------------------------------------
@@ -127,9 +126,11 @@ The construction of :class:`FlexSN <spikingjelly.activation_based.neuron.flexsn.
 * ``core`` : a function that describes the single-step neuron dynamics, with the signature ``[*inputs, *states] -> [*outputs, *states]``.
 * ``num_inputs, num_states, num_outputs`` : the numbers of inputs, state variables, and outputs, which should be consistent with the signature of ``core``.
 * ``example_inputs`` : example arguments for ``core``. ``FlexSN`` will call ``core`` with these example inputs in order to capture the computation graph.
+* ``example_outputs`` : optional, per-step output templates for ``core``. They are mainly used to determine output shapes and dtypes when the input sequence is empty (``T == 0``). On the ``"triton"`` / ``"inductor"`` path, if this argument is provided, each template tensor should match the first ``example_inputs`` tensor's per-step shape and dtype.
 * ``requires_grad`` : whether the arguments of ``core`` require gradients. The default value is ``None``, which means that all arguments require gradients (i.e., equivalent to all ``True``).
-* ``step_mode, backend`` : similar to other neuron modules, these two arguments determine the step mode and the backend. For FlexSN on CUDA, ``triton`` and ``inductor`` are equivalent backend labels, and both are only valid when ``step_mode="m"``.
+* ``step_mode, backend`` : similar to other neuron modules, these two arguments determine the step mode and the backend. The ``"torch"`` backend is always available. The ``"triton"``, ``"inductor"``, and ``"hop"`` backends are only valid when ``step_mode="m"``. In FlexSN, ``"triton"`` and ``"inductor"`` are equivalent labels for the same Triton path, while ``"hop"`` uses the HOP/eager-scan path.
 * ``store_state_seqs`` : similar to ``store_v_seq`` in other neuron modules, this argument determines whether state sequences are stored. If ``True``, the state sequences from the last run can be accessed via the ``state_seqs`` attribute. This attribute is a list, where each element corresponds to the sequence of a specific state variable.
+
 
 ``FlexSN`` also supports backward propagation, as shown in the following code block:
 
@@ -240,16 +241,15 @@ With the workflow described above, users can obtain Triton-accelerated neuron mo
 
     When using ``FlexSN``, please note the following:
 
-    * It should be executed on a GPU.
-    * The CUDA backend labels ``triton`` and ``inductor`` only support multi-step mode ``step_mode="m"``.
+    * The ``"torch"`` backend can run on CPU or GPU. The ``"triton"`` and ``"inductor"`` backends require a GPU, and the ``"triton"``, ``"inductor"``, and ``"hop"`` backends only support multi-step mode ``step_mode="m"``.
     * The PyTorch backend is implemented by repeatedly calling ``core``.
     * In the design of ``FlexSN``, compromises are made in efficiency in order to pursue generality. At present, ``IFNode``, ``LIFNode``, and ``PLIFNode`` are equipped with highly optimized predefined Triton kernels. Please use these predefined kernels whenever possible to obtain higher performance.
     * After completing a simulation with ``FlexSN``, ``reset()`` must be called to reset the neuron states.
 
-FlexSN CUDA Backends
---------------------
+Compatibility with ``torch.compile``
+------------------------------------
 
-``FlexSN`` exposes two equivalent CUDA backend labels, ``backend="triton"`` and ``backend="inductor"``. They are peers in the public API and currently share the same maintained Triton-based execution path. In practice, choose whichever label is clearer in your codebase; behavior and kernel generation are aligned.
+``FlexSN`` exposes two equivalent backend labels for the same Triton path: ``backend="triton"`` and ``backend="inductor"``. The latter is the custom-op-wrapped entry to the same maintained Triton execution path. In practice, choose whichever label is clearer in your codebase; behavior and kernel generation are aligned.
 
 Key properties:
 
@@ -260,16 +260,18 @@ Key properties:
 .. admonition:: Important
    :class: warning
 
-   * Only CUDA devices are supported.
+   * This section is about the Triton path. The ``"triton"`` and ``"inductor"`` backends require CUDA.
    * Ops inside ``core`` must be in the ``FX_TO_TRITON`` table.
      Unsupported ops fall back to ``eager_scan`` with a WARNING log.
      See :ref:`Op Coverage <flexsn-inductor-op-coverage-en>` below for the full list.
    * For training, ``core`` should use a surrogate gradient
-     (e.g. :class:`spikingjelly.activation_based.surrogate.Sigmoid`) instead
+     (e.g. :class:`Sigmoid <spikingjelly.activation_based.surrogate.Sigmoid>`) instead
      of a hard threshold; hard thresholds yield zero gradients by design.
 
-Quick Start — Inference
-^^^^^^^^^^^^^^^^^^^^^^^
+Minimal Examples
+^^^^^^^^^^^^^^^^
+
+Inference:
 
 .. code:: python
 
@@ -295,10 +297,7 @@ Quick Start — Inference
     model = torch.compile(model, fullgraph=True)
     out = model(x)
 
-Quick Start — Training
-^^^^^^^^^^^^^^^^^^^^^^
-
-Use a surrogate gradient to make spike signals differentiable:
+Training:
 
 .. code:: python
 
@@ -322,90 +321,51 @@ Use a surrogate gradient to make spike signals differentiable:
     out.sum().backward()        # BPTT via dedicated Triton fwd+bwd kernels
     print(x.grad.shape)         # [8, 64, 512]
 
-.. admonition:: torch.compile() is optional for training
-   :class: tip
-
-   ``backend="triton"`` and ``backend="inductor"`` both work with and without ``torch.compile``.
-   When wrapped by ``torch.compile``, FlexSN can remain in the compiled graph
-   and still dispatch its dedicated Triton scan kernels through the
-   custom-op path. This is the mode to use when benchmarking cross-layer
-   fusion with surrounding ``Linear`` / ``Conv`` modules.
-
-Kernel Dispatch Strategy
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-``multi_step_forward`` selects a path automatically based on context. The
-``triton`` and ``inductor`` labels share the same CUDA dispatch logic:
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Condition
-     - Path
-   * - Inference (no grad) + CUDA
-     - Single Triton scan kernel (``tl.static_range(T)``, 1 launch)
-   * - Training + CUDA (with or without ``torch.compile``)
-     - Dedicated Triton forward/backward scan kernels; ``torch.compile`` can
-       keep FlexSN in the compiled graph through the custom-op path
-   * - CPU or kernels unavailable
-     - ``eager_scan`` / ``flex_sn_scan`` HOP fallback
+``torch.compile`` is optional in both examples. Without it, the ``"triton"``
+and ``"inductor"`` backends still use the same dedicated Triton scan kernels. With it,
+FlexSN stays in the compiled graph through the custom-op path, which is the
+mode to use when benchmarking cross-layer fusion with surrounding
+``Linear`` / ``Conv`` modules.
 
 Supported Backends
 ^^^^^^^^^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 22 22 32
+   :widths: 18 16 30 36
 
    * - Backend
      - Device
-     - Typical use
-     - Notes
+     - Execution path
+     - Typical use / notes
    * - ``"torch"``
      - CPU / CUDA
-     - reference / debugging
      - Pure PyTorch multi-step loop
+     - Reference implementation, debugging, CPU prototyping
    * - ``"triton"`` / ``"inductor"``
      - CUDA
-     - production CUDA path
-     - Equivalent peer labels; both use the same dedicated Triton scan kernels and optional ``torch.compile``
+     - Same Triton path
+     - Primary high-performance path. ``inductor`` is custom-op-wrapped entry to same Triton kernels
    * - ``"hop"``
      - CPU / CUDA
-     - scan/HOP experimentation
-     - Higher-order-op / eager fallback path
+     - HOP / eager scan path
+     - Experimentation, scan tracing, fallback path
 
-Performance Notes
-^^^^^^^^^^^^^^^^^
+Runtime Behavior
+^^^^^^^^^^^^^^^^
 
-**Inference**: at initialization time, ``core`` is traced with ``make_fx`` and the FlexSN template generates a single Triton scan kernel with a ``tl.static_range(T)`` time loop. Every inference call triggers exactly one kernel launch regardless of T.
+Under ``backend="triton"`` or ``backend="inductor"``:
 
-**Training (without torch.compile)**: at initialization time, ``aot_function`` traces both the forward and backward of ``core`` and compiles dedicated Triton forward and backward scan kernels, each with a ``tl.static_range(T)`` time loop; one kernel launch per direction regardless of T.
+* Inference traces ``core`` with ``make_fx`` and emits one Triton scan kernel with ``tl.static_range(T)``. Each inference call launches exactly one kernel, independent of ``T``.
+* Training traces both forward and backward and emits dedicated Triton forward/backward scan kernels. Without ``torch.compile``, this is already the full Triton path.
+* With ``torch.compile``, FlexSN still dispatches the same Triton kernels through opaque custom ops, while surrounding layers can be jointly compiled.
+* If ``core`` uses unsupported ops, or if Triton kernels cannot be built, FlexSN falls back to the HOP/eager-scan path.
 
-**Training with torch.compile**: the triton / inductor backend path exposes opaque custom ops for the generated kernels, allowing FlexSN to stay compiler-friendly while surrounding layers are jointly compiled.
+Practical recommendation:
 
-When to Use Each Backend
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 30 40
-
-   * - Scenario
-     - Recommended backend
-     - Reason
-   * - Prototyping / CPU
-     - ``"torch"``
-     - No constraints
-   * - CUDA inference, max throughput
-     - ``"triton"`` or ``"inductor"``
-     - Equivalent CUDA labels for the same single-kernel scan path
-   * - CUDA training
-     - ``"triton"`` / ``"inductor"`` + ``torch.compile()`` (optional)
-     - Dedicated fwd+bwd scan kernels; compile adds cross-layer fusion opportunities
-   * - Inference + cross-layer fusion
-     - ``"triton"`` / ``"inductor"`` + ``torch.compile``
-     - Single-kernel scan + joint compilation with surrounding Conv/Linear
+* Use the ``"torch"`` backend for CPU work, debugging, or when you want simplest semantics.
+* Use the ``"triton"`` or ``"inductor"`` backend for actual high-performance GPU execution.
+* Add ``torch.compile`` only when you want cross-layer fusion with surrounding modules.
 
 .. _flexsn-inductor-op-coverage-en:
 

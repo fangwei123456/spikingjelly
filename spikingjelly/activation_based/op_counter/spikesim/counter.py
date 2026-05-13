@@ -92,7 +92,9 @@ class SpikeSimEventCounter(BaseCounter):
         self.stage_metadata: dict[str, _StageMetadata] = {}
         self.warnings: list[str] = []
         self._warning_keys: set[str] = set()
-        self._ones_kernel_cache: dict[tuple[int, int, int, torch.device], torch.Tensor] = {}
+        self._ones_kernel_cache: dict[
+            tuple[int, int, int, torch.device], torch.Tensor
+        ] = {}
         self.rules = {
             aten.convolution.default: self._count_convolution,
             aten.add.Tensor: self._count_merge,
@@ -170,9 +172,11 @@ class SpikeSimEventCounter(BaseCounter):
         else:
             x_padded = F.pad(x, (0, 0, 0, 0, 0, padded_channels - c_in))
 
-        tile_sums = x_padded.reshape(
-            x.shape[0], num_tiles, xbar_size, x.shape[2], x.shape[3]
-        ).sum(dim=2).to(dtype=torch.float32)
+        tile_sums = (
+            x_padded.reshape(x.shape[0], num_tiles, xbar_size, x.shape[2], x.shape[3])
+            .sum(dim=2)
+            .to(dtype=torch.float32)
+        )
         cache_key = (num_tiles, k_h, k_w, tile_sums.device)
         if cache_key not in self._ones_kernel_cache:
             self._ones_kernel_cache[cache_key] = tile_sums.new_ones(
@@ -194,12 +198,13 @@ class SpikeSimEventCounter(BaseCounter):
         active_patch = occupancy.gt(0)
         active_patch_tile_count = int(active_patch.sum().item())
         active_row_count_by_tile = [
-            int(v)
-            for v in occupancy.sum(dim=(0, 2, 3), dtype=torch.float64).tolist()
+            int(v) for v in occupancy.sum(dim=(0, 2, 3), dtype=torch.float64).tolist()
         ]
         active_row_count = int(sum(active_row_count_by_tile))
         active_site_mask = active_patch.any(dim=1)
-        active_output_tile_site_count = out_channel_tiles * int(active_site_mask.sum().item())
+        active_output_tile_site_count = out_channel_tiles * int(
+            active_site_mask.sum().item()
+        )
         return (
             active_patch_tile_count,
             active_row_count,

@@ -300,7 +300,11 @@ class LIFNode(BaseNode):
         else:
             v = v - (v - _vr) / tau + x
         spike = (v >= v_threshold).to(x)
-        v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
+        v = (
+            (v - spike * v_threshold)
+            if soft_reset
+            else (_vr * spike + (1.0 - spike) * v)
+        )
         return spike, v
 
     # ---------- kept for subclass backward-compatibility ----------
@@ -372,7 +376,11 @@ class LIFNode(BaseNode):
                 spike = (v >= v_threshold).to(x_seq)
             else:
                 spike = surrogate_fn(v - v_threshold)
-            v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
+            v = (
+                (v - spike * v_threshold)
+                if soft_reset
+                else (_vr * spike + (1.0 - spike) * v)
+            )
             spike_seq[t] = spike
             if store_v_seq:
                 v_seq[t] = v
@@ -441,7 +449,12 @@ class LIFNode(BaseNode):
         else:
             self.v_float_to_tensor(x)
             spike, self.v = self._eval_single_step_forward(
-                x, self.v, self.v_threshold, self.v_reset, self.tau, self.decay_input,
+                x,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
+                self.tau,
+                self.decay_input,
             )
             return spike
 
@@ -453,13 +466,18 @@ class LIFNode(BaseNode):
                 # On GPU with a supported surrogate, use the unified Triton kernel
                 # (much faster than the Python for loop in super()).
                 # Falls back to the Python loop for CPU or custom surrogates.
-                if x_seq.is_cuda and getattr(self.surrogate_function, 'spiking', True):
+                if x_seq.is_cuda and getattr(self.surrogate_function, "spiking", True):
                     self.v_float_to_tensor(x_seq[0])
                     try:
                         spike_seq, v_seq = triton_kernel.multistep_lif(
-                            x_seq, self.v, self.decay_input, self.tau,
-                            self.v_threshold, self.v_reset,
-                            self.detach_reset, self.surrogate_function,
+                            x_seq,
+                            self.v,
+                            self.decay_input,
+                            self.tau,
+                            self.v_threshold,
+                            self.v_reset,
+                            self.detach_reset,
+                            self.surrogate_function,
                         )
                         if self.store_v_seq:
                             self.v_seq = v_seq
@@ -467,11 +485,20 @@ class LIFNode(BaseNode):
                         else:
                             self.v = v_seq[-1].clone()
                         return spike_seq
-                    except (NotImplementedError, AttributeError, TypeError, KeyError) as e:
-                        logging.debug("Falling back from Triton LIF kernel in training: %s", e)
+                    except (
+                        NotImplementedError,
+                        AttributeError,
+                        TypeError,
+                        KeyError,
+                    ) as e:
+                        logging.debug(
+                            "Falling back from Triton LIF kernel in training: %s", e
+                        )
                     except RuntimeError as e:
                         if _is_expected_triton_fallback_error(e):
-                            logging.debug("Falling back from Triton LIF kernel in training: %s", e)
+                            logging.debug(
+                                "Falling back from Triton LIF kernel in training: %s", e
+                            )
                         else:
                             logging.exception(
                                 "Unexpected Triton LIF kernel failure in training "
@@ -566,12 +593,17 @@ class LIFNode(BaseNode):
             # soft/hard reset x decay_input variants via tl.constexpr).
             # Falls back to the unified Python loop for CPU, custom surrogates,
             # or when spiking=False (Triton always emits hard spikes).
-            if x_seq.is_cuda and getattr(self.surrogate_function, 'spiking', True):
+            if x_seq.is_cuda and getattr(self.surrogate_function, "spiking", True):
                 try:
                     spike_seq, v_seq = triton_kernel.multistep_lif(
-                        x_seq, self.v, self.decay_input, self.tau,
-                        self.v_threshold, self.v_reset,
-                        self.detach_reset, self.surrogate_function,
+                        x_seq,
+                        self.v,
+                        self.decay_input,
+                        self.tau,
+                        self.v_threshold,
+                        self.v_reset,
+                        self.detach_reset,
+                        self.surrogate_function,
                     )
                     if self.store_v_seq:
                         self.v_seq = v_seq
@@ -583,7 +615,9 @@ class LIFNode(BaseNode):
                     logging.debug("Falling back from Triton LIF kernel in eval: %s", e)
                 except RuntimeError as e:
                     if _is_expected_triton_fallback_error(e):
-                        logging.debug("Falling back from Triton LIF kernel in eval: %s", e)
+                        logging.debug(
+                            "Falling back from Triton LIF kernel in eval: %s", e
+                        )
                     else:
                         logging.exception(
                             "Unexpected Triton LIF kernel failure in eval "
@@ -595,10 +629,15 @@ class LIFNode(BaseNode):
 
             # CPU or unsupported surrogate: unified Python fallback
             # (replaces the 8 separate jit_eval_multi_step_forward_* methods)
-            _spiking = getattr(self.surrogate_function, 'spiking', True)
+            _spiking = getattr(self.surrogate_function, "spiking", True)
             out = self._eval_multi_step_forward(
-                x_seq, self.v, self.v_threshold, self.v_reset,
-                self.tau, self.decay_input, self.store_v_seq,
+                x_seq,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
+                self.tau,
+                self.decay_input,
+                self.store_v_seq,
                 spiking=_spiking,
                 # When spiking=False, SurrogateFunctionBase.forward() returns the
                 # primitive (smooth) function, so we can call it directly.

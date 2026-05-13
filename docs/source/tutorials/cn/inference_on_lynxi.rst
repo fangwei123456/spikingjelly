@@ -122,7 +122,7 @@
 
         def forward(self, x: torch.Tensor):
             # x.shape = [N, C, H, W]
-            x_seq = x.unsqueeze(0).repeat(self.T, 1, 1, 1, 1)  # [N, C, H, W] -> [T, N, C, H, W]
+            x_seq = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)  # [N, C, H, W] -> [T, N, C, H, W]
             x_seq = self.conv_fc(x_seq)
             fr = x_seq.mean(0)
             return fr
@@ -241,16 +241,20 @@
 完整代码和输入输出
 -------------------------------------------
 
-完整的代码位于 `spikingjelly/activation_based/examples/lynxi_fmnist_inference.py`，运行的命令行参数为：
+完整的代码位于 `spikingjelly/activation_based/examples/lynxi_fmnist_inference.py`。当前版本的示例脚本会直接使用 ``-data-dir`` 作为 FashionMNIST 根目录，因此运行时需要显式传入该参数。一个完整示例如下：
 
 .. code-block:: shell
 
-    (fangwei) cxhpc@lxnode01:~/fangwei/spikingjelly$ python -m spikingjelly.activation_based.examples.lynxi_fmnist_inference -epochs
-    
+    python -m spikingjelly.activation_based.examples.lynxi_fmnist_inference \
+        -data-dir /datasets/FashionMNIST/ \
+        -pt-path ./logs/T4_b128_sgd_lr0.1_c128_cupy/checkpoint_max.pth \
+        -out-model-path ./lynxi_model
+
     lynxi_exchange.py[line:185]-CRITICAL: lyngor.version=1.1.0
-    usage: test.py [-h] [-T T] [-j N] [-data-dir DATA_DIR] [-channels CHANNELS]
-                [-b B] [-pt-path PT_PATH] [-out-model-path OUT_MODEL_PATH]
-                [-lynxi-device LYNXI_DEVICE]
+    usage: lynxi_fmnist_inference.py [-h] [-T T] [-j N] [-data-dir DATA_DIR]
+                                     [-channels CHANNELS] [-b B] [-pt-path PT_PATH]
+                                     [-out-model-path OUT_MODEL_PATH]
+                                     [-lynxi-device LYNXI_DEVICE]
 
     Inference on Lynxi chips
 
@@ -274,7 +278,7 @@
 
     CRITICAL:root:lyngor.version=1.1.0
     lynxi_exchange.py[line:185]-CRITICAL: lyngor.version=1.1.0
-    Namespace(T=4, b=16, channels=128, data_dir=None, j=4, lynxi_device=0, out_model_path='/home/cxhpc/fangwei/tempdir/fmnist_test/lynxi_model', pt_path='/home/cxhpc/fangwei/tempdir/fmnist_test/logs/T4_b128_sgd_lr0.1_c128_cupy/checkpoint_max.pth')
+    Namespace(T=4, b=16, channels=128, data_dir='/datasets/FashionMNIST/', j=4, lynxi_device=0, out_model_path='./lynxi_model', pt_path='./logs/T4_b128_sgd_lr0.1_c128_cupy/checkpoint_max.pth')
     max_test_acc=0.933
     InferenceNet(
     (module_list): Sequential(

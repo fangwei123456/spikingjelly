@@ -12,6 +12,7 @@ Usage (run from repo root):
   PYTORCH_JIT=0 CUDA_VISIBLE_DEVICES=0 PYTHONPATH=$(pwd) \\
     python benchmark/flexsn/benchmark_vgg_train.py
 """
+
 import gc
 import sys
 
@@ -28,11 +29,12 @@ from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
 _sg = surrogate.Sigmoid(alpha=4.0)
 
+
 def lif_core_sg(x: torch.Tensor, v: torch.Tensor):
     tau, v_th = 2.0, 1.0
     h = v + (x - v) / tau
-    s = _sg(h - v_th)          # Sigmoid surrogate gradient
-    return s, h * (1.0 - s)    # spike, updated membrane potential
+    s = _sg(h - v_th)  # Sigmoid surrogate gradient
+    return s, h * (1.0 - s)  # spike, updated membrane potential
 
 
 def make_flexsn(**kwargs):
@@ -50,12 +52,13 @@ def make_flexsn(**kwargs):
 # Timing helper
 # ---------------------------------------------------------------------------
 
+
 def cuda_time_ms(fn, warmup: int = 5, iters: int = 30) -> float:
     for _ in range(warmup):
         fn()
     torch.cuda.synchronize()
     start = torch.cuda.Event(enable_timing=True)
-    end   = torch.cuda.Event(enable_timing=True)
+    end = torch.cuda.Event(enable_timing=True)
     start.record()
     for _ in range(iters):
         fn()
@@ -68,9 +71,11 @@ def cuda_time_ms(fn, warmup: int = 5, iters: int = 30) -> float:
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     if not torch.cuda.is_available():
-        print("CUDA not available.", file=sys.stderr); sys.exit(1)
+        print("CUDA not available.", file=sys.stderr)
+        sys.exit(1)
 
     print(f"GPU    : {torch.cuda.get_device_name(0)}")
     print(f"PyTorch: {torch.__version__}")
@@ -84,17 +89,28 @@ def main() -> None:
     criterion = nn.CrossEntropyLoss()
 
     configs = [
-        ("LIFNode  backend=torch  ",
-         lambda: spiking_vgg16_bn(spiking_neuron=neuron.LIFNode,
-                                  step_mode="m", backend="torch",
-                                  surrogate_function=surrogate.Sigmoid(alpha=4.0)).cuda()),
-        ("LIFNode  backend=triton ",
-         lambda: spiking_vgg16_bn(spiking_neuron=neuron.LIFNode,
-                                  step_mode="m", backend="triton",
-                                  surrogate_function=surrogate.Sigmoid(alpha=4.0)).cuda()),
-        ("FlexSN   backend=inductor",
-         lambda: spiking_vgg16_bn(spiking_neuron=make_flexsn,
-                                  step_mode="m").cuda()),
+        (
+            "LIFNode  backend=torch  ",
+            lambda: spiking_vgg16_bn(
+                spiking_neuron=neuron.LIFNode,
+                step_mode="m",
+                backend="torch",
+                surrogate_function=surrogate.Sigmoid(alpha=4.0),
+            ).cuda(),
+        ),
+        (
+            "LIFNode  backend=triton ",
+            lambda: spiking_vgg16_bn(
+                spiking_neuron=neuron.LIFNode,
+                step_mode="m",
+                backend="triton",
+                surrogate_function=surrogate.Sigmoid(alpha=4.0),
+            ).cuda(),
+        ),
+        (
+            "FlexSN   backend=inductor",
+            lambda: spiking_vgg16_bn(spiking_neuron=make_flexsn, step_mode="m").cuda(),
+        ),
     ]
 
     print(f"Input : T={T}, B={B}, {C}×{H}×{W}  (CIFAR-10 scale)")
@@ -113,9 +129,9 @@ def main() -> None:
         def step():
             functional.reset_net(model)
             optimizer.zero_grad(set_to_none=True)
-            out = model(x_base)          # [T*B, num_classes] or [B, num_classes]
+            out = model(x_base)  # [T*B, num_classes] or [B, num_classes]
             # VGG output: average over T in multi-step mode
-            if out.dim() == 3:           # [T, B, C]
+            if out.dim() == 3:  # [T, B, C]
                 out = out.mean(0)
             loss = criterion(out, target)
             loss.backward()

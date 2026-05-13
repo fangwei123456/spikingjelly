@@ -8,7 +8,7 @@
 
 * **中文**
 
-``custom_ops`` 模块为 FlexSN 的共享 CUDA 路径提供底层 opaque custom op。
+``custom_ops`` 模块为 FlexSN 的共享 Triton 路径提供底层 opaque custom op。
 它负责在 Python 侧保存 Triton kernel 与元数据，并通过轻量级整数 ``handle``
 把这些 kernel 暴露给 ``torch.compile`` / AOTAutograd。
 
@@ -30,7 +30,7 @@
 * **English**
 
 The ``custom_ops`` module provides the low-level opaque custom ops used by
-FlexSN's shared CUDA execution path. It stores Triton kernels and metadata in
+FlexSN's shared Triton execution path. It stores Triton kernels and metadata in
 a Python-side registry and exposes them to ``torch.compile`` / AOTAutograd
 through lightweight integer ``handle`` values.
 
@@ -110,6 +110,7 @@ class FlexSNKernelHandle:
     ``custom_ops`` registry and bind Python-side kernel objects to integer
     ``handle`` values.
     """
+
     inference_kernel: Optional[object]
     inference_info: Optional[FlexSNInfo]
     inference_final_state_kernel: Optional[object]

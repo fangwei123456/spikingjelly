@@ -25,7 +25,6 @@ First, import the relevant modules:
     import numpy as np
     from spikingjelly.activation_based import neuron
 
-
 In the Spiking Self Attention mechanism, Query, Key, and Value are all spike sequences. The specific approach is to add spike neurons to the output of the three tensors, coupling spiking neurons to avoid introducing negative values. The Softmax function is removed, constructing the Spiking Self Attention mechanism:
 
 .. code-block:: python

@@ -19,6 +19,7 @@ from .lif import create_fptt_kernel as lif_create_fptt_kernel
 
 __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_plif_ptt"]
 
+
 def create_fptt_kernel(decay_input: bool, hard_reset: bool, dtype: str):
     return lif_create_fptt_kernel(
         decay_input, hard_reset, dtype, kernel_name_prefix="ParametricLIFNode"
@@ -397,9 +398,7 @@ def _plif_forward(
                 cp_numel,
             ]
 
-        kernel = create_fptt_kernel(
-            decay_input, hard_reset, dtype
-        )
+        kernel = create_fptt_kernel(decay_input, hard_reset, dtype)
 
         kernel(
             (blocks,),
@@ -625,7 +624,6 @@ def cupy_multistep_plif_forward(
         v_threshold,
         _decode_v_reset(v_reset),
         detach_reset,
-
         _resolve_sg_cuda_code_fun(sg),
     )
     capture_id = (
@@ -640,7 +638,11 @@ def cupy_multistep_plif_forward(
 @torch.library.register_fake(_PLIF_OP_NAME)
 def _cupy_multistep_plif_forward_fake(*args):
     x_seq = args[0]
-    return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty((), dtype=torch.int64),
+    )
 
 
 def _setup_ctx(ctx, inputs, output):
@@ -685,6 +687,5 @@ def multistep_plif_ptt(
         v_threshold,
         v_reset_value,
         detach_reset,
-
         sg_id,
     )[:-1]

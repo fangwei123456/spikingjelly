@@ -222,9 +222,7 @@ def _probe_binary_inputs(
     is_binary = defaultdict(lambda: True)
     hooks = []
     if target_modules is None:
-        target_modules = tuple(
-            m for m in net.modules() if isinstance(m, instance)
-        )
+        target_modules = tuple(m for m in net.modules() if isinstance(m, instance))
 
     def hook_fn(m, inputs: tuple):
         x = inputs[0]  # assume the first input is the one to be checked
@@ -316,7 +314,9 @@ def _resolve_gc_selection_targets(
     if gc_target_budget_ratio is not None:
         if gc_target_budget_ratio <= 0:
             return tuple(), candidate_count, 0, "zero_ratio_budget"
-        ratio_limit = max(1, min(candidate_count, ceil(candidate_count * gc_target_budget_ratio)))
+        ratio_limit = max(
+            1, min(candidate_count, ceil(candidate_count * gc_target_budget_ratio))
+        )
         limits.append(ratio_limit)
 
     if not limits:
@@ -327,7 +327,12 @@ def _resolve_gc_selection_targets(
         return None, candidate_count, candidate_count, "budget_covers_all"
 
     if dummy_input is None:
-        return tuple(candidates[:selected_count]), candidate_count, selected_count, "fallback_module_order"
+        return (
+            tuple(candidates[:selected_count]),
+            candidate_count,
+            selected_count,
+            "fallback_module_order",
+        )
 
     net = net.to(device)
     moved_input = _dummy_input_to_device(dummy_input, device)
@@ -343,7 +348,12 @@ def _resolve_gc_selection_targets(
         key=lambda m: (estimated_bytes.get(m, 0), -index_map[m]),
         reverse=True,
     )
-    return tuple(ranked[:selected_count]), candidate_count, selected_count, "largest_input_activations"
+    return (
+        tuple(ranked[:selected_count]),
+        candidate_count,
+        selected_count,
+        "largest_input_activations",
+    )
 
 
 def _build_gc_selection_explanation(
@@ -401,7 +411,7 @@ def _build_memopt_recommendation(summary: MemOptSummary) -> str:
         )
     if summary.prefer == "balanced":
         return (
-            "Current settings aim for a middle ground. Move to `prefer=\"speed\"` for lower overhead or "
+            'Current settings aim for a middle ground. Move to `prefer="speed"` for lower overhead or '
             '`prefer="memory"` for more aggressive memory savings.'
         )
     if summary.checkpoint_budget == "speed":
@@ -496,9 +506,7 @@ def _resolve_memory_optimization_options(
                 True if warmup_in_main_process is None else warmup_in_main_process
             ),
             warmup_in_profile_workers=(
-                True
-                if warmup_in_profile_workers is None
-                else warmup_in_profile_workers
+                True if warmup_in_profile_workers is None else warmup_in_profile_workers
             ),
             allow_expensive_profiling=(
                 True if allow_expensive_profiling is None else allow_expensive_profiling
@@ -594,7 +602,10 @@ def _resolve_checkpoint_budget_options(
     max_gc_wrapped_modules: Optional[int],
     gc_target_budget_ratio: Optional[float],
 ):
-    if checkpoint_budget is not None and checkpoint_budget not in MEMOPT_CHECKPOINT_BUDGETS:
+    if (
+        checkpoint_budget is not None
+        and checkpoint_budget not in MEMOPT_CHECKPOINT_BUDGETS
+    ):
         raise ValueError(
             "Unsupported checkpoint_budget "
             f"{checkpoint_budget!r}. Expected one of {MEMOPT_CHECKPOINT_BUDGETS}."
@@ -998,12 +1009,15 @@ def _inference_time_profile_worker(net, dummy_input, q, device, N=50):
     dummy_input = _dummy_input_to_device(dummy_input, device)
 
     net.eval()
-    with torch.no_grad(), LayerWiseFPCUDATimeProfiler(
-        (net,),
-        model_names=("net",),
-        search_mode=("submodules",),
-        instances=(GCContainer,),
-    ) as prof:
+    with (
+        torch.no_grad(),
+        LayerWiseFPCUDATimeProfiler(
+            (net,),
+            model_names=("net",),
+            search_mode=("submodules",),
+            instances=(GCContainer,),
+        ) as prof,
+    ):
         for _ in range(N):
             _ = net(*dummy_input)
             functional.reset_net(net)
@@ -1115,7 +1129,9 @@ def _spatially_split_gc_container(block: GCContainer, compress_x: bool = True):
 
 
 def _can_spatially_split(block: GCContainer) -> bool:
-    return len(block) > 1 or (len(block) == 1 and hasattr(block[0], "__spatial_split__"))
+    return len(block) > 1 or (
+        len(block) == 1 and hasattr(block[0], "__spatial_split__")
+    )
 
 
 def _cannot_temporally_split(block: GCContainer):
@@ -1382,9 +1398,7 @@ def memory_optimization(
         profile,
         checkpoint_budget,
     )
-    requested_level = (
-        level if level is not None else preset_levels.get(profile, 0)
-    )
+    requested_level = level if level is not None else preset_levels.get(profile, 0)
     resolved, resolution_notes = _resolve_memory_optimization_options(
         level=level,
         profile=profile,
@@ -1496,13 +1510,17 @@ def memory_optimization(
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
                 filtered_results = [
-                    row for row in results if row[0].split(" ")[-1] not in blocked_candidates
+                    row
+                    for row in results
+                    if row[0].split(" ")[-1] not in blocked_candidates
                 ]
                 if not filtered_results:
                     _cprint(verbose, "\tNo eligible spatial split candidates remain.")
                     break
                 improved = False
-                for row in _candidate_entries(filtered_results, max_candidates_per_round):
+                for row in _candidate_entries(
+                    filtered_results, max_candidates_per_round
+                ):
                     cb_name = row[0]
                     cb_path = cb_name.split(" ")[-1]
                     cb, parent, child_name = get_module_and_parent(net, cb_path)
@@ -1587,13 +1605,17 @@ def memory_optimization(
                     _cprint(verbose, "\tNo more GCContainers to split.")
                     break
                 filtered_results = [
-                    row for row in results if row[0].split(" ")[-1] not in blocked_candidates
+                    row
+                    for row in results
+                    if row[0].split(" ")[-1] not in blocked_candidates
                 ]
                 if not filtered_results:
                     _cprint(verbose, "\tNo eligible temporal split candidates remain.")
                     break
                 improved = False
-                for row in _candidate_entries(filtered_results, max_candidates_per_round):
+                for row in _candidate_entries(
+                    filtered_results, max_candidates_per_round
+                ):
                     cb_name = row[0]
                     cb_path = cb_name.split(" ")[-1]
                     cb, parent, child_name = get_module_and_parent(net, cb_path)
@@ -1657,7 +1679,9 @@ def memory_optimization(
 
             for r in results:
                 cb_name = r[0]
-                cb, parent, child_name = get_module_and_parent(net, cb_name.split(" ")[-1])
+                cb, parent, child_name = get_module_and_parent(
+                    net, cb_name.split(" ")[-1]
+                )
 
                 # try to unwrap the GCContainer
                 ucb = _unwrap_gc_container(cb)

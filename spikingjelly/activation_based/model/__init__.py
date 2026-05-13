@@ -8,6 +8,7 @@ from .spikformer import (
     spikformer_s,
     spikformer_ti,
 )
+from .train_classify import Trainer
 
 __all__ = [
     "Spikformer",
@@ -18,4 +19,5 @@ __all__ = [
     "SpikformerPatchStem",
     "spikformer_s",
     "spikformer_ti",
+    "Trainer",
 ]

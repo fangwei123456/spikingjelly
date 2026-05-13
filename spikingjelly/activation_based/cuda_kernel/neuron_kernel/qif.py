@@ -19,6 +19,7 @@ from .common import (
 
 __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_qif_ptt"]
 
+
 def create_fptt_kernel(hard_reset: bool, dtype: str):
     kernel_name = f"QIFNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
 
@@ -649,7 +650,6 @@ def cupy_multistep_qif_forward(
         v_c,
         a0,
         detach_reset,
-
         _resolve_sg_cuda_code_fun(sg),
     )
     capture_id = (
@@ -664,7 +664,11 @@ def cupy_multistep_qif_forward(
 @torch.library.register_fake("sj::cupy_multistep_qif_forward")
 def _cupy_multistep_qif_forward_fake(*args):
     x_seq = args[0]
-    return (x_seq.new_empty(x_seq.shape), x_seq.new_empty(x_seq.shape), x_seq.new_empty((), dtype=torch.int64))
+    return (
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty(x_seq.shape),
+        x_seq.new_empty((), dtype=torch.int64),
+    )
 
 
 def _setup_ctx(ctx, inputs, output):
@@ -686,7 +690,9 @@ def _bw(ctx, *grad_outputs):
     return grads[0], grads[1], None, None, None, None, None, None, None, None
 
 
-torch.library.register_autograd("sj::cupy_multistep_qif_forward", _bw, setup_context=_setup_ctx)
+torch.library.register_autograd(
+    "sj::cupy_multistep_qif_forward", _bw, setup_context=_setup_ctx
+)
 
 
 def multistep_qif_ptt(
@@ -713,6 +719,5 @@ def multistep_qif_ptt(
         v_c,
         a0,
         detach_reset,
-
         sg_id,
     )[:-1]

@@ -312,7 +312,7 @@ reduce accuracy. An example of the training codes is:
         optimizer.zero_grad()
         img = img.to(args.device)
         label = label.to(args.device)
-        img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+        img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 
         fr = net(encoder(img)).mean(0)
         loss = F.cross_entropy(fr, label)
@@ -334,7 +334,7 @@ After training, we can convert this SNN to Lava DL and check the accuracy:
         for img, label in test_data_loader:
             img = img.to(args.device)
             label = label.to(args.device)
-            img = img.unsqueeze(0).repeat(args.T, 1, 1, 1, 1)
+            img = img.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
             img = encoder(img)
             img = lava_exchange.TNX_to_NXT(img)
             fr = net_ladl(img).mean(-1)
@@ -405,4 +405,3 @@ When we run this script, it will firstly train a SNN, then convert the SNN to La
     save net.state_dict() to ./net.pt
     save net_ladl.state_dict() to ./net_ladl.pt
     export net_ladl to ./net_la.net
-

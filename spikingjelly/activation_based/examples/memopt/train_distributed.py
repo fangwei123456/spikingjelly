@@ -28,7 +28,9 @@ from spikingjelly.activation_based.distributed import (
     resolve_data_parallel_partition,
     resolve_tensor_parallel_group_size,
 )
-from spikingjelly.activation_based.examples.memopt.data_module import CIFAR10DVSDataModule
+from spikingjelly.activation_based.examples.memopt.data_module import (
+    CIFAR10DVSDataModule,
+)
 from spikingjelly.activation_based.examples.memopt.models import CIFAR10DVSVGG
 from spikingjelly.activation_based.examples.memopt.models import VGGBlock
 from spikingjelly.activation_based.memopt import memory_optimization
@@ -129,7 +131,11 @@ def setup_runtime(args) -> DistributedRuntime:
     rank = int(os.environ.get("RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
     local_rank = int(os.environ.get("LOCAL_RANK", rank))
-    device = torch.device("cuda", local_rank) if torch.cuda.is_available() else torch.device("cpu")
+    device = (
+        torch.device("cuda", local_rank)
+        if torch.cuda.is_available()
+        else torch.device("cpu")
+    )
     if device.type == "cuda":
         torch.cuda.set_device(local_rank)
     ensure_distributed_initialized()
@@ -191,7 +197,11 @@ def resolve_strategy_args(args, runtime: DistributedRuntime):
             args.memopt_level = recommendation.memopt_level
         if args.optimizer_sharding is None and args.distributed_mode == "dp":
             args.optimizer_sharding = recommendation.optimizer_sharding
-        if args.mesh_shape is None and args.distributed_mode == "fsdp2_tp" and recommendation.mesh_shape is not None:
+        if (
+            args.mesh_shape is None
+            and args.distributed_mode == "fsdp2_tp"
+            and recommendation.mesh_shape is not None
+        ):
             args.mesh_shape = list(recommendation.mesh_shape)
         if args.pp_microbatches is None and args.distributed_mode == "pp":
             args.pp_microbatches = recommendation.pp_microbatches
@@ -221,10 +231,14 @@ def resolve_strategy_args(args, runtime: DistributedRuntime):
 def build_model(args, runtime: DistributedRuntime):
     model = CIFAR10DVSVGG(dropout=0.25, backend=args.backend)
     model.to(runtime.device)
-    example_input = torch.randn(args.batch_size, args.T, 2, 48, 48, device=runtime.device)
+    example_input = torch.randn(
+        args.batch_size, args.T, 2, 48, 48, device=runtime.device
+    )
     tp_disabled = args.disable_classifier_tp and args.disable_conv_tp
 
-    defer_memopt_until_after_pp = args.distributed_mode == "pp" and args.memopt_level > 0
+    defer_memopt_until_after_pp = (
+        args.distributed_mode == "pp" and args.memopt_level > 0
+    )
     if args.memopt_level > 0 and not defer_memopt_until_after_pp:
         model = memory_optimization(
             model,
@@ -312,7 +326,11 @@ def build_model(args, runtime: DistributedRuntime):
                 "fsdp2_tp mode requires at least one tensor-parallel target. "
                 "Do not disable both classifier TP and convolution TP."
             )
-        tp_mesh_dim = args.tp_mesh_dim if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None else 1
+        tp_mesh_dim = (
+            args.tp_mesh_dim
+            if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None
+            else 1
+        )
         dp_mesh_dim = args.dp_mesh_dim if args.dp_mesh_dim is not None else 0
         return configure_cifar10dvs_vgg_fsdp2(
             model,
@@ -340,14 +358,22 @@ def build_data(args, runtime: DistributedRuntime, mesh):
     train_sampler = None
     val_sampler = None
     if runtime.is_distributed and runtime.mode == "pp":
-        train_sampler = DistributedSampler(dm.train_set, num_replicas=1, rank=0, shuffle=True)
-        val_sampler = DistributedSampler(dm.test_set, num_replicas=1, rank=0, shuffle=False)
+        train_sampler = DistributedSampler(
+            dm.train_set, num_replicas=1, rank=0, shuffle=True
+        )
+        val_sampler = DistributedSampler(
+            dm.test_set, num_replicas=1, rank=0, shuffle=False
+        )
     elif runtime.is_distributed:
         data_replicas, data_rank = resolve_data_parallel_partition(
             mesh,
             dp_mesh_dim=args.dp_mesh_dim
             if args.dp_mesh_dim is not None
-            else (0 if runtime.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None else None),
+            else (
+                0
+                if runtime.mode in ("dp", "fsdp2", "fsdp2_tp") and mesh is not None
+                else None
+            ),
             sharded_by_data_parallel=runtime.mode in ("dp", "fsdp2", "fsdp2_tp"),
         )
         train_sampler = DistributedSampler(
@@ -417,7 +443,13 @@ def _reduce_stats_tensor(
 
 
 def train_one_epoch(
-    model, optimizer, criterion, loader, runtime: DistributedRuntime, epoch: int, tp_group_size: int
+    model,
+    optimizer,
+    criterion,
+    loader,
+    runtime: DistributedRuntime,
+    epoch: int,
+    tp_group_size: int,
 ):
     model.train()
     total_loss = 0.0
@@ -445,8 +477,12 @@ def train_one_epoch(
 
     loss_tensor = torch.stack(
         [
-            total_loss if torch.is_tensor(total_loss) else torch.tensor(total_loss, device=runtime.device),
-            total_correct if torch.is_tensor(total_correct) else torch.tensor(total_correct, device=runtime.device),
+            total_loss
+            if torch.is_tensor(total_loss)
+            else torch.tensor(total_loss, device=runtime.device),
+            total_correct
+            if torch.is_tensor(total_correct)
+            else torch.tensor(total_correct, device=runtime.device),
             torch.tensor(float(total_samples), device=runtime.device),
         ]
     )
@@ -483,7 +519,9 @@ def train_one_epoch_pipeline(
             if labels.ndim > 1:
                 labels = labels.argmax(dim=1)
             step_kwargs = {"target": labels}
-        outputs = pipeline_runtime.schedule.step(*step_args, losses=losses, **step_kwargs)
+        outputs = pipeline_runtime.schedule.step(
+            *step_args, losses=losses, **step_kwargs
+        )
         optimizer.step()
         functional.reset_net(pipeline_runtime.stage_module)
 
@@ -496,8 +534,12 @@ def train_one_epoch_pipeline(
 
     stat_tensor = torch.tensor(
         [
-            float(total_loss.item()) if torch.is_tensor(total_loss) else float(total_loss),
-            float(total_correct.item()) if torch.is_tensor(total_correct) else float(total_correct),
+            float(total_loss.item())
+            if torch.is_tensor(total_loss)
+            else float(total_loss),
+            float(total_correct.item())
+            if torch.is_tensor(total_correct)
+            else float(total_correct),
             total_samples,
         ],
         device=runtime.device,
@@ -531,15 +573,21 @@ def evaluate(model, criterion, loader, runtime: DistributedRuntime, tp_group_siz
 
     stat_tensor = torch.stack(
         [
-            total_loss if torch.is_tensor(total_loss) else torch.tensor(total_loss, device=runtime.device),
-            total_correct if torch.is_tensor(total_correct) else torch.tensor(total_correct, device=runtime.device),
+            total_loss
+            if torch.is_tensor(total_loss)
+            else torch.tensor(total_loss, device=runtime.device),
+            total_correct
+            if torch.is_tensor(total_correct)
+            else torch.tensor(total_correct, device=runtime.device),
             torch.tensor(float(total_samples), device=runtime.device),
         ]
     )
     stat_tensor = _reduce_stats_tensor(stat_tensor, runtime, tp_group_size)
 
     denom = stat_tensor[2].item()
-    return stat_tensor[0].item() / max(denom, 1.0), stat_tensor[1].item() / max(denom, 1.0)
+    return stat_tensor[0].item() / max(denom, 1.0), stat_tensor[1].item() / max(
+        denom, 1.0
+    )
 
 
 def main():
@@ -576,7 +624,9 @@ def main():
 
     tp_group_size = resolve_tensor_parallel_group_size(
         mesh,
-        tp_mesh_dim=args.tp_mesh_dim if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None else (1 if args.distributed_mode == "fsdp2_tp" and mesh is not None else 0),
+        tp_mesh_dim=args.tp_mesh_dim
+        if args.tp_mesh_dim != 0 or args.dp_mesh_dim is not None
+        else (1 if args.distributed_mode == "fsdp2_tp" and mesh is not None else 0),
         tensor_parallel_enabled=args.distributed_mode in ("tp", "fsdp2_tp"),
     )
 
@@ -592,7 +642,9 @@ def main():
             train_loss, train_acc, train_sps = train_one_epoch(
                 model, optimizer, criterion, train_loader, runtime, epoch, tp_group_size
             )
-            val_loss, val_acc = evaluate(model, criterion, val_loader, runtime, tp_group_size)
+            val_loss, val_acc = evaluate(
+                model, criterion, val_loader, runtime, tp_group_size
+            )
         if runtime.rank == 0:
             print(
                 f"epoch={epoch} mode={args.distributed_mode} optimizer_sharding={args.optimizer_sharding} "

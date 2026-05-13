@@ -193,19 +193,32 @@ class IFNode(BaseNode):
 
     @staticmethod
     def _eval_single_step_forward(
-        x: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset,
-        tau: Optional[float] = None, decay_input: Optional[bool] = None,
+        x: torch.Tensor,
+        v: torch.Tensor,
+        v_threshold: float,
+        v_reset,
+        tau: Optional[float] = None,
+        decay_input: Optional[bool] = None,
     ):
         """Unified single-step eval (replaces jit_eval_single_step_forward_*)."""
         v = v + x
         spike = (v >= v_threshold).to(x)
-        v = (v - spike * v_threshold) if v_reset is None else (v_reset * spike + (1.0 - spike) * v)
+        v = (
+            (v - spike * v_threshold)
+            if v_reset is None
+            else (v_reset * spike + (1.0 - spike) * v)
+        )
         return spike, v
 
     @staticmethod
     def _eval_multi_step_forward(
-        x_seq: torch.Tensor, v: torch.Tensor, v_threshold: float, v_reset,
-        tau: Optional[float] = None, decay_input: Optional[bool] = None, store_v_seq: bool = False,
+        x_seq: torch.Tensor,
+        v: torch.Tensor,
+        v_threshold: float,
+        v_reset,
+        tau: Optional[float] = None,
+        decay_input: Optional[bool] = None,
+        store_v_seq: bool = False,
     ):
         """Unified multi-step eval (replaces jit_eval_multi_step_forward_*)."""
         T = x_seq.shape[0]
@@ -216,7 +229,11 @@ class IFNode(BaseNode):
         for t in range(T):
             v = v + x_seq[t]
             spike = (v >= v_threshold).to(x_seq)
-            v = (v - spike * v_threshold) if soft_reset else (_vr * spike + (1.0 - spike) * v)
+            v = (
+                (v - spike * v_threshold)
+                if soft_reset
+                else (_vr * spike + (1.0 - spike) * v)
+            )
             spike_seq[t] = spike
             if store_v_seq:
                 v_seq[t] = v
@@ -393,7 +410,9 @@ class IFNode(BaseNode):
                     logging.debug("Falling back from Triton IF kernel in eval: %s", e)
                 except RuntimeError as e:
                     if _is_expected_triton_fallback_error(e):
-                        logging.debug("Falling back from Triton IF kernel in eval: %s", e)
+                        logging.debug(
+                            "Falling back from Triton IF kernel in eval: %s", e
+                        )
                     else:
                         logging.exception(
                             "Unexpected Triton IF kernel failure in eval "
@@ -405,7 +424,10 @@ class IFNode(BaseNode):
 
             # torch & cupy backend:
             out = self._eval_multi_step_forward(
-                x_seq, self.v, self.v_threshold, self.v_reset,
+                x_seq,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
                 store_v_seq=self.store_v_seq,
             )
             if self.store_v_seq:
@@ -472,7 +494,10 @@ class IFNode(BaseNode):
         else:
             self.v_float_to_tensor(x)
             spike, self.v = self._eval_single_step_forward(
-                x, self.v, self.v_threshold, self.v_reset,
+                x,
+                self.v,
+                self.v_threshold,
+                self.v_reset,
             )
             return spike
 
