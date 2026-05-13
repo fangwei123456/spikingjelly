@@ -28,6 +28,49 @@ except ImportError:
 
 
 def set_deterministic(_seed_: int = 2020, disable_uda=False):
+    r"""
+    **API Language:**
+    :ref:`中文 <set_deterministic-cn>` | :ref:`English <set_deterministic-en>`
+
+    ----
+
+    .. _set_deterministic-cn:
+
+    * **中文**
+
+    设置 PyTorch 为确定性模式，使得在相同输入下结果可复现。此函数会设置
+    Python、NumPy 和 PyTorch（CPU/CUDA）的随机种子，并启用 CuDNN 确定性算法
+    和 PyTorch 的确定性模式。
+
+    :param _seed_: 随机种子，默认为 2020
+    :type _seed_: int
+
+    :param disable_uda: 是否禁用 UDA（不确定区域丢弃算法）
+    :type disable_uda: bool
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _set_deterministic-en:
+
+    * **English**
+
+    Set PyTorch to deterministic mode so that results are reproducible under
+    the same input. This function seeds Python, NumPy and PyTorch (CPU/CUDA)
+    random number generators, enables CuDNN deterministic algorithms and
+    PyTorch deterministic mode.
+
+    :param _seed_: random seed, default is 2020
+    :type _seed_: int
+
+    :param disable_uda: whether to disable UDA (unreliable data augmentation)
+    :type disable_uda: bool
+
+    :return: None
+    :rtype: None
+    """
     random.seed(_seed_)
     np.random.seed(_seed_)
     torch.manual_seed(
@@ -46,6 +89,40 @@ def set_deterministic(_seed_: int = 2020, disable_uda=False):
 
 
 def seed_worker(worker_id):
+    r"""
+    **API Language:**
+    :ref:`中文 <seed_worker-cn>` | :ref:`English <seed_worker-en>`
+
+    ----
+
+    .. _seed_worker-cn:
+
+    * **中文**
+
+    DataLoader 的 worker 初始化函数，用于确保每个 worker 进程使用不同的、
+    可复现的随机种子。
+
+    :param worker_id: worker 的索引
+    :type worker_id: int
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _seed_worker-en:
+
+    * **English**
+
+    DataLoader worker initialization function that ensures each worker process
+    uses a distinct and reproducible random seed.
+
+    :param worker_id: the index of the worker
+    :type worker_id: int
+
+    :return: None
+    :rtype: None
+    """
     worker_seed = torch.initial_seed() % 2**32
     np.random.seed(worker_seed)
     random.seed(worker_seed)

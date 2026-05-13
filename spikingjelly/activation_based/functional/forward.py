@@ -29,6 +29,9 @@ def multi_step_forward(
 
     * **中文**
 
+    在单步模块 ``single_step_module`` 上使用多步前向传播。函数内部将执行一个for循环，
+    执行 ``T`` 次单步前向传播。若 ``single_step_module`` 为多个模块，则每个时间步都会按顺序依次执行这些模块。
+
     :param x_seq: ``shape=[T, batch_size, ...]`` 的输入tensor
     :type x_seq: torch.Tensor
 
@@ -38,14 +41,16 @@ def multi_step_forward(
     :return: ``shape=[T, batch_size, ...]`` 的输出tensor
     :rtype: torch.Tensor
 
-    在单步模块 ``single_step_module`` 上使用多步前向传播。函数内部将执行一个for循环，
-    执行 ``T`` 次单步前向传播。若 ``single_step_module`` 为多个模块，则每个时间步都会按顺序依次执行这些模块。
-
     ----
 
     .. _multi_step_forward-en:
 
     * **English**
+
+    Applies multi-step forward on ``single_step_module``. The function runs a
+    for loop to execute single-step forward for ``T`` times. If
+    ``single_step_module`` contains multiple modules, they are applied
+    sequentially at each time-step.
 
     :param x_seq: the input tensor with ``shape=[T, batch_size, ...]``
     :type x_seq: torch.Tensor
@@ -55,11 +60,6 @@ def multi_step_forward(
 
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: torch.Tensor
-
-    Applies multi-step forward on ``single_step_module``. The function runs a
-    for loop to execute single-step forward for ``T`` times. If
-    ``single_step_module`` contains multiple modules, they are applied
-    sequentially at each time-step.
     """
     y_seq = []
     if isinstance(single_step_module, (list, tuple, nn.Sequential)):

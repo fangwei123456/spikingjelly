@@ -138,10 +138,6 @@ When running on a single GeForce RTX 4090, the results are as follows:
     6  28.0  32.649216  4.535296  2.940928
     7  32.0  41.872896  5.189120  3.365888
 
-.. note::
-
-    The ``cupy`` backend is a legacy option. SpikingJelly's primary recommended backend for GPU acceleration is ``triton``. The CuPy column in the table above is kept for historical reference only.
-
 .. image:: ../../_static/tutorials/triton_backend/Performance-float16.png
     :width: 100%
 
