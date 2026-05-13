@@ -5,7 +5,8 @@ FlexSN
 
 English version: :doc:`../en/flexsn`
 
-本教程聚焦 ``FlexSN`` 的使用。若你尚未阅读 Triton 后端基础，建议先阅读 :doc:`./triton_backend` ，了解预定义 Triton 神经元内核的启用方式与基本约束。 ``FlexSN`` 可根据用户自定义的单步神经元动力学函数 ``core`` 生成高性能多步内核。对 CUDA 而言， ``backend="triton"`` 与 ``backend="inductor"`` 是并列且等价的后端标签，当前共享同一套维护中的 Triton scan 实现。
+本教程聚焦 ``FlexSN`` 的使用。``FlexSN`` 可根据用户自定义的单步神经元动力学函数 ``core`` 生成高性能多步内核。
+若你尚未阅读 Triton 后端基础，建议先阅读 :doc:`./triton_backend` ，了解 Triton 神经元内核的启用方式与基本约束。
 
 使用 FlexSN 自定义 Triton 神经元内核
 ------------------------------------
@@ -124,9 +125,10 @@ FlexSN 使用流程
 
 * ``core`` ：描述单步神经元动力学的函数，签名为 ``[*inputs, *states] -> [*outputs, *states]`` 。
 * ``num_inputs, num_states, num_outputs`` ：输入、状态变量和输出的个数。应与 ``core`` 签名的情况相一致。
-* ``example_inputs`` ： ``core`` 的参数示例。 ``FlexSN`` 内部将使用这些示例输入调用 ``core`` ，从而捕获计算图。
+* ``example_inputs`` ： ``core`` 的参数示例。 ``FlexSN`` 内部将使用这些示例输入调用 ``core`` ，从而捕获计算图。若为 ``None`` （默认），则自动生成 ``num_inputs + num_states`` 个仅含一个元素的张量作为示例输入。
+* ``example_outputs`` ： 可选，``core`` 的单步输出模板。它主要在空序列输入（ ``T == 0`` ）时用于确定输出张量的形状和 dtype；对 ``"triton"`` / ``"inductor"`` 路径而言，若提供该参数，则每个模板张量都需要与第一个 ``example_inputs`` 张量的单步形状和 dtype 相匹配。
 * ``requires_grad`` ： ``core`` 参数是否需要求梯度。默认值为 ``None`` ，含义为“所有参数都需要梯度”（即等价于全为 ``True`` ）。
-* ``step_mode, backend`` ：类似于其他神经元模块，这两个参数决定了步进模式和后端。对于 FlexSN 的 CUDA 路径， ``triton`` 与 ``inductor`` 是等价后端标签，且都只在 ``step_mode="m"`` 时有效。
+* ``step_mode, backend`` ：类似于其他神经元模块，这两个参数决定了步进模式和后端。 ``"torch"`` 后端始终可用； ``"triton"`` 、 ``"inductor"`` 和 ``"hop"`` 后端只在 ``step_mode="m"`` 时有效。
 * ``store_state_seqs`` ：类似于其他神经元的 ``store_v_seq`` ，该参数决定是否保存状态序列。若为 ``True`` ，则可通过 ``state_seqs`` 属性获取上一次运行的状态序列：该属性是一个列表，列表的每个元素对应着某个状态的序列。 ``FlexSN`` 当然也支持反向传播，如下面的代码片段所示：
 
 .. code:: python
@@ -236,33 +238,29 @@ FlexSN 使用流程
 
     在使用 ``FlexSN`` 时，需注意：
 
-    * 应在 GPU 上运行。
-    * CUDA 后端标签 ``triton`` 与 ``inductor`` 仅支持多步运行模式 ``step_mode="m"`` 。
+    * ``"torch"`` 后端可以在 CPU 或 GPU 上运行； ``"triton"`` 与 ``"inductor"`` 后端需要 GPU，且 ``"triton"`` / ``"inductor"`` / ``"hop"`` 后端都仅支持多步运行模式 ``step_mode="m"`` 。
     * PyTorch 后端是通过反复调用 ``core`` 来实现的。
     * ``FlexSN`` 完成一次模拟之后，需要调用 ``reset()`` 方法来重置神经元状态。
 
-FlexSN CUDA 后端
-----------------
-
-``FlexSN`` 对 CUDA 暴露两个等价后端标签： ``backend="triton"`` 与 ``backend="inductor"`` 。它们在公共 API 中是并列关系，当前共享同一套维护中的 Triton 执行路径。实际使用时，选择哪个标签取决于你希望代码表达的语义；行为和 kernel 生成结果保持一致。
+兼容 ``torch.compile``
+-----------------------------
 
 主要特点：
-
-* 支持 ``torch.compile`` ，可与外层网络联合编译，实现跨层算子融合；
-* 推理和训练都内置了专用 Triton 核；
-* 在专用 kernel 不可用时，仍保留 final-state 快路径与 HOP/eager fallback。
+``FlexSN`` 支持 ``torch.compile`` ，可与外层网络联合编译，实现跨层算子融合。 ``FlexSN`` 推理和训练都内置了专用 Triton 核；在专用 kernel 不可用时，仍保留 final-state 快路径与 HOP/eager fallback。
 
 .. admonition:: 注意
    :class: warning
 
-   * 目前仅支持 CUDA 设备。
+   * 本节讨论的是 Triton 路径。 ``"triton"`` 后端与 ``"inductor"`` 后端需要 CUDA 设备。
    * ``core`` 中的算子需在 ``FX_TO_TRITON`` 映射表内，不在表内的算子自动回退 ``eager_scan`` （日志中会有提示）。
      支持的算子见下方 :ref:`算子覆盖 <flexsn-inductor-op-coverage>` 一节。
-   * 训练时 ``core`` 应使用 surrogate gradient（如 :class:`spikingjelly.activation_based.surrogate.Sigmoid` ）
+   * 训练时 ``core`` 应使用替代梯度模块（如 :class:`Sigmoid <spikingjelly.activation_based.surrogate.Sigmoid>` ），
      而非硬阈值，否则梯度为零。
 
-快速上手 — 推理
-^^^^^^^^^^^^^^^
+最小示例
+^^^^^^^^
+
+推理：
 
 .. code:: python
 
@@ -288,10 +286,7 @@ FlexSN CUDA 后端
     model = torch.compile(model, fullgraph=True)
     out = model(x)
 
-快速上手 — 训练
-^^^^^^^^^^^^^^^
-
-训练时使用 surrogate gradient 使脉冲信号可微：
+训练：
 
 .. code:: python
 
@@ -315,91 +310,50 @@ FlexSN CUDA 后端
     out.sum().backward()        # BPTT via Triton fwd+bwd 核
     print(x.grad.shape)         # [8, 64, 512]
 
-.. admonition:: 训练时可选套 ``torch.compile``
-   :class: tip
-
-   ``backend="triton"`` 与 ``backend="inductor"`` 在不套或套 ``torch.compile`` 时都可以工作。
-   套上 ``torch.compile`` 后，FlexSN 会通过 custom-op 路径继续调度其专用 Triton scan kernel，
-   同时为外层 ``Linear`` / ``Conv`` 提供联合编译与跨层融合的机会。
-
-内核分发策略
-^^^^^^^^^^^^
-
-``backend="triton"`` 与 ``backend="inductor"`` 共享同一套
-``multi_step_forward`` CUDA 分发逻辑：
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - 条件
-     - 路径
-   * - 推理（no grad）+ CUDA
-     - Triton 单核 scan（ ``tl.static_range(T)`` ，1 次 launch）
-   * - 训练 + CUDA（含 torch.compile 内外）
-     - 专用 Triton 正反向 scan kernel；套 ``torch.compile`` 时可经由
-       custom-op 路径保持编译器友好
-   * - CPU 或 kernel 不可用
-     - ``eager_scan`` / ``flex_sn_scan`` HOP fallback
+上面两种场景都不强制依赖 ``torch.compile`` 。不套时， ``"triton"`` 后端与
+``"inductor"`` 后端依然直接使用同一套专用 Triton scan kernel；套上时，
+FlexSN 会通过 custom-op 路径继续调度这些 Triton kernel，同时让外层
+``Linear`` / ``Conv`` 一起进入编译图。
 
 支持的后端
 ^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
-   :widths: 24 22 22 32
+   :widths: 18 16 30 36
 
    * - 后端
      - 设备
-     - 典型用途
-     - 备注
+     - 执行路径
+     - 典型用途 / 备注
    * - ``"torch"``
      - CPU / CUDA
-     - 参考实现 / 调试
      - 纯 PyTorch 多步循环
+     - 参考实现、调试、CPU 原型验证
    * - ``"triton"`` / ``"inductor"``
      - CUDA
-     - 主要 CUDA 路径
-     - 并列且等价的标签；共用同一套专用 Triton scan kernel，并可选 ``torch.compile``
+     - 同一条 Triton 执行路径
+     - 高性能路径
    * - ``"hop"``
      - CPU / CUDA
-     - scan/HOP 实验
-     - Higher-order-op / eager fallback 路径
+     - HOP / eager scan 路径
+     - scan tracing、实验、fallback
 
-性能说明
-^^^^^^^^
+运行时行为
+^^^^^^^^^^
 
-**推理**：初始化时通过 ``make_fx`` 追踪 ``core`` ，使用 FlexSN 模板生成带 ``tl.static_range(T)`` 时间循环的单个 Triton 扫描内核，每次推理只触发一次 kernel launch。
+在 ``backend="triton"`` 或 ``backend="inductor"`` 下：
 
-**训练（不套 ``torch.compile``）**：初始化时通过 ``aot_function`` 同时追踪正向和反向计算图，
-生成专用的 Triton 正向核（保存中间值）和反向核（时间逆序扫描），两者均含 ``tl.static_range(T)`` 时间循环，
-每方向只触发一次 kernel launch。
+* 推理阶段会先用 ``make_fx`` 追踪 ``core`` ，生成带 ``tl.static_range(T)`` 时间循环的单个 Triton scan kernel。每次推理调用只触发一次 kernel launch，与 ``T`` 无关。
+* 训练阶段会同时追踪前向和反向，生成专用的 Triton 正向/反向 scan kernel。不套 ``torch.compile`` 时，这已经是完整 Triton 路径。
+* 套上 ``torch.compile`` 后，FlexSN 仍通过 opaque custom op 调度同一套 Triton kernel，同时允许外层网络联合编译。
+* 若 ``core`` 使用了不受支持的算子，或者 Triton kernel 构建失败，则会自动回退到 HOP/eager-scan 路径。
 
-**训练（套 ``torch.compile``）**：共享的 CUDA 后端路径会通过 opaque custom op 公开这些 kernel，
-从而在保持 FlexSN 编译器友好的同时，让周围层一起进入编译图。
+实践建议：
 
-使用建议
-^^^^^^^^
-
-.. list-table::
-   :header-rows: 1
-   :widths: 30 30 40
-
-   * - 场景
-     - 推荐后端
-     - 原因
-   * - 快速原型 / CPU
-     - ``"torch"``
-     - 无约束
-   * - CUDA 推理，追求极致性能
-     - ``"triton"`` 或 ``"inductor"``
-     - 等价的 CUDA 标签，对应同一条单核 scan 路径
-   * - CUDA 训练
-     - ``"triton"`` / ``"inductor"`` + ``torch.compile()``（可选）
-     - 专用 fwd+bwd scan kernel，并为跨层融合提供机会
-   * - 推理 + 跨层融合
-     - ``"triton"`` / ``"inductor"`` + ``torch.compile``
-     - 单核 scan + 与外层 Conv/Linear 联合编译
+* 做 CPU 工作、调试、验证语义时，用 ``"torch"`` 后端。
+* 真正做高性能 GPU 运行时，用 ``"triton"`` 后端或 ``"inductor"`` 后端。
+* 只有当你需要和外层模块做跨层融合时，再额外套 ``torch.compile`` 。
 
 .. _flexsn-inductor-op-coverage:
 

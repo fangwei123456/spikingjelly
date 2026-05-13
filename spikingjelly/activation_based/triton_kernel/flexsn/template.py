@@ -1,7 +1,14 @@
+"""
+FlexSN Triton Kernel Templates.
+
+Insert a single-step kernel into a multi-step kernel template.
+"""
+
 try:
     import triton
 except BaseException as e:
     import logging
+
     from .. import dummy
 
     logging.info(f"spikingjelly.activation_based.triton_kernel.flexsn.template: {e}")
@@ -9,7 +16,6 @@ except BaseException as e:
 
 from ..torch2triton import compile_triton_code_str
 from .info import FlexSNInfo
-
 
 __all__ = [
     "get_flexsn_inference_kernel",

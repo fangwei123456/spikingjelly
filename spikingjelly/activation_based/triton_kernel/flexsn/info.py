@@ -1,6 +1,6 @@
 from collections import namedtuple
-import torch.fx as fx
 
+import torch.fx as fx
 
 __all__ = ["FlexSNInfo", "extract_info"]
 
@@ -30,7 +30,7 @@ def extract_info(
     """Extract useful information from the forward graph.
 
     The forward graph should have the following signature:
-    [*inputs, *states] -> [*outputs, *states, *intermediates]
+    ``[*inputs, *states] -> [*outputs, *states, *intermediates]``
 
     The following information will be extracted:
 
