@@ -1053,7 +1053,7 @@ class FlexSN(base.MemoryModule):
             and self._inductor_train_info is not None
         )
         if (
-            _is_flexsn_cuda_scan_backend(backend)
+            _is_flexsn_triton_backend(backend)
             and register_flexsn_kernel_handle is not None
             and (
                 self._inductor_inference_available

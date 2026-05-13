@@ -23,7 +23,7 @@ def download_url(url, dst):
     :param dst: 保存文件的目标路径
     :type dst: str
 
-    :return: 文件的总大小（以字节为单位）
+    :return: 文件的总大小(以字节为单位)
     :rtype: int
 
     ----

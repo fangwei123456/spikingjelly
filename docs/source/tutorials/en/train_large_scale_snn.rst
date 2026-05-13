@@ -216,7 +216,7 @@ efforts. For example, :class:`spikingjelly.activation_based.model.train_classify
           elif opt_name == "adamw":
               optimizer = torch.optim.AdamW(parameters, lr=args.lr, weight_decay=args.weight_decay)
           else:
-              optimizer = None
+              raise RuntimeError(f"Invalid optimizer {args.opt}. Only SGD, RMSprop and AdamW are supported.")
           return optimizer
 
       def main(self, args):

@@ -163,7 +163,7 @@ def save_every_frame_of_an_entire_DVS_dataset(
 
     * **中文**
 
-    将指定 DVS 数据集的每个样本按固定帧数加载为帧数据，并将所有帧逐张保存为图片。
+    将指定 DVS 数据集的每个样本按固定帧数加载为帧数据, 并将所有帧逐张保存为图片。
 
     :param dataset: 要保存的数据集名称。当前可用的选项有：DVS128Gesture、CIFAR10DVS 和 NCaltech101。
     :type dataset: str
@@ -183,8 +183,8 @@ def save_every_frame_of_an_entire_DVS_dataset(
     :return: None
     :rtype: None
 
-    :raises ValueError: 当必要参数为空，或 ``dataset`` 不是 ``"DVS128Gesture"``、
-        ``"CIFAR10DVS"``、``"NCaltech101"`` 之一时抛出。
+    :raises ValueError: 当必要参数为空, 或 ``dataset`` 不是 ``"DVS128Gesture"``,
+        ``"CIFAR10DVS"``, ``"NCaltech101"`` 之一时抛出。
 
     ----
 
@@ -1200,7 +1200,7 @@ def split_to_train_test_set(
         随机性由 ``numpy.random.seed`` 控制
     :type random_split: bool
 
-    :return: 一个元组 ``(train_set, test_set)``，二者均为基于 ``origin_dataset`` 构造的
+    :return: 一个元组 ``(train_set, test_set)``, 二者均为基于 ``origin_dataset`` 构造的
         :class:`torch.utils.data.Subset`
     :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
 
@@ -1288,7 +1288,7 @@ def fast_split_to_train_test_set(
     :param batch_size: 每个批次处理的样本数量
     :type batch_size: int
 
-    :return: 一个元组 ``(train_set, test_set)``，二者均为基于 ``origin_dataset`` 构造的
+    :return: 一个元组 ``(train_set, test_set)``, 二者均为基于 ``origin_dataset`` 构造的
         :class:`torch.utils.data.Subset`
     :rtype: tuple[torch.utils.data.Subset, torch.utils.data.Subset]
 
@@ -1374,8 +1374,8 @@ def pad_sequence_collate(batch: list):
     :param batch: 样本列表，每个样本形如 ``(x, y)``，其中 ``x`` 是长度可变的序列，``y`` 是标签
     :type batch: list
 
-    :return: ``(x_p, y, x_len)``，其中 ``x_p`` 是按相同长度补齐后的批数据，
-        ``y`` 是标签张量，``x_len`` 是各样本原始长度张量
+    :return: ``(x_p, y, x_len)``, 其中 ``x_p`` 是按相同长度补齐后的批数据,
+        ``y`` 是标签张量, ``x_len`` 是各样本原始长度张量
     :rtype: tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
     ----

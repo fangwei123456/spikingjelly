@@ -9,7 +9,7 @@ This tutorial focuses on ``FlexSN``. ``FlexSN`` can generate high-performance mu
 If you have not read the Triton backend basics yet, it is recommended to read :doc:`./triton_backend` first to understand the usage and constraints of predefined Triton neuron kernels.
 
 Using FlexSN to Customize Triton Neuron Kernels
--------------------------------------------------------
+-----------------------------------------------
 
 Describing Neuronal Dynamics with Functions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -246,8 +246,8 @@ With the workflow described above, users can obtain Triton-accelerated neuron mo
     * In the design of ``FlexSN``, compromises are made in efficiency in order to pursue generality. At present, ``IFNode``, ``LIFNode``, and ``PLIFNode`` are equipped with highly optimized predefined Triton kernels. Please use these predefined kernels whenever possible to obtain higher performance.
     * After completing a simulation with ``FlexSN``, ``reset()`` must be called to reset the neuron states.
 
-FlexSN Triton Path
---------------------
+Compatibility with ``torch.compile``
+------------------------------------
 
 ``FlexSN`` exposes two equivalent backend labels for the same Triton path: ``backend="triton"`` and ``backend="inductor"``. The latter is the custom-op-wrapped entry to the same maintained Triton execution path. In practice, choose whichever label is clearer in your codebase; behavior and kernel generation are aligned.
 

@@ -545,7 +545,10 @@ class Trainer:
                 parameters, lr=args.lr, weight_decay=args.weight_decay
             )
         else:
-            optimizer = None
+            raise RuntimeError(
+                f"Invalid optimizer {args.opt}. "
+                "Only SGD, RMSprop and AdamW are supported."
+            )
         return optimizer
 
     def set_lr_scheduler(self, args, optimizer):

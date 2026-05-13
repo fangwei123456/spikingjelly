@@ -6,7 +6,7 @@ Insert a single-step kernel into a multi-step kernel template.
 
 try:
     import triton
-except BaseException as e:
+except Exception as e:
     import logging
 
     from .. import dummy

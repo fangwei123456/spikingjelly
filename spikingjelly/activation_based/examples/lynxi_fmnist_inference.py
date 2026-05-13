@@ -28,7 +28,7 @@ class InferenceNet(nn.Module):
 
     def forward(self, x: torch.Tensor):
         # x.shape = [N, C, H, W]
-        x = x.repeat(self.T, 1, 1, 1)
+        x = x.unsqueeze(0).expand(self.T, -1, -1, -1, -1)
 
         # [N, C, H, W] -> [T, N, C, H, W]
         x = self.module_list(x)

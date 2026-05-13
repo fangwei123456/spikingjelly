@@ -346,7 +346,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
 
         直接使用原始数据集目录作为处理后的数据集目录，不做额外处理。
 
-        :return: 元组 ``(processed_root, loader)``，其中 ``processed_root`` 为原始数据集目录，
+        :return: 元组 ``(processed_root, loader)``, 其中 ``processed_root`` 为原始数据集目录,
             loader 为 ``np.load``。
         :rtype: Tuple[pathlib.Path, Callable]
 
@@ -1130,7 +1130,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         这些扩展名将传递给 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>`
         以识别有效的数据文件。
 
-        :return: 支持的文件扩展名元组，当前为 ``('.npy', '.npz')``。
+        :return: 支持的文件扩展名元组, 当前为 ``('.npy', '.npz')``。
         :rtype: Tuple[str]
 
         ----
@@ -1162,8 +1162,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         * **中文**
 
-        :return: 一个元组 ``(H, W)``，其中 ``H`` 是数据的高度，``W`` 是数据的宽度。
-            例如，对于 DVS128 Gesture 数据集，此函数返回 ``(128, 128)``。
+        :return: 一个元组 ``(H, W)``, 其中 ``H`` 是数据的高度, ``W`` 是数据的宽度。
+            例如, 对于 DVS128 Gesture 数据集, 此函数返回 ``(128, 128)``。
         :rtype: Tuple[int]
         ----
 
@@ -1190,7 +1190,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         * **中文**
 
-        :return: 一个列表 ``url``，其中 ``url[i]`` 是一个元组，包含第 ``i`` 个数据文件的文件名、下载链接和 MD5。
+        :return: 一个列表 ``url``, 其中 ``url[i]`` 是一个元组, 包含第 ``i`` 个数据文件的文件名、下载链接和 MD5。
         :rtype: list
 
         ----
@@ -1218,7 +1218,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         * **中文**
 
-        :return: 数据集是否可以通过 Python 代码直接下载。若返回 ``False``，则需要用户手动下载。
+        :return: 数据集是否可以通过 Python 代码直接下载。若返回 ``False``, 则需要用户手动下载。
         :rtype: bool
 
         ----
@@ -1291,7 +1291,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         * **中文**
 
-        定义如何将 ``extract_root`` 中的解压数据转换为原始数据集格式，并保存到 ``raw_root``。
+        定义如何将 ``extract_root`` 中的解压数据转换为原始数据集格式, 并保存到 ``raw_root``。
 
         :param extract_root: 保存解压后文件的根目录。
         :type extract_root: pathlib.Path
