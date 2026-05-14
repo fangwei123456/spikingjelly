@@ -196,6 +196,30 @@ def test_neuromc_exact_mixed_hook_and_functional_mm_counts_both_paths():
     assert any(item["op_name"] == "aten.mm.default" for item in report.mapping_summary)
 
 
+def test_neuromc_exact_mixed_hook_and_functional_addmm_counts_both_paths():
+    class MixedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(4, 4, bias=False)
+            self.bias = nn.Parameter(torch.randn(3))
+            self.weight = nn.Parameter(torch.randn(4, 3))
+
+        def forward(self, x):
+            return self.linear(x)[:, :3] + torch.addmm(self.bias, x, self.weight)
+
+    model = MixedModel()
+    x = (torch.rand(5, 4) > 0.5).float()
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    expected_mac = 5 * 4 * 4 + 5 * 4 * 3
+    assert report.primitive_counts["totals"]["mac"] == expected_mac
+    assert any(item["op_name"] == "linear.forward" for item in report.mapping_summary)
+    assert any(
+        item["op_name"] == "aten.addmm.default" for item in report.mapping_summary
+    )
+
+
 def test_neuromc_exact_b_type_reuse_hint_reduces_later_forward_energy():
     model = nn.Linear(16, 8, bias=False)
     x = (torch.rand(4, 16) > 0.75).float()
@@ -374,6 +398,7 @@ def test_neuromc_exact_memory_config_api():
     assert cfg.technology_nm == 32
     assert "dram" in cfg.memory_instances
     assert hasattr(op_counter.neuromc, "MemoryResidencySimulator")
+    assert hasattr(op_counter.neuromc, "NeuroMCMemoryResidencyCounter")
 
 
 def test_neuromc_exact_trace_events_do_not_retain_live_tensors():
@@ -396,6 +421,9 @@ def test_neuromc_exact_optimizer_counts_mixed_parameter_shapes():
     profiler = op_counter.NeuroMCEnergyProfiler()
     profiler.bind_optimizer(optimizer)
 
+    model.weight.grad = torch.ones_like(model.weight)
+    model.bias.grad = torch.ones_like(model.bias)
+
     fragment = profiler._optimizer_fragment("optimizer")
     counts = profiler._extra_counts(fragment)
     bits, _ = profiler._extra_memory_for_fragment(fragment)
@@ -412,6 +440,59 @@ def test_neuromc_memory_residency_legacy_memory_config_alias():
     with pytest.deprecated_call():
         counter = NeuroMCMemoryResidencyCounter(memory_config=cfg)
     assert isinstance(counter, MemoryResidencyCounter)
+
+
+def test_neuromc_memory_residency_legacy_memory_config_positional_alias():
+    cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
+    with pytest.deprecated_call():
+        counter = NeuroMCMemoryResidencyCounter(cfg)
+    assert isinstance(counter, MemoryResidencyCounter)
+
+
+def test_neuromc_like_v1_legacy_memory_model_is_ignored():
+    with pytest.deprecated_call():
+        cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(
+            memory_model="weighted"
+        )
+    cfg.validate()
+
+
+def test_neuromc_exact_optimizer_skips_params_without_grad():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    model.weight.grad = torch.ones_like(model.weight)
+    model.bias.grad = None
+
+    fragment = profiler._optimizer_fragment("optimizer")
+    counts = profiler._extra_counts(fragment)
+
+    assert fragment.input_numel == 0
+    assert fragment.weight_numel == model.weight.numel()
+    assert counts["add"] == 4 * model.weight.numel()
+    assert counts["mul"] == 11 * model.weight.numel()
+    assert counts["sqrt"] == model.weight.numel()
+
+
+def test_neuromc_exact_multi_step_trace_batchnorm_is_rejected():
+    class FunctionalBN(nn.Module):
+        def forward(self, x):
+            return torch.nn.functional.batch_norm(
+                x,
+                running_mean=None,
+                running_var=None,
+                weight=None,
+                bias=None,
+                training=True,
+            )
+
+    model = FunctionalBN()
+    x = torch.randn(3, 2, 4, 5, 5)
+
+    with pytest.raises(ValueError, match="multi-step or 3D BatchNorm trace fallback"):
+        op_counter.estimate_neuromc_runtime_energy(model, x)
 
 
 def test_neuromc_exact_multi_step_conv2d_uses_true_channel_and_time_dims():

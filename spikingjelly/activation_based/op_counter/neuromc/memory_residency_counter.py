@@ -11,14 +11,16 @@ from ..memory_residency import MemoryResidencyCounter, _access_convolution_backw
 class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
     def __init__(
         self,
-        *,
         memory_config: Any | None = None,
-        config: Any | None = None,
-        capacity_bits: dict[str, float] | None = None,
         extra_rules: dict[Any, Callable] | None = None,
         extra_ignore_modules: list[nn.Module] | None = None,
+        *,
+        config: Any | None = None,
+        capacity_bits: dict[str, float] | None = None,
     ):
-        if memory_config is not None and config is None:
+        if memory_config is not None:
+            if config is not None:
+                raise TypeError("Pass only one of memory_config or config.")
             warnings.warn(
                 "memory_config is deprecated; use config instead.",
                 DeprecationWarning,

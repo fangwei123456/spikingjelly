@@ -198,11 +198,42 @@ class _Fragment:
 
 def _fragment_signature(fragment: _Fragment) -> tuple[Any, ...]:
     return (
+        fragment.op_name,
+        fragment.source,
         fragment.stage,
         fragment.phase,
         fragment.core_type,
         fragment.process_key,
         tuple(sorted(fragment.loop_dims.items())),
+        fragment.input_precision_bits,
+        fragment.weight_precision_bits,
+        fragment.output_precision_bits,
+        fragment.input_numel,
+        fragment.weight_numel,
+        fragment.output_numel,
+        fragment.mac_count,
+        fragment.conv_type,
+        fragment.b_type,
+        fragment.t_type,
+    )
+
+
+def _module_overlap_signature(fragment: _Fragment) -> tuple[Any, ...]:
+    ld = fragment.loop_dims
+    return (
+        fragment.stage,
+        fragment.phase,
+        fragment.core_type,
+        fragment.process_key,
+        (
+            ("BT", ld["B"] * ld["T"]),
+            ("C", ld["C"]),
+            ("K", ld["K"]),
+            ("OY", ld["OY"]),
+            ("OX", ld["OX"]),
+            ("FY", ld["FY"]),
+            ("FX", ld["FX"]),
+        ),
         fragment.input_precision_bits,
         fragment.weight_precision_bits,
         fragment.output_precision_bits,
@@ -975,19 +1006,29 @@ class NeuroMCEnergyProfiler:
         self, *, supplemental_only: bool = False
     ) -> list[_Fragment]:
         fragments: list[_Fragment] = []
+        supplemental_ops = {
+            "aten.convolution.default",
+            "aten.addmm.default",
+            "aten.mm.default",
+            "aten.bmm.default",
+            "aten.native_batch_norm.default",
+            "aten.native_batch_norm_backward.default",
+        }
         for event in self._trace_events:
             op = event.op_name
             b_type, t_type = self._stage_position(event.stage)
-            if supplemental_only and op not in {
-                "aten.mm.default",
-                "aten.bmm.default",
-            }:
+            if supplemental_only and op not in supplemental_ops:
                 continue
             if op in _AUXILIARY_ATEN_OPS or op.startswith(_IGNORED_OP_PREFIXES):
                 continue
             if op == "aten.convolution.default" and event.phase == "forward":
                 x, w = event.args[:2]
                 out = event.out
+                if x.ndim > 4 or out.ndim > 4:
+                    raise ValueError(
+                        "Exact NeuroMC runtime does not support multi-step or 3D "
+                        "Conv trace fallback yet."
+                    )
                 if not _is_spike_like(x):
                     raise ValueError(
                         "Exact NeuroMC runtime only supports spike/binary forward inputs "
@@ -1155,6 +1196,11 @@ class NeuroMCEnergyProfiler:
                         )
             elif op == "aten.native_batch_norm.default" and event.phase == "forward":
                 x = event.args[0]
+                if x.ndim > 4:
+                    raise ValueError(
+                        "Exact NeuroMC runtime does not support multi-step or 3D "
+                        "BatchNorm trace fallback yet."
+                    )
                 out = (
                     event.out[0] if isinstance(event.out, (tuple, list)) else event.out
                 )
@@ -1488,6 +1534,8 @@ class NeuroMCEnergyProfiler:
         fyfxkc = 0
         for group in self._optimizer.param_groups:
             for p in group["params"]:
+                if p.grad is None:
+                    continue
                 if p.ndim <= 1:
                     kt += int(p.numel())
                 else:
@@ -1501,10 +1549,10 @@ class NeuroMCEnergyProfiler:
             fy=1,
             fx=max(fyfxkc, 1),
         )
-        loop_dims["K"] = max(kt, 1)
+        loop_dims["K"] = kt
         loop_dims["C"] = 1
         loop_dims["FY"] = 1
-        loop_dims["FX"] = max(fyfxkc, 1)
+        loop_dims["FX"] = fyfxkc
         return _Fragment(
             stage=stage,
             phase="optimizer",
@@ -1529,14 +1577,14 @@ class NeuroMCEnergyProfiler:
         )
         if fragments:
             existing_signatures = {
-                _fragment_signature(fragment)
+                _module_overlap_signature(fragment)
                 for fragment in fragments
                 if fragment.source == "module"
             }
             fragments.extend(
                 fragment
                 for fragment in trace_fragments
-                if _fragment_signature(fragment) not in existing_signatures
+                if _module_overlap_signature(fragment) not in existing_signatures
             )
         else:
             fragments = trace_fragments
