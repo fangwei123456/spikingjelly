@@ -136,6 +136,7 @@ class MemoryHierarchyConfig:
             "sram_fp_soma_u",
             "sram_fp_soma_s",
             "sram_fp_soma_smask",
+            "sram_bp_conv_in_du",
             "sram_bp_conv_in_w",
             "sram_bp_conv_out_res",
             "sram_bp_grad_in_u",

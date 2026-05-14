@@ -805,6 +805,11 @@ class NeuroMCEnergyProfiler:
             if op == "aten.convolution.default" and event.phase == "forward":
                 x, w = event.args[:2]
                 out = event.out
+                if not _is_spike(x):
+                    raise ValueError(
+                        "Exact NeuroMC runtime only supports spike/binary forward inputs "
+                        "for Conv-like ops; got ANN-like dense activations."
+                    )
                 spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
                 if len(spatial) > 2:
                     raise ValueError(
