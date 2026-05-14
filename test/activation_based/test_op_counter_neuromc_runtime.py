@@ -8,6 +8,7 @@ from spikingjelly.activation_based.op_counter.memory_residency import (
     MemoryResidencySimulator,
 )
 from spikingjelly.activation_based.op_counter.neuromc.add_counter import NeuroMCAddCounter
+from spikingjelly.activation_based.op_counter.neuromc.utils import _spike_nnz
 
 
 def test_neuromc_exact_linear_report_fields():
@@ -247,6 +248,14 @@ def test_memory_residency_reset_clears_state():
     assert counter.get_move_bits_by_edge() == {}
 
 
+def test_memory_residency_unknown_op_returns_zero():
+    counter = MemoryResidencyCounter()
+    x = torch.randn(2, 2)
+    out = torch.sin(x)
+    value = counter.count(torch.ops.aten.sin.default, (x,), {}, out)
+    assert value == 0
+
+
 def test_memory_residency_views_share_storage_identity():
     sim = MemoryResidencySimulator()
     base = torch.randn(16)
@@ -265,6 +274,29 @@ def test_neuromc_base_counter_unknown_op_returns_zero():
     out = torch.sin(x)
     value = counter.count(torch.ops.aten.sin.default, (x,), {}, out)
     assert value == 0
+
+
+def test_neuromc_spike_nnz_empty_tensor_returns_none():
+    x = torch.empty(0)
+    assert _spike_nnz(x) is None
+
+
+def test_neuromc_profiler_cleans_last_input_attribute():
+    model = nn.Linear(4, 3)
+    x = torch.randn(2, 4)
+    with op_counter.NeuroMCEnergyProfiler() as profiler:
+        profiler.bind_model(model)
+        with profiler.stage("forward"):
+            _ = model(x)
+        assert hasattr(model, "_neuromc_last_input")
+    assert not hasattr(model, "_neuromc_last_input")
+
+
+def test_neuromc_exact_conv3d_is_rejected():
+    model = nn.Conv3d(2, 4, kernel_size=3, padding=1)
+    x = torch.randn(1, 2, 4, 4, 4)
+    with pytest.raises(ValueError, match="Conv3d"):
+        op_counter.estimate_neuromc_runtime_energy(model, x)
 
 
 def test_neuromc_exact_memory_config_api():

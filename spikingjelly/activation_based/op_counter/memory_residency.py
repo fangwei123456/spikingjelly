@@ -306,8 +306,11 @@ class MemoryResidencySimulator:
         ):
             evict_key, evict_bits = self.reg_cache.popitem(last=False)
             self.usage_bits["reg"] -= evict_bits
-            self._record_move("reg", "sram", evict_bits, op_name)
-            self._insert_sram(evict_key, evict_bits, op_name)
+            inserted = self._insert_sram(evict_key, evict_bits, op_name)
+            if inserted:
+                self._record_move("reg", "sram", evict_bits, op_name)
+            else:
+                self._record_move("reg", "dram", evict_bits, op_name)
 
         if self.usage_bits["reg"] + bits > self.capacity_bits["reg"]:
             return False
@@ -455,10 +458,13 @@ class MemoryResidencyCounter(BaseCounter):
         self.simulator.reset()
 
     def count(self, func, args: tuple, kwargs: dict, out) -> int:
+        rule = self.rules.get(func)
+        if rule is None:
+            return 0
         op_name = resolve_name(func)
         stage = _infer_stage(func, args, kwargs, out)
         before_level_rw = self.simulator.get_level_rw_bits()
-        read_tensors, write_tensors = self.rules[func](args, kwargs, out)
+        read_tensors, write_tensors = rule(args, kwargs, out)
 
         total_bits = 0
         for tensor in read_tensors:

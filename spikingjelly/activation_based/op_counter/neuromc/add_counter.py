@@ -189,7 +189,12 @@ def _add_convolution_backward(args, kwargs, out):
         pseudo_args = [pseudo_x, pseudo_w, None, None, None, None, False, None, groups]
         _, a = _conv_mul_add(pseudo_args, grad_weight)
         add += a
-    if output_mask[2] and isinstance(out, (tuple, list)) and torch.is_tensor(out[2]):
+    if (
+        output_mask[2]
+        and isinstance(out, (tuple, list))
+        and len(out) > 2
+        and torch.is_tensor(out[2])
+    ):
         b = grad_out.shape[0]
         c_out = grad_out.shape[1]
         add += c_out * (b * _prod(grad_out.shape[2:]) - 1)

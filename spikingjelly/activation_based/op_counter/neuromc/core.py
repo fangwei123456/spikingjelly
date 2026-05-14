@@ -284,7 +284,6 @@ class NeuroMCEnergyProfiler:
         supported = (
             nn.Conv1d,
             nn.Conv2d,
-            nn.Conv3d,
             nn.Linear,
             nn.BatchNorm1d,
             nn.BatchNorm2d,
@@ -294,6 +293,10 @@ class NeuroMCEnergyProfiler:
         for module in model.modules():
             if module in self.extra_ignore_modules:
                 continue
+            if isinstance(module, nn.Conv3d):
+                raise ValueError(
+                    "Exact NeuroMC runtime does not support nn.Conv3d yet."
+                )
             if isinstance(module, supported):
                 self._hook_handles.append(module.register_forward_hook(self._forward_hook))
                 self._hook_handles.append(
@@ -314,6 +317,11 @@ class NeuroMCEnergyProfiler:
         for handle in self._hook_handles:
             handle.remove()
         self._hook_handles.clear()
+        if self._bound_model is not None:
+            for module in self._bound_model.modules():
+                if hasattr(module, "_neuromc_last_input"):
+                    delattr(module, "_neuromc_last_input")
+        self._model_bound = False
         return self._trace_mode.__exit__(exc_type, exc, tb)
 
     @contextmanager
@@ -801,9 +809,17 @@ class NeuroMCEnergyProfiler:
                 x, w = event.args[:2]
                 out = event.out
                 spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
+                if len(spatial) > 2:
+                    raise ValueError(
+                        "Exact NeuroMC runtime does not support Conv3d fallback yet."
+                    )
                 if len(spatial) == 1:
                     spatial = (spatial[0], 1)
                 kernel = tuple(w.shape[2:]) if w.ndim > 2 else (1, 1)
+                if len(kernel) > 2:
+                    raise ValueError(
+                        "Exact NeuroMC runtime does not support Conv3d fallback yet."
+                    )
                 if len(kernel) == 1:
                     kernel = (kernel[0], 1)
                 loop_dims = self._make_loop_dims(
@@ -1414,6 +1430,9 @@ class NeuroMCEnergyProfiler:
             "counts_by_process_key": report.counts_by_process_key,
         }
 
+    def record_optimizer_step(self, stage: str = "optimizer") -> None:
+        self._fragments.append(self._optimizer_fragment(stage))
+
 
 def estimate_neuromc_runtime_energy(
     model: nn.Module,
@@ -1454,8 +1473,7 @@ def estimate_neuromc_runtime_energy(
                 loss.backward()
             if optimizer is not None:
                 with profiler.stage("optimizer"):
-                    opt_fragment = profiler._optimizer_fragment("optimizer")
-                    profiler._fragments.append(opt_fragment)
+                    profiler.record_optimizer_step("optimizer")
                     with profiler.suspend():
                         optimizer.step()
                         optimizer.zero_grad(set_to_none=True)
