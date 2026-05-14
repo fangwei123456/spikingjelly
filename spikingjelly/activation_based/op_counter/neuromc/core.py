@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from collections import defaultdict
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+import re
 from typing import Any, Callable
 
 import torch
@@ -57,9 +58,14 @@ _IGNORED_OP_PREFIXES = (
     "aten.as_strided",
     "aten.clone",
     "aten.copy_",
+    "profiler.",
 )
 
 _AUXILIARY_ATEN_OPS = {
+    "aten.all.default",
+    "aten._local_scalar_dense.default",
+    "aten.lift_fresh.default",
+    "aten._to_copy.default",
     "aten.add.Tensor",
     "aten.add_.Tensor",
     "aten.add.Scalar",
@@ -78,6 +84,10 @@ _AUXILIARY_ATEN_OPS = {
     "aten.div_.Tensor",
     "aten.div.Scalar",
     "aten.div_.Scalar",
+    "aten.empty.memory_format",
+    "aten.full_like.default",
+    "aten.mse_loss.default",
+    "aten.mse_loss_backward.default",
     "aten.where.self",
     "aten.where.ScalarOther",
     "aten.where.ScalarSelf",
@@ -105,20 +115,10 @@ _AUXILIARY_ATEN_OPS = {
     "aten.logical_or.default",
     "aten.logical_xor.default",
     "aten.logical_not.default",
+    "aten.new_empty_strided.default",
+    "aten.ones_like.default",
+    "aten.zeros_like.default",
 }
-
-_BANNED_ATEN_PREFIXES = (
-    "aten.sin",
-    "aten.relu",
-    "aten.sigmoid",
-    "aten.tanh",
-    "aten.exp",
-    "aten.log",
-    "aten.pow",
-    "aten.max_pool",
-    "aten.avg_pool",
-)
-
 
 @dataclass
 class NeuroMCRuntimeEnergyReport:
@@ -232,6 +232,8 @@ class _TraceMode(TorchDispatchMode):
 
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
         kwargs = {} if kwargs is None else kwargs
+        if self.profiler._suspended:
+            return func(*args, **kwargs)
         op_name = resolve_name(func)
         self.op_counts[op_name] = self.op_counts.get(op_name, 0) + 1
         out = func(*args, **kwargs)
@@ -266,16 +268,17 @@ class NeuroMCEnergyProfiler:
         self._trace_mode = _TraceMode(self)
         self._trace_events: list[_TraceEvent] = []
         self._fragments: list[_Fragment] = []
+        self._bound_model: nn.Module | None = None
         self._active = False
         self._suspended = False
         self._model_bound = False
         self._optimizer: torch.optim.Optimizer | None = None
         self._hook_handles = []
-        self._forward_step_index = 0
 
     def bind_model(self, model: nn.Module):
         if self._model_bound:
             return
+        self._bound_model = model
         from ...neuron.base_node import BaseNode
 
         supported = (
@@ -320,8 +323,6 @@ class NeuroMCEnergyProfiler:
         if self._stage_stack:
             raise RuntimeError("Nested stage() is not supported in NeuroMC v2.")
         self._stage_stack.append(name)
-        if self._stage_phase(name) == "forward":
-            self._forward_step_index += 1
         try:
             yield self
         finally:
@@ -349,6 +350,21 @@ class NeuroMCEnergyProfiler:
         if "optimizer" in lowered or "update" in lowered:
             return "optimizer"
         return "forward"
+
+    def _stage_position(self, stage: str | None = None) -> tuple[int, int]:
+        name = stage or self._current_stage()
+        lowered = name.lower()
+        b_match = re.search(r"(?:^|[^a-z0-9])b(\d+)(?:[^a-z0-9]|$)", lowered)
+        t_match = re.search(r"(?:^|[^a-z0-9])t(\d+)(?:[^a-z0-9]|$)", lowered)
+        b_type = int(b_match.group(1)) if b_match is not None else 0
+        t_type = int(t_match.group(1)) if t_match is not None else 0
+        return b_type, t_type
+
+    def _stage_conv_type(self, stage: str | None = None) -> str:
+        name = (stage or self._current_stage()).lower()
+        if "without_bp_bn" in name:
+            return "without_bp_bn"
+        return "--"
 
     def _maybe_record_trace_event(self, op_name: str, args, kwargs, out):
         if not self._active or self._suspended:
@@ -429,6 +445,7 @@ class NeuroMCEnergyProfiler:
         }
 
     def _make_conv_forward_fragment(self, stage: str, module: nn.Module, x, out) -> _Fragment:
+        b_type, t_type = self._stage_position(stage)
         spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
         if len(spatial) == 1:
             spatial = (spatial[0], 1)
@@ -458,12 +475,13 @@ class NeuroMCEnergyProfiler:
             weight_numel=_tensor_numel(module.weight),
             output_numel=_tensor_numel(out),
             mac_count=self._mac_count(loop_dims),
-            b_type=0,
-            t_type=max(self._forward_step_index - 1, 0),
+            b_type=b_type,
+            t_type=t_type,
             source="module",
         )
 
     def _make_linear_forward_fragment(self, stage: str, module: nn.Linear, x, out) -> _Fragment:
+        b_type, t_type = self._stage_position(stage)
         batch = int(x.shape[0]) if x.ndim > 1 else 1
         loop_dims = self._make_loop_dims(
             batch_size=batch,
@@ -488,8 +506,8 @@ class NeuroMCEnergyProfiler:
             weight_numel=_tensor_numel(module.weight),
             output_numel=_tensor_numel(out),
             mac_count=self._mac_count(loop_dims),
-            b_type=0,
-            t_type=max(self._forward_step_index - 1, 0),
+            b_type=b_type,
+            t_type=t_type,
             source="module",
         )
 
@@ -523,6 +541,7 @@ class NeuroMCEnergyProfiler:
         )
 
     def _make_soma_forward_fragment(self, stage: str, x, out) -> _Fragment:
+        b_type, t_type = self._stage_position(stage)
         out_tensor = out[0] if isinstance(out, (tuple, list)) else out
         c = _module_channel_count(out_tensor) if torch.is_tensor(out_tensor) else 1
         spatial_prod = max(int(_tensor_numel(out_tensor) // max(c, 1)), 1)
@@ -549,7 +568,8 @@ class NeuroMCEnergyProfiler:
             weight_numel=0,
             output_numel=_tensor_numel(out_tensor),
             mac_count=0,
-            t_type=max(self._forward_step_index - 1, 0),
+            b_type=b_type,
+            t_type=t_type,
             source="module",
         )
 
@@ -592,24 +612,27 @@ class NeuroMCEnergyProfiler:
                     source="module",
                 )
             )
-        fragments.append(
-            _Fragment(
-                stage=stage,
-                phase="backward",
-                op_name="conv.backward.grad_weight",
-                core_type="wg",
-                process_key="with_nothing",
-                loop_dims=base_loop,
-                input_precision_bits=1 if _is_spike_tensor(getattr(module, "_neuromc_last_input", None)) else 16,
-                weight_precision_bits=16,
-                output_precision_bits=16,
-                input_numel=_tensor_numel(getattr(module, "_neuromc_last_input", None)),
-                weight_numel=_tensor_numel(grad_out),
-                output_numel=_tensor_numel(module.weight),
-                mac_count=self._mac_count(base_loop),
-                source="module",
+        if module.weight.requires_grad:
+            fragments.append(
+                _Fragment(
+                    stage=stage,
+                    phase="backward",
+                    op_name="conv.backward.grad_weight",
+                    core_type="wg",
+                    process_key="with_nothing",
+                    loop_dims=base_loop,
+                    input_precision_bits=1
+                    if _is_spike_tensor(getattr(module, "_neuromc_last_input", None))
+                    else 16,
+                    weight_precision_bits=16,
+                    output_precision_bits=16,
+                    input_numel=_tensor_numel(getattr(module, "_neuromc_last_input", None)),
+                    weight_numel=_tensor_numel(grad_out),
+                    output_numel=_tensor_numel(module.weight),
+                    mac_count=self._mac_count(base_loop),
+                    source="module",
+                )
             )
-        )
         return fragments
 
     def _make_linear_backward_fragments(self, stage, module, grad_input, grad_output):
@@ -645,33 +668,38 @@ class NeuroMCEnergyProfiler:
                     source="module",
                 )
             )
-        fragments.append(
-            _Fragment(
-                stage=stage,
-                phase="backward",
-                op_name="linear.backward.grad_weight",
-                core_type="wg",
-                process_key="with_nothing",
-                loop_dims=loop_dims,
-                input_precision_bits=1 if _is_spike_tensor(getattr(module, "_neuromc_last_input", None)) else 16,
-                weight_precision_bits=16,
-                output_precision_bits=16,
-                input_numel=_tensor_numel(getattr(module, "_neuromc_last_input", None)),
-                weight_numel=_tensor_numel(grad_out),
-                output_numel=_tensor_numel(module.weight),
-                mac_count=self._mac_count(loop_dims),
-                source="module",
+        if module.weight.requires_grad:
+            fragments.append(
+                _Fragment(
+                    stage=stage,
+                    phase="backward",
+                    op_name="linear.backward.grad_weight",
+                    core_type="wg",
+                    process_key="with_nothing",
+                    loop_dims=loop_dims,
+                    input_precision_bits=1
+                    if _is_spike_tensor(getattr(module, "_neuromc_last_input", None))
+                    else 16,
+                    weight_precision_bits=16,
+                    output_precision_bits=16,
+                    input_numel=_tensor_numel(getattr(module, "_neuromc_last_input", None)),
+                    weight_numel=_tensor_numel(grad_out),
+                    output_numel=_tensor_numel(module.weight),
+                    mac_count=self._mac_count(loop_dims),
+                    source="module",
+                )
             )
-        )
         return fragments
 
     def _make_bn_backward_fragment(self, stage, grad_input, grad_output):
         grad_out = grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
         grad_in = grad_input[0] if isinstance(grad_input, (tuple, list)) and grad_input else grad_out
+        batch = int(grad_out.shape[0]) if grad_out.ndim > 1 else 1
         c = _module_channel_count(grad_out)
-        spatial_prod = max(int(_tensor_numel(grad_out) // max(c, 1)), 1)
+        spatial_prod = max(int(_tensor_numel(grad_out) // max(batch * c, 1)), 1)
+        conv_type = self._stage_conv_type(stage)
         loop_dims = self._make_loop_dims(
-            batch_size=1,
+            batch_size=batch,
             channels_in=c,
             channels_out=c,
             oy=spatial_prod,
@@ -693,6 +721,7 @@ class NeuroMCEnergyProfiler:
             weight_numel=c * 2,
             output_numel=_tensor_numel(grad_in),
             mac_count=0,
+            conv_type=conv_type,
             source="module",
         )
 
@@ -740,6 +769,28 @@ class NeuroMCEnergyProfiler:
             * loop_dims["FX"]
         )
 
+    def _matches_trainable_param_shape(self, out: Any) -> bool:
+        if self._bound_model is None or (not torch.is_tensor(out)):
+            return False
+        out_shape = tuple(out.shape)
+        for p in self._bound_model.parameters():
+            if p.requires_grad and tuple(p.shape) == out_shape:
+                return True
+        return False
+
+    def _gemm_backward_fragment_kind(
+        self, x: torch.Tensor, y: torch.Tensor, out: Any
+    ) -> str | None:
+        x_req = bool(x.requires_grad)
+        y_req = bool(y.requires_grad)
+        if x_req and (not y_req):
+            return "wg"
+        if (not x_req) and y_req:
+            return "bp_grad"
+        if self._matches_trainable_param_shape(out):
+            return "wg"
+        return None
+
     def _fallback_fragments_from_trace(self) -> list[_Fragment]:
         fragments: list[_Fragment] = []
         for event in self._trace_events:
@@ -785,36 +836,113 @@ class NeuroMCEnergyProfiler:
                 x = event.args[-2]
                 y = event.args[-1]
                 out = event.out
-                batch = int(x.shape[0]) if x.ndim == 2 else int(x.shape[0] * x.shape[1])
-                k = int(x.shape[-1])
-                n = int(y.shape[-1])
-                loop_dims = self._make_loop_dims(
-                    batch_size=batch,
-                    channels_in=k,
-                    channels_out=n,
-                    oy=1,
-                    ox=1,
-                    fy=1,
-                    fx=1,
-                )
-                core_type = "fp_soma" if event.phase == "forward" else "bp_grad"
-                fragments.append(
-                    _Fragment(
-                        stage=event.stage,
-                        phase=event.phase,
-                        op_name=op,
-                        core_type=core_type,
-                        process_key="with_nothing",
-                        loop_dims=loop_dims,
-                        input_precision_bits=1 if (_is_spike_tensor(x) and event.phase == "forward") else 16,
-                        weight_precision_bits=16,
-                        output_precision_bits=16,
-                        input_numel=_tensor_numel(x),
-                        weight_numel=_tensor_numel(y),
-                        output_numel=_tensor_numel(out),
-                        mac_count=self._mac_count(loop_dims),
+                if event.phase == "forward":
+                    batch = (
+                        int(x.shape[0]) if x.ndim == 2 else int(x.shape[0] * x.shape[1])
                     )
-                )
+                    k = int(x.shape[-1])
+                    n = int(y.shape[-1])
+                    loop_dims = self._make_loop_dims(
+                        batch_size=batch,
+                        channels_in=k,
+                        channels_out=n,
+                        oy=1,
+                        ox=1,
+                        fy=1,
+                        fx=1,
+                    )
+                    fragments.append(
+                        _Fragment(
+                            stage=event.stage,
+                            phase=event.phase,
+                            op_name=op,
+                            core_type="fp_soma",
+                            process_key="with_nothing",
+                            loop_dims=loop_dims,
+                            input_precision_bits=1 if _is_spike_tensor(x) else 16,
+                            weight_precision_bits=16,
+                            output_precision_bits=16,
+                            input_numel=_tensor_numel(x),
+                            weight_numel=_tensor_numel(y),
+                            output_numel=_tensor_numel(out),
+                            mac_count=self._mac_count(loop_dims),
+                            b_type=0,
+                            t_type=0,
+                        )
+                    )
+                else:
+                    kind = self._gemm_backward_fragment_kind(x, y, out)
+                    if kind == "wg":
+                        if x.ndim == 2:
+                            batch = int(x.shape[-1])
+                            c = int(x.shape[0])
+                            k = int(y.shape[-1])
+                        else:
+                            batch = int(x.shape[0] * x.shape[-1])
+                            c = int(x.shape[1])
+                            k = int(y.shape[-1])
+                        loop_dims = self._make_loop_dims(
+                            batch_size=batch,
+                            channels_in=c,
+                            channels_out=k,
+                            oy=1,
+                            ox=1,
+                            fy=1,
+                            fx=1,
+                        )
+                        fragments.append(
+                            _Fragment(
+                                stage=event.stage,
+                                phase=event.phase,
+                                op_name=op,
+                                core_type="wg",
+                                process_key="with_nothing",
+                                loop_dims=loop_dims,
+                                input_precision_bits=1 if _is_spike_tensor(x) else 16,
+                                weight_precision_bits=16,
+                                output_precision_bits=16,
+                                input_numel=_tensor_numel(x),
+                                weight_numel=_tensor_numel(y),
+                                output_numel=_tensor_numel(out),
+                                mac_count=self._mac_count(loop_dims),
+                                b_type=0,
+                                t_type=0,
+                            )
+                        )
+                    else:
+                        batch = (
+                            int(x.shape[0]) if x.ndim == 2 else int(x.shape[0] * x.shape[1])
+                        )
+                        k = int(x.shape[-1])
+                        n = int(y.shape[-1])
+                        loop_dims = self._make_loop_dims(
+                            batch_size=batch,
+                            channels_in=k,
+                            channels_out=n,
+                            oy=1,
+                            ox=1,
+                            fy=1,
+                            fx=1,
+                        )
+                        fragments.append(
+                            _Fragment(
+                                stage=event.stage,
+                                phase=event.phase,
+                                op_name=op,
+                                core_type="bp_grad",
+                                process_key="with_nothing",
+                                loop_dims=loop_dims,
+                                input_precision_bits=16,
+                                weight_precision_bits=16,
+                                output_precision_bits=16,
+                                input_numel=_tensor_numel(x),
+                                weight_numel=_tensor_numel(y),
+                                output_numel=_tensor_numel(out),
+                                mac_count=self._mac_count(loop_dims),
+                                b_type=0,
+                                t_type=0,
+                            )
+                        )
             elif op == "aten.native_batch_norm.default" and event.phase == "forward":
                 x = event.args[0]
                 out = event.out[0] if isinstance(event.out, (tuple, list)) else event.out
@@ -823,7 +951,7 @@ class NeuroMCEnergyProfiler:
                 fragments.append(self._make_bn_backward_fragment(event.stage, event.args, event.out))
         return fragments
 
-    def _unsupported_ops(self, supported_by_fragment: bool) -> list[str]:
+    def _unsupported_ops(self) -> list[str]:
         unsupported = []
         for op_name, count in self._trace_mode.op_counts.items():
             if op_name.startswith(_IGNORED_OP_PREFIXES):
@@ -838,10 +966,6 @@ class NeuroMCEnergyProfiler:
                 "aten.native_batch_norm.default",
                 "aten.native_batch_norm_backward.default",
             }:
-                continue
-            if supported_by_fragment:
-                if any(op_name.startswith(prefix) for prefix in _BANNED_ATEN_PREFIXES):
-                    unsupported.append(f"{op_name} (calls={count})")
                 continue
             unsupported.append(f"{op_name} (calls={count})")
         return sorted(unsupported)
@@ -876,9 +1000,6 @@ class NeuroMCEnergyProfiler:
                 if fragment.conv_type == "without_bp_bn":
                     counts["add"] = 0
                     counts["mul"] = 0
-                elif fragment.conv_type == "with_more_bp_bn":
-                    counts["add"] *= 2
-                    counts["mul"] *= 2
         elif fragment.process_key == "with_opt":
             counts["add"] += 8 * kt + 4 * fyfxkc
             counts["mul"] += 22 * kt + 11 * fyfxkc
@@ -890,7 +1011,7 @@ class NeuroMCEnergyProfiler:
     ) -> float:
         bw = spec.r_bw if read else spec.w_bw
         cost = spec.r_cost if read else spec.w_cost
-        if precision_bits <= 0:
+        if precision_bits <= 0 or bw <= 0:
             return 0.0
         return cost / (bw / precision_bits)
 
@@ -906,6 +1027,16 @@ class NeuroMCEnergyProfiler:
         read: bool,
     ):
         if bits <= 0:
+            return
+        if level == "dram" and self.memory_config.zero_dram_in_paper_energy:
+            return
+        if level == "noc" and self.memory_config.zero_noc_in_paper_energy:
+            return
+        if (
+            level == "sram"
+            and self.memory_config.zero_sram_high_directions
+            and direction in {"rl2h", "wh2l"}
+        ):
             return
         totals[level][direction] += bits
         energy[level][direction] += (bits / precision_bits) * self._memory_energy_per_element(
@@ -944,7 +1075,10 @@ class NeuroMCEnergyProfiler:
         i1_bits = fragment.input_numel * fragment.input_precision_bits
         i2_bits = fragment.weight_numel * fragment.weight_precision_bits
         o_bits = fragment.output_numel * fragment.output_precision_bits
-        reuse_weight = fragment.t_type > 0 and i2_bits <= sram_i2.size_bits
+        reuse_weight = (
+            (fragment.b_type > 0 or fragment.t_type > 0)
+            and i2_bits <= sram_i2.size_bits
+        )
 
         self._accumulate_memory(
             totals, energy, "reg", "rh2l", i1_bits, reg_i1, fragment.input_precision_bits, True
@@ -1050,18 +1184,20 @@ class NeuroMCEnergyProfiler:
                 "opt_s_y": ("KT", 32, "reg_32b", "sram_6MB"),
                 "opt_s_b": ("KT", 32, "reg_32b", "sram_6MB"),
                 "opt_s_w": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
+                "opt_vbc_y": ("KT", 32, "reg_32b", "sram_6MB"),
+                "opt_vbc_b": ("KT", 32, "reg_32b", "sram_6MB"),
+                "opt_vbc_w": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
+                "opt_sbc_y": ("KT", 32, "reg_32b", "sram_6MB"),
+                "opt_sbc_b": ("KT", 32, "reg_32b", "sram_6MB"),
+                "opt_sbc_w": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
+                "opt_y_updated": ("KT", 32, "reg_32b", "sram_6MB"),
+                "opt_b_updated": ("KT", 32, "reg_32b", "sram_6MB"),
+                "opt_w_updated": ("FYFXKC", 32, "reg_32b", "sram_6MB"),
             }
 
         for _, (count_key, bits_per_elem, reg_name, sram_name) in variables.items():
             total_bits = scalar_counts[count_key] * bits_per_elem
-            reg_spec = cfg[reg_name]
             sram_spec = cfg[sram_name]
-            self._accumulate_memory(
-                totals, energy, "reg", "rh2l", total_bits, reg_spec, bits_per_elem, True
-            )
-            self._accumulate_memory(
-                totals, energy, "reg", "wl2h", total_bits, reg_spec, bits_per_elem, False
-            )
             self._accumulate_memory(
                 totals, energy, "sram", "rh2l", total_bits, sram_spec, bits_per_elem, True
             )
@@ -1121,7 +1257,7 @@ class NeuroMCEnergyProfiler:
         if not fragments:
             fragments = self._fallback_fragments_from_trace()
 
-        unsupported = self._unsupported_ops(supported_by_fragment=bool(fragments))
+        unsupported = self._unsupported_ops()
         if unsupported:
             raise ValueError(
                 "Exact NeuroMC runtime does not support these aten ops: "

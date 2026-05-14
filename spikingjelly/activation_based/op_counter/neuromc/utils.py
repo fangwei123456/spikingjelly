@@ -69,6 +69,8 @@ def _is_spike(x: torch.Tensor | None) -> bool:
         return False
     if x.dtype == torch.bool:
         return True
+    if x.numel() == 0:
+        return False
     return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
 
 

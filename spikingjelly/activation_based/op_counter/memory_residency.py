@@ -317,11 +317,22 @@ class MemoryResidencySimulator:
         return True
 
     def _tensor_key(self, tensor: torch.Tensor) -> str:
-        data_ptr = int(tensor.data_ptr())
-        return (
-            f"{tensor.device}:{tensor.dtype}:{data_ptr}:"
-            f"{int(tensor.storage_offset())}:{tuple(tensor.shape)}"
-        )
+        storage = tensor.untyped_storage()
+        storage_ptr = int(storage.data_ptr())
+        if storage_ptr == 0:
+            storage_id = f"id={id(storage)}"
+        else:
+            storage_id = f"ptr={storage_ptr}"
+        return f"{tensor.device}:{tensor.dtype}:{storage_id}"
+
+    def reset(self):
+        self.reg_cache.clear()
+        self.sram_cache.clear()
+        self.usage_bits = {"reg": 0, "sram": 0}
+        self.level_rw_bits.clear()
+        self.op_level_rw_bits.clear()
+        self.move_bits_by_edge.clear()
+        self.move_bits_by_op.clear()
 
     def on_tensor_read(self, tensor: torch.Tensor, op_name: str):
         bits = _tensor_bits(tensor)
@@ -431,6 +442,17 @@ class MemoryResidencyCounter(BaseCounter):
         self.stage_op_records: dict[str, dict[str, int]] = defaultdict(
             lambda: defaultdict(int)
         )
+
+    def reset(self):
+        self.records.clear()
+        self.level_records.clear()
+        self.level_rw_records.clear()
+        self.stage_level_records.clear()
+        self.op_level_records.clear()
+        self.stage_records.clear()
+        self.op_records.clear()
+        self.stage_op_records.clear()
+        self.simulator.reset()
 
     def count(self, func, args: tuple, kwargs: dict, out) -> int:
         op_name = resolve_name(func)
