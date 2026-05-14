@@ -64,6 +64,7 @@ def _infer_stage(func, args, kwargs, out) -> str:
 
     return "forward"
 
+
 def _access_mm(args, kwargs, out):
     x, y = args[:2]
     return [x, y], [out]
@@ -260,9 +261,32 @@ class MemoryResidencySimulator:
             return False
         if key in self.sram_cache:
             old = self.sram_cache[key]
-            if bits > old:
-                self.usage_bits["sram"] += bits - old
-                self.sram_cache[key] = bits
+            if bits <= old:
+                self._touch(self.sram_cache, key)
+                return True
+            self.usage_bits["sram"] -= old
+            del self.sram_cache[key]
+            reg_bits = self.reg_cache.pop(key, None)
+            if reg_bits is not None:
+                self.usage_bits["reg"] -= reg_bits
+                self._record_level_rw("reg", "read_bits", reg_bits, op_name)
+                self._record_move("reg", "dram", reg_bits, op_name)
+            while self.sram_cache and (
+                self.usage_bits["sram"] + bits > self.capacity_bits["sram"]
+            ):
+                evict_key, evict_bits = self.sram_cache.popitem(last=False)
+                self.usage_bits["sram"] -= evict_bits
+                self._record_level_rw("sram", "read_bits", evict_bits, op_name)
+                self._record_move("sram", "dram", evict_bits, op_name)
+                reg_bits = self.reg_cache.pop(evict_key, None)
+                if reg_bits is not None:
+                    self.usage_bits["reg"] -= reg_bits
+                    self._record_level_rw("reg", "read_bits", reg_bits, op_name)
+                    self._record_move("reg", "dram", reg_bits, op_name)
+            if self.usage_bits["sram"] + bits > self.capacity_bits["sram"]:
+                return False
+            self.sram_cache[key] = bits
+            self.usage_bits["sram"] += bits
             self._touch(self.sram_cache, key)
             return True
 
@@ -291,9 +315,26 @@ class MemoryResidencySimulator:
             return False
         if key in self.reg_cache:
             old = self.reg_cache[key]
-            if bits > old:
-                self.usage_bits["reg"] += bits - old
-                self.reg_cache[key] = bits
+            if bits <= old:
+                self._touch(self.reg_cache, key)
+                return True
+            self.usage_bits["reg"] -= old
+            del self.reg_cache[key]
+            while self.reg_cache and (
+                self.usage_bits["reg"] + bits > self.capacity_bits["reg"]
+            ):
+                evict_key, evict_bits = self.reg_cache.popitem(last=False)
+                self.usage_bits["reg"] -= evict_bits
+                self._record_level_rw("reg", "read_bits", evict_bits, op_name)
+                inserted = self._insert_sram(evict_key, evict_bits, op_name)
+                if inserted:
+                    self._record_move("reg", "sram", evict_bits, op_name)
+                else:
+                    self._record_move("reg", "dram", evict_bits, op_name)
+            if self.usage_bits["reg"] + bits > self.capacity_bits["reg"]:
+                return False
+            self.reg_cache[key] = bits
+            self.usage_bits["reg"] += bits
             self._touch(self.reg_cache, key)
             return True
 

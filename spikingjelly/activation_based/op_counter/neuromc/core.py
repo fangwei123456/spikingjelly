@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import re
+import warnings
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
-import re
-import warnings
 from typing import Any, Callable
 
 import torch
@@ -87,6 +87,10 @@ _AUXILIARY_ATEN_OPS = {
     "aten.div.Scalar",
     "aten.div_.Scalar",
     "aten.empty.memory_format",
+    "aten.cat.default",
+    "aten.stack.default",
+    "aten.split.Tensor",
+    "aten.index.Tensor",
     "aten.full_like.default",
     "aten.mse_loss.default",
     "aten.mse_loss_backward.default",
@@ -122,6 +126,7 @@ _AUXILIARY_ATEN_OPS = {
     "aten.zeros_like.default",
 }
 
+
 @dataclass
 class NeuroMCRuntimeEnergyReport:
     energy_total_pj: float
@@ -142,6 +147,22 @@ class NeuroMCRuntimeEnergyReport:
     counts_by_core_type: dict[str, dict[str, int]]
     counts_by_process_key: dict[str, dict[str, int]]
     mapping_summary: list[dict[str, Any]]
+
+
+@dataclass
+class _TraceTensor:
+    shape: tuple[int, ...]
+    dtype: torch.dtype
+    requires_grad: bool
+    numel_value: int
+    is_spike: bool
+
+    @property
+    def ndim(self) -> int:
+        return len(self.shape)
+
+    def numel(self) -> int:
+        return self.numel_value
 
 
 @dataclass
@@ -174,16 +195,82 @@ class _Fragment:
     t_type: int = 0
     source: str = "trace"
 
+
+def _fragment_signature(fragment: _Fragment) -> tuple[Any, ...]:
+    return (
+        fragment.stage,
+        fragment.phase,
+        fragment.core_type,
+        fragment.process_key,
+        tuple(sorted(fragment.loop_dims.items())),
+        fragment.input_precision_bits,
+        fragment.weight_precision_bits,
+        fragment.output_precision_bits,
+        fragment.input_numel,
+        fragment.weight_numel,
+        fragment.output_numel,
+        fragment.mac_count,
+        fragment.conv_type,
+        fragment.b_type,
+        fragment.t_type,
+    )
+
+
 def _tensor_numel(x: Any) -> int:
+    if isinstance(x, _TraceTensor):
+        return x.numel_value
     if not torch.is_tensor(x):
         return 0
     return int(x.numel())
 
 
-def _module_channel_count(x: torch.Tensor) -> int:
-    if x.ndim >= 2:
-        return int(x.shape[1])
-    return int(x.numel())
+def _tensor_layout(
+    x: torch.Tensor | _TraceTensor, module: nn.Module | None = None
+) -> tuple[int, int, int, tuple[int, ...]]:
+    step_mode = getattr(module, "step_mode", "s") if module is not None else "s"
+    if step_mode == "m":
+        if x.ndim < 3:
+            raise ValueError(
+                f"Expected multi-step tensor with shape [T, N, C, ...], got {tuple(x.shape)}."
+            )
+        t = int(x.shape[0])
+        b = int(x.shape[1])
+        c = int(x.shape[2])
+        spatial = tuple(int(v) for v in x.shape[3:])
+    else:
+        t = 1
+        b = int(x.shape[0]) if x.ndim > 0 else 1
+        if x.ndim >= 2:
+            c = int(x.shape[1])
+            spatial = tuple(int(v) for v in x.shape[2:])
+        else:
+            c = _tensor_numel(x)
+            spatial = ()
+    return t, b, c, spatial
+
+
+def _snapshot_trace_value(value: Any) -> Any:
+    if torch.is_tensor(value):
+        return _TraceTensor(
+            shape=tuple(int(v) for v in value.shape),
+            dtype=value.dtype,
+            requires_grad=bool(value.requires_grad),
+            numel_value=int(value.numel()),
+            is_spike=_is_spike(value),
+        )
+    if isinstance(value, tuple):
+        return tuple(_snapshot_trace_value(v) for v in value)
+    if isinstance(value, list):
+        return [_snapshot_trace_value(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _snapshot_trace_value(v) for k, v in value.items()}
+    return value
+
+
+def _is_spike_like(x: Any) -> bool:
+    if isinstance(x, _TraceTensor):
+        return x.is_spike
+    return _is_spike(x)
 
 
 def _resolve_loss_fn(loss_fn: Callable | None):
@@ -261,8 +348,11 @@ class NeuroMCEnergyProfiler:
 
     def bind_model(self, model: nn.Module):
         if self._model_bound:
-            return
-        self._bound_model = model
+            if self._bound_model is model:
+                return
+            raise RuntimeError(
+                "NeuroMCEnergyProfiler is already bound to a different model."
+            )
         from ...neuron.base_node import BaseNode
 
         supported = (
@@ -281,8 +371,14 @@ class NeuroMCEnergyProfiler:
                 raise ValueError(
                     "Exact NeuroMC runtime does not support nn.Conv3d yet."
                 )
+        self._bound_model = model
+        for module in model.modules():
+            if module in self.extra_ignore_modules:
+                continue
             if isinstance(module, supported):
-                self._hook_handles.append(module.register_forward_hook(self._forward_hook))
+                self._hook_handles.append(
+                    module.register_forward_hook(self._forward_hook)
+                )
                 self._hook_handles.append(
                     module.register_full_backward_hook(self._backward_hook)
                 )
@@ -301,7 +397,6 @@ class NeuroMCEnergyProfiler:
         try:
             for handle in self._hook_handles:
                 handle.remove()
-            self._hook_handles.clear()
             if self._bound_model is not None:
                 for module in self._bound_model.modules():
                     if hasattr(module, "_neuromc_last_input"):
@@ -309,12 +404,15 @@ class NeuroMCEnergyProfiler:
             self._model_bound = False
             self._bound_model = None
         finally:
-            return self._trace_mode.__exit__(exc_type, exc, tb)
+            self._hook_handles.clear()
+        return self._trace_mode.__exit__(exc_type, exc, tb)
 
     @contextmanager
     def stage(self, name: str):
         if not self._active:
-            raise RuntimeError("stage() can only be used inside active profiler context.")
+            raise RuntimeError(
+                "stage() can only be used inside active profiler context."
+            )
         if self._stage_stack:
             raise RuntimeError("Nested stage() is not supported in NeuroMC v2.")
         self._stage_stack.append(name)
@@ -369,9 +467,9 @@ class NeuroMCEnergyProfiler:
                 op_name=op_name,
                 stage=self._current_stage(),
                 phase=self._stage_phase(),
-                args=args,
-                kwargs=kwargs,
-                out=out,
+                args=_snapshot_trace_value(args),
+                kwargs=_snapshot_trace_value(kwargs),
+                out=_snapshot_trace_value(out),
             )
         )
 
@@ -384,17 +482,25 @@ class NeuroMCEnergyProfiler:
         if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
             x = args[0]
             module._neuromc_last_input = x
-            self._fragments.append(self._make_conv_forward_fragment(stage, module, x, out))
+            self._fragments.append(
+                self._make_conv_forward_fragment(stage, module, x, out)
+            )
         elif isinstance(module, nn.Linear):
             x = args[0]
             module._neuromc_last_input = x
-            self._fragments.append(self._make_linear_forward_fragment(stage, module, x, out))
+            self._fragments.append(
+                self._make_linear_forward_fragment(stage, module, x, out)
+            )
         elif isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
             x = args[0]
-            self._fragments.append(self._make_bn_forward_fragment(stage, x, out))
+            self._fragments.append(
+                self._make_bn_forward_fragment(stage, module, x, out)
+            )
         elif isinstance(module, BaseNode):
             x = args[0]
-            self._fragments.append(self._make_soma_forward_fragment(stage, x, out))
+            self._fragments.append(
+                self._make_soma_forward_fragment(stage, module, x, out)
+            )
 
     def _backward_hook(self, module: nn.Module, grad_input, grad_output):
         if not self._active or self._suspended:
@@ -404,23 +510,32 @@ class NeuroMCEnergyProfiler:
 
         if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
             self._fragments.extend(
-                self._make_conv_backward_fragments(stage, module, grad_input, grad_output)
+                self._make_conv_backward_fragments(
+                    stage, module, grad_input, grad_output
+                )
             )
         elif isinstance(module, nn.Linear):
             self._fragments.extend(
-                self._make_linear_backward_fragments(stage, module, grad_input, grad_output)
+                self._make_linear_backward_fragments(
+                    stage, module, grad_input, grad_output
+                )
             )
         elif isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d)):
-            self._fragments.append(self._make_bn_backward_fragment(stage, grad_input, grad_output))
+            self._fragments.append(
+                self._make_bn_backward_fragment(stage, module, grad_input, grad_output)
+            )
         elif isinstance(module, BaseNode):
             self._fragments.append(
-                self._make_soma_backward_fragment(stage, grad_input, grad_output)
+                self._make_soma_backward_fragment(
+                    stage, module, grad_input, grad_output
+                )
             )
 
     def _make_loop_dims(
         self,
         *,
         batch_size: int,
+        time_steps: int = 1,
         channels_in: int,
         channels_out: int,
         oy: int,
@@ -430,7 +545,7 @@ class NeuroMCEnergyProfiler:
     ) -> dict[str, int]:
         return {
             "B": max(int(batch_size), 1),
-            "T": 1,
+            "T": max(int(time_steps), 1),
             "C": max(int(channels_in), 1),
             "K": max(int(channels_out), 1),
             "OY": max(int(oy), 1),
@@ -439,21 +554,30 @@ class NeuroMCEnergyProfiler:
             "FX": max(int(fx), 1),
         }
 
-    def _make_conv_forward_fragment(self, stage: str, module: nn.Module, x, out) -> _Fragment:
+    def _make_conv_forward_fragment(
+        self, stage: str, module: nn.Module, x, out
+    ) -> _Fragment:
         b_type, t_type = self._stage_position(stage)
         if not _is_spike(x):
             raise ValueError(
                 "Exact NeuroMC runtime only supports spike/binary forward inputs "
                 f"for {module.__class__.__name__}; got ANN-like dense activations."
             )
-        spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
+        t, b, _, _ = _tensor_layout(x, module)
+        _, _, _, out_spatial = _tensor_layout(out, module)
+        spatial = out_spatial if len(out_spatial) > 0 else (1, 1)
         if len(spatial) == 1:
             spatial = (spatial[0], 1)
-        kernel = tuple(module.kernel_size) if isinstance(module.kernel_size, tuple) else (module.kernel_size,)
+        kernel = (
+            tuple(module.kernel_size)
+            if isinstance(module.kernel_size, tuple)
+            else (module.kernel_size,)
+        )
         if len(kernel) == 1:
             kernel = (kernel[0], 1)
         loop_dims = self._make_loop_dims(
-            batch_size=int(x.shape[0]),
+            batch_size=b,
+            time_steps=t,
             channels_in=int(module.in_channels),
             channels_out=int(module.out_channels),
             oy=int(spatial[0]),
@@ -468,7 +592,7 @@ class NeuroMCEnergyProfiler:
             core_type="fp_soma",
             process_key="with_nothing",
             loop_dims=loop_dims,
-            input_precision_bits=1 if _is_spike(x) else 16,
+            input_precision_bits=1,
             weight_precision_bits=16,
             output_precision_bits=16,
             input_numel=_tensor_numel(x),
@@ -480,16 +604,19 @@ class NeuroMCEnergyProfiler:
             source="module",
         )
 
-    def _make_linear_forward_fragment(self, stage: str, module: nn.Linear, x, out) -> _Fragment:
+    def _make_linear_forward_fragment(
+        self, stage: str, module: nn.Linear, x, out
+    ) -> _Fragment:
         b_type, t_type = self._stage_position(stage)
         if not _is_spike(x):
             raise ValueError(
                 "Exact NeuroMC runtime only supports spike/binary forward inputs "
                 f"for {module.__class__.__name__}; got ANN-like dense activations."
             )
-        batch = int(x.shape[0]) if x.ndim > 1 else 1
+        t, batch, _, _ = _tensor_layout(x, module)
         loop_dims = self._make_loop_dims(
             batch_size=batch,
+            time_steps=t,
             channels_in=int(module.in_features),
             channels_out=int(module.out_features),
             oy=1,
@@ -504,7 +631,7 @@ class NeuroMCEnergyProfiler:
             core_type="fp_soma",
             process_key="with_nothing",
             loop_dims=loop_dims,
-            input_precision_bits=1 if _is_spike(x) else 16,
+            input_precision_bits=1,
             weight_precision_bits=16,
             output_precision_bits=16,
             input_numel=_tensor_numel(x),
@@ -516,11 +643,14 @@ class NeuroMCEnergyProfiler:
             source="module",
         )
 
-    def _make_bn_forward_fragment(self, stage: str, x, out) -> _Fragment:
-        c = _module_channel_count(x)
-        spatial_prod = max(int(x.numel() // (max(int(x.shape[0]), 1) * c)), 1)
+    def _make_bn_forward_fragment(
+        self, stage: str, module: nn.Module | None, x, out
+    ) -> _Fragment:
+        t, batch, c, spatial = _tensor_layout(x, module)
+        spatial_prod = max(_prod(spatial), 1) if spatial else 1
         loop_dims = self._make_loop_dims(
-            batch_size=int(x.shape[0]) if x.ndim > 1 else 1,
+            batch_size=batch,
+            time_steps=t,
             channels_in=c,
             channels_out=c,
             oy=spatial_prod,
@@ -540,18 +670,26 @@ class NeuroMCEnergyProfiler:
             output_precision_bits=16,
             input_numel=_tensor_numel(x),
             weight_numel=c * 2,
-            output_numel=_tensor_numel(out[0] if isinstance(out, (tuple, list)) else out),
+            output_numel=_tensor_numel(
+                out[0] if isinstance(out, (tuple, list)) else out
+            ),
             mac_count=0,
             source="module",
         )
 
-    def _make_soma_forward_fragment(self, stage: str, x, out) -> _Fragment:
+    def _make_soma_forward_fragment(
+        self, stage: str, module: nn.Module | None, x, out
+    ) -> _Fragment:
         b_type, t_type = self._stage_position(stage)
         out_tensor = out[0] if isinstance(out, (tuple, list)) else out
-        c = _module_channel_count(out_tensor) if torch.is_tensor(out_tensor) else 1
-        spatial_prod = max(int(_tensor_numel(out_tensor) // max(c, 1)), 1)
+        if torch.is_tensor(out_tensor):
+            t, batch, c, spatial = _tensor_layout(out_tensor, module)
+            spatial_prod = max(_prod(spatial), 1) if spatial else 1
+        else:
+            t, batch, c, spatial_prod = 1, 1, 1, 1
         loop_dims = self._make_loop_dims(
-            batch_size=1,
+            batch_size=batch,
+            time_steps=t,
             channels_in=c,
             channels_out=c,
             oy=spatial_prod,
@@ -579,17 +717,28 @@ class NeuroMCEnergyProfiler:
         )
 
     def _make_conv_backward_fragments(self, stage, module, grad_input, grad_output):
-        grad_out = grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
-        spatial = tuple(grad_out.shape[2:]) if grad_out.ndim > 2 else (1, 1)
+        grad_out = (
+            grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
+        )
+        t, batch, _, spatial = _tensor_layout(grad_out, module)
+        spatial = spatial if len(spatial) > 0 else (1, 1)
         if len(spatial) == 1:
             spatial = (spatial[0], 1)
-        kernel = tuple(module.kernel_size) if isinstance(module.kernel_size, tuple) else (module.kernel_size,)
+        kernel = (
+            tuple(module.kernel_size)
+            if isinstance(module.kernel_size, tuple)
+            else (module.kernel_size,)
+        )
         if len(kernel) == 1:
             kernel = (kernel[0], 1)
-        batch = int(grad_out.shape[0])
-        grad_in = grad_input[0] if isinstance(grad_input, (tuple, list)) and grad_input else None
+        grad_in = (
+            grad_input[0]
+            if isinstance(grad_input, (tuple, list)) and grad_input
+            else None
+        )
         base_loop = self._make_loop_dims(
             batch_size=batch,
+            time_steps=t,
             channels_in=int(module.in_channels),
             channels_out=int(module.out_channels),
             oy=int(spatial[0]),
@@ -631,7 +780,9 @@ class NeuroMCEnergyProfiler:
                     else 16,
                     weight_precision_bits=16,
                     output_precision_bits=16,
-                    input_numel=_tensor_numel(getattr(module, "_neuromc_last_input", None)),
+                    input_numel=_tensor_numel(
+                        getattr(module, "_neuromc_last_input", None)
+                    ),
                     weight_numel=_tensor_numel(grad_out),
                     output_numel=_tensor_numel(module.weight),
                     mac_count=self._mac_count(base_loop),
@@ -641,10 +792,13 @@ class NeuroMCEnergyProfiler:
         return fragments
 
     def _make_linear_backward_fragments(self, stage, module, grad_input, grad_output):
-        grad_out = grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
-        batch = int(grad_out.shape[0]) if grad_out.ndim > 1 else 1
+        grad_out = (
+            grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
+        )
+        t, batch, _, _ = _tensor_layout(grad_out, module)
         loop_dims = self._make_loop_dims(
             batch_size=batch,
+            time_steps=t,
             channels_in=int(module.in_features),
             channels_out=int(module.out_features),
             oy=1,
@@ -652,7 +806,11 @@ class NeuroMCEnergyProfiler:
             fy=1,
             fx=1,
         )
-        grad_in = grad_input[0] if isinstance(grad_input, (tuple, list)) and grad_input else None
+        grad_in = (
+            grad_input[0]
+            if isinstance(grad_input, (tuple, list)) and grad_input
+            else None
+        )
         fragments = []
         if torch.is_tensor(grad_in):
             fragments.append(
@@ -687,7 +845,9 @@ class NeuroMCEnergyProfiler:
                     else 16,
                     weight_precision_bits=16,
                     output_precision_bits=16,
-                    input_numel=_tensor_numel(getattr(module, "_neuromc_last_input", None)),
+                    input_numel=_tensor_numel(
+                        getattr(module, "_neuromc_last_input", None)
+                    ),
                     weight_numel=_tensor_numel(grad_out),
                     output_numel=_tensor_numel(module.weight),
                     mac_count=self._mac_count(loop_dims),
@@ -696,15 +856,21 @@ class NeuroMCEnergyProfiler:
             )
         return fragments
 
-    def _make_bn_backward_fragment(self, stage, grad_input, grad_output):
-        grad_out = grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
-        grad_in = grad_input[0] if isinstance(grad_input, (tuple, list)) and grad_input else grad_out
-        batch = int(grad_out.shape[0]) if grad_out.ndim > 1 else 1
-        c = _module_channel_count(grad_out)
-        spatial_prod = max(int(_tensor_numel(grad_out) // max(batch * c, 1)), 1)
+    def _make_bn_backward_fragment(self, stage, module, grad_input, grad_output):
+        grad_out = (
+            grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
+        )
+        grad_in = (
+            grad_input[0]
+            if isinstance(grad_input, (tuple, list)) and grad_input
+            else grad_out
+        )
+        t, batch, c, spatial = _tensor_layout(grad_out, module)
+        spatial_prod = max(_prod(spatial), 1) if spatial else 1
         conv_type = self._stage_conv_type(stage)
         loop_dims = self._make_loop_dims(
             batch_size=batch,
+            time_steps=t,
             channels_in=c,
             channels_out=c,
             oy=spatial_prod,
@@ -730,14 +896,21 @@ class NeuroMCEnergyProfiler:
             source="module",
         )
 
-    def _make_soma_backward_fragment(self, stage, grad_input, grad_output):
-        grad_in = grad_input[0] if isinstance(grad_input, (tuple, list)) and grad_input else None
-        grad_out = grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
+    def _make_soma_backward_fragment(self, stage, module, grad_input, grad_output):
+        grad_in = (
+            grad_input[0]
+            if isinstance(grad_input, (tuple, list)) and grad_input
+            else None
+        )
+        grad_out = (
+            grad_output[0] if isinstance(grad_output, (tuple, list)) else grad_output
+        )
         tensor = grad_in if torch.is_tensor(grad_in) else grad_out
-        c = _module_channel_count(tensor)
-        spatial_prod = max(int(_tensor_numel(tensor) // max(c, 1)), 1)
+        t, batch, c, spatial = _tensor_layout(tensor, module)
+        spatial_prod = max(_prod(spatial), 1) if spatial else 1
         loop_dims = self._make_loop_dims(
-            batch_size=1,
+            batch_size=batch,
+            time_steps=t,
             channels_in=c,
             channels_out=c,
             oy=spatial_prod,
@@ -775,7 +948,9 @@ class NeuroMCEnergyProfiler:
         )
 
     def _matches_trainable_param_shape(self, out: Any) -> bool:
-        if self._bound_model is None or (not torch.is_tensor(out)):
+        if self._bound_model is None or not (
+            torch.is_tensor(out) or isinstance(out, _TraceTensor)
+        ):
             return False
         out_shape = tuple(out.shape)
         for p in self._bound_model.parameters():
@@ -784,7 +959,7 @@ class NeuroMCEnergyProfiler:
         return False
 
     def _gemm_backward_fragment_kind(
-        self, x: torch.Tensor, y: torch.Tensor, out: Any
+        self, x: torch.Tensor | _TraceTensor, y: torch.Tensor | _TraceTensor, out: Any
     ) -> str | None:
         x_req = bool(x.requires_grad)
         y_req = bool(y.requires_grad)
@@ -796,16 +971,24 @@ class NeuroMCEnergyProfiler:
             return "wg"
         return None
 
-    def _fallback_fragments_from_trace(self) -> list[_Fragment]:
+    def _fallback_fragments_from_trace(
+        self, *, supplemental_only: bool = False
+    ) -> list[_Fragment]:
         fragments: list[_Fragment] = []
         for event in self._trace_events:
             op = event.op_name
+            b_type, t_type = self._stage_position(event.stage)
+            if supplemental_only and op not in {
+                "aten.mm.default",
+                "aten.bmm.default",
+            }:
+                continue
             if op in _AUXILIARY_ATEN_OPS or op.startswith(_IGNORED_OP_PREFIXES):
                 continue
             if op == "aten.convolution.default" and event.phase == "forward":
                 x, w = event.args[:2]
                 out = event.out
-                if not _is_spike(x):
+                if not _is_spike_like(x):
                     raise ValueError(
                         "Exact NeuroMC runtime only supports spike/binary forward inputs "
                         "for Conv-like ops; got ANN-like dense activations."
@@ -841,13 +1024,15 @@ class NeuroMCEnergyProfiler:
                         core_type="fp_soma",
                         process_key="with_nothing",
                         loop_dims=loop_dims,
-                        input_precision_bits=1 if _is_spike(x) else 16,
+                        input_precision_bits=1,
                         weight_precision_bits=16,
                         output_precision_bits=16,
                         input_numel=_tensor_numel(x),
                         weight_numel=_tensor_numel(w),
                         output_numel=_tensor_numel(out),
                         mac_count=self._mac_count(loop_dims),
+                        b_type=b_type,
+                        t_type=t_type,
                     )
                 )
             elif op in {"aten.addmm.default", "aten.mm.default", "aten.bmm.default"}:
@@ -855,7 +1040,7 @@ class NeuroMCEnergyProfiler:
                 y = event.args[-1]
                 out = event.out
                 if event.phase == "forward":
-                    if not _is_spike(x):
+                    if not _is_spike_like(x):
                         raise ValueError(
                             "Exact NeuroMC runtime only supports spike/binary forward inputs "
                             "for GEMM-like ops; got ANN-like dense activations."
@@ -882,15 +1067,15 @@ class NeuroMCEnergyProfiler:
                             core_type="fp_soma",
                             process_key="with_nothing",
                             loop_dims=loop_dims,
-                            input_precision_bits=1 if _is_spike(x) else 16,
+                            input_precision_bits=1,
                             weight_precision_bits=16,
                             output_precision_bits=16,
                             input_numel=_tensor_numel(x),
                             weight_numel=_tensor_numel(y),
                             output_numel=_tensor_numel(out),
                             mac_count=self._mac_count(loop_dims),
-                            b_type=0,
-                            t_type=0,
+                            b_type=b_type,
+                            t_type=t_type,
                         )
                     )
                 else:
@@ -921,20 +1106,22 @@ class NeuroMCEnergyProfiler:
                                 core_type="wg",
                                 process_key="with_nothing",
                                 loop_dims=loop_dims,
-                                input_precision_bits=1 if _is_spike(x) else 16,
+                                input_precision_bits=1 if _is_spike_like(x) else 16,
                                 weight_precision_bits=16,
                                 output_precision_bits=16,
                                 input_numel=_tensor_numel(x),
                                 weight_numel=_tensor_numel(y),
                                 output_numel=_tensor_numel(out),
                                 mac_count=self._mac_count(loop_dims),
-                                b_type=0,
-                                t_type=0,
+                                b_type=b_type,
+                                t_type=t_type,
                             )
                         )
                     else:
                         batch = (
-                            int(x.shape[0]) if x.ndim == 2 else int(x.shape[0] * x.shape[1])
+                            int(x.shape[0])
+                            if x.ndim == 2
+                            else int(x.shape[0] * x.shape[1])
                         )
                         k = int(x.shape[-1])
                         n = int(y.shape[-1])
@@ -962,16 +1149,24 @@ class NeuroMCEnergyProfiler:
                                 weight_numel=_tensor_numel(y),
                                 output_numel=_tensor_numel(out),
                                 mac_count=self._mac_count(loop_dims),
-                                b_type=0,
-                                t_type=0,
+                                b_type=b_type,
+                                t_type=t_type,
                             )
                         )
             elif op == "aten.native_batch_norm.default" and event.phase == "forward":
                 x = event.args[0]
-                out = event.out[0] if isinstance(event.out, (tuple, list)) else event.out
-                fragments.append(self._make_bn_forward_fragment(event.stage, x, out))
+                out = (
+                    event.out[0] if isinstance(event.out, (tuple, list)) else event.out
+                )
+                fragments.append(
+                    self._make_bn_forward_fragment(event.stage, None, x, out)
+                )
             elif op == "aten.native_batch_norm_backward.default":
-                fragments.append(self._make_bn_backward_fragment(event.stage, event.args, event.out))
+                fragments.append(
+                    self._make_bn_backward_fragment(
+                        event.stage, None, event.args, event.out
+                    )
+                )
         return fragments
 
     def _unsupported_ops(self) -> list[str]:
@@ -997,10 +1192,14 @@ class NeuroMCEnergyProfiler:
         counts = {"mux": 0, "add": 0, "mul": 0, "comp": 0, "sqrt": 0}
         ld = fragment.loop_dims
         oyoxkbt = ld["OY"] * ld["OX"] * ld["K"] * ld["B"] * ld["T"]
-        kt = ld["K"] * ld["T"]
         oyoxcbt = ld["OY"] * ld["OX"] * ld["C"] * ld["B"] * ld["T"]
         ct = ld["C"] * ld["T"]
-        fyfxkc = ld["FY"] * ld["FX"] * ld["K"] * ld["C"]
+        if fragment.process_key == "with_opt":
+            kt = ld["K"]
+            fyfxkc = ld["FX"] * ld["FY"] * ld["C"]
+        else:
+            kt = ld["K"] * ld["T"]
+            fyfxkc = ld["FY"] * ld["FX"] * ld["K"] * ld["C"]
 
         if fragment.process_key == "with_sg":
             if fragment.phase == "forward":
@@ -1062,14 +1261,17 @@ class NeuroMCEnergyProfiler:
         ):
             return
         totals[level][direction] += bits
-        energy[level][direction] += (bits / precision_bits) * self._memory_energy_per_element(
-            spec, precision_bits, read
-        )
+        energy[level][direction] += (
+            bits / precision_bits
+        ) * self._memory_energy_per_element(spec, precision_bits, read)
 
     def _base_memory_for_fragment(self, fragment: _Fragment):
         totals = defaultdict(lambda: defaultdict(int))
         energy = defaultdict(lambda: defaultdict(float))
-        if fragment.core_type not in {"fp_soma", "bp_grad", "wg"} or fragment.mac_count == 0:
+        if (
+            fragment.core_type not in {"fp_soma", "bp_grad", "wg"}
+            or fragment.mac_count == 0
+        ):
             return totals, energy
 
         cfg = self.memory_config.memory_instances
@@ -1099,15 +1301,28 @@ class NeuroMCEnergyProfiler:
         i2_bits = fragment.weight_numel * fragment.weight_precision_bits
         o_bits = fragment.output_numel * fragment.output_precision_bits
         reuse_weight = (
-            (fragment.b_type > 0 or fragment.t_type > 0)
-            and i2_bits <= sram_i2.size_bits
-        )
+            fragment.b_type > 0 or fragment.t_type > 0
+        ) and i2_bits <= sram_i2.size_bits
 
         self._accumulate_memory(
-            totals, energy, "reg", "rh2l", i1_bits, reg_i1, fragment.input_precision_bits, True
+            totals,
+            energy,
+            "reg",
+            "rh2l",
+            i1_bits,
+            reg_i1,
+            fragment.input_precision_bits,
+            True,
         )
         self._accumulate_memory(
-            totals, energy, "sram", "rh2l", i1_bits, sram_i1, fragment.input_precision_bits, True
+            totals,
+            energy,
+            "sram",
+            "rh2l",
+            i1_bits,
+            sram_i1,
+            fragment.input_precision_bits,
+            True,
         )
         if not reuse_weight:
             self._accumulate_memory(
@@ -1131,10 +1346,24 @@ class NeuroMCEnergyProfiler:
                 True,
             )
         self._accumulate_memory(
-            totals, energy, "reg", "wl2h", o_bits, reg_o, fragment.output_precision_bits, False
+            totals,
+            energy,
+            "reg",
+            "wl2h",
+            o_bits,
+            reg_o,
+            fragment.output_precision_bits,
+            False,
         )
         self._accumulate_memory(
-            totals, energy, "sram", "wl2h", o_bits, sram_o, fragment.output_precision_bits, False
+            totals,
+            energy,
+            "sram",
+            "wl2h",
+            o_bits,
+            sram_o,
+            fragment.output_precision_bits,
+            False,
         )
         return totals, energy
 
@@ -1148,10 +1377,14 @@ class NeuroMCEnergyProfiler:
         ld = fragment.loop_dims
         scalar_counts = {
             "OYOXKBT": ld["OY"] * ld["OX"] * ld["K"] * ld["B"] * ld["T"],
-            "KT": ld["K"] * ld["T"],
+            "KT": ld["K"] if fragment.process_key == "with_opt" else ld["K"] * ld["T"],
             "OYOXCBT": ld["OY"] * ld["OX"] * ld["C"] * ld["B"] * ld["T"],
             "CT": ld["C"] * ld["T"],
-            "FYFXKC": ld["FY"] * ld["FX"] * ld["K"] * ld["C"],
+            "FYFXKC": (
+                ld["FY"] * ld["FX"] * ld["C"]
+                if fragment.process_key == "with_opt"
+                else ld["FY"] * ld["FX"] * ld["K"] * ld["C"]
+            ),
         }
         variables: dict[str, tuple[str, int, str, str]] = {}
         if fragment.process_key == "with_sg" and fragment.phase == "forward":
@@ -1222,10 +1455,24 @@ class NeuroMCEnergyProfiler:
             total_bits = scalar_counts[count_key] * bits_per_elem
             sram_spec = cfg[sram_name]
             self._accumulate_memory(
-                totals, energy, "sram", "rh2l", total_bits, sram_spec, bits_per_elem, True
+                totals,
+                energy,
+                "sram",
+                "rh2l",
+                total_bits,
+                sram_spec,
+                bits_per_elem,
+                True,
             )
             self._accumulate_memory(
-                totals, energy, "sram", "wl2h", total_bits, sram_spec, bits_per_elem, False
+                totals,
+                energy,
+                "sram",
+                "wl2h",
+                total_bits,
+                sram_spec,
+                bits_per_elem,
+                False,
             )
         return totals, energy
 
@@ -1277,8 +1524,22 @@ class NeuroMCEnergyProfiler:
 
     def get_report(self) -> NeuroMCRuntimeEnergyReport:
         fragments = list(self._fragments)
-        if not fragments:
-            fragments = self._fallback_fragments_from_trace()
+        trace_fragments = self._fallback_fragments_from_trace(
+            supplemental_only=bool(fragments)
+        )
+        if fragments:
+            existing_signatures = {
+                _fragment_signature(fragment)
+                for fragment in fragments
+                if fragment.source == "module"
+            }
+            fragments.extend(
+                fragment
+                for fragment in trace_fragments
+                if _fragment_signature(fragment) not in existing_signatures
+            )
+        else:
+            fragments = trace_fragments
 
         unsupported = self._unsupported_ops()
         if unsupported:
@@ -1323,9 +1584,15 @@ class NeuroMCEnergyProfiler:
                 sum(direction_map.values()) for direction_map in base_energy.values()
             )
             extra_memory_total = sum(
-                sum(direction_map.values()) for direction_map in extra_mem_energy.values()
+                sum(direction_map.values())
+                for direction_map in extra_mem_energy.values()
             )
-            total = mac_energy + extra_compute_energy + base_energy_total + extra_memory_total
+            total = (
+                mac_energy
+                + extra_compute_energy
+                + base_energy_total
+                + extra_memory_total
+            )
 
             energy_mac += mac_energy
             energy_base_memory += base_energy_total
@@ -1376,7 +1643,10 @@ class NeuroMCEnergyProfiler:
 
         primitive_totals = {
             primitive: int(
-                sum(stage_counts.get(primitive, 0) for stage_counts in primitive_by_stage.values())
+                sum(
+                    stage_counts.get(primitive, 0)
+                    for stage_counts in primitive_by_stage.values()
+                )
             )
             for primitive in ("mux", "add", "mul", "comp", "sqrt")
         }
@@ -1421,7 +1691,9 @@ class NeuroMCEnergyProfiler:
                 for level, direction_map in energy_by_memory_level_dir.items()
             },
             counts_by_core_type={k: dict(v) for k, v in counts_by_core_type.items()},
-            counts_by_process_key={k: dict(v) for k, v in counts_by_process_key.items()},
+            counts_by_process_key={
+                k: dict(v) for k, v in counts_by_process_key.items()
+            },
             mapping_summary=mapping_summary,
         )
 
