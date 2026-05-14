@@ -4,6 +4,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass
 import re
+import warnings
 from typing import Any, Callable
 
 import torch
@@ -12,6 +13,7 @@ from torch.overrides import resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from .config import MemoryHierarchyConfig, MemoryInstanceSpec
+from .utils import _is_spike, _prod
 
 __all__ = [
     "MemoryHierarchyConfig",
@@ -172,24 +174,6 @@ class _Fragment:
     t_type: int = 0
     source: str = "trace"
 
-
-def _prod(values) -> int:
-    p = 1
-    for v in values:
-        p *= int(v)
-    return p
-
-
-def _is_spike_tensor(x: Any) -> bool:
-    if not torch.is_tensor(x):
-        return False
-    if x.dtype == torch.bool:
-        return True
-    if x.numel() == 0:
-        return False
-    return bool(x.eq(0).logical_or(x.eq(1)).all().item())
-
-
 def _tensor_numel(x: Any) -> int:
     if not torch.is_tensor(x):
         return 0
@@ -314,15 +298,18 @@ class NeuroMCEnergyProfiler:
 
     def __exit__(self, exc_type, exc, tb):
         self._active = False
-        for handle in self._hook_handles:
-            handle.remove()
-        self._hook_handles.clear()
-        if self._bound_model is not None:
-            for module in self._bound_model.modules():
-                if hasattr(module, "_neuromc_last_input"):
-                    delattr(module, "_neuromc_last_input")
-        self._model_bound = False
-        return self._trace_mode.__exit__(exc_type, exc, tb)
+        try:
+            for handle in self._hook_handles:
+                handle.remove()
+            self._hook_handles.clear()
+            if self._bound_model is not None:
+                for module in self._bound_model.modules():
+                    if hasattr(module, "_neuromc_last_input"):
+                        delattr(module, "_neuromc_last_input")
+            self._model_bound = False
+            self._bound_model = None
+        finally:
+            return self._trace_mode.__exit__(exc_type, exc, tb)
 
     @contextmanager
     def stage(self, name: str):
@@ -454,6 +441,11 @@ class NeuroMCEnergyProfiler:
 
     def _make_conv_forward_fragment(self, stage: str, module: nn.Module, x, out) -> _Fragment:
         b_type, t_type = self._stage_position(stage)
+        if not _is_spike(x):
+            raise ValueError(
+                "Exact NeuroMC runtime only supports spike/binary forward inputs "
+                f"for {module.__class__.__name__}; got ANN-like dense activations."
+            )
         spatial = tuple(out.shape[2:]) if out.ndim > 2 else (1, 1)
         if len(spatial) == 1:
             spatial = (spatial[0], 1)
@@ -476,7 +468,7 @@ class NeuroMCEnergyProfiler:
             core_type="fp_soma",
             process_key="with_nothing",
             loop_dims=loop_dims,
-            input_precision_bits=1 if _is_spike_tensor(x) else 16,
+            input_precision_bits=1 if _is_spike(x) else 16,
             weight_precision_bits=16,
             output_precision_bits=16,
             input_numel=_tensor_numel(x),
@@ -490,6 +482,11 @@ class NeuroMCEnergyProfiler:
 
     def _make_linear_forward_fragment(self, stage: str, module: nn.Linear, x, out) -> _Fragment:
         b_type, t_type = self._stage_position(stage)
+        if not _is_spike(x):
+            raise ValueError(
+                "Exact NeuroMC runtime only supports spike/binary forward inputs "
+                f"for {module.__class__.__name__}; got ANN-like dense activations."
+            )
         batch = int(x.shape[0]) if x.ndim > 1 else 1
         loop_dims = self._make_loop_dims(
             batch_size=batch,
@@ -507,7 +504,7 @@ class NeuroMCEnergyProfiler:
             core_type="fp_soma",
             process_key="with_nothing",
             loop_dims=loop_dims,
-            input_precision_bits=1 if _is_spike_tensor(x) else 16,
+            input_precision_bits=1 if _is_spike(x) else 16,
             weight_precision_bits=16,
             output_precision_bits=16,
             input_numel=_tensor_numel(x),
@@ -630,7 +627,7 @@ class NeuroMCEnergyProfiler:
                     process_key="with_nothing",
                     loop_dims=base_loop,
                     input_precision_bits=1
-                    if _is_spike_tensor(getattr(module, "_neuromc_last_input", None))
+                    if _is_spike(getattr(module, "_neuromc_last_input", None))
                     else 16,
                     weight_precision_bits=16,
                     output_precision_bits=16,
@@ -686,7 +683,7 @@ class NeuroMCEnergyProfiler:
                     process_key="with_nothing",
                     loop_dims=loop_dims,
                     input_precision_bits=1
-                    if _is_spike_tensor(getattr(module, "_neuromc_last_input", None))
+                    if _is_spike(getattr(module, "_neuromc_last_input", None))
                     else 16,
                     weight_precision_bits=16,
                     output_precision_bits=16,
@@ -839,7 +836,7 @@ class NeuroMCEnergyProfiler:
                         core_type="fp_soma",
                         process_key="with_nothing",
                         loop_dims=loop_dims,
-                        input_precision_bits=1 if _is_spike_tensor(x) else 16,
+                        input_precision_bits=1 if _is_spike(x) else 16,
                         weight_precision_bits=16,
                         output_precision_bits=16,
                         input_numel=_tensor_numel(x),
@@ -853,6 +850,11 @@ class NeuroMCEnergyProfiler:
                 y = event.args[-1]
                 out = event.out
                 if event.phase == "forward":
+                    if not _is_spike(x):
+                        raise ValueError(
+                            "Exact NeuroMC runtime only supports spike/binary forward inputs "
+                            "for GEMM-like ops; got ANN-like dense activations."
+                        )
                     batch = (
                         int(x.shape[0]) if x.ndim == 2 else int(x.shape[0] * x.shape[1])
                     )
@@ -875,7 +877,7 @@ class NeuroMCEnergyProfiler:
                             core_type="fp_soma",
                             process_key="with_nothing",
                             loop_dims=loop_dims,
-                            input_precision_bits=1 if _is_spike_tensor(x) else 16,
+                            input_precision_bits=1 if _is_spike(x) else 16,
                             weight_precision_bits=16,
                             output_precision_bits=16,
                             input_numel=_tensor_numel(x),
@@ -914,7 +916,7 @@ class NeuroMCEnergyProfiler:
                                 core_type="wg",
                                 process_key="with_nothing",
                                 loop_dims=loop_dims,
-                                input_precision_bits=1 if _is_spike_tensor(x) else 16,
+                                input_precision_bits=1 if _is_spike(x) else 16,
                                 weight_precision_bits=16,
                                 output_precision_bits=16,
                                 input_numel=_tensor_numel(x),
@@ -1442,11 +1444,28 @@ def estimate_neuromc_runtime_energy(
     loss_fn: Callable | None = None,
     optimizer: torch.optim.Optimizer | None = None,
     core_type: str = "fp_soma",
+    op_cost_pj: dict[str, float] | None = None,
+    memory_cost_pj_per_bit: dict[str, float] | None = None,
+    memory_level_weights: dict[str, float] | None = None,
+    memory_model: str | None = None,
     memory_config: MemoryHierarchyConfig | None = None,
     strict: bool = False,
     verbose: bool = False,
     extra_ignore_modules: list[nn.Module] | None = None,
 ) -> NeuroMCRuntimeEnergyReport:
+    if (
+        op_cost_pj is not None
+        or memory_cost_pj_per_bit is not None
+        or memory_level_weights is not None
+        or memory_model is not None
+    ):
+        warnings.warn(
+            "Legacy kwargs (op_cost_pj, memory_cost_pj_per_bit, "
+            "memory_level_weights, memory_model) are deprecated and ignored "
+            "by exact NeuroMC runtime profiling.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
     profiler = NeuroMCEnergyProfiler(
         core_type=core_type,
         memory_config=(memory_config or MemoryHierarchyConfig.neuromc_like_v1()).copy(),

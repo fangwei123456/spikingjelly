@@ -71,7 +71,7 @@ def _is_spike(x: torch.Tensor | None) -> bool:
         return True
     if x.numel() == 0:
         return False
-    return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
+    return bool(x.eq(0).logical_or(x.eq(1)).all().item())
 
 
 def _spike_nnz(x: torch.Tensor | None) -> int | None:
@@ -81,7 +81,7 @@ def _spike_nnz(x: torch.Tensor | None) -> int | None:
         return int(x.count_nonzero().item())
     if x.numel() == 0:
         return None
-    is_binary = bool(x.eq(0).logical_or_(x.eq(1)).all().item())
+    is_binary = bool(x.eq(0).logical_or(x.eq(1)).all().item())
     if not is_binary:
         return None
     return int(x.count_nonzero().item())

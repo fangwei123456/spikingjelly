@@ -8,12 +8,12 @@ from spikingjelly.activation_based.op_counter.memory_residency import (
     MemoryResidencySimulator,
 )
 from spikingjelly.activation_based.op_counter.neuromc.add_counter import NeuroMCAddCounter
-from spikingjelly.activation_based.op_counter.neuromc.utils import _spike_nnz
+from spikingjelly.activation_based.op_counter.neuromc.utils import _is_spike, _spike_nnz
 
 
 def test_neuromc_exact_linear_report_fields():
     model = nn.Linear(8, 4, bias=False)
-    x = torch.randn(3, 8)
+    x = (torch.rand(3, 8) > 0.6).float()
 
     report = op_counter.estimate_neuromc_runtime_energy(model, x)
 
@@ -41,7 +41,7 @@ def test_neuromc_exact_ifnode_supports_sg_breakdown():
 
 def test_neuromc_exact_batchnorm_supports_bn_breakdown():
     model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8))
-    x = torch.randn(4, 8)
+    x = (torch.rand(4, 8) > 0.5).float()
 
     report = op_counter.estimate_neuromc_runtime_energy(model, x)
 
@@ -91,7 +91,7 @@ def test_neuromc_exact_sgd_optimizer_is_rejected():
     model = nn.Linear(4, 2)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     loss_fn = nn.MSELoss()
-    x = torch.randn(2, 4)
+    x = (torch.rand(2, 4) > 0.5).float()
     target = torch.randn(2, 2)
 
     with pytest.raises(ValueError, match="Adam/AdamW"):
@@ -122,7 +122,7 @@ def test_neuromc_exact_mixed_supported_and_unsupported_ops_still_raise():
             return torch.tanh(self.linear(x))
 
     model = MixedModel()
-    x = torch.randn(4, 8)
+    x = (torch.rand(4, 8) > 0.5).float()
 
     with pytest.raises(ValueError, match="does not support"):
         op_counter.estimate_neuromc_runtime_energy(model, x)
@@ -131,7 +131,7 @@ def test_neuromc_exact_mixed_supported_and_unsupported_ops_still_raise():
 def test_neuromc_exact_frozen_linear_does_not_count_wg():
     model = nn.Linear(4, 3, bias=False)
     model.weight.requires_grad_(False)
-    x = torch.randn(2, 4, requires_grad=True)
+    x = (torch.rand(2, 4) > 0.5).float().requires_grad_()
     target = torch.randn(2, 3)
     loss_fn = nn.MSELoss()
 
@@ -184,10 +184,10 @@ def test_neuromc_exact_b_type_reuse_hint_reduces_later_forward_energy():
 
 
 def test_neuromc_exact_stage_conv_type_controls_bn_backward_counts():
-    model = nn.Sequential(nn.BatchNorm1d(8), nn.Linear(8, 4))
+    model = nn.BatchNorm1d(8)
     loss_fn = nn.MSELoss()
     x = torch.randn(3, 8, requires_grad=True)
-    target = torch.randn(3, 4)
+    target = torch.randn(3, 8)
 
     def run(stage_name: str):
         model.zero_grad(set_to_none=True)
@@ -212,12 +212,12 @@ def test_neuromc_exact_stage_conv_type_controls_bn_backward_counts():
 
 
 def test_neuromc_exact_bn_backward_counts_scale_with_batch():
-    model = nn.Sequential(nn.BatchNorm2d(8), nn.Flatten(), nn.Linear(32, 4))
+    model = nn.BatchNorm2d(8)
     loss_fn = nn.MSELoss()
 
     def run(batch_size: int):
         x = torch.randn(batch_size, 8, 2, 2, requires_grad=True)
-        target = torch.randn(batch_size, 4)
+        target = torch.randn(batch_size, 8, 2, 2)
         model.zero_grad(set_to_none=True)
         with op_counter.NeuroMCEnergyProfiler() as profiler:
             profiler.bind_model(model)
@@ -278,12 +278,13 @@ def test_neuromc_base_counter_unknown_op_returns_zero():
 
 def test_neuromc_spike_nnz_empty_tensor_returns_none():
     x = torch.empty(0)
+    assert _is_spike(x) is False
     assert _spike_nnz(x) is None
 
 
 def test_neuromc_profiler_cleans_last_input_attribute():
     model = nn.Linear(4, 3)
-    x = torch.randn(2, 4)
+    x = (torch.rand(2, 4) > 0.5).float()
     with op_counter.NeuroMCEnergyProfiler() as profiler:
         profiler.bind_model(model)
         with profiler.stage("forward"):
@@ -296,6 +297,13 @@ def test_neuromc_exact_conv3d_is_rejected():
     model = nn.Conv3d(2, 4, kernel_size=3, padding=1)
     x = torch.randn(1, 2, 4, 4, 4)
     with pytest.raises(ValueError, match="Conv3d"):
+        op_counter.estimate_neuromc_runtime_energy(model, x)
+
+
+def test_neuromc_exact_ann_forward_input_is_rejected():
+    model = nn.Linear(8, 4, bias=False)
+    x = torch.randn(3, 8)
+    with pytest.raises(ValueError, match="ANN-like dense activations"):
         op_counter.estimate_neuromc_runtime_energy(model, x)
 
 

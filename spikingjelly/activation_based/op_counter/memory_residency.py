@@ -64,12 +64,6 @@ def _infer_stage(func, args, kwargs, out) -> str:
 
     return "forward"
 
-
-def _extract_tensors(tree: Any) -> list[torch.Tensor]:
-    flat, _ = tree_flatten(tree)
-    return [x for x in flat if torch.is_tensor(x)]
-
-
 def _access_mm(args, kwargs, out):
     x, y = args[:2]
     return [x, y], [out]
@@ -112,7 +106,7 @@ def _access_convolution_backward(args, kwargs, out):
     writes: list[torch.Tensor] = []
 
     if not isinstance(out, (tuple, list)) or len(out) < 3:
-        return reads, _extract_tensors(out)
+        return reads, _collect_tensors(out)
 
     if output_mask[0]:
         reads.append(w)
@@ -142,7 +136,7 @@ def _access_native_batch_norm(args, kwargs, out):
 
 def _access_native_batch_norm_backward(args, kwargs, out):
     reads = [x for x in args[:7] if torch.is_tensor(x)]
-    writes = _extract_tensors(out)
+    writes = _collect_tensors(out)
     return reads, writes
 
 
@@ -250,7 +244,6 @@ class MemoryResidencySimulator:
         edge = f"{src}->{dst}"
         self.move_bits_by_edge[edge] += bits
         self.move_bits_by_op[op_name][edge] += bits
-        self._record_level_rw(src, "read_bits", bits, op_name)
         self._record_level_rw(dst, "write_bits", bits, op_name)
 
     def _touch(self, cache: OrderedDict[str, int], key: str):
@@ -278,10 +271,13 @@ class MemoryResidencySimulator:
         ):
             evict_key, evict_bits = self.sram_cache.popitem(last=False)
             self.usage_bits["sram"] -= evict_bits
+            self._record_level_rw("sram", "read_bits", evict_bits, op_name)
             self._record_move("sram", "dram", evict_bits, op_name)
             reg_bits = self.reg_cache.pop(evict_key, None)
             if reg_bits is not None:
                 self.usage_bits["reg"] -= reg_bits
+                self._record_level_rw("reg", "read_bits", reg_bits, op_name)
+                self._record_move("reg", "dram", reg_bits, op_name)
 
         if self.usage_bits["sram"] + bits > self.capacity_bits["sram"]:
             return False
@@ -306,6 +302,7 @@ class MemoryResidencySimulator:
         ):
             evict_key, evict_bits = self.reg_cache.popitem(last=False)
             self.usage_bits["reg"] -= evict_bits
+            self._record_level_rw("reg", "read_bits", evict_bits, op_name)
             inserted = self._insert_sram(evict_key, evict_bits, op_name)
             if inserted:
                 self._record_move("reg", "sram", evict_bits, op_name)
@@ -350,25 +347,33 @@ class MemoryResidencySimulator:
 
         if key in self.sram_cache:
             self._touch(self.sram_cache, key)
-            self._record_level_rw("sram", "read_bits", bits, op_name)
             if self._insert_reg(key, bits, op_name):
+                self._record_level_rw("sram", "read_bits", bits, op_name)
                 self._record_move("sram", "reg", bits, op_name)
                 self._record_level_rw("reg", "read_bits", bits, op_name)
+            else:
+                self._record_level_rw("sram", "read_bits", bits, op_name)
             return
 
-        self._record_level_rw("dram", "read_bits", bits, op_name)
         sram_ok = self._insert_sram(key, bits, op_name)
         if sram_ok:
+            self._record_level_rw("dram", "read_bits", bits, op_name)
             self._record_move("dram", "sram", bits, op_name)
-            self._record_level_rw("sram", "read_bits", bits, op_name)
             if self._insert_reg(key, bits, op_name):
+                self._record_level_rw("sram", "read_bits", bits, op_name)
                 self._record_move("sram", "reg", bits, op_name)
                 self._record_level_rw("reg", "read_bits", bits, op_name)
+            else:
+                self._record_level_rw("sram", "read_bits", bits, op_name)
             return
 
         if self._insert_reg(key, bits, op_name):
+            self._record_level_rw("dram", "read_bits", bits, op_name)
             self._record_move("dram", "reg", bits, op_name)
             self._record_level_rw("reg", "read_bits", bits, op_name)
+            return
+
+        self._record_level_rw("dram", "read_bits", bits, op_name)
 
     def on_tensor_write(self, tensor: torch.Tensor, op_name: str):
         bits = _tensor_bits(tensor)
@@ -383,10 +388,12 @@ class MemoryResidencySimulator:
 
         if key in self.sram_cache:
             self._touch(self.sram_cache, key)
-            self._record_level_rw("sram", "write_bits", bits, op_name)
             if self._insert_reg(key, bits, op_name):
+                self._record_level_rw("sram", "read_bits", bits, op_name)
                 self._record_move("sram", "reg", bits, op_name)
                 self._record_level_rw("reg", "write_bits", bits, op_name)
+            else:
+                self._record_level_rw("sram", "write_bits", bits, op_name)
             return
 
         if self._insert_reg(key, bits, op_name):
