@@ -46,10 +46,10 @@ def set_threshold_margin(
     :type label_one_hot: torch.Tensor
 
     :param eval_threshold: 输出层神经元在测试（推理）时使用的电压阈值
-    :type threshold0: float
+    :type eval_threshold: float
 
     :param threshold0: 输出层神经元在训练时，负样本的电压阈值
-    :type threshold1: float
+    :type threshold0: float
 
     :param threshold1: 输出层神经元在训练时，正样本的电压阈值
     :type threshold1: float
@@ -313,23 +313,23 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
 
     * **代码示例 | Example**
 
-    .. code:: python
+    .. code-block:: python
 
         x = torch.rand([5, 2])
         x[3:].zero_()
         x.requires_grad = True
         y = delay(x, 1)
-        print('x=')
+        print("x=")
         print(x)
-        print('y=')
+        print("y=")
         print(y)
         y.sum().backward()
-        print('x.grad=')
+        print("x.grad=")
         print(x.grad)
 
     Output:
 
-    .. code:: bash
+    .. code-block:: bash
 
         x=
         tensor([[0.1084, 0.5698],
