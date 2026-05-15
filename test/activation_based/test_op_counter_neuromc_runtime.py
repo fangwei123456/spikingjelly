@@ -170,7 +170,7 @@ def test_neuromc_exact_online_learning_optimizer_step_each_time_step():
     with op_counter.NeuroMCEnergyProfiler() as profiler:
         profiler.bind_model(model)
         profiler.bind_optimizer(optimizer)
-        for t, (x, target) in enumerate(zip(xs, targets)):
+        for t, (x, target) in enumerate(zip(xs, targets, strict=True)):
             with profiler.stage(f"t{t}_forward"):
                 out = model(x)
             with profiler.suspend():

@@ -318,10 +318,6 @@ def _optimizer_param_count(fragment: _Fragment) -> int:
     )
 
 
-def _optimizer_count_key(fragment: _Fragment) -> str:
-    return "KT" if fragment.loop_dims["K"] > 0 else "FYFXKC"
-
-
 def _resolve_loss_fn(loss_fn: Callable | None):
     if loss_fn is None:
         return None
@@ -693,7 +689,7 @@ class NeuroMCEnergyProfiler:
     def _make_bn_forward_fragment(
         self, stage: str, module: nn.Module | None, x, out
     ) -> _Fragment:
-        is_spike_input = _is_spike(x)
+        is_spike_input = _is_spike_like(x)
         t, batch, c, spatial = _tensor_layout(x, module)
         spatial_prod = max(_prod(spatial), 1) if spatial else 1
         loop_dims = self._make_loop_dims(
@@ -1176,20 +1172,23 @@ class NeuroMCEnergyProfiler:
                     else:
                         forward_key = (op, _shape_tuple(out), _shape_tuple(x))
                         is_spike_input = False
-                        if gemm_forward_is_spike[forward_key]:
-                            is_spike_input = gemm_forward_is_spike[forward_key].pop()
+                        forward_queue = gemm_forward_is_spike.get(forward_key)
+                        if forward_queue:
+                            is_spike_input = forward_queue.pop()
                         elif op == "aten.addmm.default":
                             alt_key = ("aten.mm.default", _shape_tuple(out), _shape_tuple(x))
-                            if gemm_forward_is_spike[alt_key]:
-                                is_spike_input = gemm_forward_is_spike[alt_key].pop()
+                            alt_queue = gemm_forward_is_spike.get(alt_key)
+                            if alt_queue:
+                                is_spike_input = alt_queue.pop()
                         elif op == "aten.mm.default":
                             alt_key = (
                                 "aten.addmm.default",
                                 _shape_tuple(out),
                                 _shape_tuple(x),
                             )
-                            if gemm_forward_is_spike[alt_key]:
-                                is_spike_input = gemm_forward_is_spike[alt_key].pop()
+                            alt_queue = gemm_forward_is_spike.get(alt_key)
+                            if alt_queue:
+                                is_spike_input = alt_queue.pop()
                         # Missing forward provenance should bias toward the denser,
                         # more expensive path instead of undercounting energy.
                         batch = (
