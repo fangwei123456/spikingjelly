@@ -112,3 +112,26 @@ def test_analytical_energy_cost_config_validates_memory_breakpoints():
         op_counter.AnalyticalEnergyCostConfig(
             memory_breakpoints=((0.0, 0.0), (1.0, 1.0), (1.0, 2.0), (2.0, 3.0))
         )
+
+
+def test_snn_energy_suspend_does_not_contribute_to_lemaire_projection():
+    model = nn.Linear(8, 8, bias=False)
+    profiler = op_counter.AnalyticalEnergyProfiler()
+    profiler.bind_model(model)
+    x = torch.rand(4, 8)
+
+    with profiler:
+        with profiler.stage("forward"):
+            _ = model(x)
+        baseline = profiler.get_report().inference_only_lemaire_compatible
+        with profiler.suspend():
+            _ = model(x)
+
+    report = profiler.get_report().inference_only_lemaire_compatible
+    assert report.available is True
+    assert report.inference_only_E_inout_pj == pytest.approx(
+        baseline.inference_only_E_inout_pj
+    )
+    assert report.inference_only_E_params_pj == pytest.approx(
+        baseline.inference_only_E_params_pj
+    )

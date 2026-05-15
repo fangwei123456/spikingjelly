@@ -429,11 +429,14 @@ class AnalyticalEnergyProfiler:
         if not self._active:
             yield
             return
+        prev_stage = self._current_stage_name
+        self._current_stage_name = None
         self._dispatch_mode.__exit__(None, None, None)
         try:
             yield
         finally:
             self._dispatch_mode.__enter__()
+            self._current_stage_name = prev_stage
 
     @contextmanager
     def stage(self, name: str):
