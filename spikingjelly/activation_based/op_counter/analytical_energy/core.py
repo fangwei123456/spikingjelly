@@ -29,10 +29,12 @@ __all__ = [
     "estimate_analytical_energy",
 ]
 
+_CLIF_BYTES_PER_ACCESS = 4
+
 
 def _tensor_size_bytes(tree: Any) -> int:
     if torch.is_tensor(tree):
-        return int(tree.numel() * tree.element_size())
+        return int(tree.numel()) * _CLIF_BYTES_PER_ACCESS
     if isinstance(tree, (tuple, list)):
         return sum(_tensor_size_bytes(item) for item in tree)
     if isinstance(tree, dict):
@@ -88,7 +90,10 @@ class AnalyticalEnergyCostConfig:
     解析式能耗模型的成本配置。默认采用 Lemaire 风格的加法、乘法与分段存储成本。
 
     ``memory_cost_pj`` 的输入语义是用于插值的 memory 标量，优先应传 buffer-size
-    估计而不是累计访问流量。
+    估计而不是累计访问流量。当前 CLIF 兼容口径采用固定假设：
+    **1 次访存计数 = 1 个 FP32 element = 4 bytes**。该假设对齐
+    Complementary-LIF 原始实现使用的 32-bit float 语境，而不是运行时 tensor 的
+    实际 ``dtype``。
 
     ----
 
@@ -100,7 +105,11 @@ class AnalyticalEnergyCostConfig:
     Lemaire-style add/mul cost table and a piecewise memory cost curve.
 
     ``memory_cost_pj`` expects the interpolation memory scalar, ideally a
-    buffer-size estimate rather than cumulative access traffic.
+    buffer-size estimate rather than cumulative access traffic. In the CLIF-
+    compatible path, a fixed assumption is used:
+    **one memory-access count = one FP32 element = 4 bytes**. This follows the
+    32-bit floating-point setting used by the original Complementary-LIF model,
+    rather than the runtime tensor ``dtype``.
     """
     e_add_pj: float = 0.1
     e_mul_pj: float = 3.1
@@ -277,7 +286,7 @@ class _LemaireForwardTracker:
             )
             param_bytes = 0
             for param in module.parameters(recurse=False):
-                param_bytes += int(param.numel() * param.element_size())
+                param_bytes += int(param.numel()) * _CLIF_BYTES_PER_ACCESS
             self.read_params += param_bytes
             self.read_params_buffer_bytes = max(
                 self.read_params_buffer_bytes, param_bytes
@@ -333,6 +342,8 @@ class _LemaireAddressingEstimator:
 
             if is_binary_tensor(x):
                 spike_num_in = int(x.count_nonzero().item())
+                # For grouped convolution, each input spike only fans out to the
+                # output channels within its own group.
                 out_channels_per_group = (
                     module.out_channels // module.groups
                     if module.groups > 0

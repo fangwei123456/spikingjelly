@@ -15,6 +15,7 @@ from .base import BaseCounter, is_binary_tensor
 __all__ = ["NeuronStateCounter"]
 
 aten = torch.ops.aten
+_CLIF_BYTES_PER_ACCESS = 4
 
 _IGNORED_OP_PREFIXES = (
     "aten.detach",
@@ -136,7 +137,7 @@ def _numel_tree(tree: Any) -> int:
 
 
 def _bytes_tree(tree: Any) -> int:
-    return sum(int(x.numel() * x.element_size()) for x in _collect_tensors(tree))
+    return sum(int(x.numel()) * _CLIF_BYTES_PER_ACCESS for x in _collect_tensors(tree))
 
 
 class NeuronStateCounter(BaseCounter):
@@ -299,10 +300,13 @@ class NeuronStateCounter(BaseCounter):
         out_numel = _numel_tree(out)
         out_bytes = _bytes_tree(out)
         state_buffer_bytes = max(
-            (int(x.numel() * x.element_size()) for x in state_tensors), default=0
+            (int(x.numel()) * _CLIF_BYTES_PER_ACCESS for x in state_tensors),
+            default=0,
         )
         metrics = {
-            "state_reads": sum(int(x.numel() * x.element_size()) for x in state_tensors),
+            "state_reads": sum(
+                int(x.numel()) * _CLIF_BYTES_PER_ACCESS for x in state_tensors
+            ),
             "state_writes": 0,
             "state_adds": 0,
             "state_muls": 0,

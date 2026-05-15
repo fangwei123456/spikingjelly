@@ -168,6 +168,25 @@ def test_snn_energy_binary_conv_produces_lemaire_mac_addr():
     assert profiler._addr_estimator.mac_addr > 0
 
 
+def test_snn_energy_grouped_conv_uses_per_group_fanout_for_addr():
+    model = nn.Conv2d(4, 8, kernel_size=3, bias=False, groups=2)
+    x = torch.zeros(1, 4, 5, 5)
+    x[:, 0, 1, 1] = 1.0
+    x[:, 3, 2, 2] = 1.0
+
+    profiler = op_counter.AnalyticalEnergyProfiler()
+    profiler.bind_model(model)
+    with profiler:
+        with profiler.stage("forward"):
+            _ = model(x)
+
+    spike_num_in = int(x.count_nonzero().item())
+    expected_mac_addr = spike_num_in * 2
+    expected_acc_addr = spike_num_in * (model.out_channels // model.groups) * 9
+    assert profiler._addr_estimator.mac_addr == expected_mac_addr
+    assert profiler._addr_estimator.acc_addr == expected_acc_addr
+
+
 def test_snn_energy_linear_inout_uses_byte_sized_accesses():
     model = nn.Linear(8, 4, bias=False)
     x = torch.rand(3, 8, dtype=torch.float32)
@@ -194,6 +213,20 @@ def test_snn_energy_linear_inout_uses_byte_sized_accesses():
             )
         )
     )
+
+
+def test_snn_energy_linear_inout_uses_clif_fp32_bytes_even_for_fp16_inputs():
+    model = nn.Linear(8, 4, bias=False).half()
+    x = torch.rand(3, 8, dtype=torch.float16)
+    profiler = op_counter.AnalyticalEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        with profiler.stage("forward"):
+            _ = model(x)
+
+    assert profiler._lemaire_tracker.read_in == x.numel() * 4
+    assert profiler._lemaire_tracker.write_out == (3 * 4) * 4
 
 
 def test_snn_energy_config_passes_extra_state_rules_to_counter():
