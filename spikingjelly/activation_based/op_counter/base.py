@@ -472,6 +472,9 @@ class DispatchCounterMode(TorchDispatchMode):
                     )
                 return True
 
+        if hasattr(counter, "count_with_context"):
+            return False
+
         parent_names = self.module_tracker.parents
         if not counter.has_rule(func):  # stats rule not defined
             if self.strict:
@@ -498,11 +501,23 @@ class DispatchCounterMode(TorchDispatchMode):
         for counter in self.counters:
             if self._should_skip(counter, func):
                 continue
-            value = counter.count(func, args, kwargs, out)
+            if hasattr(counter, "count_with_context"):
+                value = counter.count_with_context(
+                    func,
+                    args,
+                    kwargs,
+                    out,
+                    active_modules=set(self.module_tracker.active_modules),
+                    parent_names=set(parent_names),
+                )
+            else:
+                value = counter.count(func, args, kwargs, out)
             if self.verbose:
                 print(f"{_arrow} + {value} [{counter.__class__.__name__}]")
             for parent in set(parent_names):
                 counter.record(parent, func, value)  # add the count to every ancestor
+            if hasattr(counter, "finalize_record"):
+                counter.finalize_record()
 
         return out
 
