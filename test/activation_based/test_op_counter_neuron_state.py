@@ -93,3 +93,28 @@ def test_neuron_state_counter_does_not_change_other_counters_when_neurons_ignore
         return mac.get_total(), ac.get_total(), mem.get_total()
 
     assert run(include_state=False) == run(include_state=True)
+
+
+def test_neuron_state_counter_inplace_nonlinear_counts_state_write():
+    class InplaceNonlinearNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            self.v = self.v.sigmoid_()
+            return self.v
+
+    node = InplaceNonlinearNode()
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = node(torch.rand(2, 4))
+
+    metrics = counter.get_metric_counts()["Global"]
+    assert metrics["state_nonlinear_ops"] > 0
+    assert metrics["state_writes"] > 0

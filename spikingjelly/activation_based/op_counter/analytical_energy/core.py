@@ -6,6 +6,7 @@ from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from typing import Any
+from numbers import Real
 
 import torch
 import torch.nn as nn
@@ -70,6 +71,29 @@ class AnalyticalEnergyCostConfig:
         (32.0 * 1024.0, 20.0),
         (1024.0 * 1024.0, 100.0),
     )
+
+    def __post_init__(self):
+        points = self.memory_breakpoints
+        if len(points) != 4:
+            raise ValueError(
+                "memory_breakpoints must contain exactly 4 (x, y) pairs."
+            )
+        prev_x = None
+        for point in points:
+            if not isinstance(point, tuple) or len(point) != 2:
+                raise ValueError(
+                    "memory_breakpoints must contain exactly 4 (x, y) pairs."
+                )
+            x, y = point
+            if not isinstance(x, Real) or not isinstance(y, Real):
+                raise ValueError(
+                    "memory_breakpoints entries must be numeric (x, y) pairs."
+                )
+            if prev_x is not None and x <= prev_x:
+                raise ValueError(
+                    "memory_breakpoints x values must be strictly increasing."
+                )
+            prev_x = x
 
     def memory_cost_pj(self, memory: float) -> float:
         points = self.memory_breakpoints
@@ -258,7 +282,7 @@ class AnalyticalEnergyProfiler:
             self._addr_estimator.remove()
         finally:
             self._current_stage_name = None
-            return self._dispatch_mode.__exit__(exc_type, exc, tb)
+        return self._dispatch_mode.__exit__(exc_type, exc, tb)
 
     @contextmanager
     def suspend(self):

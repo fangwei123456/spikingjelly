@@ -102,3 +102,13 @@ def test_snn_energy_manual_profiler_usage_defaults_to_forward_stage():
     report = profiler.get_report()
     assert report.inference_only_lemaire_compatible.available is True
     assert report.inference_only_lemaire_compatible.inference_only_E_inout_pj > 0.0
+
+
+def test_analytical_energy_cost_config_validates_memory_breakpoints():
+    with pytest.raises(ValueError, match="exactly 4"):
+        op_counter.AnalyticalEnergyCostConfig(memory_breakpoints=((0.0, 0.0),))
+
+    with pytest.raises(ValueError, match="strictly increasing"):
+        op_counter.AnalyticalEnergyCostConfig(
+            memory_breakpoints=((0.0, 0.0), (1.0, 1.0), (1.0, 2.0), (2.0, 3.0))
+        )

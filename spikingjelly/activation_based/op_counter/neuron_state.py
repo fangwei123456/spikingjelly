@@ -99,6 +99,13 @@ _NONLINEAR_OPS = {
     aten.tanh_.default,
 }
 
+_INPLACE_NONLINEAR_OPS = {
+    aten.sigmoid_.default,
+    aten.sqrt_.default,
+    aten.exp_.default,
+    aten.tanh_.default,
+}
+
 _SELECT_OPS = {
     aten.where.self,
     aten.where.ScalarOther,
@@ -232,6 +239,7 @@ class NeuronStateCounter(BaseCounter):
             metrics["state_comps"] += out_numel
         elif func in _NONLINEAR_OPS:
             metrics["state_nonlinear_ops"] += out_numel
+            writes_state = func in _INPLACE_NONLINEAR_OPS
         elif func in _SELECT_OPS:
             metrics["state_select_ops"] += out_numel
             writes_state = True
