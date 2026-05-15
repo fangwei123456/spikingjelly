@@ -38,6 +38,8 @@ def _tensor_size_bytes(tree: Any) -> int:
     if isinstance(tree, dict):
         return sum(_tensor_size_bytes(item) for item in tree.values())
     return 0
+
+
 _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES = (
     nn.Linear,
     nn.Conv1d,
@@ -85,8 +87,8 @@ class AnalyticalEnergyCostConfig:
 
     解析式能耗模型的成本配置。默认采用 Lemaire 风格的加法、乘法与分段存储成本。
 
-    ``memory_cost_pj`` 的输入语义是用于插值的 memory 标量，当前实现保持与现有
-    analytical projection 一致。
+    ``memory_cost_pj`` 的输入语义是用于插值的 memory 标量，优先应传 buffer-size
+    估计而不是累计访问流量。
 
     ----
 
@@ -97,8 +99,8 @@ class AnalyticalEnergyCostConfig:
     Cost configuration for the analytical energy model. By default it uses a
     Lemaire-style add/mul cost table and a piecewise memory cost curve.
 
-    ``memory_cost_pj`` expects the scalar memory value used by the current
-    analytical projection.
+    ``memory_cost_pj`` expects the interpolation memory scalar, ideally a
+    buffer-size estimate rather than cumulative access traffic.
     """
     e_add_pj: float = 0.1
     e_mul_pj: float = 3.1
@@ -134,6 +136,7 @@ class AnalyticalEnergyCostConfig:
 
     def memory_cost_pj(self, memory: float) -> float:
         points = self.memory_breakpoints
+        memory = max(points[0][0], min(memory, points[3][0]))
         if memory <= points[1][0]:
             (x0, y0), (x1, y1) = points[0], points[1]
             return y0 + (y1 - y0) / (x1 - x0) * (memory - x0)
@@ -255,15 +258,29 @@ class _LemaireForwardTracker:
         self.read_in = 0
         self.write_out = 0
         self.read_params = 0
+        self.read_in_buffer_bytes = 0
+        self.write_out_buffer_bytes = 0
+        self.read_params_buffer_bytes = 0
 
     def attach(self, model: nn.Module):
         def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any):
             if self.stage_getter() != "forward":
                 return
-            self.read_in += _tensor_size_bytes(inputs)
-            self.write_out += _tensor_size_bytes(output)
+            input_bytes = _tensor_size_bytes(inputs)
+            output_bytes = _tensor_size_bytes(output)
+            self.read_in += input_bytes
+            self.write_out += output_bytes
+            self.read_in_buffer_bytes = max(self.read_in_buffer_bytes, input_bytes)
+            self.write_out_buffer_bytes = max(
+                self.write_out_buffer_bytes, output_bytes
+            )
+            param_bytes = 0
             for param in module.parameters(recurse=False):
-                self.read_params += int(param.numel() * param.element_size())
+                param_bytes += int(param.numel() * param.element_size())
+            self.read_params += param_bytes
+            self.read_params_buffer_bytes = max(
+                self.read_params_buffer_bytes, param_bytes
+            )
 
         for module in model.modules():
             if isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
@@ -481,6 +498,11 @@ class AnalyticalEnergyProfiler:
             "mac": self.mac_counter.get_total(),
             "ac": self.ac_counter.get_total(),
             "memory_access_bytes": self.memory_access_counter.get_total(),
+            "memory_buffer_bytes": max(
+                self._lemaire_tracker.read_in_buffer_bytes,
+                self._lemaire_tracker.write_out_buffer_bytes,
+                self._lemaire_tracker.read_params_buffer_bytes,
+            ),
             "state": self.neuron_state_counter.get_metric_counts().get("Global", {}),
             "projection": self.neuron_state_counter.get_projection_counts().get(
                 "Global", {}
@@ -499,8 +521,17 @@ class AnalyticalEnergyProfiler:
         state_mac_like = int(projection.get("state_mac_like", 0))
         state_acc_like = int(projection.get("state_acc_like", 0))
         memory_access = float(snapshot.get("memory_access_bytes", 0))
+        memory_buffer_bytes = float(
+            snapshot.get("memory_buffer_bytes", snapshot.get("memory_access_bytes", 0))
+        )
         read_potential = float(projection.get("read_potential", 0))
         write_potential = float(projection.get("write_potential", 0))
+        potential_buffer_bytes = float(
+            projection.get(
+                "potential_buffer_bytes",
+                max(read_potential, write_potential),
+            )
+        )
 
         synop_compute = synop * cost.e_add_pj
         mac_compute = mac * (cost.e_mul_pj + cost.e_add_pj)
@@ -508,9 +539,11 @@ class AnalyticalEnergyProfiler:
         state_compute = state_acc_like * cost.e_add_pj + state_mac_like * (
             cost.e_mul_pj + cost.e_add_pj
         )
-        memory_access_pj = memory_access * cost.memory_cost_pj(memory_access)
-        state_memory_pj = read_potential * cost.memory_cost_pj(read_potential)
-        state_memory_pj += write_potential * cost.memory_cost_pj(write_potential)
+        memory_access_pj = memory_access * cost.memory_cost_pj(memory_buffer_bytes)
+        state_memory_pj = read_potential * cost.memory_cost_pj(potential_buffer_bytes)
+        state_memory_pj += write_potential * cost.memory_cost_pj(
+            potential_buffer_bytes
+        )
 
         total_compute = synop_compute + mac_compute + ac_compute + state_compute
         total_memory = memory_access_pj + state_memory_pj
@@ -553,6 +586,19 @@ class AnalyticalEnergyProfiler:
         read_in = float(self._lemaire_tracker.read_in)
         write_out = float(self._lemaire_tracker.write_out)
         read_params = float(self._lemaire_tracker.read_params)
+        read_in_buffer_bytes = float(self._lemaire_tracker.read_in_buffer_bytes or read_in)
+        write_out_buffer_bytes = float(
+            self._lemaire_tracker.write_out_buffer_bytes or write_out
+        )
+        read_params_buffer_bytes = float(
+            self._lemaire_tracker.read_params_buffer_bytes or read_params
+        )
+        potential_buffer_bytes = float(
+            projection.get(
+                "potential_buffer_bytes",
+                max(read_potential, write_potential),
+            )
+        )
         acc_addr = float(self._addr_estimator.acc_addr)
         mac_addr = float(self._addr_estimator.mac_addr)
 
@@ -563,16 +609,20 @@ class AnalyticalEnergyProfiler:
         report.inference_only_E_addr_pj = acc_addr * cost.e_add_pj + mac_addr * (
             cost.e_mul_pj + cost.e_add_pj
         )
-        report.inference_only_E_inout_pj = read_in * cost.memory_cost_pj(read_in)
-        report.inference_only_E_inout_pj += write_out * cost.memory_cost_pj(write_out)
+        report.inference_only_E_inout_pj = read_in * cost.memory_cost_pj(
+            read_in_buffer_bytes
+        )
+        report.inference_only_E_inout_pj += write_out * cost.memory_cost_pj(
+            write_out_buffer_bytes
+        )
         report.inference_only_E_params_pj = read_params * cost.memory_cost_pj(
-            read_params
+            read_params_buffer_bytes
         )
         report.inference_only_E_potential_pj = read_potential * cost.memory_cost_pj(
-            read_potential
+            potential_buffer_bytes
         )
         report.inference_only_E_potential_pj += write_potential * cost.memory_cost_pj(
-            write_potential
+            potential_buffer_bytes
         )
         report.inference_only_E_total_pj = (
             report.inference_only_E_op_pj

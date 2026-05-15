@@ -133,6 +133,8 @@ def _numel_tree(tree: Any) -> int:
 
 def _bytes_tree(tree: Any) -> int:
     return sum(int(x.numel() * x.element_size()) for x in _collect_tensors(tree))
+
+
 class NeuronStateCounter(BaseCounter):
     r"""
     **API Language:**
@@ -288,6 +290,9 @@ class NeuronStateCounter(BaseCounter):
         output_tensors = _collect_tensors(out)
         out_numel = _numel_tree(out)
         out_bytes = _bytes_tree(out)
+        state_buffer_bytes = max(
+            (int(x.numel() * x.element_size()) for x in state_tensors), default=0
+        )
         metrics = {
             "state_reads": sum(int(x.numel() * x.element_size()) for x in state_tensors),
             "state_writes": 0,
@@ -336,13 +341,18 @@ class NeuronStateCounter(BaseCounter):
             self._pending_projection = None
             return 0
 
-        return self._store_breakdown(metrics)
+        return self._store_breakdown(metrics, state_buffer_bytes=state_buffer_bytes)
 
-    def _store_breakdown(self, metrics: dict[str, int]) -> int:
+    def _store_breakdown(
+        self, metrics: dict[str, int], *, state_buffer_bytes: int = 0
+    ) -> int:
         projection = {
             "read_potential": metrics.get("state_reads", 0),
             "write_potential": metrics.get("state_writes", 0),
             "state_mac_like": metrics.get("state_muls", 0),
+            "potential_buffer_bytes": max(
+                metrics.get("state_writes", 0), state_buffer_bytes
+            ),
             "state_acc_like": metrics.get("state_adds", 0)
             + metrics.get("state_comps", 0)
             + metrics.get("state_nonlinear_ops", 0)
