@@ -118,8 +118,21 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
     return [x for x in flat if torch.is_tensor(x)]
 
 
+def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:
+    return (
+        x.device.type,
+        x.device.index,
+        x.dtype,
+        x.untyped_storage().data_ptr(),
+    )
+
+
 def _numel_tree(tree: Any) -> int:
     return sum(int(x.numel()) for x in _collect_tensors(tree))
+
+
+def _bytes_tree(tree: Any) -> int:
+    return sum(int(x.numel() * x.element_size()) for x in _collect_tensors(tree))
 class NeuronStateCounter(BaseCounter):
     r"""
     **API Language:**
@@ -240,13 +253,13 @@ class NeuronStateCounter(BaseCounter):
                 self._pending_projection = None
                 return 0
 
-        state_tensor_ids: set[int] = set()
+        state_tensor_keys: set[tuple[Any, ...]] = set()
         for module in active_base_nodes:
             for value in module._memories.values():
                 if torch.is_tensor(value):
-                    state_tensor_ids.add(id(value))
+                    state_tensor_keys.add(_storage_key(value))
 
-        if not state_tensor_ids:
+        if not state_tensor_keys:
             self._pending_metrics = None
             self._pending_projection = None
             return 0
@@ -255,7 +268,7 @@ class NeuronStateCounter(BaseCounter):
             rule = self.extra_state_rules.get(type(module))
             if rule is None:
                 continue
-            breakdown = rule(module, func, args, kwargs, out, state_tensor_ids)
+            breakdown = rule(module, func, args, kwargs, out, state_tensor_keys)
             if breakdown is not None:
                 return self._store_breakdown(breakdown)
 
@@ -266,7 +279,7 @@ class NeuronStateCounter(BaseCounter):
             return 0
 
         tensors_in = _collect_tensors((args, kwargs))
-        state_tensors = [x for x in tensors_in if id(x) in state_tensor_ids]
+        state_tensors = [x for x in tensors_in if _storage_key(x) in state_tensor_keys]
         if not state_tensors:
             self._pending_metrics = None
             self._pending_projection = None
@@ -274,8 +287,9 @@ class NeuronStateCounter(BaseCounter):
 
         output_tensors = _collect_tensors(out)
         out_numel = _numel_tree(out)
+        out_bytes = _bytes_tree(out)
         metrics = {
-            "state_reads": sum(int(x.numel()) for x in state_tensors),
+            "state_reads": sum(int(x.numel() * x.element_size()) for x in state_tensors),
             "state_writes": 0,
             "state_adds": 0,
             "state_muls": 0,
@@ -304,8 +318,10 @@ class NeuronStateCounter(BaseCounter):
             writes_state = True
 
         if writes_state and output_tensors:
-            metrics["state_writes"] += out_numel
-            non_state_tensors = [x for x in tensors_in if id(x) not in state_tensor_ids]
+            metrics["state_writes"] += out_bytes
+            non_state_tensors = [
+                x for x in tensors_in if _storage_key(x) not in state_tensor_keys
+            ]
             has_spike_gate = any(is_binary_tensor(x) for x in non_state_tensors)
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel

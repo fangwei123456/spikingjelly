@@ -118,3 +118,31 @@ def test_neuron_state_counter_inplace_nonlinear_counts_state_write():
     metrics = counter.get_metric_counts()["Global"]
     assert metrics["state_nonlinear_ops"] > 0
     assert metrics["state_writes"] > 0
+
+
+def test_neuron_state_counter_counts_state_access_in_bytes_for_views():
+    class ViewStateNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            y = self.v.view_as(x)
+            self.v = y + 1.0
+            return self.v
+
+    x = torch.rand(2, 4, dtype=torch.float32)
+    node = ViewStateNode()
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = node(x)
+
+    metrics = counter.get_metric_counts()["Global"]
+    expected_bytes = x.numel() * x.element_size()
+    assert metrics["state_reads"] >= expected_bytes
+    assert metrics["state_writes"] >= expected_bytes

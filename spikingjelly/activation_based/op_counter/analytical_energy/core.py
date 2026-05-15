@@ -30,13 +30,13 @@ __all__ = [
 ]
 
 
-def _tensor_numel(tree: Any) -> int:
+def _tensor_size_bytes(tree: Any) -> int:
     if torch.is_tensor(tree):
-        return int(tree.numel())
+        return int(tree.numel() * tree.element_size())
     if isinstance(tree, (tuple, list)):
-        return sum(_tensor_numel(item) for item in tree)
+        return sum(_tensor_size_bytes(item) for item in tree)
     if isinstance(tree, dict):
-        return sum(_tensor_numel(item) for item in tree.values())
+        return sum(_tensor_size_bytes(item) for item in tree.values())
     return 0
 _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES = (
     nn.Linear,
@@ -260,15 +260,14 @@ class _LemaireForwardTracker:
         def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any):
             if self.stage_getter() != "forward":
                 return
-            if not isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
-                return
-            self.read_in += _tensor_numel(inputs)
-            self.write_out += _tensor_numel(output)
+            self.read_in += _tensor_size_bytes(inputs)
+            self.write_out += _tensor_size_bytes(output)
             for param in module.parameters(recurse=False):
-                self.read_params += int(param.numel())
+                self.read_params += int(param.numel() * param.element_size())
 
         for module in model.modules():
-            self.handles.append(module.register_forward_hook(hook))
+            if isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
+                self.handles.append(module.register_forward_hook(hook))
 
     def remove(self):
         for handle in self.handles:
@@ -287,8 +286,6 @@ class _LemaireAddressingEstimator:
         def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any):
             if self.stage_getter() != "forward":
                 return
-            if not isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
-                return
             if not inputs:
                 return
             x = inputs[0]
@@ -297,13 +294,33 @@ class _LemaireAddressingEstimator:
             out = output[0] if isinstance(output, (tuple, list)) else output
             if not torch.is_tensor(out):
                 return
-            param_numel = sum(int(p.numel()) for p in module.parameters(recurse=False))
-            self.acc_addr += int(x.numel()) + int(out.numel()) + param_numel
+            if isinstance(module, nn.Linear):
+                if is_binary_tensor(x):
+                    self.acc_addr += int(x.count_nonzero().item()) * module.out_features
+                else:
+                    self.acc_addr += int(x.numel()) + int(out.numel())
+                return
+
+            kernel_size = module.kernel_size
+            if isinstance(kernel_size, int):
+                kernel_volume = kernel_size
+            else:
+                kernel_volume = 1
+                for value in kernel_size:
+                    kernel_volume *= int(value)
+
             if is_binary_tensor(x):
-                self.mac_addr += int(x.count_nonzero().item())
+                spike_num_in = int(x.count_nonzero().item())
+                out_channels_per_group = module.out_channels // module.groups
+                self.mac_addr += spike_num_in * 2
+                self.acc_addr += spike_num_in * out_channels_per_group * kernel_volume
+            else:
+                self.acc_addr += int(x.numel()) + int(out.numel())
+                self.acc_addr += module.out_channels * kernel_volume
 
         for module in model.modules():
-            self.handles.append(module.register_forward_hook(hook))
+            if isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
+                self.handles.append(module.register_forward_hook(hook))
 
     def remove(self):
         for handle in self.handles:
