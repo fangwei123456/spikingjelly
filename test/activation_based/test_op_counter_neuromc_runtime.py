@@ -55,7 +55,7 @@ def test_neuromc_exact_batchnorm_supports_bn_breakdown():
 
     report = op_counter.estimate_neuromc_runtime_energy(model, x)
 
-    assert report.energy_by_core_type["fp_bn"] > 0.0
+    assert report.energy_by_core_type["ann_bn"] > 0.0
     assert report.energy_by_process_key["with_bn"] > 0.0
     assert report.counts_by_process_key["with_bn"]["sqrt"] > 0
 
@@ -81,6 +81,23 @@ def test_neuromc_exact_training_uses_bp_wg_and_optimizer():
     assert sum(report.energy_by_stage.values()) == pytest.approx(report.energy_total_pj)
 
 
+def _optimizer_fragment_totals(profiler, fragments):
+    total_add = 0
+    total_mul = 0
+    total_sqrt = 0
+    total_rh2l = 0
+    total_wl2h = 0
+    for fragment in fragments:
+        counts = profiler._extra_counts(fragment)
+        bits, _ = profiler._extra_memory_for_fragment(fragment)
+        total_add += counts["add"]
+        total_mul += counts["mul"]
+        total_sqrt += counts["sqrt"]
+        total_rh2l += bits["sram"].get("rh2l", 0)
+        total_wl2h += bits["sram"].get("wl2h", 0)
+    return total_add, total_mul, total_sqrt, total_rh2l, total_wl2h
+
+
 def test_neuromc_exact_repeated_forward_reuses_weights():
     model = nn.Linear(16, 8, bias=False)
     x = (torch.rand(4, 16) > 0.75).float()
@@ -97,17 +114,129 @@ def test_neuromc_exact_repeated_forward_reuses_weights():
     assert any(item["t_type"] == 1 for item in report.mapping_summary)
 
 
-def test_neuromc_exact_sgd_optimizer_is_rejected():
+def test_neuromc_exact_plain_sgd_optimizer_is_supported():
     model = nn.Linear(4, 2)
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
     loss_fn = nn.MSELoss()
     x = (torch.rand(2, 4) > 0.5).float()
     target = torch.randn(2, 2)
 
-    with pytest.raises(ValueError, match="Adam/AdamW"):
-        op_counter.estimate_neuromc_runtime_energy(
-            model, x, target=target, loss_fn=loss_fn, optimizer=optimizer
-        )
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, x, target=target, loss_fn=loss_fn, optimizer=optimizer
+    )
+
+    assert report.energy_by_stage["optimizer"] > 0.0
+    assert report.energy_by_core_type["bp_grad_opt"] > 0.0
+    assert report.energy_by_process_key["with_opt"] > 0.0
+    assert any(
+        item["source"] == "optimizer"
+        and item["op_name"] == "sgd"
+        and item["optimizer_has_momentum"] is False
+        and item["optimizer_has_weight_decay"] is False
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_sgd_with_momentum_and_weight_decay_is_supported():
+    model = nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.01
+    )
+    loss_fn = nn.MSELoss()
+    x = (torch.rand(2, 4) > 0.5).float()
+    target = torch.randn(2, 2)
+
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, x, target=target, loss_fn=loss_fn, optimizer=optimizer
+    )
+
+    assert report.energy_by_stage["optimizer"] > 0.0
+    assert any(
+        item["source"] == "optimizer"
+        and item["op_name"] == "sgd"
+        and item["optimizer_has_momentum"] is True
+        and item["optimizer_has_weight_decay"] is True
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_online_learning_optimizer_step_each_time_step():
+    model = nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    loss_fn = nn.MSELoss()
+    xs = [torch.randn(3, 4), torch.randn(3, 4)]
+    targets = [torch.randn(3, 2), torch.randn(3, 2)]
+
+    with op_counter.NeuroMCEnergyProfiler() as profiler:
+        profiler.bind_model(model)
+        profiler.bind_optimizer(optimizer)
+        for t, (x, target) in enumerate(zip(xs, targets)):
+            with profiler.stage(f"t{t}_forward"):
+                out = model(x)
+            with profiler.suspend():
+                loss = loss_fn(out, target)
+            with profiler.stage(f"t{t}_backward"):
+                loss.backward()
+            with profiler.stage(f"t{t}_optimizer"):
+                profiler.record_optimizer_step(f"t{t}_optimizer")
+                with profiler.suspend():
+                    optimizer.step()
+                    optimizer.zero_grad(set_to_none=True)
+        report = profiler.get_report()
+
+    optimizer_items = [
+        item for item in report.mapping_summary if item["source"] == "optimizer"
+    ]
+    assert report.energy_by_stage["t0_optimizer"] > 0.0
+    assert report.energy_by_stage["t1_optimizer"] > 0.0
+    assert {item["stage"] for item in optimizer_items} == {
+        "t0_optimizer",
+        "t1_optimizer",
+    }
+    assert any(
+        item["stage"] == "t0_optimizer"
+        and item["op_name"] == "sgd"
+        and item["optimizer_has_momentum"] is True
+        and item["optimizer_has_momentum_buffer"] is False
+        for item in optimizer_items
+    )
+    assert any(
+        item["stage"] == "t1_optimizer"
+        and item["op_name"] == "sgd"
+        and item["optimizer_has_momentum"] is True
+        and item["optimizer_has_momentum_buffer"] is True
+        for item in optimizer_items
+    )
+
+
+def test_neuromc_exact_sgd_optimizer_rejects_nesterov():
+    model = nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, nesterov=True)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    with pytest.raises(ValueError, match="nesterov=False"):
+        profiler._optimizer_fragments("optimizer")
+
+
+def test_neuromc_exact_sgd_optimizer_rejects_dampening():
+    model = nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, dampening=0.1)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    with pytest.raises(ValueError, match="dampening=0"):
+        profiler._optimizer_fragments("optimizer")
+
+
+def test_neuromc_exact_sgd_optimizer_rejects_maximize():
+    model = nn.Linear(4, 2)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, maximize=True)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    with pytest.raises(ValueError, match="maximize=False"):
+        profiler._optimizer_fragments("optimizer")
 
 
 def test_neuromc_exact_unsupported_op_raises():
@@ -175,6 +304,56 @@ def test_neuromc_exact_functional_mm_backward_has_wg_fragment():
     assert report.energy_by_core_type.get("wg", 0.0) > 0.0
 
 
+def test_neuromc_exact_dense_functional_mm_backward_uses_ann_paths():
+    class FunctionalMM(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight = nn.Parameter(torch.randn(3, 5))
+
+        def forward(self, x):
+            return torch.mm(x, self.weight)
+
+    model = FunctionalMM()
+    x = torch.randn(4, 3, requires_grad=True)
+    target = torch.randn(4, 5)
+    loss_fn = nn.MSELoss()
+
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, x, target=target, loss_fn=loss_fn
+    )
+
+    assert report.energy_by_core_type.get("ann_be", 0.0) > 0.0
+    assert report.energy_by_core_type.get("ann_we", 0.0) > 0.0
+
+
+def test_neuromc_exact_same_shape_functional_mm_backward_keeps_spike_and_ann_labels():
+    class DualFunctionalMM(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.weight_dense = nn.Parameter(torch.randn(3, 5))
+            self.weight_spike = nn.Parameter(torch.randn(3, 5))
+
+        def forward(self, x_dense, x_spike):
+            return torch.mm(x_dense, self.weight_dense) + torch.mm(
+                x_spike, self.weight_spike
+            )
+
+    model = DualFunctionalMM()
+    x_dense = torch.randn(4, 3, requires_grad=True)
+    x_spike = (torch.rand(4, 3) > 0.7).float().requires_grad_()
+    target = torch.randn(4, 5)
+    loss_fn = nn.MSELoss()
+
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, (x_dense, x_spike), target=target, loss_fn=loss_fn
+    )
+
+    assert report.energy_by_core_type.get("ann_be", 0.0) > 0.0
+    assert report.energy_by_core_type.get("bp_grad", 0.0) > 0.0
+    assert report.energy_by_core_type.get("ann_we", 0.0) > 0.0
+    assert report.energy_by_core_type.get("wg", 0.0) > 0.0
+
+
 def test_neuromc_exact_mixed_hook_and_functional_mm_counts_both_paths():
     class MixedModel(nn.Module):
         def __init__(self):
@@ -217,6 +396,202 @@ def test_neuromc_exact_mixed_hook_and_functional_addmm_counts_both_paths():
     assert any(item["op_name"] == "linear.forward" for item in report.mapping_summary)
     assert any(
         item["op_name"] == "aten.addmm.default" for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_dense_linear_uses_ann_forward_path():
+    model = nn.Linear(8, 4, bias=False)
+    x = torch.randn(3, 8)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    assert report.energy_by_core_type["ann_fe"] > 0.0
+    assert report.energy_base_memory_pj > 0.0
+    assert any(
+        item["op_name"] == "linear.forward"
+        and item["core_type"] == "ann_fe"
+        and item["input_precision_bits"] == 16
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_dense_conv2d_uses_ann_forward_path():
+    model = nn.Conv2d(2, 3, kernel_size=3, padding=1, bias=False)
+    x = torch.randn(4, 2, 5, 5)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    assert report.energy_by_core_type["ann_fe"] > 0.0
+    assert report.energy_base_memory_pj > 0.0
+    assert any(
+        item["op_name"] == "conv.forward"
+        and item["core_type"] == "ann_fe"
+        and item["input_precision_bits"] == 16
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_dense_training_uses_ann_backward_paths():
+    model = nn.Linear(8, 4, bias=False)
+    x = torch.randn(3, 8, requires_grad=True)
+    target = torch.randn(3, 4)
+    loss_fn = nn.MSELoss()
+
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, x, target=target, loss_fn=loss_fn
+    )
+
+    assert report.energy_by_core_type["ann_fe"] > 0.0
+    assert report.energy_by_core_type["ann_be"] > 0.0
+    assert report.energy_by_core_type["ann_we"] > 0.0
+
+
+def test_neuromc_exact_dense_conv2d_backward_uses_ann_paths():
+    model = nn.Conv2d(2, 3, kernel_size=3, padding=1, bias=False)
+    x = torch.randn(3, 2, 5, 5)
+    grad_in = torch.randn_like(x)
+    grad_out = torch.randn(3, 3, 5, 5)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+
+    model._neuromc_last_input = x
+    fragments = profiler._make_conv_backward_fragments(
+        "backward", model, (grad_in,), (grad_out,)
+    )
+
+    assert {fragment.core_type for fragment in fragments} == {"ann_be", "ann_we"}
+    assert all(fragment.input_precision_bits == 16 for fragment in fragments)
+
+
+def test_neuromc_exact_dense_weight_grad_costs_more_than_spike_weight_grad():
+    torch.manual_seed(0)
+    model_spike = nn.Linear(8, 4, bias=False)
+    x_spike = (torch.rand(3, 8) > 0.6).float().requires_grad_()
+    target_spike = torch.randn(3, 4)
+    loss_fn = nn.MSELoss()
+    spike_report = op_counter.estimate_neuromc_runtime_energy(
+        model_spike, x_spike, target=target_spike, loss_fn=loss_fn
+    )
+
+    model_dense = nn.Linear(8, 4, bias=False)
+    x_dense = torch.randn(3, 8, requires_grad=True)
+    target_dense = torch.randn(3, 4)
+    dense_report = op_counter.estimate_neuromc_runtime_energy(
+        model_dense, x_dense, target=target_dense, loss_fn=loss_fn
+    )
+
+    assert spike_report.energy_by_core_type["wg"] > 0.0
+    assert dense_report.energy_by_core_type["ann_we"] > 0.0
+    assert (
+        dense_report.energy_by_core_type["ann_we"]
+        > spike_report.energy_by_core_type["wg"]
+    )
+
+
+def test_neuromc_exact_dense_batchnorm_training_uses_ann_bn_labels():
+    model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8))
+    x = torch.randn(4, 8, requires_grad=True)
+    target = torch.randn(4, 8)
+    loss_fn = nn.MSELoss()
+
+    report = op_counter.estimate_neuromc_runtime_energy(
+        model, x, target=target, loss_fn=loss_fn
+    )
+
+    assert report.energy_by_core_type["ann_bn"] > 0.0
+    assert report.energy_by_core_type["ann_bn_bp"] > 0.0
+    assert report.energy_by_process_key["with_bn"] > 0.0
+
+
+def test_neuromc_exact_dense_batchnorm2d_forward_uses_ann_bn_label():
+    model = nn.Sequential(nn.Conv2d(2, 4, kernel_size=3, padding=1), nn.BatchNorm2d(4))
+    x = torch.randn(2, 2, 5, 5)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    assert report.energy_by_core_type["ann_bn"] > 0.0
+    assert any(
+        item["op_name"] == "bn.forward" and item["core_type"] == "ann_bn"
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_mixed_model_dense_bn_keeps_ann_label_before_spike_node():
+    model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8), neuron.IFNode())
+    x = torch.randn(3, 8)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    assert report.energy_by_core_type["ann_bn"] > 0.0
+    assert not any(
+        item["op_name"] == "bn.forward" and item["core_type"] == "fp_bn"
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_mixed_model_reports_ann_and_snn_paths():
+    model = nn.Sequential(nn.Linear(8, 8), neuron.IFNode(), nn.Linear(8, 4))
+    x = torch.randn(3, 8)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    assert report.energy_by_core_type["ann_fe"] > 0.0
+    assert report.energy_by_core_type["fp_soma"] > 0.0
+    assert any(
+        item["op_name"] == "linear.forward" and item["core_type"] == "ann_fe"
+        for item in report.mapping_summary
+    )
+    assert any(
+        item["op_name"] == "linear.forward" and item["core_type"] == "fp_soma"
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_dense_mixed_hook_and_functional_mm_use_ann_path():
+    class MixedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(4, 4, bias=False)
+            self.weight = nn.Parameter(torch.randn(4, 3))
+
+        def forward(self, x):
+            return self.linear(x)[:, :3] + torch.mm(x, self.weight)
+
+    model = MixedModel()
+    x = torch.randn(5, 4)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    expected_mac = 5 * 4 * 4 + 5 * 4 * 3
+    assert report.primitive_counts["totals"]["mac"] == expected_mac
+    assert report.counts_by_core_type["ann_fe"]["mac"] == expected_mac
+    assert any(
+        item["op_name"] == "aten.mm.default" and item["core_type"] == "ann_fe"
+        for item in report.mapping_summary
+    )
+
+
+def test_neuromc_exact_dense_mixed_hook_and_functional_addmm_use_ann_path():
+    class MixedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = nn.Linear(4, 4, bias=False)
+            self.bias = nn.Parameter(torch.randn(3))
+            self.weight = nn.Parameter(torch.randn(4, 3))
+
+        def forward(self, x):
+            return self.linear(x)[:, :3] + torch.addmm(self.bias, x, self.weight)
+
+    model = MixedModel()
+    x = torch.randn(5, 4)
+
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+
+    expected_mac = 5 * 4 * 4 + 5 * 4 * 3
+    assert report.primitive_counts["totals"]["mac"] == expected_mac
+    assert report.counts_by_core_type["ann_fe"]["mac"] == expected_mac
+    assert any(
+        item["op_name"] == "aten.addmm.default" and item["core_type"] == "ann_fe"
+        for item in report.mapping_summary
     )
 
 
@@ -385,11 +760,12 @@ def test_neuromc_bind_model_rejects_rebinding_different_model():
         profiler.bind_model(model2)
 
 
-def test_neuromc_exact_ann_forward_input_is_rejected():
+def test_neuromc_exact_ann_forward_input_is_supported():
     model = nn.Linear(8, 4, bias=False)
     x = torch.randn(3, 8)
-    with pytest.raises(ValueError, match="ANN-like dense activations"):
-        op_counter.estimate_neuromc_runtime_energy(model, x)
+    report = op_counter.estimate_neuromc_runtime_energy(model, x)
+    assert report.energy_total_pj > 0.0
+    assert report.energy_by_core_type["ann_fe"] > 0.0
 
 
 def test_neuromc_exact_memory_config_api():
@@ -435,6 +811,154 @@ def test_neuromc_exact_optimizer_counts_mixed_parameter_shapes():
     assert bits["sram"]["wl2h"] == (14 * 3 + 7 * 6) * 32
 
 
+def test_neuromc_exact_sgd_optimizer_counts_plain_step():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    model.weight.grad = torch.ones_like(model.weight)
+    model.bias.grad = torch.ones_like(model.bias)
+
+    fragments = profiler._optimizer_fragments("optimizer")
+    add, mul, sqrt, rh2l, wl2h = _optimizer_fragment_totals(profiler, fragments)
+
+    total_params = model.weight.numel() + model.bias.numel()
+    assert add == total_params
+    assert mul == total_params
+    assert sqrt == 0
+    assert rh2l == total_params * 2 * 32
+    assert wl2h == total_params * 32
+
+
+def test_neuromc_exact_sgd_optimizer_counts_weight_decay_only_step():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, weight_decay=0.01)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    model.weight.grad = torch.ones_like(model.weight)
+    model.bias.grad = torch.ones_like(model.bias)
+
+    fragments = profiler._optimizer_fragments("optimizer")
+    add, mul, sqrt, rh2l, wl2h = _optimizer_fragment_totals(profiler, fragments)
+
+    total_params = model.weight.numel() + model.bias.numel()
+    assert add == total_params * 2
+    assert mul == total_params * 2
+    assert sqrt == 0
+    assert rh2l == total_params * 2 * 32
+    assert wl2h == total_params * 32
+
+
+def test_neuromc_exact_sgd_optimizer_counts_momentum_first_step():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    model.weight.grad = torch.ones_like(model.weight)
+    model.bias.grad = torch.ones_like(model.bias)
+
+    fragments = profiler._optimizer_fragments("optimizer")
+    add, mul, sqrt, rh2l, wl2h = _optimizer_fragment_totals(profiler, fragments)
+
+    total_params = model.weight.numel() + model.bias.numel()
+    assert add == total_params
+    assert mul == total_params
+    assert sqrt == 0
+    assert rh2l == total_params * 2 * 32
+    assert wl2h == total_params * 2 * 32
+    assert any(
+        fragment.op_name == "sgd"
+        and fragment.optimizer_has_momentum
+        and not fragment.optimizer_has_momentum_buffer
+        for fragment in fragments
+    )
+
+
+def test_neuromc_exact_sgd_optimizer_counts_momentum_with_existing_buffer():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9)
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    for param in model.parameters():
+        optimizer.state[param]["momentum_buffer"] = torch.ones_like(param)
+        param.grad = torch.ones_like(param)
+
+    fragments = profiler._optimizer_fragments("optimizer")
+    add, mul, sqrt, rh2l, wl2h = _optimizer_fragment_totals(profiler, fragments)
+
+    total_params = model.weight.numel() + model.bias.numel()
+    assert add == total_params * 2
+    assert mul == total_params * 2
+    assert sqrt == 0
+    assert rh2l == total_params * 3 * 32
+    assert wl2h == total_params * 2 * 32
+    assert all(
+        fragment.optimizer_has_momentum_buffer
+        for fragment in fragments
+        if fragment.op_name == "sgd"
+    )
+
+
+def test_neuromc_exact_sgd_optimizer_counts_momentum_and_weight_decay():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.SGD(
+        model.parameters(), lr=0.1, momentum=0.9, weight_decay=0.01
+    )
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    for param in model.parameters():
+        optimizer.state[param]["momentum_buffer"] = torch.ones_like(param)
+        param.grad = torch.ones_like(param)
+
+    fragments = profiler._optimizer_fragments("optimizer")
+    add, mul, sqrt, rh2l, wl2h = _optimizer_fragment_totals(profiler, fragments)
+
+    total_params = model.weight.numel() + model.bias.numel()
+    assert add == total_params * 3
+    assert mul == total_params * 3
+    assert sqrt == 0
+    assert rh2l == total_params * 3 * 32
+    assert wl2h == total_params * 2 * 32
+
+
+def test_neuromc_exact_sgd_optimizer_counts_mixed_param_groups():
+    model = nn.Linear(2, 3, bias=True)
+    optimizer = torch.optim.SGD(
+        [
+            {"params": [model.bias], "lr": 0.1},
+            {
+                "params": [model.weight],
+                "lr": 0.1,
+                "momentum": 0.9,
+                "weight_decay": 0.01,
+            },
+        ]
+    )
+    profiler = op_counter.NeuroMCEnergyProfiler()
+    profiler.bind_optimizer(optimizer)
+
+    model.bias.grad = torch.ones_like(model.bias)
+    model.weight.grad = torch.ones_like(model.weight)
+    optimizer.state[model.weight]["momentum_buffer"] = torch.ones_like(model.weight)
+
+    fragments = profiler._optimizer_fragments("optimizer")
+    add, mul, sqrt, rh2l, wl2h = _optimizer_fragment_totals(profiler, fragments)
+
+    bias_numel = model.bias.numel()
+    weight_numel = model.weight.numel()
+    assert add == bias_numel + weight_numel * 3
+    assert mul == bias_numel + weight_numel * 3
+    assert sqrt == 0
+    assert rh2l == (bias_numel * 2 + weight_numel * 3) * 32
+    assert wl2h == (bias_numel + weight_numel * 2) * 32
+    assert len(fragments) == 2
+
+
 def test_neuromc_memory_residency_legacy_memory_config_alias():
     cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1()
     with pytest.deprecated_call():
@@ -451,9 +975,7 @@ def test_neuromc_memory_residency_legacy_memory_config_positional_alias():
 
 def test_neuromc_like_v1_legacy_memory_model_is_ignored():
     with pytest.deprecated_call():
-        cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(
-            memory_model="weighted"
-        )
+        cfg = op_counter.MemoryHierarchyConfig.neuromc_like_v1(memory_model="weighted")
     cfg.validate()
 
 
