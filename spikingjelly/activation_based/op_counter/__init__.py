@@ -8,4 +8,4 @@ from .synop import *
 from .mac import *
 from .neuromc import *
 from .spikesim import *
-from .snn_energy import *
+from .analytical_energy import *

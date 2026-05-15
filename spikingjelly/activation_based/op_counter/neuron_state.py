@@ -10,10 +10,11 @@ from torch.overrides import resolve_name
 from torch.utils._pytree import tree_flatten
 
 from ..neuron.base_node import BaseNode
-from .base import BaseCounter
+from .base import BaseCounter, is_binary_tensor
 
 __all__ = ["NeuronStateCounter"]
 
+aten = torch.ops.aten
 
 _IGNORED_OP_PREFIXES = (
     "aten.detach",
@@ -35,61 +36,73 @@ _IGNORED_OP_PREFIXES = (
     "aten._to_copy",
 )
 
+_IGNORED_OPS = {
+    aten.detach.default,
+    aten.alias.default,
+    aten._unsafe_view.default,
+    aten.as_strided.default,
+    aten.expand.default,
+    aten.clone.default,
+    aten.copy_.default,
+    aten.lift_fresh.default,
+    aten._to_copy.default,
+}
+
 _ADD_OPS = {
-    "aten.add.Tensor",
-    "aten.add_.Tensor",
-    "aten.add.Scalar",
-    "aten.add_.Scalar",
-    "aten.sub.Tensor",
-    "aten.sub_.Tensor",
-    "aten.sub.Scalar",
-    "aten.sub_.Scalar",
-    "aten.rsub.Tensor",
-    "aten.rsub.Scalar",
+    aten.add.Tensor,
+    aten.add_.Tensor,
+    aten.add.Scalar,
+    aten.add_.Scalar,
+    aten.sub.Tensor,
+    aten.sub_.Tensor,
+    aten.sub.Scalar,
+    aten.sub_.Scalar,
+    aten.rsub.Tensor,
+    aten.rsub.Scalar,
 }
 
 _MUL_OPS = {
-    "aten.mul.Tensor",
-    "aten.mul_.Tensor",
-    "aten.mul.Scalar",
-    "aten.mul_.Scalar",
-    "aten.div.Tensor",
-    "aten.div_.Tensor",
-    "aten.div.Scalar",
-    "aten.div_.Scalar",
+    aten.mul.Tensor,
+    aten.mul_.Tensor,
+    aten.mul.Scalar,
+    aten.mul_.Scalar,
+    aten.div.Tensor,
+    aten.div_.Tensor,
+    aten.div.Scalar,
+    aten.div_.Scalar,
 }
 
 _COMP_OPS = {
-    "aten.eq.Tensor",
-    "aten.eq.Scalar",
-    "aten.ne.Tensor",
-    "aten.ne.Scalar",
-    "aten.lt.Tensor",
-    "aten.lt.Scalar",
-    "aten.le.Tensor",
-    "aten.le.Scalar",
-    "aten.gt.Tensor",
-    "aten.gt.Scalar",
-    "aten.ge.Tensor",
-    "aten.ge.Scalar",
+    aten.eq.Tensor,
+    aten.eq.Scalar,
+    aten.ne.Tensor,
+    aten.ne.Scalar,
+    aten.lt.Tensor,
+    aten.lt.Scalar,
+    aten.le.Tensor,
+    aten.le.Scalar,
+    aten.gt.Tensor,
+    aten.gt.Scalar,
+    aten.ge.Tensor,
+    aten.ge.Scalar,
 }
 
 _NONLINEAR_OPS = {
-    "aten.sigmoid.default",
-    "aten.sigmoid_.default",
-    "aten.rsqrt.default",
-    "aten.sqrt.default",
-    "aten.sqrt_.default",
-    "aten.exp.default",
-    "aten.exp_.default",
-    "aten.tanh.default",
-    "aten.tanh_.default",
+    aten.sigmoid.default,
+    aten.sigmoid_.default,
+    aten.rsqrt.default,
+    aten.sqrt.default,
+    aten.sqrt_.default,
+    aten.exp.default,
+    aten.exp_.default,
+    aten.tanh.default,
+    aten.tanh_.default,
 }
 
 _SELECT_OPS = {
-    "aten.where.self",
-    "aten.where.ScalarOther",
-    "aten.where.ScalarSelf",
+    aten.where.self,
+    aten.where.ScalarOther,
+    aten.where.ScalarSelf,
 }
 
 
@@ -100,14 +113,6 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
 
 def _numel_tree(tree: Any) -> int:
     return sum(int(x.numel()) for x in _collect_tensors(tree))
-
-
-def _is_binary_tensor(x: torch.Tensor) -> bool:
-    if x.dtype == torch.bool:
-        return True
-    return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
-
-
 class NeuronStateCounter(BaseCounter):
     def __init__(
         self,
@@ -142,17 +147,16 @@ class NeuronStateCounter(BaseCounter):
         self.warnings.append(message)
         warnings.warn(message, RuntimeWarning, stacklevel=3)
 
-    def count_with_context(
+    def count(
         self,
         func,
         args: tuple,
         kwargs: dict,
         out,
-        *,
-        active_modules: set[nn.Module],
-        parent_names: set[str],
+        active_modules: set[nn.Module] | None = None,
+        parent_names: set[str] | None = None,
     ) -> int:
-        del parent_names
+        active_modules = set() if active_modules is None else active_modules
         active_base_nodes = [m for m in active_modules if isinstance(m, BaseNode)]
         if not active_base_nodes:
             self._pending_metrics = None
@@ -190,7 +194,7 @@ class NeuronStateCounter(BaseCounter):
                 return self._store_breakdown(breakdown)
 
         op_name = resolve_name(func)
-        if op_name.startswith(_IGNORED_OP_PREFIXES):
+        if func in _IGNORED_OPS or op_name.startswith(_IGNORED_OP_PREFIXES):
             self._pending_metrics = None
             self._pending_projection = None
             return 0
@@ -218,24 +222,24 @@ class NeuronStateCounter(BaseCounter):
         }
 
         writes_state = False
-        if op_name in _ADD_OPS:
+        if func in _ADD_OPS:
             metrics["state_adds"] += out_numel
             writes_state = True
-        elif op_name in _MUL_OPS:
+        elif func in _MUL_OPS:
             metrics["state_muls"] += out_numel
             writes_state = True
-        elif op_name in _COMP_OPS:
+        elif func in _COMP_OPS:
             metrics["state_comps"] += out_numel
-        elif op_name in _NONLINEAR_OPS:
+        elif func in _NONLINEAR_OPS:
             metrics["state_nonlinear_ops"] += out_numel
-        elif op_name in _SELECT_OPS:
+        elif func in _SELECT_OPS:
             metrics["state_select_ops"] += out_numel
             writes_state = True
 
         if writes_state and output_tensors:
             metrics["state_writes"] += out_numel
             non_state_tensors = [x for x in tensors_in if id(x) not in state_tensor_ids]
-            has_spike_gate = any(_is_binary_tensor(x) for x in non_state_tensors)
+            has_spike_gate = any(is_binary_tensor(x) for x in non_state_tensors)
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel
                 metrics["state_select_ops"] += out_numel

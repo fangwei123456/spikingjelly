@@ -12,7 +12,7 @@ import torch.nn as nn
 
 from ...neuron.base_node import BaseNode
 from ..ac import ACCounter
-from ..base import DispatchCounterMode
+from ..base import DispatchCounterMode, is_binary_tensor
 from ..mac import MACCounter
 from ..memory_access import MemoryAccessCounter
 from ..memory_residency import MemoryResidencyCounter
@@ -20,11 +20,11 @@ from ..neuron_state import NeuronStateCounter
 from ..synop import SynOpCounter
 
 __all__ = [
-    "SNNEnergyCostConfig",
-    "SNNEnergyConfig",
-    "SNNEnergyReport",
-    "SNNEnergyProfiler",
-    "estimate_snn_energy",
+    "AnalyticalEnergyCostConfig",
+    "AnalyticalEnergyConfig",
+    "AnalyticalEnergyReport",
+    "AnalyticalEnergyProfiler",
+    "estimate_analytical_energy",
 ]
 
 
@@ -36,12 +36,15 @@ def _tensor_numel(tree: Any) -> int:
     if isinstance(tree, dict):
         return sum(_tensor_numel(item) for item in tree.values())
     return 0
-
-
-def _is_binary_tensor(x: torch.Tensor) -> bool:
-    if x.dtype == torch.bool:
-        return True
-    return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
+_SUPPORTED_LEMAIRE_SYNAPTIC_MODULES = (
+    nn.Linear,
+    nn.Conv1d,
+    nn.Conv2d,
+    nn.Conv3d,
+    nn.ConvTranspose1d,
+    nn.ConvTranspose2d,
+    nn.ConvTranspose3d,
+)
 
 
 def _subtract_nested(after: Any, before: Any) -> Any:
@@ -58,7 +61,7 @@ def _sum_nested_ints(tree: Any) -> int:
 
 
 @dataclass
-class SNNEnergyCostConfig:
+class AnalyticalEnergyCostConfig:
     e_add_pj: float = 0.1
     e_mul_pj: float = 3.1
     memory_breakpoints: tuple[tuple[float, float], ...] = (
@@ -84,10 +87,12 @@ class SNNEnergyCostConfig:
 
 
 @dataclass
-class SNNEnergyConfig:
+class AnalyticalEnergyConfig:
     strict: bool = False
     collect_residency: bool = False
-    cost_config: SNNEnergyCostConfig = field(default_factory=SNNEnergyCostConfig)
+    cost_config: AnalyticalEnergyCostConfig = field(
+        default_factory=AnalyticalEnergyCostConfig
+    )
     enable_inference_only_lemaire_projection: bool = True
 
 
@@ -104,7 +109,7 @@ class InferenceOnlyLemaireCompatibleReport:
 
 
 @dataclass
-class SNNEnergyReport:
+class AnalyticalEnergyReport:
     energy_total_pj: float
     energy_by_stage: dict[str, float]
     energy_by_component: dict[str, Any]
@@ -126,9 +131,7 @@ class _LemaireForwardTracker:
         def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any):
             if self.stage_getter() != "forward":
                 return
-            if isinstance(module, BaseNode):
-                return
-            if any(True for _ in module.children()):
+            if not isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
                 return
             self.read_in += _tensor_numel(inputs)
             self.write_out += _tensor_numel(output)
@@ -155,9 +158,7 @@ class _LemaireAddressingEstimator:
         def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any):
             if self.stage_getter() != "forward":
                 return
-            if isinstance(module, BaseNode):
-                return
-            if any(True for _ in module.children()):
+            if not isinstance(module, _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES):
                 return
             if not inputs:
                 return
@@ -169,7 +170,7 @@ class _LemaireAddressingEstimator:
                 return
             param_numel = sum(int(p.numel()) for p in module.parameters(recurse=False))
             self.acc_addr += int(x.numel()) + int(out.numel()) + param_numel
-            if _is_binary_tensor(x):
+            if is_binary_tensor(x):
                 self.mac_addr += int(x.count_nonzero().item())
 
         for module in model.modules():
@@ -181,9 +182,9 @@ class _LemaireAddressingEstimator:
         self.handles.clear()
 
 
-class SNNEnergyProfiler:
-    def __init__(self, *, config: SNNEnergyConfig | None = None):
-        self.config = copy.deepcopy(config or SNNEnergyConfig())
+class AnalyticalEnergyProfiler:
+    def __init__(self, *, config: AnalyticalEnergyConfig | None = None):
+        self.config = copy.deepcopy(config or AnalyticalEnergyConfig())
         self.model: nn.Module | None = None
         self._current_stage_name: str | None = None
         ignore_neurons = [BaseNode]
@@ -231,7 +232,7 @@ class SNNEnergyProfiler:
             if module.backend == "torch":
                 continue
             message = (
-                "SNNEnergyProfiler only supports torch backend for BaseNode modules, "
+                "AnalyticalEnergyProfiler only supports torch backend for BaseNode modules, "
                 f"got {module.backend!r} from {module.__class__.__name__}."
             )
             if self.config.strict:
@@ -242,6 +243,7 @@ class SNNEnergyProfiler:
                 warned = True
 
     def __enter__(self):
+        self._current_stage_name = "forward"
         self._dispatch_mode.__enter__()
         self._active = True
         if self.model is not None:
@@ -255,6 +257,7 @@ class SNNEnergyProfiler:
             self._lemaire_tracker.remove()
             self._addr_estimator.remove()
         finally:
+            self._current_stage_name = None
             return self._dispatch_mode.__exit__(exc_type, exc, tb)
 
     @contextmanager
@@ -397,7 +400,7 @@ class SNNEnergyProfiler:
         report.available = True
         return report
 
-    def get_report(self) -> SNNEnergyReport:
+    def get_report(self) -> AnalyticalEnergyReport:
         totals = self._snapshot_totals()
         if not self._stage_snapshots:
             self._stage_snapshots["forward"] = totals
@@ -410,7 +413,7 @@ class SNNEnergyProfiler:
             stage: values["total_pj"] for stage, values in components_by_stage.items()
         }
         warnings_list = list(self._warnings) + list(self.neuron_state_counter.warnings)
-        return SNNEnergyReport(
+        return AnalyticalEnergyReport(
             energy_total_pj=components_totals["total_pj"],
             energy_by_stage=energy_by_stage,
             energy_by_component={
@@ -442,19 +445,19 @@ def _add_nested(lhs: Any, rhs: Any) -> Any:
     return lhs + rhs
 
 
-def estimate_snn_energy(
+def estimate_analytical_energy(
     model: nn.Module,
     inputs,
     *,
-    config: SNNEnergyConfig | None = None,
+    config: AnalyticalEnergyConfig | None = None,
     target=None,
     loss_fn=None,
     optimizer=None,
-) -> SNNEnergyReport:
+) -> AnalyticalEnergyReport:
     if (target is None) ^ (loss_fn is None):
         raise ValueError("target and loss_fn must be provided together.")
 
-    profiler = SNNEnergyProfiler(config=config)
+    profiler = AnalyticalEnergyProfiler(config=config)
     profiler.bind_model(model)
 
     if optimizer is not None:

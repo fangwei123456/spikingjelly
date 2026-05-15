@@ -505,7 +505,15 @@ class MemoryResidencyCounter(BaseCounter):
         self.stage_op_records.clear()
         self.simulator.reset()
 
-    def count(self, func, args: tuple, kwargs: dict, out) -> int:
+    def count(
+        self,
+        func,
+        args: tuple,
+        kwargs: dict,
+        out,
+        active_modules: set[nn.Module] | None = None,
+        parent_names: set[str] | None = None,
+    ) -> int:
         rule = self.rules.get(func)
         if rule is None:
             return 0

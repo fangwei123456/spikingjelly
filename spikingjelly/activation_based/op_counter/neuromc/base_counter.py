@@ -33,7 +33,15 @@ class NeuroMCBaseCounter(BaseCounter):
             lambda: defaultdict(int)
         )
 
-    def count(self, func, args: tuple, kwargs: dict, out) -> int:
+    def count(
+        self,
+        func,
+        args: tuple,
+        kwargs: dict,
+        out,
+        active_modules: set[nn.Module] | None = None,
+        parent_names: set[str] | None = None,
+    ) -> int:
         rule = self.rules.get(func)
         if rule is None:
             return 0

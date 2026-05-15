@@ -1,14 +1,14 @@
-from collections import defaultdict
-from typing import Any, Callable
 import logging
+from collections import defaultdict
+from typing import Any, Callable, Optional
 
 import torch
 import torch.nn as nn
 from torch.autograd.graph import register_multi_grad_hook
 from torch.overrides import TorchFunctionMode, resolve_name
 from torch.utils._python_dispatch import TorchDispatchMode
-from torch.utils.module_tracker import ModuleTracker
 from torch.utils._pytree import tree_flatten
+from torch.utils.module_tracker import ModuleTracker
 
 logger = logging.getLogger(__name__)
 _arrow = chr(0x2937)
@@ -19,7 +19,14 @@ __all__ = [
     "BaseCounter",
     "DispatchCounterMode",
     "FunctionCounterMode",
+    "is_binary_tensor",
 ]
+
+
+def is_binary_tensor(x: torch.Tensor) -> bool:
+    if x.dtype == torch.bool:
+        return True
+    return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
 
 
 class ActiveModuleTracker(ModuleTracker):
@@ -195,7 +202,15 @@ class BaseCounter:
         """
         return func in self.rules
 
-    def count(self, func, args: tuple, kwargs: dict, out) -> int:
+    def count(
+        self,
+        func,
+        args: tuple,
+        kwargs: dict,
+        out,
+        active_modules: Optional[set[nn.Module]] = None,
+        parent_names: Optional[set[str]] = None,
+    ) -> int:
         r"""
         **API Language:**
         :ref:`中文 <BaseCounter.count-cn>` | :ref:`English <BaseCounter.count-en>`
@@ -472,9 +487,6 @@ class DispatchCounterMode(TorchDispatchMode):
                     )
                 return True
 
-        if hasattr(counter, "count_with_context"):
-            return False
-
         parent_names = self.module_tracker.parents
         if not counter.has_rule(func):  # stats rule not defined
             if self.strict:
@@ -501,17 +513,14 @@ class DispatchCounterMode(TorchDispatchMode):
         for counter in self.counters:
             if self._should_skip(counter, func):
                 continue
-            if hasattr(counter, "count_with_context"):
-                value = counter.count_with_context(
-                    func,
-                    args,
-                    kwargs,
-                    out,
-                    active_modules=set(self.module_tracker.active_modules),
-                    parent_names=set(parent_names),
-                )
-            else:
-                value = counter.count(func, args, kwargs, out)
+            value = counter.count(
+                func,
+                args,
+                kwargs,
+                out,
+                active_modules=set(self.module_tracker.active_modules),
+                parent_names=set(parent_names),
+            )
             if self.verbose:
                 print(f"{_arrow} + {value} [{counter.__class__.__name__}]")
             for parent in set(parent_names):
@@ -635,10 +644,19 @@ class FunctionCounterMode(TorchFunctionMode):
         for counter in self.counters:
             if self._should_skip(counter, func):
                 continue
-            value = counter.count(func, args, kwargs, out)
+            value = counter.count(
+                func,
+                args,
+                kwargs,
+                out,
+                active_modules=set(self.module_tracker.active_modules),
+                parent_names=set(parent_names),
+            )
             if self.verbose:
                 print(f"{_arrow} + {value}")
             for parent in set(parent_names):
                 counter.record(parent, func, value)  # add the count to every ancestor
+            if hasattr(counter, "finalize_record"):
+                counter.finalize_record()
 
         return out
