@@ -26,7 +26,7 @@ __all__ = [
 def is_binary_tensor(x: torch.Tensor) -> bool:
     if x.dtype == torch.bool:
         return True
-    return bool(x.eq(0).logical_or_(x.eq(1)).all().item())
+    return bool((x.eq(0) | x.eq(1)).all().item())
 
 
 class ActiveModuleTracker(ModuleTracker):

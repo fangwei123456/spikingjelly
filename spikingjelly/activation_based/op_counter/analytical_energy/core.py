@@ -5,7 +5,7 @@ import warnings
 from collections import defaultdict
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 from numbers import Real
 
 import torch
@@ -182,6 +182,7 @@ class AnalyticalEnergyConfig:
         default_factory=AnalyticalEnergyCostConfig
     )
     enable_inference_only_lemaire_projection: bool = True
+    extra_state_rules: dict[type[nn.Module], Callable] = field(default_factory=dict)
 
 
 @dataclass
@@ -328,7 +329,11 @@ class _LemaireAddressingEstimator:
 
             if is_binary_tensor(x):
                 spike_num_in = int(x.count_nonzero().item())
-                out_channels_per_group = module.out_channels // module.groups
+                out_channels_per_group = (
+                    module.out_channels // module.groups
+                    if module.groups > 0
+                    else module.out_channels
+                )
                 self.mac_addr += spike_num_in * 2
                 self.acc_addr += spike_num_in * out_channels_per_group * kernel_volume
             else:
@@ -392,7 +397,10 @@ class AnalyticalEnergyProfiler:
         self.memory_access_counter = MemoryAccessCounter(
             extra_ignore_modules=ignore_neurons
         )
-        self.neuron_state_counter = NeuronStateCounter(strict=self.config.strict)
+        self.neuron_state_counter = NeuronStateCounter(
+            strict=self.config.strict,
+            extra_state_rules=self.config.extra_state_rules,
+        )
         self.residency_counter = (
             MemoryResidencyCounter(extra_ignore_modules=ignore_neurons)
             if self.config.collect_residency

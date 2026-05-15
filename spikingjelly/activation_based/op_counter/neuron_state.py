@@ -160,7 +160,8 @@ class NeuronStateCounter(BaseCounter):
     :type strict: bool
     :param extra_state_rules: 额外的状态规则，格式为
       ``{module_type: callable}``。其中 ``callable`` 的签名为
-      ``(module, func, args, kwargs, out, state_tensor_ids) -> dict | None``；
+      ``(module, func, args, kwargs, out, state_tensor_keys) -> dict | None``；
+      其中 ``state_tensor_keys`` 为 ``_storage_key(tensor)`` 形式的键集合；
       若返回非 ``None``，则覆盖默认统计逻辑
     :type extra_state_rules: Optional[dict[type[nn.Module], Callable]]
 
@@ -184,8 +185,10 @@ class NeuronStateCounter(BaseCounter):
     :type strict: bool
     :param extra_state_rules: additional rules in the form
       ``{module_type: callable}``. The callable signature is
-      ``(module, func, args, kwargs, out, state_tensor_ids) -> dict | None``;
-      when it returns non-``None``, the default counting logic is overridden
+      ``(module, func, args, kwargs, out, state_tensor_keys) -> dict | None``;
+      ``state_tensor_keys`` contains ``_storage_key(tensor)`` tuples, and a
+      custom rule should compare against those keys rather than ``id(tensor)``.
+      When it returns non-``None``, the default counting logic is overridden
     :type extra_state_rules: Optional[dict[type[nn.Module], Callable]]
     """
     def __init__(
@@ -245,11 +248,12 @@ class NeuronStateCounter(BaseCounter):
             return 0
 
         for module in active_base_nodes:
-            if module.backend != "torch":
+            backend = module.backend
+            if backend is not None and backend != "torch":
                 self._warn_or_raise(
                     module,
                     f"NeuronStateCounter only supports torch backend, got "
-                    f"{module.backend!r} from {module.__class__.__name__}.",
+                    f"{backend!r} from {module.__class__.__name__}.",
                 )
                 self._pending_metrics = None
                 self._pending_projection = None
@@ -370,7 +374,12 @@ class NeuronStateCounter(BaseCounter):
                 self.metric_records[scope][key] += int(item)
         if self._pending_projection is not None:
             for key, item in self._pending_projection.items():
-                self.projection_records[scope][key] += int(item)
+                if key == "potential_buffer_bytes":
+                    self.projection_records[scope][key] = max(
+                        self.projection_records[scope][key], int(item)
+                    )
+                else:
+                    self.projection_records[scope][key] += int(item)
 
     def finalize_record(self):
         self._pending_metrics = None
