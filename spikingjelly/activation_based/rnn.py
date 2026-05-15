@@ -45,7 +45,7 @@ def bidirectional_rnn_cell_forward(
     :param states_reverse: 反向RNN cell的起始状态
         若RNN cell只有单个隐藏状态，则 ``shape = [batch_size, hidden_size]`` ；
         否则 ``shape = [states_num, batch_size, hidden_size]``
-    :type states: torch.Tensor
+    :type states_reverse: torch.Tensor
     :return: y, ss, ss_r
 
         y: torch.Tensor

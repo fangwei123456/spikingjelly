@@ -742,29 +742,29 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type data_type: str
 
         :param frames_number: 积分帧的数量
-        :type frames_number: int
+        :type frames_number: Optional[int]
 
         :param split_by: ``"time"`` 或 ``"number"``
-        :type split_by: str
+        :type split_by: Optional[str]
 
         :param duration: 每帧的时间时长，其单位与特定数据集的时间单位相同
-        :type duration: int
+        :type duration: Optional[int]
 
         :param custom_integrate_function: 一个用户定义的函数，其输入为 ``events, H, W``。``events`` 是一个键为 ``['t', 'x', 'y', 'p']``、值为 ``numpy.ndarray`` 的字典。
             ``H`` 是数据的高度，``W`` 是数据的宽度。
             例如，对于 DVS128 Gesture 数据集，``H=128`` 和 ``W=128``。
             应返回积分后的帧序列（``np.ndarray``）。
-        :type custom_integrate_function: Callable
+        :type custom_integrate_function: Optional[Callable]
 
         :param custom_integrated_frames_dir_name: 用于保存通过 ``custom_integrate_function`` 积分帧的目录名称。
             如果 ``None``，则设置为 ``custom_integrate_function.__name__``
         :type custom_integrated_frames_dir_name: Optional[str]
 
         :param transform: 一个函数/转换器，接收样本并返回转换后的版本。例如图像的 ``transforms.RandomCrop``。
-        :type transform: Callable
+        :type transform: Optional[Callable]
 
         :param target_transform: 一个函数/转换器，接收目标并对其进行转换。
-        :type target_transform: Callable
+        :type target_transform: Optional[Callable]
         ----
 
         .. _NeuromorphicDatasetFolder.__init__-en:
@@ -822,14 +822,14 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :type data_type: str
 
         :param frames_number: the number of integrated frames
-        :type frames_number: int
+        :type frames_number: Optional[int]
 
         :param split_by: ``"time"`` or ``"number"``
-        :type split_by: str
+        :type split_by: Optional[str]
 
         :param duration: the time duration of each frame, whose unit is the same
             as the time unit of the specific dataset
-        :type duration: int
+        :type duration: Optional[int]
 
         :param custom_integrate_function: a user-defined function whose inputs
             are ``events, H, W``. ``events`` is a dict whose keys are
@@ -837,7 +837,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
             ``H`` is the height of the data and ``W`` is the weight of the data.
             For example, ``H=128`` and ``W=128`` for the DVS128 Gesture dataset.
             The integrated frame sequence (``np.ndarray``) should be returned.
-        :type custom_integrate_function: Callable
+        :type custom_integrate_function: Optional[Callable]
 
         :param custom_integrated_frames_dir_name: The name of directory for
             saving the frames integrating by ``custom_integrate_function``.
@@ -846,11 +846,11 @@ class NeuromorphicDatasetFolder(DatasetFolder):
 
         :param transform: a function/transform that takes in a sample and
             returns a transformed version. E.g, ``transforms.RandomCrop`` for images.
-        :type transform: Callable
+        :type transform: Optional[Callable]
 
         :param target_transform: a function/transform that takes in the target
             and transforms it.
-        :type target_transform: Callable
+        :type target_transform: Optional[Callable]
         """
         self.cfg = NeuromorphicDatasetConfig(
             root=Path(root),
@@ -899,6 +899,7 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         **原始数据集**作为原始数据集的中间和统一表示。处理后的数据集是基于原始数据集生成的。
 
         :return: 默认为 ``root/events_np``
+        :rtype: pathlib.Path
         ----
 
         .. _NeuromorphicDatasetFolder.raw_root-en:
@@ -971,6 +972,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         2. 通过调用 :meth:`extract_downloaded_files` 将下载的文件提取到 ``root/extract`` 中。
         3. 通过调用 :meth:`create_raw_from_extracted` 将提取的数据转换为原始数据集，并将原始数据集保存到 :attr:`raw_root`。
 
+        :return: None
+        :rtype: None
+
         ----
 
         .. _NeuromorphicDatasetFolder.prepare_raw_dataset-en:
@@ -985,6 +989,9 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         1. Download dataset files to ``root/download`` (if supported) or verify existing downloads.
         2. Extract downloaded files into ``root/extract`` by calling :meth:`extract_downloaded_files`.
         3. Convert extracted data into raw dataset by calling :meth:`create_raw_from_extracted`, and save the raw dataset to :attr:`raw_root`.
+
+        :return: None
+        :rtype: None
         """
         if self.raw_root.exists():
             return

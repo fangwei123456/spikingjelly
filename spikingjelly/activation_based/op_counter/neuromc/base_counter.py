@@ -34,8 +34,11 @@ class NeuroMCBaseCounter(BaseCounter):
         )
 
     def count(self, func, args: tuple, kwargs: dict, out) -> int:
+        rule = self.rules.get(func)
+        if rule is None:
+            return 0
         op_name = resolve_name(func)
-        value = int(self.rules[func](args, kwargs, out))
+        value = int(rule(args, kwargs, out))
         stage = _infer_stage(func, args, kwargs, out)
         self.stage_records[stage] += value
         self.op_records[op_name] += value
