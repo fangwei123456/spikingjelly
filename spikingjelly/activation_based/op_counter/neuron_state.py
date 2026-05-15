@@ -121,6 +121,58 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
 def _numel_tree(tree: Any) -> int:
     return sum(int(x.numel()) for x in _collect_tensors(tree))
 class NeuronStateCounter(BaseCounter):
+    r"""
+    **API Language:**
+    :ref:`中文 <NeuronStateCounter-cn>` |
+    :ref:`English <NeuronStateCounter-en>`
+
+    ----
+
+    .. _NeuronStateCounter-cn:
+
+    * **中文**
+
+    神经元内部状态计数器，用于统计 ``BaseNode`` 及其子类在运行时的状态读写和原语操作。
+
+    该计数器会输出两类结果：
+
+    - ``metric_records``：细粒度状态统计，如 ``state_reads``、``state_writes``、
+      ``state_adds``、``state_nonlinear_ops`` 等
+    - ``projection_records``：较粗粒度投影，如 ``read_potential``、
+      ``write_potential``、``state_mac_like``、``state_acc_like``
+
+    :param strict: 是否在遇到不支持的 backend 时直接抛异常
+    :type strict: bool
+    :param extra_state_rules: 额外的状态规则，格式为
+      ``{module_type: callable}``。其中 ``callable`` 的签名为
+      ``(module, func, args, kwargs, out, state_tensor_ids) -> dict | None``；
+      若返回非 ``None``，则覆盖默认统计逻辑
+    :type extra_state_rules: Optional[dict[type[nn.Module], Callable]]
+
+    ----
+
+    .. _NeuronStateCounter-en:
+
+    * **English**
+
+    Counter for tracking runtime state reads/writes and primitive operations
+    inside ``BaseNode`` and its subclasses.
+
+    It exposes two result families:
+
+    - ``metric_records``: fine-grained state metrics such as ``state_reads``,
+      ``state_writes``, ``state_adds``, and ``state_nonlinear_ops``
+    - ``projection_records``: coarser projections such as ``read_potential``,
+      ``write_potential``, ``state_mac_like``, and ``state_acc_like``
+
+    :param strict: whether to raise immediately on unsupported backends
+    :type strict: bool
+    :param extra_state_rules: additional rules in the form
+      ``{module_type: callable}``. The callable signature is
+      ``(module, func, args, kwargs, out, state_tensor_ids) -> dict | None``;
+      when it returns non-``None``, the default counting logic is overridden
+    :type extra_state_rules: Optional[dict[type[nn.Module], Callable]]
+    """
     def __init__(
         self,
         *,
@@ -129,7 +181,14 @@ class NeuronStateCounter(BaseCounter):
     ):
         super().__init__()
         self.strict = strict
-        self.extra_state_rules = dict(extra_state_rules or {})
+        rules = extra_state_rules or {}
+        for module_type, rule in rules.items():
+            if not callable(rule):
+                raise TypeError(
+                    "extra_state_rules values must be callable, "
+                    f"got {type(rule).__name__} for {module_type.__name__}."
+                )
+        self.extra_state_rules = dict(rules)
         self.metric_records: dict[str, dict[str, int]] = defaultdict(
             lambda: defaultdict(int)
         )
@@ -250,7 +309,8 @@ class NeuronStateCounter(BaseCounter):
             has_spike_gate = any(is_binary_tensor(x) for x in non_state_tensors)
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel
-                metrics["state_select_ops"] += out_numel
+                if func not in _SELECT_OPS:
+                    metrics["state_select_ops"] += out_numel
                 metrics["spike_triggered_ops"] += out_numel
             else:
                 metrics["timestep_dense_ops"] += out_numel
@@ -291,7 +351,53 @@ class NeuronStateCounter(BaseCounter):
         self._pending_projection = None
 
     def get_metric_counts(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuronStateCounter.get_metric_counts-cn>` |
+        :ref:`English <NeuronStateCounter.get_metric_counts-en>`
+
+        ----
+
+        .. _NeuronStateCounter.get_metric_counts-cn:
+
+        * **中文**
+
+        :return: 按 scope 聚合的细粒度状态统计
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _NeuronStateCounter.get_metric_counts-en:
+
+        * **English**
+
+        :return: fine-grained state metrics aggregated by scope
+        :rtype: dict[str, dict[str, int]]
+        """
         return {scope: dict(items) for scope, items in self.metric_records.items()}
 
     def get_projection_counts(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuronStateCounter.get_projection_counts-cn>` |
+        :ref:`English <NeuronStateCounter.get_projection_counts-en>`
+
+        ----
+
+        .. _NeuronStateCounter.get_projection_counts-cn:
+
+        * **中文**
+
+        :return: 按 scope 聚合的状态投影统计
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _NeuronStateCounter.get_projection_counts-en:
+
+        * **English**
+
+        :return: projected state statistics aggregated by scope
+        :rtype: dict[str, dict[str, int]]
+        """
         return {scope: dict(items) for scope, items in self.projection_records.items()}

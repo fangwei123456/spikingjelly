@@ -235,6 +235,13 @@ class BaseCounter:
         :param out: `func` 输出
         :type out: Any
 
+        :param active_modules: 当前处于活跃状态的模块集合。大多数计数器可忽略该参数，
+            但需要结合模块上下文做语义统计的计数器可以使用它
+        :type active_modules: Optional[set[nn.Module]]
+
+        :param parent_names: 当前活跃模块名称集合。大多数计数器可忽略该参数
+        :type parent_names: Optional[set[str]]
+
         :return: 计算得到的计数值
         :rtype: int
 
@@ -258,6 +265,14 @@ class BaseCounter:
 
         :param out: output of `func`
         :type out: Any
+
+        :param active_modules: currently active module instances. Most counters can
+            ignore it, while context-aware counters may use it for semantic counting
+        :type active_modules: Optional[set[nn.Module]]
+
+        :param parent_names: names of the currently active parent modules. Most
+            counters can ignore it
+        :type parent_names: Optional[set[str]]
 
         :return: the calculated count
         :rtype: int
@@ -506,6 +521,8 @@ class DispatchCounterMode(TorchDispatchMode):
         kwargs = {} if kwargs is None else kwargs
         out = func(*args, **kwargs)
         parent_names = self.module_tracker.parents
+        active_modules = set(self.module_tracker.active_modules)
+        parent_names_snapshot = set(parent_names)
 
         if self.verbose:
             print(f"DispatchCounterMode: {parent_names} - {resolve_name(func)}")
@@ -518,12 +535,12 @@ class DispatchCounterMode(TorchDispatchMode):
                 args,
                 kwargs,
                 out,
-                active_modules=set(self.module_tracker.active_modules),
-                parent_names=set(parent_names),
+                active_modules=active_modules,
+                parent_names=parent_names_snapshot,
             )
             if self.verbose:
                 print(f"{_arrow} + {value} [{counter.__class__.__name__}]")
-            for parent in set(parent_names):
+            for parent in parent_names_snapshot:
                 counter.record(parent, func, value)  # add the count to every ancestor
             if hasattr(counter, "finalize_record"):
                 counter.finalize_record()
@@ -637,6 +654,8 @@ class FunctionCounterMode(TorchFunctionMode):
         kwargs = {} if kwargs is None else kwargs
         out = func(*args, **kwargs)
         parent_names = self.module_tracker.parents
+        active_modules = set(self.module_tracker.active_modules)
+        parent_names_snapshot = set(parent_names)
 
         if self.verbose:
             print(f"FunctionCounterMode: {parent_names} - {resolve_name(func)}")
@@ -649,12 +668,12 @@ class FunctionCounterMode(TorchFunctionMode):
                 args,
                 kwargs,
                 out,
-                active_modules=set(self.module_tracker.active_modules),
-                parent_names=set(parent_names),
+                active_modules=active_modules,
+                parent_names=parent_names_snapshot,
             )
             if self.verbose:
                 print(f"{_arrow} + {value}")
-            for parent in set(parent_names):
+            for parent in parent_names_snapshot:
                 counter.record(parent, func, value)  # add the count to every ancestor
             if hasattr(counter, "finalize_record"):
                 counter.finalize_record()
