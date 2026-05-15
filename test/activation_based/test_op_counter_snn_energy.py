@@ -194,3 +194,48 @@ def test_snn_energy_linear_inout_uses_byte_sized_accesses():
             )
         )
     )
+
+
+def test_snn_energy_config_passes_extra_state_rules_to_counter():
+    calls = {"count": 0}
+
+    class RuleNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+    def rule(module, func, args, kwargs, out, state_tensor_keys):
+        del func, args, kwargs, out, state_tensor_keys
+        calls["count"] += 1
+        return {"state_reads": 1, "state_writes": 1}
+
+    node = RuleNode()
+    profiler = op_counter.AnalyticalEnergyProfiler(
+        config=op_counter.AnalyticalEnergyConfig(
+            extra_state_rules={RuleNode: rule}
+        )
+    )
+    profiler.bind_model(node)
+    with profiler:
+        _ = node(torch.rand(2, 4))
+
+    assert calls["count"] > 0
+
+
+def test_snn_energy_addressing_estimator_handles_empty_sequence_output():
+    class EmptyOutputLinear(nn.Linear):
+        def forward(self, x):
+            super().forward(x)
+            return ()
+
+    model = EmptyOutputLinear(8, 4, bias=False)
+    profiler = op_counter.AnalyticalEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        with profiler.stage("forward"):
+            _ = model(torch.rand(3, 8))
+
+    assert profiler._addr_estimator.acc_addr == 0

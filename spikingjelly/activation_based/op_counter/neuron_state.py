@@ -119,11 +119,15 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
 
 
 def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:
+    try:
+        storage_ptr = x.untyped_storage().data_ptr()
+    except (RuntimeError, AttributeError):
+        storage_ptr = id(x)
     return (
         x.device.type,
         x.device.index,
         x.dtype,
-        x.untyped_storage().data_ptr(),
+        storage_ptr,
     )
 
 

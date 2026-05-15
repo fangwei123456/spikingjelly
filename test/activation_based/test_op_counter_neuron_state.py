@@ -146,3 +146,27 @@ def test_neuron_state_counter_counts_state_access_in_bytes_for_views():
     expected_bytes = x.numel() * x.element_size()
     assert metrics["state_reads"] >= expected_bytes
     assert metrics["state_writes"] >= expected_bytes
+
+
+def test_neuron_state_counter_supports_meta_tensor_storage_keys():
+    class MetaFriendlyNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            self.v = self.v + 1.0
+            return self.v
+
+    node = MetaFriendlyNode()
+    x = torch.empty((2, 4), device="meta")
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = node(x)
+
+    assert counter.get_metric_counts()["Global"]["state_reads"] >= 0

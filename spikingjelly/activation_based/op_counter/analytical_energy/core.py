@@ -309,7 +309,11 @@ class _LemaireAddressingEstimator:
             x = inputs[0]
             if not torch.is_tensor(x):
                 return
-            out = output[0] if isinstance(output, (tuple, list)) else output
+            out = (
+                output[0]
+                if isinstance(output, (tuple, list)) and len(output) > 0
+                else output
+            )
             if not torch.is_tensor(out):
                 return
             if isinstance(module, nn.Linear):
