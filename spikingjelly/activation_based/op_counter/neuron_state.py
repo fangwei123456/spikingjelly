@@ -200,7 +200,9 @@ class NeuronStateCounter(BaseCounter):
         zero_ratio_threshold: float = 0.5,
         enable_sparse_memory_estimation: bool = True,
     ):
-        super().__init__()
+        self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
+        self.rules: dict[Any, Callable] = {}
+        self.ignore_modules = []
         self.strict = strict
         self.zero_ratio_threshold = zero_ratio_threshold
         self.enable_sparse_memory_estimation = enable_sparse_memory_estimation

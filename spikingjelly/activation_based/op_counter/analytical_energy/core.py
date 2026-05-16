@@ -18,7 +18,6 @@ from .._sparse_memory import (
     sparse_bytes,
 )
 from ..ac import ACCounter
-from ..analytical_memory import AnalyticalMemoryCounter
 from ..base import DispatchCounterMode
 from ..lemaire_addressing import LemaireAddressingCounter
 from ..mac import MACCounter
@@ -360,11 +359,6 @@ class LemaireEnergyProfiler:
         self.synop_counter = SynOpCounter()
         self.mac_counter = MACCounter(extra_ignore_modules=ignore_neurons)
         self.ac_counter = ACCounter(extra_ignore_modules=ignore_neurons)
-        self.analytical_memory_counter = AnalyticalMemoryCounter(
-            zero_ratio_threshold=self.config.sparse_zero_ratio_threshold,
-            enable_sparse_memory_estimation=self.config.enable_sparse_memory_estimation,
-            extra_ignore_modules=ignore_neurons,
-        )
         self.neuron_state_counter = NeuronStateCounter(
             strict=self.config.strict,
             extra_state_rules=self.config.extra_state_rules,
@@ -377,7 +371,6 @@ class LemaireEnergyProfiler:
                 self.synop_counter,
                 self.mac_counter,
                 self.ac_counter,
-                self.analytical_memory_counter,
                 self.neuron_state_counter,
                 self.addressing_counter,
             ],
@@ -483,7 +476,6 @@ class LemaireEnergyProfiler:
         total_pj = ops_pj + addressing_pj + memory_pj
         warnings_list = (
             list(self._warnings)
-            + list(self.analytical_memory_counter.warnings)
             + list(self.neuron_state_counter.warnings)
             + list(self._lemaire_tracker.warnings)
         )

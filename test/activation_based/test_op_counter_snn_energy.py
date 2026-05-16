@@ -259,18 +259,14 @@ def test_lemaire_energy_config_passes_extra_state_rules_to_counter():
     assert calls["count"] > 0
 
 
-def test_richer_counters_still_expose_scalar_and_structured_views():
+def test_neuron_state_counter_still_exposes_scalar_and_structured_views():
     model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
     x = torch.rand(4, 8)
-    memory = op_counter.AnalyticalMemoryCounter(extra_ignore_modules=[neuron.BaseNode])
     state = op_counter.NeuronStateCounter()
 
-    with op_counter.DispatchCounterMode([memory, state]):
+    with op_counter.DispatchCounterMode([state]):
         _ = model(x)
 
-    assert memory.get_total() > 0
-    assert memory.get_metric_counts()["Global"]["memory_access_bytes"] > 0
-    assert memory.get_extra_counts()["Global"]["memory_access_bytes"] > 0
     assert state.get_total() >= 0
     assert "Global" in state.get_metric_counts()
     assert "Global" in state.get_projection_counts()
@@ -283,6 +279,7 @@ def test_old_analytical_energy_names_are_not_exported():
     assert not hasattr(op_counter, "AnalyticalEnergyConfig")
     assert not hasattr(op_counter, "AnalyticalEnergyCostConfig")
     assert not hasattr(op_counter, "AnalyticalEnergyReport")
+    assert not hasattr(op_counter, "AnalyticalMemoryCounter")
 
 
 def test_training_related_legacy_arguments_are_rejected():
