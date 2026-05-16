@@ -152,11 +152,9 @@ class AnalyticalEnergyCostConfig:
         if memory <= points[2][0]:
             (x0, y0), (x1, y1) = points[1], points[2]
             return y0 + (y1 - y0) / (x1 - x0) * (memory - x0)
-        if memory <= points[3][0]:
-            (x0, y0), (x1, y1) = points[2], points[3]
-            return y0 + (y1 - y0) / (x1 - x0) * (memory - x0)
+        # memory is guaranteed <= points[3][0] by the clamp above.
         (x0, y0), (x1, y1) = points[2], points[3]
-        return y1 + (y1 - y0) / (x1 - x0) * (memory - x1)
+        return y0 + (y1 - y0) / (x1 - x0) * (memory - x0)
 
 
 @dataclass
@@ -691,6 +689,8 @@ class AnalyticalEnergyProfiler:
             warnings=warnings_list,
             inference_only_lemaire_compatible=self._build_lemaire_projection(totals),
         )
+
+
 def estimate_analytical_energy(
     model: nn.Module,
     inputs,
