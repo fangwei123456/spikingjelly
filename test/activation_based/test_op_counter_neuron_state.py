@@ -279,5 +279,10 @@ def test_neuron_state_counter_non_binary_zero_sparse_gate_reduces_state_bytes():
 
     dense_metrics = dense_counter.get_metric_counts()["Global"]
     sparse_metrics = sparse_counter.get_metric_counts()["Global"]
+    dense_projection = dense_counter.get_projection_counts()["Global"]
+    sparse_projection = sparse_counter.get_projection_counts()["Global"]
+    expected_buffer_bytes = x.numel() * x.element_size()
     assert sparse_metrics["state_reads"] < dense_metrics["state_reads"]
     assert sparse_metrics["state_writes"] < dense_metrics["state_writes"]
+    assert dense_projection["potential_buffer_bytes"] == expected_buffer_bytes
+    assert sparse_projection["potential_buffer_bytes"] == expected_buffer_bytes

@@ -37,18 +37,6 @@ _IGNORED_OP_PREFIXES = (
     "aten._to_copy",
 )
 
-_IGNORED_OPS = {
-    aten.detach.default,
-    aten.alias.default,
-    aten._unsafe_view.default,
-    aten.as_strided.default,
-    aten.expand.default,
-    aten.clone.default,
-    aten.copy_.default,
-    aten.lift_fresh.default,
-    aten._to_copy.default,
-}
-
 _ADD_OPS = {
     aten.add.Tensor,
     aten.add_.Tensor,
@@ -288,7 +276,7 @@ class NeuronStateCounter(BaseCounter):
                 return self._store_breakdown(breakdown)
 
         op_name = resolve_name(func)
-        if func in _IGNORED_OPS or op_name.startswith(_IGNORED_OP_PREFIXES):
+        if op_name.startswith(_IGNORED_OP_PREFIXES):
             self._pending_metrics = None
             self._pending_projection = None
             return 0
@@ -318,14 +306,8 @@ class NeuronStateCounter(BaseCounter):
             default=0,
         )
         sparse_state_access = bool(sparse_driver_tensors)
+        state_buffer_bytes = max((dense_bytes(x) for x in state_tensors), default=0)
         if sparse_state_access:
-            state_buffer_bytes = max(
-                (
-                    min(sparse_driver_count, int(x.numel())) * int(x.element_size())
-                    for x in state_tensors
-                ),
-                default=0,
-            )
             state_reads = sum(
                 min(sparse_driver_count, int(x.numel())) * int(x.element_size())
                 for x in state_tensors
@@ -336,7 +318,6 @@ class NeuronStateCounter(BaseCounter):
             )
         else:
             out_bytes = _bytes_tree(out)
-            state_buffer_bytes = max((dense_bytes(x) for x in state_tensors), default=0)
             state_reads = sum(dense_bytes(x) for x in state_tensors)
         metrics = {
             "state_reads": state_reads,
@@ -390,9 +371,7 @@ class NeuronStateCounter(BaseCounter):
             "read_potential": metrics.get("state_reads", 0),
             "write_potential": metrics.get("state_writes", 0),
             "state_mac_like": metrics.get("state_muls", 0),
-            "potential_buffer_bytes": max(
-                metrics.get("state_writes", 0), state_buffer_bytes
-            ),
+            "potential_buffer_bytes": state_buffer_bytes,
             "state_acc_like": metrics.get("state_adds", 0)
             + metrics.get("state_comps", 0)
             + metrics.get("state_nonlinear_ops", 0)

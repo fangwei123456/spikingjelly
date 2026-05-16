@@ -65,7 +65,7 @@ class AnalyticalMemoryCounter(BaseCounter):
             return any(self._tree_has_sparse_tensor(item) for item in tree.values())
         return False
 
-    def _warn_fallback(self, func, active_modules: set[nn.Module] | None = None) -> None:
+    def _warn_fallback(self, active_modules: set[nn.Module] | None = None) -> None:
         active_modules = set() if active_modules is None else active_modules
         unsupported_modules = [
             module
@@ -73,7 +73,6 @@ class AnalyticalMemoryCounter(BaseCounter):
             if len(list(module.children())) == 0
             if not isinstance(module, self._supported_sparse_modules)
         ]
-        del func
         if not unsupported_modules:
             return
         module_type = type(unsupported_modules[0])
@@ -131,7 +130,7 @@ class AnalyticalMemoryCounter(BaseCounter):
         if self._tree_has_sparse_tensor((args, kwargs)) or self._tree_has_sparse_tensor(
             out
         ):
-            self._warn_fallback(func, active_modules=active_modules)
+            self._warn_fallback(active_modules=active_modules)
         return self._store_metrics(
             {
                 "read_in_bytes": 0,

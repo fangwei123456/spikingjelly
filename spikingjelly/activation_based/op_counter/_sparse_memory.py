@@ -35,7 +35,7 @@ def is_sparse_access_tensor(
         return False
     if x.dtype == torch.bool or is_binary_tensor(x):
         return True
-    zero_ratio = float(x.eq(0).sum().item()) / float(x.numel())
+    zero_ratio = 1.0 - float(x.count_nonzero().item()) / float(x.numel())
     return zero_ratio >= zero_ratio_threshold
 
 

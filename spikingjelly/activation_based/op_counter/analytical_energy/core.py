@@ -432,11 +432,7 @@ class _LemaireAddressingEstimator:
                 spike_num_in = int(x.count_nonzero().item())
                 # For grouped convolution, each input spike only fans out to the
                 # output channels within its own group.
-                out_channels_per_group = (
-                    module.out_channels // module.groups
-                    if module.groups > 0
-                    else module.out_channels
-                )
+                out_channels_per_group = module.out_channels // module.groups
                 self.mac_addr += spike_num_in * 2
                 self.acc_addr += spike_num_in * out_channels_per_group * kernel_volume
             else:
