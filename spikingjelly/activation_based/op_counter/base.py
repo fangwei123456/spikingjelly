@@ -19,14 +19,39 @@ __all__ = [
     "BaseCounter",
     "DispatchCounterMode",
     "FunctionCounterMode",
+    "binary_tensor_cache_key",
     "is_binary_tensor",
 ]
 
 
-def is_binary_tensor(x: torch.Tensor) -> bool:
+def binary_tensor_cache_key(x: torch.Tensor) -> tuple[Any, ...]:
+    try:
+        storage_ptr = x.untyped_storage().data_ptr()
+    except (RuntimeError, AttributeError):
+        storage_ptr = id(x)
+    return (
+        x.device.type,
+        x.device.index,
+        x.dtype,
+        tuple(x.shape),
+        int(x.numel()),
+        getattr(x, "_version", None),
+        storage_ptr,
+    )
+
+
+def is_binary_tensor(
+    x: torch.Tensor, cache: dict[tuple[Any, ...], bool] | None = None
+) -> bool:
     if x.dtype == torch.bool:
         return True
-    return bool((x.eq(0) | x.eq(1)).all().item())
+    key = None if cache is None else binary_tensor_cache_key(x)
+    if cache is not None and key in cache:
+        return cache[key]
+    value = bool((x.eq(0) | x.eq(1)).all().item())
+    if cache is not None and key is not None:
+        cache[key] = value
+    return value
 
 
 class ActiveModuleTracker(ModuleTracker):

@@ -170,3 +170,37 @@ def test_neuron_state_counter_supports_meta_tensor_storage_keys():
         _ = node(x)
 
     assert counter.get_metric_counts()["Global"]["state_reads"] >= 0
+
+
+def test_neuron_state_counter_projection_does_not_double_count_reset_tags():
+    class SpikeGatedAddNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            spike = (self.v > 0.5).to(x)
+            self.v = self.v + spike
+            return self.v
+
+    node = SpikeGatedAddNode()
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = node(torch.rand(2, 4))
+
+    metrics = counter.get_metric_counts()["Global"]
+    projection = counter.get_projection_counts()["Global"]
+    assert metrics["state_adds"] > 0
+    assert metrics["state_reset_ops"] > 0
+    expected = (
+        metrics["state_adds"]
+        + metrics["state_comps"]
+        + metrics["state_nonlinear_ops"]
+        + metrics["state_select_ops"]
+    )
+    assert projection["state_acc_like"] == expected
