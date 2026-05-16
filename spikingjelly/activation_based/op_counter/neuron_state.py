@@ -222,7 +222,6 @@ class NeuronStateCounter(BaseCounter):
         self._warned_modules: set[int] = set()
         self._pending_metrics: dict[str, int] | None = None
         self._pending_projection: dict[str, int] | None = None
-        self._binary_cache: dict[tuple[Any, ...], bool] = {}
 
     def has_rule(self, func) -> bool:
         return True
@@ -340,9 +339,7 @@ class NeuronStateCounter(BaseCounter):
             non_state_tensors = [
                 x for x in tensors_in if _storage_key(x) not in state_tensor_keys
             ]
-            has_spike_gate = any(
-                is_binary_tensor(x, cache=self._binary_cache) for x in non_state_tensors
-            )
+            has_spike_gate = any(is_binary_tensor(x) for x in non_state_tensors)
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel
                 metrics["spike_triggered_ops"] += out_numel
