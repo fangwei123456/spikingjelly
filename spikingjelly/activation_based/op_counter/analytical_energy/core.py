@@ -377,7 +377,6 @@ class LemaireEnergyProfiler:
             strict=self.config.strict,
             verbose=False,
         )
-        self._active = False
         self._warnings: list[str] = []
         self._lemaire_tracker = _LemaireForwardTracker(
             zero_ratio_threshold=self.config.sparse_zero_ratio_threshold,
@@ -404,7 +403,6 @@ class LemaireEnergyProfiler:
                 warned = True
 
     def __enter__(self):
-        self._active = True
         self._dispatch_mode.__enter__()
         self._lemaire_tracker.reset()
         if self.model is not None:
@@ -412,11 +410,7 @@ class LemaireEnergyProfiler:
         return self
 
     def __exit__(self, exc_type, exc, tb):
-        self._active = False
-        try:
-            self._lemaire_tracker.remove()
-        finally:
-            pass
+        self._lemaire_tracker.remove()
         return self._dispatch_mode.__exit__(exc_type, exc, tb)
 
     def _snapshot_counts(self) -> tuple[dict[str, int], dict[str, int]]:

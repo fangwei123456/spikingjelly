@@ -87,7 +87,7 @@ def _address_convolution(args, kwargs, out):
 
 class LemaireAddressingCounter(BaseCounter):
     def __init__(self):
-        self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
+        super().__init__()
         self.rules: dict[Any, Callable] = {
             aten.mm.default: _address_mm,
             aten.addmm.default: _address_addmm,
