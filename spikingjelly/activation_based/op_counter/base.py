@@ -372,6 +372,39 @@ class BaseCounter:
         return sum(self.records["Global"].values())
 
     def reset(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <BaseCounter.reset-cn>` | :ref:`English <BaseCounter.reset-en>`
+
+        ----
+
+        .. _BaseCounter.reset-cn:
+
+        * **中文**
+
+        重置计数器，清空所有已记录的计数。
+
+        此方法会将 :attr:`records` 重新初始化为空的嵌套字典，移除之前累积的全部计数结果。
+        适用于开始新的计数会话之前显式清零计数器状态。
+
+        :return: ``None``
+        :rtype: None
+
+        ----
+
+        .. _BaseCounter.reset-en:
+
+        * **English**
+
+        Reset the counter and clear all recorded counts.
+
+        This method reinitializes :attr:`records` to an empty nested dictionary,
+        removing all previously accumulated count results. Call it before starting
+        a new counting session when a counter instance is reused.
+
+        :return: ``None``
+        :rtype: None
+        """
         self.records = defaultdict(lambda: defaultdict(int))
 
 
