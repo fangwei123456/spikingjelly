@@ -36,6 +36,8 @@ __all__ = [
     "estimate_analytical_energy",
 ]
 
+_LEMAIRE_ACCESS_WIDTH_BYTES = 4.0
+
 _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES = (
     nn.Linear,
     nn.Conv1d,
@@ -86,7 +88,11 @@ class AnalyticalEnergyCostConfig:
     ``memory_cost_pj`` 的输入语义是用于插值的 memory 标量，优先应传 buffer-size
     估计而不是累计访问流量。当前 analytical_energy 的访存字节统计按运行时
     tensor 的实际 ``dtype`` 折算，例如 FP16 tensor 记为 2 bytes/element，
-    FP32 tensor 记为 4 bytes/element。
+    FP32 tensor 记为 4 bytes/element。为了让
+    ``bytes * memory_cost_pj(buffer_bytes)`` 的公式保持量纲自洽，默认
+    ``memory_breakpoints`` 已将 Lemaire/CLIF 原始的
+    ``10/20/100 pJ per access`` 按 ``1 access = 1 FP32 element = 4 bytes``
+    转换成 ``pJ/byte``。
 
     ----
 
@@ -101,15 +107,19 @@ class AnalyticalEnergyCostConfig:
     buffer-size estimate rather than cumulative access traffic. Memory-byte
     accounting in ``analytical_energy`` follows the runtime tensor ``dtype``:
     FP16 tensors contribute 2 bytes per element, FP32 tensors contribute
-    4 bytes per element, and so on.
+    4 bytes per element, and so on. To keep the
+    ``bytes * memory_cost_pj(buffer_bytes)`` formula dimensionally consistent,
+    the default ``memory_breakpoints`` convert the original Lemaire/CLIF
+    ``10/20/100 pJ per access`` values into ``pJ/byte`` using
+    ``1 access = 1 FP32 element = 4 bytes``.
     """
     e_add_pj: float = 0.1
     e_mul_pj: float = 3.1
     memory_breakpoints: tuple[tuple[float, float], ...] = (
         (0.0, 0.0),
-        (8.0 * 1024.0, 10.0),
-        (32.0 * 1024.0, 20.0),
-        (1024.0 * 1024.0, 100.0),
+        (8.0 * 1024.0, 10.0 / _LEMAIRE_ACCESS_WIDTH_BYTES),
+        (32.0 * 1024.0, 20.0 / _LEMAIRE_ACCESS_WIDTH_BYTES),
+        (1024.0 * 1024.0, 100.0 / _LEMAIRE_ACCESS_WIDTH_BYTES),
     )
 
     def __post_init__(self):

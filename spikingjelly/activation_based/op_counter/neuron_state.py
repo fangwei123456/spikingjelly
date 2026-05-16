@@ -112,6 +112,7 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
 
 def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:
     if x.is_meta:
+        # Meta tensors do not own real storage; use object identity as a proxy.
         storage_ptr = id(x)
     else:
         try:
@@ -288,13 +289,33 @@ class NeuronStateCounter(BaseCounter):
             return 0
 
         tensors_in = _collect_tensors((args, kwargs))
-        state_tensors = [x for x in tensors_in if _storage_key(x) in state_tensor_keys]
-        if not state_tensors:
+        if (
+            func is aten.copy_.default
+            and len(args) > 0
+            and torch.is_tensor(args[0])
+            and _storage_key(args[0]) in state_tensor_keys
+        ):
+            state_source_tensors = [
+                x
+                for x in _collect_tensors((args[1:], kwargs))
+                if _storage_key(x) in state_tensor_keys
+            ]
+            state_target_tensors = [args[0]]
+        else:
+            state_source_tensors = [
+                x for x in tensors_in if _storage_key(x) in state_tensor_keys
+            ]
+            state_target_tensors = []
+
+        state_related_tensors = state_source_tensors + state_target_tensors
+        if not state_related_tensors:
             self._pending_metrics = None
             self._pending_projection = None
             return 0
 
         output_tensors = _collect_tensors(out)
+        if func is aten.copy_.default and state_target_tensors:
+            output_tensors = state_target_tensors
         out_numel = _numel_tree(out)
         non_state_tensors = [
             x for x in tensors_in if _storage_key(x) not in state_tensor_keys
@@ -312,11 +333,17 @@ class NeuronStateCounter(BaseCounter):
             default=0,
         )
         sparse_state_access = bool(sparse_driver_tensors)
-        state_buffer_bytes = max((dense_bytes(x) for x in state_tensors), default=0)
-        if sparse_state_access:
+        state_buffer_bytes = max(
+            (dense_bytes(x) for x in state_related_tensors),
+            default=0,
+        )
+        if func is aten.copy_.default and state_target_tensors:
+            state_reads = sum(dense_bytes(x) for x in state_source_tensors)
+            out_bytes = sum(dense_bytes(x) for x in state_target_tensors)
+        elif sparse_state_access:
             state_reads = sum(
                 min(sparse_driver_count, int(x.numel())) * int(x.element_size())
-                for x in state_tensors
+                for x in state_source_tensors
             )
             out_bytes = sum(
                 min(sparse_driver_count, int(x.numel())) * int(x.element_size())
@@ -324,7 +351,7 @@ class NeuronStateCounter(BaseCounter):
             )
         else:
             out_bytes = _bytes_tree(out)
-            state_reads = sum(dense_bytes(x) for x in state_tensors)
+            state_reads = sum(dense_bytes(x) for x in state_source_tensors)
         metrics = {
             "state_reads": state_reads,
             "state_writes": 0,

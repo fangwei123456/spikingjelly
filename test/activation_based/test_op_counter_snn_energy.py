@@ -200,6 +200,13 @@ def test_analytical_energy_cost_config_validates_memory_breakpoints():
         )
 
 
+def test_analytical_energy_cost_config_converts_lemaire_access_costs_to_pj_per_byte():
+    cost = op_counter.AnalyticalEnergyCostConfig()
+    assert cost.memory_cost_pj(8.0 * 1024.0) == pytest.approx(2.5)
+    assert cost.memory_cost_pj(32.0 * 1024.0) == pytest.approx(5.0)
+    assert cost.memory_cost_pj(1024.0 * 1024.0) == pytest.approx(25.0)
+
+
 def test_snn_energy_suspend_does_not_contribute_to_lemaire_projection():
     model = nn.Linear(8, 8, bias=False)
     profiler = op_counter.AnalyticalEnergyProfiler()

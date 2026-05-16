@@ -201,7 +201,8 @@ def test_neuron_state_counter_supports_meta_tensor_storage_keys():
     with op_counter.DispatchCounterMode([counter]):
         _ = node(x)
 
-    assert counter.get_metric_counts()["Global"]["state_reads"] >= 0
+    assert "Global" in counter.get_metric_counts()
+    assert counter.get_metric_counts()["Global"]["state_reads"] > 0
 
 
 def test_neuron_state_counter_projection_does_not_double_count_reset_tags():
@@ -311,4 +312,29 @@ def test_neuron_state_counter_clone_counts_state_write():
     metrics = counter.get_metric_counts()["Global"]
     expected_bytes = x.numel() * x.element_size()
     assert metrics["state_reads"] >= expected_bytes
+    assert metrics["state_writes"] >= expected_bytes
+
+
+def test_neuron_state_counter_copy_does_not_count_state_target_as_read():
+    class CopyStateNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.v.copy_(torch.zeros_like(x))
+            return self.v
+
+    x = torch.rand(2, 4)
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = CopyStateNode()(x)
+
+    metrics = counter.get_metric_counts()["Global"]
+    expected_bytes = x.numel() * x.element_size()
+    assert metrics["state_reads"] == 0
     assert metrics["state_writes"] >= expected_bytes
