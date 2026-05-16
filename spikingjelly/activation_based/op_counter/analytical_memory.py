@@ -417,3 +417,6 @@ class AnalyticalMemoryCounter(BaseCounter):
 
     def get_metric_counts(self) -> dict[str, dict[str, int]]:
         return {scope: dict(items) for scope, items in self.metric_records.items()}
+
+    def get_extra_counts(self) -> dict[str, dict[str, int]]:
+        return self.get_metric_counts()

@@ -191,6 +191,7 @@ class NeuronStateCounter(BaseCounter):
       When it returns non-``None``, the default counting logic is overridden
     :type extra_state_rules: Optional[dict[type[nn.Module], Callable]]
     """
+
     def __init__(
         self,
         *,
@@ -485,3 +486,6 @@ class NeuronStateCounter(BaseCounter):
         :rtype: dict[str, dict[str, int]]
         """
         return {scope: dict(items) for scope, items in self.projection_records.items()}
+
+    def get_extra_counts(self) -> dict[str, dict[str, int]]:
+        return self.get_projection_counts()
