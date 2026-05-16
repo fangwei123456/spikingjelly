@@ -371,6 +371,9 @@ class BaseCounter:
         """
         return sum(self.records["Global"].values())
 
+    def reset(self):
+        self.records = defaultdict(lambda: defaultdict(int))
+
 
 class DispatchCounterMode(TorchDispatchMode):
     def __init__(

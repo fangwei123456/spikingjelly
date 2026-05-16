@@ -159,3 +159,8 @@ class LemaireAddressingCounter(BaseCounter):
 
     def get_metric_counts(self) -> dict[str, dict[str, int]]:
         return {scope: dict(items) for scope, items in self.metric_records.items()}
+
+    def reset(self):
+        super().reset()
+        self.metric_records = defaultdict(lambda: defaultdict(int))
+        self._pending_metrics = None

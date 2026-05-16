@@ -403,6 +403,11 @@ class LemaireEnergyProfiler:
                 warned = True
 
     def __enter__(self):
+        self.synop_counter.reset()
+        self.mac_counter.reset()
+        self.ac_counter.reset()
+        self.neuron_state_counter.reset()
+        self.addressing_counter.reset()
         self._dispatch_mode.__enter__()
         self._lemaire_tracker.reset()
         if self.model is not None:

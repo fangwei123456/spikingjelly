@@ -143,6 +143,24 @@ def test_lemaire_energy_manual_profiler_usage_defaults_to_forward_only():
     assert not hasattr(profiler, "suspend")
 
 
+def test_lemaire_energy_profiler_reuse_does_not_accumulate_counters():
+    model = nn.Linear(8, 8, bias=False)
+    x = torch.rand(4, 8)
+    profiler = op_counter.LemaireEnergyProfiler()
+    profiler.bind_model(model)
+
+    with profiler:
+        _ = model(x)
+    first_report = profiler.get_report()
+
+    with profiler:
+        _ = model(x)
+    second_report = profiler.get_report()
+
+    assert second_report.total_pj == pytest.approx(first_report.total_pj)
+    assert second_report.counts == first_report.counts
+
+
 def test_lemaire_energy_cost_config_validates_memory_breakpoints():
     with pytest.raises(ValueError, match="exactly 4"):
         op_counter.LemaireEnergyCostConfig(memory_breakpoints=((0.0, 0.0),))

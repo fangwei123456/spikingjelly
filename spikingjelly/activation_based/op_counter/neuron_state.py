@@ -489,3 +489,12 @@ class NeuronStateCounter(BaseCounter):
 
     def get_extra_counts(self) -> dict[str, dict[str, int]]:
         return self.get_projection_counts()
+
+    def reset(self):
+        super().reset()
+        self.metric_records = defaultdict(lambda: defaultdict(int))
+        self.projection_records = defaultdict(lambda: defaultdict(int))
+        self.warnings = []
+        self._warned_modules = set()
+        self._pending_metrics = None
+        self._pending_projection = None
