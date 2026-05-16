@@ -106,7 +106,15 @@ class SpikeSimEventCounter(BaseCounter):
             aten.cat.default: self._count_concat,
         }
 
-    def count(self, func, args: tuple, kwargs: dict, out) -> int:
+    def count(
+        self,
+        func,
+        args: tuple,
+        kwargs: dict,
+        out,
+        active_modules=None,
+        parent_names=None,
+    ) -> int:
         value = int(self.rules[func](args, kwargs, out))
         scope = self._scope_from_kwargs(kwargs)
         self.record("Global", func, value)
