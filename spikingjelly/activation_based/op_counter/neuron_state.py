@@ -10,12 +10,12 @@ from torch.overrides import resolve_name
 from torch.utils._pytree import tree_flatten
 
 from ..neuron.base_node import BaseNode
-from .base import BaseCounter, is_binary_tensor
+from ._sparse_memory import active_element_count, dense_bytes, is_sparse_access_tensor
+from .base import BaseCounter
 
 __all__ = ["NeuronStateCounter"]
 
 aten = torch.ops.aten
-_CLIF_BYTES_PER_ACCESS = 4
 
 _IGNORED_OP_PREFIXES = (
     "aten.detach",
@@ -137,7 +137,7 @@ def _numel_tree(tree: Any) -> int:
 
 
 def _bytes_tree(tree: Any) -> int:
-    return sum(int(x.numel()) * _CLIF_BYTES_PER_ACCESS for x in _collect_tensors(tree))
+    return sum(dense_bytes(x) for x in _collect_tensors(tree))
 
 
 class NeuronStateCounter(BaseCounter):
@@ -201,9 +201,13 @@ class NeuronStateCounter(BaseCounter):
         *,
         strict: bool = False,
         extra_state_rules: dict[type[nn.Module], Callable] | None = None,
+        zero_ratio_threshold: float = 0.5,
+        enable_sparse_memory_estimation: bool = True,
     ):
         super().__init__()
         self.strict = strict
+        self.zero_ratio_threshold = zero_ratio_threshold
+        self.enable_sparse_memory_estimation = enable_sparse_memory_estimation
         rules = extra_state_rules or {}
         for module_type, rule in rules.items():
             if not callable(rule):
@@ -298,15 +302,44 @@ class NeuronStateCounter(BaseCounter):
 
         output_tensors = _collect_tensors(out)
         out_numel = _numel_tree(out)
-        out_bytes = _bytes_tree(out)
-        state_buffer_bytes = max(
-            (int(x.numel()) * _CLIF_BYTES_PER_ACCESS for x in state_tensors),
+        non_state_tensors = [
+            x for x in tensors_in if _storage_key(x) not in state_tensor_keys
+        ]
+        sparse_driver_tensors = [
+            x
+            for x in non_state_tensors
+            if self.enable_sparse_memory_estimation
+            and is_sparse_access_tensor(
+                x, zero_ratio_threshold=self.zero_ratio_threshold
+            )
+        ]
+        sparse_driver_count = max(
+            (active_element_count(x) for x in sparse_driver_tensors),
             default=0,
         )
+        sparse_state_access = bool(sparse_driver_tensors)
+        if sparse_state_access:
+            state_buffer_bytes = max(
+                (
+                    min(sparse_driver_count, int(x.numel())) * int(x.element_size())
+                    for x in state_tensors
+                ),
+                default=0,
+            )
+            state_reads = sum(
+                min(sparse_driver_count, int(x.numel())) * int(x.element_size())
+                for x in state_tensors
+            )
+            out_bytes = sum(
+                min(sparse_driver_count, int(x.numel())) * int(x.element_size())
+                for x in output_tensors
+            )
+        else:
+            out_bytes = _bytes_tree(out)
+            state_buffer_bytes = max((dense_bytes(x) for x in state_tensors), default=0)
+            state_reads = sum(dense_bytes(x) for x in state_tensors)
         metrics = {
-            "state_reads": sum(
-                int(x.numel()) * _CLIF_BYTES_PER_ACCESS for x in state_tensors
-            ),
+            "state_reads": state_reads,
             "state_writes": 0,
             "state_adds": 0,
             "state_muls": 0,
@@ -336,10 +369,7 @@ class NeuronStateCounter(BaseCounter):
 
         if writes_state and output_tensors:
             metrics["state_writes"] += out_bytes
-            non_state_tensors = [
-                x for x in tensors_in if _storage_key(x) not in state_tensor_keys
-            ]
-            has_spike_gate = any(is_binary_tensor(x) for x in non_state_tensors)
+            has_spike_gate = sparse_state_access
             if has_spike_gate:
                 metrics["state_reset_ops"] += out_numel
                 metrics["spike_triggered_ops"] += out_numel

@@ -74,7 +74,10 @@ def test_neuron_state_counter_toy_clif_has_more_state_traffic_than_lif():
     lif_projection = lif_counter.get_projection_counts()["Global"]
     clif_projection = clif_counter.get_projection_counts()["Global"]
     assert clif_projection["read_potential"] > lif_projection["read_potential"]
-    assert clif_projection["write_potential"] > lif_projection["write_potential"]
+    assert (
+        clif_projection["read_potential"] + clif_projection["write_potential"]
+        > lif_projection["read_potential"] + lif_projection["write_potential"]
+    )
 
 
 def test_neuron_state_counter_does_not_change_other_counters_when_neurons_ignored():
@@ -148,6 +151,35 @@ def test_neuron_state_counter_counts_state_access_in_bytes_for_views():
     assert metrics["state_writes"] >= expected_bytes
 
 
+def test_neuron_state_counter_uses_runtime_dtype_bytes():
+    class HalfStateNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            self.v = self.v + 1.0
+            return self.v
+
+    x = torch.rand(2, 4, dtype=torch.float16)
+    node = HalfStateNode().half()
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = node(x)
+
+    metrics = counter.get_metric_counts()["Global"]
+    expected_bytes = x.numel() * x.element_size()
+    assert metrics["state_reads"] >= expected_bytes
+    assert metrics["state_reads"] % x.element_size() == 0
+    assert metrics["state_writes"] >= expected_bytes
+    assert metrics["state_writes"] % x.element_size() == 0
+
+
 def test_neuron_state_counter_supports_meta_tensor_storage_keys():
     class MetaFriendlyNode(neuron.BaseNode):
         def __init__(self):
@@ -204,3 +236,48 @@ def test_neuron_state_counter_projection_does_not_double_count_reset_tags():
         + metrics["state_select_ops"]
     )
     assert projection["state_acc_like"] == expected
+
+
+def test_neuron_state_counter_non_binary_zero_sparse_gate_reduces_state_bytes():
+    class DenseGateNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            gate = torch.full_like(x, 0.25)
+            self.v = self.v + gate
+            return self.v
+
+    class SparseGateNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            gate = torch.zeros_like(x)
+            gate[:, :2] = 0.25
+            self.v = self.v + gate
+            return self.v
+
+    x = torch.rand(2, 4)
+    dense_counter = op_counter.NeuronStateCounter()
+    sparse_counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([dense_counter]):
+        _ = DenseGateNode()(x)
+    with op_counter.DispatchCounterMode([sparse_counter]):
+        _ = SparseGateNode()(x)
+
+    dense_metrics = dense_counter.get_metric_counts()["Global"]
+    sparse_metrics = sparse_counter.get_metric_counts()["Global"]
+    assert sparse_metrics["state_reads"] < dense_metrics["state_reads"]
+    assert sparse_metrics["state_writes"] < dense_metrics["state_writes"]

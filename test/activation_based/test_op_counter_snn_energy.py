@@ -91,6 +91,91 @@ def test_snn_energy_conv_inference_report_has_lemaire_compatible_fields():
     assert report.inference_only_lemaire_compatible.inference_only_E_inout_pj > 0.0
 
 
+def test_snn_energy_sparse_linear_memory_is_lower_than_dense():
+    model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
+    dense_x = torch.rand(4, 8)
+    sparse_x = torch.zeros(4, 8)
+    sparse_x[0, 0] = 0.25
+    sparse_x[1, 3] = 0.5
+
+    dense_report = op_counter.estimate_analytical_energy(model, dense_x)
+    sparse_report = op_counter.estimate_analytical_energy(model, sparse_x)
+
+    assert (
+        sparse_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+        < dense_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+    )
+    assert (
+        sparse_report.inference_only_lemaire_compatible.inference_only_E_params_pj
+        < dense_report.inference_only_lemaire_compatible.inference_only_E_params_pj
+    )
+    assert sparse_report.energy_total_pj < dense_report.energy_total_pj
+
+
+def test_snn_energy_non_binary_sparse_linear_memory_is_lower_than_dense():
+    model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
+    dense_x = torch.full((4, 8), 0.25)
+    sparse_x = torch.zeros(4, 8)
+    sparse_x[:, :2] = 0.25
+
+    dense_report = op_counter.estimate_analytical_energy(model, dense_x)
+    sparse_report = op_counter.estimate_analytical_energy(model, sparse_x)
+
+    assert (
+        sparse_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+        < dense_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+    )
+
+
+def test_snn_energy_sparse_zero_ratio_below_threshold_stays_dense():
+    model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
+    dense_x = torch.full((4, 8), 0.25)
+    near_dense_x = dense_x.clone()
+    near_dense_x[:, 0] = 0.0
+
+    dense_report = op_counter.estimate_analytical_energy(model, dense_x)
+    near_dense_report = op_counter.estimate_analytical_energy(model, near_dense_x)
+
+    assert (
+        near_dense_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+        == pytest.approx(
+            dense_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+        )
+    )
+
+
+def test_snn_energy_sparse_conv_memory_is_lower_than_dense():
+    model = nn.Sequential(
+        nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False),
+        neuron.IFNode(),
+    )
+    dense_x = torch.rand(1, 2, 6, 6)
+    sparse_x = torch.zeros(1, 2, 6, 6)
+    sparse_x[:, 0, 1, 1] = 0.25
+
+    dense_report = op_counter.estimate_analytical_energy(model, dense_x)
+    sparse_report = op_counter.estimate_analytical_energy(model, sparse_x)
+
+    assert (
+        sparse_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+        < dense_report.inference_only_lemaire_compatible.inference_only_E_inout_pj
+    )
+    assert (
+        sparse_report.inference_only_lemaire_compatible.inference_only_E_params_pj
+        < dense_report.inference_only_lemaire_compatible.inference_only_E_params_pj
+    )
+
+
+def test_snn_energy_conv_transpose_sparse_input_falls_back_with_warning():
+    model = nn.Sequential(nn.ConvTranspose2d(2, 4, kernel_size=3, bias=False))
+    x = torch.zeros(1, 2, 5, 5)
+    x[:, 0, 1, 1] = 0.25
+
+    report = op_counter.estimate_analytical_energy(model, x)
+
+    assert any("ConvTranspose2d" in message for message in report.warnings)
+
+
 def test_snn_energy_manual_profiler_usage_defaults_to_forward_stage():
     model = nn.Sequential(nn.Linear(8, 8, bias=False), neuron.IFNode())
     x = torch.rand(4, 8)
@@ -215,7 +300,7 @@ def test_snn_energy_linear_inout_uses_byte_sized_accesses():
     )
 
 
-def test_snn_energy_linear_inout_uses_clif_fp32_bytes_even_for_fp16_inputs():
+def test_snn_energy_linear_inout_uses_runtime_dtype_bytes_for_fp16_inputs():
     model = nn.Linear(8, 4, bias=False).half()
     x = torch.rand(3, 8, dtype=torch.float16)
     profiler = op_counter.AnalyticalEnergyProfiler()
@@ -225,8 +310,11 @@ def test_snn_energy_linear_inout_uses_clif_fp32_bytes_even_for_fp16_inputs():
         with profiler.stage("forward"):
             _ = model(x)
 
-    assert profiler._lemaire_tracker.read_in == x.numel() * 4
-    assert profiler._lemaire_tracker.write_out == (3 * 4) * 4
+    assert profiler._lemaire_tracker.read_in == x.numel() * x.element_size()
+    assert profiler._lemaire_tracker.write_out == (3 * 4) * x.element_size()
+    assert profiler._lemaire_tracker.read_params == (
+        model.weight.numel() * model.weight.element_size()
+    )
 
 
 def test_snn_energy_config_passes_extra_state_rules_to_counter():

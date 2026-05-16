@@ -13,9 +13,16 @@ import torch.nn as nn
 
 from ...neuron.base_node import BaseNode
 from ..ac import ACCounter
+from .._sparse_memory import (
+    active_element_count,
+    dense_bytes,
+    dense_bytes_tree,
+    is_sparse_access_tensor,
+    sparse_bytes,
+)
+from ..analytical_memory import AnalyticalMemoryCounter
 from ..base import DispatchCounterMode, is_binary_tensor
 from ..mac import MACCounter
-from ..memory_access import MemoryAccessCounter
 from ..memory_residency import MemoryResidencyCounter
 from ..neuron_state import NeuronStateCounter
 from ..synop import SynOpCounter
@@ -28,19 +35,6 @@ __all__ = [
     "InferenceOnlyLemaireCompatibleReport",
     "estimate_analytical_energy",
 ]
-
-_CLIF_BYTES_PER_ACCESS = 4
-
-
-def _tensor_size_bytes(tree: Any) -> int:
-    if torch.is_tensor(tree):
-        return int(tree.numel()) * _CLIF_BYTES_PER_ACCESS
-    if isinstance(tree, (tuple, list)):
-        return sum(_tensor_size_bytes(item) for item in tree)
-    if isinstance(tree, dict):
-        return sum(_tensor_size_bytes(item) for item in tree.values())
-    return 0
-
 
 _SUPPORTED_LEMAIRE_SYNAPTIC_MODULES = (
     nn.Linear,
@@ -90,10 +84,9 @@ class AnalyticalEnergyCostConfig:
     解析式能耗模型的成本配置。默认采用 Lemaire 风格的加法、乘法与分段存储成本。
 
     ``memory_cost_pj`` 的输入语义是用于插值的 memory 标量，优先应传 buffer-size
-    估计而不是累计访问流量。当前 CLIF 兼容口径采用固定假设：
-    **1 次访存计数 = 1 个 FP32 element = 4 bytes**。该假设对齐
-    Complementary-LIF 原始实现使用的 32-bit float 语境，而不是运行时 tensor 的
-    实际 ``dtype``。
+    估计而不是累计访问流量。当前 analytical_energy 的访存字节统计按运行时
+    tensor 的实际 ``dtype`` 折算，例如 FP16 tensor 记为 2 bytes/element，
+    FP32 tensor 记为 4 bytes/element。
 
     ----
 
@@ -105,11 +98,10 @@ class AnalyticalEnergyCostConfig:
     Lemaire-style add/mul cost table and a piecewise memory cost curve.
 
     ``memory_cost_pj`` expects the interpolation memory scalar, ideally a
-    buffer-size estimate rather than cumulative access traffic. In the CLIF-
-    compatible path, a fixed assumption is used:
-    **one memory-access count = one FP32 element = 4 bytes**. This follows the
-    32-bit floating-point setting used by the original Complementary-LIF model,
-    rather than the runtime tensor ``dtype``.
+    buffer-size estimate rather than cumulative access traffic. Memory-byte
+    accounting in ``analytical_energy`` follows the runtime tensor ``dtype``:
+    FP16 tensors contribute 2 bytes per element, FP32 tensors contribute
+    4 bytes per element, and so on.
     """
     e_add_pj: float = 0.1
     e_mul_pj: float = 3.1
@@ -190,6 +182,8 @@ class AnalyticalEnergyConfig:
     )
     enable_inference_only_lemaire_projection: bool = True
     extra_state_rules: dict[type[nn.Module], Callable] = field(default_factory=dict)
+    sparse_zero_ratio_threshold: float = 0.5
+    enable_sparse_memory_estimation: bool = True
 
 
 @dataclass
@@ -260,8 +254,10 @@ class AnalyticalEnergyReport:
 
 
 class _LemaireForwardTracker:
-    def __init__(self, stage_getter):
+    def __init__(self, stage_getter, *, zero_ratio_threshold: float, enable_sparse: bool):
         self.stage_getter = stage_getter
+        self.zero_ratio_threshold = zero_ratio_threshold
+        self.enable_sparse = enable_sparse
         self.handles: list[Any] = []
         self.read_in = 0
         self.write_out = 0
@@ -269,25 +265,119 @@ class _LemaireForwardTracker:
         self.read_in_buffer_bytes = 0
         self.write_out_buffer_bytes = 0
         self.read_params_buffer_bytes = 0
+        self.warnings: list[str] = []
+        self._warned_module_types: set[type[nn.Module]] = set()
+
+    def _warn_dense_fallback(self, module: nn.Module):
+        module_type = type(module)
+        if module_type in self._warned_module_types:
+            return
+        self._warned_module_types.add(module_type)
+        message = (
+            f"Lemaire forward tracker falls back to dense lower-bound memory for "
+            f"{module_type.__name__}."
+        )
+        self.warnings.append(message)
+        warnings.warn(message, RuntimeWarning, stacklevel=3)
+
+    def _track_bytes(self, read_in: int, write_out: int, read_params: int):
+        self.read_in += read_in
+        self.write_out += write_out
+        self.read_params += read_params
+        self.read_in_buffer_bytes = max(self.read_in_buffer_bytes, read_in)
+        self.write_out_buffer_bytes = max(self.write_out_buffer_bytes, write_out)
+        self.read_params_buffer_bytes = max(self.read_params_buffer_bytes, read_params)
 
     def attach(self, model: nn.Module):
         def hook(module: nn.Module, inputs: tuple[Any, ...], output: Any):
             if self.stage_getter() != "forward":
                 return
-            input_bytes = _tensor_size_bytes(inputs)
-            output_bytes = _tensor_size_bytes(output)
-            self.read_in += input_bytes
-            self.write_out += output_bytes
-            self.read_in_buffer_bytes = max(self.read_in_buffer_bytes, input_bytes)
-            self.write_out_buffer_bytes = max(
-                self.write_out_buffer_bytes, output_bytes
+            if not inputs:
+                return
+            x = inputs[0]
+            out = (
+                output[0]
+                if isinstance(output, (tuple, list)) and len(output) > 0
+                else output
             )
-            param_bytes = 0
-            for param in module.parameters(recurse=False):
-                param_bytes += int(param.numel()) * _CLIF_BYTES_PER_ACCESS
-            self.read_params += param_bytes
-            self.read_params_buffer_bytes = max(
-                self.read_params_buffer_bytes, param_bytes
+            if not torch.is_tensor(x) or not torch.is_tensor(out):
+                self._track_bytes(
+                    dense_bytes_tree(inputs),
+                    dense_bytes_tree(output),
+                    sum(dense_bytes(param) for param in module.parameters(recurse=False)),
+                )
+                return
+
+            input_is_sparse = self.enable_sparse and is_sparse_access_tensor(
+                x, zero_ratio_threshold=self.zero_ratio_threshold
+            )
+            output_is_sparse = self.enable_sparse and is_sparse_access_tensor(
+                out, zero_ratio_threshold=self.zero_ratio_threshold
+            )
+
+            if isinstance(module, nn.Linear):
+                if not input_is_sparse:
+                    read_in = dense_bytes(x)
+                    write_out = dense_bytes(out)
+                    read_params = sum(
+                        dense_bytes(param) for param in module.parameters(recurse=False)
+                    )
+                else:
+                    active_inputs = active_element_count(x)
+                    read_in = sparse_bytes(x)
+                    read_params = (
+                        active_inputs
+                        * module.out_features
+                        * int(module.weight.element_size())
+                    )
+                    if module.bias is not None:
+                        output_active = (
+                            active_element_count(out)
+                            if output_is_sparse
+                            else int(out.numel())
+                        )
+                        read_params += output_active * int(module.bias.element_size())
+                    write_out = sparse_bytes(out) if output_is_sparse else dense_bytes(out)
+                self._track_bytes(read_in, write_out, read_params)
+                return
+
+            if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+                if not input_is_sparse:
+                    read_in = dense_bytes(x)
+                    write_out = dense_bytes(out)
+                    read_params = sum(
+                        dense_bytes(param) for param in module.parameters(recurse=False)
+                    )
+                else:
+                    active_inputs = active_element_count(x)
+                    kernel_volume = 1
+                    for dim in module.kernel_size:
+                        kernel_volume *= int(dim)
+                    out_channels_per_group = module.out_channels // module.groups
+                    read_in = sparse_bytes(x)
+                    read_params = (
+                        active_inputs
+                        * out_channels_per_group
+                        * kernel_volume
+                        * int(module.weight.element_size())
+                    )
+                    if module.bias is not None:
+                        output_active = (
+                            active_element_count(out)
+                            if output_is_sparse
+                            else int(out.numel())
+                        )
+                        read_params += output_active * int(module.bias.element_size())
+                    write_out = sparse_bytes(out) if output_is_sparse else dense_bytes(out)
+                self._track_bytes(read_in, write_out, read_params)
+                return
+
+            if input_is_sparse or output_is_sparse:
+                self._warn_dense_fallback(module)
+            self._track_bytes(
+                dense_bytes_tree(inputs),
+                dense_bytes_tree(output),
+                sum(dense_bytes(param) for param in module.parameters(recurse=False)),
             )
 
         for module in model.modules():
@@ -407,12 +497,16 @@ class AnalyticalEnergyProfiler:
         self.synop_counter = SynOpCounter()
         self.mac_counter = MACCounter(extra_ignore_modules=ignore_neurons)
         self.ac_counter = ACCounter(extra_ignore_modules=ignore_neurons)
-        self.memory_access_counter = MemoryAccessCounter(
+        self.memory_access_counter = AnalyticalMemoryCounter(
+            zero_ratio_threshold=self.config.sparse_zero_ratio_threshold,
+            enable_sparse_memory_estimation=self.config.enable_sparse_memory_estimation,
             extra_ignore_modules=ignore_neurons
         )
         self.neuron_state_counter = NeuronStateCounter(
             strict=self.config.strict,
             extra_state_rules=self.config.extra_state_rules,
+            zero_ratio_threshold=self.config.sparse_zero_ratio_threshold,
+            enable_sparse_memory_estimation=self.config.enable_sparse_memory_estimation,
         )
         self.residency_counter = (
             MemoryResidencyCounter(extra_ignore_modules=ignore_neurons)
@@ -437,7 +531,11 @@ class AnalyticalEnergyProfiler:
         self._stage_snapshots: dict[str, dict[str, Any]] = defaultdict(dict)
         self._warnings: list[str] = []
         self._training_run = False
-        self._lemaire_tracker = _LemaireForwardTracker(lambda: self._current_stage_name)
+        self._lemaire_tracker = _LemaireForwardTracker(
+            lambda: self._current_stage_name,
+            zero_ratio_threshold=self.config.sparse_zero_ratio_threshold,
+            enable_sparse=self.config.enable_sparse_memory_estimation,
+        )
         self._addr_estimator = _LemaireAddressingEstimator(
             lambda: self._current_stage_name
         )
@@ -514,21 +612,21 @@ class AnalyticalEnergyProfiler:
             self._current_stage_name = prev
 
     def _snapshot_totals(self) -> dict[str, Any]:
+        memory_metrics = self.memory_access_counter.get_metric_counts().get("Global", {})
         snapshot = {
             "synop": self.synop_counter.get_total(),
             "mac": self.mac_counter.get_total(),
             "ac": self.ac_counter.get_total(),
             "memory_access_bytes": self.memory_access_counter.get_total(),
-            "memory_buffer_bytes": max(
-                self._lemaire_tracker.read_in_buffer_bytes,
-                self._lemaire_tracker.write_out_buffer_bytes,
-                self._lemaire_tracker.read_params_buffer_bytes,
+            "memory_buffer_bytes": memory_metrics.get(
+                "memory_buffer_bytes", self.memory_access_counter.get_total()
             ),
             "state": self.neuron_state_counter.get_metric_counts().get("Global", {}),
             "projection": self.neuron_state_counter.get_projection_counts().get(
                 "Global", {}
             ),
         }
+        snapshot.update(memory_metrics)
         if self.residency_counter is not None:
             snapshot["memory_residency_bits"] = self.residency_counter.get_total()
         return snapshot
@@ -667,7 +765,12 @@ class AnalyticalEnergyProfiler:
         energy_by_stage = {
             stage: values["total_pj"] for stage, values in components_by_stage.items()
         }
-        warnings_list = list(self._warnings) + list(self.neuron_state_counter.warnings)
+        warnings_list = (
+            list(self._warnings)
+            + list(self.memory_access_counter.warnings)
+            + list(self.neuron_state_counter.warnings)
+            + list(self._lemaire_tracker.warnings)
+        )
         return AnalyticalEnergyReport(
             energy_total_pj=components_totals["total_pj"],
             energy_by_stage=energy_by_stage,
