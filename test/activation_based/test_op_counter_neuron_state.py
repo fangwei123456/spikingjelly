@@ -286,3 +286,29 @@ def test_neuron_state_counter_non_binary_zero_sparse_gate_reduces_state_bytes():
     assert sparse_metrics["state_writes"] < dense_metrics["state_writes"]
     assert dense_projection["potential_buffer_bytes"] == expected_buffer_bytes
     assert sparse_projection["potential_buffer_bytes"] == expected_buffer_bytes
+
+
+def test_neuron_state_counter_clone_counts_state_write():
+    class CloneStateNode(neuron.BaseNode):
+        def __init__(self):
+            super().__init__(v_threshold=1.0, v_reset=None, step_mode="s")
+
+        def neuronal_charge(self, x: torch.Tensor):
+            self.v = self.v + x
+
+        def single_step_forward(self, x: torch.Tensor):
+            self.v_float_to_tensor(x)
+            self.neuronal_charge(x)
+            self.v = self.v.clone()
+            return self.v
+
+    x = torch.rand(2, 4)
+    counter = op_counter.NeuronStateCounter()
+
+    with op_counter.DispatchCounterMode([counter]):
+        _ = CloneStateNode()(x)
+
+    metrics = counter.get_metric_counts()["Global"]
+    expected_bytes = x.numel() * x.element_size()
+    assert metrics["state_reads"] >= expected_bytes
+    assert metrics["state_writes"] >= expected_bytes

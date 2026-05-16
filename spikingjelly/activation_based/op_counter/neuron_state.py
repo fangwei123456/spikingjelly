@@ -31,10 +31,7 @@ _IGNORED_OP_PREFIXES = (
     "aten.squeeze",
     "aten.transpose",
     "aten.permute",
-    "aten.clone",
-    "aten.copy_",
     "aten.lift_fresh",
-    "aten._to_copy",
 )
 
 _ADD_OPS = {
@@ -101,6 +98,12 @@ _SELECT_OPS = {
     aten.where.ScalarSelf,
 }
 
+_STATE_COPY_OPS = {
+    aten.clone.default,
+    aten.copy_.default,
+    aten._to_copy.default,
+}
+
 
 def _collect_tensors(tree: Any) -> list[torch.Tensor]:
     flat, _ = tree_flatten(tree)
@@ -108,10 +111,13 @@ def _collect_tensors(tree: Any) -> list[torch.Tensor]:
 
 
 def _storage_key(x: torch.Tensor) -> tuple[Any, ...]:
-    try:
-        storage_ptr = x.untyped_storage().data_ptr()
-    except (RuntimeError, AttributeError):
+    if x.is_meta:
         storage_ptr = id(x)
+    else:
+        try:
+            storage_ptr = x.untyped_storage().data_ptr()
+        except (RuntimeError, AttributeError):
+            storage_ptr = id(x)
     return (
         x.device.type,
         x.device.index,
@@ -346,6 +352,8 @@ class NeuronStateCounter(BaseCounter):
             writes_state = func in _INPLACE_NONLINEAR_OPS
         elif func in _SELECT_OPS:
             metrics["state_select_ops"] += out_numel
+            writes_state = True
+        elif func in _STATE_COPY_OPS:
             writes_state = True
 
         if writes_state and output_tensors:

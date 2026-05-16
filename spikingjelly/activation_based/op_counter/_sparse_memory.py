@@ -33,6 +33,8 @@ def is_sparse_access_tensor(
 ) -> bool:
     if x.numel() == 0:
         return False
+    if x.is_meta:
+        return False
     if x.dtype == torch.bool or is_binary_tensor(x):
         return True
     zero_ratio = 1.0 - float(x.count_nonzero().item()) / float(x.numel())
