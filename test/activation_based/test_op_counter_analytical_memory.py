@@ -34,6 +34,14 @@ def test_analytical_memory_counter_reduces_sparse_linear_memory():
     metrics = analytical.get_metric_counts()["Global"]
     assert metrics["sparse_memory_bytes"] == analytical.get_total()
     assert metrics["read_in_bytes"] == int(x.count_nonzero().item()) * x.element_size()
+    assert metrics["read_params_buffer_bytes"] == (
+        model.weight.numel() * model.weight.element_size()
+    )
+    assert metrics["memory_buffer_bytes"] == max(
+        metrics["read_in_buffer_bytes"],
+        metrics["read_params_buffer_bytes"],
+        metrics["write_out_buffer_bytes"],
+    )
 
 
 def test_analytical_memory_counter_reduces_sparse_conv_memory():

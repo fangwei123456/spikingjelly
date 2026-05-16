@@ -96,13 +96,28 @@ class AnalyticalMemoryCounter(BaseCounter):
         )
         if "memory_buffer_bytes" not in metrics:
             metrics["memory_buffer_bytes"] = max(
-                metrics.get("read_in_bytes", 0),
-                metrics.get("read_params_bytes", 0),
-                metrics.get("write_out_bytes", 0),
-                metrics.get("other_memory_bytes", 0),
+                metrics.get("read_in_buffer_bytes", metrics.get("read_in_bytes", 0)),
+                metrics.get(
+                    "read_params_buffer_bytes", metrics.get("read_params_bytes", 0)
+                ),
+                metrics.get(
+                    "write_out_buffer_bytes", metrics.get("write_out_bytes", 0)
+                ),
+                metrics.get(
+                    "other_memory_buffer_bytes", metrics.get("other_memory_bytes", 0)
+                ),
             )
         self._pending_metrics = metrics
         return metrics["memory_access_bytes"]
+
+    def _max_tensor_bytes(self, tree: Any) -> int:
+        if torch.is_tensor(tree):
+            return dense_bytes(tree)
+        if isinstance(tree, (tuple, list)):
+            return max((self._max_tensor_bytes(item) for item in tree), default=0)
+        if isinstance(tree, dict):
+            return max((self._max_tensor_bytes(item) for item in tree.values()), default=0)
+        return 0
 
     def _dense_fallback(
         self,
@@ -126,7 +141,10 @@ class AnalyticalMemoryCounter(BaseCounter):
                 "sparse_memory_bytes": 0,
                 "other_memory_bytes": value,
                 "fallback_dense_ops": 1,
-                "memory_buffer_bytes": value,
+                "other_memory_buffer_bytes": max(
+                    self._max_tensor_bytes((args, kwargs)),
+                    self._max_tensor_bytes(out),
+                ),
             }
         )
 
@@ -149,6 +167,10 @@ class AnalyticalMemoryCounter(BaseCounter):
                 "read_in_bytes": read_in,
                 "read_params_bytes": read_params,
                 "write_out_bytes": write_out,
+                "read_in_buffer_bytes": dense_bytes(x),
+                "read_params_buffer_bytes": dense_bytes(y)
+                + (dense_bytes(bias) if bias is not None else 0),
+                "write_out_buffer_bytes": dense_bytes(out),
                 "dense_memory_bytes": read_in + read_params + write_out,
                 "sparse_memory_bytes": 0,
                 "other_memory_bytes": 0,
@@ -168,6 +190,10 @@ class AnalyticalMemoryCounter(BaseCounter):
             "read_in_bytes": read_in,
             "read_params_bytes": read_params,
             "write_out_bytes": write_out,
+            "read_in_buffer_bytes": dense_bytes(x),
+            "read_params_buffer_bytes": dense_bytes(y)
+            + (dense_bytes(bias) if bias is not None else 0),
+            "write_out_buffer_bytes": dense_bytes(out),
             "dense_memory_bytes": 0,
             "sparse_memory_bytes": total,
             "other_memory_bytes": 0,
@@ -200,6 +226,10 @@ class AnalyticalMemoryCounter(BaseCounter):
                 "read_in_bytes": read_in,
                 "read_params_bytes": read_params,
                 "write_out_bytes": write_out,
+                "read_in_buffer_bytes": dense_bytes(x),
+                "read_params_buffer_bytes": dense_bytes(w)
+                + (dense_bytes(bias) if bias is not None else 0),
+                "write_out_buffer_bytes": dense_bytes(out),
                 "dense_memory_bytes": read_in + read_params + write_out,
                 "sparse_memory_bytes": 0,
                 "other_memory_bytes": 0,
@@ -225,6 +255,10 @@ class AnalyticalMemoryCounter(BaseCounter):
             "read_in_bytes": read_in,
             "read_params_bytes": read_params,
             "write_out_bytes": write_out,
+            "read_in_buffer_bytes": dense_bytes(x),
+            "read_params_buffer_bytes": dense_bytes(w)
+            + (dense_bytes(bias) if bias is not None else 0),
+            "write_out_buffer_bytes": dense_bytes(out),
             "dense_memory_bytes": 0,
             "sparse_memory_bytes": total,
             "other_memory_bytes": 0,
@@ -272,6 +306,9 @@ class AnalyticalMemoryCounter(BaseCounter):
                         "read_in_bytes": read_in,
                         "read_params_bytes": read_params,
                         "write_out_bytes": write_out,
+                        "read_in_buffer_bytes": dense_bytes(x),
+                        "read_params_buffer_bytes": dense_bytes(y),
+                        "write_out_buffer_bytes": dense_bytes(out),
                         "dense_memory_bytes": read_in + read_params + write_out,
                         "sparse_memory_bytes": 0,
                         "other_memory_bytes": 0,
@@ -287,6 +324,9 @@ class AnalyticalMemoryCounter(BaseCounter):
                     "read_in_bytes": read_in,
                     "read_params_bytes": read_params,
                     "write_out_bytes": write_out,
+                    "read_in_buffer_bytes": dense_bytes(x),
+                    "read_params_buffer_bytes": dense_bytes(y),
+                    "write_out_buffer_bytes": dense_bytes(out),
                     "dense_memory_bytes": 0,
                     "sparse_memory_bytes": total,
                     "other_memory_bytes": 0,
@@ -318,6 +358,10 @@ class AnalyticalMemoryCounter(BaseCounter):
                         "read_in_bytes": read_in,
                         "read_params_bytes": read_params,
                         "write_out_bytes": write_out,
+                        "read_in_buffer_bytes": dense_bytes(x),
+                        "read_params_buffer_bytes": dense_bytes(y)
+                        + (dense_bytes(bias) if beta != 0 else 0),
+                        "write_out_buffer_bytes": dense_bytes(out),
                         "dense_memory_bytes": read_in + read_params + write_out,
                         "sparse_memory_bytes": 0,
                         "other_memory_bytes": 0,
@@ -338,6 +382,10 @@ class AnalyticalMemoryCounter(BaseCounter):
                     "read_in_bytes": read_in,
                     "read_params_bytes": read_params,
                     "write_out_bytes": write_out,
+                    "read_in_buffer_bytes": dense_bytes(x),
+                    "read_params_buffer_bytes": dense_bytes(y)
+                    + (dense_bytes(bias) if beta != 0 else 0),
+                    "write_out_buffer_bytes": dense_bytes(out),
                     "dense_memory_bytes": 0,
                     "sparse_memory_bytes": total,
                     "other_memory_bytes": 0,
