@@ -696,8 +696,8 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         :param input_size: The number of expected features in the input ``x``
         :type input_size: int
 
-        :param hidden_size: int
-        :type hidden_size: The number of features in the hidden state ``h``
+        :param hidden_size: The number of features in the hidden state ``h``
+        :type hidden_size: int
 
         :param bias: If ``False``, then the layer does not use bias weights ``b_ih`` and
             ``b_hh``. Default: ``True``

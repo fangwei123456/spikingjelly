@@ -55,6 +55,7 @@ def set_threshold_margin(
     :type threshold1: float
 
     :return: None
+    :rtype: None
 
     ----
 
@@ -88,6 +89,7 @@ def set_threshold_margin(
     :type threshold1: float
 
     :return: None
+    :rtype: None
     """
     if output_layer.training:
         output_layer.v_threshold = torch.ones_like(label_one_hot) * threshold0

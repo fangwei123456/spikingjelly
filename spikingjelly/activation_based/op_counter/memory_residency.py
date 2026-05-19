@@ -199,6 +199,55 @@ _RESIDENCY_ACCESS_RULES: dict[Any, Callable] = {
 
 
 class MemoryResidencySimulator:
+    r"""
+    **API Language:**
+    :ref:`中文 <MemoryResidencySimulator-cn>` |
+    :ref:`English <MemoryResidencySimulator-en>`
+
+    ----
+
+    .. _MemoryResidencySimulator-cn:
+
+    * **中文**
+
+    内存驻留模拟器，用于模拟 SNN 推理过程中张量在不同存储层级（寄存器、SRAM、DRAM）的驻留和移动。
+
+    该模拟器使用 LRU 淘汰策略管理寄存器与 SRAM 缓存，追踪每个操作对各层级字节的读写，
+    以及各层级间的数据移动量。
+
+    典型用法是与 :class:`MemoryResidencyCounter` 配合使用，由计数器自动驱动模拟器更新。
+
+    :param config: 可选配置对象（需具有 ``capacity_bits`` 属性）
+    :type config: Optional[Any]
+
+    :param capacity_bits: 各层级的容量（以比特为单位），包含 ``reg``、``sram``、``dram`` 三个键。
+        若未提供则使用默认容量
+    :type capacity_bits: Optional[dict[str, float]]
+
+    ----
+
+    .. _MemoryResidencySimulator-en:
+
+    * **English**
+
+    Memory residency simulator that models tensor residency and movement across
+    different memory hierarchy levels (reg, SRAM, DRAM) during SNN inference.
+
+    The simulator manages register and SRAM caches with LRU eviction policy,
+    tracks per-operation read/write bytes at each level, and data movement
+    between levels.
+
+    Typical usage is to pair it with :class:`MemoryResidencyCounter`, which
+    automatically drives the simulator.
+
+    :param config: optional config object (must have ``capacity_bits`` attribute)
+    :type config: Optional[Any]
+
+    :param capacity_bits: capacity for each level in bits, with keys ``reg``,
+        ``sram``, and ``dram``. If not provided, default capacities are used
+    :type capacity_bits: Optional[dict[str, float]]
+    """
+
     def __init__(
         self,
         config: Any | None = None,
@@ -537,7 +586,9 @@ class MemoryResidencyCounter(BaseCounter):
         for level in all_levels:
             old_info = before_level_rw.get(level, {})
             new_info = after_level_rw.get(level, {})
-            delta_read = int(new_info.get("read_bits", 0) - old_info.get("read_bits", 0))
+            delta_read = int(
+                new_info.get("read_bits", 0) - old_info.get("read_bits", 0)
+            )
             delta_write = int(
                 new_info.get("write_bits", 0) - old_info.get("write_bits", 0)
             )

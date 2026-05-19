@@ -513,6 +513,18 @@ def estimate_lemaire_energy(
 
     对一次前向推理执行 Lemaire 对齐的解析式能耗估计。
 
+    :param model: 待分析的 PyTorch 模型
+    :type model: torch.nn.Module
+
+    :param inputs: 模型输入。如果为 ``tuple`` 或 ``list`` 则解包后传入 ``model(*inputs)``
+    :type inputs: Any
+
+    :param config: Lemaire 能耗配置，若为 ``None`` 则使用默认配置
+    :type config: Optional[LemaireEnergyConfig]
+
+    :return: Lemaire 对齐的解析式能耗报告
+    :rtype: LemaireEnergyReport
+
     ----
 
     .. _estimate_lemaire_energy-en:
@@ -521,6 +533,19 @@ def estimate_lemaire_energy(
 
     Run one forward inference pass and return a Lemaire-aligned analytical
     energy report.
+
+    :param model: PyTorch model to profile
+    :type model: torch.nn.Module
+
+    :param inputs: input to the model. If it is a ``tuple`` or ``list``,
+        it will be unpacked as ``model(*inputs)``
+    :type inputs: Any
+
+    :param config: Lemaire energy configuration. If ``None``, default config is used
+    :type config: Optional[LemaireEnergyConfig]
+
+    :return: Lemaire-aligned analytical energy report
+    :rtype: LemaireEnergyReport
     """
 
     profiler = LemaireEnergyProfiler(config=config)

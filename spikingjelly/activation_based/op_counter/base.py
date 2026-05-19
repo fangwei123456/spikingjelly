@@ -22,7 +22,40 @@ __all__ = [
     "FunctionCounterMode",
 ]
 
+
 def is_binary_tensor(x: torch.Tensor) -> bool:
+    r"""
+    **API Language:**
+    :ref:`中文 <is_binary_tensor-cn>` | :ref:`English <is_binary_tensor-en>`
+
+    ----
+
+    .. _is_binary_tensor-cn:
+
+    * **中文**
+
+    判断输入张量 ``x`` 是否为二元张量（即所有元素都在 {0, 1} 中或 ``dtype`` 为 ``bool``）。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+
+    :return: 如果 ``x`` 是二元张量或 bool 张量则返回 ``True``
+    :rtype: bool
+
+    ----
+
+    .. _is_binary_tensor-en:
+
+    * **English**
+
+    Check if the input tensor ``x`` is a binary tensor (all elements are in {0, 1} or its ``dtype`` is ``bool``).
+
+    :param x: input tensor
+    :type x: torch.Tensor
+
+    :return: ``True`` if ``x`` is a binary tensor or a bool tensor
+    :rtype: bool
+    """
     if x.dtype == torch.bool:
         return True
     value = bool((x.eq(0) | x.eq(1)).all().item())

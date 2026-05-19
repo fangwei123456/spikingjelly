@@ -224,7 +224,7 @@ class InputMonitor(BaseMonitor):
 
         :param instance: the instance of modules to be monitored. If ``None``, it will
             be regarded as ``type(net)``
-        :type instance: Any or tuple
+        :type instance: Optional[Union[type, tuple[type, ...]]]
 
         :param function_on_input: the function that applies on the monitored modules' inputs
         :type function_on_input: Callable
@@ -340,11 +340,6 @@ class AttributeMonitor(BaseMonitor):
         .. _AttributeMonitor-en:
 
         * **English**
-
-        Applies ``function_on_input`` on inputs of all modules whose instances are
-        ``instance`` in ``net``, and records the data into ``self.records``, which is a
-        ``list``. Call ``self.enable()`` or ``self.disable()`` to enable or disable the
-        monitor. Call ``self.clear_recorded_data()`` to clear the recorded data.
 
         Applies ``function_on_attribute`` on ``m.attribute_name`` of each monitored
         module ``m`` whose instance is ``instance`` in ``net``, and records the data
@@ -646,7 +641,7 @@ class GradOutputMonitor(BaseMonitor):
         :type instance: Optional[Union[type, tuple[type, ...]]]
 
         :param function_on_grad_output: the function that applies on the grad of
-            monitored modules' inputs
+            monitored modules' outputs
         :type function_on_grad_output: Callable
 
         ----

@@ -488,6 +488,29 @@ class NeuronStateCounter(BaseCounter):
         return {scope: dict(items) for scope, items in self.projection_records.items()}
 
     def get_extra_counts(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuronStateCounter.get_extra_counts-cn>` |
+        :ref:`English <NeuronStateCounter.get_extra_counts-en>`
+
+        ----
+
+        .. _NeuronStateCounter.get_extra_counts-cn:
+
+        * **中文**
+
+        :return: 返回与 :meth:`get_projection_counts` 相同的结果
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _NeuronStateCounter.get_extra_counts-en:
+
+        * **English**
+
+        :return: returns the same result as :meth:`get_projection_counts`
+        :rtype: dict[str, dict[str, int]]
+        """
         return self.get_projection_counts()
 
     def reset(self):
