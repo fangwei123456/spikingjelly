@@ -1,0 +1,3294 @@
+{
+  "publications": [
+    {
+      "title": "Incorporating Learnable Membrane Time Constant to Enhance Learning of Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2007.05785",
+      "publisher": "ICCV 2021",
+      "code_urls": [
+        "https://github.com/fangwei123456/Parametric-Leaky-Integrate-and-Fire-Spiking-Neuron"
+      ]
+    },
+    {
+      "title": "Pruning of Deep Spiking Neural Networks through Gradient Rewiring",
+      "paper_url": "https://arxiv.org/abs/2105.04916",
+      "publisher": "IJCAI 2021",
+      "code_urls": [
+        "https://github.com/Yanqi-Chen/Gradient-Rewiring"
+      ]
+    },
+    {
+      "title": "Optimal ANN-SNN Conversion for Fast and Accurate Inference in Deep Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2105.11654",
+      "publisher": "IJCAI 2021",
+      "code_urls": [
+        "https://github.com/DingJianhao/OptSNNConvertion-RNL-RIL"
+      ]
+    },
+    {
+      "title": "Deep Residual Learning in Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2102.04159",
+      "publisher": "NeurIPS 2021",
+      "code_urls": [
+        "https://github.com/fangwei123456/Spike-Element-Wise-ResNet"
+      ]
+    },
+    {
+      "title": "Spiking Neural Networks Trained via Proxy",
+      "paper_url": "https://arxiv.org/abs/2109.13208",
+      "publisher": "IEEE Access",
+      "code_urls": [
+        "https://github.com/SRKH/ProxyLearning"
+      ]
+    },
+    {
+      "title": "StereoSpike: Depth Learning with a Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2109.13751",
+      "publisher": "IEEE Access",
+      "code_urls": [
+        "https://github.com/urancon/StereoSpike"
+      ]
+    },
+    {
+      "title": "An Odor Recognition Algorithm of Electronic Noses Based on Convolutional Spiking Neural Network for Spoiled Food Identification",
+      "paper_url": "https://iopscience.iop.org/article/10.1149/1945-7111/ac1699/meta",
+      "publisher": "Journal of The Electrochemical Society",
+      "code_urls": []
+    },
+    {
+      "title": "Cascade Spiking Neuron Network For Event-based Image Classification In Noisy Environment",
+      "paper_url": "https://www.techrxiv.org/articles/preprint/Cascade_Spiking_Neuron_Network_For_Event-based_Image_Classification_In_Noisy_Environment/16571043",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Keys to Accurate Feature Extraction Using Residual Spiking Neural Networks",
+      "paper_url": "https://iopscience.iop.org/article/10.1088/2634-4386/ac8bef/meta",
+      "publisher": "Neuromorphic Computing and Engineering",
+      "code_urls": [
+        "https://github.com/VicenteAlex/Spiking_ResNet"
+      ]
+    },
+    {
+      "title": "Human-Level Control through Directly-Trained Deep Spiking Q-Networks",
+      "paper_url": "https://arxiv.org/abs/2201.07211",
+      "publisher": "IEEE Transactions on Cybernetics",
+      "code_urls": [
+        "https://github.com/AptX395/Deep-Spiking-Q-Networks"
+      ]
+    },
+    {
+      "title": "Deep Reinforcement Learning with Spiking Q-learning",
+      "paper_url": "https://arxiv.org/abs/2201.09754",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based Video Reconstruction via Potential-assisted Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2201.10943",
+      "publisher": "CVPR 2022",
+      "code_urls": [
+        "https://github.com/LinZhu111/EVSNN"
+      ]
+    },
+    {
+      "title": "Optimal ANN-SNN Conversion for High-accuracy and Ultra-low-latency Spiking Neural Networks",
+      "paper_url": "https://openreview.net/forum?id=7B3IJMM1k_M",
+      "publisher": "ICLR 2022",
+      "code_urls": [
+        "https://github.com/putshua/SNN-conversion-QCFS"
+      ]
+    },
+    {
+      "title": "Optimized Potential Initialization for Low-latency Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2202.01440",
+      "publisher": "AAAI 2022",
+      "code_urls": []
+    },
+    {
+      "title": "AutoSNN: Towards Energy-Efficient Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2201.12738",
+      "publisher": "ICML 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Neural Architecture Search for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2201.10355",
+      "publisher": "ECCV 2022",
+      "code_urls": [
+        "https://github.com/Intelligent-Computing-Lab-Yale/Neural-Architecture-Search-for-Spiking-Neural-Networks"
+      ]
+    },
+    {
+      "title": "FEAS: A Faster Event-driven Accelerator Supporting Inhibitory Spiking Neural Network",
+      "paper_url": "https://ieeexplore.ieee.org/document/9720483/",
+      "publisher": "International Symposium on Parallel Architectures, Algorithms and Programming (PAAP) 2021",
+      "code_urls": []
+    },
+    {
+      "title": "Neuromorphic Data Augmentation for Training Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2203.06145",
+      "publisher": "ECCV 2022",
+      "code_urls": [
+        "https://github.com/Intelligent-Computing-Lab-Yale/NDA_SNN"
+      ]
+    },
+    {
+      "title": "SIT: A Bionic and Non-Linear Neuron for Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2203.16117",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Building and training a deep spiking neural network for ECG classification",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S1746809422002713",
+      "publisher": "Biomedical Signal Processing and Control",
+      "code_urls": []
+    },
+    {
+      "title": "DynSNN: A Dynamic Approach to Reduce Redundancy in Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/9746566",
+      "publisher": "ICASSP 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Object Detection with Spiking Neural Networks on Automotive Event Data",
+      "paper_url": "https://arxiv.org/abs/2205.04339",
+      "publisher": "IJCNN 2022",
+      "code_urls": []
+    },
+    {
+      "title": "State Transition of Dendritic Spines Improves Learning of Sparse Spiking Neural Networks",
+      "paper_url": "https://proceedings.mlr.press/v162/chen22ac.html",
+      "publisher": "ICML 2022",
+      "code_urls": [
+        "https://github.com/Yanqi-Chen/STDS"
+      ]
+    },
+    {
+      "title": "Training High-Performance Low-Latency Spiking Neural Networks by Differentiation on Spike Representation",
+      "paper_url": "https://arxiv.org/abs/2205.00459",
+      "publisher": "CVPR 2022",
+      "code_urls": [
+        "https://github.com/qymeng94/DSR"
+      ]
+    },
+    {
+      "title": "Relaxation LIF: A gradient-based spiking neuron for direct training deep spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S092523122200755X",
+      "publisher": "Neurocomputing",
+      "code_urls": []
+    },
+    {
+      "title": "SNN2ANN: A Fast and Memory-Efficient Training Framework for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2206.09449",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/TJXTT/SNN2ANN"
+      ]
+    },
+    {
+      "title": "Spiking Neural Networks for Frame-based and Event-based Single Object Localization",
+      "paper_url": "https://arxiv.org/abs/2206.06506",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "TCJA-SNN: Temporal-Channel Joint Attention for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2206.10177",
+      "publisher": "IEEE Transactions on Neural Networks and Learning Systems",
+      "code_urls": [
+        "https://github.com/ridgerchu/TCJA"
+      ]
+    },
+    {
+      "title": "Exploring Lottery Ticket Hypothesis in Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2207.01382",
+      "publisher": "ECCV 2022",
+      "code_urls": [
+        "https://github.com/Intelligent-Computing-Lab-Yale/Exploring-Lottery-Ticket-Hypothesis-in-SNNs"
+      ]
+    },
+    {
+      "title": "Spiking Graph Convolutional Networks",
+      "paper_url": "https://arxiv.org/abs/2205.02767",
+      "publisher": "IJCAI 2022",
+      "code_urls": [
+        "https://github.com/ZulunZhu/SpikingGCN"
+      ]
+    },
+    {
+      "title": "Spiking VGG7: Deep Convolutional Spiking Neural Network with Direct Training for Object Recognition",
+      "paper_url": "https://www.mdpi.com/2079-9292/11/13/2097",
+      "publisher": "Electronics",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Network Based on Layer-Wise Compensation for Event-Stream Image Classification",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-981-19-3927-3_72",
+      "publisher": "International Technical Conference on Advances in Computing, Control and Industrial Engineering (CCIE 2021)",
+      "code_urls": []
+    },
+    {
+      "title": "A calibratable sensory neuron based on epitaxial VO2 for spike-based neuromorphic multisensory system",
+      "paper_url": "https://www.nature.com/articles/s41467-022-31747-w",
+      "publisher": "Nature Communications",
+      "code_urls": [
+        "https://github.com/billyuanpku96/SNN-for-sensory-neuron"
+      ]
+    },
+    {
+      "title": "A model of TaOx threshold switching memristor for neuromorphic computing",
+      "paper_url": "https://aip.scitation.org/doi/full/10.1063/5.0096643",
+      "publisher": "Journal of Applied Physics",
+      "code_urls": []
+    },
+    {
+      "title": "Label Distribution Learning via Implicit Distribution Representation",
+      "paper_url": "https://arxiv.org/abs/2209.13824",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking SiamFC++: Deep Spiking Neural Network for Object Tracking",
+      "paper_url": "https://arxiv.org/abs/2209.12010",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spikformer: When Spiking Neural Network Meets Transformer",
+      "paper_url": "https://openreview.net/forum?id=frE4fUwz_h",
+      "publisher": "ICLR 2023",
+      "code_urls": [
+        "https://github.com/ZK-Zhou/spikformer"
+      ]
+    },
+    {
+      "title": "STSC-SNN: Spatio-Temporal Synaptic Connection with Temporal Convolution and Attention for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2210.05241",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Online Training Through Time for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2210.04195",
+      "publisher": "NeurIPS 2022",
+      "code_urls": [
+        "https://github.com/pkuxmq/OTTT-SNN"
+      ]
+    },
+    {
+      "title": "Training Spiking Neural Networks with Event-driven Backpropagation",
+      "paper_url": "https://openreview.net/forum?id=nC8VC8gVGPo",
+      "publisher": "NeurIPS 2022",
+      "code_urls": [
+        "https://github.com/zhuyaoyu/SNN-event-driven-learning"
+      ]
+    },
+    {
+      "title": "GLIF: A Unified Gated Leaky Integrate-and-Fire Neuron for Spiking Neural Networks",
+      "paper_url": "https://openreview.net/forum?id=UmFSx2c4ubT",
+      "publisher": "NeurIPS 2022",
+      "code_urls": [
+        "https://github.com/Ikarosy/Gated-LIF"
+      ]
+    },
+    {
+      "title": "Temporal Effective Batch Normalization in Spiking Neural Networks",
+      "paper_url": "https://openreview.net/forum?id=fLIgyyQiJqz",
+      "publisher": "NeurIPS 2022",
+      "code_urls": [
+        "https://openreview.net/attachment?id=fLIgyyQiJqz&name=supplementary_material"
+      ]
+    },
+    {
+      "title": "Attention Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/document/10032591",
+      "publisher": "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+      "code_urls": [
+        "https://github.com/fangwei123456/spikingjelly/pull/329"
+      ]
+    },
+    {
+      "title": "Training Full Spike Neural Networks via Auxiliary Accumulation Pathway",
+      "paper_url": "https://arxiv.org/abs/2301.11929",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Bridging the Gap between ANNs and SNNs by Calibrating Offset Spikes",
+      "paper_url": "https://openreview.net/forum?id=PFbzoWZyZRX",
+      "publisher": "ICLR 2023",
+      "code_urls": [
+        "https://github.com/hzc1208/ANN2SNN_COS"
+      ]
+    },
+    {
+      "title": "A Unified Framework of Soft Threshold Pruning",
+      "paper_url": "https://openreview.net/forum?id=cCFqcrq0d8",
+      "publisher": "ICLR 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Reducing ANN-SNN Conversion Error through Residual Membrane Potential",
+      "paper_url": "https://arxiv.org/abs/2302.02091",
+      "publisher": "AAAI 2023",
+      "code_urls": [
+        "https://github.com/hzc1208/ANN2SNN_SRP"
+      ]
+    },
+    {
+      "title": "MSS-DepthNet: Depth Prediction with Multi-Step Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2211.12156",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "An Analytical Estimation of Spiking Neural Networks Energy Efficiency",
+      "paper_url": "https://arxiv.org/abs/2210.13107",
+      "publisher": "ICONIP 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Spikeformer: A Novel Architecture for Training High-Performance Low-Latency Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2211.10686",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A Low Latency Adaptive Coding Spiking Framework for Deep Reinforcement Learning",
+      "paper_url": "https://arxiv.org/abs/2211.11760",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Skin Cancer Classification Using Deep Spiking Neural Network",
+      "paper_url": "https://link.springer.com/article/10.1007/s10278-023-00776-2",
+      "publisher": "Journal of Digital Imaging",
+      "code_urls": []
+    },
+    {
+      "title": "Entrenamiento supervisado de redes neuronales de impulsos",
+      "paper_url": "https://ruc.udc.es/dspace/handle/2183/31382",
+      "publisher": "XLIII Jornadas de Automática",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neuron Network Based on VTEAM Memristor and MOSFET-LIF Neuron",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-14903-0_5",
+      "publisher": "International Federation for Information Processing 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Emotions: Dynamic Vision Emotion Recognition Using Spiking Neural Networks",
+      "paper_url": "https://ceur-ws.org/Vol-3331/paper08.pdf",
+      "publisher": "International Conference on Algorithms, High Performance Computing and Artificial Intelligence 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Bio-inspired Active Learning method in spiking neural network",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0950705122012898",
+      "publisher": "Knowledge-Based Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Deep Spiking Residual Shrinkage Network for Bearing Fault Diagnosis",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/9994622",
+      "publisher": "IEEE Transactions on Cybernetics",
+      "code_urls": []
+    },
+    {
+      "title": "Control and regulation of skyrmionic topological charge in a novel synthetic antiferromagnetic nanostructure",
+      "paper_url": "https://pubs.rsc.org/en/content/articlelanding/2023/nr/d2nr06498g",
+      "publisher": "Nanoscale",
+      "code_urls": []
+    },
+    {
+      "title": "Accurate ECG Classification Based on Spiking Neural Network and Attentional Mechanism for Real-Time Implementation on Personal Portable Devices",
+      "paper_url": "https://www.mdpi.com/2079-9292/11/12/1889",
+      "publisher": "Electronics",
+      "code_urls": []
+    },
+    {
+      "title": "Dynamic Threshold Integrate and Fire Neuron Model for Low Latency Spiking Neural Networks",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4179879",
+      "publisher": "Neurocomputing",
+      "code_urls": []
+    },
+    {
+      "title": "Neuromorphic-P2M: Processing-in-Pixel-in-Memory Paradigm for Neuromorphic Image Sensors",
+      "paper_url": "https://arxiv.org/abs/2301.09111",
+      "publisher": "Frontiers in Neuroinformatics",
+      "code_urls": []
+    },
+    {
+      "title": "Bioinspired membrane learnable spiking neural network for autonomous vehicle sensors fault diagnosis under open environments",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0951832023000170",
+      "publisher": "Reliability Engineering & System Safety",
+      "code_urls": []
+    },
+    {
+      "title": "Surrogate-Assisted Cooperative Co-evolutionary Reservoir Architecture Search for Liquid State Machines",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10005101",
+      "publisher": "IEEE Transactions on Emerging Topics in Computational Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "Supervised Learning Algorithm Based on Spike Train Inner Product for Deep Spiking Neural Networks",
+      "paper_url": "https://www.mdpi.com/2076-3425/13/2/168",
+      "publisher": "Brain Sciences",
+      "code_urls": []
+    },
+    {
+      "title": "Mitigating Catastrophic Forgetting in Spiking Neural Networks through Threshold Modulation",
+      "paper_url": "https://openreview.net/forum?id=15SoThZmtU",
+      "publisher": "Transactions on Machine Learning Research",
+      "code_urls": [
+        "https://github.com/Thvnvtos/Nm-SNN"
+      ]
+    },
+    {
+      "title": "Optical Flow estimation with Event-based Cameras and Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2302.06492",
+      "publisher": "Frontiers in Neuroscience",
+      "code_urls": [
+        "https://github.com/J-Cuadrado/OF_EV_SNN"
+      ]
+    },
+    {
+      "title": "Poster: Backdoor Attacks on Spiking NNs and Neuromorphic Datasets",
+      "paper_url": "https://dl.acm.org/doi/10.1145/3548606.3563532",
+      "publisher": "CCS 2022",
+      "code_urls": [
+        "https://github.com/GorkaAbad/NeuromorphicBackdoors"
+      ]
+    },
+    {
+      "title": "Sneaky Spikes: Uncovering Stealthy Backdoor Attacks in Spiking Neural Networks with Neuromorphic Data",
+      "paper_url": "https://arxiv.org/abs/2302.06279",
+      "publisher": "NDSS 2024",
+      "code_urls": [
+        "https://github.com/GorkaAbad/Sneaky-Spikes"
+      ]
+    },
+    {
+      "title": "SpikeGPT: Generative Pre-trained Language Model with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2302.13939",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/ridgerchu/SpikeGPT"
+      ]
+    },
+    {
+      "title": "Trainable quantization for Speedy Spiking Neural Networks",
+      "paper_url": "https://www.frontiersin.org/articles/10.3389/fnins.2023.1154241/full",
+      "publisher": "Frontiers in Neuroscience",
+      "code_urls": []
+    },
+    {
+      "title": "Training-aware Low Precision Quantization in Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10051957",
+      "publisher": "Asilomar Conference on Signals, Systems & Computers 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Memory- and Time-Efficient Backpropagation for Training Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2302.14311",
+      "publisher": "ICCV 2023",
+      "code_urls": [
+        "https://github.com/qymeng94/SLTT"
+      ]
+    },
+    {
+      "title": "Biologically inspired structure learning with reverse knowledge distillation for spiking neural networks",
+      "paper_url": "https://arxiv.org/abs/2304.09500",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Detecting COVID-19 on CT Images with Impulsive-Backpropagation Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10033991",
+      "publisher": "Chinese Control and Decision Conference, CCDC 2022",
+      "code_urls": []
+    },
+    {
+      "title": "Rethinking Deep Spiking Neural Networks: A Multi-Layer Perceptron Approach",
+      "paper_url": "https://openreview.net/forum?id=-1x2-lp1eZf",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Deep Spiking Neural Networks with High Representation Similarity Model Visual Pathways of Macaque and Mouse",
+      "paper_url": "https://arxiv.org/abs/2303.06060",
+      "publisher": "AAAI 2023",
+      "code_urls": []
+    },
+    {
+      "title": "A Hybrid ANN-SNN Architecture for Low-Power and Low-Latency Visual Perception",
+      "paper_url": "https://arxiv.org/abs/2303.14176",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Constrain Bias Addition to Train Low-Latency Spiking Neural Networks",
+      "paper_url": "https://www.mdpi.com/2076-3425/13/2/319",
+      "publisher": "Brain Sciences",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based Human Pose Tracking by Spiking Spatiotemporal Transformer",
+      "paper_url": "https://arxiv.org/abs/2303.09681",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/JimmyZou/HumanPoseTracking_SNN"
+      ]
+    },
+    {
+      "title": "Constructing Deep Spiking Neural Networks from Artificial Neural Networks with Knowledge Distillation",
+      "paper_url": "https://arxiv.org/abs/2304.05627",
+      "publisher": "CVPR 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking-Fer: Spiking Neural Network for Facial Expression Recognition With Event Cameras",
+      "paper_url": "https://arxiv.org/abs/2304.10211",
+      "publisher": "International Conference on Content-based Multimedia Indexing, 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Parallel Spiking Neurons with High Efficiency and Ability to Learn Long-term Dependencies",
+      "paper_url": "https://arxiv.org/abs/2304.12760",
+      "publisher": "NeurIPS 2023",
+      "code_urls": [
+        "https://github.com/fangwei123456/Parallel-Spiking-Neuron"
+      ]
+    },
+    {
+      "title": "Spikingformer: Spike-driven Residual Learning for Transformer-based Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2304.11954",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/zhouchenlin2096/Spikingformer"
+      ]
+    },
+    {
+      "title": "Enhancing the Performance of Transformer-based Spiking Neural Networks by Improved Downsampling with Precise Gradient Backpropagation",
+      "paper_url": "https://arxiv.org/abs/2305.05954",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/zhouchenlin2096/Spikingformer-CML"
+      ]
+    },
+    {
+      "title": "Lip print recognition based on convolutional spiking neural network",
+      "paper_url": "https://www.spiedigitallibrary.org/conference-proceedings-of-spie/12707/127073M/Lip-print-recognition-based-on-convolutional-spiking-neural-network/10.1117/12.2680982.short",
+      "publisher": "International Conference on Image, Signal Processing, and Pattern Recognition 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Deep recurrent spiking neural networks capture both static and dynamic representations of the visual cortex under movie stimuli",
+      "paper_url": "https://arxiv.org/abs/2306.01354",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Low Precision Quantization-aware Training in Spiking Neural Networks with Differentiable Quantization Function",
+      "paper_url": "https://arxiv.org/abs/2305.19295",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A Brain-Inspired Spiking Network Framework Based on Multi-Time-Step Self-Attention for Lithium-ion Batteries Capacity Prediction",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10132013",
+      "publisher": "IEEE Transactions on Consumer Electronics",
+      "code_urls": []
+    },
+    {
+      "title": "Neurogenesis Dynamics-inspired Spiking Neural Network Training Acceleration",
+      "paper_url": "https://arxiv.org/abs/2304.12214",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Exploring Joint Embedding Architectures and Data Augmentations for Self-Supervised Representation Learning in Event-Based Vision",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2023W/EventVision/html/Barchid_Exploring_Joint_Embedding_Architectures_and_Data_Augmentations_for_Self-Supervised_Representation_CVPRW_2023_paper.html",
+      "publisher": "CVPR 2023",
+      "code_urls": [
+        "https://github.com/Barchid/exploring_event_ssl"
+      ]
+    },
+    {
+      "title": "End-to-End Neuromorphic Lip-Reading",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2023W/EventVision/html/Bulzomi_End-to-End_Neuromorphic_Lip-Reading_CVPRW_2023_paper.html",
+      "publisher": "CVPR 2023 Workshops",
+      "code_urls": []
+    },
+    {
+      "title": "Configurable NbOx Memristors as Artificial Synapses or Neurons Achieved by Regulating the Forming Compliance Current for the Spiking Neural Network",
+      "paper_url": "https://onlinelibrary.wiley.com/doi/abs/10.1002/aelm.202300018",
+      "publisher": "Advanced Electronic Materials",
+      "code_urls": []
+    },
+    {
+      "title": "Learning Delays in Spiking Neural Networks using Dilated Convolutions with Learnable Spacings",
+      "paper_url": "https://arxiv.org/abs/2306.17670",
+      "publisher": "ICLR 2024",
+      "code_urls": [
+        "https://github.com/Thvnvtos/SNN-delays"
+      ]
+    },
+    {
+      "title": "Spike-driven Transformer",
+      "paper_url": "https://arxiv.org/abs/2307.01694",
+      "publisher": "NeurIPS 2023",
+      "code_urls": [
+        "https://github.com/BICLab/Spike-Driven-Transformer"
+      ]
+    },
+    {
+      "title": "Inherent Redundancy in Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2308.08227",
+      "publisher": "ICCV 2023",
+      "code_urls": [
+        "https://github.com/BICLab/ASA-SNN"
+      ]
+    },
+    {
+      "title": "Training of Spiking Neural Network joint Curriculum Learning Strategy",
+      "paper_url": "https://arxiv.org/abs/2309.04737",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking-Diffusion: Vector Quantized Discrete Diffusion Model with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2308.10187",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikeBERT: A Language Spikformer Trained with Two-Stage Knowledge Distillation from BERT",
+      "paper_url": "https://arxiv.org/abs/2308.15122",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Resource Constrained Model Compression via Minimax Optimization for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2308.04672",
+      "publisher": "ACM MM 2023",
+      "code_urls": [
+        "https://github.com/chenjallen/Resource-Constrained-Compression-on-SNN"
+      ]
+    },
+    {
+      "title": "Privacy-Preserving Discretized Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2308.12529",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Attention-free Spikformer: Mixing Spike Sequences with Simple Linear Transforms",
+      "paper_url": "https://arxiv.org/abs/2308.02557",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Improving Spiking Neural Network Performance with Auxiliary Learning",
+      "paper_url": "https://www.mdpi.com/2504-4990/5/3/52",
+      "publisher": "Machine Learning and Knowledge Extraction",
+      "code_urls": []
+    },
+    {
+      "title": "SDenseNet-An Improved DenseNet Model for Spiking Neural Networks",
+      "paper_url": "https://iopscience.iop.org/article/10.1088/1742-6596/2575/1/012004/meta",
+      "publisher": "Journal of Physics: Conference Series",
+      "code_urls": []
+    },
+    {
+      "title": "Enhancing Robustness of Memristor Crossbar-Based Spiking Neural Networks against Nonidealities: A Hybrid Approach for Neuromorphic Computing in Noisy Environments",
+      "paper_url": "https://onlinelibrary.wiley.com/doi/full/10.1002/aisy.202300411",
+      "publisher": "Advanced Intelligent Systems",
+      "code_urls": []
+    },
+    {
+      "title": "A LIF Neuron With Adaptive Firing Frequency Based on the GaSe Memristor",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10171222",
+      "publisher": "IEEE Transactions on Electron Devices",
+      "code_urls": []
+    },
+    {
+      "title": "Direct training high-performance spiking neural networks for object recognition and detection",
+      "paper_url": "https://www.frontiersin.org/articles/10.3389/fnins.2023.1229951/full",
+      "publisher": "Frontiers in Neuroscience",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient asynchronous federated neuromorphic learning of spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0925231223008093",
+      "publisher": "Neurocomputing",
+      "code_urls": []
+    },
+    {
+      "title": "Predicting the temporal-dynamic trajectories of cortical neuronal responses in non-human primates based on deep spiking neural network",
+      "paper_url": "https://link.springer.com/article/10.1007/s11571-023-09989-1",
+      "publisher": "Cognitive Neurodynamics",
+      "code_urls": []
+    },
+    {
+      "title": "Hybrid Spiking Fully Convolutional Neural Network for Semantic Segmentation",
+      "paper_url": "https://www.mdpi.com/2079-9292/12/17/3565",
+      "publisher": "Electronics",
+      "code_urls": []
+    },
+    {
+      "title": "A Character-level Short Text Classification Model Based On Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10191963",
+      "publisher": "IJCNN 2023",
+      "code_urls": []
+    },
+    {
+      "title": "CBMC: A Biomimetic Approach for Control of a 7-Degree of Freedom Robotic Arm",
+      "paper_url": "https://www.mdpi.com/2313-7673/8/5/389",
+      "publisher": "Biomimetics",
+      "code_urls": []
+    },
+    {
+      "title": "FABLE: A Development and Computing Framework for Brain-inspired Learning Algorithms",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10192026",
+      "publisher": "IJCNN 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Hybrid photonic deep convolutional residual spiking neural networks for text classification",
+      "paper_url": "https://opg.optica.org/abstract.cfm?uri=oe-31-17-28489",
+      "publisher": "Optics Express",
+      "code_urls": []
+    },
+    {
+      "title": "Energy-Efficient Spiking Segmenter for Frame and Event-Based Images",
+      "paper_url": "https://www.mdpi.com/2313-7673/8/4/356",
+      "publisher": "Biomimetics",
+      "code_urls": []
+    },
+    {
+      "title": "SPIDEN: deep Spiking Neural Networks for efficient image denoising",
+      "paper_url": "https://www.frontiersin.org/articles/10.3389/fnins.2023.1224457/full",
+      "publisher": "Frontiers in Neuroscience",
+      "code_urls": []
+    },
+    {
+      "title": "Batch normalization-free weight-binarized SNN based on hardware-saving IF neuron",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0925231223003570",
+      "publisher": "Neurocomputing",
+      "code_urls": []
+    },
+    {
+      "title": "AC2AS: Activation Consistency Coupled ANN-SNN framework for fast and memory-efficient SNN training",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0031320323005241",
+      "publisher": "Pattern Recognition",
+      "code_urls": []
+    },
+    {
+      "title": "Back to Homogeneous Computing: A Tightly-Coupled Neuromorphic Processor With Neuromorphic ISA",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10226235/",
+      "publisher": "IEEE Transactions on Parallel and Distributed Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Bioinspired Spiking Spatiotemporal Attention Framework for Lithium-Ion Batteries Capacity and RUL Prediction by Electrochemical Impedance Spectroscopy",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4472252",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking neural network with working memory can integrate and rectify spatiotemporal features",
+      "paper_url": "https://www.frontiersin.org/articles/10.3389/fnins.2023.1167134/full",
+      "publisher": "Frontiers in Neuroscience",
+      "code_urls": []
+    },
+    {
+      "title": "CMOS-PCM Based Artificial Thermosensory Neuron for Bio-Inspired Sensing",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10231240",
+      "publisher": "2023 IEEE 23rd International Conference on Nanotechnology (NANO)",
+      "code_urls": []
+    },
+    {
+      "title": "SpikingJelly: An open-source machine learning infrastructure platform for spike-based intelligence",
+      "paper_url": "https://www.science.org/doi/10.1126/sciadv.adi1480",
+      "publisher": "Science Advances",
+      "code_urls": [
+        "https://doi.org/10.5281/zenodo.8310901"
+      ]
+    },
+    {
+      "title": "Masked Spiking Transformer",
+      "paper_url": "https://openaccess.thecvf.com/content/ICCV2023/html/Wang_Masked_Spiking_Transformer_ICCV_2023_paper.html",
+      "publisher": "ICCV 2023",
+      "code_urls": [
+        "https://github.com/bic-L/Masked-Spiking-Transformer"
+      ]
+    },
+    {
+      "title": "Rate Gradient Approximation Attack Threats Deep Spiking Neural Networks",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2023/html/Bu_Rate_Gradient_Approximation_Attack_Threats_Deep_Spiking_Neural_Networks_CVPR_2023_paper.html",
+      "publisher": "CVPR 2023",
+      "code_urls": [
+        "https://github.com/putshua/SNN_attack_RGA"
+      ]
+    },
+    {
+      "title": "Exploring Loss Functions for Time-based Training Strategy in Spiking Neural Networks",
+      "paper_url": "https://openreview.net/forum?id=8IvW2k5VeA",
+      "publisher": "NeurIPS 2023",
+      "code_urls": [
+        "https://github.com/zhuyaoyu/SNN-temporal-training-losses"
+      ]
+    },
+    {
+      "title": "EICIL: Joint Excitatory Inhibitory Cycle Iteration Learning for Deep Spiking Neural Networks",
+      "paper_url": "https://openreview.net/forum?id=OMDgOjdqoZ",
+      "publisher": "NeurIPS 2023",
+      "code_urls": [
+        "https://openreview.net/attachment?id=OMDgOjdqoZ&name=supplementary_material"
+      ]
+    },
+    {
+      "title": "On-chip spiking neural networks based on add-drop ring microresonators and electrically reconfigurable phase-change materials photonic switches",
+      "paper_url": "https://opg.optica.org/prj/upcoming_pdf.cfm?id=507178",
+      "publisher": "Photonics Research",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Network Enhanced Hand Gesture Recognition Using Low-Cost Single-photon Avalanche Diode Array",
+      "paper_url": "https://arxiv.org/abs/2402.05441",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/zzy666666zzy/TinyLiDAR_NET_SNN"
+      ]
+    },
+    {
+      "title": "CLIF: Complementary Leaky Integrate-and-Fire Neuron for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2402.04663",
+      "publisher": "ICML 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Improved Imbalance Robustness in Continual Multi-Label Learning with Dual Output Spiking Architecture (DOSA)",
+      "paper_url": "https://arxiv.org/abs/2402.04596",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Facial Expression Recognition Based on Convolutional Spiking Neural Network and STDP Fine-Tune",
+      "paper_url": "https://www.preprints.org/manuscript/202401.2165/v1",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking-PhysFormer: Camera-Based Remote Photoplethysmography with Parallel Spike-driven Transformer",
+      "paper_url": "https://arxiv.org/abs/2402.04798",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking CenterNet: A Distillation-boosted Spiking Neural Network for Object Detection",
+      "paper_url": "https://arxiv.org/abs/2402.01287",
+      "publisher": "IJCNN 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient and Effective Time-Series Forecasting with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2402.01533",
+      "publisher": "ICML 2024",
+      "code_urls": [
+        "https://github.com/microsoft/SeqSNN"
+      ]
+    },
+    {
+      "title": "Efficient Structure Slimming for Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10391076/",
+      "publisher": "IEEE Transactions on Artificial Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "Fully Spiking Actor Network with Intra-layer Connections for Reinforcement Learning",
+      "paper_url": "https://arxiv.org/abs/2401.05444",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Sampling complex topology structures for spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0893608024000352",
+      "publisher": "Neural Networks",
+      "code_urls": [
+        "https://github.com/stiger1000/Random-Sampling-SNN"
+      ]
+    },
+    {
+      "title": "Spikeformer: Training high-performance spiking neural network with transformer",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S092523122400050X",
+      "publisher": "Neurocomputing",
+      "code_urls": []
+    },
+    {
+      "title": "Multi-LRA: Multi logical residual architecture for spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0020025524000495",
+      "publisher": "Information Sciences",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking-Detr: A Spike-Driven End-to-End Object Detection Framework on Spike-Form Data Streams Using Spiking-Transformer and Spiking Residual Learning",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4706194",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/JosephBH0622/Spiking-DETR"
+      ]
+    },
+    {
+      "title": "Trainable Region of Interest Prediction: Hard Attention Framework for Hardware-Efficient Event-Based Computer Vision Neural Networks on Neuromorphic Processors",
+      "paper_url": "https://lup.lub.lu.se/student-papers/search/publication/9142302",
+      "publisher": "LUND UNIVERSITY",
+      "code_urls": []
+    },
+    {
+      "title": "Memory-Efficient Reversible Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2312.07922",
+      "publisher": "AAAI 2024",
+      "code_urls": [
+        "https://github.com/mi804/RevSNN"
+      ]
+    },
+    {
+      "title": "Hierarchical Mapping of Large-Scale Spiking Convolutional Neural Networks Onto Resource-Constrained Neuromorphic Processor",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10363652",
+      "publisher": "IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Shrinking Your TimeStep: Towards Low-Latency Neuromorphic Object Recognition with Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2401.01912",
+      "publisher": "AAAI 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based Shape from Polarization with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2312.16071",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Networks for Active Time-Resolved SPAD Imaging",
+      "paper_url": "https://openaccess.thecvf.com/content/WACV2024/html/Lin_Spiking_Neural_Networks_for_Active_Time-Resolved_SPAD_Imaging_WACV_2024_paper.html",
+      "publisher": "WACV 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Deep Pulse-Coupled Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2401.08649",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Optimizing skyrmionium movement and stability via stray magnetic fields in trilayer nanowire constructs",
+      "paper_url": "https://pubs.rsc.org/en/content/articlelanding/2024/cp/d3cp05340g/unauth",
+      "publisher": "Physical Chemistry Chemical Physics",
+      "code_urls": []
+    },
+    {
+      "title": "Pursing the Sparse Limitation of Spiking Deep Learning Structures",
+      "paper_url": "https://arxiv.org/abs/2311.12060",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Effective Surrogate Gradient Learning With High-Order Information Bottleneck for Spike-Based Machine Intelligence",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10325627",
+      "publisher": "IEEE Transactions on Neural Networks and Learning Systems",
+      "code_urls": []
+    },
+    {
+      "title": "RFI Detection with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2311.14303",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A brain-inspired energy-efficient Wide Spiking Residual Attention Framework for intelligent fault diagnosis",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0951832023007871",
+      "publisher": "Reliability Engineering & System Safety",
+      "code_urls": []
+    },
+    {
+      "title": "A two-stage spiking meta-learning method for few-shot classification",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S095070512300970X",
+      "publisher": "Knowledge-Based Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Spiking Neural Architecture Search with Mixed Neuron Models and Variable Thresholds",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-981-99-8082-6_36",
+      "publisher": "ICONIP 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Rethinking Residual Connection in Training Large-Scale Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2311.05171",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "OR Residual Connection Achieving Comparable Accuracy to ADD Residual Connection in Deep Residual Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2311.06570",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SUSHI: Ultra-High-Speed and Ultra-Low-Power Neuromorphic Chip Using Superconducting Single-Flux-Quantum Circuits",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3613424.3623787",
+      "publisher": "MICRO 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Tensor Decomposition Based Attention Module for Spiking Neural Networks",
+      "paper_url": "https://arxiv.dosf.top/abs/2310.14576",
+      "publisher": "Knowledge-Based Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Semantic Communication for Feature Transmission with HARQ",
+      "paper_url": "https://arxiv.org/abs/2310.08804",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikePoint: An Efficient Point-based Spiking Neural Network for Event Cameras Action Recognition",
+      "paper_url": "https://arxiv.org/abs/2310.07189",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Enhancing neuromorphic computing with advanced spiking neural network architectures",
+      "paper_url": "https://helvia.uco.es/handle/10396/26030",
+      "publisher": "Universidad de Córdoba",
+      "code_urls": []
+    },
+    {
+      "title": "Simple and Effective Visual Place Recognition via Spiking Neural Networks and Deep Information",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10351617",
+      "publisher": "International Conference on Civil Aviation Safety and Information Technology (ICCASIT), 2023",
+      "code_urls": []
+    },
+    {
+      "title": "An efficient pruning and fine-tuning method for deep spiking neural network",
+      "paper_url": "https://link.springer.com/article/10.1007/s10489-023-05056-8",
+      "publisher": "Applied Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "Spike Camera Image Reconstruction Using Deep Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10288531",
+      "publisher": "IEEE Transactions on Circuits and Systems for Video Technology",
+      "code_urls": []
+    },
+    {
+      "title": "Autonomous Driving using Spiking Neural Networks on Dynamic Vision Sensor Data: A Case Study of Traffic Light Change Detection",
+      "paper_url": "https://arxiv.org/abs/2311.09225",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/xueleichen/snn-dvs-carla"
+      ]
+    },
+    {
+      "title": "Bioinspired spiking spatiotemporal attention framework for lithium-ion batteries state-of-health estimation",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S1364032123005853",
+      "publisher": "Renewable and Sustainable Energy Reviews",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking neural networks for embedded event-based vision",
+      "paper_url": "https://theses.hal.science/tel-04393971/",
+      "publisher": "Université Côte d'Azur",
+      "code_urls": []
+    },
+    {
+      "title": "Hardware-Algorithm Co-design Enabling Processing-in-Pixel-in-Memory (P2M) for Neuromorphic Vision Sensors",
+      "paper_url": "https://arxiv.org/abs/2310.16844",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Mitigating Overfitting for Deep Learning-based Aging-related Bug Prediction via Brain-inspired Regularization in Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10301319",
+      "publisher": "International Symposium on Software Reliability Engineering Workshops (ISSREW), 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Energy-Efficient Visual Search by Eye Movement and Low-Latency Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2310.06578",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Gaining the Sparse Rewards by Exploring Binary Lottery Tickets in Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2309.13302",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Privacy-Preserving Convolutional Spiking Neural Networks with FHE",
+      "paper_url": "https://arxiv.org/abs/2309.09025v1",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Learning Spiking Neural Network from Easy to Hard task",
+      "paper_url": "https://arxiv.org/abs/2309.04737",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Reconstruction of Adaptive Leaky Integrate-and-Fire Neuron to Enhance the Spiking Neural Networks Performance by Establishing Complex Dynamics",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10375825",
+      "publisher": "IEEE Transactions on Neural Networks and Learning Systems",
+      "code_urls": []
+    },
+    {
+      "title": "A High-speed and Low-power FPGA Implementation of Spiking Convolutional Neural Network Using Logarithmic Quantization",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10280835",
+      "publisher": "International Conference on Natural Computation, Fuzzy Systems and Knowledge Discovery (ICNC-FSKD), 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Comparing energy efficiency of Leaky integrate-and-fire and Spike response neuron models in Spiking Neural Networks",
+      "paper_url": "https://www.diva-portal.org/smash/get/diva2:1779214/FULLTEXT01.pdf",
+      "publisher": "KTH Royal Institute of Technology",
+      "code_urls": []
+    },
+    {
+      "title": "A neuromorphic physiological signal processing system based on VO2 memristor for next-generation human-machine interface",
+      "paper_url": "https://www.nature.com/articles/s41467-023-39430-4",
+      "publisher": "Nature Communications",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based classification of defects in civil infrastructures with Artificial and Spiking Neural Networks",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-43078-7_51",
+      "publisher": "International Work-Conference on Artificial Neural Networks, 2023",
+      "code_urls": []
+    },
+    {
+      "title": "Optimal ANN-SNN Conversion with Group Neurons",
+      "paper_url": "https://arxiv.org/abs/2402.19061",
+      "publisher": "ICASSP 2024",
+      "code_urls": [
+        "https://github.com/Lyu6PosHao/ANN2SNN_GN"
+      ]
+    },
+    {
+      "title": "SGLFormer: Spiking Global-Local-Fusion Transformer with high performance",
+      "paper_url": "https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1371290/full",
+      "publisher": "Frontiers in Neuroscience 2024",
+      "code_urls": [
+        "https://github.com/ZhangHanN1/SGLFormer"
+      ]
+    },
+    {
+      "title": "QKFormer: Hierarchical Spiking Transformer using Q-K Attention",
+      "paper_url": "https://arxiv.org/pdf/2403.16552.pdf",
+      "publisher": "Neurips 2024",
+      "code_urls": [
+        "https://github.com/zhouchenlin2096/QKFormer"
+      ]
+    },
+    {
+      "title": "Methodology based on spiking neural networks for univariate time-series forecasting",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0893608024000959",
+      "publisher": "Neural Networks",
+      "code_urls": []
+    },
+    {
+      "title": "A Unified Evaluation Framework for Spiking Neural Network Hardware Accelerators Based on Emerging Non-Volatile Memory Devices",
+      "paper_url": "https://arxiv.org/abs/2402.19139",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikeNAS: A Fast Memory-Aware Neural Architecture Search Framework for Spiking Neural Network-based Autonomous Agents",
+      "paper_url": "https://arxiv.org/abs/2402.11322",
+      "publisher": "IEEE Transactions on Artificial Intelligence (TAI) 2025",
+      "code_urls": []
+    },
+    {
+      "title": "SDiT: Spiking Diffusion Model with Transformer",
+      "paper_url": "https://arxiv.org/abs/2402.11588",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "RepSViT: An Efficient Vision Transformer Based on Spiking Neural Networks for Object Recognition in Satellite On-Orbit Remote Sensing Images",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10440355",
+      "publisher": "IEEE Transactions on Geoscience and Remote Sensing",
+      "code_urls": []
+    },
+    {
+      "title": "A light-weight neuromorphic controlling clock gating based multi-core cryptography platform",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0141933124000358",
+      "publisher": "Microprocessors and Microsystems",
+      "code_urls": []
+    },
+    {
+      "title": "Point-to-Spike Residual Learning for Energy-Efficient 3D Point Cloud Classification",
+      "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/28425",
+      "publisher": "AAAI 2024",
+      "code_urls": []
+    },
+    {
+      "title": "EAS-SNN: End-to-End Adaptive Sampling and Representation for Event-based Detection with Recurrent Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2403.12574",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Using spiking neural networks to assist fine art and philology study: to classify styles of Chinese calligraphy with minimal computing power",
+      "paper_url": "https://openreview.net/forum?id=1715SJkbj7",
+      "publisher": "ICLR 2024 Tiny Papers",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Wavelet Transformer",
+      "paper_url": "https://arxiv.org/abs/2403.11138",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A Hybrid SNN-ANN Network for Event-based Object Detection with Spatial and Temporal Attention",
+      "paper_url": "https://arxiv.org/abs/2403.10173",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A novel stochastic resonance based deep residual network for fault diagnosis of rolling bearing system",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0019057824001289",
+      "publisher": "ISA Transactions",
+      "code_urls": []
+    },
+    {
+      "title": "Application of SNNS Model Based On Multi-Dimensional Attention In Drone Radio Frequency Signal Classification",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10446694",
+      "publisher": "ICASSP 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Fourier or Wavelet bases as counterpart self-attention in spikformer for efficient visual classification",
+      "paper_url": "https://arxiv.org/abs/2403.18228",
+      "publisher": "Frontiers in Neuroscience, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spikewhisper: Temporal Spike Backdoor Attacks on Federated Neuromorphic Learning over Low-power Devices",
+      "paper_url": "https://arxiv.org/abs/2403.18607",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "GET: Group Event Transformer for Event-Based Vision",
+      "paper_url": "https://openaccess.thecvf.com/content/ICCV2023/html/Peng_GET_Group_Event_Transformer_for_Event-Based_Vision_ICCV_2023_paper.html",
+      "publisher": "ICCV 2023",
+      "code_urls": [
+        "https://github.com/Peterande/GET-Group-Event-Transformer"
+      ]
+    },
+    {
+      "title": "Fast gradient-free activation maximization for neurons in spiking neural networks",
+      "paper_url": "https://arxiv.org/abs/2401.10748",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/iabs-neuro/mango"
+      ]
+    },
+    {
+      "title": "Direct training high-performance deep spiking neural networks: a review of theories and methods",
+      "paper_url": "https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1383844/full",
+      "publisher": "Frontiers in Neuroscience 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Threshold Modulation for Online Test-Time Adaptation of Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2505.05375",
+      "publisher": "IJCNN 2025",
+      "code_urls": [
+        "https://github.com/NneurotransmitterR/TM-OTTA-SNN"
+      ]
+    },
+    {
+      "title": "Compass: Sram-based computing-in-memory snn accelerator with adaptive spike speculation",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10764497/",
+      "publisher": "MICRO2024",
+      "code_urls": [
+        "https://github.com/ZongwuWang/COMPASS_AE"
+      ]
+    },
+    {
+      "title": "Spatiotemporal Trigger on Event Data for Backdoor Attack on Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11173104/",
+      "publisher": "AICAS 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Automated FPGA Compilation of Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10595982/",
+      "publisher": "AICAS 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Biologically plausible learning for NLP using spiking neural network",
+      "paper_url": "https://dspace.bracu.ac.bd/xmlui/handle/10361/26594",
+      "publisher": "Brac University, 2025.",
+      "code_urls": []
+    },
+    {
+      "title": "Dynamic spatio-temporal pruning for efficient spiking neural networks",
+      "paper_url": "https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2025.1545583/full",
+      "publisher": "Frontiers in Neuroscience 2025",
+      "code_urls": [
+        "https://github.com/gzxdu/SNN_Pruning"
+      ]
+    },
+    {
+      "title": "Incorporating the Refractory Period into Spiking Neural Networks through Spike-Triggered Threshold Dynamics",
+      "paper_url": "https://arxiv.org/abs/2509.17769",
+      "publisher": "ACM MM 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Temporal Reversal Regularization for Spiking Neural Networks: Hybrid Spatio-Temporal Invariance for Generalization",
+      "paper_url": "https://arxiv.org/abs/2408.09108",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Adaptive Spiking TD3+ BC for Offline-to-Online Spiking Reinforcement Learning",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10650965/",
+      "publisher": "IJCNN 2024",
+      "code_urls": []
+    },
+    {
+      "title": "DelRec: learning delays in recurrent spiking neural networks",
+      "paper_url": "https://arxiv.org/abs/2509.24852",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/alexmaxad/DelRec"
+      ]
+    },
+    {
+      "title": "Verifying an Efficient Structure Slimming Method for Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11161679/",
+      "publisher": "CSIS-IAC 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Analyzing the Impact of Climate Change With Major Emphasis on Pollution: A Comparative Study of ML and Statistical Models in Time Series Data",
+      "paper_url": "https://arxiv.org/abs/2405.15835",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SIDC-KWS: Efficient Spiking Inception-Dilated Conformer with Self-Attention for Keyword Spotting",
+      "paper_url": "https://www.isca-archive.org/interspeech_2025/lim25_interspeech.pdf",
+      "publisher": "Interspeech 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Noise-Injected Spiking Graph Convolution for Energy-Efficient 3D Point Cloud Denoising",
+      "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/34050",
+      "publisher": "AAAI 2025",
+      "code_urls": [
+        "https://github.com/Miraclelzk/NI-SGCN"
+      ]
+    },
+    {
+      "title": "Spike-temporal latent representation for energy-efficient event-to-video reconstruction",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-72946-1_10",
+      "publisher": "ECCV 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Improved Imbalance Resilience in Continual Multi-Label Classification with Adaptive Margin Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10831419/",
+      "publisher": "2024 IEEE International Conference on Systems, Man, and Cybernetics (SMC)",
+      "code_urls": []
+    },
+    {
+      "title": "Analog Spiking U-Net integrating CBAM&ViT for medical image segmentation",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0893608024006890",
+      "publisher": "Neural Network 2025",
+      "code_urls": []
+    },
+    {
+      "title": "TONUS: Neuromorphic human pose estimation for artistic sound co-creation",
+      "paper_url": "https://arxiv.org/abs/2507.15734",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Reconfigurable neuromorphic functions in antiferroelectric transistors through coupled polarization switching and charge trapping dynamics",
+      "paper_url": "https://www.nature.com/articles/s41467-025-59603-7",
+      "publisher": "Nature Communications",
+      "code_urls": []
+    },
+    {
+      "title": "Ds2ta: Denoising spiking transformer with attenuated spatiotemporal attention",
+      "paper_url": "https://arxiv.org/abs/2409.15375",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Event-Based Semantic Segmentation via Exploiting Frame-Event Fusion: A Hybrid Neural Network Approach",
+      "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/34013",
+      "publisher": "AAAI 2025",
+      "code_urls": [
+        "https://github.com/HebeiFast/Hybrid-Segmentation"
+      ]
+    },
+    {
+      "title": "Masked Spikformer: Gaussian based and Random Spike Masking for Energy-Efficient Spiking Transformers",
+      "paper_url": "https://hal.science/hal-05263018/",
+      "publisher": "IEEE International Conference on Content-Based Multimedia Indexing (IEEE CBMI). 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spike-TBR: A noise resilient neuromorphic event representation",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0167865525002144",
+      "publisher": "Pattern Recognition Letters 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Research on Anti-Interference Performance of Spiking Neural Network Under Network Connection Damage",
+      "paper_url": "https://www.mdpi.com/2076-3425/15/3/217",
+      "publisher": "Brain Sciences 2025",
+      "code_urls": []
+    },
+    {
+      "title": "UCF-Crime-DVS: A Novel Event-Based Dataset for Video Anomaly Detection with Spiking Neural Networks",
+      "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/32705",
+      "publisher": "AAAI 2025",
+      "code_urls": [
+        "https://github.com/YBQian-Roy/UCF-Crime-DVS"
+      ]
+    },
+    {
+      "title": "Energy-efficient PPG-based respiratory rate estimation using spiking neural networks",
+      "paper_url": "https://www.mdpi.com/1424-8220/24/12/3980",
+      "publisher": "Sensors 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Adaptive spiking neuron with population coding for a residual spiking neural network",
+      "paper_url": "https://link.springer.com/article/10.1007/s10489-024-06128-z",
+      "publisher": "Applied Intelligence 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Signal-SGN: A spiking graph convolutional network for skeletal action recognition via learning temporal-frequency dynamics",
+      "paper_url": "https://arxiv.org/abs/2408.01701",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Cost-Effective and High-Speed Implementation of Brain-Like Spiking Neural Network with Encoding Architectures on FPGA",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10838496/",
+      "publisher": "CHAIN, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Auto Deep Spiking Neural Network Design Based on an Evolutionary Membrane Algorithm",
+      "paper_url": "https://www.mdpi.com/2313-7673/10/8/514",
+      "publisher": "Biomimetics, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Superconducting Neuromorphic Computing using Single-Flux-Quantum Circuits",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10900446/",
+      "publisher": "IEEE Transactions on Applied Superconductivity, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "SpiNeRF: Direct-trained spiking neural networks for efficient neural radiance field rendering",
+      "paper_url": "https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2025.1593580/abstract",
+      "publisher": "Frontiers in Neuroscience, 2025",
+      "code_urls": [
+        "https://github.com/Ikarosy/SpikingNeRF-of-CASIA"
+      ]
+    },
+    {
+      "title": "Hardware/Software Co-design for spike communication optimization: Leveraging neuron-level communication patterns",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S1383762125002255",
+      "publisher": "Journal of Systems Architecture, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Network for Intra-cortical Brain Signal Decoding",
+      "paper_url": "https://arxiv.org/abs/2504.09213",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Pedestrian intention prediction in adverse weather conditions with spiking neural networks and dynamic vision sensors",
+      "paper_url": "https://arxiv.org/abs/2406.00473",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/szmazurek/snn_dvs"
+      ]
+    },
+    {
+      "title": "Photoactive Monolayer MoS2 for Spiking Neural Networks Enabled Machine Vision Applications",
+      "paper_url": "https://advanced.onlinelibrary.wiley.com/doi/abs/10.1002/admt.202401677",
+      "publisher": "Advanced Materials Technologies, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Improvement of Spiking Neural Network with Bit Planes and Color Models",
+      "paper_url": "https://arxiv.org/abs/2410.08229",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Dynamic activation with knowledge distillation for energy-efficient spiking nn ensembles",
+      "paper_url": "https://arxiv.org/abs/2502.14023",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Enhancing Generalization of Spiking Neural Networks Through Temporal Regularization",
+      "paper_url": "https://arxiv.org/abs/2506.19256",
+      "publisher": "",
+      "code_urls": [
+        "https://anonymous.4open.science/r/TRT-7FBFUYT4E"
+      ]
+    },
+    {
+      "title": "On Reducing Activity with Distillation and Regularization for Energy Efficient Spiking Neural Networks",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-72359-9_30",
+      "publisher": "Cham: Springer Nature Switzerland, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "TAIL: Exploiting Temporal Asynchronous Execution for Efficient Spiking Neural Networks with Inter-Layer Parallelism",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10993093/",
+      "publisher": "2025 Design, Automation & Test in Europe Conference",
+      "code_urls": []
+    },
+    {
+      "title": "HiAER-Spike: Hardware-Software Co-Design for Large-Scale Reconfigurable Event-Driven Neuromorphic Computing",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10936998/",
+      "publisher": "2024 IEEE International Conference on Rebooting Computing",
+      "code_urls": []
+    },
+    {
+      "title": "Spike-Count Reduction Techniques for Low Power Spiking Neural Networks",
+      "paper_url": "https://link.springer.com/article/10.1007/s11063-025-11786-2",
+      "publisher": "Neural Processing Letters, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Meets Attention: Efficient Remote Sensing Image Super-Resolution with Attention Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2503.04223",
+      "publisher": "Neurips 2025",
+      "code_urls": [
+        "https://github.com/XY-boy/SpikeSR"
+      ]
+    },
+    {
+      "title": "Learning from Noise: Enhancing DNNs for Event-Based Vision through Controlled Noise Injection",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2025W/EventVision/html/Kowalczyk_Learning_from_Noise_Enhancing_DNNs_for_Event-Based_Vision_through_Controlled_CVPRW_2025_paper.html",
+      "publisher": "Proceedings of the Computer Vision and Pattern Recognition Conference. 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Hybrid Attention Spike Transformer",
+      "paper_url": "https://ietresearch.onlinelibrary.wiley.com/doi/abs/10.1049/csy2.70010",
+      "publisher": "IET Cyber‐Systems and Robotics, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Spatio-Temporal Neural Architecture Search for EEG-Based Emotion Recognition",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10741587/",
+      "publisher": "IEEE Transactions on Instrumentation and Measurement, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "One-step spiking transformer with a linear complexity",
+      "paper_url": "https://www.ijcai.org/proceedings/2024/0348.pdf",
+      "publisher": "Proceedings of the Thirty-Third International Joint Conference on Artificial Intelligence. 2024",
+      "code_urls": [
+        "https://github.com/songxt3/OST"
+      ]
+    },
+    {
+      "title": "*S* 3A-NPU: A High-Performance Hardware Accelerator for Spiking Self-Supervised Learning With Dynamic Adaptive Memory Optimization",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11010182/",
+      "publisher": "IEEE Transactions on Very Large Scale Integration (VLSI) Systems, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Energy Efficient Models for Future Communication Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11080548/",
+      "publisher": "2025 IEEE 11th International Conference on Network Softwarization",
+      "code_urls": []
+    },
+    {
+      "title": "Exploiting temporal-unrolled parallelism for energy-efficient snn acceleration",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10561563/",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Speech Command Recognition Leveraging Spiking Neural Network and Curriculum Learning-based Knowledge Distillation",
+      "paper_url": "https://arxiv.org/abs/2412.12858",
+      "publisher": "IEEE Transactions on Parallel and Distributed Systems, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "SpikACom: A Neuromorphic Computing Framework for Green Communications",
+      "paper_url": "https://arxiv.org/abs/2502.17168",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/yl5922/SpikACom"
+      ]
+    },
+    {
+      "title": "Long-range feedback spiking network captures dynamic and static representations of the visual cortex under movie stimuli",
+      "paper_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/155a94c71f0a2a3cb7eacbf733b5c64b-Abstract-Conference.html",
+      "publisher": "Neurips 2024",
+      "code_urls": [
+        "https://github.com/Grasshlw/SNN-Neural-Similarity-Movie"
+      ]
+    },
+    {
+      "title": "SDformerFlow: Spiking neural network transformer for event-based optical flow",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-78354-8_30",
+      "publisher": "International Conference on Pattern Recognition. Cham: Springer Nature Switzerland, 2024",
+      "code_urls": [
+        "https://github.com/yitian97/SDformerFlow"
+      ]
+    },
+    {
+      "title": "Flexible and scalable deep dendritic spiking neural networks with multiple nonlinear branching",
+      "paper_url": "https://arxiv.org/abs/2412.06355",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Simultaneous Learning Intensity and Optical Flow from High-speed Spike Stream",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10795244/",
+      "publisher": "IEEE Transactions on Circuits and Systems for Video Technology, 2024.",
+      "code_urls": [
+        "https://github.com/LinZhu111/SLIO"
+      ]
+    },
+    {
+      "title": "Spiking monocular event based 6D pose estimation for space application",
+      "paper_url": "https://arxiv.org/abs/2501.02916",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "WTxGRN: Wavelet Transform-based Extended Gated Recurrent Network for Palm Vein Recognition",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11095785/",
+      "publisher": "IEEE Transactions on Information Forensics and Security, 2025.",
+      "code_urls": []
+    },
+    {
+      "title": "Accuracy-Robustness Trade Off via Spiking Neural Network Gradient Sparsity Trail",
+      "paper_url": "https://arxiv.org/abs/2509.23762",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/luutn2002/grad-obf-snn"
+      ]
+    },
+    {
+      "title": "Spike-HAR++: an energy-efficient and lightweight parallel spiking transformer for event-based human action recognition",
+      "paper_url": "https://www.frontiersin.org/journals/computational-neuroscience/articles/10.3389/fncom.2024.1508297/full",
+      "publisher": "Frontiers in Computational Neuroscience, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "支持抑制型脉冲神经网络的硬件加速器.",
+      "paper_url": "https://search.ebscohost.com/login.aspx?direct=true&profile=ehost&scope=site&authtype=crawler&jrnl=10028331&AN=176711373&h=gn4RMyWbPSzAPcH5IfQ4aUzF03JFg0RnIUvnNAW7h9ymGB6dqYHyRmXr%2BcBB1uX3xyat1Se9nKlquPLVrZ9DtA%3D%3D&crl=c",
+      "publisher": "Journal of Computer Engineering & Applications, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Binary event-driven spiking transformer",
+      "paper_url": "https://arxiv.org/abs/2501.05904",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Logit-based Knowledge Distillation of Deep Spiking Neural Networks for Full-Range Timestep Deployment",
+      "paper_url": "https://arxiv.org/abs/2501.15925",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/Intelli-Chip-Lab/snn_temporal_decoupling_distillation"
+      ]
+    },
+    {
+      "title": "Hybrid Neural Networks: Integrating Spikes for Energy Efficient Computation",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11173113/",
+      "publisher": "2025 IEEE 7th International Conference on Artificial Intelligence Circuits and Systems (AICAS)",
+      "code_urls": []
+    },
+    {
+      "title": "A Hybrid Diagnosis Method for Rail Service Status Based on the Analysis of Wheel–Rail Dynamics Behavior with a Prior Data-Driven Vehicle–Rail Dynamics Model",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5292839",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "EyeTrAES: fine-grained, low-latency eye tracking via adaptive event slicing",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3699745",
+      "publisher": "Proceedings of the ACM on Interactive, Mobile, Wearable and Ubiquitous Technologies, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Swin Transformer for UAV Object Detection Based on Event Cameras",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10845340",
+      "publisher": "2024 12th International Conference on Information Systems and Computing Technology (ISCTech)",
+      "code_urls": []
+    },
+    {
+      "title": "Real-Time Hand Gesture Recognition System Using Mediapipe, Spiking Convolution Neural Network and Bi-LSTM",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11064065",
+      "publisher": "2025 International Conference on Electronics, Computing, Communication and Control Technology (ICECCC)",
+      "code_urls": []
+    },
+    {
+      "title": "Spatiotemporal Attention Learning Framework for Event-Driven Object Recognition",
+      "paper_url": "https://arxiv.org/abs/2504.00370",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Event-Based Spiking Neural Networks for Object Detection: A Review of Datasets, Architectures, Learning Rules, and Implementation",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10716373",
+      "publisher": "IEEE Access (Volume: 12)",
+      "code_urls": [
+        "https://github.com/radlab-sketch/Event-SNN-Resources"
+      ]
+    },
+    {
+      "title": "Efficient data processing pipeline for event-based vision datasets: techniques and insights",
+      "paper_url": "https://iopscience.iop.org/article/10.1088/2631-8695/ad9235/meta",
+      "publisher": "Engineering Research Express",
+      "code_urls": [
+        "https://github.com/aitsam12/Event_data_processing_pipeline"
+      ]
+    },
+    {
+      "title": "EvSegSNN: Neuromorphic Semantic Segmentation for Event Data",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10650811",
+      "publisher": "IJCNN 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Networks for Multimodal Neuroimaging: A Comprehensive Review of Current Trends and the NeuCube Brain-Inspired Architecture",
+      "paper_url": "https://www.mdpi.com/2306-5354/12/6/628",
+      "publisher": "Bioengineering",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Scalable GPU-Accelerated SNN Training via Temporal Fusion",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-72341-4_5",
+      "publisher": "Artificial Neural Networks and Machine Learning – ICANN 2024",
+      "code_urls": [
+        "https://github.com/EMI-Group/snn-temporal-fusion"
+      ]
+    },
+    {
+      "title": "Evetac Meets Sparse Probabilistic Spiking Neural Network: Enhancing Snap-Fit Recognition Efficiency and Performance",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10948344",
+      "publisher": "IEEE Robotics and Automation Letters",
+      "code_urls": []
+    },
+    {
+      "title": "Strain-mediated multistate skyrmion for neuron devices",
+      "paper_url": "https://pubs.rsc.org/en/content/articlelanding/2024/nr/d4nr01464b/unauth",
+      "publisher": "Nanoscale",
+      "code_urls": []
+    },
+    {
+      "title": "Unveiling Robustness of Spiking Neural Networks against Data Poisoning Attacks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10650573",
+      "publisher": "IJCNN 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spike Time Noise and Generalization in Spiking Neural Networks: Evaluating the Effects of Controlled Jitter on Overfitting and Performance",
+      "paper_url": "https://www.diva-portal.org/smash/record.jsf?pid=diva2%3A1985703&dswid=-1812",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Poster: Hybrid Encoding in SNN-Based Transformers for Accurate Time Series Forecasting",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10723716",
+      "publisher": "2024 IEEE 21st International Conference on Mobile Ad-Hoc and Smart Systems (MASS)",
+      "code_urls": []
+    },
+    {
+      "title": "CPT-SNN: A spiking neural network that can combine the previous timestep",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0925231225009257",
+      "publisher": "Neurocomputing",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based White Blood Cell Classification using Convolutional Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10740105",
+      "publisher": "2024 IEEE International Conference on Metaverse Computing, Networking, and Applications (MetaCom)",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking ST-former: enhancing spatio-temporal modeling in spiking transformers via integrated self-attention mechanisms",
+      "paper_url": "https://link.springer.com/article/10.1007/s00371-025-04173-4",
+      "publisher": "The Visual Computer",
+      "code_urls": [
+        "https://github.com/Bennie123-byte/Spiking-ST-former"
+      ]
+    },
+    {
+      "title": "Reversing Structural Pattern Learning with Biologically Inspired Knowledge Distillation for Spiking Neural Networks",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3664647.3680655",
+      "publisher": "ACM MM 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Electrocardiography classification with leaky Integrate-and-Fire neurons in an artificial neural network-Inspired spiking neural network framework",
+      "paper_url": "https://www.mdpi.com/1424-8220/24/11/3426",
+      "publisher": "Sensors",
+      "code_urls": []
+    },
+    {
+      "title": "MFN: A Brain-Like Auditory Model Based on Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10873762",
+      "publisher": "2024 21st International Computer Conference on Wavelet Active Media Technology and Information Processing (ICCWAMTIP)",
+      "code_urls": []
+    },
+    {
+      "title": "Improvement of Spiking Neural Network with Bit Plane Coding",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10847438",
+      "publisher": "2024 IEEE 16th International Conference on Computational Intelligence and Communication Networks (CICN)",
+      "code_urls": []
+    },
+    {
+      "title": "Constructing lightweight and efficient spiking neural networks for EEG-based motor imagery classification",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S1746809424010589",
+      "publisher": "Biomedical Signal Processing and Control",
+      "code_urls": []
+    },
+    {
+      "title": "Rethinking the Membrane Dynamics and Optimization Objectives of Spiking Neural Networks",
+      "paper_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/a867a94a427bacbe3f4de16c7ac10ba8-Abstract-Conference.html",
+      "publisher": "NeurIPS 2024",
+      "code_urls": [
+        "https://github.com/StephenTaylor1998/IMP-SNN"
+      ]
+    },
+    {
+      "title": "Optimized negative spikes in Spiking Neural Networks for low-latency ECG classification",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0167865525001643",
+      "publisher": "Pattern Recognition Letters",
+      "code_urls": []
+    },
+    {
+      "title": "BKDSNN: Enhancing the Performance of Learning-Based Spiking Neural Networks Training with Blurred Knowledge Distillation",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-72973-7_7",
+      "publisher": "ECCV 2024",
+      "code_urls": [
+        "https://github.com/Intelligent-Computing-Research-Group/BKDSNN"
+      ]
+    },
+    {
+      "title": "Spike-slr: an energy-efficient parallel spiking transformer for event-based sign language recognition",
+      "paper_url": "https://hal.science/hal-04572397/",
+      "publisher": "35th British Machine Vision Conference 2024",
+      "code_urls": [
+        "https://github.com/Arktis2022/Spike-SLR"
+      ]
+    },
+    {
+      "title": "Attention-Aware Neuromorphic Semantic Communications",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10734731",
+      "publisher": "2024 IEEE 34th International Workshop on Machine Learning for Signal Processing (MLSP)",
+      "code_urls": []
+    },
+    {
+      "title": "Maximizing Energy Efficiency in Spiking Neural Networks: A Dynamic Joint Pruning Framework",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11132570",
+      "publisher": "DAC 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Head-Tail-Aware KL Divergence in Knowledge Distillation for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2504.20445",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "EOS: An Energy-Oriented Attack Framework for Spiking Neural Networks",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3649329.3655981",
+      "publisher": "DAC 2024",
+      "code_urls": []
+    },
+    {
+      "title": "CSDformer: A Conversion Method for Fully Spike-Driven Transformer",
+      "paper_url": "https://arxiv.org/abs/2509.17461",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikeNAS-Bench: Benchmarking NAS Algorithms for Spiking Neural Network Architecture",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10855683",
+      "publisher": "IEEE Transactions on Artificial Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "Leaky integrate-and-fire and oscillation neurons based on ZnO diffusive memristors for spiking neural networks",
+      "paper_url": "https://link.springer.com/article/10.1007/s40843-024-3236-6",
+      "publisher": "Science China Materials",
+      "code_urls": []
+    },
+    {
+      "title": "SNNSIR: A Simple Spiking Neural Network for Stereo Image Restoration",
+      "paper_url": "https://arxiv.org/abs/2508.12271",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Effet d'un masquage d'impulsions sur la consommation énergétique d'un SNN: application au Spikformer",
+      "paper_url": "https://hal.science/hal-05263225/",
+      "publisher": "XXXe Colloque Francophone de Traitement du Signal et des Images, GRETSI 2025",
+      "code_urls": []
+    },
+    {
+      "title": "EventCrab: Harnessing Frame and Point Synergy for Event-based Action Recognition and Beyond",
+      "paper_url": "https://arxiv.org/abs/2411.18328",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A Comparative Study: Error Analysis and Model Efficiency in Event-Based Action Recognition",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10755929",
+      "publisher": "2024 IEEE Thirteenth International Conference on Image Processing Theory, Tools and Applications (IPTA)",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient orbit-torque driven spiking neuromorphic device mimicking the selective attention mechanism for self-adaptive recognition",
+      "paper_url": "https://link.springer.com/article/10.1007/s40843-025-3535-8",
+      "publisher": "Science China Materials",
+      "code_urls": []
+    },
+    {
+      "title": "Hydrogen bonding networks for tunable organic neuromorphic transistor arrays and in-sensor computing",
+      "paper_url": "https://www.cell.com/matter/fulltext/S2590-2385(25)00235-8",
+      "publisher": "Matter",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Transfer Learning From RGB Image to Neuromorphic Event Stream",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10608063",
+      "publisher": "IEEE Transactions on Image Processing",
+      "code_urls": []
+    },
+    {
+      "title": "Event-Driven CsPbBr3 Perovskite Visual Neurons for Motion Direction Recognition in Low-Light Scenes",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11142492",
+      "publisher": "IEEE Transactions on Electron Devices",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Low-latency Event-based Visual Recognition with Hybrid Step-wise Distillation Spiking Neural Networks",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3664647.3680832",
+      "publisher": "ACM MM 2024",
+      "code_urls": [
+        "https://github.com/hsw0929/HSD"
+      ]
+    },
+    {
+      "title": "PS4: A Low Power SNN Accelerator with Spike Speculative Scheme",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10818108",
+      "publisher": "2024 IEEE 42nd International Conference on Computer Design (ICCD)",
+      "code_urls": []
+    },
+    {
+      "title": "NEURAL: An Elastic Neuromorphic Architecture with Hybrid Data-Event Execution and On-the-fly Attention Dataflow",
+      "paper_url": "https://arxiv.org/abs/2509.15036",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Synergy Between the Strong and the Weak: Spiking Neural Networks are Inherently Self-Distillers",
+      "paper_url": "https://arxiv.org/abs/2510.07924",
+      "publisher": "NeurIPS 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Prosperity: Accelerating Spiking Neural Networks via Product Sparsity",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10946780",
+      "publisher": "2025 IEEE International Symposium on High Performance Computer Architecture (HPCA)",
+      "code_urls": [
+        "https://github.com/dubcyfor3/Prosperity"
+      ]
+    },
+    {
+      "title": "Medical Image Classification Using Lightweight Deep Spiking Neural Network",
+      "paper_url": "https://link.springer.com/article/10.1007/s40998-025-00808-3",
+      "publisher": "Iranian Journal of Science and Technology, Transactions of Electrical Engineering",
+      "code_urls": []
+    },
+    {
+      "title": "Xpikeformer: Hybrid Analog-Digital Hardware Acceleration for Spiking Transformers",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10957839",
+      "publisher": "IEEE Transactions on Very Large Scale Integration (VLSI) Systems",
+      "code_urls": []
+    },
+    {
+      "title": "SVFormer: A Direct Training Spiking Transformer for Efficient Video Action Recognition",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-981-96-4001-0_11",
+      "publisher": "Human Brain and Artificial Intelligence (HBAI 2024)",
+      "code_urls": []
+    },
+    {
+      "title": "SNN-SC: A Spiking Semantic Communication Framework for Collaborative Intelligence",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10767271",
+      "publisher": "IEEE Transactions on Vehicular Technology",
+      "code_urls": []
+    },
+    {
+      "title": "基于脉冲神经元膜电位增量的 数据分布统计量及批归一化 (Data distribution statistics and batch normalization based on membrane potential increments of spiking neurons)",
+      "paper_url": "https://research.ebsco.com/c/kpguhl/search/details/durlvzeo3n?db=asn",
+      "publisher": "计算机应用研究(Application Research of Computers)",
+      "code_urls": []
+    },
+    {
+      "title": "Efficiently Training Time-to-First-Spike Spiking Neural Networks from Scratch",
+      "paper_url": "https://arxiv.org/abs/2410.23619",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Topology optimization of random memristors for input-aware dynamic SNN",
+      "paper_url": "https://www.science.org/doi/full/10.1126/sciadv.ads5340",
+      "publisher": "Science Advances",
+      "code_urls": [
+        "https://github.com/bo-wang-up/PRIME"
+      ]
+    },
+    {
+      "title": "LED: A Large-scale Real-world Paired Dataset for Event Camera Denoising",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2024/html/Duan_LED_A_Large-scale_Real-world_Paired_Dataset_for_Event_Camera_Denoising_CVPR_2024_paper.html",
+      "publisher": "CVPR 2024",
+      "code_urls": [
+        "https://github.com/Yee-Sing/led"
+      ]
+    },
+    {
+      "title": "Highly Efficient 3D Human Pose Tracking From Events With Spiking Spatiotemporal Transformer",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11003996",
+      "publisher": "IEEE Transactions on Circuits and Systems for Video Technology",
+      "code_urls": [
+        "https://github.com/JimmyZou/HumanPoseTracking_SNN"
+      ]
+    },
+    {
+      "title": "SATRN: Spiking Audio Tagging Robust Network",
+      "paper_url": "https://www.mdpi.com/2079-9292/14/4/761",
+      "publisher": "Electronics",
+      "code_urls": []
+    },
+    {
+      "title": "Toward High-Accuracy, Programmable Extreme-Edge Intelligence for Neuromorphic Vision Sensors utilizing Magnetic Domain Wall Motion-based MTJ",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3649329.3657359",
+      "publisher": "DAC 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Advancing Spiking Neural Networks for Sequential Modeling with Central Pattern Generators",
+      "paper_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/2f55a8b7b1c2c6312eb86557bb9a2bd5-Abstract-Conference.html",
+      "publisher": "NeurIPS 2024",
+      "code_urls": [
+        "https://github.com/microsoft/SeqSNN"
+      ]
+    },
+    {
+      "title": "Temporal Information Reconstruction and Non-Aligned Residual in Spiking Neural Networks for Speech Classification",
+      "paper_url": "https://arxiv.org/abs/2501.00348",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "基于脉冲神经网络微调方法的遥感图像目标检测 (Research on Spiking Neural Network fine-tuning method for object detection in remote sensing images)",
+      "paper_url": "https://www.ygxb.ac.cn/rc-pub/front/front-article/download/64961748/lowqualitypdf/%E5%9F%BA%E4%BA%8E%E8%84%89%E5%86%B2%E7%A5%9E%E7%BB%8F%E7%BD%91%E7%BB%9C%E5%BE%AE%E8%B0%83%E6%96%B9%E6%B3%95%E7%9A%84%E9%81%A5%E6%84%9F%E5%9B%BE%E5%83%8F%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B.pdf",
+      "publisher": "遥感学报 (National Remote Sensing Bulletin)",
+      "code_urls": []
+    },
+    {
+      "title": "MK-SGN: A Spiking Graph Convolutional Network with Multimodal Fusion and Knowledge Distillation for Skeleton-based Action Recognition",
+      "paper_url": "https://arxiv.org/abs/2404.10210",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Wavelet and time domain attention-guided stochastic resonance network for fault diagnosis of rotating machinery in strong noise environment",
+      "paper_url": "https://iopscience.iop.org/article/10.1088/1361-6501/adecb6/meta",
+      "publisher": "Measurement Science and Technology",
+      "code_urls": []
+    },
+    {
+      "title": "Eventrpg: Event data augmentation with relevance propagation guidance",
+      "paper_url": "https://arxiv.org/abs/2403.09274",
+      "publisher": "ICLR 2024",
+      "code_urls": [
+        "https://github.com/myuansun/EventRPG"
+      ]
+    },
+    {
+      "title": "The neurobench framework for benchmarking neuromorphic computing algorithms and systems",
+      "paper_url": "https://www.nature.com/articles/s41467-025-56739-4",
+      "publisher": "Nature Communications",
+      "code_urls": []
+    },
+    {
+      "title": "Monas-Esnn: Multi-Objective Neural Architecture Search for Efficient Spiking Neural Networks",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5177706",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikeVoice: High-Quality Text-to-Speech Via Efficient Spiking Neural Network",
+      "paper_url": "https://aclanthology.org/anthology-files/pdf/acl/2024.acl-long.429.pdf",
+      "publisher": "ACL 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Adversarial Robustness of Rate-Encoded Spiking Neural Networks",
+      "paper_url": "https://www.timif.io/AI%20Safety%20Thesis%20-%20Timi%20Folaranmi.pdf",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SiamEFT: adaptive-time feature extraction hybrid network for RGBE multi-domain object tracking",
+      "paper_url": "https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2024.1453419/full",
+      "publisher": "Frontiers in Neuroscience",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Deep Spiking Multilayer Perceptrons With Multiplication-Free Inference",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10535518",
+      "publisher": "IEEE Transactions on Neural Networks and Learning Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Rethinking spiking neural networks from an ensemble learning perspective",
+      "paper_url": "https://arxiv.org/abs/2502.14218",
+      "publisher": "ICLR 2025",
+      "code_urls": []
+    },
+    {
+      "title": "SpikingViT: A Multiscale Spiking Vision Transformer Model for Event-Based Object Detection",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10586833",
+      "publisher": "IEEE Transactions on Cognitive and Developmental Systems",
+      "code_urls": []
+    },
+    {
+      "title": "Learning Low-Energy Consumption Obstacle Detection Models for the Blind",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-981-96-0351-0_25",
+      "publisher": "Australasian Joint Conference on Artificial Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Efficient Deep Spiking Neural Networks Construction with Spiking Activity based Pruning",
+      "paper_url": "https://arxiv.org/abs/2406.01072",
+      "publisher": "ICML 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Encrypted Spiking Neural Networks Based on Adaptive Differential Privacy Mechanism",
+      "paper_url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC12026015/",
+      "publisher": "Entropy",
+      "code_urls": []
+    },
+    {
+      "title": "Biologically Plausible Learning via Bidirectional Spike-Based Distillation",
+      "paper_url": "https://arxiv.org/abs/2509.20284",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Variational Graph Representation Inference for Video Summarization",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11146420",
+      "publisher": "IEEE Transactions on Image Processing",
+      "code_urls": [
+        "https://github.com/liwrui/SpiVG"
+      ]
+    },
+    {
+      "title": "TDFormer: A Top-Down Attention-Controlled Spiking Transformer",
+      "paper_url": "https://arxiv.org/abs/2505.15840",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "High-Performance Temporal Reversible Spiking Neural Networks with O(L) Training Memory and O(1) Inference Cost",
+      "paper_url": "https://openreview.net/forum?id=s4h6nyjM9H",
+      "publisher": "ICML 2024",
+      "code_urls": [
+        "https://github.com/BICLab/T-RevSNN"
+      ]
+    },
+    {
+      "title": "When SNN meets ANN: Error-Free ANN-to-SNN Conversion for Extreme Edge Efficiency",
+      "paper_url": "https://openreview.net/forum?id=WOwQKguWT0",
+      "publisher": "Transactions on Machine Learning Research",
+      "code_urls": [
+        "https://github.com/godatta/SNN_meets_ANN"
+      ]
+    },
+    {
+      "title": "Chapter: Spike-Based Learning with Information Theory. In: Neuromorphic Intelligence",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-57873-1_3",
+      "publisher": "Springer",
+      "code_urls": []
+    },
+    {
+      "title": "DMR: Decomposed Multi-Modality Representations for Frames and Events Fusion in Visual Reinforcement Learning",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2024/html/Xu_DMR_Decomposed_Multi-Modality_Representations_for_Frames_and_Events_Fusion_in_CVPR_2024_paper.html",
+      "publisher": "CVPR 2024",
+      "code_urls": [
+        "https://github.com/kyoran/DMR"
+      ]
+    },
+    {
+      "title": "Ensemble of Simple Spiking Neural Networks as a Concept Drift Detector",
+      "paper_url": "https://ric.zp.edu.ua/article/view/316196",
+      "publisher": "Radio Electronics, Computer Science, Control",
+      "code_urls": []
+    },
+    {
+      "title": "A comprehensive multimodal benchmark of neuromorphic training frameworks for spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/abs/pii/S0952197625015453",
+      "publisher": "Engineering Applications of Artificial Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "The role of membrane time constant in the training of spiking neural networks",
+      "paper_url": "https://repository.tudelft.nl/file/File_983b1248-3dd0-4676-a76c-962594be5e76?preview=1",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/Anananas42/tu-delft-bsc-thesis-computer-science"
+      ]
+    },
+    {
+      "title": "DVS-PedX: Synthetic-and-Real Event-Based Pedestrian Dataset",
+      "paper_url": "https://arxiv.org/pdf/2509.04117?",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Slax: a composable JAX library for rapid and flexible prototyping of spiking neural networks",
+      "paper_url": "https://iopscience.iop.org/article/10.1088/2634-4386/ada9a8/pdf",
+      "publisher": "Neuromorphic Computing and Engineering",
+      "code_urls": [
+        "https://github.com/Intelligent-Microsystems-Lab/slax"
+      ]
+    },
+    {
+      "title": "From Convolution to Spikes for Mental Health: A CNN-to-SNN Approach Using the DAIC-WOZ Dataset",
+      "paper_url": "https://www.mdpi.com/2076-3417/15/16/9032",
+      "publisher": "Applied Sciences",
+      "code_urls": [
+        "https://github.com/gv1x2/ANN2SNN-SpikingJelly-"
+      ]
+    },
+    {
+      "title": "Spyx: A library for just-in-time compiled optimization of spiking neural networks",
+      "paper_url": "https://arxiv.org/pdf/2402.18994",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/kmheckel/spyx"
+      ]
+    },
+    {
+      "title": "STEP: A Unified Spiking Transformer Evaluation Platform for Fair and Reproducible Benchmarking",
+      "paper_url": "https://arxiv.org/pdf/2505.11151",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/Fancyssc/STEP"
+      ]
+    },
+    {
+      "title": "SU-YOLO: Spiking Neural Network for Efficient Underwater Object Detection",
+      "paper_url": "https://arxiv.org/pdf/2503.24389",
+      "publisher": "Neurocomputing 2025",
+      "code_urls": [
+        "https://github.com/lwxfight/snn-underwater"
+      ]
+    },
+    {
+      "title": "Rsnn: Recurrent spiking neural networks for dynamic spatial-temporal information processing",
+      "paper_url": "https://openreview.net/pdf?id=FFIh7vYgyx",
+      "publisher": "ACM MM 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based depth prediction with deep spiking neural network",
+      "paper_url": "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10592043",
+      "publisher": "IEEE Transactions on Cognitive and Developmental Systems, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Embedded event based object detection with spiking neural network",
+      "paper_url": "https://arxiv.org/pdf/2406.17617",
+      "publisher": "2024 International Joint Conference on Neural Networks (IJCNN)",
+      "code_urls": []
+    },
+    {
+      "title": "NeuCODEX: Edge-Cloud Co-Inference with Spike-Driven Compression and Dynamic Early-Exit",
+      "paper_url": "https://arxiv.org/pdf/2509.19156",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A Self-attention Spiking Neural Network for Human-to-Human Interaction Recognition Based on Wi-Fi Signals",
+      "paper_url": "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=10924957",
+      "publisher": "2024 IEEE Smart World Congress (SWC)",
+      "code_urls": []
+    },
+    {
+      "title": "Balancing Energy Consumption and Detection Accuracy in Cardiovascular Disease Diagnosis: A Spiking Neural Network-Based Approach with ECG and PCG Signals",
+      "paper_url": "https://www.mdpi.com/1424-8220/25/17/5263",
+      "publisher": "Sensors 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking point transformer for point cloud classification",
+      "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/35459",
+      "publisher": "AAAI 2025",
+      "code_urls": [
+        "https://github.com/PeppaWu/SPT"
+      ]
+    },
+    {
+      "title": "DSC-SNN: A Depthwise Separable Convolutional Spiking Neural Network for Efficient, Privacy-Preserving Action Recognition from Event-Based Data",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11133952/",
+      "publisher": "MAPR 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Neuronquant: Accurate and efficient post-training quantization for spiking neural networks",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3658617.3697716",
+      "publisher": "Proceedings of the 30th Asia and South Pacific Design Automation Conference 2025",
+      "code_urls": [
+        "https://github.com/shieldforever/NeuronQuant"
+      ]
+    },
+    {
+      "title": "Sign gradient descent-based neuronal dynamics: ANN-to-SNN conversion beyond reLU network",
+      "paper_url": "https://arxiv.org/abs/2407.01645",
+      "publisher": "ICML 2024",
+      "code_urls": [
+        "https://github.com/snuhcs/snn_signgd"
+      ]
+    },
+    {
+      "title": "Akkumula: Evidence accumulation driver models with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2505.05489",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Membership privacy evaluation in deep spiking neural networks",
+      "paper_url": "https://arxiv.org/abs/2409.19413",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "DAFF-SNN: Dual attention-driven and feature fusion-based spiking neural network for epilepsy detection based on electroencephalogram",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11080273/",
+      "publisher": "IEEE Journal of Biomedical and Health Informatics (2025)",
+      "code_urls": []
+    },
+    {
+      "title": "Traffic Sign Recognition Model Based on Spiking Neural Network",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10498698/",
+      "publisher": "NNICE 2024",
+      "code_urls": []
+    },
+    {
+      "title": "A Hybrid Stochastic-Binary Computing Batch Normalization Engine for Low-Power On-Chip Learning Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11148273/",
+      "publisher": "VLSI 2025",
+      "code_urls": []
+    },
+    {
+      "title": "ST-BPTT: A Memory-efficient BPTT SNN Training Approach through Gradient-Contribution-Driven Time-Step Selection",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10798378/",
+      "publisher": "BioCAS 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking St-Former: An Improved Spiking Transformer with Spatio-Temporal Self Attention",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5107273",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Meets Ann: A Hybrid Architecture For Energy-Efficient, Multimodal Language Modeling",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5080177",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "TE-Spikformer: Temporal-enhanced spiking neural network with transformer",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0925231224010397",
+      "publisher": "Neurocomputing, 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Event-based structured light 3D reconstruction driven by spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0030399225012733",
+      "publisher": "Optics & Laser Technology, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Convolutional & Spiking Neural Networks for the Efficient Classification of Rotor Faults in Induction Motors via Stator Current and Stray Flux Signals",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11154324/",
+      "publisher": "SDEMPED 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Exploring vulnerabilities in spiking neural networks: Direct adversarial attacks on raw event data",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-73220-1_24",
+      "publisher": "ECCV 2024",
+      "code_urls": [
+        "https://github.com/JY-ura/GumbelSoftmaxAttack"
+      ]
+    },
+    {
+      "title": "Efficient spiking convolutional neural networks accelerator with multi-structure compatibility",
+      "paper_url": "https://www.frontiersin.org/journals/neuroscience/articles/10.3389/fnins.2025.1662886/abstract",
+      "publisher": "Frontier",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Networks: A Comprehensive Survey of Training Methodologies, Hardware Implementations and Applications",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11201000/",
+      "publisher": "Artificial Intelligence Science and Engineering",
+      "code_urls": []
+    },
+    {
+      "title": "Advancing training efficiency of deep spiking neural networks through rate-based backpropagation",
+      "paper_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/d1bdc488ec18f64177b2275a03984683-Abstract-Conference.html",
+      "publisher": "NeurIPS 2024",
+      "code_urls": [
+        "https://github.com/Tab-ct/rate-based-backpropagation"
+      ]
+    },
+    {
+      "title": "NeuroSORT: A Neuromorphic Accelerator for Spike-based Online and Real-time Tracking",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10595908/",
+      "publisher": "AICAS 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spike-Driven Channel-Temporal Attention Network with Multi-Scale Convolution for Energy-Efficient Bearing Fault Detection",
+      "paper_url": "https://www.mdpi.com/2076-3417/15/13/7622",
+      "publisher": "Applied Sciences, 2025 - mdpi.com",
+      "code_urls": []
+    },
+    {
+      "title": "Sea Surface Small Target Detection Using Spiking Neural Network with Controllable False Alarm",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10843263/",
+      "publisher": "IEEE Geoscience and Remote Sensing Letters (2025)",
+      "code_urls": []
+    },
+    {
+      "title": "QSViT: A Methodology for Quantizing Spiking Vision Transformers",
+      "paper_url": "https://arxiv.org/abs/2504.00948",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Eye tracking based on event camera and spiking neural network",
+      "paper_url": "https://www.mdpi.com/2079-9292/13/14/2879",
+      "publisher": "Electronics, 2024 - mdpi.com",
+      "code_urls": []
+    },
+    {
+      "title": "A Self-Ensemble Inspired Approach for Effective Training of Binary-Weight Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2508.12609",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/qymeng94/SEI-BWSNN"
+      ]
+    },
+    {
+      "title": "Towards Label-Efficient Deep Learning-based Aging-related Bug Prediction with Spiking Convolutional Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10852596/",
+      "publisher": "IEEE Transactions on Emerging Topics in Computing (2025)",
+      "code_urls": []
+    },
+    {
+      "title": "Assessment of deep learning-based detection algorithms using event cameras for construction applications",
+      "paper_url": "https://construction-robots.github.io/papers/48.pdf",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "MSR-SNN: Advancing Neuromorphic Vision Object Classification with Multi-Scale-Residual Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10832502/",
+      "publisher": "IEEE Sensors Journal (2025)",
+      "code_urls": []
+    },
+    {
+      "title": "AT-SNN: Adaptive Tokens for Vision Transformer on Spiking Neural Network",
+      "paper_url": "https://arxiv.org/abs/2408.12293",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Understanding SNN and Its Recent Advancements",
+      "paper_url": "https://engrxiv.org/preprint/view/3652",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SVFormer: A Direct Training Spiking",
+      "paper_url": "https://books.google.com/books?hl=zh-CN&lr=&id=Aw1YEQAAQBAJ&oi=fnd&pg=PA161&dq=spikingjelly&ots=g6rCaFTILh&sig=XceD7M0IQMnN03Caf_VXeCJ3zf0",
+      "publisher": "Human Brain and Artificial Intelligence",
+      "code_urls": []
+    },
+    {
+      "title": "RTFormer: Re-parameter TSBN Spiking Transformer",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10650654/",
+      "publisher": "IJCNN 2024",
+      "code_urls": []
+    },
+    {
+      "title": "TRIP: Trainable Region-of-Interest Prediction for Hardware-Efficient Neuromorphic Processing on Event-based Vision",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10766546/",
+      "publisher": "ICONS 2024",
+      "code_urls": [
+        "https://github.com/ERNIS-LAB/TRIP"
+      ]
+    },
+    {
+      "title": "Hybrid Layer-Wise ANN-SNN With Surrogate Spike Encoding-Decoding Structure",
+      "paper_url": "https://arxiv.org/abs/2509.24411",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/luutn2002/has-8"
+      ]
+    },
+    {
+      "title": "SpikF: Spiking Fourier Network for Efficient Long-term Prediction",
+      "paper_url": "https://openreview.net/forum?id=5jlvLwoO1n",
+      "publisher": "ICML 2025",
+      "code_urls": [
+        "https://github.com/WWJcreator/SpikF"
+      ]
+    },
+    {
+      "title": "Are neuromorphic architectures inherently privacy-preserving? an exploratory study",
+      "paper_url": "https://arxiv.org/abs/2411.06613",
+      "publisher": "PoPETS 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spike-BRGNet: Efficient and accurate event-based semantic segmentation with boundary region-guided spiking neural networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10750266/",
+      "publisher": "IEEE Transactions on Circuits and Systems for Video Technology",
+      "code_urls": []
+    },
+    {
+      "title": "Research on SNN Learning Algorithms and Networks Based on Biological Plausibility",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10985795/",
+      "publisher": "IEEE Access",
+      "code_urls": []
+    },
+    {
+      "title": "SM-Former: Spiking Symmetric Mixing Branchformer for Brain Auditory Attention Detection",
+      "paper_url": "https://arxiv.org/abs/2508.05164",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking graph neural network on riemannian manifolds",
+      "paper_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/3ba7560b4c3e66d760fbdd472cf4a5a9-Abstract-Conference.html",
+      "publisher": "NeurIPS 2024",
+      "code_urls": [
+        "https://github.com/ZhenhHuang/MSG"
+      ]
+    },
+    {
+      "title": "THE-SEAN: A Heart Rate Variation-Inspired Temporally High-Order Event-Based Visual Odometry with Self-Supervised Spiking Event Accumulation Networks",
+      "paper_url": "https://arxiv.org/abs/2503.05112",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/Franky-X/THE-SEAN"
+      ]
+    },
+    {
+      "title": "Adaptive Time-step Training for Enhancing Spike-Based Neural Radiance Fields",
+      "paper_url": "https://arxiv.org/abs/2507.23033",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A bio-inspired spiking neural network with adaptive spatiotemporal filtering and direction-modulated synaptic plasticity for robust collision detection",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5445962",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Networks for Temporal Processing: Status Quo and Future Prospects",
+      "paper_url": "https://arxiv.org/abs/2502.09449",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/liyc5929/neuroseqbench"
+      ]
+    },
+    {
+      "title": "Deep event-based object detection in autonomous driving: a survey",
+      "paper_url": "https://arxiv.org/abs/2405.03995",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "EPOC: A 28-nm 5.3 pJ/SOP Event-driven Parallel Neuromorphic Hardware with Neuromodulation-based Online Learning",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10704604/",
+      "publisher": "IEEE Transactions on Biomedical Circuits and Systems (2024)",
+      "code_urls": []
+    },
+    {
+      "title": "Unsupervised Backdoor Detection and Mitigation for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2510.06629",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Depth: Depth Estimation from Sparse Events with Spiking Neural Networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0957417425035924",
+      "publisher": "Expert Systems with Applications, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "A neuromorphic hardware architecture based on TTFS coding with temporal quantization for spiking neural networks",
+      "paper_url": "https://www.sciencedirect.com/science/article/pii/S0167926025000604",
+      "publisher": "Integration 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Toward Efficient Spiking Transformers: Synapse Pruning Meets Synergistic Learning-Based Compensation",
+      "paper_url": "https://arxiv.org/abs/2508.01992",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/GuoLab-UESTC/EfficientST"
+      ]
+    },
+    {
+      "title": "Enhanced Self-Distillation Framework for Efficient Spiking Neural Network Training",
+      "paper_url": "https://arxiv.org/abs/2510.06254",
+      "publisher": "",
+      "code_urls": [
+        "https://github.com/Intelli-Chip-Lab/enhanced-self-distillation-framework-for-snn"
+      ]
+    },
+    {
+      "title": "Neuromorphic Optical Tracking and Imaging of Randomly Moving Targets through Strongly Scattering Media",
+      "paper_url": "https://arxiv.org/abs/2501.03874",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Visual feature extraction through brain inspired algorithms: towards efficiency, accuracy and continual learning",
+      "paper_url": "https://stax.strath.ac.uk/concern/theses/hh63sw52p",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Learning-Efficient Spiking Neural Networks with Multi-Compartment Spatio-Temporal Backpropagation",
+      "paper_url": "https://www.cell.com/iscience/fulltext/S2589-0042(25)00752-7",
+      "publisher": "iScience 2025",
+      "code_urls": [
+        "https://github.com/NeuroSyd/SSDP"
+      ]
+    },
+    {
+      "title": "BIMII-Net: Brain-Inspired Multi-Iterative Interactive Network for RGB-T Road Scene Semantic Segmentation",
+      "paper_url": "https://arxiv.org/abs/2503.19303",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Reproducing the Few-Shot Learning Capabilities of the Visual Ventral Pathway Using Vision Transformers and Neural Fields",
+      "paper_url": "https://www.mdpi.com/2076-3425/15/8/882",
+      "publisher": "Brain Sciences",
+      "code_urls": []
+    },
+    {
+      "title": "SNNAX-Spiking Neural Networks in JAX",
+      "paper_url": "https://arxiv.org/pdf/2409.02842?",
+      "publisher": "2024 International Conference on Neuromorphic Systems (ICONS)",
+      "code_urls": []
+    },
+    {
+      "title": "Fractional Spike Differential Equations Neural Network with Efficient Adjoint Parameters Training",
+      "paper_url": "https://arxiv.org/pdf/2507.16937",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Design and Application of Spiking Neural Networks Based on LIF Neurons",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10835501/",
+      "publisher": "ICDACAI 2024",
+      "code_urls": []
+    },
+    {
+      "title": "GenericSNN: a framework for easy development of Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/stamp/stamp.jsp?arnumber=10506505",
+      "publisher": "IEEE Access 2024",
+      "code_urls": []
+    },
+    {
+      "title": "SPAIC: a spike-based artificial intelligence computing framework",
+      "paper_url": "https://arxiv.org/pdf/2207.12750",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "脉冲神经网络基准测试及类脑训练框架性能评估",
+      "paper_url": "https://www.society.shu.edu.cn/CN/abstract/abstract21062.shtml",
+      "publisher": "应用科学学报",
+      "code_urls": []
+    },
+    {
+      "title": "TinySpiking: a lightweight and efficient python framework for unsupervised learning spiking neural networks",
+      "paper_url": "https://iopscience.iop.org/article/10.1088/2631-8695/ada725/meta",
+      "publisher": "Engineering Research Express 2025",
+      "code_urls": []
+    },
+    {
+      "title": "SpikingYOLOX: Improved YOLOX Object Detection with Fast Fourier Convolution and Spiking Neural Networks",
+      "paper_url": "https://ojs.aaai.org/index.php/AAAI/article/view/32137",
+      "publisher": "AAAI 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Event-based Delay Learning in Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/pdf/2501.07331",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Compressed Sensing Spiking Neural Network for Sparse Signal Classification",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10798352",
+      "publisher": "BioCAS 2024",
+      "code_urls": []
+    },
+    {
+      "title": "A Lightweight Shallow Convolutional SNN Combined with STDP Fine-Tuning for Facial Expression Recognition",
+      "paper_url": "https://www.preprints.org/frontend/manuscript/971923d2de9ee3454a0e170e80d58a4b/download_pub",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A Multi-modal Spiking Meta-learner with Brain-Inspired Task-Aware Modulation Scheme",
+      "paper_url": "https://link.springer.com/chapter/10.1007/978-3-031-72359-9_25",
+      "publisher": "ICANN 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Gaining the Sparse Rewards by Exploring Lottery Tickets in Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/pdf/2309.13302",
+      "publisher": "IROS 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking neural networks with adaptive membrane time constant for event-based tracking",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10857949/",
+      "publisher": "TIP 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking the Transformer: NeuViT with Single‑Step Attention for Efficient High-Resolution UAV Vision",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5490880",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikingVPR: Spiking Neural Network-Based Feature Aggregation for Visual Place Recognition",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10920604",
+      "publisher": "ICSMD 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Spikedattention: Training-free and fully spike-driven transformer-to-snn conversion with winner-oriented spike shift for softmax operation",
+      "paper_url": "https://proceedings.neurips.cc/paper_files/paper/2024/hash/7c9341ad0263428b5057d92f4d88dfa0-Abstract-Conference.html",
+      "publisher": "NeurIPS 2024",
+      "code_urls": [
+        "https://github.com/sangwoohwang/SpikedAttention"
+      ]
+    },
+    {
+      "title": "Graph spiking neural network for advanced urban flood risk assessment",
+      "paper_url": "https://www.cell.com/iscience/fulltext/S2589-0042(24)02262-4",
+      "publisher": "iScience",
+      "code_urls": []
+    },
+    {
+      "title": "An Efficient Brain-Inspired Accelerator Using a High-Accuracy Conversion Algorithm for Spiking Deformable CNN",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10737095",
+      "publisher": "IEEE Transactions on Circuits and Systems II: Express Briefs 2025",
+      "code_urls": []
+    },
+    {
+      "title": "TQ-TTFS: High-Accuracy and Energy-Efficient Spiking Neural Networks Using Temporal Quantization Time-to-First-Spike Neuron",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10473964/",
+      "publisher": "ASP-DAC 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Once upon a spike time: exploring spiking neurons and perspective applications of neuromorphic solutions",
+      "paper_url": "https://stax.strath.ac.uk/concern/theses/ww72bc052",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikeNAS: A Fast Memory-Aware Neural Architecture Search Framework for Spiking Neural Network-based Embedded AI Systems",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11071976/",
+      "publisher": "IEEE Transactions on Artificial Intelligence 2025",
+      "code_urls": []
+    },
+    {
+      "title": "SCSC: Leveraging Sparsity and Fault-Tolerance for Energy-Efficient Spiking Neural Networks",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3658617.3697718",
+      "publisher": "ASPDAC 25",
+      "code_urls": []
+    },
+    {
+      "title": "Research on Large Scale SNN Oriented Simulation Optimization Method",
+      "paper_url": "https://dl.acm.org/doi/abs/10.1145/3696474.3696483",
+      "publisher": "JCRAI '24",
+      "code_urls": []
+    },
+    {
+      "title": "A dynamic vision sensor object recognition model based on trainable event-driven convolution and spiking attention mechanism",
+      "paper_url": "https://arxiv.org/pdf/2409.12691?",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Advancing Neuromorphic Architecture Towards Emerging Spiking Neural Network on FPGA",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10908632",
+      "publisher": "IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems 2025",
+      "code_urls": []
+    },
+    {
+      "title": "The Promise of Spiking Neural Networks for Ubiquitous Computing: A Survey and New Perspectives",
+      "paper_url": "https://arxiv.org/abs/2506.01737",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Neuromorphic computing for graph analytics",
+      "paper_url": "https://dl.acm.org/doi/pdf/10.1145/3676536.3698024",
+      "publisher": "Proceedings of the 43rd IEEE/ACM International Conference on Computer-Aided Design",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking-LSTM: A novel hyperspectral image segmentation network for Sclerotinia detection",
+      "paper_url": "https://www.sciencedirect.com/science/article/abs/pii/S0168169924007889",
+      "publisher": "Computers and Electronics in Agriculture 2024",
+      "code_urls": []
+    },
+    {
+      "title": "SMVSNN: An Intelligent Framework for Anticancer Drug–Drug Interaction Prediction Utilizing Spiking Multi-view Siamese Neural Networks",
+      "paper_url": "https://pubs.acs.org/doi/abs/10.1021/acs.jcim.4c02205",
+      "publisher": "ACS Publications 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Broad Learning System for Facial Expression Recognition in the Wild",
+      "paper_url": "https://onlinelibrary.wiley.com/doi/full/10.1155/js/9737734",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Towards Effective and Sparse Adversarial Attack on Spiking Neural Networks via Breaking Invisible Surrogate Gradients",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2025/papers/Lun_Towards_Effective_and_Sparse_Adversarial_Attack_on_Spiking_Neural_Networks_CVPR_2025_paper.pdf",
+      "publisher": "CVPR 2025",
+      "code_urls": []
+    },
+    {
+      "title": "SPEAR: Structured Pruning for Spiking Neural Networks via Synaptic Operation Estimation and Reinforcement Learning",
+      "paper_url": "https://arxiv.org/pdf/2507.02945?",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Edge Intelligence with Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/abs/2507.14069",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spatio-Temporal Decoupled Learning for Spiking Neural Networks",
+      "paper_url": "https://arxiv.org/pdf/2506.01117",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Spikelm: Towards general spike-driven language modeling via elastic bi-spiking mechanisms",
+      "paper_url": "https://arxiv.org/pdf/2406.03287?",
+      "publisher": "ICML 2024",
+      "code_urls": []
+    },
+    {
+      "title": "基于多维投影时空事件帧的动态视觉传感手势识别",
+      "paper_url": "https://www.china-simulation.com/CN/abstract/abstract3337.shtml",
+      "publisher": "系统仿真学报",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Event-Based Object Detection: A Hybrid Neural Network with Spatial and Temporal Attention",
+      "paper_url": "https://openaccess.thecvf.com/content/CVPR2025/papers/Ahmed_Efficient_Event-Based_Object_Detection_A_Hybrid_Neural_Network_with_Spatial_CVPR_2025_paper.pdf",
+      "publisher": "CVPR 2025",
+      "code_urls": []
+    },
+    {
+      "title": "STF: Shallow-Level Temporal Feedback to Enhance Spiking Transformers",
+      "paper_url": "https://arxiv.org/pdf/2508.00387?",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SGSAFormer: Spike Gated Self-Attention Transformer and Temporal Attention",
+      "paper_url": "https://www.mdpi.com/2079-9292/14/1/43",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Neuromorphic computing for the masses",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10766554",
+      "publisher": "International Conference on Neuromorphic Systems (ICONS) 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Channelwise Regional Integrate and Multiple Firing Neuron: Improving the Spatiotemporal Learning of Spiking Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11159293/",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "A 1.1 μJ/Inference Binary Spiking Neural Network Accelerator for DVS Gesture Recognition",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11128877/",
+      "publisher": "IEEE Transactions on Circuits and Systems I: Regular Papers  2025",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Training of Spiking Neural Networks by Spike-aware Data Pruning",
+      "paper_url": "https://arxiv.org/pdf/2510.04098",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Time-e2v: Overcoming limitations of e2vid",
+      "paper_url": "https://www.eurecom.fr/publication/7789/download/sec-publi-7789.pdf",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Integrated algorithm and hardware design for hybrid neuromorphic systems",
+      "paper_url": "https://www.nature.com/articles/s44335-025-00036-2.pdf",
+      "publisher": "npj Unconventional Computing 2025",
+      "code_urls": []
+    },
+    {
+      "title": "大规模脉冲神经网络动态加载仿真方法",
+      "paper_url": "https://www.china-simulation.com/CN/10.16182/j.issn1004731x.joss.23-1220",
+      "publisher": "系统仿真学报",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient Training and Neuro-Encoding for Bridging Hybrid ANN and SNN Computation",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11163623",
+      "publisher": "IEEE Transactions on Emerging Topics in Computing  2025",
+      "code_urls": []
+    },
+    {
+      "title": "Research on hardware acceleration of traffic sign recognition based on spiking neural network and FPGA platform",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10715726",
+      "publisher": "IEEE Transactions on Very Large Scale Integration (VLSI) Systems  2025",
+      "code_urls": []
+    },
+    {
+      "title": "Fully spiking actor network with intralayer connections for reinforcement learning",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10423179/",
+      "publisher": "IEEE Transactions on Neural Networks and Learning Systems 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Hardware–Software Co-design Computational Framework and Hardware-Aware Training for Photonic Spiking Convolutional Networks with DFB-SA Laser",
+      "paper_url": "https://doi.org/10.1021/acsphotonics.4c02382",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "CBMC-V2: A CNS-inspired Framework for Real-time Robotic Arm Control",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10769842/",
+      "publisher": "2024 IEEE-RAS 23rd International Conference on Humanoid Robots (Humanoids)",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Networks for Real-Time Pedestrian Street-Crossing Detection Using Dynamic Vision Sensors in Simulated Adverse Weather Conditions",
+      "paper_url": "https://www.mdpi.com/2079-9292/13/21/4280",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "SpikeSMOKE: Spiking Neural Networks for Monocular 3D Object Detection with Cross-Scale Gated Coding",
+      "paper_url": "https://arxiv.org/pdf/2506.07737",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Brain-inspired computing: A systematic survey and future trends",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10636118/",
+      "publisher": "Proceedings of the IEEE",
+      "code_urls": []
+    },
+    {
+      "title": "Obstacle Avoidance in a Crowd With a Plastic Recurrent Mushroom Body Model",
+      "paper_url": "https://ieeexplore.ieee.org/iel8/6287639/6514899/10852307.pdf",
+      "publisher": "IEEE Access 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Improving the sparse structure learning of spiking neural networks from the view of compression efficiency",
+      "paper_url": "https://arxiv.org/abs/2502.13572",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Computation-Efficient Hardware Accelerator for Unstructured-Pruned Spiking Convolutional Neural Networks",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11173146/",
+      "publisher": "2025 IEEE 7th International Conference on Artificial Intelligence Circuits and Systems (AICAS)",
+      "code_urls": []
+    },
+    {
+      "title": "Ec-snn: Splitting deep spiking neural networks for edge devices",
+      "paper_url": "https://www.ijcai.org/proceedings/2024/0596.pdf",
+      "publisher": "IJCAI 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Optical flow estimation from event-based data using spiking neural networks",
+      "paper_url": "https://theses.hal.science/tel-05049510/",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Visual Slam in the Heterogeneous Intelligence Era: A Survey",
+      "paper_url": "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5383002",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "eBrainISA: Edge-oriented Instruction Set Architecture for Hybrid Brain-inspired Computing",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11084892/",
+      "publisher": "IEEE Transactions on Computer-Aided Design of Integrated Circuits and Systems, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Spatial-temporal spiking feature pruning in spiking transformer",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10758407",
+      "publisher": "IEEE Transactions on Cognitive and Developmental Systems 2024",
+      "code_urls": []
+    },
+    {
+      "title": "Enhancing robustness against adversarial attacks in multimodal emotion recognition with spiking transformers",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10896875/",
+      "publisher": "IEEE Access 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Towards biologically plausible computing: A comprehensive comparison",
+      "paper_url": "https://arxiv.org/abs/2406.16062",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "High-Performance Temporal Reversible Spiking Neural Networks with $ O (L) $ Training Memory and $ O (1) $ Inference Cost.",
+      "paper_url": "https://arxiv.org/abs/2405.16466",
+      "publisher": "ICML2024",
+      "code_urls": [
+        "https://github.com/BICLab/T-RevSNN"
+      ]
+    },
+    {
+      "title": "Ftbc: Forward temporal bias correction for optimizing ann-snn conversion",
+      "paper_url": "https://idp.springer.com/authorize?response_type=cookie&client_id=springerlink&redirect_uri=https%3A%2F%2Flink.springer.com%2Fcontent%2Fpdf%2F10.1007%2F978-3-031-72890-7_10.pdf",
+      "publisher": "ECCV 2024",
+      "code_urls": []
+    },
+    {
+      "title": "SNN-IoT: Efficient Partitioning and Enabling of Deep Spiking Neural Networks in IoT Services",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11095670/",
+      "publisher": "IEEE Transactions on Services Computing 2025",
+      "code_urls": []
+    },
+    {
+      "title": "IML-Spikeformer: Input-Aware Multilevel Spiking Transformer for Speech Processing",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11197047/",
+      "publisher": "IEEE Transactions on Neural Networks and Learning Systems 2025",
+      "code_urls": []
+    },
+    {
+      "title": "A Multi-Angle Encoding Spiking Convolutional Neural Network for Remote Sensing Classification",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/10899489/",
+      "publisher": "In 2024 7th International Conference on Algorithms, Computing and Artificial Intelligence (ACAI) (pp. 01-05). IEEE.",
+      "code_urls": []
+    },
+    {
+      "title": "Research on general-purpose brain-inspired computing systems",
+      "paper_url": "https://link.springer.com/article/10.1007/s11390-023-4002-3",
+      "publisher": "Journal of Computer Science and Technology",
+      "code_urls": []
+    },
+    {
+      "title": "Simple Transformer with Single Leaky Neuron for Event Vision",
+      "paper_url": "https://openaccess.thecvf.com/content/WACV2025W/EVGEN/html/Kumar_Simple_Transformer_with_Single_Leaky_Neuron_for_Event_Vision_WACVW_2025_paper.html",
+      "publisher": "WACV Workshops, 2025",
+      "code_urls": []
+    },
+    {
+      "title": "An Asynchronous Multi-core Accelerator for SNN inference",
+      "paper_url": "https://arxiv.org/abs/2407.20947",
+      "publisher": "",
+      "code_urls": []
+    },
+    {
+      "title": "Timestep-parallel 4D Neuromorphic Computing Array Enabling High Computing Power Density and High Energy Efficiency",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11143567/",
+      "publisher": "IEEE Transactions on Circuits and Systems II: Express Briefs.",
+      "code_urls": []
+    },
+    {
+      "title": "DVS-Aware Visual Perception for Pose Estimation of Mobile Robots with Neuromorphic Implementation",
+      "paper_url": "https://ieeexplore.ieee.org/abstract/document/11128155",
+      "publisher": "ICRA 2025",
+      "code_urls": []
+    },
+    {
+      "title": "Multiplication-Free Parallelizable Spiking Neurons with Efficient Spatio-Temporal Dynamics",
+      "paper_url": "https://arxiv.org/abs/2501.14490",
+      "publisher": "Neurips 2025",
+      "code_urls": [
+        "https://github.com/PengXue0812/Multiplication-Free-Parallelizable-Spiking-Neurons-with-Efficient-Spatio-Temporal-Dynamics"
+      ]
+    },
+    {
+      "title": "脉冲深度学习梯度替代算法研究综述",
+      "paper_url": "http://cjc.ict.ac.cn/online/onlinepaper/fw-2025818171058.pdf",
+      "publisher": "计算机学报",
+      "code_urls": [
+        "https://github.com/fangwei123456/chinese_snn_surrogate_gradient_review"
+      ]
+    },
+    {
+      "title": "基于突触可塑性延迟和时间注意力的脉冲神经网络及其语音识别应用",
+      "paper_url": "http://cjc.ict.ac.cn/online/onlinepaper/zmh-2025818172636.pdf",
+      "publisher": "计算机学报",
+      "code_urls": []
+    },
+    {
+      "title": "脉冲神经网络基准测试及类脑训练框架性能评估",
+      "paper_url": "https://www.jas.shu.edu.cn/CN/10.3969/j.issn.0255-8297.2025.01.012",
+      "publisher": "应用科学学报",
+      "code_urls": []
+    },
+    {
+      "title": "基于自适应时间步脉冲神经网络的高效图像分类",
+      "paper_url": "https://www.aas.net.cn/article/doi/10.16383/j.aas.c230656",
+      "publisher": "自动化学报",
+      "code_urls": []
+    },
+    {
+      "title": "电子传输层结构调控对钙钛矿忆阻器性能优化",
+      "paper_url": "https://d.wanfangdata.com.cn/thesis/CiBUaGVzaXNOZXdTMjAyNTA2MTMyMDI1MDYxMzE2MTkxNhIJRDAzNjQ5OTI4GghlZWZhazY4Mw%3D%3D",
+      "publisher": "湖北大学",
+      "code_urls": []
+    },
+    {
+      "title": "Efficient orbit-torque driven spiking neuromorphic device mimicking the selective attention mechanism for self-adaptive recognition",
+      "paper_url": "https://link.springer.com/article/10.1007/s40843-025-3535-8",
+      "publisher": "Science China Materials",
+      "code_urls": []
+    },
+    {
+      "title": "BIVM: 类脑计算编译框架及其原型研究",
+      "paper_url": "https://www.jos.org.cn/html/7420.htm",
+      "publisher": "软件学报",
+      "code_urls": []
+    },
+    {
+      "title": "基于脉冲神经元膜电位增量的数据分布统计量及批归一化",
+      "paper_url": "https://www.arocmag.cn/abs/2024.12.0529",
+      "publisher": "计算机应用研究",
+      "code_urls": []
+    },
+    {
+      "title": "多注意力残差脉冲神经网络的接地网故障诊断",
+      "paper_url": "http://jemi.etmchina.com/jemi/article/abstract/b2407886",
+      "publisher": "电子测量与仪器学报",
+      "code_urls": []
+    },
+    {
+      "title": "基于自适应阈值与多特征融合的脉冲神经网络语义分割方法",
+      "paper_url": "https://ctet.csrzic.com/thesisDetails#10.13889/j.issn.2096-5427.2024.06.012&lang=zh",
+      "publisher": "控制与信息技术",
+      "code_urls": []
+    },
+    {
+      "title": "基于自适应替代梯度和阈值脉冲池化的脉冲神经网络",
+      "paper_url": "http://xwxt.sict.ac.cn/CN/Y2025/V46/I6/1326",
+      "publisher": "小型微型计算机系统",
+      "code_urls": []
+    },
+    {
+      "title": "基于DT-LIF神经元与SSD的脉冲神经网络目标检测方法",
+      "paper_url": "https://www.jeit.ac.cn/cn/article/doi/10.11999/JEIT221367",
+      "publisher": "电子与信息学报",
+      "code_urls": []
+    },
+    {
+      "title": "融合脉冲神经网络的模糊情景车辆重识别算法",
+      "paper_url": "https://yykj.hrbeu.edu.cn/#/digest?ArticleID=2520",
+      "publisher": "应用科技",
+      "code_urls": []
+    },
+    {
+      "title": "Spiking Neural Networks Need High-Frequency Information",
+      "paper_url": "https://openreview.net/forum?id=owNPAl7LNK",
+      "publisher": "NeurIPS 2025",
+      "code_urls": [
+        "https://github.com/bic-L/MaxFormer"
+      ]
+    },
+    {
+      "title": "Towards Lossless Memory-efficient Training of Spiking Neural Networks via Gradient Checkpointing and Spike Compression",
+      "paper_url": "https://openreview.net/forum?id=nrBJ0Uvj7c",
+      "publisher": "ICLR 2026",
+      "code_urls": [
+        "https://github.com/AllenYolk/snn-gradient-checkpointing"
+      ]
+    }
+  ]
+}

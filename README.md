@@ -36,7 +36,7 @@ The [documentation](https://spikingjelly.readthedocs.io) of SpikingJelly is writ
 
 ## Changelog
 
-We are actively maintaining and improving SpikingJelly. Below are our future plans and highlights of each release.
+We are actively maintaining and improving SpikingJelly. This section summarizes the current project status and recent updates.
 
 **Highlights**
 
@@ -48,26 +48,15 @@ In the latest version (Github version),
 - `FlexSN` is available for converting PyTorch spiking neuronal dynamics to Triton kernels;
 - `SpikingSelfAttention` and `QKAttention` are available;
 - `memopt` is available;
+- `op_counter` now supports FLOP, memory-access, SynOp and analytical runtime energy profiling;
 - `nir_exchange` is available;
-- `op_counter` is available;
 - `spikingjelly.activation_based.layer`, `spikingjelly.activation_based.functional` and `spikingjelly.datasets` are refactored;
 - Dataset implementations are refactored;
 - Docs and tutorials are updated;
 - Conv-bn fusion functions in `spikingjelly.activation_based.functional` are deprecated; use PyTorch's [`fuse_conv_bn_eval`](https://docs.pytorch.org/docs/stable/generated/torch.nn.utils.fuse_conv_bn_eval.html) instead.
 
-**Planned**
+**Roadmap**
 
-We are going to release version `0.0.0.1.0` soon.
-
-- [x] Add [Triton](https://github.com/triton-lang/triton) backend for further acceleration on GPU.
-- [x] Add a transpiler for converting PyTorch spiking neurons to Triton kernels, which will be more flexible than the existing [`auto_cuda`](https://github.com/fangwei123456/spikingjelly/tree/master/spikingjelly/activation_based/cuda_kernel/auto_cuda) subpackage.
-- [x] Add spiking self-attention implementations.
-- [x] Update docs and tutorials.
-
-Other long-term plans include:
-
-- [x] Add [NIR](https://github.com/neuromorphs/NIR) support.
-- [x] Optimize training memory cost.
 - [ ] Accelerate on Huawei NPU.
 
 For early-stage experimental features, see our companion project [flashsnn](https://github.com/AllenYolk/flash-snn). New ideas are prototyped in flashsnn before merging into SpikingJelly.
@@ -95,7 +84,7 @@ For early-stage experimental features, see our companion project [flashsnn](http
 
 ## Installation
 
-Note that SpikingJelly is based on PyTorch. Please make sure that you have installed [PyTorch, torchvision and torchaudio](https://pytorch.org) before you install SpikingJelly. Note that the latest version of SpikingJelly requires `torch>=2.2.0` and is tested on `torch==2.7.1` .
+Note that SpikingJelly is based on PyTorch. Please make sure that you have installed [PyTorch, torchvision and torchaudio](https://pytorch.org) before you install SpikingJelly. The latest version of SpikingJelly requires `python>=3.11` and `torch>=2.6.0`, and is tested on `torch==2.7.1`.
 
 **Install the last stable version from** [**PyPI**](https://pypi.org/project/spikingjelly/):
 
@@ -339,7 +328,7 @@ Other tutorials that are not listed here are also available at the [document](ht
 
 ## Publications and Citation
 
-Publications using SpikingJelly are recorded in [Publications](./publications.md). If you use SpikingJelly in your paper, you can also add it to this table by pull request.
+Publications using SpikingJelly are listed on the [documentation page](https://spikingjelly.readthedocs.io/zh_CN/latest/publications.html). The authoritative data source is [publications.json](./publications.json). If you use SpikingJelly in your paper, you can add it there by pull request.
 
 If you use SpikingJelly in your work, please cite it as follows:
 

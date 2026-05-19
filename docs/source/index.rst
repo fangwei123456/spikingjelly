@@ -110,7 +110,7 @@ SpikingJelly是基于PyTorch的，需要确保环境中已经安装了PyTorch，
     eprint = {https://www.science.org/doi/pdf/10.1126/sciadv.adi1480},
     abstract = {Spiking neural networks (SNNs) aim to realize brain-inspired intelligence on neuromorphic chips with high energy efficiency by introducing neural dynamics and spike properties. As the emerging spiking deep learning paradigm attracts increasing interest, traditional programming frameworks cannot meet the demands of the automatic differentiation, parallel computation acceleration, and high integration of processing neuromorphic datasets and deployment. In this work, we present the SpikingJelly framework to address the aforementioned dilemma. We contribute a full-stack toolkit for preprocessing neuromorphic datasets, building deep SNNs, optimizing their parameters, and deploying SNNs on neuromorphic chips. Compared to existing methods, the training of deep SNNs can be accelerated 11×, and the superior extensibility and flexibility of SpikingJelly enable users to accelerate custom models at low costs through multilevel inheritance and semiautomatic code generation. SpikingJelly paves the way for synthesizing truly energy-efficient SNN-based machine intelligence systems, which will enrich the ecology of neuromorphic computing. Motivation and introduction of the software framework SpikingJelly for spiking deep learning.}}
 
-使用惊蜇(SpikingJelly)的出版物可见于 `Publications using SpikingJelly <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>`_。
+使用惊蜇(SpikingJelly)的出版物可见于 :doc:`./publications` 。
 
 项目信息
 -------------------------
@@ -248,7 +248,7 @@ If you use SpikingJelly in your work, please cite it as follows:
     abstract = {Spiking neural networks (SNNs) aim to realize brain-inspired intelligence on neuromorphic chips with high energy efficiency by introducing neural dynamics and spike properties. As the emerging spiking deep learning paradigm attracts increasing interest, traditional programming frameworks cannot meet the demands of the automatic differentiation, parallel computation acceleration, and high integration of processing neuromorphic datasets and deployment. In this work, we present the SpikingJelly framework to address the aforementioned dilemma. We contribute a full-stack toolkit for preprocessing neuromorphic datasets, building deep SNNs, optimizing their parameters, and deploying SNNs on neuromorphic chips. Compared to existing methods, the training of deep SNNs can be accelerated 11×, and the superior extensibility and flexibility of SpikingJelly enable users to accelerate custom models at low costs through multilevel inheritance and semiautomatic code generation. SpikingJelly paves the way for synthesizing truly energy-efficient SNN-based machine intelligence systems, which will enrich the ecology of neuromorphic computing. Motivation and introduction of the software framework SpikingJelly for spiking deep learning.}}
 
 
-Publications using SpikingJelly are recorded in `Publications using SpikingJelly <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>`_. If you use SpikingJelly in your paper, you can also add it to this table by pull request.
+Publications using SpikingJelly are recorded in :doc:`./publications`.
 
 About
 -------------------------
@@ -276,9 +276,9 @@ The list of contributors can be found at `contributors <https://github.com/fangw
 .. toctree::
     :hidden:
 
-    贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>
+    publications
 
 .. toctree::
     :hidden:
 
-    出版物 | Publications <https://github.com/fangwei123456/spikingjelly/blob/master/publications.md>
+    贡献指南 | Contributing <https://github.com/fangwei123456/spikingjelly/blob/master/CONTRIBUTING.md>
