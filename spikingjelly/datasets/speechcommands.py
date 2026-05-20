@@ -96,25 +96,25 @@ class SpeechCommands(Dataset):
         :type root: str
 
         :param silence_cnt: Silence数据的数量
-        :type silence_cnt: int, optional
+        :type silence_cnt: Optional[int]
 
         :param silence_size: Silence数据的尺寸
-        :type silence_size: int, optional
+        :type silence_size: Optional[int]
 
         :param transform: A function/transform that takes in a raw audio
-        :type transform: Callable, optional
+        :type transform: Optional[Callable]
 
         :param url: 数据集版本，默认为v0.02
-        :type url: str, optional
+        :type url: Optional[str]
 
         :param split: 数据集划分，可以是 ``"train", "test", "val"``，默认为 ``"train"``
-        :type split: str, optional
+        :type split: Optional[str]
 
         :param folder_in_archive: 解压后的目录名称，默认为 ``"SpeechCommands"``
-        :type folder_in_archive: str, optional
+        :type folder_in_archive: Optional[str]
 
         :param download: 是否下载数据，默认为False
-        :type download: bool, optional
+        :type download: Optional[bool]
 
         ----
 

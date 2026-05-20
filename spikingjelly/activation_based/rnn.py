@@ -32,6 +32,17 @@ def bidirectional_rnn_cell_forward(
     states_reverse: torch.Tensor,
 ):
     """
+    **API Language:**
+    :ref:`中文 <bidirectional_rnn_cell_forward-cn>` | :ref:`English <bidirectional_rnn_cell_forward-en>`
+
+    ----
+
+    .. _bidirectional_rnn_cell_forward-cn:
+
+    * **中文**
+
+    计算单个正向和反向RNN cell沿着时间维度的循环并输出结果和两个cell的最终状态。
+
     :param cell: 正向RNN cell，输入是正向序列
     :type cell: nn.Module
     :param cell_reverse: 反向的RNN cell，输入是反向序列
@@ -56,7 +67,37 @@ def bidirectional_rnn_cell_forward(
         ss_r: torch.Tensor
             ``shape`` 与 ``states_reverse`` 相同，反向cell在 ``0`` 时刻的状态
 
-    计算单个正向和反向RNN cell沿着时间维度的循环并输出结果和两个cell的最终状态。
+    ----
+
+    .. _bidirectional_rnn_cell_forward-en:
+
+    * **English**
+
+    Compute the temporal loop of a forward and a reverse RNN cell along the time dimension, returning the output and the final states of both cells.
+
+    :param cell: forward RNN cell that takes the forward sequence as input
+    :type cell: nn.Module
+    :param cell_reverse: reverse RNN cell that takes the reverse sequence as input
+    :type cell_reverse: nn.Module
+    :param x: input with ``shape = [T, batch_size, input_size]``
+    :type x: torch.Tensor
+    :param states: initial state of the forward RNN cell.
+        If the RNN cell has a single hidden state, ``shape = [batch_size, hidden_size]``;
+        otherwise ``shape = [states_num, batch_size, hidden_size]``
+    :type states: torch.Tensor
+    :param states_reverse: initial state of the reverse RNN cell.
+        If the RNN cell has a single hidden state, ``shape = [batch_size, hidden_size]``;
+        otherwise ``shape = [states_num, batch_size, hidden_size]``
+    :type states_reverse: torch.Tensor
+    :return: y, ss, ss_r
+
+        y: torch.Tensor
+            ``shape = [T, batch_size, 2 * hidden_size]``. ``y[t]`` is the concatenation of
+            the forward cell's output at ``t`` and the reverse cell's output at ``T - t - 1``
+        ss: torch.Tensor
+            ``shape`` is the same as ``states``. The state of the forward cell at ``T-1``
+        ss_r: torch.Tensor
+            ``shape`` is the same as ``states_reverse``. The state of the reverse cell at ``0``
     """
     T = x.shape[0]
     ss = states
