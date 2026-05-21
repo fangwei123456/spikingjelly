@@ -222,6 +222,7 @@ class ComputeEnergyProfiler:
     def __init__(self, *, config: ComputeEnergyConfig | None = None):
         self.config = copy.deepcopy(config or ComputeEnergyConfig())
         ignore_modules = list(self.config.extra_ignore_modules or [])
+        self._warnings: list[str] = []
         self.mac_counter = MACCounter(extra_ignore_modules=ignore_modules)
         self.ac_counter = ACCounter(extra_ignore_modules=ignore_modules)
         self.synop_counter = SynOpCounter(extra_ignore_modules=ignore_modules)
@@ -238,6 +239,7 @@ class ComputeEnergyProfiler:
         )
 
     def __enter__(self):
+        self._warnings.clear()
         self.mac_counter.reset()
         self.ac_counter.reset()
         self.synop_counter.reset()
@@ -253,7 +255,18 @@ class ComputeEnergyProfiler:
         ac = self.ac_counter.get_total()
         synop = self.synop_counter.get_total()
         flop = self.flop_counter.get_total()
+        total_count = mac + ac + synop + flop
         cost = self.config.cost_config
+
+        warnings_list = list(self._warnings)
+        if total_count == 0:
+            message = (
+                "ComputeEnergyProfiler recorded zero MAC/AC/SynOp/FLOP counts. "
+                "The model may not contain supported operators for this estimator."
+            )
+            if self.config.strict:
+                raise RuntimeError(message)
+            warnings_list.append(message)
 
         energy_mac_pj = mac * cost.e_mac_pj
         energy_ac_pj = ac * cost.e_ac_pj
@@ -273,7 +286,7 @@ class ComputeEnergyProfiler:
                 "synop": synop,
                 "flop": flop,
             },
-            warnings=[],
+            warnings=warnings_list,
         )
 
     def get_total(self) -> float:

@@ -109,3 +109,22 @@ def test_compute_energy_fp16_preset_changes_only_comparison_regime():
     assert report.counts["ac"] == 4
     assert report.counts["mac"] == 0
     assert report.energy_total_pj == pytest.approx(4 * 0.4)
+
+
+def test_compute_energy_warns_when_no_supported_ops_are_profiled():
+    model = nn.ReLU()
+    x = torch.ones(2, 3)
+
+    report = op_counter.estimate_compute_energy(model, x)
+
+    assert report.energy_total_pj == pytest.approx(0.0)
+    assert any("zero MAC/AC/SynOp/FLOP counts" in msg for msg in report.warnings)
+
+
+def test_compute_energy_strict_raises_when_no_supported_ops_are_profiled():
+    model = nn.ReLU()
+    x = torch.ones(2, 3)
+    cfg = op_counter.ComputeEnergyConfig(strict=True)
+
+    with pytest.raises(RuntimeError, match="zero MAC/AC/SynOp/FLOP counts"):
+        op_counter.estimate_compute_energy(model, x, config=cfg)
