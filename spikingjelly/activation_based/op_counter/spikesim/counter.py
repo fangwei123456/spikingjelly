@@ -238,7 +238,7 @@ class SpikeSimCounter(BaseCounter):
         padding: tuple[int, int],
         dilation: tuple[int, int],
         spike_like_input: bool,
-    ) -> None:
+    ) -> int:
         out_channel_tiles = math.ceil(w.shape[0] / self.config.xbar_size)
         metadata = self.stage_metadata.get(scope)
         if metadata is None:
@@ -299,8 +299,9 @@ class SpikeSimCounter(BaseCounter):
                 dense_z,
             )
 
+        dense_pe_cycles = self._dense_pe_cycles(w=w, out=out)
         stats = self.stage_stats[scope]
-        stats.dense_pe_cycle_count += self._dense_pe_cycles(w=w, out=out)
+        stats.dense_pe_cycle_count += dense_pe_cycles
         stats.active_patch_tile_count += active_a
         stats.active_row_count += active_r
         if stats.active_row_count_by_tile is None:
@@ -323,6 +324,7 @@ class SpikeSimCounter(BaseCounter):
                 break
             stats.dense_row_count_by_tile[i] += value
         stats.dense_output_tile_site_count += dense_z
+        return dense_pe_cycles
 
     def _handle_convolution(
         self,
@@ -370,7 +372,7 @@ class SpikeSimCounter(BaseCounter):
         padding = _pair_tuple(padding)
         dilation = _pair_tuple(dilation)
         spike_like_input = is_binary_tensor(x)
-        self._update_stage(
+        dense_pe_cycles = self._update_stage(
             scope=scope,
             x=x,
             w=w,
@@ -390,7 +392,7 @@ class SpikeSimCounter(BaseCounter):
                 f"SpikeSimCounter: {scope} - aten.convolution.default "
                 f"[{mode}] x={tuple(x.shape)} w={tuple(w.shape)} out={tuple(out.shape)}"
             )
-        return self._dense_pe_cycles(w=w, out=out)
+        return dense_pe_cycles
 
     def _count_convolution(
         self,

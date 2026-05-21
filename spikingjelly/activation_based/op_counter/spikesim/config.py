@@ -126,15 +126,6 @@ class SpikeSimEnergyConfig:
             + (b / 8.0) * (b / 8.0) * (self.adc_pj + self.mux_pj)
         )
 
-    @property
-    def pe_cycle_energy_pj(self) -> float:
-        b = float(self.xbar_size)
-        return (
-            self.patch_control_energy_pj
-            + self.neuron_pj
-            + b / 8.0 * self.xbar_array_energy_pj * 3.0 * 3.0
-        )
-
     def pe_cycle_energy_for_kernel_pj(self, kernel_size: tuple[int, int]) -> float:
         k_h, k_w = kernel_size
         return (

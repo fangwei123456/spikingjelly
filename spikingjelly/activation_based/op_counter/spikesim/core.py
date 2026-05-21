@@ -369,13 +369,13 @@ def estimate_spikesim_event_energy(
     """
     cfg = (config or SpikeSimEnergyConfig()).copy()
     cfg.validate()
+    training_message = (
+        "SpikeSim energy only covers forward inference; call model.eval() before "
+        "profiling."
+    )
     if model.training:
-        message = (
-            "SpikeSim energy only covers forward inference; call model.eval() before "
-            "profiling."
-        )
         if strict:
-            raise ValueError(message)
+            raise ValueError(training_message)
     neuron_warnings: list[str] = []
     if cfg.require_if_lif_neurons:
         unsupported_neurons = _unsupported_neuron_modules(model)
@@ -398,5 +398,5 @@ def estimate_spikesim_event_energy(
             _ = _call_model(model, inputs)
     report = profiler.get_report()
     if model.training:
-        report.warnings.insert(0, message)
+        report.warnings.insert(0, training_message)
     return report
