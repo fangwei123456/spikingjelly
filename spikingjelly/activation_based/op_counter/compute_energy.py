@@ -124,6 +124,9 @@ class ComputeEnergyConfig:
     Configuration for the compute-only MAC/AC energy profiler.
 
     The default ``cost_config`` matches ``ComputeEnergyCostConfig.fp32()``.
+    ``strict`` only applies to profiler-level validation added by this wrapper.
+    The internal ``DispatchCounterMode`` is intentionally kept non-strict because
+    it composes multiple specialized counters with non-identical rule coverage.
     """
 
     strict: bool = False
@@ -230,7 +233,7 @@ class ComputeEnergyProfiler:
                 self.synop_counter,
                 self.flop_counter,
             ],
-            strict=self.config.strict,
+            strict=False,
             verbose=self.config.verbose,
         )
 
