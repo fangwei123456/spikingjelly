@@ -276,9 +276,8 @@ class ComputeEnergyProfiler:
     def get_total(self) -> float:
         return self.get_report().energy_total_pj
 
-    def get_counts(self) -> dict[str, Any]:
-        report = self.get_report()
-        return {"counts": report.counts}
+    def get_counts(self) -> dict[str, int]:
+        return self.get_report().counts
 
 
 def estimate_compute_energy(
