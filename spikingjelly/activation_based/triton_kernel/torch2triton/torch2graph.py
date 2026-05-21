@@ -1,11 +1,8 @@
-import warnings
-from typing import Callable, Optional, Sequence, Tuple
+from typing import Callable, Optional, Sequence, Tuple, Any
 
 import torch
 import torch.fx as fx
 from functorch.compile import aot_function, min_cut_rematerialization_partition
-
-warnings.filterwarnings("ignore", category=UserWarning)
 
 
 __all__ = [
@@ -15,21 +12,29 @@ __all__ = [
 
 
 class GraphCollector:
-    """Provide this class to aot_function to collect forward and backward graph."""
+    """Provide this class to aot_function to collect forward and backward graph/module.
+
+    We store both the raw GraphModule and the Graph to allow safe optimizations that
+    preserve module attributes/constants when possible.
+    """
 
     def __init__(self):
-        self.fwd_graph = None
-        self.bwd_graph = None
+        self.fwd_graph: Optional[fx.Graph] = None
+        self.bwd_graph: Optional[fx.Graph] = None
+        self.fwd_module: Optional[fx.GraphModule] = None
+        self.bwd_module: Optional[fx.GraphModule] = None
 
     def get_forward_compiler(self):
-        def _fw_compiler(fx_module, *args, **kwargs):
+        def _fw_compiler(fx_module: fx.GraphModule, *args, **kwargs):
+            self.fwd_module = fx_module
             self.fwd_graph = fx_module.graph
             return fx_module
 
         return _fw_compiler
 
     def get_backward_compiler(self):
-        def _bw_compiler(fx_module, *args, **kwargs):
+        def _bw_compiler(fx_module: fx.GraphModule, *args, **kwargs):
+            self.bwd_module = fx_module
             self.bwd_graph = fx_module.graph
             return fx_module
 
@@ -45,8 +50,17 @@ class GraphOptimizer(fx.Transformer):
         return super().call_function(target, args, kwargs)
 
 
-def _optimize_graph(graph: fx.Graph):
-    return GraphOptimizer(fx.GraphModule({}, graph)).transform().graph
+def _optimize_graph(graph_or_module: Any) -> fx.Graph:
+    # Accept either an fx.GraphModule or an fx.Graph. Prefer operating on the
+    # original GraphModule when available so module attributes/constants are
+    # preserved; otherwise fall back to creating a temporary GraphModule.
+    if isinstance(graph_or_module, fx.GraphModule):
+        gm = graph_or_module
+    else:
+        gm = fx.GraphModule({}, graph_or_module)
+
+    optimized = GraphOptimizer(gm).transform()
+    return optimized.graph
 
 
 def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
@@ -67,21 +81,36 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
     :raises ValueError: EN: Raised when the traced callable fails to produce a forward graph. Chinese: 当被追踪函数未能产生前向 FX 图时抛出。
     """
     collector = GraphCollector()
-    f = aot_function(
-        fn,
-        fw_compiler=collector.get_forward_compiler(),
-        bw_compiler=collector.get_backward_compiler(),
-    )  # ahead-of-time autograd
 
+    # Build local inputs so we don't mutate callers' tensors. For inference
+    # tracing we detach inputs so they do not require gradients.
+    local_inputs = []
     for i in example_inputs:
         if isinstance(i, torch.Tensor):
-            i.requires_grad = False  # for inference
+            local_inputs.append(i.detach())
+        else:
+            local_inputs.append(i)
 
-    # feed the fake inputs
-    _ = f(*example_inputs)
-    if collector.fwd_graph is None:
+    # Fast-path: try lightweight FX symbolic trace under no_grad for pure forward tracing.
+    try:
+        with torch.no_grad():
+            traced = fx.symbolic_trace(fn)
+            # Run traced once to ensure graph is materialized for dynamic shapes.
+            _ = traced(*local_inputs)
+            return _optimize_graph(traced)
+    except Exception:
+        # Fallback to heavier aot_function which captures via autograd if symbolic_trace fails.
+        f = aot_function(
+            fn,
+            fw_compiler=collector.get_forward_compiler(),
+            bw_compiler=collector.get_backward_compiler(),
+        )
+        _ = f(*local_inputs)
+
+    if collector.fwd_module is None and collector.fwd_graph is None:
         raise ValueError(f"Failed to capture an inference graph for {fn}.")
-    return _optimize_graph(collector.fwd_graph)
+
+    return _optimize_graph(collector.fwd_module or collector.fwd_graph)
 
 
 def generate_forward_and_backward_graph(
@@ -115,6 +144,9 @@ def generate_forward_and_backward_graph(
         partition_fn=min_cut_rematerialization_partition,
     )
 
+    # Build local inputs so we don't mutate callers' tensors. Set requires_grad
+    # on detached clones as needed to avoid modifying non-leaf tensors.
+    local_inputs = []
     if requires_grad is not None:
         if len(requires_grad) != len(example_inputs):
             raise ValueError(
@@ -122,14 +154,21 @@ def generate_forward_and_backward_graph(
             )
         for i, r in zip(example_inputs, requires_grad):
             if isinstance(i, torch.Tensor):
-                i.requires_grad = r
+                if r:
+                    local_inputs.append(i.detach().requires_grad_(True))
+                else:
+                    local_inputs.append(i.detach())
+            else:
+                local_inputs.append(i)
     else:  # if not specified, assume that all tensors require gradients
         for i in example_inputs:
             if isinstance(i, torch.Tensor):
-                i.requires_grad = True
+                local_inputs.append(i.detach().requires_grad_(True))
+            else:
+                local_inputs.append(i)
 
     # feed the fake inputs
-    ys = f(*example_inputs)
+    ys = f(*local_inputs)
     # Normalise to tuple so iteration always walks outputs, not tensor dimensions
     if isinstance(ys, torch.Tensor):
         ys = (ys,)
@@ -146,18 +185,21 @@ def generate_forward_and_backward_graph(
         raise ValueError(
             f"No differentiable Tensor found in the output of the function {fn}"
         )
-    torch.autograd.backward(
-        diff_outputs,
-        [torch.randn_like(y) for y in diff_outputs],
-    )
+    torch.autograd.backward(diff_outputs, [torch.randn_like(y) for y in diff_outputs])
 
-    if collector.fwd_graph is None or collector.bwd_graph is None:
+    if (collector.fwd_module is None and collector.fwd_graph is None) or (
+        collector.bwd_module is None and collector.bwd_graph is None
+    ):
         raise ValueError(
             f"Failed to capture both forward and backward graphs for {fn}."
         )
-    collector.bwd_graph.lint()
 
-    return (
-        _optimize_graph(collector.fwd_graph),
-        _optimize_graph(collector.bwd_graph),
-    )
+    # Prefer modules when available so optimizations preserve attributes/constants.
+    fwd_src = collector.fwd_module or collector.fwd_graph
+    bwd_src = collector.bwd_module or collector.bwd_graph
+
+    # Run lint on the backward graph (if available)
+    if collector.bwd_graph is not None:
+        collector.bwd_graph.lint()
+
+    return (_optimize_graph(fwd_src), _optimize_graph(bwd_src))
