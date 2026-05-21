@@ -121,9 +121,11 @@ class SpikeSimEnergyConfig:
             self.htree_pj
             + self.mem_fetch_pj
             + self.tile_buffer_pj
-            + (b / 8.0) * 16.0 * self.sub_pj
-            + (b / 8.0) * self.temp_buffer_pj
-            + (b / 8.0) * (b / 8.0) * (self.adc_pj + self.mux_pj)
+            + (b / _SPIKESIM_XBAR_ROW_DIVISOR) * 16.0 * self.sub_pj
+            + (b / _SPIKESIM_XBAR_ROW_DIVISOR) * self.temp_buffer_pj
+            + (b / _SPIKESIM_XBAR_ROW_DIVISOR)
+            * (b / _SPIKESIM_XBAR_ROW_DIVISOR)
+            * (self.adc_pj + self.mux_pj)
         )
 
     def pe_cycle_energy_for_kernel_pj(self, kernel_size: tuple[int, int]) -> float:

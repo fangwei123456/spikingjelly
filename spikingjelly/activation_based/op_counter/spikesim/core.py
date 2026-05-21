@@ -91,7 +91,6 @@ class SpikeSimEnergyReport:
     event_stats_by_stage: dict[str, dict[str, Any]]
     stage_metadata: dict[str, dict[str, Any]]
     warnings: list[str]
-    total_pj: float
     breakdown_pj: dict[str, float]
     counts: dict[str, int]
 
@@ -265,7 +264,6 @@ class SpikeSimEnergyProfiler:
             event_stats_by_stage=event_stats_by_stage,
             stage_metadata=stage_metadata,
             warnings=warnings,
-            total_pj=total_pj,
             breakdown_pj=totals_dict,
             counts=counts,
         )
