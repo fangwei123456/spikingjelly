@@ -129,7 +129,16 @@ class SpikeSimEnergyConfig:
         )
 
     def pe_cycle_energy_for_kernel_pj(self, kernel_size: tuple[int, int]) -> float:
+        if len(kernel_size) != 2:
+            raise ValueError(
+                f"kernel_size must be a tuple of length 2, got {kernel_size}."
+            )
         k_h, k_w = kernel_size
+        if k_h <= 0 or k_w <= 0:
+            raise ValueError(
+                "kernel_size dimensions must be positive, "
+                f"got ({k_h}, {k_w})."
+            )
         return (
             self.patch_control_energy_pj
             + self.neuron_pj

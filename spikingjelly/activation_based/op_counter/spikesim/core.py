@@ -69,9 +69,11 @@ class SpikeSimEnergyReport:
 
     * **中文**
 
-    Report for the event-driven SpikeSim runtime energy estimator.
+    SpikeSim 运行时能耗估计器的报告, 支持 ``dense`` 和 ``event`` 两种 activity
+    mode。
 
     字段包括总能耗、stage 分解、统计量、stage 元数据和 warning。
+    ``event_stats_by_stage`` 在两种 mode 下都会填充。
 
     ----
 
@@ -79,10 +81,12 @@ class SpikeSimEnergyReport:
 
     * **English**
 
-    Report for the event-driven SpikeSim runtime energy estimator.
+    Report for the SpikeSim runtime energy estimator, supporting both ``dense``
+    and ``event`` activity modes.
 
     Fields include total energy, stage-wise energy breakdown, event stats,
-    stage metadata, and warnings.
+    stage metadata, and warnings. ``event_stats_by_stage`` is populated
+    regardless of the selected activity mode.
     """
 
     energy_total_pj: float
