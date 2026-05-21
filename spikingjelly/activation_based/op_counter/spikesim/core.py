@@ -21,6 +21,8 @@ from .formulas import (
 __all__ = [
     "SpikeSimEnergyConfig",
     "SpikeSimCounter",
+    "SpikeSimEnergyReport",
+    "SpikeSimEnergyProfiler",
     "SpikeSimEventEnergyReport",
     "SpikeSimEventEnergyProfiler",
     "estimate_spikesim_event_energy",
@@ -55,15 +57,15 @@ def _unsupported_neuron_modules(model: nn.Module) -> list[tuple[str, str]]:
 
 
 @dataclass
-class SpikeSimEventEnergyReport:
+class SpikeSimEnergyReport:
     r"""
     **API Language:**
-    :ref:`中文 <SpikeSimEventEnergyReport-cn>` |
-    :ref:`English <SpikeSimEventEnergyReport-en>`
+    :ref:`中文 <SpikeSimEnergyReport-cn>` |
+    :ref:`English <SpikeSimEnergyReport-en>`
 
     ----
 
-    .. _SpikeSimEventEnergyReport-cn:
+    .. _SpikeSimEnergyReport-cn:
 
     * **中文**
 
@@ -73,7 +75,7 @@ class SpikeSimEventEnergyReport:
 
     ----
 
-    .. _SpikeSimEventEnergyReport-en:
+    .. _SpikeSimEnergyReport-en:
 
     * **English**
 
@@ -94,15 +96,15 @@ class SpikeSimEventEnergyReport:
     counts: dict[str, int]
 
 
-class SpikeSimEventEnergyProfiler:
+class SpikeSimEnergyProfiler:
     r"""
     **API Language:**
-    :ref:`中文 <SpikeSimEventEnergyProfiler-cn>` |
-    :ref:`English <SpikeSimEventEnergyProfiler-en>`
+    :ref:`中文 <SpikeSimEnergyProfiler-cn>` |
+    :ref:`English <SpikeSimEnergyProfiler-en>`
 
     ----
 
-    .. _SpikeSimEventEnergyProfiler-cn:
+    .. _SpikeSimEnergyProfiler-cn:
 
     * **中文**
 
@@ -115,7 +117,7 @@ class SpikeSimEventEnergyProfiler:
 
     ----
 
-    .. _SpikeSimEventEnergyProfiler-en:
+    .. _SpikeSimEnergyProfiler-en:
 
     * **English**
 
@@ -136,12 +138,12 @@ class SpikeSimEventEnergyProfiler:
     ):
         r"""
         **API Language:**
-        :ref:`中文 <SpikeSimEventEnergyProfiler.__init__-cn>` |
-        :ref:`English <SpikeSimEventEnergyProfiler.__init__-en>`
+        :ref:`中文 <SpikeSimEnergyProfiler.__init__-cn>` |
+        :ref:`English <SpikeSimEnergyProfiler.__init__-en>`
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.__init__-cn:
+        .. _SpikeSimEnergyProfiler.__init__-cn:
 
         * **中文**
 
@@ -151,7 +153,7 @@ class SpikeSimEventEnergyProfiler:
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.__init__-en:
+        .. _SpikeSimEnergyProfiler.__init__-en:
 
         * **English**
 
@@ -188,15 +190,15 @@ class SpikeSimEventEnergyProfiler:
     def add_warnings(self, messages: list[str]) -> None:
         self._warnings.extend(messages)
 
-    def get_report(self) -> SpikeSimEventEnergyReport:
+    def get_report(self) -> SpikeSimEnergyReport:
         r"""
         **API Language:**
-        :ref:`中文 <SpikeSimEventEnergyProfiler.get_report-cn>` |
-        :ref:`English <SpikeSimEventEnergyProfiler.get_report-en>`
+        :ref:`中文 <SpikeSimEnergyProfiler.get_report-cn>` |
+        :ref:`English <SpikeSimEnergyProfiler.get_report-en>`
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.get_report-cn:
+        .. _SpikeSimEnergyProfiler.get_report-cn:
 
         * **中文**
 
@@ -204,7 +206,7 @@ class SpikeSimEventEnergyProfiler:
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.get_report-en:
+        .. _SpikeSimEnergyProfiler.get_report-en:
 
         * **English**
 
@@ -253,7 +255,7 @@ class SpikeSimEventEnergyProfiler:
                 "extension; activity_mode='dense' is the original SpikeSim-aligned "
                 "default."
             )
-        return SpikeSimEventEnergyReport(
+        return SpikeSimEnergyReport(
             energy_total_pj=total_pj,
             energy_by_stage=energy_by_stage,
             energy_by_component={
@@ -271,12 +273,12 @@ class SpikeSimEventEnergyProfiler:
     def get_total(self) -> float:
         r"""
         **API Language:**
-        :ref:`中文 <SpikeSimEventEnergyProfiler.get_total-cn>` |
-        :ref:`English <SpikeSimEventEnergyProfiler.get_total-en>`
+        :ref:`中文 <SpikeSimEnergyProfiler.get_total-cn>` |
+        :ref:`English <SpikeSimEnergyProfiler.get_total-en>`
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.get_total-cn:
+        .. _SpikeSimEnergyProfiler.get_total-cn:
 
         * **中文**
 
@@ -284,7 +286,7 @@ class SpikeSimEventEnergyProfiler:
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.get_total-en:
+        .. _SpikeSimEnergyProfiler.get_total-en:
 
         * **English**
 
@@ -295,12 +297,12 @@ class SpikeSimEventEnergyProfiler:
     def get_counts(self) -> dict[str, Any]:
         r"""
         **API Language:**
-        :ref:`中文 <SpikeSimEventEnergyProfiler.get_counts-cn>` |
-        :ref:`English <SpikeSimEventEnergyProfiler.get_counts-en>`
+        :ref:`中文 <SpikeSimEnergyProfiler.get_counts-cn>` |
+        :ref:`English <SpikeSimEnergyProfiler.get_counts-en>`
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.get_counts-cn:
+        .. _SpikeSimEnergyProfiler.get_counts-cn:
 
         * **中文**
 
@@ -308,7 +310,7 @@ class SpikeSimEventEnergyProfiler:
 
         ----
 
-        .. _SpikeSimEventEnergyProfiler.get_counts-en:
+        .. _SpikeSimEnergyProfiler.get_counts-en:
 
         * **English**
 
@@ -320,6 +322,10 @@ class SpikeSimEventEnergyProfiler:
             "event_stats_by_stage": report.event_stats_by_stage,
             "stage_metadata": report.stage_metadata,
         }
+
+
+SpikeSimEventEnergyReport = SpikeSimEnergyReport
+SpikeSimEventEnergyProfiler = SpikeSimEnergyProfiler
 
 
 def estimate_spikesim_event_energy(
@@ -390,7 +396,7 @@ def estimate_spikesim_event_energy(
             if strict:
                 raise ValueError(message)
             neuron_warnings.append(message)
-    with SpikeSimEventEnergyProfiler(
+    with SpikeSimEnergyProfiler(
         config=cfg, strict=strict, verbose=verbose
     ) as profiler:
         profiler.add_warnings(neuron_warnings)

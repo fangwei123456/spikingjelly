@@ -167,7 +167,7 @@ def test_spikesim_event_energy_counter_base_contract_nonempty():
     x = (torch.rand(1, 3, 8, 8) > 0.5).float()
 
     with torch.no_grad():
-        with op_counter.SpikeSimEventEnergyProfiler(config=config) as profiler:
+        with op_counter.SpikeSimEnergyProfiler(config=config) as profiler:
             _ = model(x)
 
     records = profiler._counter.get_counts()
@@ -246,7 +246,7 @@ def test_spikesim_event_energy_formula_requires_both_tile_inputs():
 
 
 def test_spikesim_event_energy_profiler_context_cleanup_on_enter_failure():
-    profiler = op_counter.SpikeSimEventEnergyProfiler()
+    profiler = op_counter.SpikeSimEnergyProfiler()
     baseline_parents = set(profiler._dispatch_mode.module_tracker.parents)
     baseline_active_modules = set(profiler._dispatch_mode.module_tracker.active_modules)
 
