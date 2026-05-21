@@ -171,8 +171,12 @@ def test_spikesim_event_energy_counter_base_contract_nonempty():
             _ = model(x)
 
     records = profiler._counter.get_counts()
+    expected_dense_pe_cycles = math.ceil(3 / 4) * math.ceil(4 / 4) * 8 * 8
     assert "Global" in records
-    assert records["Global"][torch.ops.aten.convolution.default] > 1
+    assert (
+        records["Global"][torch.ops.aten.convolution.default]
+        == expected_dense_pe_cycles
+    )
     assert (
         profiler._counter.get_total()
         == records["Global"][torch.ops.aten.convolution.default]

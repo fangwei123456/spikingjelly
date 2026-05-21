@@ -185,6 +185,9 @@ class SpikeSimEventEnergyProfiler:
         self._active = False
         return self._dispatch_mode.__exit__(exc_type, exc, tb)
 
+    def add_warnings(self, messages: list[str]) -> None:
+        self._warnings.extend(messages)
+
     def get_report(self) -> SpikeSimEventEnergyReport:
         r"""
         **API Language:**
@@ -226,6 +229,8 @@ class SpikeSimEventEnergyProfiler:
             component_by_stage[stage] = breakdown
             energy_by_stage[stage] = breakdown["total_pj"]
             for key, value in breakdown.items():
+                if key == "total_pj":
+                    continue
                 component_totals[key] += value
 
         warnings = list(self._counter.warnings)
@@ -237,6 +242,7 @@ class SpikeSimEventEnergyProfiler:
             )
 
         totals_dict = dict(component_totals)
+        total_pj = sum(energy_by_stage.values())
         counts = {
             "dense_pe_cycle_count": int(self._counter.get_total()),
             "stage_count": len(stage_metadata),
@@ -248,16 +254,16 @@ class SpikeSimEventEnergyProfiler:
                 "default."
             )
         return SpikeSimEventEnergyReport(
-            energy_total_pj=totals_dict.get("total_pj", 0.0),
+            energy_total_pj=total_pj,
             energy_by_stage=energy_by_stage,
             energy_by_component={
-                "totals": totals_dict,
+                "totals": {**totals_dict, "total_pj": total_pj},
                 "by_stage": component_by_stage,
             },
             event_stats_by_stage=event_stats_by_stage,
             stage_metadata=stage_metadata,
             warnings=warnings,
-            total_pj=totals_dict.get("total_pj", 0.0),
+            total_pj=total_pj,
             breakdown_pj=totals_dict,
             counts=counts,
         )
@@ -387,7 +393,7 @@ def estimate_spikesim_event_energy(
     with SpikeSimEventEnergyProfiler(
         config=cfg, strict=strict, verbose=verbose
     ) as profiler:
-        profiler._warnings.extend(neuron_warnings)
+        profiler.add_warnings(neuron_warnings)
         with torch.no_grad():
             _ = _call_model(model, inputs)
     report = profiler.get_report()

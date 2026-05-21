@@ -274,6 +274,11 @@ class SpikeSimCounter(BaseCounter):
                 )
 
         metadata.total_calls += 1
+        dense_a, dense_r, dense_r_by_tile, dense_z = self._dense_event_counts(
+            w=w,
+            out=out,
+            out_channel_tiles=out_channel_tiles,
+        )
         if self.config.activity_mode == "event" and spike_like_input:
             metadata.event_driven_calls += 1
             active_a, active_r, active_r_by_tile, active_z = self._spike_event_counts(
@@ -287,17 +292,12 @@ class SpikeSimCounter(BaseCounter):
             )
         else:
             metadata.dense_fallback_calls += 1
-            active_a, active_r, active_r_by_tile, active_z = self._dense_event_counts(
-                w=w,
-                out=out,
-                out_channel_tiles=out_channel_tiles,
+            active_a, active_r, active_r_by_tile, active_z = (
+                dense_a,
+                dense_r,
+                dense_r_by_tile,
+                dense_z,
             )
-
-        dense_a, dense_r, dense_r_by_tile, dense_z = self._dense_event_counts(
-            w=w,
-            out=out,
-            out_channel_tiles=out_channel_tiles,
-        )
 
         stats = self.stage_stats[scope]
         stats.dense_pe_cycle_count += self._dense_pe_cycles(w=w, out=out)

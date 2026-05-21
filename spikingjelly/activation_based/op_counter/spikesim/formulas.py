@@ -79,19 +79,3 @@ def compute_spikesim_event_energy_breakdown(
         "neuron_pj": neuron,
         "total_pj": patch_control + xbar + neuron,
     }
-
-
-def _compute_spikesim_dense_stage_energy(
-    *,
-    in_channels: int,
-    out_channels: int,
-    kernel_size: tuple[int, int],
-    num_sites: int,
-    config: SpikeSimEnergyConfig,
-) -> float:
-    p_i = math.ceil(in_channels / config.xbar_size)
-    q_i = math.ceil(out_channels / config.xbar_size)
-    dense_pe_cycles = p_i * q_i * num_sites
-    k_h, k_w = kernel_size
-    pe_cycle_energy = config.pe_cycle_energy_for_kernel_pj((k_h, k_w))
-    return dense_pe_cycles * pe_cycle_energy

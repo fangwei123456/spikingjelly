@@ -140,7 +140,7 @@ class SpikeSimEnergyConfig:
         return (
             self.patch_control_energy_pj
             + self.neuron_pj
-            + (self.xbar_size / 8.0)
+            + (self.xbar_size / _SPIKESIM_XBAR_ROW_DIVISOR)
             * float(k_h)
             * float(k_w)
             * self.xbar_array_energy_pj
