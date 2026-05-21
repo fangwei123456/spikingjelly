@@ -1,8 +1,11 @@
-from typing import Callable, Optional, Sequence, Tuple, Any
+import warnings
+from typing import Any, Callable, Optional, Sequence, Tuple
 
 import torch
 import torch.fx as fx
 from functorch.compile import aot_function, min_cut_rematerialization_partition
+
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 __all__ = [
@@ -91,21 +94,14 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
         else:
             local_inputs.append(i)
 
-    # Fast-path: try lightweight FX symbolic trace under no_grad for pure forward tracing.
-    try:
-        with torch.no_grad():
-            traced = fx.symbolic_trace(fn)
-            # Run traced once to ensure graph is materialized for dynamic shapes.
-            _ = traced(*local_inputs)
-            return _optimize_graph(traced)
-    except Exception:
-        # Fallback to heavier aot_function which captures via autograd if symbolic_trace fails.
-        f = aot_function(
-            fn,
-            fw_compiler=collector.get_forward_compiler(),
-            bw_compiler=collector.get_backward_compiler(),
-        )
-        _ = f(*local_inputs)
+    # Capture the graph using aot_function which provides the flattened ATen-level graph
+    # required for the Triton compiler.
+    f = aot_function(
+        fn,
+        fw_compiler=collector.get_forward_compiler(),
+        bw_compiler=collector.get_backward_compiler(),
+    )
+    _ = f(*local_inputs)
 
     if collector.fwd_module is None and collector.fwd_graph is None:
         raise ValueError(f"Failed to capture an inference graph for {fn}.")
@@ -194,12 +190,12 @@ def generate_forward_and_backward_graph(
             f"Failed to capture both forward and backward graphs for {fn}."
         )
 
-    # Prefer modules when available so optimizations preserve attributes/constants.
-    fwd_src = collector.fwd_module or collector.fwd_graph
-    bwd_src = collector.bwd_module or collector.bwd_graph
-
     # Run lint on the backward graph (if available)
     if collector.bwd_graph is not None:
         collector.bwd_graph.lint()
+
+    # Prefer modules when available so optimizations preserve attributes/constants.
+    fwd_src = collector.fwd_module or collector.fwd_graph
+    bwd_src = collector.bwd_module or collector.bwd_graph
 
     return (_optimize_graph(fwd_src), _optimize_graph(bwd_src))
