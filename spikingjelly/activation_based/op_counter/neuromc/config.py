@@ -18,7 +18,9 @@ class MemoryInstanceSpec:
 
 
 _MEMORY_INSTANCES = {
-    "reg_1b": MemoryInstanceSpec("reg_1b", 1, 1, 1, 1, 0.00901 / 7.1 * 2, 0.00901 / 7.1 * 2),
+    "reg_1b": MemoryInstanceSpec(
+        "reg_1b", 1, 1, 1, 1, 0.00901 / 7.1 * 2, 0.00901 / 7.1 * 2
+    ),
     "reg_16b": MemoryInstanceSpec(
         "reg_16b", 16, 16, 16, 16, 0.14416 / 7.1 * 2, 0.14416 / 7.1 * 2
     ),

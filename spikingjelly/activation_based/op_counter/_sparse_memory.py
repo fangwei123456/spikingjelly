@@ -18,11 +18,24 @@ __all__ = [
 
 def active_element_count(x: torch.Tensor) -> int:
     r"""
+    **API Language:**
+    :ref:`中文 <active_element_count-cn>` | :ref:`English <active_element_count-en>`
+
+    ----
+
+    .. _active_element_count-cn:
+
+    * **中文**
+
     :param x: 输入张量
     :type x: torch.Tensor
 
     :return: ``x`` 中非零元素的个数
     :rtype: int
+
+    ----
+
+    .. _active_element_count-en:
 
     * **English**
 
@@ -37,11 +50,24 @@ def active_element_count(x: torch.Tensor) -> int:
 
 def dense_bytes(x: torch.Tensor) -> int:
     r"""
+    **API Language:**
+    :ref:`中文 <dense_bytes-cn>` | :ref:`English <dense_bytes-en>`
+
+    ----
+
+    .. _dense_bytes-cn:
+
+    * **中文**
+
     :param x: 输入张量
     :type x: torch.Tensor
 
     :return: ``x`` 以密集格式存储所需的字节数，即 ``numel * element_size``
     :rtype: int
+
+    ----
+
+    .. _dense_bytes-en:
 
     * **English**
 
@@ -56,11 +82,24 @@ def dense_bytes(x: torch.Tensor) -> int:
 
 def sparse_bytes(x: torch.Tensor) -> int:
     r"""
+    **API Language:**
+    :ref:`中文 <sparse_bytes-cn>` | :ref:`English <sparse_bytes-en>`
+
+    ----
+
+    .. _sparse_bytes-cn:
+
+    * **中文**
+
     :param x: 输入张量
     :type x: torch.Tensor
 
     :return: ``x`` 以稀疏格式存储所需的字节数，即 ``active_elements * element_size``
     :rtype: int
+
+    ----
+
+    .. _sparse_bytes-en:
 
     * **English**
 
@@ -77,6 +116,15 @@ def is_sparse_access_tensor(
     x: torch.Tensor, *, zero_ratio_threshold: float = 0.5
 ) -> bool:
     r"""
+    **API Language:**
+    :ref:`中文 <is_sparse_access_tensor-cn>` | :ref:`English <is_sparse_access_tensor-en>`
+
+    ----
+
+    .. _is_sparse_access_tensor-cn:
+
+    * **中文**
+
     :param x: 输入张量
     :type x: torch.Tensor
 
@@ -86,6 +134,10 @@ def is_sparse_access_tensor(
 
     :return: 当 ``x`` 为零值比例高于 ``zero_ratio_threshold`` 的二元脉冲张量或稠密张量时返回 ``True``
     :rtype: bool
+
+    ----
+
+    .. _is_sparse_access_tensor-en:
 
     * **English**
 
@@ -113,11 +165,24 @@ def is_sparse_access_tensor(
 
 def dense_bytes_tree(tree: Any) -> int:
     r"""
+    **API Language:**
+    :ref:`中文 <dense_bytes_tree-cn>` | :ref:`English <dense_bytes_tree-en>`
+
+    ----
+
+    .. _dense_bytes_tree-cn:
+
+    * **中文**
+
     :param tree: 可能包含张量的嵌套容器（tuple / list / dict）
     :type tree: Any
 
     :return: 容器中所有张量的密集字节数之和
     :rtype: int
+
+    ----
+
+    .. _dense_bytes_tree-en:
 
     * **English**
 
@@ -138,6 +203,15 @@ def dense_bytes_tree(tree: Any) -> int:
 
 def sparse_bytes_tree(tree: Any, *, zero_ratio_threshold: float = 0.5) -> int:
     r"""
+    **API Language:**
+    :ref:`中文 <sparse_bytes_tree-cn>` | :ref:`English <sparse_bytes_tree-en>`
+
+    ----
+
+    .. _sparse_bytes_tree-cn:
+
+    * **中文**
+
     :param tree: 可能包含张量的嵌套容器（tuple / list / dict）
     :type tree: Any
 
@@ -147,6 +221,10 @@ def sparse_bytes_tree(tree: Any, *, zero_ratio_threshold: float = 0.5) -> int:
 
     :return: 容器中所有张量的稀疏字节数之和。对于稀疏张量，仅计算非零元素对应的字节数
     :rtype: int
+
+    ----
+
+    .. _sparse_bytes_tree-en:
 
     * **English**
 

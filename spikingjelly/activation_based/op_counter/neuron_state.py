@@ -245,6 +245,69 @@ class NeuronStateCounter(BaseCounter):
         active_modules: set[nn.Module] | None = None,
         parent_names: set[str] | None = None,
     ) -> int:
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuronStateCounter.count-cn>` |
+        :ref:`English <NeuronStateCounter.count-en>`
+
+        ----
+
+        .. _NeuronStateCounter.count-cn:
+
+        * **中文**
+
+        统计一次aten操作对神经元内部状态的影响。
+
+        该函数会判断当前操作是否涉及 ``BaseNode`` 子类的内部状态张量，
+        并根据操作类型（加法、乘法、比较、非线性、选择等）记录对应的
+        细粒度状态统计。如果启用了稀疏内存估计，还会根据输入张量的
+        稀疏度调整计数方式。
+
+        :param func: 待计算的 aten 操作
+        :type func: Any
+        :param args: func 的位置参数
+        :type args: tuple
+        :param kwargs: func 的关键字参数
+        :type kwargs: dict
+        :param out: func 的输出
+        :type out: Any
+        :param active_modules: 当前活跃模块集合
+        :type active_modules: Optional[set[nn.Module]]
+        :param parent_names: 当前活跃父模块名称集合
+        :type parent_names: Optional[set[str]]
+        :return: 所有状态相关操作数之和（非零计数的总和）
+        :rtype: int
+
+        ----
+
+        .. _NeuronStateCounter.count-en:
+
+        * **English**
+
+        Count the impact of an aten operation on the internal state of neurons.
+
+        This function checks whether the current operation involves internal
+        state tensors of ``BaseNode`` subclasses, and records fine-grained
+        state metrics according to the operation type (addition, multiplication,
+        comparison, nonlinear, selection, etc.). When sparse memory estimation
+        is enabled, the counting is adjusted based on the sparsity of input
+        tensors.
+
+        :param func: the aten operation to be calculated
+        :type func: Any
+        :param args: positional arguments of func
+        :type args: tuple
+        :param kwargs: keyword arguments of func
+        :type kwargs: dict
+        :param out: output of func
+        :type out: Any
+        :param active_modules: currently active module instances
+        :type active_modules: Optional[set[nn.Module]]
+        :param parent_names: names of currently active parent modules
+        :type parent_names: Optional[set[str]]
+        :return: total count of all state-related operations
+        :rtype: int
+        """
         active_modules = set() if active_modules is None else active_modules
         active_base_nodes = [m for m in active_modules if isinstance(m, BaseNode)]
         if not active_base_nodes:

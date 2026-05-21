@@ -242,7 +242,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
 
     * **中文**
 
-    使用kaiming normal初始化 ``net` `中的所有 :class:`torch.nn._ConvNd` 和 :class:`torch.nn.Linear` 的权重（不包括偏置项）。
+    使用kaiming normal初始化 ``net`` 中的所有 :class:`torch.nn._ConvNd` 和 :class:`torch.nn.Linear` 的权重（不包括偏置项）。
     参见 :class:`torch.nn.init.kaiming_normal_`。
 
     :param net: 任何属于 ``nn.Module`` 子类的网络

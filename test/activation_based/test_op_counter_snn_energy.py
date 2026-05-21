@@ -71,8 +71,12 @@ def test_lemaire_energy_sparse_linear_memory_is_lower_than_dense():
     dense_report = op_counter.estimate_lemaire_energy(model, dense_x)
     sparse_report = op_counter.estimate_lemaire_energy(model, sparse_x)
 
-    assert sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
-    assert sparse_report.breakdown_pj["params_pj"] < dense_report.breakdown_pj["params_pj"]
+    assert (
+        sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+    )
+    assert (
+        sparse_report.breakdown_pj["params_pj"] < dense_report.breakdown_pj["params_pj"]
+    )
     assert sparse_report.total_pj < dense_report.total_pj
 
 
@@ -85,7 +89,9 @@ def test_lemaire_energy_non_binary_sparse_linear_memory_is_lower_than_dense():
     dense_report = op_counter.estimate_lemaire_energy(model, dense_x)
     sparse_report = op_counter.estimate_lemaire_energy(model, sparse_x)
 
-    assert sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+    assert (
+        sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+    )
 
 
 def test_lemaire_energy_sparse_zero_ratio_below_threshold_stays_dense():
@@ -114,8 +120,12 @@ def test_lemaire_energy_sparse_conv_memory_is_lower_than_dense():
     dense_report = op_counter.estimate_lemaire_energy(model, dense_x)
     sparse_report = op_counter.estimate_lemaire_energy(model, sparse_x)
 
-    assert sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
-    assert sparse_report.breakdown_pj["params_pj"] < dense_report.breakdown_pj["params_pj"]
+    assert (
+        sparse_report.breakdown_pj["inout_pj"] < dense_report.breakdown_pj["inout_pj"]
+    )
+    assert (
+        sparse_report.breakdown_pj["params_pj"] < dense_report.breakdown_pj["params_pj"]
+    )
 
 
 def test_lemaire_energy_conv_transpose_sparse_input_falls_back_with_warning():
@@ -195,7 +205,10 @@ def test_lemaire_addressing_counter_linear_counts_dense_and_binary():
         _ = model(spike_x)
     spike_counts = counter.get_metric_counts()["Global"]
     assert spike_counts["mac_addr"] == 0
-    assert spike_counts["acc_addr"] == int(spike_x.count_nonzero().item()) * model.out_features
+    assert (
+        spike_counts["acc_addr"]
+        == int(spike_x.count_nonzero().item()) * model.out_features
+    )
 
 
 def test_lemaire_addressing_counter_conv_counts_dense_binary_and_grouped():

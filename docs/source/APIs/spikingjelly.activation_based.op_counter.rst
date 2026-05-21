@@ -43,6 +43,14 @@ MAC / AC / SynOp Counters
    :undoc-members:
    :show-inheritance:
 
+Compute-Only Energy Estimator
++++++++++++++++++++++++++++++
+
+.. automodule:: spikingjelly.activation_based.op_counter.compute_energy
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 NeuroMC Energy Profiler
 +++++++++++++++++++++++++++
 

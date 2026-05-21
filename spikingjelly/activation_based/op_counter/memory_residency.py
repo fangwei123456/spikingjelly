@@ -513,14 +513,98 @@ class MemoryResidencySimulator:
 
 
 class MemoryResidencyCounter(BaseCounter):
+    r"""
+    **API Language:**
+    :ref:`中文 <MemoryResidencyCounter-cn>` |
+    :ref:`English <MemoryResidencyCounter-en>`
+
+    ----
+
+    .. _MemoryResidencyCounter-cn:
+
+    * **中文**
+
+    内存驻留计数器，用于追踪 SNN 推理过程中张量在各存储层级（register、SRAM、DRAM）之间的驻留和移动。
+
+    该计数器使用 :class:`MemoryResidencySimulator` 模拟缓存行为，并结合 LRU
+    淘汰策略管理寄存器与 SRAM 层级。它可与
+    :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`
+    配合使用来自动追踪每个 aten 操作的内存访问模式。
+
+    ----
+
+    .. _MemoryResidencyCounter-en:
+
+    * **English**
+
+    Memory residency counter that tracks tensor residency and movement across
+    memory hierarchy levels (register, SRAM, DRAM) during SNN inference.
+
+    It uses :class:`MemoryResidencySimulator` to model cache behavior with LRU
+    eviction policy at register and SRAM levels. It is designed to be used with
+    :class:`DispatchCounterMode <spikingjelly.activation_based.op_counter.base.DispatchCounterMode>`
+    to automatically track memory access patterns of each aten operation.
+    """
+
     def __init__(
         self,
         *,
         config: Any | None = None,
         capacity_bits: dict[str, float] | None = None,
         extra_rules: dict[Any, Callable] | None = None,
-        extra_ignore_modules: list[nn.Module] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.__init__-cn>` |
+        :ref:`English <MemoryResidencyCounter.__init__-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.__init__-cn:
+
+        * **中文**
+
+        初始化内存驻留计数器。
+
+        :param config: 可选配置对象（需具有 ``capacity_bits`` 属性）
+        :type config: Optional[Any]
+
+        :param capacity_bits: 各层级的容量（以比特为单位），包含 ``reg``、``sram``、``dram`` 三个键。
+            若未提供则使用默认容量
+        :type capacity_bits: Optional[dict[str, float]]
+
+        :param extra_rules: 额外的内存访问规则，用于注册自定义 aten 操作的访存模式。
+            键为 aten 操作，值为 ``(args, kwargs, out) -> (read_tensors, write_tensors)`` 形式的函数
+        :type extra_rules: Optional[dict[Any, Callable]]
+
+        :param extra_ignore_modules: 需要忽略的模块类型列表，这些模块中的访存不会被计入
+        :type extra_ignore_modules: Optional[list[type[nn.Module]]]
+
+        ----
+
+        .. _MemoryResidencyCounter.__init__-en:
+
+        * **English**
+
+        Initialize the memory residency counter.
+
+        :param config: optional config object (must have ``capacity_bits`` attribute)
+        :type config: Optional[Any]
+
+        :param capacity_bits: capacity for each level in bits, with keys ``reg``,
+            ``sram``, and ``dram``. If not provided, default capacities are used
+        :type capacity_bits: Optional[dict[str, float]]
+
+        :param extra_rules: additional memory access rules for registering access
+            patterns of custom aten operations. Keys are aten operations, values
+            are callables with signature ``(args, kwargs, out) -> (read_tensors, write_tensors)``
+        :type extra_rules: Optional[dict[Any, Callable]]
+
+        :param extra_ignore_modules: list of module classes to ignore. Memory accesses
+            within these modules will not be counted
+        :type extra_ignore_modules: Optional[list[type[nn.Module]]]
+        """
         super().__init__()
         self.rules = dict(_RESIDENCY_ACCESS_RULES)
         if extra_rules is not None:
@@ -544,6 +628,33 @@ class MemoryResidencyCounter(BaseCounter):
         )
 
     def reset(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.reset-cn>` |
+        :ref:`English <MemoryResidencyCounter.reset-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.reset-cn:
+
+        * **中文**
+
+        重置计数器和模拟器的所有记录状态。
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _MemoryResidencyCounter.reset-en:
+
+        * **English**
+
+        Reset all recorded states of the counter and the underlying simulator.
+
+        :return: None
+        :rtype: None
+        """
         self.records.clear()
         self.level_records.clear()
         self.level_rw_records.clear()
@@ -563,6 +674,60 @@ class MemoryResidencyCounter(BaseCounter):
         active_modules: set[nn.Module] | None = None,
         parent_names: set[str] | None = None,
     ) -> int:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.count-cn>` |
+        :ref:`English <MemoryResidencyCounter.count-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.count-cn:
+
+        * **中文**
+
+        根据注册的访存规则计算一次 aten 操作的内存访问计数，并驱动
+        :class:`MemoryResidencySimulator` 更新缓存状态。
+
+        :param func: 待计算的 aten 操作
+        :type func: Any
+        :param args: func 的位置参数
+        :type args: tuple
+        :param kwargs: func 的关键字参数
+        :type kwargs: dict
+        :param out: func 的输出
+        :type out: Any
+        :param active_modules: 当前活跃模块集合
+        :type active_modules: Optional[set[nn.Module]]
+        :param parent_names: 当前活跃父模块名称集合
+        :type parent_names: Optional[set[str]]
+        :return: 该操作的总访问字节数
+        :rtype: int
+
+        ----
+
+        .. _MemoryResidencyCounter.count-en:
+
+        * **English**
+
+        Compute the memory access count for an aten operation according to
+        registered access rules, and drive the :class:`MemoryResidencySimulator`
+        to update cache states.
+
+        :param func: the aten operation to be calculated
+        :type func: Any
+        :param args: positional arguments of func
+        :type args: tuple
+        :param kwargs: keyword arguments of func
+        :type kwargs: dict
+        :param out: output of func
+        :type out: Any
+        :param active_modules: currently active module instances
+        :type active_modules: Optional[set[nn.Module]]
+        :param parent_names: names of currently active parent modules
+        :type parent_names: Optional[set[str]]
+        :return: total access bytes of this operation
+        :rtype: int
+        """
         rule = self.rules.get(func)
         if rule is None:
             return 0
@@ -610,19 +775,157 @@ class MemoryResidencyCounter(BaseCounter):
         return total_bits
 
     def get_level_bits(self) -> dict[str, int]:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.get_level_bits-cn>` |
+        :ref:`English <MemoryResidencyCounter.get_level_bits-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.get_level_bits-cn:
+
+        * **中文**
+
+        :return: 各层级的总访问比特数
+        :rtype: dict[str, int]
+
+        ----
+
+        .. _MemoryResidencyCounter.get_level_bits-en:
+
+        * **English**
+
+        :return: total access bits per memory level
+        :rtype: dict[str, int]
+        """
         return dict(self.level_records)
 
     def get_level_rw_bits(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.get_level_rw_bits-cn>` |
+        :ref:`English <MemoryResidencyCounter.get_level_rw_bits-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.get_level_rw_bits-cn:
+
+        * **中文**
+
+        :return: 各层级的读写比特数详情
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _MemoryResidencyCounter.get_level_rw_bits-en:
+
+        * **English**
+
+        :return: per-level read/write bit breakdown
+        :rtype: dict[str, dict[str, int]]
+        """
         return {k: dict(v) for k, v in self.level_rw_records.items()}
 
     def get_op_level_bits(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.get_op_level_bits-cn>` |
+        :ref:`English <MemoryResidencyCounter.get_op_level_bits-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.get_op_level_bits-cn:
+
+        * **中文**
+
+        :return: 按操作聚合的各层级访问比特数
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _MemoryResidencyCounter.get_op_level_bits-en:
+
+        * **English**
+
+        :return: per-operation level access bits
+        :rtype: dict[str, dict[str, int]]
+        """
         return {k: dict(v) for k, v in self.op_level_records.items()}
 
     def get_stage_level_bits(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.get_stage_level_bits-cn>` |
+        :ref:`English <MemoryResidencyCounter.get_stage_level_bits-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.get_stage_level_bits-cn:
+
+        * **中文**
+
+        :return: 按阶段（forward/backward/optimizer）聚合的各层级访问比特数
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _MemoryResidencyCounter.get_stage_level_bits-en:
+
+        * **English**
+
+        :return: per-stage level access bits
+        :rtype: dict[str, dict[str, int]]
+        """
         return {k: dict(v) for k, v in self.stage_level_records.items()}
 
     def get_move_bits_by_edge(self) -> dict[str, int]:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.get_move_bits_by_edge-cn>` |
+        :ref:`English <MemoryResidencyCounter.get_move_bits_by_edge-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.get_move_bits_by_edge-cn:
+
+        * **中文**
+
+        :return: 按层级间移动边聚合的数据移动比特数
+        :rtype: dict[str, int]
+
+        ----
+
+        .. _MemoryResidencyCounter.get_move_bits_by_edge-en:
+
+        * **English**
+
+        :return: data movement bits aggregated by inter-level edges
+        :rtype: dict[str, int]
+        """
         return self.simulator.get_move_bits_by_edge()
 
     def get_move_bits_by_op(self) -> dict[str, dict[str, int]]:
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryResidencyCounter.get_move_bits_by_op-cn>` |
+        :ref:`English <MemoryResidencyCounter.get_move_bits_by_op-en>`
+
+        ----
+
+        .. _MemoryResidencyCounter.get_move_bits_by_op-cn:
+
+        * **中文**
+
+        :return: 按操作聚合的层级间数据移动比特数
+        :rtype: dict[str, dict[str, int]]
+
+        ----
+
+        .. _MemoryResidencyCounter.get_move_bits_by_op-en:
+
+        * **English**
+
+        :return: per-operation inter-level data movement bits
+        :rtype: dict[str, dict[str, int]]
+        """
         return self.simulator.get_move_bits_by_op()
