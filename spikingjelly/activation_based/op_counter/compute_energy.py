@@ -131,7 +131,7 @@ class ComputeEnergyConfig:
     cost_config: ComputeEnergyCostConfig = field(
         default_factory=ComputeEnergyCostConfig
     )
-    extra_ignore_modules: list[nn.Module] | None = None
+    extra_ignore_modules: list[type[nn.Module]] | None = None
 
 
 @dataclass
@@ -246,10 +246,10 @@ class ComputeEnergyProfiler:
         return self._dispatch_mode.__exit__(exc_type, exc, tb)
 
     def get_report(self) -> ComputeEnergyReport:
-        mac = int(self.mac_counter.get_total())
-        ac = int(self.ac_counter.get_total())
-        synop = int(self.synop_counter.get_total())
-        flop = int(self.flop_counter.get_total())
+        mac = self.mac_counter.get_total()
+        ac = self.ac_counter.get_total()
+        synop = self.synop_counter.get_total()
+        flop = self.flop_counter.get_total()
         cost = self.config.cost_config
 
         energy_mac_pj = mac * cost.e_mac_pj

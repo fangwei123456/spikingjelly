@@ -552,7 +552,7 @@ class MemoryResidencyCounter(BaseCounter):
         config: Any | None = None,
         capacity_bits: dict[str, float] | None = None,
         extra_rules: dict[Any, Callable] | None = None,
-        extra_ignore_modules: list[nn.Module] | None = None,
+        extra_ignore_modules: list[type[nn.Module]] | None = None,
     ):
         r"""
         **API Language:**
@@ -578,8 +578,8 @@ class MemoryResidencyCounter(BaseCounter):
             键为 aten 操作，值为 ``(args, kwargs, out) -> (read_tensors, write_tensors)`` 形式的函数
         :type extra_rules: Optional[dict[Any, Callable]]
 
-        :param extra_ignore_modules: 需要忽略的模块列表，这些模块中的访存不会被计入
-        :type extra_ignore_modules: Optional[list[nn.Module]]
+        :param extra_ignore_modules: 需要忽略的模块类型列表，这些模块中的访存不会被计入
+        :type extra_ignore_modules: Optional[list[type[nn.Module]]]
 
         ----
 
@@ -601,9 +601,9 @@ class MemoryResidencyCounter(BaseCounter):
             are callables with signature ``(args, kwargs, out) -> (read_tensors, write_tensors)``
         :type extra_rules: Optional[dict[Any, Callable]]
 
-        :param extra_ignore_modules: list of modules to ignore. Memory accesses
+        :param extra_ignore_modules: list of module classes to ignore. Memory accesses
             within these modules will not be counted
-        :type extra_ignore_modules: Optional[list[nn.Module]]
+        :type extra_ignore_modules: Optional[list[type[nn.Module]]]
         """
         super().__init__()
         self.rules = dict(_RESIDENCY_ACCESS_RULES)
