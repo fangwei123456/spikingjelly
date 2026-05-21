@@ -118,7 +118,7 @@ def test_compute_energy_warns_when_no_supported_ops_are_profiled():
     report = op_counter.estimate_compute_energy(model, x)
 
     assert report.energy_total_pj == pytest.approx(0.0)
-    assert any("zero MAC/AC/SynOp/FLOP counts" in msg for msg in report.warnings)
+    assert any("did not match any supported operators" in msg for msg in report.warnings)
 
 
 def test_compute_energy_strict_raises_when_no_supported_ops_are_profiled():
@@ -126,5 +126,19 @@ def test_compute_energy_strict_raises_when_no_supported_ops_are_profiled():
     x = torch.ones(2, 3)
     cfg = op_counter.ComputeEnergyConfig(strict=True)
 
-    with pytest.raises(RuntimeError, match="zero MAC/AC/SynOp/FLOP counts"):
+    with pytest.raises(RuntimeError, match="did not match any supported operators"):
         op_counter.estimate_compute_energy(model, x, config=cfg)
+
+
+def test_compute_energy_strict_allows_zero_work_when_supported_op_matches():
+    model = nn.Linear(4, 3, bias=False)
+    x = torch.empty(0, 4)
+    cfg = op_counter.ComputeEnergyConfig(strict=True)
+
+    report = op_counter.estimate_compute_energy(model, x, config=cfg)
+
+    assert report.counts["mac"] == 0
+    assert report.counts["ac"] == 0
+    assert report.counts["synop"] == 0
+    assert report.counts["flop"] == 0
+    assert report.warnings == []

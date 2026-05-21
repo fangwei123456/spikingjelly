@@ -255,13 +255,18 @@ class ComputeEnergyProfiler:
         ac = self.ac_counter.get_total()
         synop = self.synop_counter.get_total()
         flop = self.flop_counter.get_total()
-        total_count = mac + ac + synop + flop
         cost = self.config.cost_config
 
         warnings_list = list(self._warnings)
-        if total_count == 0:
+        matched_supported_ops = (
+            len(self.mac_counter.get_counts().get("Global", {}))
+            + len(self.ac_counter.get_counts().get("Global", {}))
+            + len(self.synop_counter.get_counts().get("Global", {}))
+            + len(self.flop_counter.get_counts().get("Global", {}))
+        )
+        if matched_supported_ops == 0:
             message = (
-                "ComputeEnergyProfiler recorded zero MAC/AC/SynOp/FLOP counts. "
+                "ComputeEnergyProfiler did not match any supported operators. "
                 "The model may not contain supported operators for this estimator."
             )
             if self.config.strict:
