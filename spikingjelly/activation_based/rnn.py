@@ -10,6 +10,54 @@ from spikingjelly.activation_based import surrogate
 def directional_rnn_cell_forward(
     cell: nn.Module, x: torch.Tensor, states: torch.Tensor
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <directional_rnn_cell_forward-cn>` | :ref:`English <directional_rnn_cell_forward-en>`
+
+    ----
+
+    .. _directional_rnn_cell_forward-cn:
+
+    * **中文**
+
+    计算单个RNN cell沿着时间维度的循环并输出结果和cell的最终状态。
+
+    :param cell: RNN cell
+    :type cell: nn.Module
+    :param x: ``shape = [T, batch_size, input_size]`` 的输入
+    :type x: torch.Tensor
+    :param states: RNN cell的起始状态。
+        若RNN cell只有单个隐藏状态，则 ``shape = [batch_size, hidden_size]`` ；
+        否则 ``shape = [states_num, batch_size, hidden_size]``
+    :type states: torch.Tensor
+    :return: (output, ss)
+        output: torch.Tensor
+            ``shape = [T, batch_size, hidden_size]`` 的输出
+        ss: torch.Tensor
+            ``shape`` 与 ``states`` 相同，cell在 ``T-1`` 时刻的状态
+
+    ----
+
+    .. _directional_rnn_cell_forward-en:
+
+    * **English**
+
+    Compute the temporal loop of a single RNN cell along the time dimension, returning the output and the final state of the cell.
+
+    :param cell: the RNN cell
+    :type cell: nn.Module
+    :param x: input with ``shape = [T, batch_size, input_size]``
+    :type x: torch.Tensor
+    :param states: initial state of the RNN cell.
+        If the RNN cell has a single hidden state, ``shape = [batch_size, hidden_size]``;
+        otherwise ``shape = [states_num, batch_size, hidden_size]``
+    :type states: torch.Tensor
+    :return: (output, ss)
+        output: torch.Tensor
+            ``shape = [T, batch_size, hidden_size]``
+        ss: torch.Tensor
+            ``shape`` is the same as ``states``. The state of the cell at ``T-1``
+    """
     T = x.shape[0]
     ss = states
 
@@ -324,7 +372,7 @@ class SpikingRNNBase(nn.Module):
         :type dropout_p: float
         :param invariant_dropout_mask: If ``False``，use the naive `Dropout`；If ``True``，use the dropout in SNN that
             `mask` doesn't change in different time steps, see :class:`~spikingjelly.activation_based.layer.Dropout` for more
-            information. Defaule: ``False``
+            information. Default: ``False``
         :type invariant_dropout_mask: bool
         :param bidirectional: If ``True``, becomes a bidirectional LSTM. Default: ``False``
         :type bidirectional: bool
@@ -977,7 +1025,7 @@ class SpikingLSTM(SpikingRNNBase):
         :type dropout_p: float
         :param invariant_dropout_mask: If ``False``，use the naive `Dropout`；If ``True``，use the dropout in SNN that
             `mask` doesn't change in different time steps, see :class:`~spikingjelly.activation_based.layer.Dropout` for more
-            information. Defaule: ``False``
+            information. Default: ``False``
         :type invariant_dropout_mask: bool
         :param bidirectional: If ``True``, becomes a bidirectional LSTM. Default: ``False``
         :type bidirectional: bool

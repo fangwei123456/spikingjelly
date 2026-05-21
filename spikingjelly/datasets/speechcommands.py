@@ -101,7 +101,7 @@ class SpeechCommands(Dataset):
         :param silence_size: Silence数据的尺寸
         :type silence_size: Optional[int]
 
-        :param transform: A function/transform that takes in a raw audio
+        :param transform: 对原始音频的变换/处理函数，输入为原始音频波形，输出为变换后的音频
         :type transform: Optional[Callable]
 
         :param url: 数据集版本，默认为v0.02

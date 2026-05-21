@@ -1176,7 +1176,11 @@ class NeuroMCEnergyProfiler:
                         if forward_queue:
                             is_spike_input = forward_queue.pop()
                         elif op == "aten.addmm.default":
-                            alt_key = ("aten.mm.default", _shape_tuple(out), _shape_tuple(x))
+                            alt_key = (
+                                "aten.mm.default",
+                                _shape_tuple(out),
+                                _shape_tuple(x),
+                            )
                             alt_queue = gemm_forward_is_spike.get(alt_key)
                             if alt_queue:
                                 is_spike_input = alt_queue.pop()
@@ -1521,7 +1525,10 @@ class NeuroMCEnergyProfiler:
                 32,
                 False,
             )
-            if fragment.optimizer_has_momentum and fragment.optimizer_has_momentum_buffer:
+            if (
+                fragment.optimizer_has_momentum
+                and fragment.optimizer_has_momentum_buffer
+            ):
                 self._accumulate_memory(
                     totals,
                     energy,
@@ -1650,18 +1657,15 @@ class NeuroMCEnergyProfiler:
     def _validate_sgd_group(self, group: dict[str, Any]) -> None:
         if group.get("nesterov", False):
             raise ValueError(
-                "Exact NeuroMC SGD modeling currently supports only "
-                "nesterov=False."
+                "Exact NeuroMC SGD modeling currently supports only nesterov=False."
             )
         if float(group.get("dampening", 0.0)) != 0.0:
             raise ValueError(
-                "Exact NeuroMC SGD modeling currently supports only "
-                "dampening=0."
+                "Exact NeuroMC SGD modeling currently supports only dampening=0."
             )
         if group.get("maximize", False):
             raise ValueError(
-                "Exact NeuroMC SGD modeling currently supports only "
-                "maximize=False."
+                "Exact NeuroMC SGD modeling currently supports only maximize=False."
             )
 
     def _make_optimizer_fragment(
