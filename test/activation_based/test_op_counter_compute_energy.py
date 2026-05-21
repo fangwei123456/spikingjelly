@@ -142,3 +142,20 @@ def test_compute_energy_strict_allows_zero_work_when_supported_op_matches():
     assert report.counts["synop"] == 0
     assert report.counts["flop"] == 0
     assert report.warnings == []
+
+
+def test_compute_energy_supports_dict_inputs_for_keyword_only_models():
+    class KeywordOnlyAdd(nn.Module):
+        def forward(self, *, x, y):
+            return x + y
+
+    model = KeywordOnlyAdd()
+    inputs = {
+        "x": torch.ones(2, 3),
+        "y": torch.ones(2, 3),
+    }
+
+    report = op_counter.estimate_compute_energy(model, inputs)
+
+    assert report.counts["mac"] == 0
+    assert report.counts["ac"] == 12

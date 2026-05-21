@@ -24,6 +24,8 @@ __all__ = [
 def _call_model(model: nn.Module, inputs):
     if isinstance(inputs, (tuple, list)):
         return model(*inputs)
+    if isinstance(inputs, dict):
+        return model(**inputs)
     return model(inputs)
 
 
@@ -222,7 +224,6 @@ class ComputeEnergyProfiler:
     def __init__(self, *, config: ComputeEnergyConfig | None = None):
         self.config = copy.deepcopy(config or ComputeEnergyConfig())
         ignore_modules = list(self.config.extra_ignore_modules or [])
-        self._warnings: list[str] = []
         self.mac_counter = MACCounter(extra_ignore_modules=ignore_modules)
         self.ac_counter = ACCounter(extra_ignore_modules=ignore_modules)
         self.synop_counter = SynOpCounter(extra_ignore_modules=ignore_modules)
@@ -239,7 +240,6 @@ class ComputeEnergyProfiler:
         )
 
     def __enter__(self):
-        self._warnings.clear()
         self.mac_counter.reset()
         self.ac_counter.reset()
         self.synop_counter.reset()
@@ -257,7 +257,7 @@ class ComputeEnergyProfiler:
         flop = self.flop_counter.get_total()
         cost = self.config.cost_config
 
-        warnings_list = list(self._warnings)
+        warnings_list: list[str] = []
         matched_supported_ops = (
             len(self.mac_counter.get_counts().get("Global", {}))
             + len(self.ac_counter.get_counts().get("Global", {}))
