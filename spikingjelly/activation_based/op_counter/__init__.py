@@ -7,6 +7,7 @@ from .neuron_state import *
 from .ac import *
 from .synop import *
 from .mac import *
+from .compute_energy import *
 from .neuromc import *
 from .spikesim import *
 from .analytical_energy import *
