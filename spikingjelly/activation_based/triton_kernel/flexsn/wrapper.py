@@ -32,13 +32,34 @@ _BACKWARD_XLARGE_MAX_NCL = 1 << 23
 
 def flexsn_backward_ncl_bucket(ncl: int) -> int:
     """Bucket a flattened sequence size for backward-kernel tuning.
+    **API Language:**
+    :ref:`中文 <flexsn_backward_ncl_bucket-cn>` | :ref:`English <flexsn_backward_ncl_bucket-en>`
 
+    ----
+
+    .. _flexsn_backward_ncl_bucket-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param ncl: EN: Flattened element count per time step. Chinese: 单个时间步展平后的元素数。
+    :type ncl: int
+    :return: EN: Bucket index in ``[0, 4]``. Chinese: ``[0, 4]`` 范围内的分桶索引。
+    :rtype: int
     Chinese:
         将展平后的单步元素数 ``NCL`` 映射到 backward kernel 的调优分桶。
-
     English:
         Map the flattened per-step element count ``NCL`` to the backward-kernel
         autotuning bucket.
+
+    ----
+
+    .. _flexsn_backward_ncl_bucket-en:
+
+    * **English**
+
+    TODO: add English description
 
     :param ncl: EN: Flattened element count per time step. Chinese: 单个时间步展平后的元素数。
     :type ncl: int
@@ -108,12 +129,34 @@ def _allocate_state_grad(
 
 def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
     """Run the inference kernel for a multi-step FlexSN core.
+    **API Language:**
+    :ref:`中文 <flexsn_inference-cn>` | :ref:`English <flexsn_inference-en>`
 
+    ----
+
+    .. _flexsn_inference-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
+    :return: EN: Output/state sequences. When ``T == 0``, returns empty tensors with the expected templates. Chinese: 输出/状态序列；当 ``T == 0`` 时, 返回符合模板的空张量。
+    :rtype: tuple
     Chinese:
         执行 FlexSN 多步推理 kernel。
-
     English:
         Execute the FlexSN multi-step inference kernel.
+
+    ----
+
+    .. _flexsn_inference-en:
+
+    * **English**
+
+    TODO: add English description
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -144,12 +187,34 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 
 def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
     """Run the inference kernel and materialize final states.
+    **API Language:**
+    :ref:`中文 <flexsn_inference_final_state-cn>` | :ref:`English <flexsn_inference_final_state-en>`
 
+    ----
+
+    .. _flexsn_inference_final_state-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
+    :return: EN: Output sequences followed by final states. When ``T == 0``, output sequences are empty, provided initial states are cloned, and missing states are zero-filled. Chinese: 输出序列后接最终状态；当 ``T == 0`` 时, 输出序列为空, 已提供的初始状态会被克隆, 缺失状态会以零填充。
+    :rtype: tuple
     Chinese:
         执行带最终状态物化的 FlexSN 多步推理 kernel。
-
     English:
         Execute the FlexSN inference kernel and materialize final states.
+
+    ----
+
+    .. _flexsn_inference_final_state-en:
+
+    * **English**
+
+    TODO: add English description
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -194,12 +259,34 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 
 def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
     """Run the training forward kernel for FlexSN.
+    **API Language:**
+    :ref:`中文 <flexsn_forward-cn>` | :ref:`English <flexsn_forward-en>`
 
+    ----
+
+    .. _flexsn_forward-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
+    :return: EN: Forward outputs plus any saved tensors required by backward. When ``T == 0``, returns empty tensors following the expected templates. Chinese: 前向输出以及 backward 所需的保存张量；当 ``T == 0`` 时, 返回符合模板的空张量。
+    :rtype: tuple
     Chinese:
         执行 FlexSN 训练前向 kernel。
-
     English:
         Execute the FlexSN training forward kernel.
+
+    ----
+
+    .. _flexsn_forward-en:
+
+    * **English**
+
+    TODO: add English description
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -234,23 +321,36 @@ def flexsn_backward(
     state_templates: Optional[Tuple[torch.Tensor, ...]] = None,
 ) -> tuple:
     """Run the training backward kernel for FlexSN.
+    **API Language:**
+    :ref:`中文 <flexsn_backward-cn>` | :ref:`English <flexsn_backward-en>`
 
-    Chinese:
-        执行 FlexSN 训练反向 kernel。
+    ----
 
-    English:
-        Execute the FlexSN training backward kernel.
+    .. _flexsn_backward-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
     :param args: EN: Gradients followed by any saved tensors accepted by the kernel.
+    :type args: tuple
+    :param input_templates: EN: Per-input-sequence templates used to allocate input
+    :type input_templates: Optional[Tuple[torch.Tensor, ...]]
+    :param state_templates: EN: Per-initial-state templates used to allocate initial
+    :type state_templates: Optional[Tuple[torch.Tensor, ...]]
+    :return: EN: Gradients for inputs and initial states. When ``T == 0`` or all
+    :rtype: tuple
+    Chinese:
+        执行 FlexSN 训练反向 kernel。
+    English:
+        Execute the FlexSN training backward kernel.
         The leading ``info.num_outputs + info.num_states`` entries correspond to
         output/state-sequence gradients, and the remaining entries are saved tensors
         from the forward pass. Chinese: kernel 接收的梯度与保存张量。前
         ``info.num_outputs + info.num_states`` 个参数对应输出/状态序列梯度, 其余参数
         为前向保存张量。
-    :type args: tuple
-    :param input_templates: EN: Per-input-sequence templates used to allocate input
         gradients. They are required when all incoming gradients are ``None`` and
         ensure that state-only cores still return correctly shaped input-sequence
         gradients. When omitted, the fallback allocation path is only valid for
@@ -260,17 +360,31 @@ def flexsn_backward(
         当所有传入梯度都为 ``None`` 时必须提供, 并确保仅有状态输出的 core 仍返回
         形状正确的输入梯度。若省略该参数, 当前仅支持单输入且存在输出序列梯度的 core,
         因为回退路径会从第一个非 ``None`` 的输出序列梯度推断输入梯度形状。
-    :type input_templates: Optional[Tuple[torch.Tensor, ...]]
-    :param state_templates: EN: Per-initial-state templates used to allocate initial
         state gradients. When provided, the returned state gradients preserve the
         original initial-state shapes instead of inferring them from state-sequence
         gradients. Chinese: 每个初始状态的模板, 用于分配初始状态梯度。提供后, 返回的
         状态梯度会保持初始状态原始形状, 而不是从状态序列梯度中推断。
-    :type state_templates: Optional[Tuple[torch.Tensor, ...]]
-    :return: EN: Gradients for inputs and initial states. When ``T == 0`` or all
         incoming gradients are ``None``, returns zero-filled gradients that follow
         the provided templates. Chinese: 输入与初始状态的梯度；当 ``T == 0`` 或所有传入
         梯度都为 ``None`` 时, 返回符合模板的零梯度。
+
+    ----
+
+    .. _flexsn_backward-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
+    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
+    :param args: EN: Gradients followed by any saved tensors accepted by the kernel.
+    :param input_templates: EN: Per-input-sequence templates used to allocate input
+    :param state_templates: EN: Per-initial-state templates used to allocate initial
+    :type args: tuple
+    :type input_templates: Optional[Tuple[torch.Tensor, ...]]
+    :type state_templates: Optional[Tuple[torch.Tensor, ...]]
+    :return: EN: Gradients for inputs and initial states. When ``T == 0`` or all
     :rtype: tuple
     """
     required_grad_count = info.num_outputs + info.num_states

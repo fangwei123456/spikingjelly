@@ -25,9 +25,31 @@ def _cmp_max_pool2d_with_indices(args, kwargs, out):
 
 class NeuroMCCmpCounter(NeuroMCBaseCounter):
     """Counter for comparison operations in the NeuroMC framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCCmpCounter-cn>` | :ref:`English <NeuroMCCmpCounter-en>`
 
+    ----
+
+    .. _NeuroMCCmpCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Tracks the number of scalar and tensor comparison operations, including
     element-wise comparisons and max-pooling indexing operations.
+
+    ----
+
+    .. _NeuroMCCmpCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

@@ -165,10 +165,32 @@ def _mul_native_batch_norm_backward(args, kwargs, out):
 
 class NeuroMCMulCounter(NeuroMCBaseCounter):
     """Counter for multiplication operations in the NeuroMC framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCMulCounter-cn>` | :ref:`English <NeuroMCMulCounter-en>`
 
+    ----
+
+    .. _NeuroMCMulCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Tracks the number of multiplication operations performed during model
     execution, including matrix multiplications, convolutions, and
     element-wise multiplications.
+
+    ----
+
+    .. _NeuroMCMulCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

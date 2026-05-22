@@ -150,6 +150,16 @@ def get_flexsn_inference_kernel(
     core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
 ):
     """Compile a Triton kernel for FlexSN inference (no backward).
+    **API Language:**
+    :ref:`中文 <get_flexsn_inference_kernel-cn>` | :ref:`English <get_flexsn_inference_kernel-en>`
+
+    ----
+
+    .. _get_flexsn_inference_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param core_str: Core kernel source code as a string
     :type core_str: str
@@ -158,6 +168,25 @@ def get_flexsn_inference_kernel(
     :param info: FlexSN kernel metadata
     :type info: FlexSNInfo
     :param verbose: If ``True``, print compilation info
+    :type verbose: bool
+    :return: Compiled Triton kernel executable
+    :rtype: triton.runtime.JITFunction
+
+    ----
+
+    .. _get_flexsn_inference_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_str: Core kernel source code as a string
+    :param core_name: Unique name for the compiled kernel
+    :param info: FlexSN kernel metadata
+    :param verbose: If ``True``, print compilation info
+    :type core_str: str
+    :type core_name: str
+    :type info: FlexSNInfo
     :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
@@ -235,6 +264,16 @@ def get_flexsn_inference_final_state_kernel(
     core_str: str, core_name: str, info: FlexSNInfo, verbose: bool = False
 ):
     """Compile a Triton kernel for FlexSN inference returning the final state.
+    **API Language:**
+    :ref:`中文 <get_flexsn_inference_final_state_kernel-cn>` | :ref:`English <get_flexsn_inference_final_state_kernel-en>`
+
+    ----
+
+    .. _get_flexsn_inference_final_state_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param core_str: Core kernel source code as a string
     :type core_str: str
@@ -243,6 +282,25 @@ def get_flexsn_inference_final_state_kernel(
     :param info: FlexSN kernel metadata
     :type info: FlexSNInfo
     :param verbose: If ``True``, print compilation info
+    :type verbose: bool
+    :return: Compiled Triton kernel executable
+    :rtype: triton.runtime.JITFunction
+
+    ----
+
+    .. _get_flexsn_inference_final_state_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_str: Core kernel source code as a string
+    :param core_name: Unique name for the compiled kernel
+    :param info: FlexSN kernel metadata
+    :param verbose: If ``True``, print compilation info
+    :type core_str: str
+    :type core_name: str
+    :type info: FlexSNInfo
     :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
@@ -320,6 +378,16 @@ def get_flexsn_forward_kernel(
     verbose: bool = False,
 ):
     """Compile a Triton kernel for FlexSN forward pass (with state saving).
+    **API Language:**
+    :ref:`中文 <get_flexsn_forward_kernel-cn>` | :ref:`English <get_flexsn_forward_kernel-en>`
+
+    ----
+
+    .. _get_flexsn_forward_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param core_str: Core kernel source code as a string
     :type core_str: str
@@ -328,6 +396,25 @@ def get_flexsn_forward_kernel(
     :param info: FlexSN kernel metadata
     :type info: FlexSNInfo
     :param verbose: If ``True``, print compilation info
+    :type verbose: bool
+    :return: Compiled Triton kernel executable
+    :rtype: triton.runtime.JITFunction
+
+    ----
+
+    .. _get_flexsn_forward_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_str: Core kernel source code as a string
+    :param core_name: Unique name for the compiled kernel
+    :param info: FlexSN kernel metadata
+    :param verbose: If ``True``, print compilation info
+    :type core_str: str
+    :type core_name: str
+    :type info: FlexSNInfo
     :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction
@@ -399,6 +486,16 @@ def get_flexsn_backward_kernel(
     verbose: bool = False,
 ):
     """Compile a Triton kernel for FlexSN backward pass.
+    **API Language:**
+    :ref:`中文 <get_flexsn_backward_kernel-cn>` | :ref:`English <get_flexsn_backward_kernel-en>`
+
+    ----
+
+    .. _get_flexsn_backward_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param core_str: Core kernel source code as a string
     :type core_str: str
@@ -407,6 +504,25 @@ def get_flexsn_backward_kernel(
     :param info: FlexSN kernel metadata
     :type info: FlexSNInfo
     :param verbose: If ``True``, print compilation info
+    :type verbose: bool
+    :return: Compiled Triton kernel executable
+    :rtype: triton.runtime.JITFunction
+
+    ----
+
+    .. _get_flexsn_backward_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_str: Core kernel source code as a string
+    :param core_name: Unique name for the compiled kernel
+    :param info: FlexSN kernel metadata
+    :param verbose: If ``True``, print compilation info
+    :type core_str: str
+    :type core_name: str
+    :type info: FlexSNInfo
     :type verbose: bool
     :return: Compiled Triton kernel executable
     :rtype: triton.runtime.JITFunction

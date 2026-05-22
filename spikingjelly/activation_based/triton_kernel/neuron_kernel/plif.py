@@ -444,6 +444,16 @@ def multistep_plif(
     surrogate_function,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Multi-step Parametric LIF neuron forward pass via Triton kernel.
+    **API Language:**
+    :ref:`中文 <multistep_plif-cn>` | :ref:`English <multistep_plif-en>`
+
+    ----
+
+    .. _multistep_plif-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -460,6 +470,33 @@ def multistep_plif(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
+    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :return: Tuple of (spike_seq, v_seq)
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _multistep_plif-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param x_seq: Input sequence, shape ``[T, N, *]``
+    :param v_init: Initial membrane potential
+    :param r_tau: Reciprocal of the learnable membrane time constant
+    :param decay_input: Whether input participates in decay
+    :param v_threshold: Threshold voltage
+    :param v_reset: Reset voltage (``None`` for soft reset)
+    :param detach_reset: Whether to detach the reset term in backward
+    :param surrogate_function: Surrogate gradient function
+    :type x_seq: torch.Tensor
+    :type v_init: torch.Tensor
+    :type r_tau: torch.Tensor
+    :type decay_input: bool
+    :type v_threshold: float
+    :type v_reset: Optional[float]
+    :type detach_reset: bool
     :type surrogate_function: surrogate.SurrogateFunctionBase
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]

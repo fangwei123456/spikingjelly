@@ -21,11 +21,36 @@ __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_qif_ptt"]
 
 
 def create_fptt_kernel(hard_reset: bool, dtype: str):
-    """Create the forward-pass (fptt) CUDA kernel for the QIF neuron.
+    r"""
+    **API Language:**
+    :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
+
+    ----
+
+    .. _create_fptt_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+
+    ----
+
+    .. _create_fptt_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param hard_reset: Whether to use hard reset mode
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type hard_reset: bool
     :type dtype: str
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
@@ -34,6 +59,18 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
 
     if dtype == "fp32":
         code = rf"""
+        **API Language:**
+        :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
+
+        ----
+
+        .. _create_fptt_kernel-cn:
+
+        * **中文**
+
+        TODO: add Chinese description
+
+        :rtype: None
         extern "C" __global__
         void {kernel_name}(const float* x_seq, float* v_v_seq, float* h_seq, float* spike_seq,
         const float & reciprocal_tau,
@@ -42,6 +79,17 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
         const float & v_threshold,
         const float & v_rest, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
+
+        ----
+
+        .. _create_fptt_kernel-en:
+
+        * **English**
+
+        TODO: add English description
+
+        :return: None
+        :rtype: None
         """
         code += r"""
         {
@@ -149,7 +197,17 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
 def create_bptt_kernel(
     sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str
 ):
-    """Create the backward-pass (bptt) CUDA kernel for the QIF neuron.
+    r"""
+    **API Language:**
+    :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
+
+    ----
+
+    .. _create_bptt_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
     :type sg_cuda_code_fun: Callable
@@ -161,6 +219,25 @@ def create_bptt_kernel(
     :type dtype: str
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
+
+    ----
+
+    .. _create_bptt_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
+    :param hard_reset: Whether to use hard reset mode
+    :param detach_reset: Whether to detach the reset term in backward
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type sg_cuda_code_fun: Callable
+    :type hard_reset: bool
+    :type detach_reset: bool
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
     """
         kernel_name = f"QIFNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
@@ -168,6 +245,18 @@ def create_bptt_kernel(
 
     if dtype == "fp32":
         code = rf"""
+        **API Language:**
+        :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
+
+        ----
+
+        .. _create_bptt_kernel-cn:
+
+        * **中文**
+
+        TODO: add Chinese description
+
+        :rtype: None
         extern "C" __global__
         void {kernel_name}(
         const float* grad_spike_seq, const float* grad_v_seq, const float* h_seq, const float* spike_seq, const float* v_v_seq,
@@ -175,6 +264,17 @@ def create_bptt_kernel(
         const float & a0_over_tau, const float & neg_sum_v_rest_v_c, const float & reciprocal_tau,
         const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
+
+        ----
+
+        .. _create_bptt_kernel-en:
+
+        * **English**
+
+        TODO: add English description
+
+        :return: None
+        :rtype: None
         """
 
         code += r"""
@@ -730,6 +830,16 @@ def multistep_qif_ptt(
     surrogate_function,
 ):
     """Multi-step QIF neuron forward pass via CuPy PTT custom op.
+    **API Language:**
+    :ref:`中文 <multistep_qif_ptt-cn>` | :ref:`English <multistep_qif_ptt-en>`
+
+    ----
+
+    .. _multistep_qif_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -750,6 +860,37 @@ def multistep_qif_ptt(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
+    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :return: Tuple of (spike_seq, v_seq)
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _multistep_qif_ptt-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param x_seq: Input sequence, shape ``[T, N, *]``
+    :param v_init: Initial membrane potential
+    :param tau: Membrane time constant
+    :param v_threshold: Threshold voltage
+    :param v_reset: Reset voltage (``None`` for soft reset)
+    :param v_rest: Resting potential
+    :param v_c: Cutoff voltage
+    :param a0: Reset value
+    :param detach_reset: Whether to detach the reset term in backward
+    :param surrogate_function: Surrogate gradient function
+    :type x_seq: torch.Tensor
+    :type v_init: torch.Tensor
+    :type tau: float
+    :type v_threshold: float
+    :type v_reset: Optional[float]
+    :type v_rest: float
+    :type v_c: float
+    :type a0: float
+    :type detach_reset: bool
     :type surrogate_function: surrogate.SurrogateFunctionBase
     :return: Tuple of (spike_seq, v_seq)
     :rtype: Tuple[torch.Tensor, torch.Tensor]

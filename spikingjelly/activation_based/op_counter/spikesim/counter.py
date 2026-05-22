@@ -73,6 +73,44 @@ class _StageMetadata:
 
 
 class SpikeSimCounter(BaseCounter):
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikeSimCounter-cn>` | :ref:`English <SpikeSimCounter-en>`
+
+    ----
+
+    .. _SpikeSimCounter-cn:
+
+    * **中文**
+
+    SpikeSim 计数器，用于在 spike 驱动的模拟中统计计算成本。
+
+    :param config: SpikeSim 能量配置
+    :type config: SpikeSimEnergyConfig
+    :param strict: 严格模式开关
+    :type strict: bool
+    :param verbose: 详细输出开关
+    :type verbose: bool
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _SpikeSimCounter-en:
+
+    * **English**
+
+    SpikeSim counter for profiling computation costs in spike-driven simulations.
+
+    :param config: SpikeSim energy configuration
+    :type config: SpikeSimEnergyConfig
+    :param strict: Whether to use strict mode
+    :type strict: bool
+    :param verbose: Whether to produce verbose output
+    :type verbose: bool
+    :return: None
+    :rtype: None
+    """
     def __init__(
         self,
         *,
@@ -104,6 +142,52 @@ class SpikeSimCounter(BaseCounter):
         active_modules=None,
         parent_names=None,
     ) -> int:
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikeSimCounter.count-cn>` | :ref:`English <SpikeSimCounter.count-en>`
+
+        ----
+
+        .. _SpikeSimCounter.count-cn:
+
+        * **中文**
+
+        统计单次前向传播的计算成本。
+
+        :param func: 待统计的算子
+        :type func: Callable
+        :param args: 位置参数
+        :type args: tuple
+        :param kwargs: 关键字参数
+        :type kwargs: dict
+        :param out: 算子输出
+        :param active_modules: 活跃模块列表
+        :param parent_names: 父节点名称列表
+        :return: 计算成本
+        :rtype: int
+        :raises NotImplementedError: 若未注册的算子遇到则抛出
+
+        ----
+
+        .. _SpikeSimCounter.count-en:
+
+        * **English**
+
+        Count the computation cost of a single forward propagation.
+
+        :param func: The operator to count
+        :type func: Callable
+        :param args: Positional arguments
+        :type args: tuple
+        :param kwargs: Keyword arguments
+        :type kwargs: dict
+        :param out: Output of the operator
+        :param active_modules: List of active modules
+        :param parent_names: List of parent node names
+        :return: computation cost
+        :rtype: int
+        :raises NotImplementedError: Raised when encountering an unregistered operator
+        """
         return int(
             self.rules[func](
                 args,

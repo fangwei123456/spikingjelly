@@ -104,11 +104,21 @@ __all__ = [
 
 class FlexSNScan(HigherOrderOperator):
     """HOP that runs a user-defined single-step ``core`` function over the
-    leading time dimension of its inputs.
+    **API Language:**
+    :ref:`中文 <FlexSNScan-cn>` | :ref:`English <FlexSNScan-en>`
 
+    ----
+
+    .. _FlexSNScan-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
+    leading time dimension of its inputs.
     The HOP is invoked with a flat argument list so that Dynamo / AOTAutograd
     can treat it uniformly. Shapes/semantics:
-
     * ``core_fn``: callable with signature
       ``(*step_inputs, *states) -> (*step_outputs, *updated_states)``.
     * ``num_inputs`` / ``num_states`` / ``num_outputs``: int literals used to
@@ -117,9 +127,19 @@ class FlexSNScan(HigherOrderOperator):
       leading time dim ``T``; the next ``num_states`` tensors are initial
       states (no time dim); any remaining tensors are lifted freevars that are
       passed through to ``core_fn`` unchanged at every time step.
-
     Return: ``num_outputs`` output sequences followed by ``num_states`` state
     sequences, all stacked along the leading time dim.
+
+    ----
+
+    .. _FlexSNScan-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(self) -> None:
@@ -285,17 +305,36 @@ def _output_template_specs_from_dynamo_body_result(
 
 def lowerable_scan_available() -> bool:
     """Report whether PyTorch's built-in ``scan`` HOP is available.
+    **API Language:**
+    :ref:`中文 <lowerable_scan_available-cn>` | :ref:`English <lowerable_scan_available-en>`
 
+    ----
+
+    .. _lowerable_scan_available-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :return: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
+    :rtype: bool
     Chinese:
         返回当前环境是否提供 PyTorch 内置 ``scan`` HOP。
-
     English:
         Return whether the current environment exposes PyTorch's built-in
         ``scan`` higher-order operator.
-
-    :return: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
         otherwise ``False``. Chinese: 若 ``torch.ops.higher_order.scan`` 可用则
         返回 ``True``，否则返回 ``False``。
+
+    ----
+
+    .. _lowerable_scan_available-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: EN: ``True`` when ``torch.ops.higher_order.scan`` is available;
     :rtype: bool
     """
     return _torch_scan_op is not None
@@ -303,18 +342,37 @@ def lowerable_scan_available() -> bool:
 
 def dynamo_hop_available() -> bool:
     """Report whether the FlexSN Dynamo HOP registration succeeded.
+    **API Language:**
+    :ref:`中文 <dynamo_hop_available-cn>` | :ref:`English <dynamo_hop_available-en>`
 
+    ----
+
+    .. _dynamo_hop_available-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :return: EN: ``True`` when the Dynamo compatibility shim for
+    :rtype: bool
     Chinese:
         返回 FlexSN 的 Dynamo HOP 注册是否成功。
-
     English:
         Return whether the FlexSN-specific Dynamo HigherOrderOperator
         registration has been installed successfully.
-
-    :return: EN: ``True`` when the Dynamo compatibility shim for
         ``flex_sn_scan`` is registered; otherwise ``False``. Chinese:
         当 ``flex_sn_scan`` 的 Dynamo 兼容注册已完成时返回 ``True``，否则返回
         ``False``。
+
+    ----
+
+    .. _dynamo_hop_available-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: EN: ``True`` when the Dynamo compatibility shim for
     :rtype: bool
     """
     return _DYNAMO_HOP_REGISTERED
@@ -322,18 +380,37 @@ def dynamo_hop_available() -> bool:
 
 def lowerable_while_loop_available() -> bool:
     """Report whether PyTorch's built-in ``while_loop`` HOP is available.
+    **API Language:**
+    :ref:`中文 <lowerable_while_loop_available-cn>` | :ref:`English <lowerable_while_loop_available-en>`
 
+    ----
+
+    .. _lowerable_while_loop_available-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :return: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
+    :rtype: bool
     Chinese:
         返回当前环境是否提供 PyTorch 内置 ``while_loop`` HOP。
-
     English:
         Return whether the current environment exposes PyTorch's built-in
         ``while_loop`` higher-order operator.
-
-    :return: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
         available; otherwise ``False``. Chinese: 若
         ``torch.ops.higher_order.while_loop`` 可用则返回 ``True``，否则返回
         ``False``。
+
+    ----
+
+    .. _lowerable_while_loop_available-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: EN: ``True`` when ``torch.ops.higher_order.while_loop`` is
     :rtype: bool
     """
     return _torch_while_loop is not None
@@ -443,47 +520,77 @@ def eager_scan(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the FlexSN scan with an eager Python time-step loop.
+    **API Language:**
+    :ref:`中文 <eager_scan-cn>` | :ref:`English <eager_scan-en>`
 
+    ----
+
+    .. _eager_scan-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param core_fn: EN: Single-step core callable with signature
+    :type core_fn: Callable
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :type num_inputs: int
+    :param num_states: EN: Number of initial-state tensors.
+    :type num_states: int
+    :param num_outputs: EN: Number of per-step outputs.
+    :type num_outputs: int
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :type flat_args: torch.Tensor
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
+    :rtype: Tuple[torch.Tensor, ...]
     Chinese:
         通过 Python 时间步循环执行 FlexSN scan。
-
     English:
         Run the FlexSN scan with an eager Python loop. This helper is reused by
         both the HOP eager implementation and the Dynamo-friendly
         ``backend="inductor"`` path, so ``torch.compile`` can trace the
         unrolled loop into a standard FX graph.
-
         When ``T == 0``, ``output_template_specs`` must describe the output
         sequence shapes/dtypes so empty outputs can be materialized without
         executing ``core_fn``.
-
-    :param core_fn: EN: Single-step core callable with signature
         ``(*step_inputs, *states, *lifted_args)``.
         Chinese: 单步 ``core`` 可调用对象, 签名为
         ``(*step_inputs, *states, *lifted_args)``。
-    :type core_fn: Callable
-    :param num_inputs: EN: Number of T-leading input sequences.
         Chinese: 带时间维 ``T`` 的输入序列数量。
-    :type num_inputs: int
-    :param num_states: EN: Number of initial-state tensors.
         Chinese: 初始状态张量数量。
-    :type num_states: int
-    :param num_outputs: EN: Number of per-step outputs.
         Chinese: 每个时间步输出数量。
-    :type num_outputs: int
-    :param flat_args: EN: Flattened input sequences, initial states, then lifted
         tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
-    :type flat_args: torch.Tensor
-    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
         ``(shape, dtype, device)`` templates used to build empty output
         sequences when ``T == 0``. Omitted devices follow the first input
         sequence at runtime. Chinese: 在 ``T == 0`` 时用于构造空输出序列的可选模板,
         每项为 ``(shape, dtype)`` 或 ``(shape, dtype, device)``；省略 ``device``
         时运行时设备跟随第一个输入序列。
-    :type output_template_specs: Optional[OutputTemplateSpecs]
-    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
         state sequences. Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回
         ``num_states`` 个状态序列。
+
+    ----
+
+    .. _eager_scan-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_fn: EN: Single-step core callable with signature
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :param num_states: EN: Number of initial-state tensors.
+    :param num_outputs: EN: Number of per-step outputs.
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type core_fn: Callable
+    :type num_inputs: int
+    :type num_states: int
+    :type num_outputs: int
+    :type flat_args: torch.Tensor
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
     :rtype: Tuple[torch.Tensor, ...]
     """
     expected = num_inputs + num_states
@@ -569,40 +676,71 @@ def eager_scan_final_state(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the eager scan and return output sequences plus final states.
+    **API Language:**
+    :ref:`中文 <eager_scan_final_state-cn>` | :ref:`English <eager_scan_final_state-en>`
 
+    ----
+
+    .. _eager_scan_final_state-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :type core_fn: Callable
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :type num_inputs: int
+    :param num_states: EN: Number of initial-state tensors.
+    :type num_states: int
+    :param num_outputs: EN: Number of per-step outputs.
+    :type num_outputs: int
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :type flat_args: torch.Tensor
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by the final states.
+    :rtype: Tuple[torch.Tensor, ...]
     Chinese:
         执行 eager scan, 返回输出序列以及最终状态。
-
     English:
         Variant of :func:`eager_scan` used when ``store_state_seqs=False`` so
         the HOP backend does not materialize full state sequences only to
         discard them. When ``T == 0``, ``output_template_specs`` is used to
         build empty output sequences and the provided initial states are cloned
         into the returned final states.
-
-    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
-    :type core_fn: Callable
-    :param num_inputs: EN: Number of T-leading input sequences.
         Chinese: 带时间维 ``T`` 的输入序列数量。
-    :type num_inputs: int
-    :param num_states: EN: Number of initial-state tensors.
         Chinese: 初始状态张量数量。
-    :type num_states: int
-    :param num_outputs: EN: Number of per-step outputs.
         Chinese: 每个时间步输出数量。
-    :type num_outputs: int
-    :param flat_args: EN: Flattened input sequences, initial states, then lifted
         tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
-    :type flat_args: torch.Tensor
-    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
         ``(shape, dtype, device)`` templates used to materialize empty output
         sequences when ``T == 0``. Omitted devices follow the first input
         sequence at runtime. Chinese: 在 ``T == 0`` 时用于构造空输出序列的可选模板,
         每项为 ``(shape, dtype)`` 或 ``(shape, dtype, device)``；省略 ``device``
         时运行时设备跟随第一个输入序列。
+        Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回最终状态。
+
+    ----
+
+    .. _eager_scan_final_state-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :param num_states: EN: Number of initial-state tensors.
+    :param num_outputs: EN: Number of per-step outputs.
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type core_fn: Callable
+    :type num_inputs: int
+    :type num_states: int
+    :type num_outputs: int
+    :type flat_args: torch.Tensor
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by the final states.
-        Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回最终状态。
     :rtype: Tuple[torch.Tensor, ...]
     """
     expected = num_inputs + num_states
@@ -674,45 +812,75 @@ def lowerable_scan(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``scan`` HOP.
+    **API Language:**
+    :ref:`中文 <lowerable_scan-cn>` | :ref:`English <lowerable_scan-en>`
 
+    ----
+
+    .. _lowerable_scan-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :type core_fn: Callable
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :type num_inputs: int
+    :param num_states: EN: Number of initial-state tensors.
+    :type num_states: int
+    :param num_outputs: EN: Number of per-step outputs.
+    :type num_outputs: int
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :type flat_args: torch.Tensor
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
+    :rtype: Tuple[torch.Tensor, ...]
     Chinese:
         通过 PyTorch 内置 ``scan`` HOP 执行 FlexSN scan。
-
     English:
         Keep the FlexSN scan as a single higher-order op under tracing so
         downstream compilers can lower it as a loop instead of fully unrolling
         the body ``T`` times. This remains an experimental helper rather than
         the default compiled path.
-
         When ``T == 0``, ``output_template_specs`` must contain
         ``num_outputs`` items shaped as ``(shape, dtype)`` or
         ``(shape, dtype, device)``. Runtime devices default to the first input
         sequence when omitted.
-
-    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
-    :type core_fn: Callable
-    :param num_inputs: EN: Number of T-leading input sequences.
         Chinese: 带时间维 ``T`` 的输入序列数量。
-    :type num_inputs: int
-    :param num_states: EN: Number of initial-state tensors.
         Chinese: 初始状态张量数量。
-    :type num_states: int
-    :param num_outputs: EN: Number of per-step outputs.
         Chinese: 每个时间步输出数量。
-    :type num_outputs: int
-    :param flat_args: EN: Flattened input sequences, initial states, then lifted
         tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
-    :type flat_args: torch.Tensor
-    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
         ``(shape, dtype, device)`` templates used to materialize empty output
         sequences when ``T == 0``. Omitted devices follow the first input
         sequence at runtime. Chinese: 在 ``T == 0`` 时用于构造空输出序列的可选模板,
         每项为 ``(shape, dtype)`` 或 ``(shape, dtype, device)``；省略 ``device``
         时运行时设备跟随第一个输入序列。
-    :type output_template_specs: Optional[OutputTemplateSpecs]
-    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
         state sequences. Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回
         ``num_states`` 个状态序列。
+
+    ----
+
+    .. _lowerable_scan-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :param num_states: EN: Number of initial-state tensors.
+    :param num_outputs: EN: Number of per-step outputs.
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type core_fn: Callable
+    :type num_inputs: int
+    :type num_states: int
+    :type num_outputs: int
+    :type flat_args: torch.Tensor
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
     :rtype: Tuple[torch.Tensor, ...]
     """
     if _torch_scan_op is None:
@@ -815,38 +983,69 @@ def lowerable_scan_final_state(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the built-in ``scan`` HOP and return final states only.
+    **API Language:**
+    :ref:`中文 <lowerable_scan_final_state-cn>` | :ref:`English <lowerable_scan_final_state-en>`
 
-    Chinese:
-        通过内置 ``scan`` HOP 执行 FlexSN, 返回输出序列与最终状态。
+    ----
 
-    English:
-        Final-state variant of :func:`lowerable_scan`. When ``T == 0``,
-        ``output_template_specs`` materializes empty output sequences and the
-        initial states are cloned into the returned final states.
+    .. _lowerable_scan_final_state-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
     :type core_fn: Callable
     :param num_inputs: EN: Number of T-leading input sequences.
-        Chinese: 带时间维 ``T`` 的输入序列数量。
     :type num_inputs: int
     :param num_states: EN: Number of initial-state tensors.
-        Chinese: 初始状态张量数量。
     :type num_states: int
     :param num_outputs: EN: Number of per-step outputs.
-        Chinese: 每个时间步输出数量。
     :type num_outputs: int
     :param flat_args: EN: Flattened input sequences, initial states, then lifted
-        tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
     :type flat_args: torch.Tensor
     :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by the final states.
+    :rtype: Tuple[torch.Tensor, ...]
+    Chinese:
+        通过内置 ``scan`` HOP 执行 FlexSN, 返回输出序列与最终状态。
+    English:
+        Final-state variant of :func:`lowerable_scan`. When ``T == 0``,
+        ``output_template_specs`` materializes empty output sequences and the
+        initial states are cloned into the returned final states.
+        Chinese: 带时间维 ``T`` 的输入序列数量。
+        Chinese: 初始状态张量数量。
+        Chinese: 每个时间步输出数量。
+        tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
         ``(shape, dtype, device)`` templates used to materialize empty output
         sequences when ``T == 0``. Omitted devices follow the first input
         sequence at runtime. Chinese: 在 ``T == 0`` 时用于构造空输出序列的可选模板,
         每项为 ``(shape, dtype)`` 或 ``(shape, dtype, device)``；省略 ``device``
         时运行时设备跟随第一个输入序列。
+        Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回最终状态。
+
+    ----
+
+    .. _lowerable_scan_final_state-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :param num_states: EN: Number of initial-state tensors.
+    :param num_outputs: EN: Number of per-step outputs.
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type core_fn: Callable
+    :type num_inputs: int
+    :type num_states: int
+    :type num_outputs: int
+    :type flat_args: torch.Tensor
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by the final states.
-        Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回最终状态。
     :rtype: Tuple[torch.Tensor, ...]
     """
     if _torch_scan_op is None:
@@ -971,43 +1170,73 @@ def lowerable_while_loop_scan(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run FlexSN scan through PyTorch's built-in ``while_loop`` HOP.
+    **API Language:**
+    :ref:`中文 <lowerable_while_loop_scan-cn>` | :ref:`English <lowerable_while_loop_scan-en>`
 
+    ----
+
+    .. _lowerable_while_loop_scan-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :type core_fn: Callable
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :type num_inputs: int
+    :param num_states: EN: Number of initial-state tensors.
+    :type num_states: int
+    :param num_outputs: EN: Number of per-step outputs.
+    :type num_outputs: int
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :type flat_args: torch.Tensor
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
+    :rtype: Tuple[torch.Tensor, ...]
     Chinese:
         通过 PyTorch 内置 ``while_loop`` HOP 执行 FlexSN scan。
-
     English:
         Experimental helper for studying whether a first-class loop
         representation is a better fit than the current unrolled scan path.
         Current while-loop capture does not support symbolic ``x[t]`` indexing
         here, so this implementation keeps functional queue buffers.
-
         When ``T == 0``, ``output_template_specs`` materializes empty output
         sequences without running ``core_fn``.
-
-    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
-    :type core_fn: Callable
-    :param num_inputs: EN: Number of T-leading input sequences.
         Chinese: 带时间维 ``T`` 的输入序列数量。
-    :type num_inputs: int
-    :param num_states: EN: Number of initial-state tensors.
         Chinese: 初始状态张量数量。
-    :type num_states: int
-    :param num_outputs: EN: Number of per-step outputs.
         Chinese: 每个时间步输出数量。
-    :type num_outputs: int
-    :param flat_args: EN: Flattened input sequences, initial states, then lifted
         tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
-    :type flat_args: torch.Tensor
-    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
         ``(shape, dtype, device)`` templates used to materialize empty output
         sequences when ``T == 0``. Omitted devices follow the first input
         sequence at runtime. Chinese: 在 ``T == 0`` 时用于构造空输出序列的可选模板,
         每项为 ``(shape, dtype)`` 或 ``(shape, dtype, device)``；省略 ``device``
         时运行时设备跟随第一个输入序列。
-    :type output_template_specs: Optional[OutputTemplateSpecs]
-    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
         state sequences. Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回
         ``num_states`` 个状态序列。
+
+    ----
+
+    .. _lowerable_while_loop_scan-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :param num_states: EN: Number of initial-state tensors.
+    :param num_outputs: EN: Number of per-step outputs.
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type core_fn: Callable
+    :type num_inputs: int
+    :type num_states: int
+    :type num_outputs: int
+    :type flat_args: torch.Tensor
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by ``num_states``
     :rtype: Tuple[torch.Tensor, ...]
     """
     if _torch_while_loop is None:
@@ -1173,39 +1402,70 @@ def lowerable_while_loop_scan_final_state(
     output_template_specs: Optional[OutputTemplateSpecs] = None,
 ) -> Tuple[torch.Tensor, ...]:
     """Run the while-loop HOP and return output sequences plus final states.
+    **API Language:**
+    :ref:`中文 <lowerable_while_loop_scan_final_state-cn>` | :ref:`English <lowerable_while_loop_scan_final_state-en>`
 
+    ----
+
+    .. _lowerable_while_loop_scan_final_state-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :type core_fn: Callable
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :type num_inputs: int
+    :param num_states: EN: Number of initial-state tensors.
+    :type num_states: int
+    :param num_outputs: EN: Number of per-step outputs.
+    :type num_outputs: int
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :type flat_args: torch.Tensor
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type output_template_specs: Optional[OutputTemplateSpecs]
+    :return: EN: ``num_outputs`` output sequences followed by the final states.
+    :rtype: Tuple[torch.Tensor, ...]
     Chinese:
         执行 while-loop HOP, 返回输出序列以及最终状态。
-
     English:
         Final-state variant of :func:`lowerable_while_loop_scan`. When
         ``T == 0``, ``output_template_specs`` is used to build empty output
         sequences and the provided initial states are cloned into the returned
         final states.
-
-    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
-    :type core_fn: Callable
-    :param num_inputs: EN: Number of T-leading input sequences.
         Chinese: 带时间维 ``T`` 的输入序列数量。
-    :type num_inputs: int
-    :param num_states: EN: Number of initial-state tensors.
         Chinese: 初始状态张量数量。
-    :type num_states: int
-    :param num_outputs: EN: Number of per-step outputs.
         Chinese: 每个时间步输出数量。
-    :type num_outputs: int
-    :param flat_args: EN: Flattened input sequences, initial states, then lifted
         tensor freevars. Chinese: 展平后的输入序列、初始状态以及提升出来的张量自由变量。
-    :type flat_args: torch.Tensor
-    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
         ``(shape, dtype, device)`` templates used to materialize empty output
         sequences when ``T == 0``. Omitted devices follow the first input
         sequence at runtime. Chinese: 在 ``T == 0`` 时用于构造空输出序列的可选模板,
         每项为 ``(shape, dtype)`` 或 ``(shape, dtype, device)``；省略 ``device``
         时运行时设备跟随第一个输入序列。
+        Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回最终状态。
+
+    ----
+
+    .. _lowerable_while_loop_scan_final_state-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param core_fn: EN: Single-step core callable. Chinese: 单步 ``core`` 可调用对象。
+    :param num_inputs: EN: Number of T-leading input sequences.
+    :param num_states: EN: Number of initial-state tensors.
+    :param num_outputs: EN: Number of per-step outputs.
+    :param flat_args: EN: Flattened input sequences, initial states, then lifted
+    :param output_template_specs: EN: Optional ``(shape, dtype)`` or
+    :type core_fn: Callable
+    :type num_inputs: int
+    :type num_states: int
+    :type num_outputs: int
+    :type flat_args: torch.Tensor
     :type output_template_specs: Optional[OutputTemplateSpecs]
     :return: EN: ``num_outputs`` output sequences followed by the final states.
-        Chinese: 先返回 ``num_outputs`` 个输出序列, 再返回最终状态。
     :rtype: Tuple[torch.Tensor, ...]
     """
     if _torch_while_loop is None:

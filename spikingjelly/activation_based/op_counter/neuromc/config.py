@@ -9,9 +9,16 @@ __all__ = ["MemoryInstanceSpec", "MemoryHierarchyConfig"]
 @dataclass(frozen=True)
 class MemoryInstanceSpec:
     """Specification for a single memory instance in the memory hierarchy.
+    **API Language:**
+    :ref:`中文 <MemoryInstanceSpec-cn>` | :ref:`English <MemoryInstanceSpec-en>`
 
-    Describes the properties of one level in the memory hierarchy, including
-    capacity, bit width, and access energy cost.
+    ----
+
+    .. _MemoryInstanceSpec-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param capacity: Capacity of the memory level (in elements or bytes)
     :type capacity: int
@@ -19,6 +26,26 @@ class MemoryInstanceSpec:
     :type data_bit: int
     :param memory_cost_pj: Energy cost per access in picojoules
     :type memory_cost_pj: float
+    :rtype: None
+    Describes the properties of one level in the memory hierarchy, including
+    capacity, bit width, and access energy cost.
+
+    ----
+
+    .. _MemoryInstanceSpec-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param capacity: Capacity of the memory level (in elements or bytes)
+    :param data_bit: Bit width of each data element
+    :param memory_cost_pj: Energy cost per access in picojoules
+    :type capacity: int
+    :type data_bit: int
+    :type memory_cost_pj: float
+    :return: None
+    :rtype: None
     """
     name: str
     size_bits: int
@@ -98,7 +125,30 @@ _MEMORY_INSTANCES = {
 @dataclass
 class MemoryHierarchyConfig:
     r"""
+    **API Language:**
+    :ref:`中文 <MemoryHierarchyConfig-cn>` | :ref:`English <MemoryHierarchyConfig-en>`
+
+    ----
+
+    .. _MemoryHierarchyConfig-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Exact NeuroMC v1 hardware preset used by the runtime profiler.
+
+    ----
+
+    .. _MemoryHierarchyConfig-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     preset_name: str = "neuromc_like_v1"

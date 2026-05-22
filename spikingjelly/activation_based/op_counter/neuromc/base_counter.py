@@ -14,10 +14,32 @@ __all__ = ["NeuroMCBaseCounter"]
 
 class NeuroMCBaseCounter(BaseCounter):
     """Base counter for NeuroMC energy profiling framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCBaseCounter-cn>` | :ref:`English <NeuroMCBaseCounter-en>`
 
+    ----
+
+    .. _NeuroMCBaseCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Provides generic recording infrastructure for tracking operation counts
     across stages, operators, and their combinations. Subclasses implement
     specific counting rules for different operation types.
+
+    ----
+
+    .. _NeuroMCBaseCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

@@ -18,9 +18,31 @@ def _mux_where(args, kwargs, out):
 
 class NeuroMCMuxCounter(NeuroMCBaseCounter):
     """Counter for multiplexer/selection operations in the NeuroMC framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCMuxCounter-cn>` | :ref:`English <NeuroMCMuxCounter-en>`
 
+    ----
+
+    .. _NeuroMCMuxCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Tracks operations that involve selecting or routing values based on
     conditions, such as masked selects and conditional moves.
+
+    ----
+
+    .. _NeuroMCMuxCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

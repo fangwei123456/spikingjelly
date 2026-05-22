@@ -145,11 +145,35 @@ def _resolve_sg_cuda_code_fun(sg):
 
 def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
     """Save generated CUDA kernel source text for neuron kernels to a ``.cu`` file.
+    **API Language:**
+    :ref:`中文 <save_cuda_codes-cn>` | :ref:`English <save_cuda_codes-en>`
+
+    ----
+
+    .. _save_cuda_codes-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param cu_file_path: 输出的 CUDA 文件路径
     :type cu_file_path: str
-
     :param cu_file_path: Output CUDA file path
+    :type cu_file_path: str
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _save_cuda_codes-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param cu_file_path: 输出的 CUDA 文件路径
+    :param cu_file_path: Output CUDA file path
+    :type cu_file_path: str
     :type cu_file_path: str
     :return: None
     :rtype: None
@@ -236,13 +260,30 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
 
 def multistep_if_ptt(*args, **kwargs):
     """Multi-step IF neuron forward/backward via PTT CUDA kernel.
+    **API Language:**
+    :ref:`中文 <multistep_if_ptt-cn>` | :ref:`English <multistep_if_ptt-en>`
+
+    ----
+
+    .. _multistep_if_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     .. admonition:: Note
-        :class: note
-
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
         This is a re-exported wrapper. See
-        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.integrate_and_fire.multistep_if_ptt`
         for the full documentation.
+
+    ----
+
+    .. _multistep_if_ptt-en:
+
+    * **English**
+
+    TODO: add English description
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -254,13 +295,30 @@ def multistep_if_ptt(*args, **kwargs):
 
 def multistep_lif_ptt(*args, **kwargs):
     """Multi-step LIF neuron forward/backward via PTT CUDA kernel.
+    **API Language:**
+    :ref:`中文 <multistep_lif_ptt-cn>` | :ref:`English <multistep_lif_ptt-en>`
+
+    ----
+
+    .. _multistep_lif_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     .. admonition:: Note
-        :class: note
-
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
         This is a re-exported wrapper. See
-        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.lif.multistep_lif_ptt`
         for the full documentation.
+
+    ----
+
+    .. _multistep_lif_ptt-en:
+
+    * **English**
+
+    TODO: add English description
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -272,13 +330,30 @@ def multistep_lif_ptt(*args, **kwargs):
 
 def multistep_plif_ptt(*args, **kwargs):
     """Multi-step Parametric LIF neuron forward/backward via PTT CUDA kernel.
+    **API Language:**
+    :ref:`中文 <multistep_plif_ptt-cn>` | :ref:`English <multistep_plif_ptt-en>`
+
+    ----
+
+    .. _multistep_plif_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     .. admonition:: Note
-        :class: note
-
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
         This is a re-exported wrapper. See
-        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.plif.multistep_plif_ptt`
         for the full documentation.
+
+    ----
+
+    .. _multistep_plif_ptt-en:
+
+    * **English**
+
+    TODO: add English description
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -290,13 +365,30 @@ def multistep_plif_ptt(*args, **kwargs):
 
 def multistep_qif_ptt(*args, **kwargs):
     """Multi-step QIF neuron forward/backward via PTT CUDA kernel.
+    **API Language:**
+    :ref:`中文 <multistep_qif_ptt-cn>` | :ref:`English <multistep_qif_ptt-en>`
+
+    ----
+
+    .. _multistep_qif_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     .. admonition:: Note
-        :class: note
-
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
         This is a re-exported wrapper. See
-        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.qif.multistep_qif_ptt`
         for the full documentation.
+
+    ----
+
+    .. _multistep_qif_ptt-en:
+
+    * **English**
+
+    TODO: add English description
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -308,13 +400,30 @@ def multistep_qif_ptt(*args, **kwargs):
 
 def multistep_izhikevich_ptt(*args, **kwargs):
     """Multi-step Izhikevich neuron forward/backward via PTT CUDA kernel.
+    **API Language:**
+    :ref:`中文 <multistep_izhikevich_ptt-cn>` | :ref:`English <multistep_izhikevich_ptt-en>`
+
+    ----
+
+    .. _multistep_izhikevich_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     .. admonition:: Note
-        :class: note
-
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
         This is a re-exported wrapper. See
-        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.izhikevich.multistep_izhikevich_ptt`
         for the full documentation.
+
+    ----
+
+    .. _multistep_izhikevich_ptt-en:
+
+    * **English**
+
+    TODO: add English description
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -326,13 +435,30 @@ def multistep_izhikevich_ptt(*args, **kwargs):
 
 def multistep_eif_ptt(*args, **kwargs):
     """Multi-step EIF neuron forward/backward via PTT CUDA kernel.
+    **API Language:**
+    :ref:`中文 <multistep_eif_ptt-cn>` | :ref:`English <multistep_eif_ptt-en>`
+
+    ----
+
+    .. _multistep_eif_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     .. admonition:: Note
-        :class: note
-
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
         This is a re-exported wrapper. See
-        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.eif.multistep_eif_ptt`
         for the full documentation.
+
+    ----
+
+    .. _multistep_eif_ptt-en:
+
+    * **English**
+
+    TODO: add English description
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]

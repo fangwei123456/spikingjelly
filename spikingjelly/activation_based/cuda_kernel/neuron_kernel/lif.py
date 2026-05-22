@@ -26,11 +26,36 @@ def create_fptt_kernel(
     dtype: str,
     kernel_name_prefix: str = "LIFNode",
 ):
-    """Create the forward-pass (fptt) CUDA kernel for the LIF neuron.
+    r"""
+    **API Language:**
+    :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
+
+    ----
+
+    .. _create_fptt_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+
+    ----
+
+    .. _create_fptt_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param hard_reset: Whether to use hard reset mode
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type hard_reset: bool
     :type dtype: str
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
@@ -39,11 +64,34 @@ def create_fptt_kernel(
 
     if dtype == "fp32":
         code = rf"""
+        **API Language:**
+        :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
+
+        ----
+
+        .. _create_fptt_kernel-cn:
+
+        * **中文**
+
+        TODO: add Chinese description
+
+        :rtype: None
         extern "C" __global__
         void {kernel_name}(const float* x_seq, float* v_v_seq, float* h_seq, float* spike_seq,
         const float & reciprocal_tau,
         const float & v_threshold, {"const float & v_reset," if hard_reset else ""}
         const int & neuron_num, const int & numel)
+
+        ----
+
+        .. _create_fptt_kernel-en:
+
+        * **English**
+
+        TODO: add English description
+
+        :return: None
+        :rtype: None
         """
         code += r"""
         {
@@ -184,7 +232,17 @@ def create_bptt_kernel(
     detach_reset: bool,
     dtype: str,
 ):
-    """Create the backward-pass (bptt) CUDA kernel for the LIF neuron.
+    r"""
+    **API Language:**
+    :ref:`中文 <create_bptt_kernel-cn>` | :ref:`English <create_bptt_kernel-en>`
+
+    ----
+
+    .. _create_bptt_kernel-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
     :type sg_cuda_code_fun: Callable
@@ -193,6 +251,25 @@ def create_bptt_kernel(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+
+    ----
+
+    .. _create_bptt_kernel-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
+    :param hard_reset: Whether to use hard reset mode
+    :param detach_reset: Whether to detach the reset term in backward
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type sg_cuda_code_fun: Callable
+    :type hard_reset: bool
+    :type detach_reset: bool
     :type dtype: str
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
@@ -730,6 +807,16 @@ def multistep_lif_ptt(
     surrogate_function,
 ):
     """Multi-step LIF neuron forward pass via CuPy PTT custom op.
+    **API Language:**
+    :ref:`中文 <multistep_lif_ptt-cn>` | :ref:`English <multistep_lif_ptt-en>`
+
+    ----
+
+    .. _multistep_lif_ptt-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :type x_seq: torch.Tensor
@@ -746,6 +833,33 @@ def multistep_lif_ptt(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
+    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :return: Tuple of (spike_seq, v_seq)
+    :rtype: Tuple[torch.Tensor, torch.Tensor]
+
+    ----
+
+    .. _multistep_lif_ptt-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param x_seq: Input sequence, shape ``[T, N, *]``
+    :param v_init: Initial membrane potential
+    :param decay_input: Whether input participates in decay
+    :param tau: Membrane time constant
+    :param v_threshold: Threshold voltage
+    :param v_reset: Reset voltage (``None`` for soft reset)
+    :param detach_reset: Whether to detach the reset term in backward
+    :param surrogate_function: Surrogate gradient function
+    :type x_seq: torch.Tensor
+    :type v_init: torch.Tensor
+    :type decay_input: bool
+    :type tau: float
+    :type v_threshold: float
+    :type v_reset: Optional[float]
+    :type detach_reset: bool
     :type surrogate_function: surrogate.SurrogateFunctionBase
     :return: Tuple of (spike_seq, v_seq)
     :rtype: Tuple[torch.Tensor, torch.Tensor]

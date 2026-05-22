@@ -31,9 +31,16 @@ def compute_spikesim_event_energy_breakdown(
     config: SpikeSimEnergyConfig,
 ) -> dict[str, float]:
     """Compute SpikeSim event-based energy breakdown for a layer.
+    **API Language:**
+    :ref:`中文 <compute_spikesim_event_energy_breakdown-cn>` | :ref:`English <compute_spikesim_event_energy_breakdown-en>`
 
-    Calculates patch control, crossbar array, and row energy contributions
-    based on operation statistics and hardware configuration.
+    ----
+
+    .. _compute_spikesim_event_energy_breakdown-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param stats: Operation statistics from SpikeSim tracing
     :type stats: Mapping[str, Any]
@@ -44,6 +51,26 @@ def compute_spikesim_event_energy_breakdown(
     :return: Dictionary of energy components in picojoules
     :rtype: dict[str, float]
     :raises ValueError: If ``active_row_count_by_tile`` and ``input_tile_channels`` are inconsistently specified
+    Calculates patch control, crossbar array, and row energy contributions
+    based on operation statistics and hardware configuration.
+
+    ----
+
+    .. _compute_spikesim_event_energy_breakdown-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param stats: Operation statistics from SpikeSim tracing
+    :param metadata: Layer metadata (channels, tile configuration)
+    :param config: SpikeSim energy configuration
+    :type stats: Mapping[str, Any]
+    :type metadata: Mapping[str, Any]
+    :type config: SpikeSimEnergyConfig
+    :raises ValueError: If ``active_row_count_by_tile`` and ``input_tile_channels`` are inconsistently specified
+    :return: Dictionary of energy components in picojoules
+    :rtype: dict[str, float]
     """
     if config.activity_mode != "event":
         return compute_spikesim_dense_energy_breakdown(stats, metadata, config)

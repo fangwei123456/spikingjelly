@@ -28,12 +28,21 @@ def extract_info(
     num_outputs: int = 1,
 ) -> FlexSNInfo:
     """Extract useful information from the forward graph.
+    **API Language:**
+    :ref:`中文 <extract_info-cn>` | :ref:`English <extract_info-en>`
 
+    ----
+
+    .. _extract_info-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     The forward graph should have the following signature:
     ``[*inputs, *states] -> [*outputs, *states, *intermediates]``
-
     The following information will be extracted:
-
     * fwd_core_args
     * fwd_core_returns: the return value names of the forward graph. There might
         be duplicated tensors in fwd_core_returns, but
@@ -47,15 +56,24 @@ def extract_info(
         fwd_core_returns[num_inputs+num_states:] (a.k.a. the intermediate result
         list) to the index j of fwd_kernel_returns. It can be used to retrieve
         required intermediate states from the forward kernel's return values.
-
     Args:
         fwd_graph (fx.Graph): the forward computational graph.
         num_inputs (int): Defaults to 1.
         num_states (int): Defaults to 1.
         num_outputs (int): Defaults to 1.
-
     Returns:
         FlexSNInfo
+
+    ----
+
+    .. _extract_info-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
     fwd_core_args = [n.name for n in fwd_graph.find_nodes(op="placeholder")]
     fwd_core_returns = []

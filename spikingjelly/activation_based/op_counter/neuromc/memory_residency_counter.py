@@ -10,9 +10,31 @@ from ..memory_residency import MemoryResidencyCounter, _access_convolution_backw
 
 class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
     """Counter for memory residency in the NeuroMC framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCMemoryResidencyCounter-cn>` | :ref:`English <NeuroMCMemoryResidencyCounter-en>`
 
+    ----
+
+    .. _NeuroMCMemoryResidencyCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Tracks the memory residency (number of elements alive) at different
     memory hierarchy levels during model execution.
+
+    ----
+
+    .. _NeuroMCMemoryResidencyCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

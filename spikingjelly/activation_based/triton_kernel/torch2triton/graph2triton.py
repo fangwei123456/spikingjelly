@@ -328,14 +328,35 @@ def generate_triton_code_str(
     verbose: bool = False,
 ) -> Tuple[str, str]:
     """Given a fx.Graph, generate its corresponding Triton code string.
+    **API Language:**
+    :ref:`中文 <generate_triton_code_str-cn>` | :ref:`English <generate_triton_code_str-en>`
 
+    ----
+
+    .. _generate_triton_code_str-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Args:
         graph (fx.Graph)
         fn_name (str): name of the original PyTorch function. For generating the Triton kernel name.
         verbose (bool, optional): Defaults to False.
-
     Returns:
         Tuple[str, str]: the generated Triton code string and the name of the Triton function.
+
+    ----
+
+    .. _generate_triton_code_str-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
     if verbose:
         print(graph)
@@ -385,10 +406,20 @@ def compile_triton_code_str(
     name_space: Optional[dict] = None,
 ):
     """Compile a Triton code string into a runnable Triton JIT function.
+    **API Language:**
+    :ref:`中文 <compile_triton_code_str-cn>` | :ref:`English <compile_triton_code_str-en>`
 
+    ----
+
+    .. _compile_triton_code_str-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Materializes the Triton code under the persistent codegen cache, loads or
     reuses the matching module object, and extracts the requested JIT function.
-
     Args:
         triton_code (str): The Triton code string to compile/cache.
         kernel_name (str): The name of the Triton function to extract.
@@ -398,9 +429,19 @@ def compile_triton_code_str(
             When provided, it will be updated with symbols defined by the compiled module.
             Calls without ``name_space`` reuse a cached module keyed by the generated
             source hash; calls with ``name_space`` reload so injected symbols stay fresh.
-
     Returns:
         triton.JITFunction: The compiled Triton JIT function.
+
+    ----
+
+    .. _compile_triton_code_str-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
     if not _has_real_triton_runtime():
         raise ImportError(

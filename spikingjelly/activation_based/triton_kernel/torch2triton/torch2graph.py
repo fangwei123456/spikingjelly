@@ -16,9 +16,31 @@ __all__ = [
 
 class GraphCollector:
     """Provide this class to aot_function to collect forward and backward graph/module.
+    **API Language:**
+    :ref:`中文 <GraphCollector-cn>` | :ref:`English <GraphCollector-en>`
 
+    ----
+
+    .. _GraphCollector-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     We store both the raw GraphModule and the Graph to allow safe optimizations that
     preserve module attributes/constants when possible.
+
+    ----
+
+    .. _GraphCollector-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(self):
@@ -68,12 +90,16 @@ def _optimize_graph(graph_or_module: Any) -> fx.Graph:
 
 def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
     """Generate an optimized inference FX graph.
+    **API Language:**
+    :ref:`中文 <generate_inference_graph-cn>` | :ref:`English <generate_inference_graph-en>`
 
-    Chinese:
-        为给定的 PyTorch 函数生成优化后的推理 FX 图。
+    ----
 
-    English:
-        Generate an optimized inference FX graph for a PyTorch callable.
+    .. _generate_inference_graph-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
     :type fn: Callable
@@ -82,6 +108,26 @@ def generate_inference_graph(fn: Callable, example_inputs: tuple) -> fx.Graph:
     :return: EN: Optimized forward FX graph. Chinese: 优化后的前向 FX 图。
     :rtype: torch.fx.Graph
     :raises ValueError: EN: Raised when the traced callable fails to produce a forward graph. Chinese: 当被追踪函数未能产生前向 FX 图时抛出。
+    Chinese:
+        为给定的 PyTorch 函数生成优化后的推理 FX 图。
+    English:
+        Generate an optimized inference FX graph for a PyTorch callable.
+
+    ----
+
+    .. _generate_inference_graph-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
+    :param example_inputs: EN: Example inputs used for tracing. Chinese: 用于追踪的示例输入。
+    :type fn: Callable
+    :type example_inputs: tuple
+    :raises ValueError: EN: Raised when the traced callable fails to produce a forward graph. Chinese: 当被追踪函数未能产生前向 FX 图时抛出。
+    :return: EN: Optimized forward FX graph. Chinese: 优化后的前向 FX 图。
+    :rtype: torch.fx.Graph
     """
     collector = GraphCollector()
 
@@ -115,12 +161,16 @@ def generate_forward_and_backward_graph(
     requires_grad: Optional[Sequence[bool]] = None,
 ) -> Tuple[fx.Graph, fx.Graph]:
     """Generate optimized forward/backward FX graphs.
+    **API Language:**
+    :ref:`中文 <generate_forward_and_backward_graph-cn>` | :ref:`English <generate_forward_and_backward_graph-en>`
 
-    Chinese:
-        为给定的 PyTorch 函数生成优化后的前向与反向 FX 图。
+    ----
 
-    English:
-        Generate optimized forward and backward FX graphs for a PyTorch callable.
+    .. _generate_forward_and_backward_graph-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
     :type fn: Callable
@@ -131,6 +181,28 @@ def generate_forward_and_backward_graph(
     :return: EN: Optimized forward and backward FX graphs. Chinese: 优化后的前向与反向 FX 图。
     :rtype: Tuple[torch.fx.Graph, torch.fx.Graph]
     :raises ValueError: EN: Raised when ``requires_grad`` length mismatches ``example_inputs``, when the callable does not return a tensor/list/tuple, or when no differentiable output exists. Chinese: 当 ``requires_grad`` 长度与 ``example_inputs`` 不匹配、函数返回值不是张量/列表/元组、或不存在可求导输出时抛出。
+    Chinese:
+        为给定的 PyTorch 函数生成优化后的前向与反向 FX 图。
+    English:
+        Generate optimized forward and backward FX graphs for a PyTorch callable.
+
+    ----
+
+    .. _generate_forward_and_backward_graph-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param fn: EN: Callable to trace. Chinese: 待追踪的可调用对象。
+    :param example_inputs: EN: Example inputs used for tracing. Chinese: 用于追踪的示例输入。
+    :param requires_grad: EN: Optional gradient-requirement flags for each example input. Chinese: 每个示例输入对应的可选求导标志。
+    :type fn: Callable
+    :type example_inputs: tuple
+    :type requires_grad: Optional[Sequence[bool]]
+    :raises ValueError: EN: Raised when ``requires_grad`` length mismatches ``example_inputs``, when the callable does not return a tensor/list/tuple, or when no differentiable output exists. Chinese: 当 ``requires_grad`` 长度与 ``example_inputs`` 不匹配、函数返回值不是张量/列表/元组、或不存在可求导输出时抛出。
+    :return: EN: Optimized forward and backward FX graphs. Chinese: 优化后的前向与反向 FX 图。
+    :rtype: Tuple[torch.fx.Graph, torch.fx.Graph]
     """
     collector = GraphCollector()
     f = aot_function(

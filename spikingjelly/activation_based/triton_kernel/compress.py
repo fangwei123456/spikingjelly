@@ -114,9 +114,31 @@ def _bit_spike_decompress_triton(
 @contiguous_and_device_guard
 def bit_spike_compress(s_seq):
     """Compress a float32 spike tensor into a compact uint8 representation using bit-packing.
+    **API Language:**
+    :ref:`中文 <bit_spike_compress-cn>` | :ref:`English <bit_spike_compress-en>`
 
+    ----
+
+    .. _bit_spike_compress-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :param s_seq: Spike sequence tensor of ``float32``
+    :type s_seq: torch.Tensor
+    :return: Compressed uint8 tensor (8x smaller)
+    :rtype: torch.Tensor
     Each element is rounded to 0 or 1 (by threshold 0.5) and packed as a single bit.
     Works on both CPU and GPU (via Triton kernel on CUDA).
+
+    ----
+
+    .. _bit_spike_compress-en:
+
+    * **English**
+
+    TODO: add English description
 
     :param s_seq: Spike sequence tensor of ``float32``
     :type s_seq: torch.Tensor
@@ -146,10 +168,35 @@ def bit_spike_compress(s_seq):
 @contiguous_and_device_guard
 def bit_spike_decompress(s_seq_compressed, shape):
     """Decompress a uint8 bit-packed tensor back to a float32 spike tensor.
+    **API Language:**
+    :ref:`中文 <bit_spike_decompress-cn>` | :ref:`English <bit_spike_decompress-en>`
+
+    ----
+
+    .. _bit_spike_decompress-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
 
     :param s_seq_compressed: Compressed uint8 tensor from :func:`bit_spike_compress`
     :type s_seq_compressed: torch.Tensor
     :param shape: Original shape of the uncompressed tensor
+    :type shape: tuple
+    :return: Decompressed float32 spike tensor (values are 0.0 or 1.0)
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _bit_spike_decompress-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :param s_seq_compressed: Compressed uint8 tensor from :func:`bit_spike_compress`
+    :param shape: Original shape of the uncompressed tensor
+    :type s_seq_compressed: torch.Tensor
     :type shape: tuple
     :return: Decompressed float32 spike tensor (values are 0.0 or 1.0)
     :rtype: torch.Tensor

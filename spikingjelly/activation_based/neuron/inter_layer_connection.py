@@ -11,6 +11,33 @@ __all__ = ["ILCBaseNode", "ILCIFNode", "ILCLIFNode", "ILCCUBALIFNode"]
 
 
 class ILCBaseNode(nn.Module, base.MultiStepModule):
+    r"""
+    **API Language:**
+    :ref:`中文 <ILCBaseNode-cn>` | :ref:`English <ILCBaseNode-en>`
+
+    ----
+
+    .. _ILCBaseNode-cn:
+
+    * **中文**
+
+    TODO: add Chinese description for ILCBaseNode
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _ILCBaseNode-en:
+
+    * **English**
+
+    TODO: add English description for ILCBaseNode
+
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         act_dim,
@@ -36,21 +63,156 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
     @abstractmethod
     def neuronal_charge(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronal_charge-cn>` | :ref:`English <neuronal_charge-en>`
+
+        ----
+
+        .. _neuronal_charge-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for neuronal_charge
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _neuronal_charge-en:
+
+        * **English**
+
+        TODO: add English description for neuronal_charge
+
+        :return: None
+        :rtype: None
+        """
+
         raise NotImplementedError
 
     def neuronal_fire(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronal_fire-cn>` | :ref:`English <neuronal_fire-en>`
+
+        ----
+
+        .. _neuronal_fire-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for neuronal_fire
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _neuronal_fire-en:
+
+        * **English**
+
+        TODO: add English description for neuronal_fire
+
+        :return: None
+        :rtype: None
+        """
+
         return self.surrogate_function(self.v - self.v_threshold)
 
     def neuronal_reset(self, spike):
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronal_reset-cn>` | :ref:`English <neuronal_reset-en>`
+
+        ----
+
+        .. _neuronal_reset-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for neuronal_reset
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _neuronal_reset-en:
+
+        * **English**
+
+        TODO: add English description for neuronal_reset
+
+        :return: None
+        :rtype: None
+        """
+
         if self.v_reset is None:
             self.v = self.v - spike * self.v_threshold
         else:
             self.v = (1.0 - spike) * self.v + spike * self.v_reset
 
     def init_tensor(self, data: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <init_tensor-cn>` | :ref:`English <init_tensor-en>`
+
+        ----
+
+        .. _init_tensor-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for init_tensor
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _init_tensor-en:
+
+        * **English**
+
+        TODO: add English description for init_tensor
+
+        :return: None
+        :rtype: None
+        """
+
         self.v = torch.full_like(data, fill_value=self.v_reset)
 
     def forward(self, x_seq: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
+
+        ----
+
+        .. _forward-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for forward
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _forward-en:
+
+        * **English**
+
+        TODO: add English description for forward
+
+        :return: None
+        :rtype: None
+        """
+
         self.init_tensor(x_seq[0].data)
 
         T = x_seq.shape[0]
@@ -70,6 +232,33 @@ class ILCBaseNode(nn.Module, base.MultiStepModule):
 
 
 class ILCIFNode(ILCBaseNode):
+    r"""
+    **API Language:**
+    :ref:`中文 <ILCIFNode-cn>` | :ref:`English <ILCIFNode-en>`
+
+    ----
+
+    .. _ILCIFNode-cn:
+
+    * **中文**
+
+    TODO: add Chinese description for ILCIFNode
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _ILCIFNode-en:
+
+    * **English**
+
+    TODO: add English description for ILCIFNode
+
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         act_dim,
@@ -81,10 +270,64 @@ class ILCIFNode(ILCBaseNode):
         super().__init__(act_dim, dec_pop_dim, v_threshold, v_reset, surrogate_function)
 
     def neuronal_charge(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronal_charge-cn>` | :ref:`English <neuronal_charge-en>`
+
+        ----
+
+        .. _neuronal_charge-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for neuronal_charge
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _neuronal_charge-en:
+
+        * **English**
+
+        TODO: add English description for neuronal_charge
+
+        :return: None
+        :rtype: None
+        """
+
         self.v = self.v + x
 
 
 class ILCLIFNode(ILCBaseNode):
+    r"""
+    **API Language:**
+    :ref:`中文 <ILCLIFNode-cn>` | :ref:`English <ILCLIFNode-en>`
+
+    ----
+
+    .. _ILCLIFNode-cn:
+
+    * **中文**
+
+    TODO: add Chinese description for ILCLIFNode
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _ILCLIFNode-en:
+
+    * **English**
+
+    TODO: add English description for ILCLIFNode
+
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         act_dim,
@@ -99,10 +342,64 @@ class ILCLIFNode(ILCBaseNode):
         self.v_decay = v_decay
 
     def neuronal_charge(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronal_charge-cn>` | :ref:`English <neuronal_charge-en>`
+
+        ----
+
+        .. _neuronal_charge-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for neuronal_charge
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _neuronal_charge-en:
+
+        * **English**
+
+        TODO: add English description for neuronal_charge
+
+        :return: None
+        :rtype: None
+        """
+
         self.v = self.v * self.v_decay + x
 
 
 class ILCCUBALIFNode(ILCBaseNode):
+    r"""
+    **API Language:**
+    :ref:`中文 <ILCCUBALIFNode-cn>` | :ref:`English <ILCCUBALIFNode-en>`
+
+    ----
+
+    .. _ILCCUBALIFNode-cn:
+
+    * **中文**
+
+    TODO: add Chinese description for ILCCUBALIFNode
+
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _ILCCUBALIFNode-en:
+
+    * **English**
+
+    TODO: add English description for ILCCUBALIFNode
+
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         act_dim,
@@ -119,9 +416,63 @@ class ILCCUBALIFNode(ILCBaseNode):
         self.v_decay = v_decay
 
     def neuronal_charge(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <neuronal_charge-cn>` | :ref:`English <neuronal_charge-en>`
+
+        ----
+
+        .. _neuronal_charge-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for neuronal_charge
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _neuronal_charge-en:
+
+        * **English**
+
+        TODO: add English description for neuronal_charge
+
+        :return: None
+        :rtype: None
+        """
+
         self.c = self.c * self.c_decay + x
         self.v = self.v * self.v_decay + self.c
 
     def init_tensor(self, data: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <init_tensor-cn>` | :ref:`English <init_tensor-en>`
+
+        ----
+
+        .. _init_tensor-cn:
+
+        * **中文**
+
+        TODO: add Chinese description for init_tensor
+
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _init_tensor-en:
+
+        * **English**
+
+        TODO: add English description for init_tensor
+
+        :return: None
+        :rtype: None
+        """
+
         self.c = torch.full_like(data, fill_value=0.0)
         self.v = torch.full_like(data, fill_value=self.v_reset)

@@ -24,9 +24,31 @@ def _sqrt_native_batch_norm(args, kwargs, out):
 
 class NeuroMCSqrtCounter(NeuroMCBaseCounter):
     """Counter for square root operations in the NeuroMC framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCSqrtCounter-cn>` | :ref:`English <NeuroMCSqrtCounter-en>`
 
+    ----
+
+    .. _NeuroMCSqrtCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Tracks the number of square root and inverse square root operations
     performed during model execution.
+
+    ----
+
+    .. _NeuroMCSqrtCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

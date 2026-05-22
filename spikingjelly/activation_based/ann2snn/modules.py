@@ -46,28 +46,44 @@ class VoltageHook(nn.Module):
 
     def forward(self, x):
         """
-        * :ref:`API in English <VoltageHook.forward-en>`
+        **API Language:**
+        :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
+
+        ----
+
+        .. _forward-cn:
+
+        * **中文**
+
+        TODO: add Chinese description
 
         .. _VoltageHook.forward-cn:
-
         :param x: 输入张量
         :type x: torch.Tensor
         :return: 原输入张量
         :rtype: torch.Tensor
-
-        不对输入张量做任何处理，只是抓取ReLU的激活值
-
-        * :ref:`中文API <VoltageHook.forward-cn>`
-
         .. _VoltageHook.forward-en:
-
         :param x: input tensor
         :type x: torch.Tensor
         :return: original input tensor
         :rtype: torch.Tensor
-
+        不对输入张量做任何处理，只是抓取ReLU的激活值
         It doesn't process input tensors, but hooks the activation values of ReLU.
 
+        ----
+
+        .. _forward-en:
+
+        * **English**
+
+        TODO: add English description
+
+        :param x: 输入张量
+        :param x: input tensor
+        :type x: torch.Tensor
+        :type x: torch.Tensor
+        :return: 原输入张量
+        :rtype: torch.Tensor
         """
         err_msg = "You have used a non-defined VoltageScale Method."
         if isinstance(self.mode, str):
@@ -124,24 +140,42 @@ class VoltageScaler(nn.Module):
 
     def forward(self, x):
         """
-        * :ref:`API in English <VoltageScaler.forward-en>`
+        **API Language:**
+        :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
+
+        ----
+
+        .. _forward-cn:
+
+        * **中文**
+
+        TODO: add Chinese description
 
         .. _VoltageScaler.forward-cn:
-
         :param x: 输入张量，亦即输入电流
         :type x: torch.Tensor
         :return: 缩放后的电流
         :rtype: torch.Tensor
-
-        * :ref:`中文API <VoltageScaler.forward-cn>`
-
         .. _VoltageScaler.forward-en:
-
         :param x: input tensor, or input current
         :type x: torch.Tensor
         :return: current after scaling
         :rtype: torch.Tensor
 
+        ----
+
+        .. _forward-en:
+
+        * **English**
+
+        TODO: add English description
+
+        :param x: 输入张量，亦即输入电流
+        :param x: input tensor, or input current
+        :type x: torch.Tensor
+        :type x: torch.Tensor
+        :return: 缩放后的电流
+        :rtype: torch.Tensor
         """
         return x * self.scale
 

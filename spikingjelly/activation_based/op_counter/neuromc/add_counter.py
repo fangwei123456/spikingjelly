@@ -257,9 +257,31 @@ def _add_native_batch_norm_backward(args, kwargs, out):
 
 class NeuroMCAddCounter(NeuroMCBaseCounter):
     """Counter for addition operations in the NeuroMC framework.
+    **API Language:**
+    :ref:`中文 <NeuroMCAddCounter-cn>` | :ref:`English <NeuroMCAddCounter-en>`
 
+    ----
+
+    .. _NeuroMCAddCounter-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Tracks the number of addition operations performed during model execution,
     including element-wise additions and accumulation operations.
+
+    ----
+
+    .. _NeuroMCAddCounter-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
 
     def __init__(

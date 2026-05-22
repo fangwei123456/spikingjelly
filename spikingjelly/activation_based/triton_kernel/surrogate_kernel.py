@@ -38,9 +38,31 @@ SG_TRITON_IDS: dict[type[surrogate.SurrogateFunctionBase], int] = {
 @triton.jit
 def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
     """Surrogate gradient g'(h) in Triton JIT.
+    **API Language:**
+    :ref:`中文 <sg_triton-cn>` | :ref:`English <sg_triton-en>`
 
+    ----
+
+    .. _sg_triton-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     All transcendentals upcast to float32 to avoid fp16 precision issues.
     The result is cast back to the input dtype before returning.
+
+    ----
+
+    .. _sg_triton-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
     if sg_triton_id == 0:  # Sigmoid:  alpha * sigmoid(alpha*h) * (1 - sigmoid(alpha*h))
         sg = tl.sigmoid(h.to(tl.float32) * alpha)
@@ -80,8 +102,30 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
 def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
     """Return (sg_triton_id, alpha) for a surrogate function.
+    **API Language:**
+    :ref:`中文 <resolve_sg_triton_id_and_alpha-cn>` | :ref:`English <resolve_sg_triton_id_and_alpha-en>`
 
+    ----
+
+    .. _resolve_sg_triton_id_and_alpha-cn:
+
+    * **中文**
+
+    TODO: add Chinese description
+
+    :rtype: None
     Raises NotImplementedError for unsupported surrogate types.
+
+    ----
+
+    .. _resolve_sg_triton_id_and_alpha-en:
+
+    * **English**
+
+    TODO: add English description
+
+    :return: None
+    :rtype: None
     """
     sg_type = type(surrogate_function)
     sg_triton_id = None
