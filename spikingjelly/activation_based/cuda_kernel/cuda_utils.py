@@ -205,10 +205,16 @@ def python_object_registry_key(obj: Any) -> str:
 
 
 def cpu_timer(f: Callable, *args, **kwargs):
-    """
-    * :ref:`API in English <cpu_timer-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <cpu_timer-cn>` | :ref:`English <cpu_timer-en>`
+
+    ----
 
     .. _cpu_timer-cn:
+    * **中文**
+
+    * **中文**
 
     计算在CPU上执行 ``f(*args, **kwargs)`` 所需的时间
 
@@ -217,9 +223,12 @@ def cpu_timer(f: Callable, *args, **kwargs):
     :return: 用时，单位是毫秒
     :rtype: float
 
-    * :ref:`中文 API <cpu_timer-cn>`
+    ----
 
     .. _cpu_timer-en:
+    * **English**
+
+    * **English**
 
     Returns the used time for calling ``f(*args, **kwargs)`` in CPU
 
@@ -234,10 +243,16 @@ def cpu_timer(f: Callable, *args, **kwargs):
 
 
 def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
-    """
-    * :ref:`API in English <cuda_timer-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <cuda_timer-cn>` | :ref:`English <cuda_timer-en>`
+
+    ----
 
     .. _cuda_timer-cn:
+    * **中文**
+
+    * **中文**
 
     计算在CUDA上执行 ``f(*args, **kwargs)`` 所需的时间
 
@@ -248,9 +263,12 @@ def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
     :return: 用时，单位是毫秒
     :rtype: float
 
-    * :ref:`中文 API <cuda_timer-cn>`
+    ----
 
     .. _cuda_timer-en:
+    * **English**
+
+    * **English**
 
     Returns the used time for calling ``f(*args, **kwargs)`` in CUDA
 
@@ -274,10 +292,15 @@ def cuda_timer(device: Union[torch.device, int], f: Callable, *args, **kwargs):
 def cal_fun_t(
     n: int, device: Union[str, torch.device, int], f: Callable, *args, **kwargs
 ):
-    """
-    * :ref:`API in English <cal_fun_t-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <cal_fun_t-cn>` | :ref:`English <cal_fun_t-en>`
+
+    ----
 
     .. _cal_fun_t-cn:
+
+    * **中文**
 
     测量在 ``device`` 上执行 ``n`` 次 ``f(*args, **kwargs)`` 的平均用时
 
@@ -294,9 +317,11 @@ def cal_fun_t(
     :return: 用时，单位是毫秒
     :rtype: float
 
-    * :ref:`中文 API <cal_fun_t-cn>`
+    ----
 
     .. _cal_fun_t-en:
+
+    * **English**
 
     Returns the used time averaged by calling ``f(*args, **kwargs)`` over ``n`` times
 
@@ -341,10 +366,16 @@ def cal_fun_t(
 
 
 def cal_blocks(numel: int, threads: int = -1):
-    """
-    * :ref:`API in English <cal_blocks-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <cal_blocks-cn>` | :ref:`English <cal_blocks-en>`
+
+    ----
 
     .. _cal_blocks-cn:
+    * **中文**
+
+    * **中文**
 
     :param numel: 并行执行的CUDA内核的数量
     :type numel: int
@@ -355,9 +386,12 @@ def cal_blocks(numel: int, threads: int = -1):
 
     此函数返回 blocks的数量，用来按照 ``kernel((blocks,), (configure.cuda_threads,), ...)`` 调用 :class:`cupy.RawKernel`
 
-    * :ref:`中文 API <cal_blocks-cn>`
+    ----
 
     .. _cal_blocks-en:
+    * **English**
+
+    * **English**
 
     :param numel: the number of parallel CUDA kernels
     :type numel: int
@@ -376,10 +410,16 @@ def cal_blocks(numel: int, threads: int = -1):
 
 
 def get_contiguous(*args):
-    """
-    * :ref:`API in English <get_contiguous-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <get_contiguous-cn>` | :ref:`English <get_contiguous-en>`
+
+    ----
 
     .. _get_contiguous-cn:
+    * **中文**
+
+    * **中文**
 
     将 ``*args`` 中所有的 ``torch.Tensor`` 或 ``cupy.ndarray`` 进行连续化。
 
@@ -390,9 +430,12 @@ def get_contiguous(*args):
     :return: 一个元素全部为连续的 ``torch.Tensor`` 或 ``cupy.ndarray`` 的 ``list``
     :rtype: list
 
-    * :ref:`中文 API <get_contiguous-cn>`
+    ----
 
     .. _get_contiguous-en:
+    * **English**
+
+    * **English**
 
     :return: a list that contains the contiguous ``torch.Tensor`` or ``cupy.ndarray``
     :rtype: list
@@ -419,10 +462,16 @@ def get_contiguous(*args):
 
 
 def wrap_args_to_raw_kernel(device: int, *args):
-    """
-    * :ref:`API in English <wrap_args_to_raw_kernel-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <wrap_args_to_raw_kernel-cn>` | :ref:`English <wrap_args_to_raw_kernel-en>`
+
+    ----
 
     .. _wrap_args_to_raw_kernel-cn:
+    * **中文**
+
+    * **中文**
 
     :param device: raw kernel运行的CUDA设备
     :type device: int
@@ -431,9 +480,12 @@ def wrap_args_to_raw_kernel(device: int, *args):
 
     此函数可以包装 ``torch.Tensor`` 和 ``cupy.ndarray`` 并将其作为 :class:`cupy.RawKernel.__call__` 的 ``args``
 
-    * :ref:`中文 API <wrap_args_to_raw_kernel-cn>`
+    ----
 
     .. _wrap_args_to_raw_kernel-en:
+    * **English**
+
+    * **English**
 
     :param device: on which CUDA device the raw kernel will run
     :type device: int
@@ -464,10 +516,16 @@ def wrap_args_to_raw_kernel(device: int, *args):
 
 class DeviceEnvironment:
     def __init__(self, device: int):
-        """
-        * :ref:`API in English <DeviceEnvironment.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <DeviceEnvironment.__init__-cn>` | :ref:`English <DeviceEnvironment.__init__-en>`
+
+        ----
 
         .. _DeviceEnvironment.__init__-cn:
+        * **中文**
+
+        * **中文**
 
         这个模块可以被用作在指定的 ``device`` 上执行CuPy函数的上下文，用来避免 `torch.cuda.current_device()` 被CuPy意外改变( https://github.com/cupy/cupy/issues/6569 )。
 
@@ -479,9 +537,12 @@ class DeviceEnvironment:
                 kernel((blocks,), (configure.cuda_threads,), ...)
 
 
-        * :ref:`中文 API <DeviceEnvironment.__init__-cn>`
+        ----
 
         .. _DeviceEnvironment.__init__-en:
+        * **English**
+
+        * **English**
 
         :param device: the CUDA device
         :type device: int

@@ -68,6 +68,38 @@ class SimpleLIFNode(SimpleBaseNode):
         * **English**
 
         A simple version of :class:`LIFNode`.
+
+        :param tau: 膜电位时间常数（详见父类 :class:`LIFNode`）
+        :type tau: float
+        :param decay_input: 输入是否参与衰减（详见父类）
+        :type decay_input: bool
+        :param v_threshold: 神经元的阈值电压（详见父类）
+        :type v_threshold: float
+        :param v_reset: 神经元的重置电压（详见父类）
+        :type v_reset: float
+        :param surrogate_function: 替代梯度函数（详见父类）
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否将 reset 过程的计算图分离
+        :type detach_reset: bool
+        :param step_mode: 步进模式，可为 ``\"s\"`` 或 ``\"m\"``
+        :type step_mode: str
+
+        :param tau: Membrane time constant (see parent class :class:`LIFNode`)
+        :type tau: float
+        :param decay_input: Whether input participates in decay (see parent)
+        :type decay_input: bool
+        :param v_threshold: Threshold voltage of the neuron (see parent)
+        :type v_threshold: float
+        :param v_reset: Reset voltage of the neuron (see parent)
+        :type v_reset: float
+        :param surrogate_function: Surrogate gradient function (see parent)
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: Whether to detach reset graph in backward
+        :type detach_reset: bool
+        :param step_mode: Step mode, either ``\"s\"`` or ``\"m\"``
+        :type step_mode: str
+        :return: None
+        :rtype: None
         """
         super().__init__(
             v_threshold, v_reset, surrogate_function, detach_reset, step_mode
@@ -210,6 +242,9 @@ class LIFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
+
+        :return: None
+        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
 
@@ -712,8 +747,21 @@ class LIFNode(BaseNode):
 
 class NonSpikingLIFNode(NonSpikingBaseNode):
     def __init__(self, tau: float = 2.0, decode: Optional[str] = None):
-        """
+        """Non-spiking version of :class:`LIFNode` that outputs continuous-valued membrane potentials instead of spikes.
+
         See also: :class:`spikingjelly.activation_based.layer.misc.SynapseFilter`.
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+        :param decode: 解码方式
+        :type decode: Optional[str]
+
+        :param tau: Membrane time constant
+        :type tau: float
+        :param decode: Decoding method
+        :type decode: Optional[str]
+        :return: None
+        :rtype: None
         """
         super().__init__(decode)
 

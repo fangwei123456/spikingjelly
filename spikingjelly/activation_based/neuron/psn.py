@@ -69,7 +69,10 @@ class PSN(nn.Module, base.MultiStepModule):
 
         :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
         :type surrogate_function: surrogate.SurrogateFunctionBase
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.T = T
         self.surrogate_function = surrogate_function
@@ -198,7 +201,10 @@ class MaskedPSN(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.register_memory("time_step", 0)
         self.register_memory("queue", [])
@@ -367,7 +373,10 @@ class SlidingPSN(base.MemoryModule):
 
         :param backend: backend for this neuron layer, which can be "gemm" or "conv". This option only works for multi-step mode
         :type backend: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
 
         super().__init__()
         self.register_memory("queue", [])

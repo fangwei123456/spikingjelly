@@ -443,6 +443,27 @@ def multistep_plif(
     detach_reset: bool,
     surrogate_function,
 ) -> tuple[torch.Tensor, torch.Tensor]:
+    """Multi-step Parametric LIF neuron forward pass via Triton kernel.
+
+    :param x_seq: Input sequence, shape ``[T, N, *]``
+    :type x_seq: torch.Tensor
+    :param v_init: Initial membrane potential
+    :type v_init: torch.Tensor
+    :param r_tau: Reciprocal of the learnable membrane time constant
+    :type r_tau: torch.Tensor
+    :param decay_input: Whether input participates in decay
+    :type decay_input: bool
+    :param v_threshold: Threshold voltage
+    :type v_threshold: float
+    :param v_reset: Reset voltage (``None`` for soft reset)
+    :type v_reset: Optional[float]
+    :param detach_reset: Whether to detach the reset term in backward
+    :type detach_reset: bool
+    :param surrogate_function: Surrogate gradient function
+    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :return: Tuple of (spike_seq, v_seq)
+    :rtype: tuple[torch.Tensor, torch.Tensor]
+    """
     soft_reset = v_reset is None
     v_reset = v_reset if v_reset is not None else 0.0
     need_grad = torch.is_grad_enabled() and (

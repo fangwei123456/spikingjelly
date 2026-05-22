@@ -30,6 +30,21 @@ def compute_spikesim_event_energy_breakdown(
     metadata: Mapping[str, Any],
     config: SpikeSimEnergyConfig,
 ) -> dict[str, float]:
+    """Compute SpikeSim event-based energy breakdown for a layer.
+
+    Calculates patch control, crossbar array, and row energy contributions
+    based on operation statistics and hardware configuration.
+
+    :param stats: Operation statistics from SpikeSim tracing
+    :type stats: Mapping[str, Any]
+    :param metadata: Layer metadata (channels, tile configuration)
+    :type metadata: Mapping[str, Any]
+    :param config: SpikeSim energy configuration
+    :type config: SpikeSimEnergyConfig
+    :return: Dictionary of energy components in picojoules
+    :rtype: dict[str, float]
+    :raises ValueError: If ``active_row_count_by_tile`` and ``input_tile_channels`` are inconsistently specified
+    """
     if config.activity_mode != "event":
         return compute_spikesim_dense_energy_breakdown(stats, metadata, config)
 

@@ -20,7 +20,16 @@ __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_izhikevich_ptt
 
 
 def create_fptt_kernel(hard_reset: bool, dtype: str):
-    kernel_name = f"IzhikevichNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
+    """Create the forward-pass (fptt) CUDA kernel for the Izhikevich neuron.
+
+    :param hard_reset: Whether to use hard reset mode
+    :type hard_reset: bool
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+    """
+        kernel_name = f"IzhikevichNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
 
     if dtype == "fp32":
         code = rf"""
@@ -87,7 +96,20 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
 def create_bptt_kernel(
     sg_cuda_code_fun, hard_reset: bool, detach_reset: bool, dtype: str
 ):
-    kernel_name = f"IzhikevichNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
+    """Create the backward-pass (bptt) CUDA kernel for the Izhikevich neuron.
+
+    :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
+    :type sg_cuda_code_fun: Callable
+    :param hard_reset: Whether to use hard reset mode
+    :type hard_reset: bool
+    :param detach_reset: Whether to detach the reset term in backward
+    :type detach_reset: bool
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+    """
+        kernel_name = f"IzhikevichNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
     code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
 
@@ -650,6 +672,39 @@ def multistep_izhikevich_ptt(
     detach_reset,
     surrogate_function,
 ):
+    """Multi-step Izhikevich neuron forward pass via CuPy PTT custom op.
+
+    :param x_seq: Input sequence, shape ``[T, N, *]``
+    :type x_seq: torch.Tensor
+    :param v_init: Initial membrane potential
+    :type v_init: torch.Tensor
+    :param w_init: Initial recovery variable
+    :type w_init: torch.Tensor
+    :param tau: Membrane time constant
+    :type tau: float
+    :param v_threshold: Threshold voltage
+    :type v_threshold: float
+    :param v_reset: Reset voltage (``None`` for soft reset)
+    :type v_reset: Optional[float]
+    :param v_rest: Resting potential
+    :type v_rest: float
+    :param a: Time scale of the recovery variable
+    :type a: float
+    :param b: Sensitivity of the recovery variable
+    :type b: float
+    :param tau_w: Time constant of the recovery variable
+    :type tau_w: float
+    :param v_c: Cutoff voltage
+    :type v_c: float
+    :param a0: Reset value of the recovery variable
+    :type a0: float
+    :param detach_reset: Whether to detach the reset term in backward
+    :type detach_reset: bool
+    :param surrogate_function: Surrogate gradient function
+    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :return: Tuple of (spike_seq, v_seq, w_seq)
+    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    """
     sg_id = _sg_obj_id(surrogate_function)
     v_reset_value = float("nan") if v_reset is None else float(v_reset)
     return cupy_multistep_izhikevich_forward(

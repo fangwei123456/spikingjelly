@@ -39,20 +39,20 @@ def _readATIS_tddat(
     events_restriction=[0, np.inf],
 ):
     """
-    Reads ATIS td events in .dat format
+    Read ATIS td events from a ``.dat`` file.
 
-    input:
-    filename: string, path to the .dat file
-    orig_at_zero: bool, if True, timestamps will start at 0
-    drop_negative_dt: bool, if True, events with a timestamp greater than the previous event are dismissed
-    verbose: bool, if True, verbose mode.
-    events_restriction: list [min ts, max ts], will return only events with ts in the defined boundaries
-
-    output:
-    timestamps: numpy array of length (number of events), timestamps
-    coords: numpy array of size (number of events, 2), spatial coordinates: col 0 is x, col 1 is y.
-    polarities: numpy array of length (number of events), polarities
-    removed_events: integer, number of removed events (negative delta-ts)
+    :param file_name: Path to the ``.dat`` file
+    :type file_name: str
+    :param orig_at_zero: If ``True``, timestamps start at ``0``
+    :type orig_at_zero: bool
+    :param drop_negative_dt: If ``True``, drop events with negative timestamp deltas
+    :type drop_negative_dt: bool
+    :param verbose: Enable verbose logging
+    :type verbose: bool
+    :param events_restriction: Event timestamp restriction ``[min_ts, max_ts]``
+    :type events_restriction: list
+    :return: ``(timestamps, coords, polarities, removed_events)``
+    :rtype: tuple
     """
     polmask = 0x0002000000000000
     xmask = 0x000001FF00000000
@@ -237,7 +237,48 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         The Nav Gesture dataset, which is proposed by
         `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
 
-        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` 
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` or ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
+        :return: None
+        :rtype: None
         """
         super().__init__(
             root,
@@ -254,12 +295,37 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
 
     @classmethod
     def get_H_W(cls) -> Tuple:
-        """
-        .. note::
+        r"""
+        **API Language:**
+        :ref:`中文 <NAVGesture.get_H_W-cn>` | :ref:`English <NAVGesture.get_H_W-en>`
 
-            The camera is 240*320, but ``x.max() = 303``. So, we set ``W=304``.
+        ----
+
+        .. _NAVGesture.get_H_W-cn:
+        * **中文**
+
+        * **中文**
 
         :return: ``(240, 304)``
+        :rtype: Tuple
+
+        .. note::
+
+            相机的分辨率为240×320，但 ``x.max() = 303``，因此设置 ``W=304``。
+
+        ----
+
+        .. _NAVGesture.get_H_W-en:
+        * **English**
+
+        * **English**
+
+        :return: ``(240, 304)``
+        :rtype: Tuple
+
+        .. note::
+
+            The camera resolution is 240×320, but ``x.max() = 303``. So we set ``W=304``.
         """
         return 240, 304  # this camera is 240*320, but x.max() = 303. So, I set W = 304.
 
@@ -372,7 +438,48 @@ class NAVGestureSit(NAVGestureWalk):
         The Nav Gesture dataset, which is proposed by
         `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
 
-        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` 
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` or ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
+        :return: None
+        :rtype: None
         """
         super().__init__(
             root,

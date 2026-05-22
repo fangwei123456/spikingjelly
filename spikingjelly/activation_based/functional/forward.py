@@ -41,6 +41,8 @@ def multi_step_forward(
     :return: ``shape=[T, batch_size, ...]`` 的输出tensor
     :rtype: torch.Tensor
 
+    :raises Exception: 任何底层模块在某个时间步前向传播时抛出的异常都会原样向上传播
+
     ----
 
     .. _multi_step_forward-en:
@@ -60,6 +62,8 @@ def multi_step_forward(
 
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: torch.Tensor
+
+    :raises Exception: Any exception raised by an underlying module at any time step is propagated unchanged
     """
     y_seq = []
     if isinstance(single_step_module, (list, tuple, nn.Sequential)):
@@ -93,6 +97,9 @@ def t_last_multi_step_forward(
 
     在单步模块 ``single_step_module`` 上使用多步前向传播。
 
+    此函数适用于时间维位于最后一维的序列张量，即 ``shape=[batch_size, ..., T]``。
+    它会沿最后一维逐个时间步取出切片，并在每个时间步顺序执行单步模块。
+
     :param x_seq: ``shape=[batch_size, ..., T]`` 的输入tensor
     :type x_seq: Tensor
 
@@ -102,13 +109,19 @@ def t_last_multi_step_forward(
     :return: ``shape=[batch_size, ..., T]`` 的输出tensor
     :rtype: torch.Tensor
 
+    :raises Exception: 任何底层模块在某个时间步前向传播时抛出的异常都会原样向上传播
+
     ----
 
     .. _t_last_multi_step_forward-en:
 
     * **English**
 
-    Applies multi-step forward on ``single_step_module``.
+    Apply multi-step forward on ``single_step_module``.
+
+    This helper is intended for sequence tensors whose time axis is the last
+    dimension, i.e. ``shape=[batch_size, ..., T]``. It slices along the last
+    dimension and applies the single-step module(s) at each time step.
 
     :param x_seq: the input tensor with ``shape=[batch_size, ..., T]``
     :type x_seq: torch.Tensor
@@ -118,6 +131,8 @@ def t_last_multi_step_forward(
 
     :return: the output tensor with ``shape=[batch_size, ..., T]``
     :rtype: torch.Tensor
+
+    :raises Exception: Any exception raised by an underlying module at any time step is propagated unchanged
     """
     y_seq = []
     if isinstance(single_step_module, (list, tuple, nn.Sequential)):
@@ -162,6 +177,8 @@ def chunk_multi_step_forward(
     :return: 输出
     :rtype: torch.Tensor
 
+    :raises Exception: 任何 ``multi_step_module`` 在某个分块上的前向传播异常都会原样向上传播
+
     ----
 
     .. _chunk_multi_step_forward-en:
@@ -185,6 +202,8 @@ def chunk_multi_step_forward(
 
     :return: the output tensor
     :rtype: Tensor
+
+    :raises Exception: Any exception raised by ``multi_step_module`` on a chunk is propagated unchanged
 
     ----
 
@@ -241,6 +260,8 @@ def seq_to_ann_forward(
     :return: ``shape=[T, batch_size, ...]`` 的输出tensor
     :rtype: torch.Tensor
 
+    :raises Exception: 任何底层无状态模块在前向传播时抛出的异常都会原样向上传播
+
     ----
 
     .. _seq_to_ann_forward-en:
@@ -260,6 +281,8 @@ def seq_to_ann_forward(
 
     :return: the output tensor with ``shape=[T, batch_size, ...]``
     :rtype: torch.Tensor
+
+    :raises Exception: Any exception raised by an underlying stateless module is propagated unchanged
     """
     y_shape = [x_seq.shape[0], x_seq.shape[1]]
     y = x_seq.flatten(0, 1)
@@ -310,6 +333,9 @@ def t_last_seq_to_ann_forward(
     :return: ``shape=[batch_size, ..., T]`` 的输出tensor
     :rtype: torch.Tensor
 
+    :raises TypeError: 当 ``torch.vmap`` 可用但 ``stateless_module`` 不是可直接调用对象时，``torch.vmap`` 路径可能抛出类型错误
+    :raises Exception: 任何底层无状态模块在 ``vmap`` 或 fallback 路径中抛出的异常都会原样向上传播
+
     ----
 
     .. _t_last_seq_to_ann_forward-en:
@@ -348,6 +374,9 @@ def t_last_seq_to_ann_forward(
 
     :return: the output tensor with ``shape=[batch_size, ..., T]``
     :rtype: torch.Tensor
+
+    :raises TypeError: When ``torch.vmap`` is available, the vmap path may raise a type error if ``stateless_module`` is not directly callable
+    :raises Exception: Any exception raised by an underlying stateless module on either the vmap or fallback path is propagated unchanged
     """
     if hasattr(torch, "vmap"):
         vmap_f = torch.vmap(stateless_module, in_dims=-1, out_dims=-1)

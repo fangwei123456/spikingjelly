@@ -39,6 +39,7 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _MultiStepContainer.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -48,12 +49,16 @@ class MultiStepContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _MultiStepContainer.__init__-en:
+        * **English**
 
         * **English**
 
         Container of :func:`spikingjelly.activation_based.functional.multi_step_forward`.
         Its constructor signature is the same as `torch.nn.Sequential`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(*args)
         _check_step_mode(self, "MultiStepContainer")
 
@@ -77,6 +82,7 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _SeqToANNContainer-cn:
+        * **中文**
 
         * **中文**
 
@@ -86,12 +92,16 @@ class SeqToANNContainer(nn.Sequential, base.MultiStepModule):
         ----
 
         .. _SeqToANNContainer-en:
+        * **English**
 
         * **English**
 
         Container of :func:`spikingjelly.activation_based.functional.seq_to_ann_forward`.
         Its constructor signature is the same as `torch.nn.Sequential`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(*args)
         _check_step_mode(self, "SeqToANNContainer")
 
@@ -110,7 +120,10 @@ class TLastMultiStepContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
         """
         See :func:`spikingjelly.activation_based.functional.forward.t_last_multi_step_forward` .
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(*args)
         _check_step_mode(self, "TLastMultiStepContainer")
 
@@ -129,7 +142,10 @@ class TLastSeqToANNContainer(nn.Sequential, base.MultiStepModule):
     def __init__(self, *args):
         """
         See :func:`spikingjelly.activation_based.functional.forward.t_last_seq_to_ann_forward` .
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(*args)
         _check_step_mode(self, "TLastSeqToANNContainer")
 
@@ -149,6 +165,21 @@ class StepModeContainer(nn.Sequential, base.StepModule):
         """
         Call single-step forward, multi-step forward or seq-to-ANN forward according to
         ``stateful`` and ``step_mode``.
+
+        :param stateful: 是否是有状态的容器
+        :type stateful: bool
+        :param step_mode: 步进模式，``\"s\"`` 或 ``\"m\"``
+        :type step_mode: str
+        :param args: 与 ``torch.nn.Sequential`` 相同的构造参数
+
+        :param stateful: Whether the container is stateful
+        :type stateful: bool
+        :param step_mode: Step mode, ``\"s\"`` or ``\"m\"``
+        :type step_mode: str
+        :param args: Same constructor arguments as ``torch.nn.Sequential``
+        :type args: tuple
+        :return: None
+        :rtype: None
         """
         super().__init__(*args)
         self.stateful = stateful
@@ -249,7 +280,10 @@ class ElementWiseRecurrentContainer(base.MemoryModule):
                 print(t, f"x[t]={x[t]}, s[t]={net(x[t])}")
 
             functional.reset_net(net)
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = step_mode
         assert not hasattr(sub_module, "step_mode") or sub_module.step_mode == "s"
@@ -378,7 +412,10 @@ class LinearRecurrentContainer(base.MemoryModule):
                 print(t, net(x[t]))
 
             functional.reset_net(net)
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = step_mode
         assert not hasattr(sub_module, "step_mode") or sub_module.step_mode == "s"

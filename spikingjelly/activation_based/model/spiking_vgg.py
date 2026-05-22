@@ -35,6 +35,28 @@ model_urls = {
 
 
 class SpikingVGG(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikingVGG-cn>` | :ref:`English <SpikingVGG-en>`
+
+    ----
+
+    .. _SpikingVGG-cn:
+    * **中文**
+
+    * **中文**
+
+    脉冲 VGG 网络。继承自 :class:`torchvision.models.VGG`，将原网络的激活函数替换为脉冲神经元。
+
+    ----
+
+    .. _SpikingVGG-en:
+    * **English**
+
+    * **English**
+
+    Spiking VGG network. Inherits from :class:`torchvision.models.VGG` with activations replaced by spiking neurons.
+    """
     def __init__(
         self,
         cfg,
@@ -203,19 +225,54 @@ def _spiking_vgg(
 def spiking_vgg11(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg11-cn>` | :ref:`English <spiking_vgg11-en>`
+
+    ----
+
+    .. _spiking_vgg11-cn:
+
+    * **中文**
+
+    构造 Spiking VGG-11 模型。
+
+    该模型来自 `Very Deep Convolutional Networks for Large-Scale Image Recognition
+    <https://arxiv.org/pdf/1409.1556.pdf>`_ 的脉冲版本。
+
+    :param pretrained: 若为 ``True``，则加载在 ImageNet 上预训练的 ANN 参数
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否在下载时显示进度条
     :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking VGG-11
     :rtype: torch.nn.Module
 
-    A spiking version of VGG-11 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    ----
+
+    .. _spiking_vgg11-en:
+
+    * **English**
+
+    Construct a Spiking VGG-11 model.
+
+    This is the spiking version of the model from
+    `Very Deep Convolutional Networks for Large-Scale Image Recognition
+    <https://arxiv.org/pdf/1409.1556.pdf>`_.
+
+    :param pretrained: If ``True``, load ANN parameters pretrained on ImageNet
+    :type pretrained: bool
+    :param progress: If ``True``, display a progress bar for the download
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-11
+    :rtype: torch.nn.Module
     """
 
     return _spiking_vgg(
@@ -230,21 +287,51 @@ def spiking_vgg11_bn(
     spiking_neuron: callable = None,
     **kwargs,
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg11_bn-cn>` | :ref:`English <spiking_vgg11_bn-en>`
+
+    ----
+
+    .. _spiking_vgg11_bn-cn:
+
+    * **中文**
+
+    构造带 BatchNorm 的 Spiking VGG-11。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param norm_layer: a batch norm layer
+    :param norm_layer: BatchNorm 层
     :type norm_layer: callable
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG-11 with norm layer
+    :return: 带 BatchNorm 的 Spiking VGG-11
     :rtype: torch.nn.Module
 
-    A spiking version of VGG-11-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
+    ----
+
+    .. _spiking_vgg11_bn-en:
+
+    * **English**
+
+    Construct a Spiking VGG-11 with BatchNorm.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param norm_layer: BatchNorm layer
+    :type norm_layer: callable
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-11 with BatchNorm
+    :rtype: torch.nn.Module
     """
 
     return _spiking_vgg(
@@ -262,21 +349,47 @@ def spiking_vgg11_bn(
 def spiking_vgg13(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg13-cn>` | :ref:`English <spiking_vgg13-en>`
+
+    ----
+
+    .. _spiking_vgg13-cn:
+
+    * **中文**
+
+    构造 Spiking VGG-13。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking VGG-13
     :rtype: torch.nn.Module
 
-    A spiking version of VGG-13 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
-    """
+    ----
 
+    .. _spiking_vgg13-en:
+
+    * **English**
+
+    Construct Spiking VGG-13.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-13
+    :rtype: torch.nn.Module
     return _spiking_vgg(
         "vgg13", "B", False, pretrained, progress, None, spiking_neuron, **kwargs
     )
@@ -289,23 +402,52 @@ def spiking_vgg13_bn(
     spiking_neuron: callable = None,
     **kwargs,
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg13_bn-cn>` | :ref:`English <spiking_vgg13_bn-en>`
+
+    ----
+
+    .. _spiking_vgg13_bn-cn:
+
+    * **中文**
+
+    构造带 BatchNorm 的 Spiking VGG-13。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param norm_layer: a batch norm layer
+    :param norm_layer: BatchNorm 层
     :type norm_layer: callable
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG-11 with norm layer
+    :return: 带 BatchNorm 的 Spiking VGG-13
     :rtype: torch.nn.Module
 
-    A spiking version of VGG-13-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
-    """
+    ----
 
+    .. _spiking_vgg13_bn-en:
+
+    * **English**
+
+    Construct a Spiking VGG-13 with BatchNorm.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param norm_layer: BatchNorm layer
+    :type norm_layer: callable
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-13 with BatchNorm
+    :rtype: torch.nn.Module
+    """
     return _spiking_vgg(
         "vgg13_bn",
         "B",
@@ -321,6 +463,47 @@ def spiking_vgg13_bn(
 def spiking_vgg16(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg16-cn>` | :ref:`English <spiking_vgg16-en>`
+
+    ----
+
+    .. _spiking_vgg16-cn:
+
+    * **中文**
+
+    构造 Spiking VGG-16。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
+    :type pretrained: bool
+    :param progress: 是否显示下载进度
+    :type progress: bool
+    :param spiking_neuron: 脉冲神经元层
+    :type spiking_neuron: callable
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: Spiking VGG-16
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _spiking_vgg16-en:
+
+    * **English**
+
+    Construct Spiking VGG-16.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-16
+    :rtype: torch.nn.Module
     """
     :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
     :type pretrained: bool
@@ -348,6 +531,51 @@ def spiking_vgg16_bn(
     spiking_neuron: callable = None,
     **kwargs,
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg16_bn-cn>` | :ref:`English <spiking_vgg16_bn-en>`
+
+    ----
+
+    .. _spiking_vgg16_bn-cn:
+
+    * **中文**
+
+    构造带 BatchNorm 的 Spiking VGG-16。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
+    :type pretrained: bool
+    :param progress: 是否显示下载进度
+    :type progress: bool
+    :param norm_layer: BatchNorm 层
+    :type norm_layer: callable
+    :param spiking_neuron: 脉冲神经元层
+    :type spiking_neuron: callable
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: 带 BatchNorm 的 Spiking VGG-16
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _spiking_vgg16_bn-en:
+
+    * **English**
+
+    Construct a Spiking VGG-16 with BatchNorm.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param norm_layer: BatchNorm layer
+    :type norm_layer: callable
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-16 with BatchNorm
+    :rtype: torch.nn.Module
     """
     :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
     :type pretrained: bool
@@ -380,6 +608,47 @@ def spiking_vgg16_bn(
 def spiking_vgg19(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg19-cn>` | :ref:`English <spiking_vgg19-en>`
+
+    ----
+
+    .. _spiking_vgg19-cn:
+
+    * **中文**
+
+    构造 Spiking VGG-19。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
+    :type pretrained: bool
+    :param progress: 是否显示下载进度
+    :type progress: bool
+    :param spiking_neuron: 脉冲神经元层
+    :type spiking_neuron: callable
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: Spiking VGG-19
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _spiking_vgg19-en:
+
+    * **English**
+
+    Construct Spiking VGG-19.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-19
+    :rtype: torch.nn.Module
     """
     :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
     :type pretrained: bool
@@ -407,6 +676,51 @@ def spiking_vgg19_bn(
     spiking_neuron: callable = None,
     **kwargs,
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_vgg19_bn-cn>` | :ref:`English <spiking_vgg19_bn-en>`
+
+    ----
+
+    .. _spiking_vgg19_bn-cn:
+
+    * **中文**
+
+    构造带 BatchNorm 的 Spiking VGG-19。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
+    :type pretrained: bool
+    :param progress: 是否显示下载进度
+    :type progress: bool
+    :param norm_layer: BatchNorm 层
+    :type norm_layer: callable
+    :param spiking_neuron: 脉冲神经元层
+    :type spiking_neuron: callable
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: 带 BatchNorm 的 Spiking VGG-19
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _spiking_vgg19_bn-en:
+
+    * **English**
+
+    Construct a Spiking VGG-19 with BatchNorm.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param norm_layer: BatchNorm layer
+    :type norm_layer: callable
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking VGG-19 with BatchNorm
+    :rtype: torch.nn.Module
     """
     :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
     :type pretrained: bool

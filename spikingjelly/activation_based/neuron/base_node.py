@@ -1,4 +1,4 @@
-from abc import abstractmethod
+import logging
 from typing import Optional
 
 import torch
@@ -6,11 +6,7 @@ import torch.nn as nn
 
 from .. import base, surrogate
 
-__all__ = [
-    "SimpleBaseNode",
-    "BaseNode",
-    "NonSpikingBaseNode",
-]
+__all__ = ["BaseNode", "NonSpikingBaseNode", "SimpleBaseNode"]
 
 
 class SimpleBaseNode(base.MemoryModule):
@@ -34,6 +30,17 @@ class SimpleBaseNode(base.MemoryModule):
 
         :class:`BaseNode` 的简化版，便于用户修改或扩展神经元。
 
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+        :param v_reset: 神经元的重置电压
+        :type v_reset: Optional[float]
+        :param surrogate_function: 反向传播时用来计算脉冲函数梯度的替代函数
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否将 reset 过程的计算图分离
+        :type detach_reset: bool
+        :param step_mode: 步进模式，可以为 ``'s'`` (单步) 或 ``'m'`` (多步)
+        :type step_mode: str
+
         ----
 
         .. _SimpleBaseNode.__init__-en:
@@ -41,6 +48,19 @@ class SimpleBaseNode(base.MemoryModule):
         * **English**
 
         A simple version of :class:`BaseNode`. Users can modify this neuron easily.
+
+        :param v_threshold: threshold of this neurons layer
+        :type v_threshold: float
+        :param v_reset: reset voltage of this neurons layer
+        :type v_reset: Optional[float]
+        :param surrogate_function: the function for calculating surrogate gradients of the heaviside step function in backward
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: whether detach the computation graph of reset in backward
+        :type detach_reset: bool
+        :param step_mode: the step mode, which can be ``'s'`` (single-step) or ``'m'`` (multi-step)
+        :type step_mode: str
+        :return: None
+        :rtype: None
         """
         super().__init__()
         self.v_threshold = v_threshold
@@ -159,6 +179,9 @@ class BaseNode(base.MemoryModule):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
+
+        :return: None
+        :rtype: None
         """
         assert isinstance(v_reset, float) or v_reset is None
         assert isinstance(v_threshold, float)
@@ -232,7 +255,6 @@ class BaseNode(base.MemoryModule):
 
         Define the charge difference equation. The sub-class must implement this function.
         """
-        raise NotImplementedError
 
     def neuronal_fire(self):
         """
@@ -429,6 +451,12 @@ class BaseNode(base.MemoryModule):
 
 class NonSpikingBaseNode(nn.Module, base.MultiStepModule):
     def __init__(self, decode: Optional[str] = None):
+        """
+        :param decode: 解码方式。若不为 ``None``，在 ``forward`` 中将使用该方式对膜电位序列进行解码
+        :type decode: Optional[str]
+        :return: None
+        :rtype: None
+        """
         super().__init__()
         self.decode = decode
 

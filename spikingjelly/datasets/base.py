@@ -108,6 +108,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ----
 
         .. _NeuromorphicDatasetBuilder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -132,6 +133,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ----
 
         .. _NeuromorphicDatasetBuilder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -157,6 +159,8 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         :param raw_root: root directory of the raw dataset. The builder will read
             data from this directory.
         :type raw_root: pathlib.Path
+        :return: None
+        :rtype: None
         """
         self.cfg = cfg
         self.raw_root = raw_root
@@ -171,6 +175,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ----
 
         .. _NeuromorphicDatasetBuilder.processed_root-cn:
+        * **中文**
 
         * **中文**
 
@@ -181,6 +186,7 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ----
 
         .. _NeuromorphicDatasetBuilder.processed_root-en:
+        * **English**
 
         * **English**
 
@@ -188,6 +194,8 @@ class NeuromorphicDatasetBuilder(abc.ABC):
 
         This directory stores the output of the preprocessing step defined by
         the builder.
+        :return: 处理后的数据集的根目录
+        :rtype: Path
         """
         return self.cfg.root / "processed"
 
@@ -305,6 +313,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _EventBuilder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -317,6 +326,7 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _EventBuilder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -327,6 +337,18 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         file (e.g., ``.npz``) without frame integration.
 
         Typically, this builder is used when ``data_type == "event"``.
+
+        :param cfg: 数据集配置
+        :type cfg: NeuromorphicDatasetConfig
+        :param raw_root: 原始数据的根目录
+        :type raw_root: Path
+
+        :param cfg: Dataset configuration
+        :type cfg: NeuromorphicDatasetConfig
+        :param raw_root: Root directory of the raw data
+        :type raw_root: Path
+        :return: None
+        :rtype: None
         """
         super().__init__(cfg, raw_root)
 
@@ -382,6 +404,7 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameFixedNumberBuilder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -402,6 +425,7 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameFixedNumberBuilder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -420,6 +444,8 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
+        :return: None
+        :rtype: None
         """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
@@ -485,6 +511,7 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameFixedDurationBuilder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -505,6 +532,7 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameFixedDurationBuilder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -522,6 +550,8 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
+        :return: None
+        :rtype: None
         """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
@@ -583,6 +613,7 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameCustomIntegrateBuilder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -603,6 +634,7 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameCustomIntegrateBuilder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -622,6 +654,8 @@ class FrameCustomIntegrateBuilder(NeuromorphicDatasetBuilder):
         :type W: int
 
         Other arguments are the same as those in :class:`NeuromorphicDatasetBuilder`.
+        :return: None
+        :rtype: None
         """
         super().__init__(cfg, raw_root)
         self.H, self.W = H, W
@@ -851,6 +885,8 @@ class NeuromorphicDatasetFolder(DatasetFolder):
         :param target_transform: a function/transform that takes in the target
             and transforms it.
         :type target_transform: Optional[Callable]
+        :return: None
+        :rtype: None
         """
         self.cfg = NeuromorphicDatasetConfig(
             root=Path(root),

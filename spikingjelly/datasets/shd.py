@@ -414,6 +414,48 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
 
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param train: 是否使用训练集
+        :type train: Optional[bool]
+        :param data_type: ``"event"`` 或 ``"frame"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``"time"`` 或 ``"number"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param train: Whether to use training set or test set
+        :type train: Optional[bool]
+        :param data_type: ``"event"`` or ``"frame"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``"time"`` or ``"number"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
         .. note::
 
             Unlike other datasets in SpikingJelly, SHD is a neuromorphic audio dataset.
@@ -421,7 +463,10 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
             #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of two ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         if train is None:
             raise ValueError("`train` must be `True` or `False`")
 
@@ -603,6 +648,48 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
 
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param train: 是否使用训练集
+        :type train: Optional[bool]
+        :param data_type: ``"event"`` 或 ``"frame"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``"time"`` 或 ``"number"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param train: Whether to use training set or test set
+        :type train: Optional[bool]
+        :param data_type: ``"event"`` or ``"frame"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``"time"`` or ``"number"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
         .. note::
 
             Unlike other datasets in SpikingJelly, SSC is a neuromorphic audio dataset.
@@ -610,7 +697,10 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
             #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of three ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         self.splits = ("train", "valid", "test")
         if split not in self.splits:
             raise ValueError(f"Invalid split: {split}; valid splits are {self.splits}")

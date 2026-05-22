@@ -39,7 +39,54 @@ model_urls = {
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
-    """3x3 convolution with padding"""
+    """
+    **API Language:**
+    :ref:`中文 <conv3x3-cn>` | :ref:`English <conv3x3-en>`
+
+    ----
+
+    .. _conv3x3-cn:
+    * **中文**
+
+    * **中文**
+
+    带 padding 的 3x3 卷积层构造函数。
+
+    :param in_planes: 输入通道数
+    :type in_planes: int
+    :param out_planes: 输出通道数
+    :type out_planes: int
+    :param stride: 步幅，默认为 ``1``
+    :type stride: int
+    :param groups: 分组数，默认为 ``1``
+    :type groups: int
+    :param dilation: 膨胀率，默认为 ``1``
+    :type dilation: int
+    :return: 3x3 卷积层
+    :rtype: layer.Conv2d
+
+    ----
+
+    .. _conv3x3-en:
+    * **English**
+
+    * **English**
+
+    Construct a 3x3 convolution with padding.
+
+    :param in_planes: Number of input channels
+    :type in_planes: int
+    :param out_planes: Number of output channels
+    :type out_planes: int
+    :param stride: Stride, default is ``1``
+    :type stride: int
+    :param groups: Number of groups, default is ``1``
+    :type groups: int
+    :param dilation: Dilation rate, default is ``1``
+    :type dilation: int
+    :return: 3x3 convolution layer
+    :rtype: layer.Conv2d
+    """
     return layer.Conv2d(
         in_planes,
         out_planes,
@@ -53,7 +100,46 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
+    """
+    **API Language:**
+    :ref:`中文 <conv1x1-cn>` | :ref:`English <conv1x1-en>`
+
+    ----
+
+    .. _conv1x1-cn:
+    * **中文**
+
+    * **中文**
+
+    1x1 卷积层构造函数。
+
+    :param in_planes: 输入通道数
+    :type in_planes: int
+    :param out_planes: 输出通道数
+    :type out_planes: int
+    :param stride: 步幅，默认为 ``1``
+    :type stride: int
+    :return: 1x1 卷积层
+    :rtype: layer.Conv2d
+
+    ----
+
+    .. _conv1x1-en:
+    * **English**
+
+    * **English**
+
+    Construct a 1x1 convolution.
+
+    :param in_planes: Number of input channels
+    :type in_planes: int
+    :param out_planes: Number of output channels
+    :type out_planes: int
+    :param stride: Stride, default is ``1``
+    :type stride: int
+    :return: 1x1 convolution layer
+    :rtype: layer.Conv2d
+    """
     return layer.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
@@ -172,6 +258,73 @@ class Bottleneck(nn.Module):
 
 
 class SpikingResNet(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikingResNet-cn>` | :ref:`English <SpikingResNet-en>`
+
+    ----
+
+    .. _SpikingResNet-cn:
+    * **中文**
+
+    * **中文**
+
+    脉冲 ResNet 网络。继承自 :class:`torchvision.models.ResNet`，将原网络的激活函数替换为脉冲神经元。
+
+    ----
+
+    .. _SpikingResNet-en:
+    * **English**
+
+    * **English**
+
+    Spiking ResNet network. Inherits from :class:`torchvision.models.ResNet` with activations replaced by spiking neurons.
+
+    :param block: 残差块的类型（``BasicBlock`` 或 ``Bottleneck``）
+    :type block: type
+    :param layers: 每个层的残差块数量
+    :type layers: list
+    :param num_classes: 分类任务的类别数
+    :type num_classes: int
+    :param zero_init_residual: 是否将最后一个 BN 初始化为零
+    :type zero_init_residual: bool
+    :param groups: 分组卷积的组数
+    :type groups: int
+    :param width_per_group: 每组的宽度
+    :type width_per_group: int
+    :param replace_stride_with_dilation: 是否用膨胀卷积替换步长
+    :type replace_stride_with_dilation: Optional[List[bool]]
+    :param norm_layer: 归一化层类型
+    :type norm_layer: Optional[Callable]
+    :param spiking_neuron: 脉冲神经元类
+    :type spiking_neuron: callable
+    :param kwargs: 传递给脉冲神经元的额外参数
+    :type kwargs: dict
+
+    :param block: Type of residual block (``BasicBlock`` or ``Bottleneck``)
+    :type block: type
+    :param layers: Number of residual blocks per layer
+    :type layers: list
+    :param num_classes: Number of classes for classification
+    :type num_classes: int
+    :param zero_init_residual: Whether to zero-initialize the last BN
+    :type zero_init_residual: bool
+    :param groups: Number of groups for grouped convolution
+    :type groups: int
+    :param width_per_group: Width per group
+    :type width_per_group: int
+    :param replace_stride_with_dilation: Replace stride with dilated convolution
+    :type replace_stride_with_dilation: Optional[List[bool]]
+    :param norm_layer: Normalization layer type
+    :type norm_layer: Optional[Callable]
+    :param spiking_neuron: Spiking neuron class
+    :type spiking_neuron: callable
+    :param kwargs: Extra arguments for the spiking neuron
+    :type kwargs: dict
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         block,
@@ -351,19 +504,47 @@ def _spiking_resnet(
 def spiking_resnet18(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnet18-cn>` | :ref:`English <spiking_resnet18-en>`
+
+    ----
+
+    .. _spiking_resnet18-cn:
+
+    * **中文**
+
+    构造 Spiking ResNet-18。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNet-18
     :rtype: torch.nn.Module
 
-    A spiking version of ResNet-18 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _spiking_resnet18-en:
+
+    * **English**
+
+    Construct Spiking ResNet-18.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNet-18
+    :rtype: torch.nn.Module
     """
 
     return _spiking_resnet(
@@ -380,19 +561,47 @@ def spiking_resnet18(
 def spiking_resnet34(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnet34-cn>` | :ref:`English <spiking_resnet34-en>`
+
+    ----
+
+    .. _spiking_resnet34-cn:
+
+    * **中文**
+
+    构造 Spiking ResNet-34。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNet-34
     :rtype: torch.nn.Module
 
-    A spiking version of ResNet-34 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _spiking_resnet34-en:
+
+    * **English**
+
+    Construct Spiking ResNet-34.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNet-34
+    :rtype: torch.nn.Module
     """
     return _spiking_resnet(
         "resnet34",
@@ -408,19 +617,47 @@ def spiking_resnet34(
 def spiking_resnet50(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnet50-cn>` | :ref:`English <spiking_resnet50-en>`
+
+    ----
+
+    .. _spiking_resnet50-cn:
+
+    * **中文**
+
+    构造 Spiking ResNet-50。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNet-50
     :rtype: torch.nn.Module
 
-    A spiking version of ResNet-50 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _spiking_resnet50-en:
+
+    * **English**
+
+    Construct Spiking ResNet-50.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNet-50
+    :rtype: torch.nn.Module
     """
     return _spiking_resnet(
         "resnet50",
@@ -436,19 +673,47 @@ def spiking_resnet50(
 def spiking_resnet101(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnet101-cn>` | :ref:`English <spiking_resnet101-en>`
+
+    ----
+
+    .. _spiking_resnet101-cn:
+
+    * **中文**
+
+    构造 Spiking ResNet-101。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNet-101
     :rtype: torch.nn.Module
 
-    A spiking version of ResNet-101 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _spiking_resnet101-en:
+
+    * **English**
+
+    Construct Spiking ResNet-101.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNet-101
+    :rtype: torch.nn.Module
     """
     return _spiking_resnet(
         "resnet101",
@@ -464,19 +729,47 @@ def spiking_resnet101(
 def spiking_resnet152(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnet152-cn>` | :ref:`English <spiking_resnet152-en>`
+
+    ----
+
+    .. _spiking_resnet152-cn:
+
+    * **中文**
+
+    构造 Spiking ResNet-152。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a single step neuron
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNet-152
     :rtype: torch.nn.Module
 
-    A spiking version of ResNet-152 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _spiking_resnet152-en:
+
+    * **English**
+
+    Construct Spiking ResNet-152.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNet-152
+    :rtype: torch.nn.Module
     """
     return _spiking_resnet(
         "resnet152",
@@ -492,20 +785,47 @@ def spiking_resnet152(
 def spiking_resnext50_32x4d(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnext50_32x4d-cn>` | :ref:`English <spiking_resnext50_32x4d-en>`
+
+    ----
+
+    .. _spiking_resnext50_32x4d-cn:
+
+    * **中文**
+
+    构造 Spiking ResNeXt-50 32x4d。
+
+    :param pretrained: 若为 ``True``, 加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a single step neuron
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNeXt-50 32x4d
     :rtype: torch.nn.Module
 
-    A spiking version of ResNeXt-50 32x4d model from
-    `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
+    ----
+
+    .. _spiking_resnext50_32x4d-en:
+
+    * **English**
+
+    Construct Spiking ResNeXt-50 32x4d.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNeXt-50 32x4d
+    :rtype: torch.nn.Module
     """
     kwargs["groups"] = 32
     kwargs["width_per_group"] = 4
@@ -523,20 +843,47 @@ def spiking_resnext50_32x4d(
 def spiking_resnext101_32x8d(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_resnext101_32x8d-cn>` | :ref:`English <spiking_resnext101_32x8d-en>`
+
+    ----
+
+    .. _spiking_resnext101_32x8d-cn:
+
+    * **中文**
+
+    构造 Spiking ResNeXt-101 32x8d。
+
+    :param pretrained: 若为 ``True``, 加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a single step neuron
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking ResNeXt-101 32x8d
     :rtype: torch.nn.Module
 
-    A spiking version of ResNeXt-101 32x8d model from
-    `"Aggregated Residual Transformation for Deep Neural Networks" <https://arxiv.org/pdf/1611.05431.pdf>`_
+    ----
+
+    .. _spiking_resnext101_32x8d-en:
+
+    * **English**
+
+    Construct Spiking ResNeXt-101 32x8d.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking ResNeXt-101 32x8d
+    :rtype: torch.nn.Module
     """
     kwargs["groups"] = 32
     kwargs["width_per_group"] = 8
@@ -554,25 +901,53 @@ def spiking_resnext101_32x8d(
 def spiking_wide_resnet50_2(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_wide_resnet50_2-cn>` | :ref:`English <spiking_wide_resnet50_2-en>`
+
+    ----
+
+    .. _spiking_wide_resnet50_2-cn:
+
+    * **中文**
+
+    构造 Spiking Wide ResNet-50-2。
+
+    该模型来自 `Wide Residual Networks <https://arxiv.org/pdf/1605.07146.pdf>`_
+    的脉冲版本。
+
+    :param pretrained: 若为 ``True``, 加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a single step neuron
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking Wide ResNet-50-2
     :rtype: torch.nn.Module
 
-    A spiking version of Wide ResNet-50-2 model from
-    `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
+    ----
 
-    The model is the same as ResNet except for the bottleneck number of channels
-    which is twice larger in every block. The number of channels in outer 1x1
-    convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
-    channels, and in Wide ResNet-50-2 has 2048-1024-2048.
+    .. _spiking_wide_resnet50_2-en:
+
+    * **English**
+
+    Construct Spiking Wide ResNet-50-2.
+
+    This is the spiking version of `Wide Residual Networks
+    <https://arxiv.org/pdf/1605.07146.pdf>`_.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking Wide ResNet-50-2
+    :rtype: torch.nn.Module
     """
     kwargs["width_per_group"] = 64 * 2
     return _spiking_resnet(
@@ -589,25 +964,53 @@ def spiking_wide_resnet50_2(
 def spiking_wide_resnet101_2(
     pretrained=False, progress=True, spiking_neuron: callable = None, **kwargs
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <spiking_wide_resnet101_2-cn>` | :ref:`English <spiking_wide_resnet101_2-en>`
+
+    ----
+
+    .. _spiking_wide_resnet101_2-cn:
+
+    * **中文**
+
+    构造 Spiking Wide ResNet-101-2。
+
+    该模型来自 `Wide Residual Networks <https://arxiv.org/pdf/1605.07146.pdf>`_
+    的脉冲版本。
+
+    :param pretrained: 若为 ``True``, 加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param spiking_neuron: a single step neuron
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
     :return: Spiking Wide ResNet-101-2
     :rtype: torch.nn.Module
 
-    A spiking version of Wide ResNet-101-2 model from
-    `"Wide Residual Networks" <https://arxiv.org/pdf/1605.07146.pdf>`_
+    ----
 
-    The model is the same as ResNet except for the bottleneck number of channels
-    which is twice larger in every block. The number of channels in outer 1x1
-    convolutions is the same, e.g. last block in ResNet-50 has 2048-512-2048
-    channels, and in Wide ResNet-50-2 has 2048-1024-2048.
+    .. _spiking_wide_resnet101_2-en:
+
+    * **English**
+
+    Construct Spiking Wide ResNet-101-2.
+
+    This is the spiking version of `Wide Residual Networks
+    <https://arxiv.org/pdf/1605.07146.pdf>`_.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Spiking Wide ResNet-101-2
+    :rtype: torch.nn.Module
     """
     kwargs["width_per_group"] = 64 * 2
     return _spiking_resnet(

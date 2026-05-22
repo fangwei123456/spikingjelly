@@ -21,7 +21,16 @@ __all__ = ["create_fptt_kernel", "create_bptt_kernel", "multistep_plif_ptt"]
 
 
 def create_fptt_kernel(decay_input: bool, hard_reset: bool, dtype: str):
-    return lif_create_fptt_kernel(
+    """Create the forward-pass (fptt) CUDA kernel for the Parametric LIF neuron.
+
+    :param hard_reset: Whether to use hard reset mode
+    :type hard_reset: bool
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+    """
+        return lif_create_fptt_kernel(
         decay_input, hard_reset, dtype, kernel_name_prefix="ParametricLIFNode"
     )
 
@@ -33,7 +42,20 @@ def create_bptt_kernel(
     detach_reset: bool,
     dtype: str,
 ):
-    kernel_name = f"ParametricLIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
+    """Create the backward-pass (bptt) CUDA kernel for the Parametric LIF neuron.
+
+    :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
+    :type sg_cuda_code_fun: Callable
+    :param hard_reset: Whether to use hard reset mode
+    :type hard_reset: bool
+    :param detach_reset: Whether to detach the reset term in backward
+    :type detach_reset: bool
+    :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
+    :type dtype: str
+    :return: CUDA kernel object with generated code
+    :rtype: CKernel1D
+    """
+        kernel_name = f"ParametricLIFNode_bptt_decayInput{decay_input}_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
     code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
 
@@ -677,6 +699,27 @@ def multistep_plif_ptt(
     detach_reset,
     surrogate_function,
 ):
+    """Multi-step Parametric LIF neuron forward pass via CuPy PTT custom op.
+
+    :param x_seq: Input sequence, shape ``[T, N, *]``
+    :type x_seq: torch.Tensor
+    :param v_init: Initial membrane potential
+    :type v_init: torch.Tensor
+    :param reciprocal_tau: Reciprocal of the learnable time constant
+    :type reciprocal_tau: torch.Tensor
+    :param decay_input: Whether input participates in decay
+    :type decay_input: bool
+    :param v_threshold: Threshold voltage
+    :type v_threshold: float
+    :param v_reset: Reset voltage (``None`` for soft reset)
+    :type v_reset: Optional[float]
+    :param detach_reset: Whether to detach the reset term in backward
+    :type detach_reset: bool
+    :param surrogate_function: Surrogate gradient function
+    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :return: Tuple of (spike_seq, v_seq, reciprocal_tau)
+    :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+    """
     sg_id = _sg_obj_id(surrogate_function)
     v_reset_value = float("nan") if v_reset is None else float(v_reset)
     return cupy_multistep_plif_forward(

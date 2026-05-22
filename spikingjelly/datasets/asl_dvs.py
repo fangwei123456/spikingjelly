@@ -90,6 +90,47 @@ class ASLDVS(NeuromorphicDatasetFolder):
                 openi dataset download OpenI/ASLDVS --local_dir ./ASLDVS --max_workers 10
 
             Then you can extract ``ASLDVS.zip`` and get ``ICCV2019_DVS_dataset.zip`` .
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` or ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
+        :return: None
+        :rtype: None
         """
         super().__init__(
             root,
@@ -106,8 +147,29 @@ class ASLDVS(NeuromorphicDatasetFolder):
 
     @classmethod
     def get_H_W(cls) -> Tuple:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <asl_dvs.get_H_W-cn>` | :ref:`English <asl_dvs.get_H_W-en>`
+
+        ----
+
+        .. _asl_dvs.get_H_W-cn:
+        * **中文**
+
+        * **中文**
+
         :return: ``(180, 240)``
+        :rtype: Tuple
+
+        ----
+
+        .. _asl_dvs.get_H_W-en:
+        * **English**
+
+        * **English**
+
+        :return: ``(180, 240)``
+        :rtype: Tuple
         """
         return 180, 240
 

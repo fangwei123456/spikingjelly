@@ -129,6 +129,29 @@ def seed_worker(worker_id):
 
 
 class Trainer:
+    r"""
+    **API Language:**
+    :ref:`中文 <Trainer-cn>` | :ref:`English <Trainer-en>`
+
+    ----
+
+    .. _Trainer-cn:
+    * **中文**
+
+    * **中文**
+
+    分类任务的训练器。封装了训练/验证循环、学习率调度、混合精度训练、torch.compile 支持、TensorBoard 日志等功能。
+
+    ----
+
+    .. _Trainer-en:
+    * **English**
+
+    * **English**
+
+    Classification task trainer. Wraps training/validation loops, LR scheduling, mixed-precision training, torch.compile support, and TensorBoard logging.
+    """
+
     def get_data_to_device_kwargs(self, args):
         return {"non_blocking": not args.disable_pinmemory}
 

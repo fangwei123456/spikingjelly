@@ -154,3 +154,4 @@ workspace/
 # Hermes Agent & Codex local state
 .hermes/
 .codex/
+.goal*/

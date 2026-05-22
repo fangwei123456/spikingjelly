@@ -23,6 +23,7 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     ----
 
     .. _fptt_online_training_init_w_ra-cn:
+    * **中文**
 
     * **中文**
 
@@ -35,9 +36,12 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     :return: 与优化器参数顺序对齐的运行平均列表，列表元素为各参数当前的 ``w.data``
     :rtype: list[torch.Tensor]
 
+    :raises Exception: 若优化器参数组中存在不可访问 ``.data`` 的对象，则底层异常会原样向上传播
+
     ----
 
     .. _fptt_online_training_init_w_ra-en:
+    * **English**
 
     * **English**
 
@@ -52,6 +56,8 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     :return: a list aligned with optimizer parameter order whose elements are
         the current ``w.data`` tensors
     :rtype: list[torch.Tensor]
+
+    :raises Exception: Any exception raised while accessing ``.data`` of optimizer parameters is propagated unchanged
     """
     w_ra = []
     for item in optimizer.param_groups:
@@ -84,6 +90,10 @@ def fptt_online_training(
     前向、损失计算、参数更新与 ``detach_net``，并对
     :class:`spikingjelly.activation_based.base.MemoryModule` 的内部状态进行保存和恢复。
 
+    该函数要求 ``x_seq`` 与 ``target_seq`` 的时间维均位于第 0 维，且长度一致。
+    ``w_ra`` 应由 :func:`fptt_online_training_init_w_ra` 初始化，并与 ``optimizer``
+    当前参数顺序保持一致。
+
     :param model: 神经网络
     :type model: nn.Module
 
@@ -106,8 +116,11 @@ def fptt_online_training(
         其中每个元素与一个优化器参数对应
     :type w_ra: list[torch.Tensor]
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises IndexError: 若 ``target_seq`` 的时间长度小于 ``x_seq``，按时间步索引目标时会抛出异常
+    :raises Exception: 任何模型前向、损失计算、反向传播或优化器更新异常都会原样向上传播
 
     ----
 
@@ -120,6 +133,11 @@ def fptt_online_training(
     performs forward, loss computation, parameter update, and ``detach_net`` at
     every time step. It also stores and restores the internal states of
     :class:`spikingjelly.activation_based.base.MemoryModule`.
+
+    The function expects both ``x_seq`` and ``target_seq`` to place the time
+    axis at dimension 0 and to share the same temporal length. ``w_ra`` should
+    be initialized by :func:`fptt_online_training_init_w_ra` and remain aligned
+    with the current parameter order of ``optimizer``.
 
     :param model: the neural network
     :type model: nn.Module
@@ -145,8 +163,11 @@ def fptt_online_training(
         to one optimizer parameter
     :type w_ra: list[torch.Tensor]
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises IndexError: Raised when ``target_seq`` is shorter than ``x_seq`` along the time dimension
+    :raises Exception: Any exception raised during model forward, loss computation, backward pass, or optimizer update is propagated unchanged
 
     ----
 
@@ -265,6 +286,9 @@ def ottt_online_training(
     前向与反向传播。若 ``online`` 为 ``True``，则每个时间步都会执行一次参数更新；否则先累积整段序列的梯度，
     再在最后统一更新。
 
+    该函数要求 ``x_seq`` 与 ``target_seq`` 的前两维分别表示 batch 和 time，且
+    两者在这两维上的长度一致。
+
     :param model: 神经网络
     :type model: nn.Module
 
@@ -287,6 +311,9 @@ def ottt_online_training(
         ``y_all`` 是形状为 ``[B, T, ...]`` 的按时间堆叠且已 detach 的输出
     :rtype: tuple[torch.Tensor, torch.Tensor]
 
+    :raises IndexError: 若 ``target_seq`` 与 ``x_seq`` 在时间维长度不一致，则按时间步索引时会抛出异常
+    :raises Exception: 任何模型前向、损失计算、反向传播或优化器更新异常都会原样向上传播
+
     ----
 
     .. _ottt_online_training-en:
@@ -300,6 +327,9 @@ def ottt_online_training(
     the time dimension. If ``online`` is ``True``, the optimizer updates
     parameters at every time step; otherwise, gradients are accumulated through
     the whole sequence and applied once at the end.
+
+    The function expects ``x_seq`` and ``target_seq`` to use batch and time as
+    the first two dimensions and to share the same sizes on those dimensions.
 
     :param model: the neural network
     :type model: nn.Module
@@ -325,6 +355,9 @@ def ottt_online_training(
         losses and ``y_all`` is the detached stacked output with
         ``shape=[B, T, ...]``
     :rtype: tuple[torch.Tensor, torch.Tensor]
+
+    :raises IndexError: Raised when ``target_seq`` and ``x_seq`` do not match on the time dimension
+    :raises Exception: Any exception raised during model forward, loss computation, backward pass, or optimizer update is propagated unchanged
 
     ----
 

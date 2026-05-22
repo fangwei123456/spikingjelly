@@ -163,6 +163,8 @@ class SpikeSimEnergyProfiler:
         :param config: SpikeSim energy config; defaults to ``SpikeSimEnergyConfig()``
         :param strict: whether to raise immediately on unsupported behaviors
         :param verbose: whether to print per-stage runtime statistics
+        :return: None
+        :rtype: None
         """
         self.config = (config or SpikeSimEnergyConfig()).copy()
         self.config.validate()

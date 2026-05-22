@@ -383,6 +383,7 @@ class GCContainer(nn.Sequential):
         ----
 
         .. _GCContainer.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -394,6 +395,7 @@ class GCContainer(nn.Sequential):
         ----
 
         .. _GCContainer.__init__-en:
+        * **English**
 
         * **English**
 
@@ -419,6 +421,8 @@ class GCContainer(nn.Sequential):
 
             x = torch.randn(3, 10, requires_grad=True)
             result = container(x)
+        :return: None
+        :rtype: None
         """
         super().__init__(*args)
         self.x_compressor = (
@@ -467,6 +471,7 @@ class TCGCContainer(GCContainer):
     ----
 
     .. _TCGCContainer-cn:
+    * **中文**
 
     * **中文**
 
@@ -489,6 +494,7 @@ class TCGCContainer(GCContainer):
     ----
 
     .. _TCGCContainer-en:
+    * **English**
 
     * **English**
 
@@ -532,6 +538,8 @@ class TCGCContainer(GCContainer):
         result = tc_container(x_seq)
         print(f"Input shape: {x_seq.shape}")
         print(f"Output shape: {result.shape}")
+    :return: None
+    :rtype: None
     """
 
     def __init__(

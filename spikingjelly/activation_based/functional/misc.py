@@ -54,8 +54,10 @@ def set_threshold_margin(
     :param threshold1: 输出层神经元在训练时，正样本的电压阈值
     :type threshold1: float
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises RuntimeError: 若 ``output_layer.v_threshold`` 不支持被赋值为标量或与 ``label_one_hot`` 同形状的张量，则底层赋值异常会原样向上传播
 
     ----
 
@@ -88,8 +90,10 @@ def set_threshold_margin(
     :param threshold1: Voltage threshold of the corresponding neurons of **positive** samples in output layer when training
     :type threshold1: float
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises RuntimeError: Any assignment error raised while updating ``output_layer.v_threshold`` is propagated unchanged
     """
     if output_layer.training:
         output_layer.v_threshold = torch.ones_like(label_one_hot) * threshold0
@@ -106,6 +110,7 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
     ----
 
     .. _redundant_one_hot-cn:
+    * **中文**
 
     * **中文**
 
@@ -123,9 +128,12 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
     :return: 形状为 ``[batch_size, num_classes * n]`` 的tensor
     :rtype: torch.Tensor
 
+    :raises RuntimeError: 若 ``labels`` 中存在不在 ``[0, num_classes - 1]`` 范围内的值，则 ``F.one_hot`` 会抛出异常
+
     ----
 
     .. _redundant_one_hot-en:
+    * **English**
 
     * **English**
 
@@ -142,6 +150,8 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
 
     :return: Tensor of shape ``[batch_size, num_classes * n]``
     :rtype: torch.Tensor
+
+    :raises RuntimeError: ``F.one_hot`` raises if ``labels`` contains values outside ``[0, num_classes - 1]``
 
     ----
 
@@ -176,6 +186,7 @@ def first_spike_index(spikes: Tensor):
     ----
 
     .. _first_spike_index-cn:
+    * **中文**
 
     * **中文**
 
@@ -188,9 +199,12 @@ def first_spike_index(spikes: Tensor):
     :return: ``index`` ， ``shape=[*, T]`` ，为 ``True`` 的位置表示该神经元首次释放脉冲的时刻
     :rtype: torch.Tensor
 
+    :raises RuntimeError: 若 ``spikes`` 不是可进行 ``cumsum`` 的张量类型，则底层张量操作异常会原样向上传播
+
     ----
 
     .. _first_spike_index-en:
+    * **English**
 
     * **English**
 
@@ -201,6 +215,8 @@ def first_spike_index(spikes: Tensor):
 
     :return: index, ``shape=[*, T]``, the index of ``True`` represents the moment of first spike.
     :rtype: torch.Tensor
+
+    :raises RuntimeError: Any tensor operation error raised by ``cumsum`` is propagated unchanged
 
     ----
 
@@ -239,6 +255,7 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     ----
 
     .. _kaiming_normal_conv_linear_weight-cn:
+    * **中文**
 
     * **中文**
 
@@ -248,12 +265,15 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises RuntimeError: 若某个权重张量不支持 Kaiming 初始化，则底层初始化异常会原样向上传播
 
     ----
 
     .. _kaiming_normal_conv_linear_weight-en:
+    * **English**
 
     * **English**
 
@@ -264,8 +284,10 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises RuntimeError: Any initialization error raised by ``torch.nn.init.kaiming_normal_`` is propagated unchanged
     """
     for m in net.modules():
         if isinstance(m, (nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.Linear)):
@@ -280,6 +302,7 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     ----
 
     .. _delay-cn:
+    * **中文**
 
     * **中文**
 
@@ -294,9 +317,12 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     :return: 延迟后的序列
     :rtype: torch.Tensor
 
+    :raises ValueError: 当 ``delay_steps`` 小于 ``0`` 时，底层切片与拼接行为不再满足延迟语义，调用方应保证 ``delay_steps >= 0``
+
     ----
 
     .. _delay-en:
+    * **English**
 
     * **English**
 
@@ -310,6 +336,8 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
 
     :return: the delayed sequence
     :rtype: torch.Tensor
+
+    :raises ValueError: Callers are expected to provide ``delay_steps >= 0`` to preserve the intended delay semantics
 
     ----
 

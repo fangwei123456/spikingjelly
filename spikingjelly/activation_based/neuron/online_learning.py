@@ -144,7 +144,10 @@ class OTTTLIFNode(LIFNode):
             :class:`LIFNode`. This class only supports single-step mode and does
             not use ``self.v_seq``
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
 
         super().__init__(
             tau,
@@ -413,7 +416,10 @@ class SLTTLIFNode(LIFNode):
             :class:`LIFNode`. This class only supports single-step mode and does
             not use ``self.v_seq``
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(
             tau,
             decay_input,

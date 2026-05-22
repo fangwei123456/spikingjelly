@@ -59,6 +59,17 @@ class SimpleIFNode(SimpleBaseNode):
 
         :class:`IFNode` 的简化版实现。
 
+        :param v_threshold: 神经元阈值电压
+        :type v_threshold: float
+        :param v_reset: 神经元重置电压
+        :type v_reset: Optional[float]
+        :param surrogate_function: 替代梯度函数
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否在反向传播时分离 reset 计算图
+        :type detach_reset: bool
+        :param step_mode: 步进模式，可为 ``"s"`` 或 ``"m"``
+        :type step_mode: str
+
         ----
 
         .. _SimpleIFNode.__init__-en:
@@ -66,15 +77,62 @@ class SimpleIFNode(SimpleBaseNode):
         * **English**
 
         A simple version of :class:`IFNode`.
+
+        :param v_threshold: Threshold voltage of the neuron
+        :type v_threshold: float
+        :param v_reset: Reset voltage of the neuron
+        :type v_reset: Optional[float]
+        :param surrogate_function: Surrogate gradient function
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: Whether to detach reset graph in backward
+        :type detach_reset: bool
+        :param step_mode: Step mode, either ``"s"`` or ``"m"``
+        :type step_mode: str
+        :return: None
+        :rtype: None
         """
         super().__init__(
             v_threshold, v_reset, surrogate_function, detach_reset, step_mode
         )
 
     def neuronal_charge(self, x: torch.Tensor):
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <SimpleIFNode.neuronal_charge-cn>` | :ref:`English <SimpleIFNode.neuronal_charge-en>`
+
+        ----
+
+        .. _SimpleIFNode.neuronal_charge-cn:
+        * **中文**
+
+        * **中文**
+
+        神经元充电的微分方程：
+
         .. math::
             H[t] = V[t-1] + X[t]
+
+        :param x: 输入电压
+        :type x: torch.Tensor
+        :return: None（膜电位更新存储在 ``self.v`` 中）
+        :rtype: None
+
+        ----
+
+        .. _SimpleIFNode.neuronal_charge-en:
+        * **English**
+
+        * **English**
+
+        The differential equation for neuronal charge:
+
+        .. math::
+            H[t] = V[t-1] + X[t]
+
+        :param x: Input voltage
+        :type x: torch.Tensor
+        :return: None (membrane potential is stored in ``self.v``)
+        :rtype: None
         """
         self.v = self.v + x
 
@@ -168,6 +226,8 @@ class IFNode(BaseNode):
             only the voltage at last time-step will be stored to ``self.v`` with ``shape = [N, *]``, which can reduce the
             memory consumption
         :type store_v_seq: bool
+        :return: None
+        :rtype: None
         """
         super().__init__(
             v_threshold,
@@ -504,6 +564,36 @@ class IFNode(BaseNode):
 
 class NonSpikingIFNode(NonSpikingBaseNode):
     def __init__(self, decode: Optional[str] = None):
+        """
+        **API Language:**
+        :ref:`中文 <NonSpikingIFNode.__init__-cn>` | :ref:`English <NonSpikingIFNode.__init__-en>`
+
+        ----
+
+        .. _NonSpikingIFNode.__init__-cn:
+        * **中文**
+
+        * **中文**
+
+        不发放脉冲的 IF 节点，输出膜电位（或根据 ``decode`` 进行解码）。
+
+        :param decode: 非脉冲输出解码方式，见 :class:`NonSpikingBaseNode`
+        :type decode: Optional[str]
+
+        ----
+
+        .. _NonSpikingIFNode.__init__-en:
+        * **English**
+
+        * **English**
+
+        Non-spiking IF node that outputs membrane potential (or decoded outputs specified by ``decode``).
+
+        :param decode: Decoding mode for non-spiking outputs, see :class:`NonSpikingBaseNode`
+        :type decode: Optional[str]
+        :return: None
+        :rtype: None
+        """
         super().__init__(decode)
 
     def neuronal_charge(self, x: torch.Tensor):

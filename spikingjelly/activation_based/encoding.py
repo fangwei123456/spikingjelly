@@ -174,30 +174,67 @@ class StatefulEncoder(base.MemoryModule):
 
     @abstractmethod
     def single_step_encode(self, x: torch.Tensor):
-        """
-        * :ref:`API in English <StatefulEncoder.single_step_encode-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <StatefulEncoder.single_step_encode-cn>` | :ref:`English <StatefulEncoder.single_step_encode-en>`
+
+        ----
 
         .. _StatefulEncoder.single_step_encode-cn:
+        * **中文**
+
+        * **中文**
 
         :param x: 输入数据
         :type x: torch.Tensor
 
-        :return: ``spike``, shape 与 ``x.shape`` 相同
-        :rtype: torch.Tensor
+        :return: None
+        :rtype: None
 
-        * :ref:`中文API <StatefulEncoder.single_step_encode-cn>`
+        ----
 
         .. _StatefulEncoder.single_step_encode-en:
+        * **English**
+
+        * **English**
 
         :param x: input data
         :type x: torch.Tensor
 
-        :return: ``spike``, whose shape is same with ``x.shape``
-        :rtype: torch.Tensor
+        :return: None
+        :rtype: None
         """
         raise NotImplementedError
 
     def extra_repr(self) -> str:
+        r"""
+        **API Language:**
+        :ref:`中文 <StatefulEncoder.extra_repr-cn>` | :ref:`English <StatefulEncoder.extra_repr-en>`
+
+        ----
+
+        .. _StatefulEncoder.extra_repr-cn:
+        * **中文**
+
+        * **中文**
+
+        返回编码器的额外表示信息，即编码周期 ``T``。
+
+        :return: 表示字符串 ``"T=T"``
+        :rtype: str
+
+        ----
+
+        .. _StatefulEncoder.extra_repr-en:
+        * **English**
+
+        * **English**
+
+        Returns the extra representation string of the encoder, i.e., the encoding period ``T``.
+
+        :return: the representation string ``"T=T"``
+        :rtype: str
+        """
         return f"T={self.T}"
 
 
@@ -210,6 +247,7 @@ class PeriodicEncoder(StatefulEncoder):
         ----
 
         .. _PeriodicEncoder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -228,6 +266,7 @@ class PeriodicEncoder(StatefulEncoder):
         ----
 
         .. _PeriodicEncoder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -247,6 +286,35 @@ class PeriodicEncoder(StatefulEncoder):
         super().__init__(spike.shape[0], step_mode)
 
     def single_step_encode(self, spike: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <PeriodicEncoder.single_step_encode-cn>` | :ref:`English <PeriodicEncoder.single_step_encode-en>`
+
+        ----
+
+        .. _PeriodicEncoder.single_step_encode-cn:
+        * **中文**
+
+        * **中文**
+
+        设置周期性编码器的脉冲序列。将输入的 ``spike`` 作为编码器的脉冲序列，并将编码周期 ``T`` 设置为 ``spike.shape[0]``。
+
+        :param spike: 脉冲张量，其第0维为编码周期
+        :type spike: torch.Tensor
+
+        ----
+
+        .. _PeriodicEncoder.single_step_encode-en:
+        * **English**
+
+        * **English**
+
+        Sets the spike sequence for the periodic encoder. The input ``spike`` is used as the encoder's
+        spike sequence, and the encoding period ``T`` is set to ``spike.shape[0]``.
+
+        :param spike: the spike tensor, whose 0-th dimension is the encoding period
+        :type spike: torch.Tensor
+        """
         self.spike = spike
         self.T = spike.shape[0]
 
@@ -352,6 +420,35 @@ class LatencyEncoder(StatefulEncoder):
         self.enc_function = enc_function
 
     def single_step_encode(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <LatencyEncoder.single_step_encode-cn>` | :ref:`English <LatencyEncoder.single_step_encode-en>`
+
+        ----
+
+        .. _LatencyEncoder.single_step_encode-cn:
+        * **中文**
+
+        * **中文**
+
+        单步编码函数。根据输入的 ``x`` 计算脉冲发放时刻 :math:`t_f`，并生成对应的 one-hot 脉冲张量。
+
+        :param x: 输入数据，取值范围应为 ``[0, 1]``
+        :type x: torch.Tensor
+
+        ----
+
+        .. _LatencyEncoder.single_step_encode-en:
+        * **English**
+
+        * **English**
+
+        Single-step encoding function. Computes the firing time :math:`t_f` from input ``x`` and
+        generates the corresponding one-hot spike tensor.
+
+        :param x: input data, which should be in the range ``[0, 1]``
+        :type x: torch.Tensor
+        """
         if self.enc_function == "log":
             t_f = (self.T - 1.0 - torch.log(self.alpha * x + 1.0)).round().long()
         else:
@@ -373,6 +470,7 @@ class PoissonEncoder(StatelessEncoder):
         ----
 
         .. _PoissonEncoder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -388,6 +486,7 @@ class PoissonEncoder(StatelessEncoder):
         ----
 
         .. _PoissonEncoder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -404,6 +503,39 @@ class PoissonEncoder(StatelessEncoder):
         super().__init__(step_mode)
 
     def forward(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <PoissonEncoder.forward-cn>` | :ref:`English <PoissonEncoder.forward-en>`
+
+        ----
+
+        .. _PoissonEncoder.forward-cn:
+        * **中文**
+
+        * **中文**
+
+        前向传播。根据输入 ``x`` 中的概率值生成泊松脉冲序列。每个元素以概率 ``x`` 独立地发放脉冲。
+
+        :param x: 输入数据，取值范围应为 ``[0, 1]``，表示脉冲发放概率
+        :type x: torch.Tensor
+        :return: 脉冲张量，形状与 ``x`` 相同
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _PoissonEncoder.forward-en:
+        * **English**
+
+        * **English**
+
+        Forward pass. Generates Poisson spike trains based on the probability values in ``x``.
+        Each element independently fires a spike with probability ``x``.
+
+        :param x: input data in the range ``[0, 1]``, representing firing probabilities
+        :type x: torch.Tensor
+        :return: spike tensor with the same shape as ``x``
+        :rtype: torch.Tensor
+        """
         out_spike = torch.rand_like(x).le(x).to(x)
         return out_spike
 
@@ -417,6 +549,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
         ----
 
         .. _WeightedPhaseEncoder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -455,6 +588,7 @@ class WeightedPhaseEncoder(StatefulEncoder):
         ----
 
         .. _WeightedPhaseEncoder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -492,6 +626,37 @@ class WeightedPhaseEncoder(StatefulEncoder):
         super().__init__(K, step_mode)
 
     def single_step_encode(self, x: torch.Tensor):
+        r"""
+        **API Language:**
+        :ref:`中文 <WeightedPhaseEncoder.single_step_encode-cn>` | :ref:`English <WeightedPhaseEncoder.single_step_encode-en>`
+
+        ----
+
+        .. _WeightedPhaseEncoder.single_step_encode-cn:
+        * **中文**
+
+        * **中文**
+
+        单步编码函数。将输入 ``x`` 按照二进制加权相位编码方式展开为脉冲序列。
+
+        :param x: 输入数据，取值范围应为 ``[0, 1 - 2^{-T}]``
+        :type x: torch.Tensor
+        :raises AssertionError: 当 ``x`` 不在 ``[0, 1 - 2^{-T}]`` 范围内时
+
+        ----
+
+        .. _WeightedPhaseEncoder.single_step_encode-en:
+        * **English**
+
+        * **English**
+
+        Single-step encoding function. Encodes the input ``x`` into spike trains using the
+        weighted phase encoding scheme based on binary decomposition.
+
+        :param x: input data, which should be in the range ``[0, 1 - 2^{-T}]``
+        :type x: torch.Tensor
+        :raises AssertionError: if ``x`` is not in the range ``[0, 1 - 2^{-T}]``
+        """
         assert (x >= 0).all() and (x <= 1 - 2 ** (-self.T)).all()
         inputs = x.clone()
         self.spike = torch.empty(
@@ -505,8 +670,6 @@ class WeightedPhaseEncoder(StatefulEncoder):
 
 
 class PopSpikeEncoderDeterministic(nn.Module):
-    """Learnable Population Coding Spike Encoder with Deterministic Spike Trains"""
-
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         r"""
         **API Language:**
@@ -586,6 +749,39 @@ class PopSpikeEncoderDeterministic(nn.Module):
         functional.set_backend(self, backend="torch")
 
     def forward(self, obs):
+        r"""
+        **API Language:**
+        :ref:`中文 <PopSpikeEncoderDeterministic.forward-cn>` | :ref:`English <PopSpikeEncoderDeterministic.forward-en>`
+
+        ----
+
+        .. _PopSpikeEncoderDeterministic.forward-cn:
+        * **中文**
+
+        * **中文**
+
+        前向传播。将输入观测映射为高斯群体激活，并在 ``spike_ts`` 个时间步上重复后输入脉冲神经元，输出确定性脉冲序列。
+
+        :param obs: 输入观测张量，最后一维大小应与 ``obs_dim`` 一致
+        :type obs: torch.Tensor
+        :return: 编码后的脉冲序列，形状为 ``[spike_ts, batch_size, obs_dim * pop_dim]``
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _PopSpikeEncoderDeterministic.forward-en:
+        * **English**
+
+        * **English**
+
+        Forward pass. The input observations are mapped to Gaussian population activations, repeated for
+        ``spike_ts`` time steps, and fed into spiking neurons to produce deterministic spike trains.
+
+        :param obs: input observation tensor whose last dimension should match ``obs_dim``
+        :type obs: torch.Tensor
+        :return: encoded spike sequence with shape ``[spike_ts, batch_size, obs_dim * pop_dim]``
+        :rtype: torch.Tensor
+        """
         obs = obs.view(-1, self.obs_dim, 1)
 
         # Receptive Field of encoder population has Gaussian Shape
@@ -598,8 +794,6 @@ class PopSpikeEncoderDeterministic(nn.Module):
 
 
 class PopSpikeEncoderRandom(nn.Module):
-    """Learnable Population Coding Spike Encoder with Random Spike Trains"""
-
     def __init__(self, obs_dim, pop_dim, spike_ts, mean_range, std):
         r"""
         **API Language:**
@@ -608,6 +802,7 @@ class PopSpikeEncoderRandom(nn.Module):
         ----
 
         .. _PopSpikeEncoderRandom.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -631,6 +826,7 @@ class PopSpikeEncoderRandom(nn.Module):
         ----
 
         .. _PopSpikeEncoderRandom.__init__-en:
+        * **English**
 
         * **English**
 
@@ -671,6 +867,39 @@ class PopSpikeEncoderRandom(nn.Module):
         self.pseudo_spike = surrogate.poisson_pass.apply
 
     def forward(self, obs):
+        r"""
+        **API Language:**
+        :ref:`中文 <PopSpikeEncoderRandom.forward-cn>` | :ref:`English <PopSpikeEncoderRandom.forward-en>`
+
+        ----
+
+        .. _PopSpikeEncoderRandom.forward-cn:
+        * **中文**
+
+        * **中文**
+
+        前向传播。将输入观测映射为高斯群体激活，并在每个时间步通过随机采样生成脉冲序列。
+
+        :param obs: 输入观测张量，最后一维大小应与 ``obs_dim`` 一致
+        :type obs: torch.Tensor
+        :return: 随机脉冲序列，形状为 ``[spike_ts, batch_size, obs_dim * pop_dim]``
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _PopSpikeEncoderRandom.forward-en:
+        * **English**
+
+        * **English**
+
+        Forward pass. The input observations are mapped to Gaussian population activations, and random spikes
+        are sampled at each time step.
+
+        :param obs: input observation tensor whose last dimension should match ``obs_dim``
+        :type obs: torch.Tensor
+        :return: random spike sequence with shape ``[spike_ts, batch_size, obs_dim * pop_dim]``
+        :rtype: torch.Tensor
+        """
         obs = obs.view(-1, self.obs_dim, 1)
         batch_size = obs.shape[0]
 
@@ -698,6 +927,7 @@ class PopEncoder(nn.Module):
         ----
 
         .. _PopEncoder.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -721,6 +951,7 @@ class PopEncoder(nn.Module):
         ----
 
         .. _PopEncoder.__init__-en:
+        * **English**
 
         * **English**
 
@@ -758,6 +989,39 @@ class PopEncoder(nn.Module):
         self.std = nn.Parameter(tmp_std)
 
     def forward(self, obs):
+        r"""
+        **API Language:**
+        :ref:`中文 <PopEncoder.forward-cn>` | :ref:`English <PopEncoder.forward-en>`
+
+        ----
+
+        .. _PopEncoder.forward-cn:
+        * **中文**
+
+        * **中文**
+
+        前向传播。将输入观测映射为高斯群体激活，并在 ``spike_ts`` 个时间步上复制该激活，返回连续输入序列。
+
+        :param obs: 输入观测张量，最后一维大小应与 ``obs_dim`` 一致
+        :type obs: torch.Tensor
+        :return: 编码输入序列，形状为 ``[spike_ts, batch_size, obs_dim * pop_dim]``
+        :rtype: torch.Tensor
+
+        ----
+
+        .. _PopEncoder.forward-en:
+        * **English**
+
+        * **English**
+
+        Forward pass. The input observations are mapped to Gaussian population activations and repeated for
+        ``spike_ts`` time steps as a continuous input sequence.
+
+        :param obs: input observation tensor whose last dimension should match ``obs_dim``
+        :type obs: torch.Tensor
+        :return: encoded input sequence with shape ``[spike_ts, batch_size, obs_dim * pop_dim]``
+        :rtype: torch.Tensor
+        """
         obs = obs.view(-1, self.obs_dim, 1)
         batch_size = obs.shape[0]
 

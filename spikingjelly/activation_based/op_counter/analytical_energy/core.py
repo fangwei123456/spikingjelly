@@ -338,6 +338,7 @@ class LemaireEnergyProfiler:
     ----
 
     .. _LemaireEnergyProfiler-cn:
+    * **中文**
 
     * **中文**
 
@@ -346,10 +347,19 @@ class LemaireEnergyProfiler:
     ----
 
     .. _LemaireEnergyProfiler-en:
+    * **English**
 
     * **English**
 
     Inference-only Lemaire energy profiler composed from public counters.
+
+    :param config: 能耗配置，若为 ``None`` 则使用默认配置
+    :type config: LemaireEnergyConfig | None
+
+    :param config: Energy configuration. If ``None``, uses the default configuration
+    :type config: LemaireEnergyConfig | None
+    :return: None
+    :rtype: None
     """
 
     def __init__(self, *, config: LemaireEnergyConfig | None = None):

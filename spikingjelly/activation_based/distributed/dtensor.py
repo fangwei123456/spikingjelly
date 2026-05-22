@@ -28,6 +28,27 @@ except ImportError:
     DTensor = None
     DTENSOR_AVAILABLE = False
 
+__all__ = [
+    "SNNDistributedConfig",
+    "SNNPipelineRuntime",
+    "SNNDistributedAnalysis",
+    "SNNDistributedRecommendation",
+    "TensorShardMemoryModule",
+    "ChannelShardConv2d",
+    "ChannelShardConv1d",
+    "ChannelShardBatchNorm2d",
+    "ChannelShardBatchNorm1d",
+    "parse_pipeline_layout",
+    "resolve_pipeline_schedule_kind",
+    "recommended_pipeline_microbatches",
+    "recommend_snn_distributed_strategy",
+    "analyze_snn_distributed_capability",
+    "auto_build_tensor_parallel_plan",
+    "parallelize_snn_module",
+    "configure_snn_distributed",
+]
+
+
 try:
     from torch.distributed.tensor.parallel import (
         ColwiseParallel,
@@ -94,6 +115,48 @@ BatchNorm2dLike = (nn.BatchNorm2d, layer.BatchNorm2d)
 
 
 class TensorShardMemoryModule(base.MemoryModule):
+    r"""
+    **API Language:**
+    :ref:`中文 <TensorShardMemoryModule-cn>` | :ref:`English <TensorShardMemoryModule-en>`
+
+    ----
+
+    .. _TensorShardMemoryModule-cn:
+    * **中文**
+
+    * **中文**
+
+    支持张量并行分片的内存模块基类。
+
+    ----
+
+    .. _TensorShardMemoryModule-en:
+    * **English**
+
+    * **English**
+    Base memory module supporting tensor parallel sharding.
+
+    :param source: 源 MemoryModule
+    :type source: base.MemoryModule
+    :param shard_dim: 切分维度
+    :type shard_dim: int
+    :param logical_dim_size: 逻辑维度大小（每一维的大小），用于验证分片正确性
+    :type logical_dim_size: Optional[int]
+    :param process_group: 分布式进程组
+    :type process_group: Any
+
+    :param source: Source MemoryModule
+    :type source: base.MemoryModule
+    :param shard_dim: Dimension along which to shard
+    :type shard_dim: int
+    :param logical_dim_size: Logical dimension size, used to validate sharding
+    :type logical_dim_size: Optional[int]
+    :param process_group: Distributed process group
+    :type process_group: Any
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         source: base.MemoryModule,
@@ -159,6 +222,28 @@ class TensorShardMemoryModule(base.MemoryModule):
 
 @dataclass
 class SNNDistributedAnalysis:
+    r"""
+    **API Language:**
+    :ref:`中文 <SNNDistributedAnalysis-cn>` | :ref:`English <SNNDistributedAnalysis-en>`
+
+    ----
+
+    .. _SNNDistributedAnalysis-cn:
+    * **中文**
+
+    * **中文**
+
+    SNN 分布式训练分析器。分析模型结构并推荐并行策略。
+
+    ----
+
+    .. _SNNDistributedAnalysis-en:
+    * **English**
+
+    * **English**
+
+    SNN distributed training analyzer.
+    """
     memory_module_names: Tuple[str, ...]
     tensor_parallel_candidate_names: Tuple[str, ...]
     unsupported_tensor_parallel_names: Tuple[str, ...]
@@ -167,6 +252,28 @@ class SNNDistributedAnalysis:
 
 @dataclass
 class SNNDistributedConfig:
+    r"""
+    **API Language:**
+    :ref:`中文 <SNNDistributedConfig-cn>` | :ref:`English <SNNDistributedConfig-en>`
+
+    ----
+
+    .. _SNNDistributedConfig-cn:
+    * **中文**
+
+    * **中文**
+
+    SNN 分布式训练配置。包含数据/张量/流水线并行设置。
+
+    ----
+
+    .. _SNNDistributedConfig-en:
+    * **English**
+
+    * **English**
+
+    SNN distributed training configuration.
+    """
     device_type: str = "cuda"
     mesh_shape: Optional[Tuple[int, ...]] = None
     device_mesh: Optional["DeviceMesh"] = None
@@ -196,6 +303,28 @@ class SNNDistributedConfig:
 
 @dataclass
 class SNNPipelineRuntime:
+    r"""
+    **API Language:**
+    :ref:`中文 <SNNPipelineRuntime-cn>` | :ref:`English <SNNPipelineRuntime-en>`
+
+    ----
+
+    .. _SNNPipelineRuntime-cn:
+    * **中文**
+
+    * **中文**
+
+    SNN 流水线并行运行时。管理多 GPU 流水线调度与执行。
+
+    ----
+
+    .. _SNNPipelineRuntime-en:
+    * **English**
+
+    * **English**
+
+    SNN pipeline parallel runtime.
+    """
     schedule: Any
     stage_module: nn.Module
     stage_modules: Tuple[nn.Module, ...]
@@ -233,6 +362,28 @@ SNN_DISTRIBUTED_PREFERENCES = ("speed", "memory", "capacity")
 
 @dataclass(frozen=True)
 class SNNDistributedRecommendation:
+    r"""
+    **API Language:**
+    :ref:`中文 <SNNDistributedRecommendation-cn>` | :ref:`English <SNNDistributedRecommendation-en>`
+
+    ----
+
+    .. _SNNDistributedRecommendation-cn:
+    * **中文**
+
+    * **中文**
+
+    SNN 分布式策略推荐。基于分析结果推荐最优并行配置。
+
+    ----
+
+    .. _SNNDistributedRecommendation-en:
+    * **English**
+
+    * **English**
+
+    SNN distributed strategy recommendation.
+    """
     prefer: str
     model: str
     world_size: int
@@ -613,6 +764,26 @@ def parse_pipeline_layout(
     num_logical_stages: int,
     total_units: int,
 ) -> Optional[Tuple[int, ...]]:
+    r"""
+    **API Language:**
+    :ref:`中文 <parse_pipeline_layout-cn>` | :ref:`English <parse_pipeline_layout-en>`
+
+    ----
+
+    .. _parse_pipeline_layout-cn:
+
+    * **中文**
+
+    解析流水线并行布局配置。
+
+    ----
+
+    .. _parse_pipeline_layout-en:
+
+    * **English**
+
+    Parse pipeline parallel layout configuration.
+    """
     if layout is None:
         return None
     if isinstance(layout, str):
@@ -642,6 +813,26 @@ def resolve_pipeline_schedule_kind(
     virtual_pipeline_size: int,
     delayed_wgrad: bool,
 ) -> str:
+    r"""
+    **API Language:**
+    :ref:`中文 <resolve_pipeline_schedule_kind-cn>` | :ref:`English <resolve_pipeline_schedule_kind-en>`
+
+    ----
+
+    .. _resolve_pipeline_schedule_kind-cn:
+
+    * **中文**
+
+    解析流水线调度类型。
+
+    ----
+
+    .. _resolve_pipeline_schedule_kind-en:
+
+    * **English**
+
+    Resolve pipeline schedule kind.
+    """
     normalized = schedule_kind.lower()
     if normalized not in ("auto", "gpipe", "1f1b", "interleaved", "zero_bubble"):
         raise ValueError(
@@ -671,6 +862,28 @@ def resolve_pipeline_schedule_kind(
 
 
 def recommended_pipeline_microbatches(batch_size: int, num_stages: int) -> int:
+    r"""
+    **API Language:**
+    :ref:`中文 <recommended_pipeline_microbatches-cn>` | :ref:`English <recommended_pipeline_microbatches-en>`
+
+    ----
+
+    .. _recommended_pipeline_microbatches-cn:
+    * **中文**
+
+    * **中文**
+
+    推荐流水线并行的微批次数量。
+
+    ----
+
+    .. _recommended_pipeline_microbatches-en:
+    * **English**
+
+    * **English**
+
+    Recommend microbatches for pipeline parallelism.
+    """
     if batch_size <= 0:
         raise ValueError(f"batch_size must be positive, but got {batch_size}.")
     if num_stages <= 0:
@@ -705,6 +918,26 @@ def recommend_snn_distributed_strategy(
     fsdp2_available: Optional[bool] = None,
     tensor_parallel_available: Optional[bool] = None,
 ) -> SNNDistributedRecommendation:
+    r"""
+    **API Language:**
+    :ref:`中文 <recommend_snn_distributed_strategy-cn>` | :ref:`English <recommend_snn_distributed_strategy-en>`
+
+    ----
+
+    .. _recommend_snn_distributed_strategy-cn:
+
+    * **中文**
+
+    推荐 SNN 分布式训练策略。
+
+    ----
+
+    .. _recommend_snn_distributed_strategy-en:
+
+    * **English**
+
+    Recommend SNN distributed strategy.
+    """
     prefer = prefer.lower()
     if prefer not in SNN_DISTRIBUTED_PREFERENCES:
         raise ValueError(
@@ -1404,6 +1637,26 @@ def analyze_snn_distributed_capability(
     module: nn.Module,
     tensor_parallel_roots: Optional[Sequence[str]] = None,
 ) -> SNNDistributedAnalysis:
+    r"""
+    **API Language:**
+    :ref:`中文 <analyze_snn_distributed_capability-cn>` | :ref:`English <analyze_snn_distributed_capability-en>`
+
+    ----
+
+    .. _analyze_snn_distributed_capability-cn:
+
+    * **中文**
+
+    分析 SNN 模型的分布式训练能力。
+
+    ----
+
+    .. _analyze_snn_distributed_capability-en:
+
+    * **English**
+
+    Analyze SNN distributed capability.
+    """
     memory_modules: List[str] = []
     tensor_parallel_candidates: List[str] = []
     unsupported_tp: List[str] = []
@@ -1450,6 +1703,26 @@ def auto_build_tensor_parallel_plan(
     module: nn.Module,
     tensor_parallel_roots: Optional[Sequence[str]] = None,
 ) -> Dict[str, "ParallelStyle"]:
+    r"""
+    **API Language:**
+    :ref:`中文 <auto_build_tensor_parallel_plan-cn>` | :ref:`English <auto_build_tensor_parallel_plan-en>`
+
+    ----
+
+    .. _auto_build_tensor_parallel_plan-cn:
+
+    * **中文**
+
+    自动构建张量模型并行计划。
+
+    ----
+
+    .. _auto_build_tensor_parallel_plan-en:
+
+    * **English**
+
+    Auto-build tensor parallel plan.
+    """
     analysis = analyze_snn_distributed_capability(module, tensor_parallel_roots)
     candidate_names = list(analysis.tensor_parallel_candidate_names)
 
@@ -1514,6 +1787,26 @@ def parallelize_snn_module(
     tensor_parallel_plan: Mapping[str, Union[str, "ParallelStyle"]],
     tp_mesh_dim: int = 0,
 ) -> nn.Module:
+    r"""
+    **API Language:**
+    :ref:`中文 <parallelize_snn_module-cn>` | :ref:`English <parallelize_snn_module-en>`
+
+    ----
+
+    .. _parallelize_snn_module-cn:
+
+    * **中文**
+
+    将 SNN 模块并行化。
+
+    ----
+
+    .. _parallelize_snn_module-en:
+
+    * **English**
+
+    Parallelize an SNN module.
+    """
     if not TENSOR_PARALLEL_AVAILABLE:
         raise RuntimeError(
             "torch.distributed.tensor.parallel is unavailable in the current PyTorch build."
@@ -1839,6 +2132,44 @@ def _shard_range(total: int, rank: int, world_size: int) -> Tuple[int, int]:
 
 
 class ChannelShardConv2d(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <ChannelShardConv2d-cn>` | :ref:`English <ChannelShardConv2d-en>`
+
+    ----
+
+    .. _ChannelShardConv2d-cn:
+    * **中文**
+
+    * **中文**
+
+    支持通道分片的二维卷积层。
+
+    ----
+
+    .. _ChannelShardConv2d-en:
+    * **English**
+
+    * **English**
+
+    2D conv layer with channel sharding support.
+
+    :param source: 源 Conv2d 模块
+    :type source: nn.Module
+    :param process_group: 分布式进程组
+    :type process_group: Any
+    :param mode: 分片模式
+    :type mode: str
+
+    :param source: Source Conv2d module
+    :type source: nn.Module
+    :param process_group: Distributed process group
+    :type process_group: Any
+    :param mode: Sharding mode
+    :type mode: str
+    :return: None
+    :rtype: None
+    """
     def __init__(self, source: nn.Module, process_group, mode: str):
         super().__init__()
         if source.groups != 1:
@@ -1939,6 +2270,44 @@ class ChannelShardConv2d(nn.Module):
 
 
 class ChannelShardConv1d(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <ChannelShardConv1d-cn>` | :ref:`English <ChannelShardConv1d-en>`
+
+    ----
+
+    .. _ChannelShardConv1d-cn:
+    * **中文**
+
+    * **中文**
+
+    支持通道分片的一维卷积层。
+
+    ----
+
+    .. _ChannelShardConv1d-en:
+    * **English**
+
+    * **English**
+
+    1D conv layer with channel sharding support.
+
+    :param source: 源 Conv1d 模块
+    :type source: nn.Module
+    :param process_group: 分布式进程组
+    :type process_group: Any
+    :param mode: 分片模式
+    :type mode: str
+
+    :param source: Source Conv1d module
+    :type source: nn.Module
+    :param process_group: Distributed process group
+    :type process_group: Any
+    :param mode: Sharding mode
+    :type mode: str
+    :return: None
+    :rtype: None
+    """
     def __init__(self, source: nn.Module, process_group, mode: str):
         super().__init__()
         if source.groups != 1:
@@ -2021,6 +2390,40 @@ class ChannelShardConv1d(nn.Module):
 
 
 class ChannelShardBatchNorm2d(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <ChannelShardBatchNorm2d-cn>` | :ref:`English <ChannelShardBatchNorm2d-en>`
+
+    ----
+
+    .. _ChannelShardBatchNorm2d-cn:
+    * **中文**
+
+    * **中文**
+
+    支持通道分片的二维批归一化层。
+
+    ----
+
+    .. _ChannelShardBatchNorm2d-en:
+    * **English**
+
+    * **English**
+
+    2D batch norm layer with channel sharding.
+
+    :param source: 源 BatchNorm2d 模块
+    :type source: nn.Module
+    :param process_group: 分布式进程组
+    :type process_group: Any
+
+    :param source: Source BatchNorm2d module
+    :type source: nn.Module
+    :param process_group: Distributed process group
+    :type process_group: Any
+    :return: None
+    :rtype: None
+    """
     def __init__(self, source: nn.Module, process_group):
         super().__init__()
         self.process_group = process_group
@@ -2108,6 +2511,40 @@ class ChannelShardBatchNorm2d(nn.Module):
 
 
 class ChannelShardBatchNorm1d(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <ChannelShardBatchNorm1d-cn>` | :ref:`English <ChannelShardBatchNorm1d-en>`
+
+    ----
+
+    .. _ChannelShardBatchNorm1d-cn:
+    * **中文**
+
+    * **中文**
+
+    支持通道分片的一维批归一化层。
+
+    ----
+
+    .. _ChannelShardBatchNorm1d-en:
+    * **English**
+
+    * **English**
+
+    1D batch norm layer with channel sharding.
+
+    :param source: 源 BatchNorm1d 模块
+    :type source: nn.Module
+    :param process_group: 分布式进程组
+    :type process_group: Any
+
+    :param source: Source BatchNorm1d module
+    :type source: nn.Module
+    :param process_group: Distributed process group
+    :type process_group: Any
+    :return: None
+    :rtype: None
+    """
     def __init__(self, source: nn.Module, process_group):
         super().__init__()
         self.process_group = process_group
@@ -2751,6 +3188,26 @@ def configure_snn_distributed(
     module: nn.Module,
     config: SNNDistributedConfig,
 ) -> Tuple[nn.Module, "DeviceMesh", SNNDistributedAnalysis]:
+    r"""
+    **API Language:**
+    :ref:`中文 <configure_snn_distributed-cn>` | :ref:`English <configure_snn_distributed-en>`
+
+    ----
+
+    .. _configure_snn_distributed-cn:
+
+    * **中文**
+
+    配置 SNN 分布式训练。
+
+    ----
+
+    .. _configure_snn_distributed-en:
+
+    * **English**
+
+    Configure SNN distributed training.
+    """
     if config.device_mesh is None:
         mesh_dim_names = None
         if config.mesh_shape is not None and len(config.mesh_shape) > 1:

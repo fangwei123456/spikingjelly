@@ -105,6 +105,8 @@ class MPBNBaseNode(BaseNode):
         :type bn_min_momentum: float
 
         Other parameters are the same as :class:`BaseNode`.
+        :return: None
+        :rtype: None
         """
         super().__init__(
             v_threshold,
@@ -275,6 +277,36 @@ class MPBNBaseNode(BaseNode):
         return spike
 
     def single_step_forward(self, x: torch.Tensor):
+        """
+        **API Language:**
+        :ref:`中文 <MPBNBaseNode.single_step_forward-cn>` | :ref:`English <MPBNBaseNode.single_step_forward-en>`
+
+        ----
+
+        .. _MPBNBaseNode.single_step_forward-cn:
+        * **中文**
+
+        * **中文**
+
+        :param x: 当前时间步输入张量（2D 或 4D）
+        :type x: torch.Tensor
+        :return: 当前时间步输出脉冲
+        :rtype: torch.Tensor
+        :raises NotImplementedError: 当输入维度不是 2D 或 4D 时，内部放电逻辑会抛出异常
+
+        ----
+
+        .. _MPBNBaseNode.single_step_forward-en:
+        * **English**
+
+        * **English**
+
+        :param x: Input tensor at current time step (2D or 4D)
+        :type x: torch.Tensor
+        :return: Output spike at current time step
+        :rtype: torch.Tensor
+        :raises NotImplementedError: Raised by internal firing logic when input rank is neither 2D nor 4D
+        """
         self.init_vth(x)
         self.v_float_to_tensor(x)
         self.neuronal_charge(x)
@@ -377,6 +409,8 @@ class MPBNLIFNode(MPBNBaseNode):
         :type decay_input: bool
 
         Other parameters are the same as :class:`MPBNBaseNode`.
+        :return: None
+        :rtype: None
         """
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(

@@ -63,6 +63,7 @@ class BaseProfiler(abc.ABC):
         ----
 
         .. _BaseProfiler.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -74,6 +75,7 @@ class BaseProfiler(abc.ABC):
         ----
 
         .. _BaseProfiler.__init__-en:
+        * **English**
 
         * **English**
 
@@ -82,7 +84,10 @@ class BaseProfiler(abc.ABC):
 
         :param models: a tuple of target neural network modules
         :type models: Tuple[nn.Module]
-        """
+        
+        :return: None
+        :rtype: None
+"""
         if isinstance(models, nn.Module):
             models = (models,)
         elif not isinstance(models, tuple):
@@ -197,7 +202,10 @@ class CategoryMemoryProfiler(BaseProfiler):
                 loss.backward()
                 results = prof.export()
                 optimizer.step()
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(models)
 
         if isinstance(optimizers, optim.Optimizer):
@@ -415,7 +423,10 @@ class HookProfiler(BaseProfiler):
 
         :param log_path: path to the log text file
         :type log_path: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(models)
 
         if model_names is None:
@@ -604,7 +615,10 @@ class LayerWiseMemoryProfiler(HookProfiler):
                 loss.backward()
 
             results = prof.export()
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.device = device
 
@@ -924,7 +938,10 @@ class LayerWiseFPCUDATimeProfiler(HookProfiler):
                         x = torch.randn(32, 10)
                         _ = net(x)
             results = prof.export()
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.warmup = warmup
         self.result = defaultdict(list)
@@ -1127,7 +1144,10 @@ class LayerWiseBPCUDATimeProfiler(HookProfiler):
                     loss.backward()
                     functional.reset_net(net)
             results = prof.export()
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(models, model_names, search_mode, instances, log_path)
         self.warmup = warmup
         self.result = defaultdict(list)

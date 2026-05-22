@@ -8,6 +8,18 @@ __all__ = ["MemoryInstanceSpec", "MemoryHierarchyConfig"]
 
 @dataclass(frozen=True)
 class MemoryInstanceSpec:
+    """Specification for a single memory instance in the memory hierarchy.
+
+    Describes the properties of one level in the memory hierarchy, including
+    capacity, bit width, and access energy cost.
+
+    :param capacity: Capacity of the memory level (in elements or bytes)
+    :type capacity: int
+    :param data_bit: Bit width of each data element
+    :type data_bit: int
+    :param memory_cost_pj: Energy cost per access in picojoules
+    :type memory_cost_pj: float
+    """
     name: str
     size_bits: int
     datawidth: int

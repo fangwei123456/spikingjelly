@@ -19,6 +19,7 @@ def heaviside(x: torch.Tensor):
     ----
 
     .. _heaviside.__init__-cn:
+    * **中文**
 
     * **中文**
 
@@ -34,11 +35,14 @@ def heaviside(x: torch.Tensor):
     阅读 `HeavisideStepFunction <https://mathworld.wolfram.com/HeavisideStepFunction.html>`_ 以获得更多信息。
 
     :param x: 输入tensor
+    :type x: torch.Tensor
     :return: 输出tensor
+    :rtype: torch.Tensor
 
     ----
 
     .. _heaviside.__init__-en:
+    * **English**
 
     * **English**
 
@@ -54,7 +58,9 @@ def heaviside(x: torch.Tensor):
     For more information, see `HeavisideStepFunction <https://mathworld.wolfram.com/HeavisideStepFunction.html>`_.
 
     :param x: the input tensor
+    :type x: torch.Tensor
     :return: the output tensor
+    :rtype: torch.Tensor
     """
     return (x >= 0).to(x)
 
@@ -67,6 +73,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     ----
 
     .. _check_manual_grad.__init__-cn:
+    * **中文**
 
     * **中文**
 
@@ -84,6 +91,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     ----
 
     .. _check_manual_grad.__init__-en:
+    * **English**
 
     * **English**
 
@@ -111,6 +119,8 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
         surrogate.check_manual_grad(
             surrogate.S2NN.primitive_function, s2nn_apply, alpha=4.0, beta=1.0
         )
+    :return: 无返回值，直接打印对比结果
+    :rtype: None
     """
     x = torch.arange(-2, 2, 32 / 8192)
     # x = torch.as_tensor([-1., 0., 1.])
@@ -131,6 +141,73 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
 
 
 def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
+    r"""
+    **API Language:**
+    :ref:`中文 <check_cuda_grad-cn>` | :ref:`English <check_cuda_grad-en>`
+
+    ----
+
+    .. _check_cuda_grad-cn:
+    * **中文**
+
+    * **中文**
+
+    检查CUDA（CuPy）后端的梯度是否正确。将CuPy后端的梯度与PyTorch后端的梯度进行比较。
+
+    :param neu: 神经元类
+    :type neu: type
+    :param surrogate_function: 替代函数类（未实例化）
+    :type surrogate_function: type
+    :param device: 设备
+    :type device: str or torch.device
+    :param args: 传递给替代函数的位置参数
+    :type args: tuple
+    :param kwargs: 传递给替代函数的关键字参数
+    :type kwargs: dict
+    :return: 无返回值，直接打印对比结果
+    :rtype: None
+
+    .. admonition:: Example
+        :class: tip
+
+        .. code-block:: python
+
+            check_cuda_grad(
+                neuron.IFNode, surrogate.S2NN, device="cuda:1", alpha=4.0, beta=1.0
+            )
+
+    ----
+
+    .. _check_cuda_grad-en:
+    * **English**
+
+    * **English**
+
+    Check whether the CUDA (CuPy) backend gradient is correct, by comparing the gradient of CuPy backend
+    and the PyTorch backend.
+
+    :param neu: neuron class
+    :type neu: type
+    :param surrogate_function: surrogate function class (not instantiated)
+    :type surrogate_function: type
+    :param device: device
+    :type device: str or torch.device
+    :param args: positional arguments to pass to the surrogate function
+    :type args: tuple
+    :param kwargs: keyword arguments to pass to the surrogate function
+    :type kwargs: dict
+    :return: no return value, directly prints comparison results
+    :rtype: None
+
+    .. admonition:: Example
+        :class: tip
+
+        .. code-block:: python
+
+            check_cuda_grad(
+                neuron.IFNode, surrogate.S2NN, device="cuda:1", alpha=4.0, beta=1.0
+            )
+    """
     # check_cuda_grad(neuron.IFNode, surrogate.S2NN, device='cuda:1', alpha=4., beta=1.)
     for dtype in [torch.float, torch.half]:
         print(dtype)
@@ -158,6 +235,39 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
 
 
 def plot_surrogate_function(surrogate_function):
+    r"""
+    **API Language:**
+    :ref:`中文 <plot_surrogate_function-cn>` | :ref:`English <plot_surrogate_function-en>`
+
+    ----
+
+    .. _plot_surrogate_function-cn:
+    * **中文**
+
+    * **中文**
+
+    绘制替代函数的原函数和梯度图像。同时绘制Heaviside阶跃函数作为参考。
+
+    :param surrogate_function: 替代函数模块的实例
+    :type surrogate_function: SurrogateFunctionBase
+    :return: 无返回值，直接保存并显示图像
+    :rtype: None
+
+    ----
+
+    .. _plot_surrogate_function-en:
+    * **English**
+
+    * **English**
+
+    Plot the primitive function and gradient of the surrogate function. Also plots the Heaviside step function
+    as a reference.
+
+    :param surrogate_function: an instance of surrogate function module
+    :type surrogate_function: SurrogateFunctionBase
+    :return: no return value, directly saves and shows the figure
+    :rtype: None
+    """
     import matplotlib.pyplot as plt
     import scienceplots  # noqa
 
@@ -191,6 +301,44 @@ def plot_surrogate_function(surrogate_function):
 
 
 class SurrogateFunctionBase(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <SurrogateFunctionBase-cn>` | :ref:`English <SurrogateFunctionBase-en>`
+
+    ----
+
+    .. _SurrogateFunctionBase-cn:
+    * **中文**
+
+    * **中文**
+
+    所有替代函数模块的基类。提供脉冲发放模式（spiking mode）和常规模式之间的切换，
+    以及CUDA代码生成的基础框架。
+
+    :param spiking: 是否输出脉冲。默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。
+        若为 ``False`` 则不使用替代梯度，前向传播时使用原函数。
+    :type spiking: bool
+    :return: ``SurrogateFunctionBase`` 实例
+    :rtype: SurrogateFunctionBase
+
+    ----
+
+    .. _SurrogateFunctionBase-en:
+    * **English**
+
+    * **English**
+
+    Base class for all surrogate function modules. Provides switching between spiking mode and
+    regular mode, as well as the basic framework for CUDA code generation.
+
+    :param spiking: whether to output spikes. Default is ``True`` which means using ``heaviside`` in forward
+        propagation and using surrogate gradient in backward propagation. If ``False``, no surrogate gradient
+        is used, and the primitive function is used in forward propagation.
+    :type spiking: bool
+    :return: a ``SurrogateFunctionBase`` instance
+    :rtype: SurrogateFunctionBase
+    """
+
     def __init__(self, spiking=True, **kwargs):
         super().__init__()
         self.spiking = spiking
@@ -241,6 +389,44 @@ class SurrogateFunctionBase(nn.Module):
 def piecewise_quadratic_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <piecewise_quadratic_backward-cn>` | :ref:`English <piecewise_quadratic_backward-en>`
+
+    ----
+
+    .. _piecewise_quadratic_backward-cn:
+
+    * **中文**
+
+    PiecewiseQuadratic 替代函数的梯度计算。 :math:`g'(x) = \begin{cases} 0, & |x| > \frac{1}{\alpha} \\\\ -\alpha^2|x|+\alpha, & |x| \leq \frac{1}{\alpha} \\end{cases}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _piecewise_quadratic_backward-en:
+
+    * **English**
+
+    Gradient computation for the PiecewiseQuadratic surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     x_abs = x.abs()
     mask = x_abs > (1 / alpha)
     grad_x = (grad_output * (-(alpha**2) * x_abs + alpha)).masked_fill_(mask, 0)
@@ -248,6 +434,36 @@ def piecewise_quadratic_backward(
 
 
 class piecewise_quadratic(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <piecewise_quadratic-cn>` | :ref:`English <piecewise_quadratic-en>`
+
+    ----
+
+    .. _piecewise_quadratic-cn:
+    * **中文**
+
+    * **中文**
+
+    PiecewiseQuadratic 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 piecewise_quadratic_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _piecewise_quadratic-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the PiecewiseQuadratic surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by piecewise_quadratic_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -274,6 +490,7 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseQuadratic.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -303,13 +520,16 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         该函数在文章 [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。
             若为 ``False`` 则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _PiecewiseQuadratic.__init__-en:
+        * **English**
 
         * **English**
 
@@ -338,10 +558,14 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         The function is used in [#esser2016convolutional]_ [#STBP]_ [#LSNN]_ [#neftci2019surrogate]_ [#panda2020toward]_.
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: ``heaviside(x)`` 或原函数的结果，形状与 ``x`` 相同
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -364,10 +588,80 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
 
 
 def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <piecewise_exp_backward-cn>` | :ref:`English <piecewise_exp_backward-en>`
+
+    ----
+
+    .. _piecewise_exp_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    PiecewiseExp 替代函数的梯度计算。 :math:`g'(x) = \frac{\alpha}{2}e^{-\alpha |x|}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _piecewise_exp_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the PiecewiseExp surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     return alpha / 2 * (-alpha * x.abs()).exp_() * grad_output, None
 
 
 class piecewise_exp(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <piecewise_exp-cn>` | :ref:`English <piecewise_exp-en>`
+
+    ----
+
+    .. _piecewise_exp-cn:
+    * **中文**
+
+    * **中文**
+
+    PiecewiseExp 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 piecewise_exp_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _piecewise_exp-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the PiecewiseExp surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by piecewise_exp_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -392,6 +686,7 @@ class PiecewiseExp(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseExp.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -415,13 +710,16 @@ class PiecewiseExp(SurrogateFunctionBase):
         该函数在文章 [#SLAYER]_ [#neftci2019surrogate]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _PiecewiseExp.__init__-en:
+        * **English**
 
         * **English**
 
@@ -445,10 +743,14 @@ class PiecewiseExp(SurrogateFunctionBase):
         The function is used in [#SLAYER]_ [#neftci2019surrogate]_ .
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: ``heaviside(x)`` 或原函数的结果，形状与 ``x`` 相同
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -469,11 +771,81 @@ class PiecewiseExp(SurrogateFunctionBase):
 
 
 def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <sigmoid_backward-cn>` | :ref:`English <sigmoid_backward-en>`
+
+    ----
+
+    .. _sigmoid_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    Sigmoid 替代函数的梯度计算。 :math:`g'(x) = \alpha \cdot (1 - \mathrm{sigmoid}(\alpha x)) \cdot \mathrm{sigmoid}(\alpha x)`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _sigmoid_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the Sigmoid surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     sgax = (x * alpha).sigmoid_()
     return grad_output * (1.0 - sgax) * sgax * alpha, None
 
 
 class sigmoid(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <sigmoid-cn>` | :ref:`English <sigmoid-en>`
+
+    ----
+
+    .. _sigmoid-cn:
+    * **中文**
+
+    * **中文**
+
+    Sigmoid 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 sigmoid_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _sigmoid-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the Sigmoid surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by sigmoid_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -498,6 +870,7 @@ class Sigmoid(SurrogateFunctionBase):
         ----
 
         .. _Sigmoid.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -517,13 +890,16 @@ class Sigmoid(SurrogateFunctionBase):
         该函数在文章 [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _Sigmoid.__init__-en:
+        * **English**
 
         * **English**
 
@@ -543,10 +919,14 @@ class Sigmoid(SurrogateFunctionBase):
         The function is used in  [#STBP]_ [#roy2019scaling]_ [#SNNLSTM]_ [#SNU]_ .
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: ``heaviside(x)`` 或原函数的结果，形状与 ``x`` 相同
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -592,10 +972,78 @@ class Sigmoid(SurrogateFunctionBase):
 
 
 def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <soft_sign_backward-cn>` | :ref:`English <soft_sign_backward-en>`
+
+    ----
+
+    .. _soft_sign_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    Soft Sign 替代函数的梯度计算。 :math:`\frac{\partial \text{SoftSign}}{\partial x} = \frac{1}{2\alpha (1 + |x/\alpha|)^2}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _soft_sign_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the Soft Sign surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     return grad_output / (2 * alpha * (1 / alpha + x.abs()).pow_(2)), None
 
 
 class soft_sign(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <soft_sign-cn>` | :ref:`English <soft_sign-en>`
+
+    ----
+
+    .. _soft_sign-cn:
+
+    * **中文**
+
+    SoftSign 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 soft_sign_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _soft_sign-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the SoftSign surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by soft_sign_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -620,6 +1068,7 @@ class SoftSign(SurrogateFunctionBase):
         ----
 
         .. _SoftSign.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -640,13 +1089,16 @@ class SoftSign(SurrogateFunctionBase):
         该函数在文章 [#SuperSpike]_ [#neftci2019surrogate]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _SoftSign.__init__-en:
+        * **English**
 
         * **English**
 
@@ -666,10 +1118,14 @@ class SoftSign(SurrogateFunctionBase):
         The function is used in [#SuperSpike]_ [#neftci2019surrogate]_.
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: ``heaviside(x)`` 或原函数的结果，形状与 ``x`` 相同
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
         assert alpha > 0, "alpha must be lager than 0"
@@ -688,10 +1144,78 @@ class SoftSign(SurrogateFunctionBase):
 
 
 def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <super_spike_backward-cn>` | :ref:`English <super_spike_backward-en>`
+
+    ----
+
+    .. _super_spike_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    SuperSpike 替代函数的梯度计算。 :math:`g'(x) = \frac{\alpha}{(1 + |x|)^{2}}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _super_spike_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the SuperSpike surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     return alpha * grad_output / torch.pow(torch.abs(x) + 1.0, 2), None
 
 
 class super_spike(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <super_spike-cn>` | :ref:`English <super_spike-en>`
+
+    ----
+
+    .. _super_spike-cn:
+
+    * **中文**
+
+    SuperSpike 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 super_spike_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _super_spike-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the SuperSpike surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by super_spike_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -716,6 +1240,7 @@ class SuperSpike(SurrogateFunctionBase):
         ----
 
         .. _SuperSpike.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -725,13 +1250,16 @@ class SuperSpike(SurrogateFunctionBase):
             g'(x) = \frac{\alpha}{(1 + (|x|))^{2}}
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _SuperSpike.__init__-en:
+        * **English**
 
         * **English**
 
@@ -741,10 +1269,14 @@ class SuperSpike(SurrogateFunctionBase):
             g'(x) = \frac{\alpha}{(1 + (|x|))^{2}}
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: ``heaviside(x)`` 或原函数的结果，形状与 ``x`` 相同
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -768,12 +1300,82 @@ class SuperSpike(SurrogateFunctionBase):
 
 
 def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <atan_backward-cn>` | :ref:`English <atan_backward-en>`
+
+    ----
+
+    .. _atan_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    ATan 替代函数的梯度计算。 :math:`g'(x) = \frac{\alpha}{2(1 + (\frac{\pi}{2}\alpha x)^{2})}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _atan_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the ATan surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     a = alpha / 2
     ax = math.pi * a * x
     return a / (1 + ax * ax) * grad_output, None
 
 
 class atan(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <atan-cn>` | :ref:`English <atan-en>`
+
+    ----
+
+    .. _atan-cn:
+    * **中文**
+
+    * **中文**
+
+    ATan 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 atan_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _atan-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the ATan surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by atan_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -798,6 +1400,7 @@ class ATan(SurrogateFunctionBase):
         ----
 
         .. _ATan.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -817,13 +1420,16 @@ class ATan(SurrogateFunctionBase):
         该函数在文章 [#Huh2018]_ [#huh2018gradient]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _ATan.__init__-en:
+        * **English**
 
         * **English**
 
@@ -843,10 +1449,14 @@ class ATan(SurrogateFunctionBase):
         The function is used in [#Huh2018]_ [#huh2018gradient]_.
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: ``heaviside(x)`` 或原函数的结果，形状与 ``x`` 相同
+        :rtype: torch.Tensor
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -893,10 +1503,76 @@ class ATan(SurrogateFunctionBase):
 def nonzero_sign_log_abs_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <nonzero_sign_log_abs_backward-cn>` | :ref:`English <nonzero_sign_log_abs_backward-en>`
+
+    ----
+
+    .. _nonzero_sign_log_abs_backward-cn:
+
+    * **中文**
+
+    NonzeroSignLogAbs 替代函数的梯度计算。 :math:`g'(x) = \frac{\alpha}{1 + |\alpha x|} = \frac{1}{\frac{1}{\alpha} + |x|}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _nonzero_sign_log_abs_backward-en:
+
+    * **English**
+
+    Gradient computation for the NonzeroSignLogAbs surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     return grad_output / (1 / alpha + x.abs()), None
 
 
 class nonzero_sign_log_abs(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <nonzero_sign_log_abs-cn>` | :ref:`English <nonzero_sign_log_abs-en>`
+
+    ----
+
+    .. _nonzero_sign_log_abs-cn:
+
+    * **中文**
+
+    NonzeroSignLogAbs 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 nonzero_sign_log_abs_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _nonzero_sign_log_abs-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the NonzeroSignLogAbs surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by nonzero_sign_log_abs_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -923,6 +1599,7 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         ----
 
         .. _NonzeroSignLogAbs.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -954,13 +1631,16 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#SuperSpike]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _NonzeroSignLogAbs.__init__-en:
+        * **English**
 
         * **English**
 
@@ -982,12 +1662,12 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
 
         where
 
-        .. math::
-            \mathrm{NonzeroSign}(x) =
-            \begin{cases}
-            1, & x \geq 0 \\
-            -1, & x < 0 \\
-            \end{cases}
+            .. math::
+                \mathrm{NonzeroSign}(x) =
+                \begin{cases}
+                1, & x \geq 0 \\
+                -1, & x < 0 \\
+                \end{cases}
 
         .. image:: ../_static/API/activation_based/surrogate/NonzeroSignLogAbs.*
             :width: 100%
@@ -995,10 +1675,14 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         The function is used in [#yin2017algorithm]_ [#STBP]_ [#SuperSpike]_.
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -1018,12 +1702,80 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
 
 
 def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <erf_backward-cn>` | :ref:`English <erf_backward-en>`
+
+    ----
+
+    .. _erf_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    Erf 替代函数的梯度计算。 :math:`g'(x) = \frac{\alpha}{\\sqrt{\pi}}e^{-\alpha^{2}x^{2}}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _erf_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the Erf surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control the shape of the function
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     return grad_output * (-(x * alpha).pow_(2)).exp_() * (
         alpha / math.sqrt(math.pi)
     ), None
 
 
 class erf(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <erf-cn>` | :ref:`English <erf-en>`
+
+    ----
+
+    .. _erf-cn:
+
+    * **中文**
+
+    Erf 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 erf_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _erf-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the Erf surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by erf_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -1048,6 +1800,7 @@ class Erf(SurrogateFunctionBase):
         ----
 
         .. _Erf.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -1073,13 +1826,16 @@ class Erf(SurrogateFunctionBase):
         该函数在文章 [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的平滑程度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _Erf.__init__-en:
+        * **English**
 
         * **English**
 
@@ -1105,10 +1861,14 @@ class Erf(SurrogateFunctionBase):
         The function is used in [#esser2015backpropagation]_ [#STBP]_ [#SRNN]_.
 
         :param alpha: parameter to control smoothness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -1128,6 +1888,48 @@ class Erf(SurrogateFunctionBase):
 def piecewise_leaky_relu_backward(
     grad_output: torch.Tensor, x: torch.Tensor, w: float, c: float
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <piecewise_leaky_relu_backward-cn>` | :ref:`English <piecewise_leaky_relu_backward-en>`
+
+    ----
+
+    .. _piecewise_leaky_relu_backward-cn:
+
+    * **中文**
+
+    PiecewiseLeakyReLU 替代函数的梯度计算。 :math:`g'(x) = \begin{cases} \frac{1}{2w}, & -w \leq x \leq w \\\\ c, & x < -w \text{ or } x > w \\end{cases}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param w: 控制窗口宽度的参数
+    :type w: float
+    :param c: 窗口外的梯度值
+    :type c: float
+    :return: 梯度张量, None, None
+    :rtype: tuple
+
+    ----
+
+    .. _piecewise_leaky_relu_backward-en:
+
+    * **English**
+
+    Gradient computation for the PiecewiseLeakyReLU surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param w: parameter to control the width of the window
+    :type w: float
+    :param c: gradient value outside the window
+    :type c: float
+    :return: gradient tensor, None, None
+    :rtype: tuple
+    """
     mask_width = x.abs() < w
     mask_c = mask_width.logical_not()
     return (
@@ -1138,6 +1940,34 @@ def piecewise_leaky_relu_backward(
 
 
 class piecewise_leaky_relu(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <piecewise_leaky_relu-cn>` | :ref:`English <piecewise_leaky_relu-en>`
+
+    ----
+
+    .. _piecewise_leaky_relu-cn:
+
+    * **中文**
+
+    PiecewiseLeakyReLU 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 piecewise_leaky_relu_backward 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _piecewise_leaky_relu-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the PiecewiseLeakyReLU surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by piecewise_leaky_relu_backward.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x: torch.Tensor, w=1, c=0.01):
         return heaviside(x)
@@ -1165,6 +1995,7 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseLeakyReLU.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -1193,15 +2024,19 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
         该函数在文章 [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_ 中使用。
 
         :param w: ``-w <= x <= w`` 时反向传播的梯度为 ``1 / 2w``
+        :type w: float
 
         :param c: ``x > w`` 或 ``x < -w`` 时反向传播的梯度为 ``c``
+        :type c: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _PiecewiseLeakyReLU.__init__-en:
+        * **English**
 
         * **English**
 
@@ -1230,12 +2065,17 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
         The function is used in [#yin2017algorithm]_ [#STBP]_ [#huh2018gradient]_ [#wu2019direct]_ [#STCA]_ [#roy2019scaling]_ [#LISNN]_ [#DECOLLE]_.
 
         :param w: when ``-w <= x <= w`` the gradient is ``1 / 2w``
+        :type w: float
 
         :param c: when ``x > w`` or ``x < -w`` the gradient is ``c``
+        :type c: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
         """
         assert w > 0.0
         super().__init__(spiking=spiking, w=w, c=c)
@@ -1305,6 +2145,36 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
 
 
 class squarewave_fourier_series(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <squarewave_fourier_series-cn>` | :ref:`English <squarewave_fourier_series-en>`
+
+    ----
+
+    .. _squarewave_fourier_series-cn:
+    * **中文**
+
+    * **中文**
+
+    SquarewaveFourierSeries 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用傅里叶级数近似的方法计算梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _squarewave_fourier_series-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the SquarewaveFourierSeries surrogate function. Forward uses ``heaviside``,
+    backward computes the gradient via Fourier series approximation.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x: torch.Tensor, n: int, T_period: float):
         return heaviside(x)
@@ -1332,6 +2202,67 @@ class squarewave_fourier_series(torch.autograd.Function):
 
 class SquarewaveFourierSeries(SurrogateFunctionBase):
     def __init__(self, n: int = 2, T_period: float = 8, spiking=True):
+        r"""
+        **API Language:**
+        :ref:`中文 <SquarewaveFourierSeries.__init__-cn>` | :ref:`English <SquarewaveFourierSeries.__init__-en>`
+
+        ----
+
+        .. _SquarewaveFourierSeries.__init__-cn:
+        * **中文**
+
+        * **中文**
+
+        使用傅里叶级数近似方波的脉冲发放函数。反向传播使用傅里叶级数展开计算梯度。
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \frac{1}{2} + \frac{2}{\pi} \sum_{i=1}^{n-1} \frac{\sin((2i-1)\omega x)}{2i-1}
+
+        其中 :math:`\omega = \frac{2\pi}{T}`。
+
+        .. image:: ../_static/API/activation_based/surrogate/SquarewaveFourierSeries.*
+            :width: 100%
+
+        :param n: 傅里叶级数的项数
+        :type n: int
+        :param T_period: 方波的周期
+        :type T_period: float
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
+
+        ----
+
+        .. _SquarewaveFourierSeries.__init__-en:
+        * **English**
+
+        * **English**
+
+        The square-wave Fourier series surrogate spiking function. The gradient is computed via Fourier series expansion.
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \frac{1}{2} + \frac{2}{\pi} \sum_{i=1}^{n-1} \frac{\sin((2i-1)\omega x)}{2i-1}
+
+        where :math:`\omega = \frac{2\pi}{T}`.
+
+        .. image:: ../_static/API/activation_based/surrogate/SquarewaveFourierSeries.*
+            :width: 100%
+
+        :param n: number of terms in Fourier series
+        :type n: int
+        :param T_period: period of the square wave
+        :type T_period: float
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
+        """
         assert isinstance(n, int) and T_period > 0.0
         super().__init__(spiking=spiking, n=n, T_period=T_period)
 
@@ -1351,6 +2282,34 @@ class SquarewaveFourierSeries(SurrogateFunctionBase):
 
 
 class s2nn(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <s2nn-cn>` | :ref:`English <s2nn-en>`
+
+    ----
+
+    .. _s2nn-cn:
+
+    * **中文**
+
+    S2NN 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 S2NN 自定义梯度（负半轴为 sigmoid 梯度，正半轴为 β/(x+1)）。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _s2nn-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the S2NN surrogate function. Forward uses ``heaviside``,
+    backward uses the S2NN custom gradient (sigmoid gradient for negative x, β/(x+1) for non-negative x).
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x: torch.Tensor, alpha: float, beta: float):
         return heaviside(x)
@@ -1381,6 +2340,7 @@ class S2NN(SurrogateFunctionBase):
         ----
 
         .. _S2NN.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -1404,15 +2364,19 @@ class S2NN(SurrogateFunctionBase):
             :width: 100%
 
         :param alpha: 控制 ``x < 0`` 时梯度的参数
+        :type alpha: float
 
         :param beta: 控制 ``x >= 0`` 时梯度的参数
+        :type beta: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _S2NN.__init__-en:
+        * **English**
 
         * **English**
 
@@ -1436,12 +2400,17 @@ class S2NN(SurrogateFunctionBase):
             :width: 100%
 
         :param alpha: the param that controls the gradient when ``x < 0``
+        :type alpha: float
 
         :param beta: the param that controls the gradient when ``x >= 0``
+        :type beta: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha, beta=beta)
 
@@ -1501,6 +2470,34 @@ class S2NN(SurrogateFunctionBase):
 
 
 class q_pseudo_spike(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <q_pseudo_spike-cn>` | :ref:`English <q_pseudo_spike-en>`
+
+    ----
+
+    .. _q_pseudo_spike-cn:
+
+    * **中文**
+
+    QPseudoSpike 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 :math:`q`-PseudoSpike 自定义梯度。
+
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _q_pseudo_spike-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the QPseudoSpike surrogate function. Forward uses ``heaviside``,
+    backward uses the :math:`q`-PseudoSpike custom gradient.
+
+    :return: spike tensor with the same shape as input x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -1531,6 +2528,7 @@ class QPseudoSpike(SurrogateFunctionBase):
         ----
 
         .. _QPseudoSpike.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -1554,13 +2552,16 @@ class QPseudoSpike(SurrogateFunctionBase):
             :width: 100%
 
         :param alpha: 控制反向传播时梯度函数尾部厚度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _QPseudoSpike.__init__-en:
+        * **English**
 
         * **English**
 
@@ -1584,10 +2585,14 @@ class QPseudoSpike(SurrogateFunctionBase):
             :width: 100%
 
         :param alpha: parameter to control tail fatness of gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -1638,12 +2643,94 @@ class QPseudoSpike(SurrogateFunctionBase):
 def leaky_k_relu_backward(
     grad_output: torch.Tensor, x: torch.Tensor, leak: float, k: float
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <leaky_k_relu_backward-cn>` | :ref:`English <leaky_k_relu_backward-en>`
+
+    ----
+
+    .. _leaky_k_relu_backward-cn:
+
+    * **中文**
+
+    LeakyKReLU 替代函数的梯度计算。 :math:`g'(x) = \begin{cases} k, & x \geq 0 \\\\ leak, & x < 0 \\end{cases}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param leak: ``x < 0`` 时的梯度值
+    :type leak: float
+    :param k: ``x \geq 0`` 时的梯度值
+    :type k: float
+    :return: 梯度张量, None, None
+    :rtype: tuple
+
+    ----
+
+    .. _leaky_k_relu_backward-en:
+
+    * **English**
+
+    Gradient computation for the LeakyKReLU surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param leak: gradient value when ``x < 0``
+    :type leak: float
+    :param k: gradient value when ``x \geq 0``
+    :type k: float
+    :return: gradient tensor, None, None
+    :rtype: tuple
+    """
     mask1 = (x >= 0.0).to(x)
     grad_x = mask1 * k + (1.0 - mask1) * leak
     return grad_output * grad_x, None, None
 
 
 class leaky_k_relu(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <leaky_k_relu-cn>` | :ref:`English <leaky_k_relu-en>`
+
+    ----
+
+    .. _leaky_k_relu-cn:
+
+    * **中文**
+
+    LeakyKReLU 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 leaky_k_relu_backward 自定义梯度。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param leak: ``x < 0`` 时的梯度值
+    :type leak: float
+    :param k: ``x \geq 0`` 时的梯度值
+    :type k: float
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _leaky_k_relu-en:
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the LeakyKReLU surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by leaky_k_relu_backward.
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param leak: gradient value when ``x < 0``
+    :type leak: float
+    :param k: gradient value when ``x \geq 0``
+    :type k: float
+    :return: spike tensor, same shape as x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, leak, k):
         return heaviside(x)
@@ -1669,6 +2756,7 @@ class LeakyKReLU(SurrogateFunctionBase):
         ----
 
         .. _LeakyKReLU.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -1705,9 +2793,13 @@ class LeakyKReLU(SurrogateFunctionBase):
         :param k: ``x >= 0 `` 时的梯度值
         :type k: float
 
+        :return: 无返回值
+        :rtype: None
+
         ----
 
         .. _LeakyKReLU.__init__-en:
+        * **English**
 
         * **English**
 
@@ -1744,6 +2836,9 @@ class LeakyKReLU(SurrogateFunctionBase):
 
         :param k: gradient when ``x >= 0 ``
         :type k: float
+
+        :return: No return value.
+        :rtype: None
         """
         super().__init__(spiking=spiking, leak=leak, k=k)
 
@@ -1802,11 +2897,89 @@ class LeakyKReLU(SurrogateFunctionBase):
 def fake_numerical_gradient_backward(
     grad_output: torch.Tensor, x: torch.Tensor, alpha: float
 ):
+    r"""
+    **API Language:**
+    :ref:`中文 <fake_numerical_gradient_backward-cn>` | :ref:`English <fake_numerical_gradient_backward-en>`
+
+    ----
+
+    .. _fake_numerical_gradient_backward-cn:
+
+    * **中文**
+
+    FakeNumericalGradient 替代函数的梯度计算。模拟数值梯度的行为。
+
+    :math:`g'(x) = \begin{cases} \frac{2 - sign(x)}{x}, & |\frac{2 - sign(x)}{x}| \leq \alpha \\\\ \alpha \cdot sign(\frac{2 - sign(x)}{x}), & |\frac{2 - sign(x)}{x}| > \alpha \\end{cases}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 梯度裁剪阈值
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _fake_numerical_gradient_backward-en:
+
+    * **English**
+
+    Gradient computation for the FakeNumericalGradient surrogate function, which emulates numerical gradient.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: gradient clipping threshold
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     grad_x = torch.clamp_max(((x >= 0.0) * 2.0 - 1.0) / x, alpha)
     return grad_output * grad_x, None
 
 
 class fake_numerical_gradient(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <fake_numerical_gradient-cn>` | :ref:`English <fake_numerical_gradient-en>`
+
+    ----
+
+    .. _fake_numerical_gradient-cn:
+    * **中文**
+
+    * **中文**
+
+    FakeNumericalGradient 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 fake_numerical_gradient_backward 自定义梯度。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 梯度裁剪阈值
+    :type alpha: float
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _fake_numerical_gradient-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the FakeNumericalGradient surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by fake_numerical_gradient_backward.
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: gradient clipping threshold
+    :type alpha: float
+    :return: spike tensor, same shape as x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -1826,6 +2999,46 @@ class fake_numerical_gradient(torch.autograd.Function):
 
 class FakeNumericalGradient(SurrogateFunctionBase):
     def __init__(self, alpha=0.3):
+        r"""
+        **API Language:**
+        :ref:`中文 <FakeNumericalGradient.__init__-cn>` | :ref:`English <FakeNumericalGradient.__init__-en>`
+
+        ----
+
+        .. _FakeNumericalGradient.__init__-cn:
+        * **中文**
+
+        * **中文**
+
+        模拟数值梯度的脉冲发放函数，反向传播为
+
+        .. math::
+            g'(x) = \mathrm{clip}(\frac{\mathrm{sign}(x)}{x}, \alpha)
+
+        :param alpha: 梯度裁剪阈值
+        :type alpha: float
+
+        :return: 无返回值
+        :rtype: None
+
+        ----
+
+        .. _FakeNumericalGradient.__init__-en:
+        * **English**
+
+        * **English**
+
+        The fake numerical gradient surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \mathrm{clip}(\frac{\mathrm{sign}(x)}{x}, \alpha)
+
+        :param alpha: gradient clip threshold
+        :type alpha: float
+
+        :return: No return value.
+        :rtype: None
+        """
         super().__init__(spiking=True, alpha=alpha)
 
     @staticmethod
@@ -1873,6 +3086,48 @@ class FakeNumericalGradient(SurrogateFunctionBase):
 
 
 def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <log_tailed_relu_backward-cn>` | :ref:`English <log_tailed_relu_backward-en>`
+
+    ----
+
+    .. _log_tailed_relu_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    LogTailedReLU 替代函数的梯度计算。
+
+    :math:`g'(x) = \begin{cases} \alpha, & x \leq 0 \\ 1, & 0 < x \leq 1 \\ \frac{1}{x}, & x > 1 \end{cases}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _log_tailed_relu_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the LogTailedReLU surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control function shape
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     mask_gt1 = x > 1.0
     mask_le0 = x <= 0.0
     grad_x = torch.ones_like(grad_output)
@@ -1882,6 +3137,44 @@ def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: 
 
 
 class log_tailed_relu(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <log_tailed_relu-cn>` | :ref:`English <log_tailed_relu-en>`
+
+    ----
+
+    .. _log_tailed_relu-cn:
+    * **中文**
+
+    * **中文**
+
+    LogTailedReLU 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 log_tailed_relu_backward 自定义梯度。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制函数形状的参数
+    :type alpha: float
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _log_tailed_relu-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the LogTailedReLU surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by log_tailed_relu_backward.
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control function shape
+    :type alpha: float
+    :return: spike tensor, same shape as x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -1906,6 +3199,7 @@ class LogTailedReLU(SurrogateFunctionBase):
         ----
 
         .. _LogTailedReLU.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -1935,13 +3229,16 @@ class LogTailedReLU(SurrogateFunctionBase):
         该函数在文章 [#STBP]_ [#huh2018gradient]_ [#neftci2019surrogate]_ 中使用。
 
         :param alpha: 控制反向传播时梯度的参数
+        :type alpha: float
 
         :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
             则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
 
         ----
 
         .. _LogTailedReLU.__init__-en:
+        * **English**
 
         * **English**
 
@@ -1971,10 +3268,14 @@ class LogTailedReLU(SurrogateFunctionBase):
         The function is used in [#STBP]_ [#huh2018gradient]_ [#neftci2019surrogate]_.
 
         :param alpha: parameter to control gradient
+        :type alpha: float
 
         :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
             propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
             using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+        :return: 无返回值
+        :rtype: None
         """
         super().__init__(spiking=spiking, alpha=alpha)
 
@@ -2049,6 +3350,40 @@ class LogTailedReLU(SurrogateFunctionBase):
 
 
 class deterministic_pass(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <deterministic_pass-cn>` | :ref:`English <deterministic_pass-en>`
+
+    ----
+
+    .. _deterministic_pass-cn:
+    * **中文**
+
+    * **中文**
+
+    DeterministicPass 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播直接传递梯度（直通估计器）。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _deterministic_pass-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the DeterministicPass surrogate function. Forward uses ``heaviside``,
+    backward passes the gradient through directly (straight-through estimator).
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :return: spike tensor, same shape as x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x):
         return heaviside(x)
@@ -2064,6 +3399,43 @@ class deterministic_pass(torch.autograd.Function):
 
 class DeterministicPass(SurrogateFunctionBase):
     def __init__(self, spiking=True):
+        r"""
+        **API Language:**
+        :ref:`中文 <DeterministicPass.__init__-cn>` | :ref:`English <DeterministicPass.__init__-en>`
+
+        ----
+
+        .. _DeterministicPass.__init__-cn:
+        * **中文**
+
+        * **中文**
+
+        直通估计器（Straight-Through Estimator, STE）替代函数。前向传播使用 ``heaviside`` 阶跃函数，反向传播直接传递梯度。
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。
+            若为 ``False`` 则直接返回输入。
+        :type spiking: bool
+
+        :return: 无返回值
+        :rtype: None
+
+        ----
+
+        .. _DeterministicPass.__init__-en:
+        * **English**
+
+        * **English**
+
+        The straight-through estimator (STE) surrogate function. Forward uses ``heaviside`` step function,
+        backward directly passes the gradient through.
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, returns the input directly.
+        :type spiking: bool
+
+        :return: No return value.
+        :rtype: None
+        """
         super().__init__(spiking=spiking)
 
     def forward(self, x: torch.Tensor):
@@ -2078,6 +3450,40 @@ class DeterministicPass(SurrogateFunctionBase):
 
 
 class poisson_pass(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <poisson_pass-cn>` | :ref:`English <poisson_pass-en>`
+
+    ----
+
+    .. _poisson_pass-cn:
+    * **中文**
+
+    * **中文**
+
+    PoissonPass 替代函数的 torch.autograd.Function 封装。前向传播使用伯努利采样生成脉冲（泊松发放），反向传播直接传递梯度。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _poisson_pass-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the PoissonPass surrogate function. Forward uses Bernoulli sampling
+    to generate spikes (Poisson firing), backward passes the gradient through directly.
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :return: spike tensor, same shape as x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x):
         return torch.bernoulli(x).float()
@@ -2093,6 +3499,44 @@ class poisson_pass(torch.autograd.Function):
 
 class PoissonPass(SurrogateFunctionBase):
     def __init__(self, spiking=True):
+        r"""
+        **API Language:**
+        :ref:`中文 <PoissonPass.__init__-cn>` | :ref:`English <PoissonPass.__init__-en>`
+
+        ----
+
+        .. _PoissonPass.__init__-cn:
+        * **中文**
+
+        * **中文**
+
+        泊松发放替代函数。前向传播使用伯努利采样生成随机脉冲（泊松过程），反向传播直接传递梯度。
+
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用伯努利采样生成脉冲而在反向传播使用替代梯度。
+            若为 ``False`` 则直接返回输入。
+        :type spiking: bool
+
+        :return: 无返回值
+        :rtype: None
+
+        ----
+
+        .. _PoissonPass.__init__-en:
+        * **English**
+
+        * **English**
+
+        The Poisson firing surrogate function. Forward uses Bernoulli sampling to generate stochastic spikes
+        (Poisson process), backward directly passes the gradient through.
+
+        :param spiking: whether output spikes. The default is ``True`` which means that using Bernoulli sampling
+            in forward propagation and using surrogate gradient in backward propagation. If ``False``, returns
+            the input directly.
+        :type spiking: bool
+
+        :return: No return value.
+        :rtype: None
+        """
         super().__init__(spiking=spiking)
 
     def forward(self, x: torch.Tensor):
@@ -2107,10 +3551,90 @@ class PoissonPass(SurrogateFunctionBase):
 
 
 def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <rect_backward-cn>` | :ref:`English <rect_backward-en>`
+
+    ----
+
+    .. _rect_backward-cn:
+    * **中文**
+
+    * **中文**
+
+    Rect 替代函数的梯度计算。
+
+    :math:`g'(x) = \alpha \cdot \mathbf{1}_{|x| < 0.5/\alpha}`
+
+    :param grad_output: 上游梯度
+    :type grad_output: torch.Tensor
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制矩形窗口宽度的参数
+    :type alpha: float
+    :return: 梯度张量, None
+    :rtype: tuple
+
+    ----
+
+    .. _rect_backward-en:
+    * **English**
+
+    * **English**
+
+    Gradient computation for the Rect surrogate function.
+
+    :param grad_output: gradient of the upstream
+    :type grad_output: torch.Tensor
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control rectangular window width
+    :type alpha: float
+    :return: gradient tensor, None
+    :rtype: tuple
+    """
     return alpha * (x.abs() < 0.5 / alpha).to(x) * grad_output, None
 
 
 class rect(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <rect-cn>` | :ref:`English <rect-en>`
+
+    ----
+
+    .. _rect-cn:
+    * **中文**
+
+    * **中文**
+
+    Rect 替代函数的 torch.autograd.Function 封装。前向传播使用 ``heaviside``，反向传播使用 rect_backward 自定义梯度。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param alpha: 控制矩形窗口宽度的参数
+    :type alpha: float
+    :return: 脉冲张量，与输入 x 形状相同
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _rect-en:
+    * **English**
+
+    * **English**
+
+    The torch.autograd.Function wrapper for the Rect surrogate function. Forward uses ``heaviside``,
+    backward uses the custom gradient defined by rect_backward.
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param alpha: parameter to control rectangular window width
+    :type alpha: float
+    :return: spike tensor, same shape as x
+    :rtype: torch.Tensor
+    """
+
     @staticmethod
     def forward(x, alpha):
         return heaviside(x)
@@ -2128,6 +3652,73 @@ class rect(torch.autograd.Function):
 
 class Rect(SurrogateFunctionBase):
     def __init__(self, alpha=1.0, spiking=True):
+        r"""
+        **API Language:**
+        :ref:`中文 <Rect.__init__-cn>` | :ref:`English <Rect.__init__-en>`
+
+        ----
+
+        .. _Rect.__init__-cn:
+
+        * **中文**
+
+        矩形窗替代函数。反向传播为
+
+        .. math::
+            g'(x) = \begin{cases}
+            \alpha, & |x| < \frac{0.5}{\alpha} \\\\
+            0, & |x| \geq \frac{0.5}{\alpha}
+            \\end{cases}
+
+        对应的原函数为
+
+        .. math::
+            g(x) = \mathrm{clip}(\alpha x + 0.5, 0, 1)
+
+        .. image:: ../_static/API/activation_based/surrogate/Rect.*
+            :width: 100%
+
+        :param alpha: 控制矩形窗口宽度的参数
+        :type alpha: float
+        :param spiking: 是否输出脉冲，默认为 ``True``，在前向传播时使用 ``heaviside`` 而在反向传播使用替代梯度。若为 ``False``
+            则不使用替代梯度，前向传播时，使用反向传播时的梯度替代函数对应的原函数
+        :type spiking: bool
+
+        :return: 无返回值
+        :rtype: None
+
+        ----
+
+        .. _Rect.__init__-en:
+
+        * **English**
+
+        The rectangular window surrogate spiking function. The gradient is defined by
+
+        .. math::
+            g'(x) = \begin{cases}
+            \alpha, & |x| < \frac{0.5}{\alpha} \\\\
+            0, & |x| \geq \frac{0.5}{\alpha}
+            \\end{cases}
+
+        The primitive function is defined by
+
+        .. math::
+            g(x) = \mathrm{clip}(\alpha x + 0.5, 0, 1)
+
+        .. image:: ../_static/API/activation_based/surrogate/Rect.*
+            :width: 100%
+
+        :param alpha: parameter to control the width of the rectangular window
+        :type alpha: float
+        :param spiking: whether output spikes. The default is ``True`` which means that using ``heaviside`` in forward
+            propagation and using surrogate gradient in backward propagation. If ``False``, in forward propagation,
+            using the primitive function of the surrogate gradient function used in backward propagation
+        :type spiking: bool
+
+        :return: No return value.
+        :rtype: None
+        """
         super().__init__(spiking=spiking, alpha=alpha)
 
     @staticmethod

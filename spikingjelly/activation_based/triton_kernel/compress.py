@@ -113,7 +113,16 @@ def _bit_spike_decompress_triton(
 
 @contiguous_and_device_guard
 def bit_spike_compress(s_seq):
-    # s_seq: float32, ndim=1
+    """Compress a float32 spike tensor into a compact uint8 representation using bit-packing.
+
+    Each element is rounded to 0 or 1 (by threshold 0.5) and packed as a single bit.
+    Works on both CPU and GPU (via Triton kernel on CUDA).
+
+    :param s_seq: Spike sequence tensor of ``float32``
+    :type s_seq: torch.Tensor
+    :return: Compressed uint8 tensor (8x smaller)
+    :rtype: torch.Tensor
+    """
     s_seq = s_seq.reshape(-1)
     if s_seq.device.type != "cuda":
         return _bit_spike_compress_pytorch(s_seq)
@@ -136,7 +145,15 @@ def bit_spike_compress(s_seq):
 
 @contiguous_and_device_guard
 def bit_spike_decompress(s_seq_compressed, shape):
-    # s_seq: uint8, ndim=1
+    """Decompress a uint8 bit-packed tensor back to a float32 spike tensor.
+
+    :param s_seq_compressed: Compressed uint8 tensor from :func:`bit_spike_compress`
+    :type s_seq_compressed: torch.Tensor
+    :param shape: Original shape of the uncompressed tensor
+    :type shape: tuple
+    :return: Decompressed float32 spike tensor (values are 0.0 or 1.0)
+    :rtype: torch.Tensor
+    """
     if s_seq_compressed.device.type != "cuda":
         return _bit_spike_decompress_pytorch(s_seq_compressed, shape)
     n_compressed_elements = s_seq_compressed.numel()

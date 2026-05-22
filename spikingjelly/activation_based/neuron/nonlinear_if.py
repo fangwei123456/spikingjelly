@@ -39,7 +39,7 @@ class QIFNode(BaseNode):
 
         .. _QIFNode.__init__-cn:
 
-        **中文 API**
+        * **中文**
 
         QIF（Quadratic Integrate-and-Fire）神经元的构造函数。
 
@@ -90,7 +90,7 @@ class QIFNode(BaseNode):
 
         .. _QIFNode.__init__-en:
 
-        **English API**
+        * **English**
 
         Constructor of the Quadratic Integrate-and-Fire (QIF) neuron.
 
@@ -139,7 +139,10 @@ class QIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
         assert isinstance(tau, float) and tau > 1.0
         if v_reset is not None:
             assert v_threshold > v_reset
@@ -235,7 +238,7 @@ class EIFNode(BaseNode):
 
         .. _EIFNode.__init__-cn:
 
-        **中文 API**
+        * **中文**
 
         EIF（Exponential Integrate-and-Fire）神经元的构造函数。
 
@@ -287,7 +290,7 @@ class EIFNode(BaseNode):
 
         .. _EIFNode.__init__-en:
 
-        **English API**
+        * **English**
 
         Constructor of the Exponential Integrate-and-Fire (EIF) neuron.
 
@@ -337,7 +340,10 @@ class EIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
         assert isinstance(tau, float) and tau > 1.0
         if v_reset is not None:
             assert v_threshold > v_reset

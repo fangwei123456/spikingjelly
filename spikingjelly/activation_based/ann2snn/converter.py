@@ -14,21 +14,15 @@ class Converter(nn.Module):
     def __init__(
         self, dataloader, device=None, mode="Max", momentum=0.1, fuse_flag=True
     ):
-        """
-        * :ref:`API in English <Converter.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.__init__-cn>` | :ref:`English <Converter.__init__-en>`
+
+        ----
 
         .. _Converter.__init__-cn:
 
-        :param dataloader: 数据加载器
-        :type dataloader: Dataloader
-        :param device: Device
-        :type device: str
-        :param mode: 转换模式。目前支持三种模式: 最大电流转换模式mode='max'，99.9%电流转换模式mode='99.9%'，以及缩放转换模式mode=x（0<x<=1）
-        :type mode: str, float
-        :param momentum: 动量值，用于modules.VoltageHook
-        :type momentum: float
-        :param fuse_flag: 标志位，设置为True，则进行conv与bn的融合，反之不进行。
-        :type fuse_flag: bool
+        * **中文**
 
         ``Converter`` 用于将带有ReLU的ANN转换为SNN。
 
@@ -46,20 +40,22 @@ class Converter(nn.Module):
 
             您最好在ANN模型中使用平均池化而不是最大池化。否则，可能会损害转换后的SNN模型的性能。
 
-        * :ref:`中文API <Converter.__init__-cn>`
-
-        .. _Converter.__init__-en:
-
-        :param dataloader: Dataloader for converting
+        :param dataloader: 数据加载器
         :type dataloader: Dataloader
         :param device: Device
         :type device: str
-        :param mode: Conversion mode. Now support three mode, MaxNorm(mode='max'), RobustNorm(mode='99.9%'), and scaling mode(mode=x, where 0<x<=1)
+        :param mode: 转换模式。目前支持三种模式: 最大电流转换模式mode='max'，99.9%电流转换模式mode='99.9%'，以及缩放转换模式mode=x（0<x<=1）
         :type mode: str, float
-        :param momentum: Momentum value used by modules.VoltageHook
+        :param momentum: 动量值，用于modules.VoltageHook
         :type momentum: float
-        :param fuse_flag: Bool specifying if fusion of the conv and the bn happens, by default it happens.
+        :param fuse_flag: 标志位，设置为True，则进行conv与bn的融合，反之不进行。
         :type fuse_flag: bool
+
+        ----
+
+        .. _Converter.__init__-en:
+
+        * **English**
 
         ``Converter`` is used to convert ANN with to SNN.
 
@@ -76,6 +72,17 @@ class Converter(nn.Module):
             Make sure that ``ReLU`` is module rather than function.
 
             You'd better use ``avgpool`` rather than ``maxpool`` in your ann model. If not, the performance of the converted snn model may be ruined.
+
+        :param dataloader: Dataloader for converting
+        :type dataloader: Dataloader
+        :param device: Device
+        :type device: str
+        :param mode: Conversion mode. Now support three mode, MaxNorm(mode='max'), RobustNorm(mode='99.9%'), and scaling mode(mode=x, where 0<x<=1)
+        :type mode: str, float
+        :param momentum: Momentum value used by modules.VoltageHook
+        :type momentum: float
+        :param fuse_flag: Bool specifying if fusion of the conv and the bn happens, by default it happens.
+        :type fuse_flag: bool
         """
         super().__init__()
         self.mode = mode
@@ -86,23 +93,33 @@ class Converter(nn.Module):
         self.momentum = momentum
 
     def forward(self, ann: nn.Module):
-        """
-        * :ref:`API in English <Converter.forward-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.forward-cn>` | :ref:`English <Converter.forward-en>`
+
+        ----
 
         .. _Converter.forward-cn:
+        * **中文**
+
+        * **中文**
+
         :param ann: 待转换的ann
         :type ann: torch.nn.Module
         :return: 转换得到的snn
         :rtype: torch.fx.GraphModule
 
-        * :ref:`API in Chinese <Converter.forward-cn>`
+        ----
 
         .. _Converter.forward-en:
+        * **English**
+
+        * **English**
+
         :param ann: ann to be converted
         :type ann: torch.nn.Module
         :return: snn
         :rtype: torch.fx.GraphModule
-
         """
         if self.device is None:
             self.device = next(ann.parameters()).device
@@ -143,10 +160,17 @@ class Converter(nn.Module):
     def fuse(
         fx_model: torch.fx.GraphModule, fuse_flag: bool = True
     ) -> torch.fx.GraphModule:
-        """
-        * :ref:`API in English <Converter.fuse-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.fuse-cn>` | :ref:`English <Converter.fuse-en>`
+
+        ----
 
         .. _Converter.fuse-cn:
+
+        * **中文**
+
+        ``fuse`` 用于conv与bn的融合。
 
         :param fx_model: 原模型
         :type fx_model: torch.fx.GraphModule
@@ -155,11 +179,13 @@ class Converter(nn.Module):
         :return: conv层和bn层融合后的模型.
         :rtype: torch.fx.GraphModule
 
-        ``fuse`` 用于conv与bn的融合。
-
-        * :ref:`中文API <Converter.fuse-cn>`
+        ----
 
         .. _Converter.fuse-en:
+
+        * **English**
+
+        ``fuse`` is used to fuse conv layer and bn layer.
 
         :param fx_model: Original fx_model
         :type fx_model: torch.fx.GraphModule
@@ -167,9 +193,6 @@ class Converter(nn.Module):
         :type fuse_flag: bool
         :return: fx_model whose conv layer and bn layer have been fused.
         :rtype: torch.fx.GraphModule
-
-        ``fuse`` is used to fuse conv layer and bn layer.
-
         """
 
         # return asap is no fuse is needed
@@ -241,10 +264,17 @@ class Converter(nn.Module):
     def set_voltagehook(
         fx_model: torch.fx.GraphModule, mode="Max", momentum=0.1
     ) -> torch.fx.GraphModule:
-        """
-        * :ref:`API in English <Converter.set_voltagehook-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.set_voltagehook-cn>` | :ref:`English <Converter.set_voltagehook-en>`
+
+        ----
 
         .. _Converter.set_voltagehook-cn:
+
+        * **中文**
+
+        ``set_voltagehook`` 用于给模型添加VoltageHook模块。这里实现了常见的三种模式，同上。
 
         :param fx_model: 原模型
         :type fx_model: torch.fx.GraphModule
@@ -255,11 +285,13 @@ class Converter(nn.Module):
         :return: 带有VoltageHook的模型.
         :rtype: torch.fx.GraphModule
 
-        ``set_voltagehook`` 用于给模型添加VoltageHook模块。这里实现了常见的三种模式，同上。
-
-        * :ref:`中文API <Converter.set_voltagehook-cn>`
+        ----
 
         .. _Converter.set_voltagehook-en:
+
+        * **English**
+
+        ``set_voltagehook`` is used to add VoltageHook to fx_model. Three common methods are implemented here, the same as Converter.mode.
 
         :param fx_model: Original fx_model
         :type fx_model: torch.fx.GraphModule
@@ -269,9 +301,6 @@ class Converter(nn.Module):
         :type momentum: float
         :return: fx_model with VoltageHook.
         :rtype: torch.fx.GraphModule
-
-        ``set_voltagehook`` is used to add VoltageHook to fx_model. Three common methods are implemented here, the same as Converter.mode.
-
         """
 
         hook_counts_per_prefix = {}
@@ -307,29 +336,37 @@ class Converter(nn.Module):
 
     @staticmethod
     def replace_by_ifnode(fx_model: torch.fx.GraphModule) -> torch.fx.GraphModule:
-        """
-        * :ref:`API in English <Converter.replace_by_ifnode-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <Converter.replace_by_ifnode-cn>` | :ref:`English <Converter.replace_by_ifnode-en>`
+
+        ----
 
         .. _Converter.replace_by_ifnode-cn:
+        * **中文**
+
+        * **中文**
+
+        ``replace_by_ifnode`` 用于将模型的ReLU替换为IF脉冲神经元。
 
         :param fx_model: 原模型
         :type fx_model: torch.fx.GraphModule
         :return: 将ReLU替换为IF脉冲神经元后的模型.
         :rtype: torch.fx.GraphModule
 
-        ``replace_by_ifnode`` 用于将模型的ReLU替换为IF脉冲神经元。
-
-        * :ref:`中文API <Converter.replace_by_ifnode-cn>`
+        ----
 
         .. _Converter.replace_by_ifnode-en:
+        * **English**
+
+        * **English**
+
+        ``replace_by_ifnode`` is used to replace ReLU with IF neuron.
 
         :param fx_model: Original fx_model
         :type fx_model: torch.fx.GraphModule
         :return: fx_model whose ReLU has been replaced by IF neuron.
         :rtype: torch.fx.GraphModule
-
-        ``replace_by_ifnode`` is used to replace ReLU with IF neuron.
-
         """
 
         hook_cnt = -1

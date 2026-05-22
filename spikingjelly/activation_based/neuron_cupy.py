@@ -180,7 +180,10 @@ class IFNode(nn.Module):
         :param store_v_seq: whether to store membrane voltage sequence, defaults to False.
             If ``True``, ``forward`` returns ``(spike_seq, v_seq)``; otherwise returns ``spike_seq`` only
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.v_th = v_threshold
         self.v_reset = v_reset
@@ -943,6 +946,8 @@ class LIFNode(nn.Module):
         :param store_v_seq: if ``True``, ``forward`` returns ``(spike_seq, v_seq)``;
             otherwise returns ``spike_seq`` only
         :type store_v_seq: bool
+        :return: None
+        :rtype: None
         """
         super().__init__()
         self.decay = 1.0 / tau
@@ -1809,6 +1814,8 @@ class ParametricLIFNode(nn.Module):
         :param store_v_seq: if ``True``, ``forward`` returns ``(spike_seq, v_seq)``;
             otherwise returns ``spike_seq`` only, defaults to False
         :type store_v_seq: bool
+        :return: None
+        :rtype: None
         """
         super().__init__()
         init_w = -math.log(init_tau - 1.0)
@@ -2746,7 +2753,10 @@ class ILIFNode(nn.Module):
             sequence to ``self.v_seq`` for external inspection; does not affect the
             return value of ``forward``, defaults to False
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.decay = decay
         self.min_value = float(min_value)

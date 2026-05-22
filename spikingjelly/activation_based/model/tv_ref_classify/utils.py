@@ -12,10 +12,50 @@ from typing import Optional, Sequence, Union
 import torch
 import torch.distributed as dist
 
+__all__ = [
+    "SmoothedValue",
+    "MetricLogger",
+    "mkdir",
+    "init_distributed_mode",
+]
+
+
 
 class SmoothedValue:
-    """Track a series of values and provide access to smoothed values over a
-    window or the global series average.
+    r"""
+    **API Language:**
+    :ref:`中文 <SmoothedValue-cn>` | :ref:`English <SmoothedValue-en>`
+
+    ----
+
+    .. _SmoothedValue-cn:
+    * **中文**
+
+    * **中文**
+
+    记录一组数值，并提供滑动窗口统计量以及全局平均值。
+
+    ----
+
+    .. _SmoothedValue-en:
+    * **English**
+
+    * **English**
+
+    Track a series of values and provide smoothed statistics over a window or
+    the global average.
+
+    :param window_size: 滑动窗口大小
+    :type window_size: int
+    :param fmt: 格式化字符串
+    :type fmt: str
+
+    :param window_size: Size of the smoothing window
+    :type window_size: int
+    :param fmt: Format string for output
+    :type fmt: str
+    :return: None
+    :rtype: None
     """
 
     def __init__(self, window_size=20, fmt=None):
@@ -32,8 +72,29 @@ class SmoothedValue:
         self.total += value * n
 
     def synchronize_between_processes(self):
-        """
-        Warning: does not synchronize the deque!
+        r"""
+        **API Language:**
+        :ref:`中文 <SmoothedValue.synchronize_between_processes-cn>` | :ref:`English <SmoothedValue.synchronize_between_processes-en>`
+
+        ----
+
+        .. _SmoothedValue.synchronize_between_processes-cn:
+        * **中文**
+
+        * **中文**
+
+        在多进程间同步平滑值。注意：不同步 deque 数据。
+
+        ----
+
+        .. _SmoothedValue.synchronize_between_processes-en:
+        * **English**
+
+        * **English**
+
+        Synchronize smoothed values between processes. Warning: does not synchronize the deque!
+        :return: None
+        :rtype: None
         """
         t = reduce_across_processes([self.count, self.total])
         t = t.tolist()
@@ -73,7 +134,28 @@ class SmoothedValue:
 
 
 class ThroughputValue:
-    """Track throughput as total_samples / total_time."""
+    r"""
+    **API Language:**
+    :ref:`中文 <ThroughputValue-cn>` | :ref:`English <ThroughputValue-en>`
+
+    ----
+
+    .. _ThroughputValue-cn:
+    * **中文**
+
+    * **中文**
+
+    按 ``total_samples / total_time`` 记录吞吐量。
+
+    ----
+
+    .. _ThroughputValue-en:
+    * **English**
+
+    * **English**
+
+    Track throughput as ``total_samples / total_time``.
+    """
 
     def __init__(self, window_size=20, fmt=None):
         if fmt is None:
@@ -168,6 +250,37 @@ class ThroughputValue:
 
 
 class MetricLogger:
+    r"""
+    **API Language:**
+    :ref:`中文 <MetricLogger-cn>` | :ref:`English <MetricLogger-en>`
+
+    ----
+
+    .. _MetricLogger-cn:
+    * **中文**
+
+    * **中文**
+
+    指标记录器。用于追踪训练过程中的损失与准确率等指标。
+
+    ----
+
+    .. _MetricLogger-en:
+    * **English**
+
+    * **English**
+
+    Metric logger for tracking training metrics like loss and accuracy.
+
+    :param delimiter: 分隔符
+    :type delimiter: str
+
+    :param delimiter: Delimiter used when logging
+    :type delimiter: str
+    :return: None
+    :rtype: None
+    """
+
     def __init__(self, delimiter="\t"):
         self.meters = defaultdict(SmoothedValue)
         self.delimiter = delimiter
@@ -319,6 +432,39 @@ def accuracy(output, target, topk=(1,)):
 
 
 def mkdir(path):
+    r"""
+    **API Language:**
+    :ref:`中文 <mkdir-cn>` | :ref:`English <mkdir-en>`
+
+    ----
+
+    .. _mkdir-cn:
+    * **中文**
+
+    * **中文**
+
+    创建目录。如果目录已存在则忽略。
+
+    :param path: 要创建的目录路径
+    :type path: str
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _mkdir-en:
+    * **English**
+
+    * **English**
+
+    Create a directory. Ignore if it already exists.
+
+    :param path: Directory path to create
+    :type path: str
+    :return: None
+    :rtype: None
+    """
+
     try:
         os.makedirs(path)
     except OSError as e:
@@ -372,6 +518,39 @@ def save_on_master(*args, **kwargs):
 
 
 def init_distributed_mode(args):
+    r"""
+    **API Language:**
+    :ref:`中文 <init_distributed_mode-cn>` | :ref:`English <init_distributed_mode-en>`
+
+    ----
+
+    .. _init_distributed_mode-cn:
+    * **中文**
+
+    * **中文**
+
+    初始化分布式训练模式。根据 args 中的分布式配置设置后端、初始化进程组。
+
+    :param args: 包含分布式配置的参数对象
+    :type args: Any
+    :return: None
+    :rtype: None
+
+    ----
+
+    .. _init_distributed_mode-en:
+    * **English**
+
+    * **English**
+
+    Initialize distributed training mode. Sets the backend and initializes process group based on args.
+
+    :param args: Args object containing distributed configuration
+    :type args: Any
+    :return: None
+    :rtype: None
+    """
+
     if "RANK" in os.environ and "WORLD_SIZE" in os.environ:
         args.rank = int(os.environ["RANK"])
         args.world_size = int(os.environ["WORLD_SIZE"])

@@ -25,6 +25,7 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _TemporalWiseAttention.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -49,6 +50,7 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _TemporalWiseAttention.__init__-en:
+        * **English**
 
         * **English**
 
@@ -70,7 +72,10 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
         :param dimension: Dimensions of input. If the input dimension is [T, N, C, H, W], dimension = 4; when the input dimension is [T, N, L], dimension = 2.
         :type dimension: int
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = "m"
         assert dimension == 4 or dimension == 2, "dimension must be 4 or 2"
@@ -187,7 +192,10 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         :param kernel_size: convolution kernel size of SpatialAttention
         :type kernel_size: int
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
 
         assert T >= reduction_t, "reduction_t cannot be greater than T"
@@ -276,6 +284,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _SpikingSelfAttention.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -300,6 +309,7 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _SpikingSelfAttention.__init__-en:
+        * **English**
 
         * **English**
 
@@ -325,7 +335,10 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         :param backend: backend used by the internal neurons of this module. Default: ``torch``
         :type backend: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         if dim % num_heads != 0:
             raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")
@@ -485,7 +498,10 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
         :param backend: backend used by the internal neurons of this module. Default: ``torch``.
         :type backend: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         if dim % num_heads != 0:
             raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")
@@ -593,6 +609,22 @@ class TokenQKAttention(QKAttention):
     def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch"):
         """
         ``QKAttention(..., qka_type="token")`` . See :class:`QKAttention` .
+
+        :param dim: 输入维度
+        :type dim: int
+        :param num_heads: 注意力头数
+        :type num_heads: int
+        :param backend: 后端
+        :type backend: str
+
+        :param dim: Input dimension
+        :type dim: int
+        :param num_heads: Number of attention heads
+        :type num_heads: int
+        :param backend: Backend
+        :type backend: str
+        :return: None
+        :rtype: None
         """
         super().__init__(dim, num_heads, qka_type="token", backend=backend)
 
@@ -601,5 +633,21 @@ class ChannelQKAttention(QKAttention):
     def __init__(self, dim: int, num_heads: int = 8, backend: str = "torch"):
         """
         ``QKAttention(..., qka_type="channel")`` . See :class:`QKAttention` .
+
+        :param dim: 输入维度
+        :type dim: int
+        :param num_heads: 注意力头数
+        :type num_heads: int
+        :param backend: 后端
+        :type backend: str
+
+        :param dim: Input dimension
+        :type dim: int
+        :param num_heads: Number of attention heads
+        :type num_heads: int
+        :param backend: Backend
+        :type backend: str
+        :return: None
+        :rtype: None
         """
         super().__init__(dim, num_heads, qka_type="channel", backend=backend)

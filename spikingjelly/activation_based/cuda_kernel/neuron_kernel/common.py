@@ -32,15 +32,46 @@ __all__ = [
 
 
 def _decode_v_reset(v_reset_value: float):
-    # NaN is used as a sentinel for soft reset (v_reset=None) in custom-op calls.
+    """Decode the v_reset parameter from a float value.
+
+    In custom CUDA kernel calls, NaN is used as a sentinel for soft reset
+    (equivalent to ``v_reset=None`` in Python).
+
+    :param v_reset_value: The raw v_reset value (may be NaN)
+    :type v_reset_value: float
+    :return: ``None`` if NaN (soft reset), otherwise the original value
+    :rtype: Optional[float]
+    """
     return None if math.isnan(v_reset_value) else v_reset_value
 
 
 def _sg_obj_id(sg) -> int:
+    """Register a surrogate gradient function object and return its unique ID.
+
+    The returned ID is used to look up the surrogate function during CUDA kernel
+    code generation at runtime.
+
+    :param sg: The surrogate gradient function object
+    :type sg: surrogate.SurrogateFunctionBase
+    :return: A unique integer ID for the surrogate function
+    :rtype: int
+    """
     return register_python_object(sg, _sg_registry_key(sg))
 
 
 class _CapturedAutogradCtx:
+    """A minimal autograd context for capturing saved tensors in CUDA kernels.
+
+    This is used internally by the PTT (Python Truncated Taylor) CUDA kernel
+    path to store tensors that need to be passed to the backward pass.
+
+    .. admonition:: Note
+        :class: note
+
+        Unlike torch's autograd ``Function`` context, this class does not
+        implement any gradient computation logic — it is purely a storage
+        container.
+    """
     saved_tensors = ()
 
     def save_for_backward(self, *tensors):
@@ -53,6 +84,16 @@ _CAPTURE_CTX_NEXT_ID = 0
 
 
 def _stash_capture_ctx(captured_ctx: _CapturedAutogradCtx) -> int:
+    """Store a captured autograd context and return its lookup ID.
+
+    The context is stored in a thread-safe global dictionary and can be
+    retrieved later via :func:`_take_capture_ctx`.
+
+    :param captured_ctx: The captured autograd context to store
+    :type captured_ctx: _CapturedAutogradCtx
+    :return: A unique integer ID for later retrieval
+    :rtype: int
+    """
     global _CAPTURE_CTX_NEXT_ID
     with _CAPTURE_CTX_LOCK:
         _CAPTURE_CTX_NEXT_ID += 1
@@ -69,6 +110,14 @@ def _should_stash_capture_ctx(inputs) -> bool:
 
 
 def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
+    """Retrieve and remove a previously stored autograd context by its ID.
+
+    :param capture_id: The ID returned by :func:`_stash_capture_ctx`
+    :type capture_id: int
+    :return: The stored autograd context
+    :rtype: _CapturedAutogradCtx
+    :raises RuntimeError: If no context is found for the given ID
+    """
     with _CAPTURE_CTX_LOCK:
         captured_ctx = _CAPTURE_CTX_BY_ID.pop(capture_id, None)
     if captured_ctx is None:
@@ -77,6 +126,14 @@ def _take_capture_ctx(capture_id: int) -> _CapturedAutogradCtx:
 
 
 def _resolve_sg_cuda_code_fun(sg):
+    """Resolve the ``cuda_code`` function from a surrogate gradient object.
+
+    :param sg: The surrogate gradient function object
+    :type sg: surrogate.SurrogateFunctionBase
+    :return: The ``cuda_code`` callable of the surrogate function
+    :rtype: Callable
+    :raises RuntimeError: If the surrogate function does not implement ``cuda_code``
+    """
     sg_cuda_code_fun = getattr(sg, "cuda_code", None)
     if sg_cuda_code_fun is None:
         raise RuntimeError(
@@ -87,8 +144,15 @@ def _resolve_sg_cuda_code_fun(sg):
 
 
 def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
-    """
-    Save generated CUDA kernel source text for neuron kernels to a ``.cu`` file.
+    """Save generated CUDA kernel source text for neuron kernels to a ``.cu`` file.
+
+    :param cu_file_path: 输出的 CUDA 文件路径
+    :type cu_file_path: str
+
+    :param cu_file_path: Output CUDA file path
+    :type cu_file_path: str
+    :return: None
+    :rtype: None
     """
     from . import eif, integrate_and_fire, izhikevich, lif, plif, qif
 
@@ -171,36 +235,108 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
 
 
 def multistep_if_ptt(*args, **kwargs):
+    """Multi-step IF neuron forward/backward via PTT CUDA kernel.
+
+    .. admonition:: Note
+        :class: note
+
+        This is a re-exported wrapper. See
+        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.integrate_and_fire.multistep_if_ptt`
+        for the full documentation.
+
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
+    """
     from .integrate_and_fire import multistep_if_ptt as _impl
 
     return _impl(*args, **kwargs)
 
 
 def multistep_lif_ptt(*args, **kwargs):
+    """Multi-step LIF neuron forward/backward via PTT CUDA kernel.
+
+    .. admonition:: Note
+        :class: note
+
+        This is a re-exported wrapper. See
+        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.lif.multistep_lif_ptt`
+        for the full documentation.
+
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
+    """
     from .lif import multistep_lif_ptt as _impl
 
     return _impl(*args, **kwargs)
 
 
 def multistep_plif_ptt(*args, **kwargs):
+    """Multi-step Parametric LIF neuron forward/backward via PTT CUDA kernel.
+
+    .. admonition:: Note
+        :class: note
+
+        This is a re-exported wrapper. See
+        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.plif.multistep_plif_ptt`
+        for the full documentation.
+
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
+    """
     from .plif import multistep_plif_ptt as _impl
 
     return _impl(*args, **kwargs)
 
 
 def multistep_qif_ptt(*args, **kwargs):
+    """Multi-step QIF neuron forward/backward via PTT CUDA kernel.
+
+    .. admonition:: Note
+        :class: note
+
+        This is a re-exported wrapper. See
+        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.qif.multistep_qif_ptt`
+        for the full documentation.
+
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
+    """
     from .qif import multistep_qif_ptt as _impl
 
     return _impl(*args, **kwargs)
 
 
 def multistep_izhikevich_ptt(*args, **kwargs):
+    """Multi-step Izhikevich neuron forward/backward via PTT CUDA kernel.
+
+    .. admonition:: Note
+        :class: note
+
+        This is a re-exported wrapper. See
+        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.izhikevich.multistep_izhikevich_ptt`
+        for the full documentation.
+
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
+    """
     from .izhikevich import multistep_izhikevich_ptt as _impl
 
     return _impl(*args, **kwargs)
 
 
 def multistep_eif_ptt(*args, **kwargs):
+    """Multi-step EIF neuron forward/backward via PTT CUDA kernel.
+
+    .. admonition:: Note
+        :class: note
+
+        This is a re-exported wrapper. See
+        :func:`spikingjelly.activation_based.cuda_kernel.neuron_kernel.eif.multistep_eif_ptt`
+        for the full documentation.
+
+    :return: Forward spike and backward gradient tensors
+    :rtype: Tuple[torch.Tensor, ...]
+    """
     from .eif import multistep_eif_ptt as _impl
 
     return _impl(*args, **kwargs)

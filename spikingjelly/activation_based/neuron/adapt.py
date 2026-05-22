@@ -32,6 +32,78 @@ class AdaptBaseNode(BaseNode):
         backend="torch",
         store_v_seq: bool = False,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <AdaptBaseNode.__init__-cn>` | :ref:`English <AdaptBaseNode.__init__-en>`
+
+        ----
+
+        .. _AdaptBaseNode.__init__-cn:
+
+        * **中文**
+
+        带适应性电流的脉冲神经元基类。在 :class:`BaseNode` 的基础上增加了膜电位恢复变量 :math:`w`，用于实现神经元适应性和脉冲频率适应性。
+
+        :param v_threshold: 神经元的阈值电压
+        :type v_threshold: float
+        :param v_reset: 重置电压。若为 ``None`` 则使用软重置
+        :type v_reset: Optional[float]
+        :param v_rest: 静息电位
+        :type v_rest: float
+        :param w_rest: 适应性电流的静息值
+        :type w_rest: float
+        :param tau_w: 适应性电流的时间常数
+        :type tau_w: float
+        :param a: 阈下耦合参数，控制亚阈值电位对适应电流的影响
+        :type a: float
+        :param b: 脉冲触发跳跃幅度，控制脉冲后适应电流的增加量
+        :type b: float
+        :param surrogate_function: 替代梯度函数
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否将重置过程的计算图分离
+        :type detach_reset: bool
+        :param step_mode: 步进模式，可为 ``'s'`` (单步) 或 ``'m'`` (多步)
+        :type step_mode: str
+        :param backend: 后端
+        :type backend: str
+        :param store_v_seq: 是否保存中间电压值
+        :type store_v_seq: bool
+
+        ----
+
+        .. _AdaptBaseNode.__init__-en:
+
+        * **English**
+
+        Base neuron with adaptation current. Extends :class:`BaseNode` with a membrane recovery variable :math:`w` that provides spike-frequency adaptation.
+
+        :param v_threshold: Threshold voltage of the neuron
+        :type v_threshold: float
+        :param v_reset: Reset voltage. If ``None``, uses soft reset
+        :type v_reset: Optional[float]
+        :param v_rest: Resting potential
+        :type v_rest: float
+        :param w_rest: Resting value of the adaptation current
+        :type w_rest: float
+        :param tau_w: Time constant of the adaptation current
+        :type tau_w: float
+        :param a: Subthreshold coupling parameter, controls subthreshold influence on adaptation current
+        :type a: float
+        :param b: Spike-triggered jump amplitude, controls adaptation current increase after each spike
+        :type b: float
+        :param surrogate_function: Surrogate gradient function
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: Whether to detach the reset computation graph
+        :type detach_reset: bool
+        :param step_mode: Step mode, can be ``'s'`` (single-step) or ``'m'`` (multi-step)
+        :type step_mode: str
+        :param backend: Backend for computation
+        :type backend: str
+        :param store_v_seq: Whether to store intermediate membrane potentials
+        :type store_v_seq: bool
+        :return: None
+        :rtype: None
+        """
         # b: jump amplitudes
         # a: subthreshold coupling
         assert isinstance(w_rest, float)
@@ -225,6 +297,92 @@ class IzhikevichNode(AdaptBaseNode):
         backend="torch",
         store_v_seq: bool = False,
     ):
+        """
+        **API Language:**
+        :ref:`中文 <IzhikevichNode.__init__-cn>` | :ref:`English <IzhikevichNode.__init__-en>`
+
+        ----
+
+        .. _IzhikevichNode.__init__-cn:
+
+        * **中文**
+
+        Izhikevich 脉冲神经元模型。参数 :math:`\\tau` 控制膜电位时间常数，:math:`v_c` 和 :math:`a0` 控制非线性 dynamics。
+        继承了 :class:`AdaptBaseNode` 的适应性电流机制。
+
+        :param tau: 膜电位时间常数
+        :type tau: float
+        :param v_c: 截止电压，控制非线性响应的阈值
+        :type v_c: float
+        :param a0: 非线性系数
+        :type a0: float
+        :param v_threshold: 阈值电压
+        :type v_threshold: float
+        :param v_reset: 重置电压
+        :type v_reset: Optional[float]
+        :param v_rest: 静息电位
+        :type v_rest: float
+        :param w_rest: 适应性电流静息值
+        :type w_rest: float
+        :param tau_w: 适应性电流时间常数
+        :type tau_w: float
+        :param a: 阈下耦合参数
+        :type a: float
+        :param b: 脉冲触发跳跃幅度
+        :type b: float
+        :param surrogate_function: 替代梯度函数
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: 是否分离重置计算图
+        :type detach_reset: bool
+        :param step_mode: 步进模式
+        :type step_mode: str
+        :param backend: 后端
+        :type backend: str
+        :param store_v_seq: 是否保存中间电压值
+        :type store_v_seq: bool
+
+        ----
+
+        .. _IzhikevichNode.__init__-en:
+
+        * **English**
+
+        Izhikevich spiking neuron model. The parameters :math:`\\tau`, :math:`v_c`, and :math:`a0` control membrane dynamics.
+        Inherits the adaptation current mechanism from :class:`AdaptBaseNode`.
+
+        :param tau: Membrane time constant
+        :type tau: float
+        :param v_c: Cutoff voltage controlling the nonlinear response threshold
+        :type v_c: float
+        :param a0: Nonlinear coefficient
+        :type a0: float
+        :param v_threshold: Threshold voltage
+        :type v_threshold: float
+        :param v_reset: Reset voltage
+        :type v_reset: Optional[float]
+        :param v_rest: Resting potential
+        :type v_rest: float
+        :param w_rest: Resting value of adaptation current
+        :type w_rest: float
+        :param tau_w: Time constant of adaptation current
+        :type tau_w: float
+        :param a: Subthreshold coupling parameter
+        :type a: float
+        :param b: Spike-triggered jump amplitude
+        :type b: float
+        :param surrogate_function: Surrogate gradient function
+        :type surrogate_function: surrogate.SurrogateFunctionBase
+        :param detach_reset: Whether to detach reset computation graph
+        :type detach_reset: bool
+        :param step_mode: Step mode, ``'s'`` or ``'m'``
+        :type step_mode: str
+        :param backend: Backend
+        :type backend: str
+        :param store_v_seq: Whether to store intermediate membrane potentials
+        :type store_v_seq: bool
+        :return: None
+        :rtype: None
+        """
         assert isinstance(tau, float) and tau > 1.0
         assert a0 > 0
 

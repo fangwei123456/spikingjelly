@@ -6,6 +6,29 @@ import argparse
 
 ### Components ###
 class ScaleLayer(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <ScaleLayer-cn>` | :ref:`English <ScaleLayer-en>`
+
+    ----
+
+    .. _ScaleLayer-cn:
+    * **中文**
+
+    * **中文**
+
+    可学习的缩放层，用于 SNAS 架构搜索网络中。
+
+    ----
+
+    .. _ScaleLayer-en:
+    * **English**
+
+    * **English**
+
+    Learnable scaling layer used in SNAS architecture search networks.
+    """
+
     def __init__(self):
         super().__init__()
         self.scale = torch.tensor(0.0)

@@ -35,6 +35,8 @@ class VoltageHook(nn.Module):
 
         ``VoltageHook`` is placed behind ReLU and used to determine the range of activations in ANN inference.
 
+        :return: None
+        :rtype: None
         """
         super().__init__()
         self.register_buffer("scale", torch.tensor(scale))
@@ -114,6 +116,8 @@ class VoltageScaler(nn.Module):
 
         ``VoltageScaler`` is used for scaling current in SNN inference.
 
+        :return: None
+        :rtype: None
         """
         super().__init__()
         self.register_buffer("scale", torch.tensor(scale))

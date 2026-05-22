@@ -48,7 +48,54 @@ def sew_function(x: torch.Tensor, y: torch.Tensor, cnf: str):
 
 
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
-    """3x3 convolution with padding"""
+    """
+    **API Language:**
+    :ref:`中文 <conv3x3-cn>` | :ref:`English <conv3x3-en>`
+
+    ----
+
+    .. _conv3x3-cn:
+    * **中文**
+
+    * **中文**
+
+    带 padding 的 3x3 卷积层构造函数。
+
+    :param in_planes: 输入通道数
+    :type in_planes: int
+    :param out_planes: 输出通道数
+    :type out_planes: int
+    :param stride: 步幅，默认为 ``1``
+    :type stride: int
+    :param groups: 分组数，默认为 ``1``
+    :type groups: int
+    :param dilation: 膨胀率，默认为 ``1``
+    :type dilation: int
+    :return: 3x3 卷积层
+    :rtype: layer.Conv2d
+
+    ----
+
+    .. _conv3x3-en:
+    * **English**
+
+    * **English**
+
+    Construct a 3x3 convolution with padding.
+
+    :param in_planes: Number of input channels
+    :type in_planes: int
+    :param out_planes: Number of output channels
+    :type out_planes: int
+    :param stride: Stride, default is ``1``
+    :type stride: int
+    :param groups: Number of groups, default is ``1``
+    :type groups: int
+    :param dilation: Dilation rate, default is ``1``
+    :type dilation: int
+    :return: 3x3 convolution layer
+    :rtype: layer.Conv2d
+    """
     return layer.Conv2d(
         in_planes,
         out_planes,
@@ -62,7 +109,46 @@ def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
 
 
 def conv1x1(in_planes, out_planes, stride=1):
-    """1x1 convolution"""
+    """
+    **API Language:**
+    :ref:`中文 <conv1x1-cn>` | :ref:`English <conv1x1-en>`
+
+    ----
+
+    .. _conv1x1-cn:
+    * **中文**
+
+    * **中文**
+
+    1x1 卷积层构造函数。
+
+    :param in_planes: 输入通道数
+    :type in_planes: int
+    :param out_planes: 输出通道数
+    :type out_planes: int
+    :param stride: 步幅，默认为 ``1``
+    :type stride: int
+    :return: 1x1 卷积层
+    :rtype: layer.Conv2d
+
+    ----
+
+    .. _conv1x1-en:
+    * **English**
+
+    * **English**
+
+    Construct a 1x1 convolution.
+
+    :param in_planes: Number of input channels
+    :type in_planes: int
+    :param out_planes: Number of output channels
+    :type out_planes: int
+    :param stride: Stride, default is ``1``
+    :type stride: int
+    :return: 1x1 convolution layer
+    :rtype: layer.Conv2d
+    """
     return layer.Conv2d(in_planes, out_planes, kernel_size=1, stride=stride, bias=False)
 
 
@@ -195,6 +281,28 @@ class Bottleneck(nn.Module):
 
 
 class SEWResNet(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <SEWResNet-cn>` | :ref:`English <SEWResNet-en>`
+
+    ----
+
+    .. _SEWResNet-cn:
+    * **中文**
+
+    * **中文**
+
+    SEW（Spike-Element-Wise）ResNet 网络。使用逐元素相加连接代替传统 shortcut 中的激活函数，以减少信息损失。
+
+    ----
+
+    .. _SEWResNet-en:
+    * **English**
+
+    * **English**
+
+    SEW (Spike-Element-Wise) ResNet network. Uses element-wise addition connections in shortcuts to reduce information loss.
+    """
     def __init__(
         self,
         block,
@@ -386,21 +494,51 @@ def sew_resnet18(
     spiking_neuron: callable = None,
     **kwargs,
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <sew_resnet18-cn>` | :ref:`English <sew_resnet18-en>`
+
+    ----
+
+    .. _sew_resnet18-cn:
+
+    * **中文**
+
+    构造 SEW-ResNet-18。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param cnf: the name of spike-element-wise function
+    :param cnf: spike-element-wise 连接方式
     :type cnf: str
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking ResNet-18
+    :return: SEW-ResNet-18
     :rtype: torch.nn.Module
 
-    The spike-element-wise ResNet-18 `"Deep Residual Learning in Spiking Neural Networks" <https://arxiv.org/abs/2102.04159>`_ modified by the ResNet-18 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _sew_resnet18-en:
+
+    * **English**
+
+    Construct SEW-ResNet-18.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param cnf: spike-element-wise connection type
+    :type cnf: str
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: SEW-ResNet-18
+    :rtype: torch.nn.Module
     """
 
     return _sew_resnet(
@@ -422,23 +560,51 @@ def sew_resnet34(
     spiking_neuron: callable = None,
     **kwargs,
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <sew_resnet34-cn>` | :ref:`English <sew_resnet34-en>`
+
+    ----
+
+    .. _sew_resnet34-cn:
+
+    * **中文**
+
+    构造 SEW-ResNet-34。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param cnf: the name of spike-element-wise function
+    :param cnf: spike-element-wise 连接方式
     :type cnf: str
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking ResNet-34
+    :return: SEW-ResNet-34
     :rtype: torch.nn.Module
 
-    The spike-element-wise ResNet-34 `"Deep Residual Learning in Spiking Neural Networks" <https://arxiv.org/abs/2102.04159>`_
-    modified by the ResNet-34 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-    """
+    ----
+
+    .. _sew_resnet34-en:
+
+    * **English**
+
+    Construct SEW-ResNet-34.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param cnf: spike-element-wise connection type
+    :type cnf: str
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: SEW-ResNet-34
+    :rtype: torch.nn.Module
     return _sew_resnet(
         "resnet34",
         BasicBlock,
@@ -458,22 +624,51 @@ def sew_resnet50(
     spiking_neuron: callable = None,
     **kwargs,
 ):
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
+    r"""
+    **API Language:**
+    :ref:`中文 <sew_resnet50-cn>` | :ref:`English <sew_resnet50-en>`
+
+    ----
+
+    .. _sew_resnet50-cn:
+
+    * **中文**
+
+    构造 SEW-ResNet-50。
+
+    :param pretrained: 若为 ``True``，加载 ImageNet 预训练权重
     :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
+    :param progress: 是否显示下载进度
     :type progress: bool
-    :param cnf: the name of spike-element-wise function
+    :param cnf: spike-element-wise 连接方式
     :type cnf: str
-    :param spiking_neuron: a spiking neuron layer
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking ResNet-50
+    :return: SEW-ResNet-50
     :rtype: torch.nn.Module
 
-    The spike-element-wise ResNet-50 `"Deep Residual Learning in Spiking Neural Networks" <https://arxiv.org/abs/2102.04159>`_
-    modified by the ResNet-50 model from `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
+    ----
+
+    .. _sew_resnet50-en:
+
+    * **English**
+
+    Construct SEW-ResNet-50.
+
+    :param pretrained: If ``True``, load ImageNet pretrained weights
+    :type pretrained: bool
+    :param progress: Whether to display download progress
+    :type progress: bool
+    :param cnf: spike-element-wise connection type
+    :type cnf: str
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: SEW-ResNet-50
+    :rtype: torch.nn.Module
     """
     return _sew_resnet(
         "resnet50",

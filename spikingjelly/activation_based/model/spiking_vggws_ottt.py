@@ -28,6 +28,65 @@ class Scale(nn.Module):
 
 
 class OTTTSpikingVGG(nn.Module):
+    r"""
+    **API Language:**
+    :ref:`中文 <OTTTSpikingVGG-cn>` | :ref:`English <OTTTSpikingVGG-en>`
+
+    ----
+
+    .. _OTTTSpikingVGG-cn:
+    * **中文**
+
+    * **中文**
+
+    使用 OTTT（Online Training Through Time）训练的脉冲 VGG 网络。继承自 :class:`torchvision.models.VGG`。
+
+    ----
+
+    .. _OTTTSpikingVGG-en:
+    * **English**
+
+    * **English**
+
+    Spiking VGG network trained with OTTT (Online Training Through Time). Inherits from :class:`torchvision.models.VGG`.
+
+    :param cfg: VGG 网络配置
+    :type cfg: list
+    :param weight_standardization: 是否使用权重标准化
+    :type weight_standardization: bool
+    :param num_classes: 分类类别数
+    :type num_classes: int
+    :param init_weights: 是否初始化权重
+    :type init_weights: bool
+    :param spiking_neuron: 脉冲神经元类
+    :type spiking_neuron: callable
+    :param light_classifier: 是否使用轻量分类器
+    :type light_classifier: bool
+    :param drop_rate: Dropout 比率
+    :type drop_rate: float
+    :param kwargs: 传递给父类的额外参数
+    :type kwargs: dict
+
+    :param cfg: VGG network configuration
+    :type cfg: list
+    :param weight_standardization: Whether to use weight standardization
+    :type weight_standardization: bool
+    :param num_classes: Number of classes for classification
+    :type num_classes: int
+    :param init_weights: Whether to initialize weights
+    :type init_weights: bool
+    :param spiking_neuron: Spiking neuron class
+    :type spiking_neuron: callable
+    :param light_classifier: Whether to use a lightweight classifier
+    :type light_classifier: bool
+    :param drop_rate: Dropout rate
+    :type drop_rate: float
+    :param kwargs: Extra arguments for the parent class
+    :type kwargs: dict
+    :return: None
+    :rtype: None
+    """
+
     def __init__(
         self,
         cfg,
@@ -186,12 +245,40 @@ def _spiking_vgg(
 
 
 def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vggws-cn>` | :ref:`English <ottt_spiking_vggws-en>`
+
+    ----
+
+    .. _ottt_spiking_vggws-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的带权重标准化 Spiking VGG。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG (sWS), model used in 'Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>'
+    :return: Spiking VGG（带权重标准化），用于 OTTT 训练
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vggws-en:
+    * **English**
+
+    * **English**
+
+    Construct a weight-standardized Spiking VGG for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Weight-standardized Spiking VGG for OTTT
     :rtype: torch.nn.Module
     """
 
@@ -201,10 +288,38 @@ def ottt_spiking_vggws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 
 def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg11-cn>` | :ref:`English <ottt_spiking_vgg11-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg11-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的 Spiking VGG-11。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: Spiking VGG-11
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg11-en:
+    * **English**
+
+    * **English**
+
+    Construct Spiking VGG-11 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
     :type kwargs: dict
     :return: Spiking VGG-11
     :rtype: torch.nn.Module
@@ -216,12 +331,40 @@ def ottt_spiking_vgg11(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 
 def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg11_ws-cn>` | :ref:`English <ottt_spiking_vgg11_ws-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg11_ws-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的带权重标准化 Spiking VGG-11。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG-11 with weight standardization
+    :return: 带权重标准化的 Spiking VGG-11
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg11_ws-en:
+    * **English**
+
+    * **English**
+
+    Construct a weight-standardized Spiking VGG-11 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Weight-standardized Spiking VGG-11
     :rtype: torch.nn.Module
     """
 
@@ -231,10 +374,38 @@ def ottt_spiking_vgg11_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
 
 
 def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg13-cn>` | :ref:`English <ottt_spiking_vgg13-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg13-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的 Spiking VGG-13。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: Spiking VGG-13
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg13-en:
+    * **English**
+
+    * **English**
+
+    Construct Spiking VGG-13 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
     :type kwargs: dict
     :return: Spiking VGG-13
     :rtype: torch.nn.Module
@@ -246,12 +417,40 @@ def ottt_spiking_vgg13(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 
 def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg13_ws-cn>` | :ref:`English <ottt_spiking_vgg13_ws-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg13_ws-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的带权重标准化 Spiking VGG-13。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG-11 with weight standardization
+    :return: 带权重标准化的 Spiking VGG-13
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg13_ws-en:
+    * **English**
+
+    * **English**
+
+    Construct a weight-standardized Spiking VGG-13 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Weight-standardized Spiking VGG-13
     :rtype: torch.nn.Module
     """
 
@@ -261,10 +460,38 @@ def ottt_spiking_vgg13_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
 
 
 def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg16-cn>` | :ref:`English <ottt_spiking_vgg16-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg16-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的 Spiking VGG-16。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: Spiking VGG-16
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg16-en:
+    * **English**
+
+    * **English**
+
+    Construct Spiking VGG-16 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
     :type kwargs: dict
     :return: Spiking VGG-16
     :rtype: torch.nn.Module
@@ -276,12 +503,40 @@ def ottt_spiking_vgg16(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 
 def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg16_ws-cn>` | :ref:`English <ottt_spiking_vgg16_ws-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg16_ws-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的带权重标准化 Spiking VGG-16。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG-16 with weight standardization
+    :return: 带权重标准化的 Spiking VGG-16
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg16_ws-en:
+    * **English**
+
+    * **English**
+
+    Construct a weight-standardized Spiking VGG-16 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Weight-standardized Spiking VGG-16
     :rtype: torch.nn.Module
     """
 
@@ -291,10 +546,38 @@ def ottt_spiking_vgg16_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwarg
 
 
 def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg19-cn>` | :ref:`English <ottt_spiking_vgg19-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg19-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的 Spiking VGG-19。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
+    :type kwargs: dict
+    :return: Spiking VGG-19
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg19-en:
+    * **English**
+
+    * **English**
+
+    Construct Spiking VGG-19 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
     :type kwargs: dict
     :return: Spiking VGG-19
     :rtype: torch.nn.Module
@@ -306,12 +589,40 @@ def ottt_spiking_vgg19(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
 
 
 def ottt_spiking_vgg19_ws(spiking_neuron: callable = neuron.OTTTLIFNode, **kwargs):
-    """
-    :param spiking_neuron: a spiking neuron layer
+    r"""
+    **API Language:**
+    :ref:`中文 <ottt_spiking_vgg19_ws-cn>` | :ref:`English <ottt_spiking_vgg19_ws-en>`
+
+    ----
+
+    .. _ottt_spiking_vgg19_ws-cn:
+    * **中文**
+
+    * **中文**
+
+    构造用于 OTTT 训练的带权重标准化 Spiking VGG-19。
+
+    :param spiking_neuron: 脉冲神经元层
     :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
+    :param kwargs: 传给 ``spiking_neuron`` 的关键字参数
     :type kwargs: dict
-    :return: Spiking VGG-19 with weight standardization
+    :return: 带权重标准化的 Spiking VGG-19
+    :rtype: torch.nn.Module
+
+    ----
+
+    .. _ottt_spiking_vgg19_ws-en:
+    * **English**
+
+    * **English**
+
+    Construct a weight-standardized Spiking VGG-19 for OTTT training.
+
+    :param spiking_neuron: Spiking neuron layer
+    :type spiking_neuron: callable
+    :param kwargs: Keyword arguments for ``spiking_neuron``
+    :type kwargs: dict
+    :return: Weight-standardized Spiking VGG-19
     :rtype: torch.nn.Module
     """
 

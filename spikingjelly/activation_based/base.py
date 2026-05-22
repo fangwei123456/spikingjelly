@@ -25,13 +25,14 @@ except BaseException:
 
 
 def check_backend_library(backend: str):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <check_backend_library-cn>` | :ref:`English <check_backend_library-en>`
 
     ----
 
     .. _check_backend_library-cn:
+    * **中文**
 
     * **中文**
 
@@ -40,9 +41,14 @@ def check_backend_library(backend: str):
     :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` 或 ``'lava'``
     :type backend: str
 
+    :return: ``None``
+    :rtype: None
+    :raises ImportError: 若所请求后端依赖的 Python 库未安装，则抛出 ``ImportError``
+
     ----
 
     .. _check_backend_library-en:
+    * **English**
 
     * **English**
 
@@ -51,6 +57,10 @@ def check_backend_library(backend: str):
 
     :param backend: ``'torch'``, ``'cupy'``, ``'triton'`` or ``'lava'``
     :type backend: str
+
+    :return: ``None``
+    :rtype: None
+    :raises ImportError: Raised when the Python package required by ``backend`` is not installed
     """
     if backend == "torch":
         return
@@ -77,8 +87,35 @@ def check_backend_library(backend: str):
 
 
 class StepModule:
+    r"""
+    **API Language:**
+    :ref:`中文 <StepModule-cn>` | :ref:`English <StepModule-en>`
+
+    ----
+
+    .. _StepModule-cn:
+    * **中文**
+
+    * **中文**
+
+    步进模式接口基类。
+
+    实现该接口的模块通过 ``step_mode`` 区分单步模式 ``"s"`` 与多步模式 ``"m"``。
+
+    ----
+
+    .. _StepModule-en:
+    * **English**
+
+    * **English**
+
+    Base interface for step-mode aware modules.
+
+    Modules implementing this interface distinguish single-step mode ``"s"``
+    from multi-step mode ``"m"`` through ``step_mode``.
+    """
     def supported_step_mode(self) -> Tuple[str]:
-        """
+        r"""
         **API Language:**
         :ref:`中文 <StepModule.supported_step_mode-cn>` | :ref:`English <StepModule.supported_step_mode-en>`
 
@@ -105,8 +142,8 @@ class StepModule:
 
     @property
     def step_mode(self) -> str:
-        """
-        **API Language;**
+        r"""
+        **API Language:**
         :ref:`中文 <StepModule.step_mode-cn>` | :ref:`English <StepModule.step_mode-en>`
 
         ----
@@ -131,13 +168,14 @@ class StepModule:
 
     @step_mode.setter
     def step_mode(self, value: str):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <StepModule.step_mode-setter-cn>` | :ref:`English <StepModule.step_mode-setter-en>`
 
         ----
 
         .. _StepModule.step_mode-setter-cn:
+        * **中文**
 
         * **中文**
 
@@ -146,9 +184,14 @@ class StepModule:
         :param value: 步进模式
         :type value: str
 
+        :return: ``None``
+        :rtype: None
+        :raises ValueError: 当 ``value`` 不在 ``self.supported_step_mode()`` 中时抛出
+
         ----
 
         .. _StepModule.step_mode-setter-en:
+        * **English**
 
         * **English**
 
@@ -156,6 +199,10 @@ class StepModule:
 
         :param value: the step mode
         :type value: str
+
+        :return: ``None``
+        :rtype: None
+        :raises ValueError: Raised when ``value`` is not included in ``self.supported_step_mode()``
         """
         if value not in self.supported_step_mode():
             raise ValueError(
@@ -165,78 +212,147 @@ class StepModule:
 
 
 class SingleStepModule(StepModule):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <SingleStepModule-cn>` | :ref:`English <SingleStepModule-en>`
 
     ----
 
     .. _SingleStepModule-cn:
+    * **中文**
 
     * **中文**
 
-    只支持单步的模块 ( ``step_mode == 's'`` )。
+    单步模式模块的接口基类。
+
+    实现该接口的模块仅支持单步模式 ``"s"``。
 
     ----
 
     .. _SingleStepModule-en:
+    * **English**
 
     * **English**
 
-    The module that only supports for single-step ( ``step_mode == 's'`` ).
+    Base interface for single-step mode modules.
+
+    Modules implementing this interface only support single-step mode ``"s"``.
     """
 
     def supported_step_mode(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <SingleStepModule.supported_step_mode-cn>` | :ref:`English <SingleStepModule.supported_step_mode-en>`
+
+        ----
+
+        .. _SingleStepModule.supported_step_mode-cn:
+        * **中文**
+
+        * **中文**
+
+        :return: 仅包含 ``"s"`` 的 tuple
+        :rtype: Tuple[str]
+
+        ----
+
+        .. _SingleStepModule.supported_step_mode-en:
+        * **English**
+
+        * **English**
+
+        :return: A tuple containing only ``"s"``
+        :rtype: Tuple[str]
+        """
         return ("s",)
 
 
 class MultiStepModule(StepModule):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <MultiStepModule-cn>` | :ref:`English <MultiStepModule-en>`
 
     ----
 
     .. _MultiStepModule-cn:
+    * **中文**
 
     * **中文**
 
-    只支持多步的模块 ( ``step_mode == 'm'`` )。
+    多步模式模块的接口基类。
+
+    实现该接口的模块仅支持多步模式 ``"m"``。
 
     ----
 
     .. _MultiStepModule-en:
+    * **English**
 
     * **English**
 
-    The module that only supports for multi-step ( ``step_mode == 'm'`` ).
+    Base interface for multi-step mode modules.
+
+    Modules implementing this interface only support multi-step mode ``"m"``.
     """
 
     def supported_step_mode(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <MultiStepModule.supported_step_mode-cn>` | :ref:`English <MultiStepModule.supported_step_mode-en>`
+
+        ----
+
+        .. _MultiStepModule.supported_step_mode-cn:
+        * **中文**
+
+        * **中文**
+
+        :return: 仅包含 ``"m"`` 的 tuple
+        :rtype: Tuple[str]
+
+        ----
+
+        .. _MultiStepModule.supported_step_mode-en:
+        * **English**
+
+        * **English**
+
+        :return: A tuple containing only ``"m"``
+        :rtype: Tuple[str]
+        """
         return ("m",)
 
 
 class MemoryModule(nn.Module, StepModule):
     def __init__(self):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.__init__-cn>` | :ref:`English <MemoryModule.__init__-en>`
 
         ----
 
         .. _MemoryModule.__init__-cn:
+        * **中文**
 
         * **中文**
 
-        ``MemoryModule`` 是SpikingJelly中所有有状态（记忆）模块的基类。
+        SpikingJelly 中所有有状态模块的基类。
+
+        ``MemoryModule`` 通过 ``register_memory`` 注册内部状态变量，并提供
+        ``reset``、``detach``、显式 memory 提取与恢复等通用能力。
 
         ----
 
         .. _MemoryModule.__init__-en:
+        * **English**
 
         * **English**
 
-        ``MemoryModule`` is the base class of all stateful modules in SpikingJelly.
+        Base class of all stateful modules in SpikingJelly.
+
+        ``MemoryModule`` registers internal state variables via
+        ``register_memory`` and provides common utilities such as ``reset``,
+        ``detach``, and explicit memory extraction / restoration.
         """
         super().__init__()
         self._memories = {}
@@ -246,17 +362,16 @@ class MemoryModule(nn.Module, StepModule):
 
     @property
     def supported_backends(self) -> Tuple[str]:
-        """
-        **API Language;**
+        r"""
+        **API Language:**
         :ref:`中文 <MemoryModule.supported_backends-cn>` | :ref:`English <MemoryModule.supported_backends-en>`
 
         ----
 
         .. _MemoryModule.supported_backends-cn:
-
         * **中文**
 
-        返回支持的后端，默认情况下只有 ``('torch', )`` 。
+        * **中文**
 
         :return: 支持的后端
         :rtype: Tuple[str]
@@ -264,10 +379,9 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.supported_backends-en:
-
         * **English**
 
-        Return the supported backends. The default return value is ``('torch', )`` .
+        * **English**
 
         :return: supported backends
         :rtype: Tuple[str]
@@ -276,10 +390,77 @@ class MemoryModule(nn.Module, StepModule):
 
     @property
     def backend(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryModule.backend-cn>` | :ref:`English <MemoryModule.backend-en>`
+
+        ----
+
+        .. _MemoryModule.backend-cn:
+        * **中文**
+
+        * **中文**
+
+        :return: 当前后端名称
+        :rtype: str
+
+        ----
+
+        .. _MemoryModule.backend-en:
+        * **English**
+
+        * **English**
+
+        :return: the name of the current backend
+        :rtype: str
+        """
         return self._backend
 
     @backend.setter
     def backend(self, value: str):
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryModule.backend-setter-cn>` | :ref:`English <MemoryModule.backend-setter-en>`
+
+        ----
+
+        .. _MemoryModule.backend-setter-cn:
+        * **中文**
+
+        * **中文**
+
+        设置当前模块的后端。
+
+        只有当 ``value`` 属于 :meth:`supported_backends` 且对应依赖库已安装时，
+        赋值才会成功。
+
+        :param value: 目标后端名称
+        :type value: str
+        :return: ``None``
+        :rtype: None
+        :raises NotImplementedError: 当 ``value`` 不在 ``supported_backends`` 中时抛出
+        :raises ImportError: 当 ``value`` 对应的后端库未安装时抛出
+
+        ----
+
+        .. _MemoryModule.backend-setter-en:
+        * **English**
+
+        * **English**
+
+        Set the backend of the current module.
+
+        The assignment succeeds only when ``value`` is listed in
+        :meth:`supported_backends` and the corresponding backend library is
+        installed.
+
+        :param value: Target backend name
+        :type value: str
+        :return: ``None``
+        :rtype: None
+        :raises NotImplementedError: Raised when ``value`` is not listed in ``supported_backends``
+        :raises ImportError: Raised when the backend library required by ``value`` is not installed
+        """
         if value not in self.supported_backends:
             raise NotImplementedError(
                 f"{value} is not a supported backend of {self._get_name()}!"
@@ -289,61 +470,81 @@ class MemoryModule(nn.Module, StepModule):
 
     @abstractmethod
     def single_step_forward(self, x: torch.Tensor, *args, **kwargs):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.single_step_forward-cn>` | :ref:`English <MemoryModule.single_step_forward-en>`
 
         ----
 
         .. _MemoryModule.single_step_forward-cn:
+        * **中文**
 
         * **中文**
 
         本模块的单步的前向传播函数。
 
-        :param x: input tensor with ``shape = [N, *]``
+        :param x: 输入张量，约定 ``shape = [N, *]``，其中 ``N`` 通常为 batch 维
         :type x: torch.Tensor
+
+        :return: 单步前向传播的输出
+        :rtype: Any
 
         ----
 
         .. _MemoryModule.single_step_forward-en:
+        * **English**
 
         * **English**
 
         The single-step forward function for this module.
 
-        :param x: input tensor with ``shape = [N, *]``
+        :param x: Input tensor, conventionally with ``shape = [N, *]`` where ``N`` is usually the batch dimension
         :type x: torch.Tensor
+
+        :return: Output of the single-step forward pass
+        :rtype: Any
         """
         pass
 
     def multi_step_forward(self, x_seq: torch.Tensor, *args, **kwargs):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.multi_step_forward-cn>` | :ref:`English <MemoryModule.multi_step_forward-en>`
 
         ----
 
         .. _MemoryModule.multi_step_forward-cn:
+        * **中文**
 
         * **中文**
 
         本模块的多步的前向传播函数，通过调用 ``T`` 次 ``single_step_forward(x[t], *args, **kwargs)`` 实现
 
-        :param x_seq: input tensor with ``shape = [T, N, *]``
+        :param x_seq: 输入序列张量，约定 ``shape = [T, N, *]``，其中第 0 维为时间维
         :type x_seq: torch.Tensor
+
+        :return: 按时间堆叠的输出序列
+        :rtype: torch.Tensor
+
+        :raises RuntimeError: 若某个时间步返回值无法被 ``torch.stack`` 堆叠，则底层异常会原样向上传播
 
         ----
 
         .. _MemoryModule.multi_step_forward-en:
+        * **English**
 
         * **English**
 
         The multi-step forward function for this module, which is implemented by
         calling ``single_step_forward(x[t], *args, **kwargs)`` over ``T`` time steps.
 
-        :param x_seq: input tensor with ``shape = [T, N, *]``
+        :param x_seq: Input sequence tensor, conventionally with ``shape = [T, N, *]`` and the time axis at dimension 0
         :type x_seq: torch.Tensor
+
+        :return: Output sequence stacked along the time dimension
+        :rtype: torch.Tensor
+
+        :raises RuntimeError: Any stacking failure raised by ``torch.stack`` is propagated unchanged
         """
         T = x_seq.shape[0]
         y_seq = []
@@ -354,27 +555,39 @@ class MemoryModule(nn.Module, StepModule):
         return torch.stack(y_seq, dim=0)
 
     def forward(self, *args, **kwargs):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.forward-cn>` | :ref:`English <MemoryModule.forward-en>`
 
         ----
 
         .. _MemoryModule.forward-cn:
+        * **中文**
 
         * **中文**
 
         若为单步模式 ``step_mode == "s"``，则调用 ``self.single_step_forward(...)`` 。
         若为多步模式 ``step_mode == "m"``，则调用 ``self.multi_step_forward(...)`` 。
 
+        :return: 与当前 ``step_mode`` 对应的前向传播结果
+        :rtype: Any
+
+        :raises ValueError: 当 ``self.step_mode`` 既不是 ``"s"`` 也不是 ``"m"`` 时抛出
+
         ----
 
         .. _MemoryModule.forward-en:
+        * **English**
 
         * **English**
 
         Call ``self.single_step_forward(...)`` if ``step_mode == "s"``.
         Call ``self.multi_step_forward(...)`` if ``step_mode == "m"``.
+
+        :return: Forward result selected according to the current ``step_mode``
+        :rtype: Any
+
+        :raises ValueError: Raised when ``self.step_mode`` is neither ``"s"`` nor ``"m"``
         """
         if self.step_mode == "s":
             return self.single_step_forward(*args, **kwargs)
@@ -384,16 +597,45 @@ class MemoryModule(nn.Module, StepModule):
             raise ValueError(self.step_mode)
 
     def extra_repr(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <MemoryModule.extra_repr-cn>` | :ref:`English <MemoryModule.extra_repr-en>`
+
+        ----
+
+        .. _MemoryModule.extra_repr-cn:
+        * **中文**
+
+        * **中文**
+
+        返回附加到 ``nn.Module.__repr__`` 输出中的摘要字符串。
+
+        :return: 附加到模块字符串表示中的摘要，包含 ``step_mode`` 与 ``backend``
+        :rtype: str
+
+        ----
+
+        .. _MemoryModule.extra_repr-en:
+        * **English**
+
+        * **English**
+
+        Return the summary string appended to ``nn.Module.__repr__``.
+
+        :return: Summary appended to the module string representation, including ``step_mode`` and ``backend``
+        :rtype: str
+        """
         return f"step_mode={self.step_mode}, backend={self.backend}"
 
     def register_memory(self, name: str, value):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.register_memory-cn>` | :ref:`English <MemoryModule.register_memory-en>`
 
         ----
 
         .. _MemoryModule.register_memory-cn:
+        * **中文**
 
         * **中文**
 
@@ -409,9 +651,14 @@ class MemoryModule(nn.Module, StepModule):
         :param value: 状态变量的初始与重制值
         :type value: Any
 
+        :return: ``None``
+        :rtype: None
+        :raises AssertionError: 当 ``name`` 已经是模块现有成员属性时抛出
+
         ----
 
         .. _MemoryModule.register_memory-en:
+        * **English**
 
         * **English**
 
@@ -427,31 +674,50 @@ class MemoryModule(nn.Module, StepModule):
         :type name: str
         :param value: state variable's initial and reset value
         :type value: Any
+
+        :return: ``None``
+        :rtype: None
+        :raises AssertionError: Raised when ``name`` already exists as an attribute of the module
         """
         assert not hasattr(self, name), f"{name} has been set as a member variable!"
         self._memories[name] = value
         self.set_reset_value(name, value)
 
     def reset(self):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.reset-cn>` | :ref:`English <MemoryModule.reset-en>`
 
         ----
 
         .. _MemoryModule.reset-cn:
+        * **中文**
 
         * **中文**
 
         重置所有有状态变量为重制值。
 
+        若当前状态与重制值均为同形状、同 dtype、同 device 的张量，则优先原地恢复；
+        否则使用复制或重新赋值恢复。
+
+        :return: ``None``
+        :rtype: None
+
         ----
 
         .. _MemoryModule.reset-en:
+        * **English**
 
         * **English**
 
         Reset all stateful variables to their reset values.
+
+        If both the current state and the reset value are tensors with the same
+        shape, dtype, and device, the state is restored in-place whenever
+        possible; otherwise it falls back to copy or reassignment.
+
+        :return: ``None``
+        :rtype: None
         """
         for key in self._memories.keys():
             cur = self._memories[key]
@@ -478,7 +744,7 @@ class MemoryModule(nn.Module, StepModule):
                 self._memories[key] = copy.deepcopy(rv)
 
     def set_reset_value(self, name: str, value):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.set_reset_value-cn>` | :ref:`English <MemoryModule.set_reset_value-en>`
 
@@ -490,6 +756,13 @@ class MemoryModule(nn.Module, StepModule):
 
         设置状态变量 ``self.name`` 的重制值。
 
+        :param name: 状态变量名称
+        :type name: str
+        :param value: 新的重制值
+        :type value: Any
+        :return: ``None``
+        :rtype: None
+
         ----
 
         .. _MemoryModule.set_reset_value-en:
@@ -497,6 +770,13 @@ class MemoryModule(nn.Module, StepModule):
         * **English**
 
         Set the reset value of state variable ``self.name`` .
+
+        :param name: Name of the state variable
+        :type name: str
+        :param value: New reset value
+        :type value: Any
+        :return: ``None``
+        :rtype: None
         """
         self._memories_rv[name] = copy.deepcopy(value)
 
@@ -539,13 +819,14 @@ class MemoryModule(nn.Module, StepModule):
         return sorted(keys)
 
     def memories(self) -> Generator:
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.memories-cn>` | :ref:`English <MemoryModule.memories-en>`
 
         ----
 
         .. _MemoryModule.memories-cn:
+        * **中文**
 
         * **中文**
 
@@ -555,6 +836,7 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.memories-en:
+        * **English**
 
         * **English**
 
@@ -565,13 +847,14 @@ class MemoryModule(nn.Module, StepModule):
             yield value
 
     def named_memories(self) -> Generator:
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.named_memories-cn>` | :ref:`English <MemoryModule.named_memories-en>`
 
         ----
 
         .. _MemoryModule.named_memories-cn:
+        * **中文**
 
         * **中文**
 
@@ -581,6 +864,7 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.named_memories-en:
+        * **English**
 
         * **English**
 
@@ -591,7 +875,7 @@ class MemoryModule(nn.Module, StepModule):
             yield name, value
 
     def detach(self):
-        """
+        r"""
         **API Language:**
         :ref:`中文 <MemoryModule.detach-cn>` | :ref:`English <MemoryModule.detach-en>`
 
@@ -607,6 +891,9 @@ class MemoryModule(nn.Module, StepModule):
 
             可以使用这个函数实现TBPTT (Truncated Back Propagation Through Time)。
 
+        :return: ``None``
+        :rtype: None
+
         ----
 
         .. _MemoryModule.detach-en:
@@ -619,6 +906,9 @@ class MemoryModule(nn.Module, StepModule):
             :class: tip
 
             We can use this function to implement TBPTT (Truncated Back Propagation Through Time).
+
+        :return: ``None``
+        :rtype: None
         """
         for key in self._memories.keys():
             if isinstance(self._memories[key], torch.Tensor):
@@ -644,6 +934,7 @@ def named_memories(module: nn.Module, prefix: str = "") -> Generator:
     ----
 
     .. _named_memories-cn:
+    * **中文**
 
     * **中文**
 
@@ -658,9 +949,12 @@ def named_memories(module: nn.Module, prefix: str = "") -> Generator:
     :return: 状态变量名称和值的生成器
     :rtype: Generator
 
+    :raises RecursionError: 若模块树存在异常递归结构，Python 递归遍历时会抛出异常
+
     ----
 
     .. _named_memories-en:
+    * **English**
 
     * **English**
 
@@ -674,6 +968,8 @@ def named_memories(module: nn.Module, prefix: str = "") -> Generator:
 
     :return: a generator of memory variable names and values
     :rtype: Generator
+
+    :raises RecursionError: Raised if traversing the module tree exceeds Python recursion limits
     """
     if isinstance(module, MemoryModule):
         for name, value in module.named_memories():
@@ -693,6 +989,7 @@ def memories(module: nn.Module) -> Generator:
     ----
 
     .. _memories-cn:
+    * **中文**
 
     * **中文**
 
@@ -704,9 +1001,12 @@ def memories(module: nn.Module) -> Generator:
     :return: 状态变量值的生成器
     :rtype: Generator
 
+    :raises RecursionError: 若模块树存在异常递归结构，Python 递归遍历时会抛出异常
+
     ----
 
     .. _memories-en:
+    * **English**
 
     * **English**
 
@@ -717,6 +1017,8 @@ def memories(module: nn.Module) -> Generator:
 
     :return: a generator of memory variable values
     :rtype: Generator
+
+    :raises RecursionError: Raised if traversing the module tree exceeds Python recursion limits
     """
     for _, value in named_memories(module):
         yield value
@@ -730,6 +1032,7 @@ def extract_memories(module: nn.Module) -> list:
     ----
 
     .. _extract_memories-cn:
+    * **中文**
 
     * **中文**
 
@@ -741,9 +1044,12 @@ def extract_memories(module: nn.Module) -> list:
     :return: 状态变量值的列表
     :rtype: list
 
+    :raises RecursionError: 若模块树存在异常递归结构，Python 递归遍历时会抛出异常
+
     ----
 
     .. _extract_memories-en:
+    * **English**
 
     * **English**
 
@@ -754,6 +1060,8 @@ def extract_memories(module: nn.Module) -> list:
 
     :return: a list of memory variable values
     :rtype: list
+
+    :raises RecursionError: Raised if traversing the module tree exceeds Python recursion limits
     """
     return [m for m in memories(module)]
 
@@ -777,6 +1085,10 @@ def load_memories(module: nn.Module, memory_list: list):
     :param memory_list: 状态变量值列表
     :type memory_list: list
 
+    :return: ``None``
+    :rtype: None
+    :raises ValueError: 当 ``memory_list`` 的长度与 ``module`` 当前状态变量数量不一致时抛出
+
     ----
 
     .. _load_memories-en:
@@ -790,6 +1102,10 @@ def load_memories(module: nn.Module, memory_list: list):
 
     :param memory_list: list of memory variable values
     :type memory_list: list
+
+    :return: ``None``
+    :rtype: None
+    :raises ValueError: Raised when the length of ``memory_list`` does not match the number of current memory variables in ``module``
     """
 
     def _assign_memory_by_name(module: nn.Module, name: str, value):
@@ -845,6 +1161,7 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     ----
 
     .. _to_functional_forward-cn:
+    * **中文**
 
     * **中文**
 
@@ -882,9 +1199,12 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     :return: 带有显式输入输出状态的前向传播函数
     :rtype: Callable
 
+    :raises ValueError: 若后续调用时提供的显式状态数量与 ``module`` 当前 memory 布局不一致，则相关 helper 可能抛出异常
+
     ----
 
     .. _to_functional_forward-en:
+    * **English**
 
     * **English**
 

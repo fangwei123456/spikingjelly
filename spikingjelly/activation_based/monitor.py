@@ -19,6 +19,35 @@ def _unpack_len1_tuple(x: Union[tuple, torch.Tensor]):
 
 class BaseMonitor:
     def __init__(self):
+        r"""
+        **API Language:**
+        :ref:`中文 <BaseMonitor.__init__-cn>` | :ref:`English <BaseMonitor.__init__-en>`
+
+        ----
+
+        .. _BaseMonitor.__init__-cn:
+        * **中文**
+
+        * **中文**
+
+        监视器基类。维护钩子句柄、被监视层列表、记录缓存以及启停状态。
+
+        :return: ``None``
+        :rtype: None
+
+        ----
+
+        .. _BaseMonitor.__init__-en:
+        * **English**
+
+        * **English**
+
+        Base monitor class. It maintains hook handles, monitored layer list, recorded data buffers,
+        and enable/disable state.
+
+        :return: ``None``
+        :rtype: None
+        """
         self.hooks = []
         self.monitored_layers = []
         self.records = []

@@ -25,6 +25,7 @@ class SynapseFilter(base.MemoryModule):
         ----
 
         .. _SynapseFilter.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -69,6 +70,7 @@ class SynapseFilter(base.MemoryModule):
         ----
 
         .. _SynapseFilter.__init__-en:
+        * **English**
 
         * **English**
 
@@ -139,7 +141,10 @@ class SynapseFilter(base.MemoryModule):
             pyplot.show()
 
         .. image:: ../_static/API/activation_based/layer/SynapseFilter.png
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = step_mode
         self.learnable = learnable
@@ -198,6 +203,7 @@ class PrintShapeModule(nn.Module):
         ----
 
         .. _PrintShapeModule.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -209,6 +215,7 @@ class PrintShapeModule(nn.Module):
         ----
 
         .. _PrintShapeModule.__init__-en:
+        * **English**
 
         * **English**
 
@@ -216,7 +223,10 @@ class PrintShapeModule(nn.Module):
 
         :param ext_str: extra strings for printing
         :type ext_str: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.ext_str = ext_str
 
@@ -234,6 +244,7 @@ class VotingLayer(nn.Module, base.StepModule):
         ----
 
         .. _VotingLayer.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -248,6 +259,7 @@ class VotingLayer(nn.Module, base.StepModule):
         ----
 
         .. _VotingLayer.__init__-en:
+        * **English**
 
         * **English**
 
@@ -258,7 +270,10 @@ class VotingLayer(nn.Module, base.StepModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.voting_size = voting_size
         self.step_mode = step_mode
@@ -290,6 +305,7 @@ class Delay(base.MemoryModule):
         ----
 
         .. _Delay.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -306,6 +322,7 @@ class Delay(base.MemoryModule):
         ----
 
         .. _Delay.__init__-en:
+        * **English**
 
         * **English**
 
@@ -358,7 +375,10 @@ class Delay(base.MemoryModule):
                     [1., 1.],
                     [1., 1.],
                     [0., 0.]])
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         assert delay_steps >= 0 and isinstance(delay_steps, int)
         self._delay_steps = delay_steps

@@ -26,6 +26,65 @@ class SpikformerConv2dBN(nn.Module):
         padding: int = 0,
         pool: bool = False,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikformerConv2dBN-cn>` | :ref:`English <SpikformerConv2dBN-en>`
+
+        ----
+
+        .. _SpikformerConv2dBN-cn:
+
+        * **中文**
+
+        ``Conv2d`` + ``BatchNorm2d`` 的组合模块。可选是否在最后添加 ``MaxPool2d`` (kernel_size=3, stride=2, padding=1)。
+
+        :param in_channels: 输入图像的通道数
+        :type in_channels: int
+
+        :param out_channels: 输出通道数
+        :type out_channels: int
+
+        :param kernel_size: 卷积核大小
+        :type kernel_size: int
+
+        :param stride: 卷积步长。默认为 1
+        :type stride: int
+
+        :param padding: 卷积填充。默认为 0
+        :type padding: int
+
+        :param pool: 若为 ``True``，则在最后添加 ``MaxPool2d(kernel_size=3, stride=2, padding=1)``。默认为 ``False``
+        :type pool: bool
+
+        ----
+
+        .. _SpikformerConv2dBN-en:
+
+        * **English**
+
+        A sequential block of ``Conv2d`` + ``BatchNorm2d``. When ``pool`` is ``True``, a ``MaxPool2d(kernel_size=3, stride=2, padding=1)`` is appended after batch norm.
+
+        :param in_channels: Number of channels in the input image
+        :type in_channels: int
+
+        :param out_channels: Number of output channels
+        :type out_channels: int
+
+        :param kernel_size: Size of the convolution kernel
+        :type kernel_size: int
+
+        :param stride: Stride of the convolution. Default: 1
+        :type stride: int
+
+        :param padding: Padding added to both sides of the input. Default: 0
+        :type padding: int
+
+        :param pool: If ``True``, appends ``MaxPool2d(kernel_size=3, stride=2, padding=1)``. Default: ``False``
+        :type pool: bool
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         layers = [
             nn.Conv2d(
@@ -62,6 +121,83 @@ class SpikformerConv2dBNLIF(nn.Module, base.MultiStepModule):
         tau: float = 2.0,
         detach_reset: bool = True,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikformerConv2dBNLIF-cn>` | :ref:`English <SpikformerConv2dBNLIF-en>`
+
+        ----
+
+        .. _SpikformerConv2dBNLIF-cn:
+
+        * **中文**
+
+        ``Conv2d`` + ``BatchNorm2d`` + ``LIFNode`` 的组合模块，支持多步模式。内部使用 ``SpikformerConv2dBN`` 进行卷积和批归一化，后接一个 ``LIFNode`` 脉冲神经元。
+
+        :param in_channels: 输入图像的通道数
+        :type in_channels: int
+
+        :param out_channels: 输出通道数
+        :type out_channels: int
+
+        :param kernel_size: 卷积核大小
+        :type kernel_size: int
+
+        :param stride: 卷积步长。默认为 1
+        :type stride: int
+
+        :param padding: 卷积填充。默认为 0
+        :type padding: int
+
+        :param pool: 若为 ``True``，则在 ``SpikformerConv2dBN`` 中添加最大池化层。默认为 ``False``
+        :type pool: bool
+
+        :param backend: 神经元后端。默认为 ``"torch"``
+        :type backend: str
+
+        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
+        :type tau: float
+
+        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
+        :type detach_reset: bool
+
+        ----
+
+        .. _SpikformerConv2dBNLIF-en:
+
+        * **English**
+
+        A sequential module combining ``Conv2d`` + ``BatchNorm2d`` + ``LIFNode`` with multi-step support. Uses ``SpikformerConv2dBN`` internally for convolution and batch normalization, followed by a ``LIFNode`` spiking neuron.
+
+        :param in_channels: Number of channels in the input image
+        :type in_channels: int
+
+        :param out_channels: Number of output channels
+        :type out_channels: int
+
+        :param kernel_size: Size of the convolution kernel
+        :type kernel_size: int
+
+        :param stride: Stride of the convolution. Default: 1
+        :type stride: int
+
+        :param padding: Padding added to both sides of the input. Default: 0
+        :type padding: int
+
+        :param pool: If ``True``, adds max-pooling inside ``SpikformerConv2dBN``. Default: ``False``
+        :type pool: bool
+
+        :param backend: Backend for the LIF neuron. Default: ``"torch"``
+        :type backend: str
+
+        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
+        :type tau: float
+
+        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
+        :type detach_reset: bool
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.conv_bn = SpikformerConv2dBN(
             in_channels=in_channels,
@@ -97,6 +233,81 @@ class SpikformerPatchStem(nn.Module, base.MultiStepModule):
         tau: float = 2.0,
         detach_reset: bool = True,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikformerPatchStem-cn>` | :ref:`English <SpikformerPatchStem-en>`
+
+        ----
+
+        .. _SpikformerPatchStem-cn:
+
+        * **中文**
+
+        图像分块嵌入 (patch embedding) 模块，由 4 个卷积降采样阶段和 1 个位置编码卷积组成。每个阶段包含 ``SpikformerConv2dBNLIF`` (Conv2d + BN + MaxPool + LIF)。
+
+        :param img_size_h: 输入图像高度。默认为 224
+        :type img_size_h: int
+
+        :param img_size_w: 输入图像宽度。默认为 224
+        :type img_size_w: int
+
+        :param patch_size: 分块大小，当前固定为 16。传入其他值将抛出 ``ValueError``
+        :type patch_size: int
+
+        :param in_channels: 输入图像的通道数。默认为 3
+        :type in_channels: int
+
+        :param embed_dims: 最终的嵌入维度。默认为 256
+        :type embed_dims: int
+
+        :param backend: 神经元后端。默认为 ``"torch"``
+        :type backend: str
+
+        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
+        :type tau: float
+
+        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
+        :type detach_reset: bool
+
+        :raises ValueError: 当 ``patch_size`` 不是 16 时抛出
+
+        ----
+
+        .. _SpikformerPatchStem-en:
+
+        * **English**
+
+        Image patch embedding stem consisting of 4 convolutional downsampling stages and a positional encoding convolution. Each stage uses ``SpikformerConv2dBNLIF`` (Conv2d + BN + MaxPool + LIF).
+
+        :param img_size_h: Input image height. Default: 224
+        :type img_size_h: int
+
+        :param img_size_w: Input image width. Default: 224
+        :type img_size_w: int
+
+        :param patch_size: Patch size, currently fixed to 16. Other values will raise a ``ValueError``
+        :type patch_size: int
+
+        :param in_channels: Number of channels in the input image. Default: 3
+        :type in_channels: int
+
+        :param embed_dims: Final embedding dimension. Default: 256
+        :type embed_dims: int
+
+        :param backend: Backend for the LIF neuron. Default: ``"torch"``
+        :type backend: str
+
+        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
+        :type tau: float
+
+        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
+        :type detach_reset: bool
+
+        :raises ValueError: If ``patch_size`` is not 16
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         if patch_size != 16:
             raise ValueError(
@@ -157,6 +368,65 @@ class SpikformerMLP(nn.Module, base.MultiStepModule):
         tau: float = 2.0,
         detach_reset: bool = True,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikformerMLP-cn>` | :ref:`English <SpikformerMLP-en>`
+
+        ----
+
+        .. _SpikformerMLP-cn:
+
+        * **中文**
+
+        脉冲 MLP 模块，包含两个 ``Conv1d`` 层（kernel_size=1）和两个 ``LIFNode`` 脉冲神经元。支持多步模式。
+
+        :param in_features: 输入特征维度
+        :type in_features: int
+
+        :param hidden_features: 隐藏层特征维度
+        :type hidden_features: int
+
+        :param out_features: 输出特征维度
+        :type out_features: int
+
+        :param backend: 神经元后端。默认为 ``"torch"``
+        :type backend: str
+
+        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
+        :type tau: float
+
+        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
+        :type detach_reset: bool
+
+        ----
+
+        .. _SpikformerMLP-en:
+
+        * **English**
+
+        Spiking MLP block consisting of two ``Conv1d`` layers (kernel_size=1) and two ``LIFNode`` spiking neurons. Supports multi-step mode.
+
+        :param in_features: Input feature dimension
+        :type in_features: int
+
+        :param hidden_features: Hidden feature dimension
+        :type hidden_features: int
+
+        :param out_features: Output feature dimension
+        :type out_features: int
+
+        :param backend: Backend for the LIF neuron. Default: ``"torch"``
+        :type backend: str
+
+        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
+        :type tau: float
+
+        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
+        :type detach_reset: bool
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.fc1 = layer.SeqToANNContainer(
             nn.Conv1d(in_features, hidden_features, kernel_size=1, bias=False),
@@ -198,6 +468,69 @@ class SpikformerBlock(nn.Module, base.MultiStepModule):
         tau: float = 2.0,
         detach_reset: bool = True,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <SpikformerBlock-cn>` | :ref:`English <SpikformerBlock-en>`
+
+        ----
+
+        .. _SpikformerBlock-cn:
+
+        * **中文**
+
+        Spikformer 基础块，包含一个 ``SpikingSelfAttention`` 和一个 ``SpikformerMLP``，并使用残差连接。输入必须是 5D 张量 ``[T, N, C, H, W]``。
+
+        :param dim: 特征维度
+        :type dim: int
+
+        :param num_heads: 自注意力头数
+        :type num_heads: int
+
+        :param mlp_ratio: MLP 隐藏层维度相对于 ``dim`` 的倍数。默认为 4.0
+        :type mlp_ratio: float
+
+        :param backend: 神经元后端。默认为 ``"torch"``
+        :type backend: str
+
+        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
+        :type tau: float
+
+        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
+        :type detach_reset: bool
+
+        :raises ValueError: 如果输入不是 5D 张量 ``[T, N, C, H, W]``
+
+        ----
+
+        .. _SpikformerBlock-en:
+
+        * **English**
+
+        A Spikformer transformer block consisting of a ``SpikingSelfAttention`` layer and a ``SpikformerMLP`` with residual connections. The input must be a 5D tensor ``[T, N, C, H, W]``.
+
+        :param dim: Feature dimension
+        :type dim: int
+
+        :param num_heads: Number of attention heads
+        :type num_heads: int
+
+        :param mlp_ratio: Ratio of MLP hidden dimension to ``dim``. Default: 4.0
+        :type mlp_ratio: float
+
+        :param backend: Backend for the LIF neuron. Default: ``"torch"``
+        :type backend: str
+
+        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
+        :type tau: float
+
+        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
+        :type detach_reset: bool
+
+        :raises ValueError: If the input is not a 5D tensor ``[T, N, C, H, W]``
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.attn = SpikingSelfAttention(dim=dim, num_heads=num_heads, backend=backend)
         hidden_features = int(dim * mlp_ratio)
@@ -239,6 +572,109 @@ class Spikformer(nn.Module, base.MultiStepModule):
         tau: float = 2.0,
         detach_reset: bool = True,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <Spikformer-cn>` | :ref:`English <Spikformer-en>`
+
+        ----
+
+        .. _Spikformer-cn:
+
+        * **中文**
+
+        Spikformer 脉冲视觉 Transformer 模型，用于图像分类。输入图像首先通过 ``SpikformerPatchStem`` 进行分块嵌入，
+        然后经过多个 ``SpikformerBlock`` 处理，最后通过线性分类头输出类别预测。支持多步 (multi-step) 时序处理。
+
+        :param T: 时间步数。默认为 4
+        :type T: int
+
+        :param in_channels: 输入图像的通道数。默认为 3
+        :type in_channels: int
+
+        :param img_size_h: 输入图像高度。默认为 224
+        :type img_size_h: int
+
+        :param img_size_w: 输入图像宽度。默认为 224
+        :type img_size_w: int
+
+        :param patch_size: 分块大小。默认为 16
+        :type patch_size: int
+
+        :param num_classes: 分类类别数。默认为 1000
+        :type num_classes: int
+
+        :param embed_dims: 嵌入维度。默认为 256
+        :type embed_dims: int
+
+        :param num_heads: 自注意力头数。默认为 8
+        :type num_heads: int
+
+        :param mlp_ratio: MLP 隐藏层维度相对于 ``embed_dims`` 的倍数。默认为 4.0
+        :type mlp_ratio: float
+
+        :param depths: Transformer 块的数量。默认为 4
+        :type depths: int
+
+        :param backend: 神经元后端。默认为 ``"torch"``
+        :type backend: str
+
+        :param tau: ``LIFNode`` 的膜电位时间常数。默认为 2.0
+        :type tau: float
+
+        :param detach_reset: 是否在重置时断开计算图。默认为 ``True``
+        :type detach_reset: bool
+
+        ----
+
+        .. _Spikformer-en:
+
+        * **English**
+
+        Spikformer spiking vision Transformer for image classification. Input images are first patch-embedded by ``SpikformerPatchStem``,
+        then processed by multiple ``SpikformerBlock`` modules, and finally classified by a linear head. Supports multi-step temporal processing.
+
+        :param T: Number of time steps. Default: 4
+        :type T: int
+
+        :param in_channels: Number of channels in the input image. Default: 3
+        :type in_channels: int
+
+        :param img_size_h: Input image height. Default: 224
+        :type img_size_h: int
+
+        :param img_size_w: Input image width. Default: 224
+        :type img_size_w: int
+
+        :param patch_size: Patch size. Default: 16
+        :type patch_size: int
+
+        :param num_classes: Number of classes. Default: 1000
+        :type num_classes: int
+
+        :param embed_dims: Embedding dimension. Default: 256
+        :type embed_dims: int
+
+        :param num_heads: Number of attention heads. Default: 8
+        :type num_heads: int
+
+        :param mlp_ratio: Ratio of MLP hidden dimension to ``embed_dims``. Default: 4.0
+        :type mlp_ratio: float
+
+        :param depths: Number of Transformer blocks. Default: 4
+        :type depths: int
+
+        :param backend: Backend for the LIF neuron. Default: ``"torch"``
+        :type backend: str
+
+        :param tau: Membrane time constant of the ``LIFNode``. Default: 2.0
+        :type tau: float
+
+        :param detach_reset: Whether to detach the computational graph on reset. Default: ``True``
+        :type detach_reset: bool
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.T = T
         self.num_classes = num_classes
@@ -311,6 +747,56 @@ def spikformer_ti(
     num_classes: int = 1000,
     backend: str = "torch",
 ) -> Spikformer:
+    r"""
+    **API Language:**
+    :ref:`中文 <spikformer_ti-cn>` | :ref:`English <spikformer_ti-en>`
+
+    ----
+
+    .. _spikformer_ti-cn:
+
+    * **中文**
+
+    返回一个 Spikformer-Ti (tiny) 模型，其 ``embed_dims=256, num_heads=8, depths=4``。
+
+    :param T: 时间步数。默认为 4
+    :type T: int
+    :param in_channels: 输入图像的通道数。默认为 3
+    :type in_channels: int
+    :param img_size_h: 输入图像高度。默认为 224
+    :type img_size_h: int
+    :param img_size_w: 输入图像宽度。默认为 224
+    :type img_size_w: int
+    :param num_classes: 分类类别数。默认为 1000
+    :type num_classes: int
+    :param backend: 神经元后端。默认为 ``\"torch\"``
+    :type backend: str
+    :return: 模型实例
+    :rtype: Spikformer
+
+    ----
+
+    .. _spikformer_ti-en:
+
+    * **English**
+
+    Return a Spikformer-Ti (tiny) model with ``embed_dims=256, num_heads=8, depths=4``.
+
+    :param T: Number of time steps. Default: 4
+    :type T: int
+    :param in_channels: Number of input channels. Default: 3
+    :type in_channels: int
+    :param img_size_h: Input image height. Default: 224
+    :type img_size_h: int
+    :param img_size_w: Input image width. Default: 224
+    :type img_size_w: int
+    :param num_classes: Number of classes. Default: 1000
+    :type num_classes: int
+    :param backend: Backend for neurons. Default: ``\"torch\"``
+    :type backend: str
+    :return: Model instance
+    :rtype: Spikformer
+    """
     return Spikformer(
         T=T,
         in_channels=in_channels,
@@ -333,6 +819,56 @@ def spikformer_s(
     num_classes: int = 1000,
     backend: str = "torch",
 ) -> Spikformer:
+    r"""
+    **API Language:**
+    :ref:`中文 <spikformer_s-cn>` | :ref:`English <spikformer_s-en>`
+
+    ----
+
+    .. _spikformer_s-cn:
+
+    * **中文**
+
+    返回一个 Spikformer-S (small) 模型，其 ``embed_dims=384, num_heads=12, depths=6``。
+
+    :param T: 时间步数。默认为 4
+    :type T: int
+    :param in_channels: 输入图像的通道数。默认为 3
+    :type in_channels: int
+    :param img_size_h: 输入图像高度。默认为 224
+    :type img_size_h: int
+    :param img_size_w: 输入图像宽度。默认为 224
+    :type img_size_w: int
+    :param num_classes: 分类类别数。默认为 1000
+    :type num_classes: int
+    :param backend: 神经元后端。默认为 ``\"torch\"``
+    :type backend: str
+    :return: 模型实例
+    :rtype: Spikformer
+
+    ----
+
+    .. _spikformer_s-en:
+
+    * **English**
+
+    Return a Spikformer-S (small) model with ``embed_dims=384, num_heads=12, depths=6``.
+
+    :param T: Number of time steps. Default: 4
+    :type T: int
+    :param in_channels: Number of input channels. Default: 3
+    :type in_channels: int
+    :param img_size_h: Input image height. Default: 224
+    :type img_size_h: int
+    :param img_size_w: Input image width. Default: 224
+    :type img_size_w: int
+    :param num_classes: Number of classes. Default: 1000
+    :type num_classes: int
+    :param backend: Backend for neurons. Default: ``\"torch\"``
+    :type backend: str
+    :return: Model instance
+    :rtype: Spikformer
+    """
     return Spikformer(
         T=T,
         in_channels=in_channels,

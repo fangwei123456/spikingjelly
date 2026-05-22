@@ -24,11 +24,25 @@ def _cmp_max_pool2d_with_indices(args, kwargs, out):
 
 
 class NeuroMCCmpCounter(NeuroMCBaseCounter):
+    """Counter for comparison operations in the NeuroMC framework.
+
+    Tracks the number of scalar and tensor comparison operations, including
+    element-wise comparisons and max-pooling indexing operations.
+    """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] | None = None,
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        """
+        :param extra_rules: Additional counting rules keyed by ATen operation
+        :type extra_rules: dict[Any, Callable] | None
+        :param extra_ignore_modules: Additional module types to ignore during counting
+        :type extra_ignore_modules: list[nn.Module] | None
+        :return: None
+        :rtype: None
+        """
         if extra_rules is None:
             extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)

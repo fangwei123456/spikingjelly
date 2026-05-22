@@ -295,6 +295,8 @@ class ACCounter(BaseCounter):
                 model(spike)
 
             print(f"Total ACs: {ac_counter.get_total()}")  # only the 1st layer counts
+        :return: None
+        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {

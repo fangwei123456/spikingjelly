@@ -95,6 +95,7 @@ class LemaireAddressingCounter(BaseCounter):
         ----
 
         .. _LemaireAddressingCounter.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -119,6 +120,7 @@ class LemaireAddressingCounter(BaseCounter):
         ----
 
         .. _LemaireAddressingCounter.__init__-en:
+        * **English**
 
         * **English**
 
@@ -147,6 +149,8 @@ class LemaireAddressingCounter(BaseCounter):
         .. [#lemaire2022] Lemaire, Edgar, et al. "An Analytical Estimation of
             Spiking Neural Networks Energy Efficiency." International Conference
             on Neural Information Processing. 2022.
+        :return: None
+        :rtype: None
         """
         super().__init__()
         self.rules: dict[Any, Callable] = {

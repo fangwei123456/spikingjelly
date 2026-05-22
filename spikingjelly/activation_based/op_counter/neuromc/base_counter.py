@@ -13,11 +13,26 @@ __all__ = ["NeuroMCBaseCounter"]
 
 
 class NeuroMCBaseCounter(BaseCounter):
+    """Base counter for NeuroMC energy profiling framework.
+
+    Provides generic recording infrastructure for tracking operation counts
+    across stages, operators, and their combinations. Subclasses implement
+    specific counting rules for different operation types.
+    """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] | None = None,
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        """
+        :param extra_rules: Additional counting rules keyed by ATen operation
+        :type extra_rules: dict[Any, Callable] | None
+        :param extra_ignore_modules: Additional module types to ignore during counting
+        :type extra_ignore_modules: list[nn.Module] | None
+        :return: None
+        :rtype: None
+        """
         if extra_rules is None:
             extra_rules = {}
         if extra_ignore_modules is None:

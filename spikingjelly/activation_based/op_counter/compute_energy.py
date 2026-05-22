@@ -201,6 +201,7 @@ class ComputeEnergyProfiler:
     ----
 
     .. _ComputeEnergyProfiler-cn:
+    * **中文**
 
     * **中文**
 
@@ -212,6 +213,7 @@ class ComputeEnergyProfiler:
     ----
 
     .. _ComputeEnergyProfiler-en:
+    * **English**
 
     * **English**
 
@@ -219,6 +221,14 @@ class ComputeEnergyProfiler:
 
     Use it like the other energy profilers: wrap one real forward pass in the
     context manager and call ``get_report()`` afterwards.
+
+    :param config: 能耗配置，若为 ``None`` 则使用默认配置
+    :type config: ComputeEnergyConfig | None
+
+    :param config: Energy configuration. If ``None``, uses the default configuration
+    :type config: ComputeEnergyConfig | None
+    :return: None
+    :rtype: None
     """
 
     def __init__(self, *, config: ComputeEnergyConfig | None = None):

@@ -164,11 +164,26 @@ def _mul_native_batch_norm_backward(args, kwargs, out):
 
 
 class NeuroMCMulCounter(NeuroMCBaseCounter):
+    """Counter for multiplication operations in the NeuroMC framework.
+
+    Tracks the number of multiplication operations performed during model
+    execution, including matrix multiplications, convolutions, and
+    element-wise multiplications.
+    """
+
     def __init__(
         self,
         extra_rules: dict[Any, Callable] | None = None,
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
+        """
+        :param extra_rules: Additional counting rules keyed by ATen operation
+        :type extra_rules: dict[Any, Callable] | None
+        :param extra_ignore_modules: Additional module types to ignore during counting
+        :type extra_ignore_modules: list[nn.Module] | None
+        :return: None
+        :rtype: None
+        """
         if extra_rules is None:
             extra_rules = {}
         super().__init__(extra_rules, extra_ignore_modules)

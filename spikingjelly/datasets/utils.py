@@ -1364,6 +1364,7 @@ def pad_sequence_collate(batch: list):
     ----
 
     .. _pad_sequence_collate-cn:
+    * **中文**
 
     * **中文**
 
@@ -1381,6 +1382,7 @@ def pad_sequence_collate(batch: list):
     ----
 
     .. _pad_sequence_collate-en:
+    * **English**
 
     * **English**
 
@@ -1434,6 +1436,8 @@ def pad_sequence_collate(batch: list):
         x_p.shape=torch.Size([2, 18, 2]), label=tensor([14, 30]), x_len=tensor([18,  2])
         x_p.shape=torch.Size([2, 29, 2]), label=tensor([3, 6]), x_len=tensor([29, 26])
         x_p.shape=torch.Size([2, 23, 2]), label=tensor([ 9, 23]), x_len=tensor([23,  9])
+    :return: None
+    :rtype: None
     """
     x_list = []
     x_len_list = []
@@ -1458,6 +1462,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     ----
 
     .. _padded_sequence_mask-cn:
+    * **中文**
 
     * **中文**
 
@@ -1477,6 +1482,7 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
     ----
 
     .. _padded_sequence_mask-en:
+    * **English**
 
     * **English**
 
@@ -1524,6 +1530,8 @@ def padded_sequence_mask(sequence_len: torch.Tensor, T: Optional[int] = None):
                 [ True,  True,  True],
                 [False,  True,  True],
                 [False, False,  True]])
+    :return: None
+    :rtype: None
     """
     if T is None:
         T = sequence_len.max().item()

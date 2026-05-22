@@ -19,7 +19,17 @@ def _memory_null(args, kwargs, out):
 
 
 def _memory_mm(args, kwargs, out):
-    """out = x @ y"""
+    """Estimate memory access for matrix multiplication.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated memory access
+    :rtype: int
+    """
     x, y = args[:2]
     _, k = x.shape
     kk, _ = y.shape
@@ -29,7 +39,17 @@ def _memory_mm(args, kwargs, out):
 
 
 def _memory_addmm(args, kwargs, out):
-    """out = beta * bias + alpha * (x @ y)"""
+    """Estimate memory access for ``out = beta * bias + alpha * (x @ y)``.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated memory access
+    :rtype: int
+    """
     bias, x, y = args[:3]
     _, k = x.shape
     kk, _ = y.shape
@@ -46,7 +66,17 @@ def _memory_addmm(args, kwargs, out):
 
 
 def _memory_bmm(args, kwargs, out):
-    """Batch matrix multiply: out[b] = x[b] @ y[b]"""
+    """Estimate memory access for batched matrix multiplication.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated memory access
+    :rtype: int
+    """
     x, y = args[:2]
     b, _, k = x.shape
     bb, kk, _ = y.shape
@@ -58,7 +88,17 @@ def _memory_bmm(args, kwargs, out):
 
 
 def _memory_baddbmm(args, kwargs, out):
-    """out[b] = beta * b[b] + alpha * (x[b] @ y[b])"""
+    """Estimate memory access for batched add-batched-matmul.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated memory access
+    :rtype: int
+    """
     bias, x, y = args[:3]
     b, m, k = x.shape
     bb, kk, n = y.shape
@@ -75,6 +115,17 @@ def _memory_baddbmm(args, kwargs, out):
 
 
 def _memory_convolution(args, kwargs, out):
+    """Estimate memory access for convolution.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated memory access
+    :rtype: int
+    """
     x, w, bias = args[:3]
     m = _bytes(x) + _bytes(w) + _bytes(out)
     if bias is not None:
@@ -83,11 +134,16 @@ def _memory_convolution(args, kwargs, out):
 
 
 def _memory_convolution_backward(args, kwargs, out):
-    """
-    Outputs (by output_mask):
-        0: grad_x
-        1: grad_weight
-        2: grad_bias
+    """Estimate memory access for convolution backward.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output tuple
+    :type out: tuple
+    :return: Estimated memory access
+    :rtype: int
     """
     (
         grad_out,
@@ -211,6 +267,38 @@ def _memory_native_batch_norm_backward(args, kwargs, out):
 
 
 class MemoryAccessCounter(BaseCounter):
+    r"""
+    **API Language:**
+    :ref:`中文 <MemoryAccessCounter-cn>` | :ref:`English <MemoryAccessCounter-en>`
+
+    ----
+
+    .. _MemoryAccessCounter-cn:
+    * **中文**
+
+    * **中文**
+
+    内存访问量估计计数器。
+
+    该计数器以输入/输出张量的字节数为基础，估计算子的内存访问下界，
+    适合用于粗略分析不同网络结构的访存压力。具体构造参数见
+    :meth:`__init__ <MemoryAccessCounter.__init__-cn>`。
+
+    ----
+
+    .. _MemoryAccessCounter-en:
+    * **English**
+
+    * **English**
+
+    Memory-access estimation counter.
+
+    The counter estimates a lower bound of operator memory access from the byte
+    size of input and output tensors, which is useful for coarse-grained memory
+    traffic analysis across network structures. See
+    :meth:`__init__ <MemoryAccessCounter.__init__-en>` for constructor
+    parameters.
+    """
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},
@@ -291,6 +379,8 @@ class MemoryAccessCounter(BaseCounter):
 
             total_bytes = memory_counter.get_total()
             print(f"Total memory access: {total_bytes / 1024:.2f} KB")
+        :return: None
+        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {

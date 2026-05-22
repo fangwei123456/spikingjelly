@@ -188,6 +188,47 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
         `CIFAR10-DVS: An Event-Stream Dataset for Object Classification <https://internal-journal.frontiersin.org/articles/10.3389/fnins.2017.00309/full>`_.
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` for more details about params information.
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` or ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
+        :return: None
+        :rtype: None
         """
         super().__init__(
             root,
@@ -204,8 +245,29 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
 
     @classmethod
     def get_H_W(cls) -> Tuple:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <cifar10_dvs.get_H_W-cn>` | :ref:`English <cifar10_dvs.get_H_W-en>`
+
+        ----
+
+        .. _cifar10_dvs.get_H_W-cn:
+        * **中文**
+
+        * **中文**
+
         :return: ``(128, 128)``
+        :rtype: Tuple
+
+        ----
+
+        .. _cifar10_dvs.get_H_W-en:
+        * **English**
+
+        * **English**
+
+        :return: ``(128, 128)``
+        :rtype: Tuple
         """
         return 128, 128
 
@@ -397,6 +459,51 @@ class CIFAR10DVSTEBNSplit(CIFAR10DVS):
 
         Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
         for more details about params information.
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param train: 是否使用训练集（``True`` 或 ``False``）
+        :type train: bool
+        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param train: Whether to use training set (``True``) or test set (``False``)
+        :type train: bool
+        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` or ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
+        :return: None
+        :rtype: None
         """
         if train is None:
             raise ValueError("`train` must be `True` or `False`")

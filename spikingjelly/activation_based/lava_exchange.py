@@ -11,12 +11,70 @@ _hw_bits = 12
 
 
 def step_quantize_forward(x: torch.Tensor, step: float):
+    r"""
+    **API Language:**
+    :ref:`中文 <step_quantize_forward-cn>` | :ref:`English <step_quantize_forward-en>`
+
+    ----
+
+    .. _step_quantize_forward-cn:
+    * **中文**
+
+    * **中文**
+
+    ``step_quantize`` 的前向量化函数。将 ``x`` 除以 ``step``，四舍五入后再乘回 ``step``。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param step: 量化步长
+    :type step: float
+    :return: 量化后的张量
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _step_quantize_forward-en:
+    * **English**
+
+    * **English**
+
+    The forward quantization function of ``step_quantize``. Divide ``x`` by ``step``, round, and multiply back by ``step``.
+
+    :param x: Input tensor
+    :type x: torch.Tensor
+    :param step: Quantization step
+    :type step: float
+    :return: Quantized tensor
+    :rtype: torch.Tensor
+    """
     x = x / step
     torch.round_(x)
     return x * step
 
 
 class step_quantize_atgf(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <step_quantize_atgf-cn>` | :ref:`English <step_quantize_atgf-en>`
+
+    ----
+
+    .. _step_quantize_atgf-cn:
+    * **中文**
+
+    * **中文**
+
+    ``step_quantize`` 的自定义自动求导函数。前向使用 ``step_quantize_forward`` 进行量化，反向使用直通估计器（Straight-Through Estimator）。
+
+    ----
+
+    .. _step_quantize_atgf-en:
+    * **English**
+
+    * **English**
+
+    Custom autograd Function for ``step_quantize``. Uses ``step_quantize_forward`` for forward quantization and a straight-through estimator (STE) for backward.
+    """
     @staticmethod
     def forward(ctx, x: torch.Tensor, step: float = 1.0):
         return step_quantize_forward(x, step)
@@ -27,27 +85,89 @@ class step_quantize_atgf(torch.autograd.Function):
 
 
 def step_quantize(x: torch.Tensor, step: float = 1.0):
-    """
-    :param x: a float tensor whose range is ``0 <= x <= 1``.
+    r"""
+    **API Language:**
+    :ref:`中文 <step_quantize-cn>` | :ref:`English <step_quantize-en>`
+
+    ----
+
+    .. _step_quantize-cn:
+    * **中文**
+
+    * **中文**
+
+    步进量化器，定义在 `Lava` 中。
+
+    记 ``k`` 为 ``int``，``x[i]`` 将被量化到最近的 ``k * step``。
+
+    :param x: 浮点张量，取值范围为 ``0 <= x <= 1``。
     :type x: torch.Tensor
-
-    :param step: the quantization step
+    :param step: 量化步长
     :type step: float
-
     :return: ``y = round(x / step) * step``
     :rtype: torch.Tensor
+
+    ----
+
+    .. _step_quantize-en:
+    * **English**
+
+    * **English**
 
     The step quantizer defined in `Lava`.
 
     Denote ``k`` as an ``int``, ``x[i]`` will be quantized to the nearest ``k * step``.
+
+    :param x: a float tensor whose range is ``0 <= x <= 1``.
+    :type x: torch.Tensor
+    :param step: the quantization step
+    :type step: float
+    :return: ``y = round(x / step) * step``
+    :rtype: torch.Tensor
     """
     return step_quantize_atgf.apply(x, step)
 
 
 def quantize_8b(x, scale, descale=False):
-    """
-    Denote ``k`` as an ``int``, ``x[i]`` will be quantized to the nearest ``2 * k / scale``, \
-    and ``k = {-128, -127, ..., 126, 127}``.
+    r"""
+    **API Language:**
+    :ref:`中文 <quantize_8b-cn>` | :ref:`English <quantize_8b-en>`
+
+    ----
+
+    .. _quantize_8b-cn:
+    * **中文**
+
+    * **中文**
+
+    记 ``k`` 为 ``int``，``x[i]`` 将被量化到最近的 ``2 * k / scale``，其中 ``k = {-128, -127, ..., 126, 127}``。
+
+    :param x: 输入张量
+    :type x: torch.Tensor
+    :param scale: 缩放因子
+    :type scale: float
+    :param descale: 是否进行反缩放
+    :type descale: bool
+    :return: 量化后的张量
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _quantize_8b-en:
+    * **English**
+
+    * **English**
+
+    Denote ``k`` as an ``int``, ``x[i]`` will be quantized to the nearest ``2 * k / scale``, and ``k = {-128, -127, ..., 126, 127}``.
+
+    :param x: input tensor
+    :type x: torch.Tensor
+    :param scale: scale factor
+    :type scale: float
+    :param descale: whether to descale
+    :type descale: bool
+    :return: quantized tensor
+    :rtype: torch.Tensor
     """
     if not descale:
         return step_quantize(x, step=2 / scale).clamp(-256 / scale, 255 / scale)
@@ -56,6 +176,42 @@ def quantize_8b(x, scale, descale=False):
 
 
 def right_shift_to_zero(x: torch.Tensor, bits: int):
+    r"""
+    **API Language:**
+    :ref:`中文 <right_shift_to_zero-cn>` | :ref:`English <right_shift_to_zero-en>`
+
+    ----
+
+    .. _right_shift_to_zero-cn:
+    * **中文**
+
+    * **中文**
+
+    带符号的右移运算，向零舍入。计算 ``sign(x) * (|x| >> bits)``，确保负数向零舍入。
+
+    :param x: 输入整数张量，须为 ``torch.int32`` 或 ``torch.int64``
+    :type x: torch.Tensor
+    :param bits: 右移位数
+    :type bits: int
+    :return: 右移后的整数张量
+    :rtype: torch.Tensor
+
+    ----
+
+    .. _right_shift_to_zero-en:
+    * **English**
+
+    * **English**
+
+    Signed right shift with rounding toward zero. Computes ``sign(x) * (|x| >> bits)`` so that negative values shift toward zero.
+
+    :param x: Input integer tensor, must be ``torch.int32`` or ``torch.int64``
+    :type x: torch.Tensor
+    :param bits: Number of bits to shift
+    :type bits: int
+    :return: Right-shifted integer tensor
+    :rtype: torch.Tensor
+    """
     dtype = x.dtype
     assert dtype in (torch.int32, torch.int64)
     return (torch.sign(x) * (torch.abs(x) >> bits)).to(dtype)
@@ -104,6 +260,58 @@ class BatchNorm2d(nn.Module):
         weight_exp_bits: int = 3,
         pre_hook_fx: Callable = lambda x: x,
     ):
+        r"""
+        **API Language:**
+        :ref:`中文 <BatchNorm2d.__init__-cn>` | :ref:`English <BatchNorm2d.__init__-en>`
+
+        ----
+
+        .. _BatchNorm2d.__init__-cn:
+
+        * **中文**
+
+        用于 Lava 交换的带权重量化的批归一化层，参考 ``lava.lib.dl.slayer.neuron.norm.WgtScaleBatchNorm``。
+        与标准 ``nn.BatchNorm2d`` 不同，该层使用基于 2 的幂的量化标准差进行归一化，且不含可学习的仿射参数。
+
+        :param num_features: 特征通道数
+        :type num_features: int
+        :param eps: 防止除零的小常数
+        :type eps: float
+        :param momentum: running 统计量的动量
+        :type momentum: float
+        :param track_running_stats: 是否追踪运行统计量
+        :type track_running_stats: bool
+        :param weight_exp_bits: 权重指数位数
+        :type weight_exp_bits: int
+        :param pre_hook_fx: 归一化前对均值的预处理函数
+        :type pre_hook_fx: Callable
+        :return: ``None``
+        :rtype: None
+
+        ----
+
+        .. _BatchNorm2d.__init__-en:
+
+        * **English**
+
+        Weight-quantized batch normalization for Lava exchange, adapted from ``lava.lib.dl.slayer.neuron.norm.WgtScaleBatchNorm``.
+        Unlike standard ``nn.BatchNorm2d``, this layer uses power-of-2 quantized standard deviation for normalization and has no learnable affine parameters.
+
+        :param num_features: Number of feature channels
+        :type num_features: int
+        :param eps: Small constant for numerical stability
+        :type eps: float
+        :param momentum: Momentum for running statistics
+        :type momentum: float
+        :param track_running_stats: Whether to track running statistics
+        :type track_running_stats: bool
+        :param weight_exp_bits: Number of bits for weight exponent
+        :type weight_exp_bits: int
+        :param pre_hook_fx: Pre-processing function applied to mean before normalization
+        :type pre_hook_fx: Callable
+        :return: ``None``
+        :rtype: None
+        """
         super().__init__()
         # lava.lib.dl.slayer.neuron.norm.WgtScaleBatchNorm
         self.num_features = num_features
@@ -158,6 +366,31 @@ class BatchNorm2d(nn.Module):
 
 
 class LeakyIntegratorStep(torch.autograd.Function):
+    r"""
+    **API Language:**
+    :ref:`中文 <LeakyIntegratorStep-cn>` | :ref:`English <LeakyIntegratorStep-en>`
+
+    ----
+
+    .. _LeakyIntegratorStep-cn:
+    * **中文**
+
+    * **中文**
+
+    泄露积分器（Leaky Integrator）的自定义自动求导函数，用于 Lava 交换中的电流/电压衰减计算。
+    前向通过 ``_listep_forward`` 实现整数算术的泄露积分，反向通过 ``_listep_backward`` 实现梯度传播。
+
+    ----
+
+    .. _LeakyIntegratorStep-en:
+    * **English**
+
+    * **English**
+
+    Custom autograd Function for the Leaky Integrator used in Lava exchange current/voltage decay.
+    Forward implements leaky integration via integer arithmetic through ``_listep_forward``,
+    and backward propagates gradients through ``_listep_backward``.
+    """
     @staticmethod
     def forward(ctx, x, decay, state, w_scale):
         output = _listep_forward(
@@ -194,105 +427,90 @@ class CubaLIFNode(neuron.BaseNode):
         store_i_seq: bool = False,
     ):
         # author: https://github.com/AllenYolk
-        """
-        * :ref:`API in English <CubaLIFNode.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <CubaLIFNode.__init__-cn>` | :ref:`English <CubaLIFNode.__init__-en>`
+
+        ----
 
         .. _CubaLIFNode.__init__-cn:
 
+        * **中文**
+
         :param current_decay: 电流衰减常数
         :type current_decay: Union[float, torch.Tensor]
-
         :param voltage_decay: 电压衰减常数
         :type voltage_decay: Union[float, torch.Tensor]
-
         :param v_threshold: 神经元阈值电压。默认为1。
         :type v_threshold: float
-
         :param v_reset: 重置电压，默认为0
         :type v_reset: float, None
-
-
         :param scale: 量化参数，控制神经元的量化精度（参考了lava-dl的cuba.Neuron）。默认为 ``1<<6`` 。
             等效于``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``。
         :type scale: float
-
         :param requires_grad: 指明 ``current_decay`` 和 ``voltage_decay`` 两个神经元参数是否可学习（是否需要梯度），默认为 ``False`` 。
         :type requires_grad: bool
-
         :param detach_reset: 是否将reset的计算图分离，默认为 ``False`` 。
         :type detach_reset: bool
-
         :param step_mode: 步进模式，可以为 `'s'` （单步）或 `'m'` （多步），默认为 `'s'` 。
         :type step_mode: str
-
         :param backend: 使用哪种后端。不同的 ``step_mode`` 可能会带有不同的后端。可以通过打印 ``self.supported_backends`` 查看当前
             使用的步进模式支持的后端。目前只支持torch
         :type backend: str
-
         :param store_v_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电压值 ``self.v_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电压，即 ``shape = [N, *]`` 的 ``self.voltage_state`` 。
             通常设置成 ``False`` ，可以节省内存。
         :type store_v_seq: bool
-
         :param store_i_seq: 在使用 ``step_mode = 'm'`` 时，给与 ``shape = [T, N, *]`` 的输入后，是否保存中间过程的 ``shape = [T, N, *]``
             的各个时间步的电流值 ``self.i_seq`` 。设置为 ``False`` 时计算完成后只保留最后一个时刻的电流，即 ``shape = [N, *]`` 的 ``self.current_state`` 。
             通常设置成 ``False`` ，可以节省内存。
         :type store_i_seq: bool
+        :param surrogate_function: 替代梯度函数。默认为 ``surrogate.Sigmoid()``
+        :type surrogate_function: Callable
+        :param norm: 量化归一化层，可选。若提供，则在每个时间步前对输入进行量化
+        :type norm: BatchNorm2d, optional
 
         .. math::
             I[t] = (1 - \\alpha_{I})I[t-1] + X[t]
             V[t] = (1 - \\alpha_{V})V[t-1] + I[t]
 
-
-        * :ref:`中文API <CubaLIFNode.__init__-cn>`
+        ----
 
         .. _CubaLIFNode.__init__-en:
 
+        * **English**
+
         :param current_decay: current decay constant
         :type current_decay: Union[float, torch.Tensor]
-
-        :param voltage_decay: voltage decay constant
-        :type voltage_decay: Union[float, torch.Tensor]
-
         :param v_threshold: threshold of the the neurons in this layer. Default to 1.
         :type v_threshold: float
-
         :param v_reset: reset potential of the neurons in this layer, 0 by default
         :type v_reset: float
-
         :param scale: quantization precision (ref: lava-dl cuba.Neuron). Default to ``1<<6`` .
             Equivalent to ``w_scale=int(scale)``, ``s_scale=int(scale * (1<<6))``, ``p_scale=1<<12``.
         :type scale: float
-
         :param requires_grad: whether ``current_decay`` and ``voltage_decay`` are learnable. Default to ``False`` .
         :type requires_grad: bool
-
-
         :param detach_reset: whether to detach the computational graph of reset in backward pass. Default to ``False`` .
         :type detach_reset: bool
-
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step). Default to `'s'` .
         :type step_mode: str
-
         :param backend: backend fot this neurons layer. Different ``step_mode`` may support for different backends. The user can
         print ``self.supported_backends`` and check what backends are supported by the current ``step_mode``. Only `torch` is supported.
         :type backend: str
-
         :param store_v_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the voltage at each time-step to ``self.v_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the voltage at last time-step will be stored to ``self.voltage_state`` with ``shape = [N, *]``, which can reduce the
             memory consumption. Default to ``False`` .
         :type store_v_seq: bool
-
         :param store_i_seq: when using ``step_mode = 'm'`` and given input with ``shape = [T, N, *]``, this option controls
             whether storing the current at each time-step to ``self.i_seq`` with ``shape = [T, N, *]``. If set to ``False``,
             only the current at last time-step will be stored to ``self.current_state`` with ``shape = [N, *]``, which can reduce the
             memory consumption. Default to ``False`` .
         :type store_i_seq: bool
         .. math::
-            I[t] = (1 - \\alpha_{I})I[t-1] + X[t]
-            V[t] = (1 - \\alpha_{V})V[t-1] + I[t]
-
+            I[t] = (1 - \alpha_{I})I[t-1] + X[t]
+            V[t] = (1 - \alpha_{V})V[t-1] + I[t]
         """
         self.lava_cuba_neuron_params = {
             "threshold": v_threshold,
@@ -366,17 +584,86 @@ class CubaLIFNode(neuron.BaseNode):
 
     @property
     def scale(self):
-        """Read-only attribute: scale"""
+        r"""
+        **API Language:**
+        :ref:`中文 <CubaLIFNode.scale-cn>` | :ref:`English <CubaLIFNode.scale-en>`
+
+        ----
+
+        .. _CubaLIFNode.scale-cn:
+        * **中文**
+
+        * **中文**
+
+        :return: 突触权重缩放因子
+        :rtype: float
+
+        ----
+
+        .. _CubaLIFNode.scale-en:
+        * **English**
+
+        * **English**
+
+        :return: Synaptic weight scaling factor
+        :rtype: float
+        """
         return self._scale
 
     @property
     def s_scale(self):
-        """Read-only attribute: s_scale"""
+        r"""
+        **API Language:**
+        :ref:`中文 <CubaLIFNode.s_scale-cn>` | :ref:`English <CubaLIFNode.s_scale-en>`
+
+        ----
+
+        .. _CubaLIFNode.s_scale-cn:
+        * **中文**
+
+        * **中文**
+
+        :return: 突触缩放因子
+        :rtype: float
+
+        ----
+
+        .. _CubaLIFNode.s_scale-en:
+        * **English**
+
+        * **English**
+
+        :return: Synaptic scaling factor
+        :rtype: float
+        """
         return self._s_scale
 
     @property
     def p_scale(self):
-        """Read-only attribute: s_scale"""
+        r"""
+        **API Language:**
+        :ref:`中文 <CubaLIFNode.p_scale-cn>` | :ref:`English <CubaLIFNode.p_scale-en>`
+
+        ----
+
+        .. _CubaLIFNode.p_scale-cn:
+        * **中文**
+
+        * **中文**
+
+        :return: 电压缩放因子
+        :rtype: float
+
+        ----
+
+        .. _CubaLIFNode.p_scale-en:
+        * **English**
+
+        * **English**
+
+        :return: Voltage scaling factor
+        :rtype: float
+        """
         return self._p_scale
 
     @property

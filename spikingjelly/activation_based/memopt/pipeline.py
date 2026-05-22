@@ -36,6 +36,32 @@ MEMOPT_PREFERENCES = ("speed", "balanced", "memory")
 
 @dataclass
 class MemOptSummary:
+    """Summary of a memory optimization configuration.
+
+    Records the selected profile, checkpoint budget, preference, device,
+    and optimization level for a :func:`memory_optimization` run.
+
+    :param profile: Name of the memory optimization profile used
+    :type profile: Optional[str]
+    :param checkpoint_budget: Checkpoint budget category (``\"speed\"``, ``\"balanced\"``, ``\"memory\"``)
+    :type checkpoint_budget: Optional[str]
+    :param prefer: Optimization preference (``\"speed\"``, ``\"balanced\"``, ``\"memory\"``)
+    :type prefer: Optional[str]
+    :param device: Target device (e.g., ``\"cuda:0\"``)
+    :type device: str
+    :param requested_level: Requested optimization level
+    :type requested_level: int
+    :param peak_memory_mb: Estimated peak memory usage in MB
+    :type peak_memory_mb: Optional[float]
+    :param total_gc_count: Total number of gradient checkpoints applied
+    :type total_gc_count: int
+    :param total_sliding_count: Total number of sliding checkpoint segments
+    :type total_sliding_count: int
+    :param compressed_layers: Number of layers using spike compression
+    :type compressed_layers: int
+    :param skipped_errors: Number of layers skipped due to errors
+    :type skipped_errors: int
+    """
     profile: Optional[str]
     checkpoint_budget: Optional[str]
     prefer: Optional[str]

@@ -21,6 +21,7 @@ class Dropout(base.MemoryModule):
         ----
 
         .. _Dropout.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -54,6 +55,7 @@ class Dropout(base.MemoryModule):
         ----
 
         .. _Dropout.__init__-en:
+        * **English**
 
         * **English**
 
@@ -85,7 +87,10 @@ class Dropout(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = step_mode
         assert 0 <= p < 1
@@ -126,6 +131,7 @@ class Dropout2d(Dropout):
         ----
 
         .. _Dropout2d.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -143,6 +149,7 @@ class Dropout2d(Dropout):
         ----
 
         .. _Dropout2d.__init__-en:
+        * **English**
 
         * **English**
 
@@ -157,7 +164,10 @@ class Dropout2d(Dropout):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(p, step_mode)
 
     def create_mask(self, x: Tensor):
@@ -268,7 +278,10 @@ class DropConnectLinear(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = step_mode
         self.in_features = in_features

@@ -253,10 +253,15 @@ torch.library.register_autograd(
 def spike_linear(
     spike: Tensor, weight: Tensor, bias: Optional[Tensor] = None
 ) -> Tensor:
-    """
-    * :ref:`API in English <spike_linear-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <spike_linear-cn>` | :ref:`English <spike_linear-en>`
+
+    ----
 
     .. _spike_linear-cn:
+
+    * **中文**
 
     :class:`torch.nn.functional.linear` 在输入为脉冲时的特例。
 
@@ -268,9 +273,11 @@ def spike_linear(
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <spike_linear-cn>`
+    ----
 
     .. _spike_linear-en:
+
+    * **English**
 
     A specific case of :class:`torch.nn.functional.linear` with inputs are spikes.
 
@@ -299,10 +306,15 @@ def spike_conv1d(
     dilation: Union[_int, _size] = 1,
     groups: _int = 1,
 ) -> Tensor:
-    """
-    * :ref:`API in English <spike_conv1d-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <spike_conv1d-cn>` | :ref:`English <spike_conv1d-en>`
+
+    ----
 
     .. _spike_conv1d-cn:
+
+    * **中文**
 
     :class:`torch.nn.functional.conv1d` 在输入为脉冲时的特例。
 
@@ -314,9 +326,11 @@ def spike_conv1d(
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <spike_conv1d-cn>`
+    ----
 
     .. _spike_conv1d-en:
+
+    * **English**
 
     A specific case of :class:`torch.nn.functional.conv1d` with inputs are spikes.
 
@@ -355,10 +369,15 @@ def spike_conv2d(
     dilation: Union[_int, _size] = 1,
     groups: _int = 1,
 ) -> Tensor:
-    """
-    * :ref:`API in English <spike_conv2d-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <spike_conv2d-cn>` | :ref:`English <spike_conv2d-en>`
+
+    ----
 
     .. _spike_conv2d-cn:
+
+    * **中文**
 
     :class:`torch.nn.functional.conv2d` 在输入为脉冲时的特例。
 
@@ -370,9 +389,11 @@ def spike_conv2d(
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <spike_conv2d-cn>`
+    ----
 
     .. _spike_conv2d-en:
+
+    * **English**
 
     A specific case of :class:`torch.nn.functional.conv2d` with inputs are spikes.
 
@@ -411,10 +432,15 @@ def spike_conv3d(
     dilation: Union[_int, _size] = 1,
     groups: _int = 1,
 ) -> Tensor:
-    """
-    * :ref:`API in English <spike_conv3d-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <spike_conv3d-cn>` | :ref:`English <spike_conv3d-en>`
+
+    ----
 
     .. _spike_conv3d-cn:
+
+    * **中文**
 
     :class:`torch.nn.functional.conv3d` 在输入为脉冲时的特例。
 
@@ -426,9 +452,11 @@ def spike_conv3d(
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <spike_conv3d-cn>`
+    ----
 
     .. _spike_conv3d-en:
+
+    * **English**
 
     A specific case of :class:`torch.nn.functional.conv3d` with inputs are spikes.
 
@@ -459,10 +487,16 @@ def spike_conv3d(
 
 
 class SpikeLinear(nn.Linear):
-    """
-    * :ref:`API in English <SpikeLinear-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikeLinear-cn>` | :ref:`English <SpikeLinear-en>`
+
+    ----
 
     .. _SpikeLinear-cn:
+    * **中文**
+
+    * **中文**
 
     :class:`torch.nn.Linear` 在输入为脉冲时的特例。
 
@@ -474,9 +508,12 @@ class SpikeLinear(nn.Linear):
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <SpikeLinear-cn>`
+    ----
 
     .. _SpikeLinear-en:
+    * **English**
+
+    * **English**
 
     A specific case of :class:`torch.nn.Linear` with inputs are spikes.
 
@@ -496,10 +533,16 @@ class SpikeLinear(nn.Linear):
 
 
 class SpikeConv1d(nn.Conv1d):
-    """
-    * :ref:`API in English <SpikeConv1d-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikeConv1d-cn>` | :ref:`English <SpikeConv1d-en>`
+
+    ----
 
     .. _SpikeConv1d-cn:
+    * **中文**
+
+    * **中文**
 
     :class:`torch.nn.Conv1d` 在输入为脉冲时的特例。
 
@@ -511,9 +554,12 @@ class SpikeConv1d(nn.Conv1d):
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <SpikeConv1d-cn>`
+    ----
 
     .. _SpikeConv1d-en:
+    * **English**
+
+    * **English**
 
     A specific case of :class:`torch.nn.Conv1d` with inputs are spikes.
 
@@ -547,10 +593,16 @@ class SpikeConv1d(nn.Conv1d):
 
 
 class SpikeConv2d(nn.Conv2d):
-    """
-    * :ref:`API in English <SpikeConv2d-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikeConv2d-cn>` | :ref:`English <SpikeConv2d-en>`
+
+    ----
 
     .. _SpikeConv2d-cn:
+    * **中文**
+
+    * **中文**
 
     :class:`torch.nn.Conv2d` 在输入为脉冲时的特例。
 
@@ -562,9 +614,12 @@ class SpikeConv2d(nn.Conv2d):
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <SpikeConv2d-cn>`
+    ----
 
     .. _SpikeConv2d-en:
+    * **English**
+
+    * **English**
 
     A specific case of :class:`torch.nn.Conv2d` with inputs are spikes.
 
@@ -598,10 +653,16 @@ class SpikeConv2d(nn.Conv2d):
 
 
 class SpikeConv3d(nn.Conv3d):
-    """
-    * :ref:`API in English <SpikeConv3d-en>`
+    r"""
+    **API Language:**
+    :ref:`中文 <SpikeConv3d-cn>` | :ref:`English <SpikeConv3d-en>`
+
+    ----
 
     .. _SpikeConv3d-cn:
+    * **中文**
+
+    * **中文**
 
     :class:`torch.nn.Conv3d` 在输入为脉冲时的特例。
 
@@ -613,9 +674,12 @@ class SpikeConv3d(nn.Conv3d):
 
         `spike` 中的任何元素都必须为0或1。
 
-    * :ref:`中文API <SpikeConv3d-cn>`
+    ----
 
     .. _SpikeConv3d-en:
+    * **English**
+
+    * **English**
 
     A specific case of :class:`torch.nn.Conv3d` with inputs are spikes.
 

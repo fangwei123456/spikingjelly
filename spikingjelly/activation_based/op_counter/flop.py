@@ -23,7 +23,17 @@ def _flop_null(args, kwargs, out):
 
 
 def _flop_mm(args, kwargs, out):
-    """out = x @ y"""
+    """Compute FLOPs for matrix multiplication ``out = x @ y``.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated FLOPs
+    :rtype: int
+    """
     x, y = args[:2]
     m, k = x.shape
     kk, n = y.shape
@@ -33,7 +43,17 @@ def _flop_mm(args, kwargs, out):
 
 
 def _flop_addmm(args, kwargs, out):
-    """out = beta * bias + alpha * (x @ y)"""
+    """Compute FLOPs for ``out = beta * bias + alpha * (x @ y)``.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated FLOPs
+    :rtype: int
+    """
     bias, x, y = args[:3]
     m, k = x.shape
     kk, n = y.shape
@@ -56,7 +76,17 @@ def _flop_addmm(args, kwargs, out):
 
 
 def _flop_bmm(args, kwargs, out):
-    """Batch matrix multiply: out[b] = x[b] @ y[b]"""
+    """Compute FLOPs for batched matrix multiplication.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated FLOPs
+    :rtype: int
+    """
     x, y = args[:2]
     b, m, k = x.shape
     bb, kk, n = y.shape
@@ -68,7 +98,17 @@ def _flop_bmm(args, kwargs, out):
 
 
 def _flop_baddbmm(args, kwargs, out):
-    """out[b] = beta * bias[b] + alpha * (x[b] @ y[b])"""
+    """Compute FLOPs for batched add-batched-matmul.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated FLOPs
+    :rtype: int
+    """
     bias, x, y = args[:3]
     b, m, k = x.shape
     bb, kk, n = y.shape
@@ -91,10 +131,16 @@ def _flop_baddbmm(args, kwargs, out):
 
 
 def _flop_convolution(args, kwargs, out):
-    """
-    args[0]: x, shape [B, C_in, ...]
-    args[1]: weight, shape [C_out, C_in, *kernel_shape]
-    args[2]: bias or None
+    """Compute FLOPs for convolution.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output
+    :type out: torch.Tensor
+    :return: Estimated FLOPs
+    :rtype: int
     """
     x, w, bias = args[:3]
     transposed = kwargs.get("transposed", args[6] if len(args) > 6 else False)
@@ -112,11 +158,16 @@ def _flop_convolution(args, kwargs, out):
 
 
 def _flop_convolution_backward(args, kwargs, out):
-    """
-    Outputs (by output_mask):
-        0: grad_x
-        1: grad_weight
-        2: grad_bias
+    """Compute FLOPs for convolution backward.
+
+    :param args: Positional aten arguments
+    :type args: tuple
+    :param kwargs: Keyword aten arguments
+    :type kwargs: dict
+    :param out: Aten output tuple
+    :type out: tuple
+    :return: Estimated FLOPs
+    :rtype: int
     """
     (
         grad_out,
@@ -258,6 +309,35 @@ def _flop_native_batch_norm_backward(args, kwargs, out):
 
 
 class FlopCounter(BaseCounter):
+    r"""
+    **API Language:**
+    :ref:`中文 <FlopCounter-cn>` | :ref:`English <FlopCounter-en>`
+
+    ----
+
+    .. _FlopCounter-cn:
+    * **中文**
+
+    * **中文**
+
+    浮点运算次数（FLOPs）计数器。
+
+    该计数器统计前向与部分反向算子在算术层面的浮点运算数量，用于粗略估计计算开销。
+    具体构造参数见 :meth:`__init__ <FlopCounter.__init__-cn>`。
+
+    ----
+
+    .. _FlopCounter-en:
+    * **English**
+
+    * **English**
+
+    Floating-point operation (FLOP) counter.
+
+    This counter tracks arithmetic FLOPs of forward operators and some backward
+    operators as a coarse estimate of compute cost. See
+    :meth:`__init__ <FlopCounter.__init__-en>` for constructor parameters.
+    """
     def __init__(
         self,
         extra_rules: dict[Any, Callable] = {},
@@ -348,6 +428,8 @@ class FlopCounter(BaseCounter):
             # Get FLOP counts
             total_flops = flop_counter.get_total()
             print(f"Total FLOPs: {total_flops}")
+        :return: None
+        :rtype: None
         """
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {

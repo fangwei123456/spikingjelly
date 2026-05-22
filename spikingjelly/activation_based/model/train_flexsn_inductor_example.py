@@ -12,6 +12,28 @@ from spikingjelly.activation_based.neuron.flexsn import FlexSN
 
 
 class FlexSNTrainer(train_classify.Trainer):
+    r"""
+    **API Language:**
+    :ref:`中文 <FlexSNTrainer-cn>` | :ref:`English <FlexSNTrainer-en>`
+
+    ----
+
+    .. _FlexSNTrainer-cn:
+    * **中文**
+
+    * **中文**
+
+    FlexSN 模型的训练器。继承 :class:`train_classify.Trainer`，覆写了 ``preprocess_train_sample`` 和 ``preprocess_test_sample`` 以给数据添加时间维度。
+
+    ----
+
+    .. _FlexSNTrainer-en:
+    * **English**
+
+    * **English**
+
+    Trainer for FlexSN models. Inherits :class:`train_classify.Trainer`, overrides ``preprocess_train_sample`` and ``preprocess_test_sample`` to add the time dimension to data.
+    """
     def preprocess_train_sample(self, args, x: torch.Tensor):
         return x.unsqueeze(0).expand(args.T, -1, -1, -1, -1)
 

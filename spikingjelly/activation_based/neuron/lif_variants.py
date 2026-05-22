@@ -120,7 +120,10 @@ class GatedLIFNode(base.MemoryModule):
             Users can print ``self.supported_backends`` to check availability.
             Gated LIF only supports the ``'torch'`` backend
         :type backend: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         assert isinstance(init_tau, float) and init_tau < 1.0
         assert isinstance(T, int) and T is not None
         assert isinstance(inplane, int) or inplane is None
@@ -289,7 +292,7 @@ class KLIFNode(BaseNode):
 
         .. _KLIFNode.__init__-cn:
 
-        **中文 API**
+        * **中文**
 
         K-based Leaky Integrate-and-Fire（KLIF）神经元的构造函数。
 
@@ -375,7 +378,7 @@ class KLIFNode(BaseNode):
 
         .. _KLIFNode.__init__-en:
 
-        **English API**
+        * **English**
 
         Constructor of the K-based Leaky Integrate-and-Fire (KLIF) neuron.
 
@@ -456,7 +459,10 @@ class KLIFNode(BaseNode):
             whether to store the membrane potential at all time steps in ``self.v_seq``.
             If ``False``, only the final membrane potential ``self.v`` is kept to reduce memory usage
         :type store_v_seq: bool
-        """
+        
+        :return: None
+        :rtype: None
+"""
         assert isinstance(tau, float) and tau > 1.0
         super().__init__(
             v_threshold,
@@ -567,7 +573,10 @@ class CUBALIFNode(BaseNode):
 
         :param surrogate_function: surrogate function used to compute spike gradients during backpropagation
         :type surrogate_function: surrogate.SurrogateFunctionBase
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(v_threshold, v_reset, surrogate_function)
 
         self.register_memory("c", 0.0)
@@ -612,8 +621,7 @@ class LIAFNode(LIFNode):
         ----
 
         .. _LIAFNode.__init__-cn:
-
-        **中文 API**
+        * **中文**
 
         LIAF（Leaky Integrate and Analog Fire）神经元的构造函数。
 
@@ -638,8 +646,7 @@ class LIAFNode(LIFNode):
         ----
 
         .. _LIAFNode.__init__-en:
-
-        **English API**
+        * **English**
 
         Constructor of the LIAF (Leaky Integrate and Analog Fire) neuron.
 
@@ -660,7 +667,10 @@ class LIAFNode(LIFNode):
         :type threshold_related: bool
 
         Other parameters in `*args, **kwargs` are the same as :class:`LIFNode`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(*args, **kwargs)
         self.act = act
         self.threshold_related = threshold_related

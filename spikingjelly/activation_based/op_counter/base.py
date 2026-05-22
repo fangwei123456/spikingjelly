@@ -71,6 +71,7 @@ class ActiveModuleTracker(ModuleTracker):
         ----
 
         .. _ActiveModuleTracker.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -83,6 +84,7 @@ class ActiveModuleTracker(ModuleTracker):
         ----
 
         .. _ActiveModuleTracker.__init__-en:
+        * **English**
 
         * **English**
 
@@ -92,7 +94,10 @@ class ActiveModuleTracker(ModuleTracker):
 
         Attributes :attr:`active_modules` and :attr:`parents` are different: the former
         is a set of ``nn.Module`` instances, while the latter is a set of ``str`` (module names).
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.active_modules: set[nn.Module] = set()  # align with self.parents: set[str]
 
@@ -168,6 +173,7 @@ class BaseCounter:
         ----
 
         .. _BaseCounter.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -184,6 +190,7 @@ class BaseCounter:
         ----
 
         .. _BaseCounter.__init__-en:
+        * **English**
 
         * **English**
 
@@ -198,7 +205,10 @@ class BaseCounter:
 
         Subclasses need to implement specific rule functions in :attr:`rules` to define
         how to calculate counts for particular operations.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         self.records: dict[str, dict[Any, int]] = defaultdict(lambda: defaultdict(int))
         self.rules: dict[Any, Callable] = {}
         self.ignore_modules: list[nn.Module] = []

@@ -61,7 +61,10 @@ class BatchNorm1d(nn.BatchNorm1d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.BatchNorm1d` for other parameters' API
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
 
@@ -123,7 +126,10 @@ class BatchNorm2d(nn.BatchNorm2d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.BatchNorm2d` for other parameters' API
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
 
@@ -188,7 +194,10 @@ class BatchNorm3d(nn.BatchNorm3d, base.StepModule):
         :type step_mode: str
 
         Refer to :class:`torch.nn.BatchNorm3d` for other parameters' API
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(num_features, eps, momentum, affine, track_running_stats)
         self.step_mode = step_mode
 
@@ -302,7 +311,10 @@ class NeuNorm(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__()
         self.step_mode = step_mode
         self.register_memory("x", 0.0)
@@ -353,6 +365,7 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm1d.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -374,6 +387,7 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm1d.__init__-en:
+        * **English**
 
         * **English**
 
@@ -392,7 +406,10 @@ class ThresholdDependentBatchNorm1d(_ThresholdDependentBatchNormBase):
         :type v_th: float
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm1d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(alpha, v_th, *args, **kwargs)
 
     def _check_input_dim(self, input):
@@ -408,6 +425,7 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm2d.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -429,6 +447,7 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm2d.__init__-en:
+        * **English**
 
         * **English**
 
@@ -447,7 +466,10 @@ class ThresholdDependentBatchNorm2d(_ThresholdDependentBatchNormBase):
         :type v_th: float
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm2d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(alpha, v_th, *args, **kwargs)
 
     def _check_input_dim(self, input):
@@ -463,6 +485,7 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm3d.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -484,6 +507,7 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         ----
 
         .. _ThresholdDependentBatchNorm3d.__init__-en:
+        * **English**
 
         * **English**
 
@@ -502,7 +526,10 @@ class ThresholdDependentBatchNorm3d(_ThresholdDependentBatchNormBase):
         :type v_th: float
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm3d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(alpha, v_th, *args, **kwargs)
 
     def _check_input_dim(self, input):
@@ -537,6 +564,7 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm1d-cn:
+        * **中文**
 
         * **中文**
 
@@ -559,6 +587,7 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm1d-en:
+        * **English**
 
         * **English**
 
@@ -578,7 +607,10 @@ class TemporalEffectiveBatchNorm1d(_TemporalEffectiveBatchNormBase):
         :type T: int
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm1d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(T, *args, **kwargs)
 
     def _check_input_dim(self, input):
@@ -597,6 +629,7 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm2d-cn:
+        * **中文**
 
         * **中文**
 
@@ -619,6 +652,7 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm2d-en:
+        * **English**
 
         * **English**
 
@@ -638,7 +672,10 @@ class TemporalEffectiveBatchNorm2d(_TemporalEffectiveBatchNormBase):
         :type T: int
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm2d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(T, *args, **kwargs)
 
     def _check_input_dim(self, input):
@@ -657,6 +694,7 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm3d-cn:
+        * **中文**
 
         * **中文**
 
@@ -679,6 +717,7 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         ----
 
         .. _TemporalEffectiveBatchNorm3d-en:
+        * **English**
 
         * **English**
 
@@ -698,7 +737,10 @@ class TemporalEffectiveBatchNorm3d(_TemporalEffectiveBatchNormBase):
         :type T: int
 
         Other parameters in ``*args, **kwargs`` are same with those of :class:`torch.nn.BatchNorm3d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(T, *args, **kwargs)
 
     def _check_input_dim(self, input):
@@ -817,7 +859,10 @@ class BatchNormThroughTime1d(_BatchNormThroughTimeBase):
         :type step_mode: str
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm1d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(
             T, num_features, eps, momentum, affine, track_running_stats, step_mode
         )
@@ -897,7 +942,10 @@ class BatchNormThroughTime2d(_BatchNormThroughTimeBase):
         :type step_mode: str
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm2d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(
             T, num_features, eps, momentum, affine, track_running_stats, step_mode
         )
@@ -977,7 +1025,10 @@ class BatchNormThroughTime3d(_BatchNormThroughTimeBase):
         :type step_mode: str
 
         Other parameters are same with those of :class:`torch.nn.BatchNorm3d`.
-        """
+        
+        :return: None
+        :rtype: None
+"""
         super().__init__(
             T, num_features, eps, momentum, affine, track_running_stats, step_mode
         )

@@ -325,6 +325,51 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
             Then SpikingJelly will split the aedat to samples by the time range and class in the csv file. In this sample,
             the first sample ``user01_fluorescent_0.npz`` is sliced from the origin events ``user01_fluorescent.aedat`` with
             ``80048239 <= t < 85092709`` and ``label=0``. ``user01_fluorescent_0.npz`` will be saved in ``root/events_np/train/0``.
+
+        :param root: 数据集的根路径
+        :type root: Union[str, Path]
+        :param train: 是否使用训练集
+        :type train: Optional[bool]
+        :param data_type: ``\"event\"`` 或 ``\"frame\"``
+        :type data_type: str
+        :param frames_number: 积分帧的数量
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` 或 ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: 每帧的时间时长
+        :type duration: Optional[int]
+        :param custom_integrate_function: 用户自定义积分函数
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: 自定义积分帧目录名
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: 数据变换
+        :type transform: Optional[Callable]
+        :param target_transform: 标签变换
+        :type target_transform: Optional[Callable]
+
+        :param root: Root directory of the dataset
+        :type root: Union[str, Path]
+        :param train: Whether to use training set or test set
+        :type train: Optional[bool]
+        :param data_type: ``\"event\"`` or ``\"frame\"``
+        :type data_type: str
+        :param frames_number: Number of frames to integrate
+        :type frames_number: Optional[int]
+        :param split_by: ``\"time\"`` or ``\"number\"``
+        :type split_by: Optional[str]
+        :param duration: Time duration per frame
+        :type duration: Optional[int]
+        :param custom_integrate_function: User-defined integrate function
+        :type custom_integrate_function: Optional[Callable]
+        :param custom_integrated_frames_dir_name: Custom frames directory name
+        :type custom_integrated_frames_dir_name: Optional[str]
+        :param transform: Transform function
+        :type transform: Optional[Callable]
+        :param target_transform: Target transform function
+        :type target_transform: Optional[Callable]
+
+        :return: None
+        :rtype: None
         """
         if train is None:
             raise ValueError("`train` must be `True` or `False`")
@@ -343,8 +388,29 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
     @classmethod
     def get_H_W(cls) -> Tuple:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <dvs128_gesture.get_H_W-cn>` | :ref:`English <dvs128_gesture.get_H_W-en>`
+
+        ----
+
+        .. _dvs128_gesture.get_H_W-cn:
+        * **中文**
+
+        * **中文**
+
         :return: ``(128, 128)``
+        :rtype: Tuple
+
+        ----
+
+        .. _dvs128_gesture.get_H_W-en:
+        * **English**
+
+        * **English**
+
+        :return: ``(128, 128)``
+        :rtype: Tuple
         """
         return 128, 128
 

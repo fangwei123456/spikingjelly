@@ -9,39 +9,53 @@ __all__ = ["reset_net", "set_step_mode", "set_backend", "detach_net"]
 
 
 def reset_net(net: nn.Module):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <reset_net-cn>` | :ref:`English <reset_net-en>`
 
     ----
 
     .. _reset_net-cn:
+    * **中文**
 
     * **中文**
 
-    将网络的状态重置。做法是遍历网络中的所有 ``Module``，若 ``m`` 为
-    ``base.MemoryModule`` 或者拥有 ``reset()`` 方法，则调用 ``m.reset()``。
+    重置 ``net`` 中所有可重置模块的状态。
+
+    该函数会遍历 ``net.modules()`` 中的所有子模块；若某个子模块实现了
+    ``reset()`` 方法，则调用该方法。对于不是
+    :class:`~spikingjelly.activation_based.base.MemoryModule` 但实现了
+    ``reset()`` 的模块，此函数仍会调用 ``reset()``，同时记录告警。
 
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises Exception: 任何子模块 ``reset()`` 在执行过程中抛出的异常都会原样向上传播
 
     ----
 
     .. _reset_net-en:
+    * **English**
 
     * **English**
 
-    Reset the whole network.  Walk through every ``Module`` as ``m``, and call
-    ``m.reset()`` if this ``m`` is ``base.MemoryModule`` or ``m`` has ``reset()``.
+    Reset the states of all resettable modules in ``net``.
+
+    This function iterates over ``net.modules()`` and calls ``reset()`` on each
+    submodule that implements it. If a submodule is not an instance of
+    :class:`~spikingjelly.activation_based.base.MemoryModule` but still defines
+    ``reset()``, the function will still call it and emit a warning.
 
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises Exception: Any exception raised by a submodule ``reset()`` call is propagated unchanged
     """
     for m in net.modules():
         if hasattr(m, "reset"):
@@ -54,17 +68,19 @@ def reset_net(net: nn.Module):
 
 
 def set_step_mode(net: nn.Module, step_mode: str):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <set_step_mode-cn>` | :ref:`English <set_step_mode-en>`
 
     ----
 
     .. _set_step_mode-cn:
+    * **中文**
 
     * **中文**
 
-    将 ``net`` 中所有具有 ``step_mode`` 属性的模块的步进模式设置为 ``step_mode`` 。
+    将 ``net`` 中所有具有 ``step_mode`` 属性的模块的步进模式设置为
+    ``step_mode`` 。
 
     .. note::
 
@@ -73,22 +89,30 @@ def set_step_mode(net: nn.Module, step_mode: str):
         :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`
         的子模块（不包含包装器本身）的 ``step_mode`` 不会被改变。
 
+    若某个模块具有 ``step_mode`` 属性但不是
+    :class:`~spikingjelly.activation_based.base.StepModule`，则该函数仍会尝试赋值，
+    同时记录告警。
+
     :param net: 一个神经网络
     :type net: torch.nn.Module
 
     :param step_mode: 's' (单步模式) 或 'm' (多步模式)
     :type step_mode: str
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises ValueError: 若某个模块的 ``step_mode`` setter 不接受给定的 ``step_mode``，则该异常会原样向上传播
 
     ----
 
     .. _set_step_mode-en:
+    * **English**
 
     * **English**
 
-    Set ``step_mode`` for all modules in ``net`` that have a ``step_mode`` attribute.
+    Set ``step_mode`` to ``step_mode`` for all modules in ``net`` that expose a
+    ``step_mode`` attribute.
 
     .. admonition:: Note
         :class: note
@@ -99,14 +123,20 @@ def set_step_mode(net: nn.Module, step_mode: str):
         :class:`LinearRecurrentContainer <spikingjelly.activation_based.layer.container.LinearRecurrentContainer>`
         will not be changed.
 
+    If a module has a ``step_mode`` attribute but is not an instance of
+    :class:`~spikingjelly.activation_based.base.StepModule`, the function still
+    attempts to assign the new value and emits a warning.
+
     :param net: a network
     :type net: nn.Module
 
     :param step_mode: 's' (single-step) or 'm' (multi-step)
     :type step_mode: str
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises ValueError: Propagated if a module rejects the provided ``step_mode`` in its setter
     """
     from ..layer import (
         ElementWiseRecurrentContainer,
@@ -153,7 +183,7 @@ def set_backend(
     backend: str,
     instance: Optional[Union[nn.Module, tuple[nn.Module]]] = None,
 ):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <set_backend-cn>` | :ref:`English <set_backend-en>`
 
@@ -163,8 +193,12 @@ def set_backend(
 
     * **中文**
 
-    将 ``net`` 中所有满足 ``isinstance(m, instance)`` 且具有 ``backend`` 属性的模块后端更改为 ``backend`` 。
-    只有当 ``backend`` 在模块的 ``supported_backends`` 中时才会实际更新；否则会记录告警并保留原有后端。
+    将 ``net`` 中所有满足 ``isinstance(m, instance)`` 且具有 ``backend``
+    属性的模块后端设置为 ``backend``。
+
+    仅当目标模块的 ``supported_backends`` 包含给定 ``backend`` 时才会实际更新；
+    否则会记录告警并保留原有后端。若 ``instance`` 为 ``None``，则会检查所有具有
+    ``backend`` 属性的模块。
 
     :param net: 一个神经网络
     :type net: torch.nn.Module
@@ -176,8 +210,10 @@ def set_backend(
         若为 ``None`` ，则所有具有 ``backend`` 属性的模块都会被检查
     :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises Exception: 若目标模块在访问 ``supported_backends`` 或设置 ``backend`` 时抛出异常，则该异常会原样向上传播
 
     ----
 
@@ -185,11 +221,13 @@ def set_backend(
 
     * **English**
 
-    Sets the backend of all modules in ``net`` whose type matches ``instance``
-    and that have a ``backend`` attribute to ``backend``. The backend is only
-    updated when ``backend`` is contained in the module's
-    ``supported_backends``; otherwise a warning is logged and the current
-    backend is kept unchanged.
+    Set ``backend`` for all modules in ``net`` whose type matches ``instance``
+    and that expose a ``backend`` attribute.
+
+    The backend is updated only when ``backend`` is listed in the module's
+    ``supported_backends``. Otherwise, a warning is logged and the existing
+    backend is kept unchanged. If ``instance`` is ``None``, all modules with a
+    ``backend`` attribute are checked.
 
     :param net: a network
     :type net: torch.nn.Module
@@ -202,8 +240,10 @@ def set_backend(
         ``None``, all modules with a ``backend`` attribute will be checked
     :type instance: Optional[Union[nn.Module, tuple[nn.Module]]]
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises Exception: Propagated if a target module raises while exposing ``supported_backends`` or assigning ``backend``
     """
     instance = (nn.Module,) if instance is None else instance
     for m in net.modules():
@@ -222,40 +262,54 @@ def set_backend(
 
 
 def detach_net(net: nn.Module):
-    """
+    r"""
     **API Language:**
     :ref:`中文 <detach_net-cn>` | :ref:`English <detach_net-en>`
 
     ----
 
     .. _detach_net-cn:
+    * **中文**
 
     * **中文**
 
-    将网络与之前的时间步的计算图断开。做法是遍历网络中的所有 ``Module``，若 ``m`` 为
-    ``base.MemoryModule`` 或者拥有 ``detach()`` 方法，则调用 ``m.detach()``。
+    将 ``net`` 中各有状态模块与之前时间步的计算图断开。
+
+    该函数会遍历 ``net.modules()`` 中的所有子模块；若某个子模块实现了
+    ``detach()`` 方法，则调用该方法。对于不是
+    :class:`~spikingjelly.activation_based.base.MemoryModule` 但实现了
+    ``detach()`` 的模块，此函数仍会调用 ``detach()``，同时记录告警。
 
     :param net: 任何属于 ``nn.Module`` 子类的网络
     :type net: torch.nn.Module
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises Exception: 任何子模块 ``detach()`` 在执行过程中抛出的异常都会原样向上传播
 
     ----
 
     .. _detach_net-en:
+    * **English**
 
     * **English**
 
-    Detach the computation graph of the whole network from previous time-steps.
-    Walk through every ``Module`` as ``m``, and call ``m.detach()`` if this
-    ``m`` is ``base.MemoryModule`` or ``m`` has ``detach()``.
+    Detach stateful modules in ``net`` from the computation graphs of previous
+    time steps.
+
+    This function iterates over ``net.modules()`` and calls ``detach()`` on each
+    submodule that implements it. If a submodule is not an instance of
+    :class:`~spikingjelly.activation_based.base.MemoryModule` but still defines
+    ``detach()``, the function will still call it and emit a warning.
 
     :param net: Any network inherits from ``nn.Module``
     :type net: torch.nn.Module
 
-    :return: None
+    :return: ``None``
     :rtype: None
+
+    :raises Exception: Any exception raised by a submodule ``detach()`` call is propagated unchanged
     """
     for m in net.modules():
         if hasattr(m, "detach"):

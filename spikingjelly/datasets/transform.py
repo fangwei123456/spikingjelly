@@ -137,6 +137,7 @@ class RandomTemporalDelete(torch.nn.Module):
         ----
 
         .. _RandomTemporalDelete.__init__-cn:
+        * **中文**
 
         * **中文**
 
@@ -152,6 +153,7 @@ class RandomTemporalDelete(torch.nn.Module):
         ----
 
         .. _RandomTemporalDelete.__init__-en:
+        * **English**
 
         * **English**
 
@@ -163,6 +165,8 @@ class RandomTemporalDelete(torch.nn.Module):
 
         :param batch_first: if `True`, `x_seq` will be regarded as `shape = [N, T, *]`
         :type batch_first: bool
+        :return: None
+        :rtype: None
         """
         super().__init__()
         self.T_remain = T_remain
