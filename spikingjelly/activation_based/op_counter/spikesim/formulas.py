@@ -6,8 +6,23 @@ from typing import Any, Mapping
 from .config import SpikeSimEnergyConfig
 
 __all__ = [
+    "compute_spikesim_dense_energy_breakdown",
     "compute_spikesim_event_energy_breakdown",
 ]
+
+
+def compute_spikesim_dense_energy_breakdown(
+    stats: Mapping[str, Any],
+    metadata: Mapping[str, Any],
+    config: SpikeSimEnergyConfig,
+) -> dict[str, float]:
+    dense_pe_cycles = float(stats["dense_pe_cycle_count"])
+    pe_cycle_energy = config.pe_cycle_energy_for_kernel_pj(metadata["kernel_size"])
+    total = dense_pe_cycles * pe_cycle_energy
+    return {
+        "pe_cycle_pj": total,
+        "total_pj": total,
+    }
 
 
 def compute_spikesim_event_energy_breakdown(
@@ -15,6 +30,9 @@ def compute_spikesim_event_energy_breakdown(
     metadata: Mapping[str, Any],
     config: SpikeSimEnergyConfig,
 ) -> dict[str, float]:
+    if config.activity_mode != "event":
+        return compute_spikesim_dense_energy_breakdown(stats, metadata, config)
+
     p_i = math.ceil(metadata["in_channels"] / config.xbar_size)
 
     patch_control = (
@@ -61,23 +79,3 @@ def compute_spikesim_event_energy_breakdown(
         "neuron_pj": neuron,
         "total_pj": patch_control + xbar + neuron,
     }
-
-
-def _compute_spikesim_dense_stage_energy(
-    *,
-    in_channels: int,
-    out_channels: int,
-    kernel_size: tuple[int, int],
-    num_sites: int,
-    config: SpikeSimEnergyConfig,
-) -> float:
-    p_i = math.ceil(in_channels / config.xbar_size)
-    q_i = math.ceil(out_channels / config.xbar_size)
-    dense_pe_cycles = p_i * q_i * num_sites
-    k_h, k_w = kernel_size
-    pe_cycle_energy = (
-        config.patch_control_energy_pj
-        + config.neuron_pj
-        + (config.xbar_size / 8.0) * k_h * k_w * config.xbar_array_energy_pj
-    )
-    return dense_pe_cycles * pe_cycle_energy

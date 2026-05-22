@@ -6,12 +6,13 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
-from ..base import BaseCounter
+from ..base import BaseCounter, is_binary_tensor
 from .config import SpikeSimEnergyConfig
 
-__all__ = []
+__all__ = ["SpikeSimCounter"]
 aten = torch.ops.aten
 
 
@@ -27,12 +28,6 @@ def _pair_tuple(x: Any) -> tuple[int, int]:
     return (int(x[0]), int(x[1]))
 
 
-def _is_spike_like(x: torch.Tensor) -> bool:
-    if x.dtype == torch.bool:
-        return True
-    return not bool(((x != 0) & (x != 1)).any().item())
-
-
 def _exclude_python_dispatch_guard():
     return torch._C._ExcludeDispatchKeyGuard(
         torch._C.DispatchKeySet(torch._C.DispatchKey.Python)
@@ -41,6 +36,7 @@ def _exclude_python_dispatch_guard():
 
 @dataclass
 class _StageStats:
+    dense_pe_cycle_count: int = 0
     active_patch_tile_count: int = 0
     active_row_count: int = 0
     active_row_count_by_tile: list[int] | None = None
@@ -76,7 +72,7 @@ class _StageMetadata:
         return asdict(self)
 
 
-class SpikeSimEventCounter(BaseCounter):
+class SpikeSimCounter(BaseCounter):
     def __init__(
         self,
         *,
@@ -97,13 +93,6 @@ class SpikeSimEventCounter(BaseCounter):
         ] = {}
         self.rules = {
             aten.convolution.default: self._count_convolution,
-            aten.add.Tensor: self._count_merge,
-            aten.add_.Tensor: self._count_merge,
-            aten.mm.default: self._count_linear_like,
-            aten.addmm.default: self._count_linear_like,
-            aten.bmm.default: self._count_linear_like,
-            aten.baddbmm.default: self._count_linear_like,
-            aten.cat.default: self._count_concat,
         }
 
     def count(
@@ -115,11 +104,15 @@ class SpikeSimEventCounter(BaseCounter):
         active_modules=None,
         parent_names=None,
     ) -> int:
-        value = int(self.rules[func](args, kwargs, out))
-        scope = self._scope_from_kwargs(kwargs)
-        self.record("Global", func, value)
-        self.record(scope, func, value)
-        return value
+        return int(
+            self.rules[func](
+                args,
+                kwargs,
+                out,
+                active_modules=active_modules,
+                parent_names=parent_names,
+            )
+        )
 
     def has_rule(self, func) -> bool:
         return func in self.rules
@@ -132,8 +125,11 @@ class SpikeSimEventCounter(BaseCounter):
             raise NotImplementedError(message)
         self.warnings.append(message)
 
-    def _scope_from_kwargs(self, kwargs: dict[str, Any]) -> str:
-        return kwargs.get("__spikesim_scope__", "Global")
+    def _leaf_scope(self, parent_names: set[str] | None) -> str:
+        names = [name for name in (parent_names or set()) if name != "Global"]
+        if not names:
+            return "Global"
+        return max(names, key=lambda name: (name.count("."), len(name)))
 
     def _input_tile_channels(self, in_channels: int) -> list[int]:
         return [
@@ -158,6 +154,17 @@ class SpikeSimEventCounter(BaseCounter):
         dense_r = sum(dense_row_count_by_tile)
         dense_z = out_channel_tiles * num_sites
         return dense_a, dense_r, dense_row_count_by_tile, dense_z
+
+    def _dense_pe_cycles(
+        self,
+        *,
+        w: torch.Tensor,
+        out: torch.Tensor,
+    ) -> int:
+        p_i = math.ceil(int(w.shape[1]) / self.config.xbar_size)
+        q_i = math.ceil(int(w.shape[0]) / self.config.xbar_size)
+        num_sites = int(out.shape[0] * out.shape[2] * out.shape[3])
+        return int(p_i * q_i * num_sites)
 
     def _spike_event_counts(
         self,
@@ -231,7 +238,7 @@ class SpikeSimEventCounter(BaseCounter):
         padding: tuple[int, int],
         dilation: tuple[int, int],
         spike_like_input: bool,
-    ) -> None:
+    ) -> int:
         out_channel_tiles = math.ceil(w.shape[0] / self.config.xbar_size)
         metadata = self.stage_metadata.get(scope)
         if metadata is None:
@@ -267,7 +274,12 @@ class SpikeSimEventCounter(BaseCounter):
                 )
 
         metadata.total_calls += 1
-        if spike_like_input:
+        dense_a, dense_r, dense_r_by_tile, dense_z = self._dense_event_counts(
+            w=w,
+            out=out,
+            out_channel_tiles=out_channel_tiles,
+        )
+        if self.config.activity_mode == "event" and spike_like_input:
             metadata.event_driven_calls += 1
             active_a, active_r, active_r_by_tile, active_z = self._spike_event_counts(
                 x=x,
@@ -280,19 +292,16 @@ class SpikeSimEventCounter(BaseCounter):
             )
         else:
             metadata.dense_fallback_calls += 1
-            active_a, active_r, active_r_by_tile, active_z = self._dense_event_counts(
-                w=w,
-                out=out,
-                out_channel_tiles=out_channel_tiles,
+            active_a, active_r, active_r_by_tile, active_z = (
+                dense_a,
+                dense_r,
+                dense_r_by_tile,
+                dense_z,
             )
 
-        dense_a, dense_r, dense_r_by_tile, dense_z = self._dense_event_counts(
-            w=w,
-            out=out,
-            out_channel_tiles=out_channel_tiles,
-        )
-
+        dense_pe_cycles = self._dense_pe_cycles(w=w, out=out)
         stats = self.stage_stats[scope]
+        stats.dense_pe_cycle_count += dense_pe_cycles
         stats.active_patch_tile_count += active_a
         stats.active_row_count += active_r
         if stats.active_row_count_by_tile is None:
@@ -315,8 +324,15 @@ class SpikeSimEventCounter(BaseCounter):
                 break
             stats.dense_row_count_by_tile[i] += value
         stats.dense_output_tile_site_count += dense_z
+        return dense_pe_cycles
 
-    def _handle_convolution(self, scope: str, args: tuple[Any, ...], out) -> None:
+    def _handle_convolution(
+        self,
+        scope: str,
+        args: tuple[Any, ...],
+        out,
+        active_modules: set[nn.Module] | None,
+    ) -> int:
         x, w = args[0], args[1]
         stride, padding, dilation = args[3], args[4], args[5]
         transposed = bool(args[6])
@@ -325,17 +341,24 @@ class SpikeSimEventCounter(BaseCounter):
         if transposed:
             self._warn_or_raise(
                 f"transposed-conv:{scope}",
-                "SpikeSim event energy does not support transposed "
-                f"convolutions: {scope}.",
+                "SpikeSim energy only covers original SpikeSim Conv2d inference "
+                f"stages; transposed convolutions are outside scope: {scope}.",
             )
-            return
+            return 0
+        if not self._is_forward_inference_conv(active_modules):
+            self._warn_or_raise(
+                f"outside-scope:{scope}",
+                "SpikeSim energy only covers Conv2d forward inference stages from "
+                f"nn.Conv2d modules: {scope}.",
+            )
+            return 0
         if groups != 1:
             self._warn_or_raise(
                 f"grouped-conv:{scope}",
                 "SpikeSim event energy does not support grouped/depthwise "
                 f"convolutions: {scope}.",
             )
-            return
+            return 0
         if x.dim() != 4 or w.dim() != 4 or out.dim() != 4:
             self._warn_or_raise(
                 f"conv-rank:{scope}",
@@ -343,13 +366,13 @@ class SpikeSimEventCounter(BaseCounter):
                 f"x.shape={tuple(x.shape)}, w.shape={tuple(w.shape)}, "
                 f"out.shape={tuple(out.shape)}.",
             )
-            return
+            return 0
 
         stride = _pair_tuple(stride)
         padding = _pair_tuple(padding)
         dilation = _pair_tuple(dilation)
-        spike_like_input = _is_spike_like(x)
-        self._update_stage(
+        spike_like_input = is_binary_tensor(x)
+        dense_pe_cycles = self._update_stage(
             scope=scope,
             x=x,
             w=w,
@@ -360,48 +383,37 @@ class SpikeSimEventCounter(BaseCounter):
             spike_like_input=spike_like_input,
         )
         if self.verbose:
-            mode = "event" if spike_like_input else "dense-fallback"
+            mode = (
+                "event"
+                if self.config.activity_mode == "event" and spike_like_input
+                else "dense"
+            )
             print(
-                f"SpikeSimEventCounter: {scope} - aten.convolution.default "
+                f"SpikeSimCounter: {scope} - aten.convolution.default "
                 f"[{mode}] x={tuple(x.shape)} w={tuple(w.shape)} out={tuple(out.shape)}"
             )
+        return dense_pe_cycles
 
     def _count_convolution(
-        self, args: tuple[Any, ...], kwargs: dict[str, Any], out
+        self,
+        args: tuple[Any, ...],
+        kwargs: dict[str, Any],
+        out,
+        *,
+        active_modules=None,
+        parent_names=None,
     ) -> int:
-        self._handle_convolution(self._scope_from_kwargs(kwargs), args, out)
-        return 1
-
-    def _count_merge(self, args: tuple[Any, ...], kwargs: dict[str, Any], out) -> int:
-        if len(args) < 2 or (not torch.is_tensor(args[1])):
-            return 0
-        scope = self._scope_from_kwargs(kwargs)
-        op_name = kwargs.get("__spikesim_op_name__", "aten.add.Tensor")
-        self._warn_or_raise(
-            f"merge-op:{scope}:{op_name}",
-            f"SpikeSim event energy ignores merge-like op {op_name}.",
+        return self._handle_convolution(
+            self._leaf_scope(parent_names), args, out, active_modules
         )
-        return 0
 
-    def _count_linear_like(
-        self, args: tuple[Any, ...], kwargs: dict[str, Any], out
-    ) -> int:
-        scope = self._scope_from_kwargs(kwargs)
-        op_name = kwargs.get("__spikesim_op_name__", "linear-like")
-        self._warn_or_raise(
-            f"linear-op:{scope}:{op_name}",
-            f"SpikeSim event energy ignores linear-like op {op_name}.",
-        )
-        return 0
-
-    def _count_concat(self, args: tuple[Any, ...], kwargs: dict[str, Any], out) -> int:
-        scope = self._scope_from_kwargs(kwargs)
-        op_name = kwargs.get("__spikesim_op_name__", "aten.cat.default")
-        self._warn_or_raise(
-            f"concat-op:{scope}:{op_name}",
-            f"SpikeSim event energy ignores concat-like op {op_name}.",
-        )
-        return 0
+    def _is_forward_inference_conv(self, active_modules: set[nn.Module] | None) -> bool:
+        modules = active_modules or set()
+        conv2d_modules = [module for module in modules if isinstance(module, nn.Conv2d)]
+        if len(conv2d_modules) != 1:
+            return False
+        conv = conv2d_modules[0]
+        return (not conv.training) and (not torch.is_grad_enabled())
 
     def get_stage_stats(self) -> dict[str, dict[str, Any]]:
         return {stage: stats.as_dict() for stage, stats in self.stage_stats.items()}

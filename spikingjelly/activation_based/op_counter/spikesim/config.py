@@ -38,6 +38,8 @@ class SpikeSimEnergyConfig:
 
     xbar_size: int = 64
     device: str = "rram"
+    activity_mode: str = "dense"
+    require_if_lif_neurons: bool = True
     tile_buffer_pj: float = 397.0
     temp_buffer_pj: float = 0.2
     sub_pj: float = 1.15e-6
@@ -99,6 +101,10 @@ class SpikeSimEnergyConfig:
             raise ValueError(f"xbar_size must be positive, got {self.xbar_size}.")
         if self.device not in ("rram", "sram"):
             raise ValueError(f"device must be 'rram' or 'sram', got {self.device}.")
+        if self.activity_mode not in ("dense", "event"):
+            raise ValueError(
+                f"activity_mode must be 'dense' or 'event', got {self.activity_mode}."
+            )
 
     @property
     def xbar_array_energy_pj(self) -> float:
@@ -115,9 +121,31 @@ class SpikeSimEnergyConfig:
             self.htree_pj
             + self.mem_fetch_pj
             + self.tile_buffer_pj
-            + (b / 8.0) * 16.0 * self.sub_pj
-            + (b / 8.0) * self.temp_buffer_pj
-            + (b / 8.0) * (b / 8.0) * (self.adc_pj + self.mux_pj)
+            + (b / _SPIKESIM_XBAR_ROW_DIVISOR) * 16.0 * self.sub_pj
+            + (b / _SPIKESIM_XBAR_ROW_DIVISOR) * self.temp_buffer_pj
+            + (b / _SPIKESIM_XBAR_ROW_DIVISOR)
+            * (b / _SPIKESIM_XBAR_ROW_DIVISOR)
+            * (self.adc_pj + self.mux_pj)
+        )
+
+    def pe_cycle_energy_for_kernel_pj(self, kernel_size: tuple[int, int]) -> float:
+        if len(kernel_size) != 2:
+            raise ValueError(
+                f"kernel_size must be a tuple of length 2, got {kernel_size}."
+            )
+        k_h, k_w = kernel_size
+        if k_h <= 0 or k_w <= 0:
+            raise ValueError(
+                "kernel_size dimensions must be positive, "
+                f"got ({k_h}, {k_w})."
+            )
+        return (
+            self.patch_control_energy_pj
+            + self.neuron_pj
+            + (self.xbar_size / _SPIKESIM_XBAR_ROW_DIVISOR)
+            * float(k_h)
+            * float(k_w)
+            * self.xbar_array_energy_pj
         )
 
     def xbar_row_energy_pj(self, tile_channels: int) -> float:
