@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <distributed-cn>` | :ref:`English <distributed-en>`
 
 ----
 
-.. ___init__-cn:
+.. _distributed-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+分布式训练支持模块，包含张量并行和数据并行工具。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _distributed-en:
 
 * **English**
 
-TODO: add English module description for __init__
+Distributed training support module with tensor and data parallelism utilities.
 
 :return: None
 :rtype: None

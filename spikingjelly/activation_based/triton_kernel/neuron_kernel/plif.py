@@ -453,14 +453,14 @@ def multistep_plif(
 
     * **中文**
 
-    TODO: add Chinese description
+    多步PLIF神经元Triton kernel前向传播
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
-    :type x_seq: torch.Tensor
+    :type x_seq: ``torch.Tensor``
     :param v_init: Initial membrane potential
-    :type v_init: torch.Tensor
+    :type v_init: ``torch.Tensor``
     :param r_tau: Reciprocal of the learnable membrane time constant
-    :type r_tau: torch.Tensor
+    :type r_tau: ``torch.Tensor``
     :param decay_input: Whether input participates in decay
     :type decay_input: bool
     :param v_threshold: Threshold voltage
@@ -470,7 +470,7 @@ def multistep_plif(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]
 
@@ -480,7 +480,7 @@ def multistep_plif(
 
     * **English**
 
-    TODO: add English description
+    Multi-step PLIF neuron Triton kernel forward
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :param v_init: Initial membrane potential
@@ -490,14 +490,14 @@ def multistep_plif(
     :param v_reset: Reset voltage (``None`` for soft reset)
     :param detach_reset: Whether to detach the reset term in backward
     :param surrogate_function: Surrogate gradient function
-    :type x_seq: torch.Tensor
-    :type v_init: torch.Tensor
-    :type r_tau: torch.Tensor
+    :type x_seq: ``torch.Tensor``
+    :type v_init: ``torch.Tensor``
+    :type r_tau: ``torch.Tensor``
     :type decay_input: bool
     :type v_threshold: float
     :type v_reset: Optional[float]
     :type detach_reset: bool
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]
     """

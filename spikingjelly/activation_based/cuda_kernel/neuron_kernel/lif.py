@@ -36,7 +36,7 @@ def create_fptt_kernel(
 
     * **中文**
 
-    TODO: add Chinese description
+    创建前向传播CUDA kernel
 
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
@@ -51,7 +51,7 @@ def create_fptt_kernel(
 
     * **English**
 
-    TODO: add English description
+    Create forward-pass CUDA kernel
 
     :param hard_reset: Whether to use hard reset mode
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
@@ -64,18 +64,6 @@ def create_fptt_kernel(
 
     if dtype == "fp32":
         code = rf"""
-        **API Language:**
-        :ref:`中文 <create_fptt_kernel-cn>` | :ref:`English <create_fptt_kernel-en>`
-
-        ----
-
-        .. _create_fptt_kernel-cn:
-
-        * **中文**
-
-        TODO: add Chinese description
-
-        :rtype: None
         extern "C" __global__
         void {kernel_name}(const float* x_seq, float* v_v_seq, float* h_seq, float* spike_seq,
         const float & reciprocal_tau,
@@ -88,7 +76,7 @@ def create_fptt_kernel(
 
         * **English**
 
-        TODO: add English description
+        Create forward-pass CUDA kernel
 
         :return: None
         :rtype: None
@@ -242,10 +230,10 @@ def create_bptt_kernel(
 
     * **中文**
 
-    TODO: add Chinese description
+    创建反向传播CUDA kernel
 
     :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
-    :type sg_cuda_code_fun: Callable
+    :type sg_cuda_code_fun: ``Callable``
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
     :param detach_reset: Whether to detach the reset term in backward
@@ -261,13 +249,13 @@ def create_bptt_kernel(
 
     * **English**
 
-    TODO: add English description
+    Create backward-pass CUDA kernel
 
     :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
     :param hard_reset: Whether to use hard reset mode
     :param detach_reset: Whether to detach the reset term in backward
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type sg_cuda_code_fun: Callable
+    :type sg_cuda_code_fun: ``Callable``
     :type hard_reset: bool
     :type detach_reset: bool
     :type dtype: str
@@ -816,12 +804,12 @@ def multistep_lif_ptt(
 
     * **中文**
 
-    TODO: add Chinese description
+    多步LIF神经元脉冲前向传播
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
-    :type x_seq: torch.Tensor
+    :type x_seq: ``torch.Tensor``
     :param v_init: Initial membrane potential
-    :type v_init: torch.Tensor
+    :type v_init: ``torch.Tensor``
     :param decay_input: Whether input participates in decay
     :type decay_input: bool
     :param tau: Membrane time constant
@@ -833,7 +821,7 @@ def multistep_lif_ptt(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: Tuple[torch.Tensor, torch.Tensor]
 
@@ -843,7 +831,7 @@ def multistep_lif_ptt(
 
     * **English**
 
-    TODO: add English description
+    Multi-step LIF neuron spike forward
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :param v_init: Initial membrane potential
@@ -853,14 +841,14 @@ def multistep_lif_ptt(
     :param v_reset: Reset voltage (``None`` for soft reset)
     :param detach_reset: Whether to detach the reset term in backward
     :param surrogate_function: Surrogate gradient function
-    :type x_seq: torch.Tensor
-    :type v_init: torch.Tensor
+    :type x_seq: ``torch.Tensor``
+    :type v_init: ``torch.Tensor``
     :type decay_input: bool
     :type tau: float
     :type v_threshold: float
     :type v_reset: Optional[float]
     :type detach_reset: bool
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: Tuple[torch.Tensor, torch.Tensor]
     """

@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <cuda_neuron_kernel-cn>` | :ref:`English <cuda_neuron_kernel-en>`
 
 ----
 
-.. ___init__-cn:
+.. _cuda_neuron_kernel-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+多步神经元CUDA kernel函数接口。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _cuda_neuron_kernel-en:
 
 * **English**
 
-TODO: add English module description for __init__
+Multi-step neuron CUDA kernel function interfaces.
 
 :return: None
 :rtype: None

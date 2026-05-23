@@ -33,7 +33,10 @@ class NeuroMCSqrtCounter(NeuroMCBaseCounter):
 
     * **中文**
 
-    TODO: add Chinese description
+    平方根运算计数器，继承自 :class:`NeuroMCBaseCounter`。
+
+    专门用于统计模型执行过程中平方根（Sqrt）和逆平方根（Rsqrt）操作的次数，
+    包括逐元素平方根计算以及 batch norm 中涉及的开方运算。
 
     :rtype: None
     Tracks the number of square root and inverse square root operations
@@ -45,7 +48,11 @@ class NeuroMCSqrtCounter(NeuroMCBaseCounter):
 
     * **English**
 
-    TODO: add English description
+    Square root operation counter, inheriting from :class:`NeuroMCBaseCounter`.
+
+    Counts square root and inverse square root operations performed during
+    model execution, including element-wise sqrt/rsqrt operations and square
+    root computations in batch normalization.
 
     :return: None
     :rtype: None

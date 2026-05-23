@@ -1,31 +1,31 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <ann2snn-cn>` | :ref:`English <ann2snn-en>`
 
 ----
 
-.. ___init__-cn:
+.. _ann2snn-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+ANN到SNN转换模块，包含转换器工具和示例模型。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _ann2snn-en:
 
 * **English**
 
-TODO: add English module description for __init__
+ANN-to-SNN conversion module with converter utilities and sample models.
 
 :return: None
 :rtype: None
 """
 
-from spikingjelly.activation_based.ann2snn.converter import Converter
-from spikingjelly.activation_based.ann2snn.utils import download_url
+from .converter import Converter
+from .utils import download_url
 
 __all__ = ["Converter", "download_url"]

@@ -27,7 +27,10 @@ class NeuroMCMuxCounter(NeuroMCBaseCounter):
 
     * **中文**
 
-    TODO: add Chinese description
+    多路选择器（MUX）操作计数器，继承自 :class:`NeuroMCBaseCounter`。
+
+    专门用于统计模型执行过程中多路选择器相关的操作次数，
+    例如条件选择、数据路由等操作的开销。
 
     :rtype: None
     Tracks operations that involve selecting or routing values based on
@@ -39,7 +42,10 @@ class NeuroMCMuxCounter(NeuroMCBaseCounter):
 
     * **English**
 
-    TODO: add English description
+    Multiplexer (MUX) operation counter, inheriting from :class:`NeuroMCBaseCounter`.
+
+    Counts operations that involve selecting or routing values based on
+    conditions during model execution.
 
     :return: None
     :rtype: None

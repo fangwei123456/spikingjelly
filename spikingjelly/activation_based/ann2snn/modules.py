@@ -8,33 +8,44 @@ __all__ = ["VoltageHook", "VoltageScaler"]
 
 class VoltageHook(nn.Module):
     def __init__(self, scale=1.0, momentum=0.1, mode="Max"):
-        """
-        * :ref:`API in English <VoltageHook.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <VoltageHook.__init__-cn>` | :ref:`English <VoltageHook.__init__-en>`
 
-        .. _voltageHook.__init__-cn:
+        ----
+
+        .. _VoltageHook.__init__-cn:
+
+        * **中文**
+
+        :class:`VoltageHook` 的构造函数。
 
         :param scale: 缩放初始值
         :type scale: float
         :param momentum: 动量值
         :type momentum: float
-        :param mode: 模式。输入“Max”表示记录ANN激活最大值，“99.9%”表示记录ANN激活的99.9%分位点，输入0-1的float型浮点数表示记录激活最大值的对应倍数。
+        :param mode: 模式。``"Max"`` 表示记录ANN激活最大值；``"99.9%"`` 表示记录99.9%分位点；
+            0-1 的 float 表示记录激活最大值的对应倍数
         :type mode: str, float
+        :return: None
+        :rtype: None
 
-        ``VoltageHook`` 被置于ReLU后，用于在ANN推理中确定激活的范围。
+        ----
 
-        * :ref:`中文API <VoltageHook.__init__-cn>`
+        .. _VoltageHook.__init__-en:
 
-        .. _voltageHook.__init__-en:
+        * **English**
+
+        Constructor of :class:`VoltageHook`.
 
         :param scale: initial scaling value
         :type scale: float
         :param momentum: momentum value
         :type momentum: float
-        :param mode: The mode. Value "Max" means recording the maximum value of ANN activation, "99.9%" means recording the 99.9% precentile of ANN activation, and a float of 0-1 means recording the corresponding multiple of the maximum activation value.
+        :param mode: Mode. ``"Max"`` means recording the maximum value of ANN activation;
+            ``"99.9%"`` means recording the 99.9% percentile; a float of 0-1 means
+            recording the corresponding multiple of the maximum value
         :type mode: str, float
-
-        ``VoltageHook`` is placed behind ReLU and used to determine the range of activations in ANN inference.
-
         :return: None
         :rtype: None
         """
@@ -45,44 +56,35 @@ class VoltageHook(nn.Module):
         self.momentum = momentum
 
     def forward(self, x):
-        """
+        r"""
         **API Language:**
-        :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
+        :ref:`中文 <VoltageHook.forward-cn>` | :ref:`English <VoltageHook.forward-en>`
 
         ----
 
-        .. _forward-cn:
+        .. _VoltageHook.forward-cn:
 
         * **中文**
 
-        TODO: add Chinese description
+        前向传播函数。不对输入张量做任何处理，只是抓取ReLU的激活值用于确定ANN激活范围。
 
-        .. _VoltageHook.forward-cn:
         :param x: 输入张量
         :type x: torch.Tensor
         :return: 原输入张量
         :rtype: torch.Tensor
-        .. _VoltageHook.forward-en:
-        :param x: input tensor
-        :type x: torch.Tensor
-        :return: original input tensor
-        :rtype: torch.Tensor
-        不对输入张量做任何处理，只是抓取ReLU的激活值
-        It doesn't process input tensors, but hooks the activation values of ReLU.
 
         ----
 
-        .. _forward-en:
+        .. _VoltageHook.forward-en:
 
         * **English**
 
-        TODO: add English description
+        Forward function. It doesn't process input tensors, but hooks the activation
+        values of ReLU to determine ANN activation ranges.
 
-        :param x: 输入张量
         :param x: input tensor
         :type x: torch.Tensor
-        :type x: torch.Tensor
-        :return: 原输入张量
+        :return: original input tensor
         :rtype: torch.Tensor
         """
         err_msg = "You have used a non-defined VoltageScale Method."
@@ -113,25 +115,33 @@ class VoltageHook(nn.Module):
 
 class VoltageScaler(nn.Module):
     def __init__(self, scale=1.0):
-        """
-        * :ref:`API in English <VoltageScaler.__init__-en>`
+        r"""
+        **API Language:**
+        :ref:`中文 <VoltageScaler.__init__-cn>` | :ref:`English <VoltageScaler.__init__-en>`
+
+        ----
 
         .. _VoltageScaler.__init__-cn:
 
+        * **中文**
+
+        :class:`VoltageScaler` 的构造函数。用于SNN推理中缩放电流。
+
         :param scale: 缩放值
         :type scale: float
+        :return: None
+        :rtype: None
 
-        ``VoltageScaler`` 用于SNN推理中缩放电流。
-
-        * :ref:`中文API <VoltageScaler.__init__-cn>`
+        ----
 
         .. _VoltageScaler.__init__-en:
 
+        * **English**
+
+        Constructor of :class:`VoltageScaler`. Used for scaling current in SNN inference.
+
         :param scale: scaling value
         :type scale: float
-
-        ``VoltageScaler`` is used for scaling current in SNN inference.
-
         :return: None
         :rtype: None
         """
@@ -139,42 +149,34 @@ class VoltageScaler(nn.Module):
         self.register_buffer("scale", torch.tensor(scale))
 
     def forward(self, x):
-        """
+        r"""
         **API Language:**
-        :ref:`中文 <forward-cn>` | :ref:`English <forward-en>`
+        :ref:`中文 <VoltageScaler.forward-cn>` | :ref:`English <VoltageScaler.forward-en>`
 
         ----
 
-        .. _forward-cn:
+        .. _VoltageScaler.forward-cn:
 
         * **中文**
 
-        TODO: add Chinese description
+        前向传播函数。对输入电流进行缩放。
 
-        .. _VoltageScaler.forward-cn:
         :param x: 输入张量，亦即输入电流
         :type x: torch.Tensor
         :return: 缩放后的电流
-        :rtype: torch.Tensor
-        .. _VoltageScaler.forward-en:
-        :param x: input tensor, or input current
-        :type x: torch.Tensor
-        :return: current after scaling
         :rtype: torch.Tensor
 
         ----
 
-        .. _forward-en:
+        .. _VoltageScaler.forward-en:
 
         * **English**
 
-        TODO: add English description
+        Forward function. Scales the input current.
 
-        :param x: 输入张量，亦即输入电流
         :param x: input tensor, or input current
         :type x: torch.Tensor
-        :type x: torch.Tensor
-        :return: 缩放后的电流
+        :return: current after scaling
         :rtype: torch.Tensor
         """
         return x * self.scale

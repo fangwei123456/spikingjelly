@@ -256,7 +256,7 @@ def _add_native_batch_norm_backward(args, kwargs, out):
 
 
 class NeuroMCAddCounter(NeuroMCBaseCounter):
-    """Counter for addition operations in the NeuroMC framework.
+    r"""
     **API Language:**
     :ref:`中文 <NeuroMCAddCounter-cn>` | :ref:`English <NeuroMCAddCounter-en>`
 
@@ -266,11 +266,20 @@ class NeuroMCAddCounter(NeuroMCBaseCounter):
 
     * **中文**
 
-    TODO: add Chinese description
+    加法运算计数器，继承自 :class:`NeuroMCBaseCounter`。
 
+    专门用于在模型前向传播和反向传播过程中统计加法（Addition）操作次数。
+    覆盖的算子包括矩阵乘法（mm、addmm、bmm、baddbmm）中的加法部分、
+    卷积运算中的加法、逐元素加法和减法、以及 batch norm 中的加法操作等。
+    已针对脉冲稀疏性（spike tensor）进行了优化：当输入为二值脉冲时，
+    利用稀疏性加速计数。
+
+    :param extra_rules: 额外的计数规则，以 ATen 算子为键
+    :type extra_rules: dict[Any, Callable] | None
+    :param extra_ignore_modules: 额外忽略的模块类型列表
+    :type extra_ignore_modules: list[nn.Module] | None
+    :return: None
     :rtype: None
-    Tracks the number of addition operations performed during model execution,
-    including element-wise additions and accumulation operations.
 
     ----
 
@@ -278,18 +287,53 @@ class NeuroMCAddCounter(NeuroMCBaseCounter):
 
     * **English**
 
-    TODO: add English description
+    Addition operation counter, inheriting from :class:`NeuroMCBaseCounter`.
 
+    Counts addition operations during model forward and backward passes.
+    Covers the addition components in matrix multiplications (mm, addmm, bmm, baddbmm),
+    convolutions, element-wise additions and subtractions, and batch normalization.
+    Optimized for spike sparsity: uses binary spike structure to accelerate counting
+    when inputs are spike tensors.
+
+    :param extra_rules: Additional counting rules keyed by ATen operation
+    :type extra_rules: dict[Any, Callable] | None
+    :param extra_ignore_modules: Additional module types to ignore during counting
+    :type extra_ignore_modules: list[nn.Module] | None
     :return: None
     :rtype: None
     """
-
     def __init__(
         self,
         extra_rules: dict[Any, Callable] | None = None,
         extra_ignore_modules: list[nn.Module] | None = None,
     ):
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <NeuroMCAddCounter.__init__-cn>` | :ref:`English <NeuroMCAddCounter.__init__-en>`
+
+        ----
+
+        .. _NeuroMCAddCounter.__init__-cn:
+
+        * **中文**
+
+        初始化加法计数器。
+
+        :param extra_rules: 额外的计数规则，以 ATen 算子为键
+        :type extra_rules: dict[Any, Callable] | None
+        :param extra_ignore_modules: 额外忽略的模块类型列表
+        :type extra_ignore_modules: list[nn.Module] | None
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _NeuroMCAddCounter.__init__-en:
+
+        * **English**
+
+        Initialize the addition counter.
+
         :param extra_rules: Additional counting rules keyed by ATen operation
         :type extra_rules: dict[Any, Callable] | None
         :param extra_ignore_modules: Additional module types to ignore during counting

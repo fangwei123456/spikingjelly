@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <spikesim-cn>` | :ref:`English <spikesim-en>`
 
 ----
 
-.. ___init__-cn:
+.. _spikesim-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+SpikeSim能耗分析模块，基于脉冲驱动的计算成本建模。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _spikesim-en:
 
 * **English**
 
-TODO: add English module description for __init__
+SpikeSim energy profiling module for spike-driven computation cost modeling.
 
 :return: None
 :rtype: None

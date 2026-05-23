@@ -18,9 +18,13 @@ class MemoryInstanceSpec:
 
     * **中文**
 
-    TODO: add Chinese description
+    内存层次结构中单个内存级别的规格描述。
 
-    :param capacity: Capacity of the memory level (in elements or bytes)
+    定义内存级别的容量（以元素数或字节数计）、每个数据元素的位宽
+    以及每次访问的能耗（皮焦耳）。多个 ``MemoryInstanceSpec`` 组合
+    构成一个完整的 :class:`MemoryHierarchyConfig`。
+
+    :param capacity: 内存容量（元素数或字节数）
     :type capacity: int
     :param data_bit: Bit width of each data element
     :type data_bit: int
@@ -36,7 +40,7 @@ class MemoryInstanceSpec:
 
     * **English**
 
-    TODO: add English description
+    MemoryInstanceSpec class
 
     :param capacity: Capacity of the memory level (in elements or bytes)
     :param data_bit: Bit width of each data element
@@ -134,10 +138,11 @@ class MemoryHierarchyConfig:
 
     * **中文**
 
-    TODO: add Chinese description
+    NeuroMC v1 硬件预设配置类。
 
-    :rtype: None
-    Exact NeuroMC v1 hardware preset used by the runtime profiler.
+    :param preset_name: 预设名称
+    :type preset_name: str
+    :param technology_nm: 工艺节点（纳米）
 
     ----
 
@@ -145,7 +150,7 @@ class MemoryHierarchyConfig:
 
     * **English**
 
-    TODO: add English description
+    MemoryHierarchyConfig class
 
     :return: None
     :rtype: None

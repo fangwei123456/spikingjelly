@@ -174,7 +174,11 @@ class NeuroMCMulCounter(NeuroMCBaseCounter):
 
     * **中文**
 
-    TODO: add Chinese description
+    乘法运算计数器，继承自 :class:`NeuroMCBaseCounter`。
+
+    专门用于在模型前向传播和反向传播过程中统计乘法（Multiplication）操作次数，
+    包括矩阵乘法、逐元素乘法、卷积中的乘法等。已针对脉冲稀疏性进行优化：
+    当输入为二值脉冲时，利用稀疏性加速计数。
 
     :rtype: None
     Tracks the number of multiplication operations performed during model
@@ -187,7 +191,12 @@ class NeuroMCMulCounter(NeuroMCBaseCounter):
 
     * **English**
 
-    TODO: add English description
+    Multiplication operation counter, inheriting from :class:`NeuroMCBaseCounter`.
+
+    Counts multiplication operations during model forward and backward passes,
+    including matrix multiplications, element-wise multiplications, and
+    convolution multiplications. Optimized for spike sparsity: uses binary
+    spike structure to accelerate counting when inputs are spike tensors.
 
     :return: None
     :rtype: None

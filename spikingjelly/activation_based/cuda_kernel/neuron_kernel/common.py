@@ -52,7 +52,7 @@ def _sg_obj_id(sg) -> int:
     code generation at runtime.
 
     :param sg: The surrogate gradient function object
-    :type sg: surrogate.SurrogateFunctionBase
+    :type sg: ``surrogate.SurrogateFunctionBase``
     :return: A unique integer ID for the surrogate function
     :rtype: int
     """
@@ -90,7 +90,7 @@ def _stash_capture_ctx(captured_ctx: _CapturedAutogradCtx) -> int:
     retrieved later via :func:`_take_capture_ctx`.
 
     :param captured_ctx: The captured autograd context to store
-    :type captured_ctx: _CapturedAutogradCtx
+    :type captured_ctx: ``_CapturedAutogradCtx``
     :return: A unique integer ID for later retrieval
     :rtype: int
     """
@@ -129,7 +129,7 @@ def _resolve_sg_cuda_code_fun(sg):
     """Resolve the ``cuda_code`` function from a surrogate gradient object.
 
     :param sg: The surrogate gradient function object
-    :type sg: surrogate.SurrogateFunctionBase
+    :type sg: ``surrogate.SurrogateFunctionBase``
     :return: The ``cuda_code`` callable of the surrogate function
     :rtype: Callable
     :raises RuntimeError: If the surrogate function does not implement ``cuda_code``
@@ -154,7 +154,7 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
 
     * **中文**
 
-    TODO: add Chinese description
+    保存CUDA代码到文件
 
     :param cu_file_path: 输出的 CUDA 文件路径
     :type cu_file_path: str
@@ -169,9 +169,8 @@ def save_cuda_codes(cu_file_path: str = "./neuron_kernel_sample.cu"):
 
     * **English**
 
-    TODO: add English description
+    Save CUDA codes to files
 
-    :param cu_file_path: 输出的 CUDA 文件路径
     :param cu_file_path: Output CUDA file path
     :type cu_file_path: str
     :type cu_file_path: str
@@ -269,7 +268,7 @@ def multistep_if_ptt(*args, **kwargs):
 
     * **中文**
 
-    TODO: add Chinese description
+    多步IF神经元脉冲前向传播
 
     .. admonition:: Note
     :return: Forward spike and backward gradient tensors
@@ -283,7 +282,7 @@ def multistep_if_ptt(*args, **kwargs):
 
     * **English**
 
-    TODO: add English description
+    Multi-step IF neuron spike forward
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -304,7 +303,7 @@ def multistep_lif_ptt(*args, **kwargs):
 
     * **中文**
 
-    TODO: add Chinese description
+    多步LIF神经元脉冲前向传播
 
     .. admonition:: Note
     :return: Forward spike and backward gradient tensors
@@ -318,7 +317,7 @@ def multistep_lif_ptt(*args, **kwargs):
 
     * **English**
 
-    TODO: add English description
+    Multi-step LIF neuron spike forward
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -339,7 +338,7 @@ def multistep_plif_ptt(*args, **kwargs):
 
     * **中文**
 
-    TODO: add Chinese description
+    多步PLIF神经元脉冲前向传播
 
     .. admonition:: Note
     :return: Forward spike and backward gradient tensors
@@ -353,7 +352,7 @@ def multistep_plif_ptt(*args, **kwargs):
 
     * **English**
 
-    TODO: add English description
+    Multi-step PLIF neuron spike forward
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -374,7 +373,7 @@ def multistep_qif_ptt(*args, **kwargs):
 
     * **中文**
 
-    TODO: add Chinese description
+    多步QIF神经元脉冲前向传播
 
     .. admonition:: Note
     :return: Forward spike and backward gradient tensors
@@ -388,7 +387,7 @@ def multistep_qif_ptt(*args, **kwargs):
 
     * **English**
 
-    TODO: add English description
+    Multi-step QIF neuron spike forward
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -409,7 +408,7 @@ def multistep_izhikevich_ptt(*args, **kwargs):
 
     * **中文**
 
-    TODO: add Chinese description
+    多步Izhikevich神经元脉冲前向传播
 
     .. admonition:: Note
     :return: Forward spike and backward gradient tensors
@@ -423,7 +422,7 @@ def multistep_izhikevich_ptt(*args, **kwargs):
 
     * **English**
 
-    TODO: add English description
+    Multi-step Izhikevich neuron spike forward
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]
@@ -444,7 +443,7 @@ def multistep_eif_ptt(*args, **kwargs):
 
     * **中文**
 
-    TODO: add Chinese description
+    多步EIF神经元脉冲前向传播
 
     .. admonition:: Note
     :return: Forward spike and backward gradient tensors
@@ -458,7 +457,7 @@ def multistep_eif_ptt(*args, **kwargs):
 
     * **English**
 
-    TODO: add English description
+    Multi-step EIF neuron spike forward
 
     :return: Forward spike and backward gradient tensors
     :rtype: Tuple[torch.Tensor, ...]

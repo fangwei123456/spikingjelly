@@ -47,7 +47,7 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
     * **中文**
 
-    TODO: add Chinese description
+    sg triton 函数
 
     :rtype: None
     All transcendentals upcast to float32 to avoid fp16 precision issues.
@@ -59,7 +59,7 @@ def sg_triton(h, alpha, sg_triton_id: tl.constexpr):
 
     * **English**
 
-    TODO: add English description
+    Sg Triton function
 
     :return: None
     :rtype: None
@@ -111,7 +111,7 @@ def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
 
     * **中文**
 
-    TODO: add Chinese description
+    resolve sg triton id and alpha 函数
 
     :rtype: None
     Raises NotImplementedError for unsupported surrogate types.
@@ -122,7 +122,7 @@ def resolve_sg_triton_id_and_alpha(surrogate_function) -> tuple[int, float]:
 
     * **English**
 
-    TODO: add English description
+    Resolve Sg Triton Id And Alpha function
 
     :return: None
     :rtype: None

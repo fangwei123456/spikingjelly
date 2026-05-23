@@ -19,7 +19,7 @@ class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
 
     * **中文**
 
-    TODO: add Chinese description
+    NeuroMC内存驻留计数器
 
     :rtype: None
     Tracks the memory residency (number of elements alive) at different
@@ -31,7 +31,7 @@ class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
 
     * **English**
 
-    TODO: add English description
+    NeuroMC memory residency counter
 
     :return: None
     :rtype: None

@@ -37,7 +37,7 @@ def extract_info(
 
     * **中文**
 
-    TODO: add Chinese description
+    从前向计算图中提取信息
 
     :rtype: None
     The forward graph should have the following signature:
@@ -70,7 +70,7 @@ def extract_info(
 
     * **English**
 
-    TODO: add English description
+    Extract information from forward graph
 
     :return: None
     :rtype: None

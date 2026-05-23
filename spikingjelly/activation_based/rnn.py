@@ -208,7 +208,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -231,7 +230,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.__init__-en:
-        * **English**
 
         * **English**
 
@@ -267,7 +265,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.reset_parameters-cn:
-        * **中文**
 
         * **中文**
 
@@ -279,7 +276,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.reset_parameters-en:
-        * **English**
 
         * **English**
 
@@ -300,7 +296,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.weight_ih-cn:
-        * **中文**
 
         * **中文**
 
@@ -310,7 +305,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.weight_ih-en:
-        * **English**
 
         * **English**
 
@@ -327,7 +321,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.weight_hh-cn:
-        * **中文**
 
         * **中文**
 
@@ -337,7 +330,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.weight_hh-en:
-        * **English**
 
         * **English**
 
@@ -354,7 +346,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.bias_ih-cn:
-        * **中文**
 
         * **中文**
 
@@ -364,7 +355,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.bias_ih-en:
-        * **English**
 
         * **English**
 
@@ -381,7 +371,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.bias_hh-cn:
-        * **中文**
 
         * **中文**
 
@@ -391,7 +380,6 @@ class SpikingRNNCellBase(nn.Module):
         ----
 
         .. _SpikingRNNCellBase.bias_hh-en:
-        * **English**
 
         * **English**
 
@@ -501,7 +489,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.create_cells-cn:
-        * **中文**
 
         * **中文**
 
@@ -513,7 +500,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.create_cells-en:
-        * **English**
 
         * **English**
 
@@ -581,7 +567,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.base_cell-cn:
-        * **中文**
 
         * **中文**
 
@@ -592,7 +577,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.base_cell-en:
-        * **English**
 
         * **English**
 
@@ -611,7 +595,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.states_num-cn:
-        * **中文**
 
         * **中文**
 
@@ -622,7 +605,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.states_num-en:
-        * **English**
 
         * **English**
 
@@ -644,7 +626,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -673,7 +654,6 @@ class SpikingRNNBase(nn.Module):
         ----
 
         .. _SpikingRNNBase.forward-en:
-        * **English**
 
         * **English**
 
@@ -1000,7 +980,6 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         ----
 
         .. _SpikingLSTMCell.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -1022,7 +1001,6 @@ class SpikingLSTMCell(SpikingRNNCellBase):
         ----
 
         .. _SpikingLSTMCell.forward-en:
-        * **English**
 
         * **English**
 
@@ -1221,7 +1199,6 @@ class SpikingLSTM(SpikingRNNBase):
         ----
 
         .. _SpikingLSTM.base_cell-cn:
-        * **中文**
 
         * **中文**
 
@@ -1231,7 +1208,6 @@ class SpikingLSTM(SpikingRNNBase):
         ----
 
         .. _SpikingLSTM.base_cell-en:
-        * **English**
 
         * **English**
 
@@ -1249,7 +1225,6 @@ class SpikingLSTM(SpikingRNNBase):
         ----
 
         .. _SpikingLSTM.states_num-cn:
-        * **中文**
 
         * **中文**
 
@@ -1259,7 +1234,6 @@ class SpikingLSTM(SpikingRNNBase):
         ----
 
         .. _SpikingLSTM.states_num-en:
-        * **English**
 
         * **English**
 
@@ -1332,7 +1306,6 @@ class SpikingVanillaRNNCell(SpikingRNNCellBase):
         ----
 
         .. _SpikingVanillaRNNCell.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -1348,7 +1321,6 @@ class SpikingVanillaRNNCell(SpikingRNNCellBase):
         ----
 
         .. _SpikingVanillaRNNCell.forward-en:
-        * **English**
 
         * **English**
 
@@ -1454,7 +1426,6 @@ class SpikingVanillaRNN(SpikingRNNBase):
         ----
 
         .. _SpikingVanillaRNN.base_cell-cn:
-        * **中文**
 
         * **中文**
 
@@ -1464,7 +1435,6 @@ class SpikingVanillaRNN(SpikingRNNBase):
         ----
 
         .. _SpikingVanillaRNN.base_cell-en:
-        * **English**
 
         * **English**
 
@@ -1482,7 +1452,6 @@ class SpikingVanillaRNN(SpikingRNNBase):
         ----
 
         .. _SpikingVanillaRNN.states_num-cn:
-        * **中文**
 
         * **中文**
 
@@ -1492,7 +1461,6 @@ class SpikingVanillaRNN(SpikingRNNBase):
         ----
 
         .. _SpikingVanillaRNN.states_num-en:
-        * **English**
 
         * **English**
 
@@ -1573,7 +1541,6 @@ class SpikingGRUCell(SpikingRNNCellBase):
         ----
 
         .. _SpikingGRUCell.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -1589,7 +1556,6 @@ class SpikingGRUCell(SpikingRNNCellBase):
         ----
 
         .. _SpikingGRUCell.forward-en:
-        * **English**
 
         * **English**
 
@@ -1714,7 +1680,6 @@ class SpikingGRU(SpikingRNNBase):
         ----
 
         .. _SpikingGRU.base_cell-cn:
-        * **中文**
 
         * **中文**
 
@@ -1724,7 +1689,6 @@ class SpikingGRU(SpikingRNNBase):
         ----
 
         .. _SpikingGRU.base_cell-en:
-        * **English**
 
         * **English**
 

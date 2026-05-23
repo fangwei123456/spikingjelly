@@ -19,7 +19,6 @@ def heaviside(x: torch.Tensor):
     ----
 
     .. _heaviside.__init__-cn:
-    * **中文**
 
     * **中文**
 
@@ -42,7 +41,6 @@ def heaviside(x: torch.Tensor):
     ----
 
     .. _heaviside.__init__-en:
-    * **English**
 
     * **English**
 
@@ -73,7 +71,6 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     ----
 
     .. _check_manual_grad.__init__-cn:
-    * **中文**
 
     * **中文**
 
@@ -91,7 +88,6 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     ----
 
     .. _check_manual_grad.__init__-en:
-    * **English**
 
     * **English**
 
@@ -148,7 +144,6 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     ----
 
     .. _check_cuda_grad-cn:
-    * **中文**
 
     * **中文**
 
@@ -179,7 +174,6 @@ def check_cuda_grad(neu, surrogate_function, device, *args, **kwargs):
     ----
 
     .. _check_cuda_grad-en:
-    * **English**
 
     * **English**
 
@@ -242,7 +236,6 @@ def plot_surrogate_function(surrogate_function):
     ----
 
     .. _plot_surrogate_function-cn:
-    * **中文**
 
     * **中文**
 
@@ -256,7 +249,6 @@ def plot_surrogate_function(surrogate_function):
     ----
 
     .. _plot_surrogate_function-en:
-    * **English**
 
     * **English**
 
@@ -308,7 +300,6 @@ class SurrogateFunctionBase(nn.Module):
     ----
 
     .. _SurrogateFunctionBase-cn:
-    * **中文**
 
     * **中文**
 
@@ -324,7 +315,6 @@ class SurrogateFunctionBase(nn.Module):
     ----
 
     .. _SurrogateFunctionBase-en:
-    * **English**
 
     * **English**
 
@@ -441,7 +431,6 @@ class piecewise_quadratic(torch.autograd.Function):
     ----
 
     .. _piecewise_quadratic-cn:
-    * **中文**
 
     * **中文**
 
@@ -453,7 +442,6 @@ class piecewise_quadratic(torch.autograd.Function):
     ----
 
     .. _piecewise_quadratic-en:
-    * **English**
 
     * **English**
 
@@ -490,7 +478,6 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseQuadratic.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -529,7 +516,6 @@ class PiecewiseQuadratic(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseQuadratic.__init__-en:
-        * **English**
 
         * **English**
 
@@ -595,7 +581,6 @@ def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: fl
     ----
 
     .. _piecewise_exp_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -613,7 +598,6 @@ def piecewise_exp_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: fl
     ----
 
     .. _piecewise_exp_backward-en:
-    * **English**
 
     * **English**
 
@@ -639,7 +623,6 @@ class piecewise_exp(torch.autograd.Function):
     ----
 
     .. _piecewise_exp-cn:
-    * **中文**
 
     * **中文**
 
@@ -651,7 +634,6 @@ class piecewise_exp(torch.autograd.Function):
     ----
 
     .. _piecewise_exp-en:
-    * **English**
 
     * **English**
 
@@ -686,7 +668,6 @@ class PiecewiseExp(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseExp.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -719,7 +700,6 @@ class PiecewiseExp(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseExp.__init__-en:
-        * **English**
 
         * **English**
 
@@ -778,7 +758,6 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _sigmoid_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -796,7 +775,6 @@ def sigmoid_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _sigmoid_backward-en:
-    * **English**
 
     * **English**
 
@@ -823,7 +801,6 @@ class sigmoid(torch.autograd.Function):
     ----
 
     .. _sigmoid-cn:
-    * **中文**
 
     * **中文**
 
@@ -835,7 +812,6 @@ class sigmoid(torch.autograd.Function):
     ----
 
     .. _sigmoid-en:
-    * **English**
 
     * **English**
 
@@ -870,7 +846,6 @@ class Sigmoid(SurrogateFunctionBase):
         ----
 
         .. _Sigmoid.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -899,7 +874,6 @@ class Sigmoid(SurrogateFunctionBase):
         ----
 
         .. _Sigmoid.__init__-en:
-        * **English**
 
         * **English**
 
@@ -979,7 +953,6 @@ def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float)
     ----
 
     .. _soft_sign_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -997,7 +970,6 @@ def soft_sign_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float)
     ----
 
     .. _soft_sign_backward-en:
-    * **English**
 
     * **English**
 
@@ -1068,7 +1040,6 @@ class SoftSign(SurrogateFunctionBase):
         ----
 
         .. _SoftSign.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1098,7 +1069,6 @@ class SoftSign(SurrogateFunctionBase):
         ----
 
         .. _SoftSign.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1151,7 +1121,6 @@ def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: floa
     ----
 
     .. _super_spike_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -1169,7 +1138,6 @@ def super_spike_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: floa
     ----
 
     .. _super_spike_backward-en:
-    * **English**
 
     * **English**
 
@@ -1240,7 +1208,6 @@ class SuperSpike(SurrogateFunctionBase):
         ----
 
         .. _SuperSpike.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1259,7 +1226,6 @@ class SuperSpike(SurrogateFunctionBase):
         ----
 
         .. _SuperSpike.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1307,7 +1273,6 @@ def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _atan_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -1325,7 +1290,6 @@ def atan_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _atan_backward-en:
-    * **English**
 
     * **English**
 
@@ -1353,7 +1317,6 @@ class atan(torch.autograd.Function):
     ----
 
     .. _atan-cn:
-    * **中文**
 
     * **中文**
 
@@ -1365,7 +1328,6 @@ class atan(torch.autograd.Function):
     ----
 
     .. _atan-en:
-    * **English**
 
     * **English**
 
@@ -1400,7 +1362,6 @@ class ATan(SurrogateFunctionBase):
         ----
 
         .. _ATan.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1429,7 +1390,6 @@ class ATan(SurrogateFunctionBase):
         ----
 
         .. _ATan.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1599,7 +1559,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         ----
 
         .. _NonzeroSignLogAbs.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1640,7 +1599,6 @@ class NonzeroSignLogAbs(SurrogateFunctionBase):
         ----
 
         .. _NonzeroSignLogAbs.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1709,7 +1667,6 @@ def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _erf_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -1727,7 +1684,6 @@ def erf_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _erf_backward-en:
-    * **English**
 
     * **English**
 
@@ -1800,7 +1756,6 @@ class Erf(SurrogateFunctionBase):
         ----
 
         .. _Erf.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -1835,7 +1790,6 @@ class Erf(SurrogateFunctionBase):
         ----
 
         .. _Erf.__init__-en:
-        * **English**
 
         * **English**
 
@@ -1995,7 +1949,6 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseLeakyReLU.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -2036,7 +1989,6 @@ class PiecewiseLeakyReLU(SurrogateFunctionBase):
         ----
 
         .. _PiecewiseLeakyReLU.__init__-en:
-        * **English**
 
         * **English**
 
@@ -2152,7 +2104,6 @@ class squarewave_fourier_series(torch.autograd.Function):
     ----
 
     .. _squarewave_fourier_series-cn:
-    * **中文**
 
     * **中文**
 
@@ -2164,7 +2115,6 @@ class squarewave_fourier_series(torch.autograd.Function):
     ----
 
     .. _squarewave_fourier_series-en:
-    * **English**
 
     * **English**
 
@@ -2209,7 +2159,6 @@ class SquarewaveFourierSeries(SurrogateFunctionBase):
         ----
 
         .. _SquarewaveFourierSeries.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -2236,7 +2185,6 @@ class SquarewaveFourierSeries(SurrogateFunctionBase):
         ----
 
         .. _SquarewaveFourierSeries.__init__-en:
-        * **English**
 
         * **English**
 
@@ -2340,7 +2288,6 @@ class S2NN(SurrogateFunctionBase):
         ----
 
         .. _S2NN.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -2376,7 +2323,6 @@ class S2NN(SurrogateFunctionBase):
         ----
 
         .. _S2NN.__init__-en:
-        * **English**
 
         * **English**
 
@@ -2528,7 +2474,6 @@ class QPseudoSpike(SurrogateFunctionBase):
         ----
 
         .. _QPseudoSpike.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -2561,7 +2506,6 @@ class QPseudoSpike(SurrogateFunctionBase):
         ----
 
         .. _QPseudoSpike.__init__-en:
-        * **English**
 
         * **English**
 
@@ -2756,7 +2700,6 @@ class LeakyKReLU(SurrogateFunctionBase):
         ----
 
         .. _LeakyKReLU.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -2799,7 +2742,6 @@ class LeakyKReLU(SurrogateFunctionBase):
         ----
 
         .. _LeakyKReLU.__init__-en:
-        * **English**
 
         * **English**
 
@@ -2949,7 +2891,6 @@ class fake_numerical_gradient(torch.autograd.Function):
     ----
 
     .. _fake_numerical_gradient-cn:
-    * **中文**
 
     * **中文**
 
@@ -2965,7 +2906,6 @@ class fake_numerical_gradient(torch.autograd.Function):
     ----
 
     .. _fake_numerical_gradient-en:
-    * **English**
 
     * **English**
 
@@ -3006,7 +2946,6 @@ class FakeNumericalGradient(SurrogateFunctionBase):
         ----
 
         .. _FakeNumericalGradient.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -3024,7 +2963,6 @@ class FakeNumericalGradient(SurrogateFunctionBase):
         ----
 
         .. _FakeNumericalGradient.__init__-en:
-        * **English**
 
         * **English**
 
@@ -3093,7 +3031,6 @@ def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: 
     ----
 
     .. _log_tailed_relu_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -3113,7 +3050,6 @@ def log_tailed_relu_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: 
     ----
 
     .. _log_tailed_relu_backward-en:
-    * **English**
 
     * **English**
 
@@ -3144,7 +3080,6 @@ class log_tailed_relu(torch.autograd.Function):
     ----
 
     .. _log_tailed_relu-cn:
-    * **中文**
 
     * **中文**
 
@@ -3160,7 +3095,6 @@ class log_tailed_relu(torch.autograd.Function):
     ----
 
     .. _log_tailed_relu-en:
-    * **English**
 
     * **English**
 
@@ -3199,7 +3133,6 @@ class LogTailedReLU(SurrogateFunctionBase):
         ----
 
         .. _LogTailedReLU.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -3238,7 +3171,6 @@ class LogTailedReLU(SurrogateFunctionBase):
         ----
 
         .. _LogTailedReLU.__init__-en:
-        * **English**
 
         * **English**
 
@@ -3357,7 +3289,6 @@ class deterministic_pass(torch.autograd.Function):
     ----
 
     .. _deterministic_pass-cn:
-    * **中文**
 
     * **中文**
 
@@ -3371,7 +3302,6 @@ class deterministic_pass(torch.autograd.Function):
     ----
 
     .. _deterministic_pass-en:
-    * **English**
 
     * **English**
 
@@ -3406,7 +3336,6 @@ class DeterministicPass(SurrogateFunctionBase):
         ----
 
         .. _DeterministicPass.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -3422,7 +3351,6 @@ class DeterministicPass(SurrogateFunctionBase):
         ----
 
         .. _DeterministicPass.__init__-en:
-        * **English**
 
         * **English**
 
@@ -3457,7 +3385,6 @@ class poisson_pass(torch.autograd.Function):
     ----
 
     .. _poisson_pass-cn:
-    * **中文**
 
     * **中文**
 
@@ -3471,7 +3398,6 @@ class poisson_pass(torch.autograd.Function):
     ----
 
     .. _poisson_pass-en:
-    * **English**
 
     * **English**
 
@@ -3506,7 +3432,6 @@ class PoissonPass(SurrogateFunctionBase):
         ----
 
         .. _PoissonPass.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -3522,7 +3447,6 @@ class PoissonPass(SurrogateFunctionBase):
         ----
 
         .. _PoissonPass.__init__-en:
-        * **English**
 
         * **English**
 
@@ -3558,7 +3482,6 @@ def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _rect_backward-cn:
-    * **中文**
 
     * **中文**
 
@@ -3578,7 +3501,6 @@ def rect_backward(grad_output: torch.Tensor, x: torch.Tensor, alpha: float):
     ----
 
     .. _rect_backward-en:
-    * **English**
 
     * **English**
 
@@ -3604,7 +3526,6 @@ class rect(torch.autograd.Function):
     ----
 
     .. _rect-cn:
-    * **中文**
 
     * **中文**
 
@@ -3620,7 +3541,6 @@ class rect(torch.autograd.Function):
     ----
 
     .. _rect-en:
-    * **English**
 
     * **English**
 

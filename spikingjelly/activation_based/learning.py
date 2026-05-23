@@ -796,7 +796,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.reset-cn:
-        * **中文**
 
         * **中文**
 
@@ -808,7 +807,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.reset-en:
-        * **English**
 
         * **English**
 
@@ -829,7 +827,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.disable-cn:
-        * **中文**
 
         * **中文**
 
@@ -841,7 +838,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.disable-en:
-        * **English**
 
         * **English**
 
@@ -861,7 +857,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.enable-cn:
-        * **中文**
 
         * **中文**
 
@@ -873,7 +868,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.enable-en:
-        * **English**
 
         * **English**
 
@@ -893,7 +887,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.step-cn:
-        * **中文**
 
         * **中文**
 
@@ -914,7 +907,6 @@ class STDPLearner(base.MemoryModule):
         ----
 
         .. _STDPLearner.step-en:
-        * **English**
 
         * **English**
 
@@ -1077,7 +1069,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.reset-cn:
-        * **中文**
 
         * **中文**
 
@@ -1089,7 +1080,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.reset-en:
-        * **English**
 
         * **English**
 
@@ -1110,7 +1100,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.disable-cn:
-        * **中文**
 
         * **中文**
 
@@ -1122,7 +1111,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.disable-en:
-        * **English**
 
         * **English**
 
@@ -1142,7 +1130,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.enable-cn:
-        * **中文**
 
         * **中文**
 
@@ -1154,7 +1141,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.enable-en:
-        * **English**
 
         * **English**
 
@@ -1174,7 +1160,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.step-cn:
-        * **中文**
 
         * **中文**
 
@@ -1194,7 +1179,6 @@ class MSTDPLearner(base.MemoryModule):
         ----
 
         .. _MSTDPLearner.step-en:
-        * **English**
 
         * **English**
 
@@ -1371,7 +1355,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.reset-cn:
-        * **中文**
 
         * **中文**
 
@@ -1383,7 +1366,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.reset-en:
-        * **English**
 
         * **English**
 
@@ -1404,7 +1386,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.disable-cn:
-        * **中文**
 
         * **中文**
 
@@ -1416,7 +1397,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.disable-en:
-        * **English**
 
         * **English**
 
@@ -1436,7 +1416,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.enable-cn:
-        * **中文**
 
         * **中文**
 
@@ -1448,7 +1427,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.enable-en:
-        * **English**
 
         * **English**
 
@@ -1468,7 +1446,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.step-cn:
-        * **中文**
 
         * **中文**
 
@@ -1488,7 +1465,6 @@ class MSTDPETLearner(base.MemoryModule):
         ----
 
         .. _MSTDPETLearner.step-en:
-        * **English**
 
         * **English**
 

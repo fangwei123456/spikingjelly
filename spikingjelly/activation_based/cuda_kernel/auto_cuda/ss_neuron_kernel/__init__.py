@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <ss_neuron_kernel-cn>` | :ref:`English <ss_neuron_kernel-en>`
 
 ----
 
-.. ___init__-cn:
+.. _ss_neuron_kernel-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+单步神经元CUDA kernel自动生成模块。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _ss_neuron_kernel-en:
 
 * **English**
 
-TODO: add English module description for __init__
+Single-step neuron CUDA kernel auto-generation module.
 
 :return: None
 :rtype: None

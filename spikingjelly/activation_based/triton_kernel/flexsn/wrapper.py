@@ -41,7 +41,7 @@ def flexsn_backward_ncl_bucket(ncl: int) -> int:
 
     * **中文**
 
-    TODO: add Chinese description
+    flexsn backward ncl bucket 函数
 
     :param ncl: EN: Flattened element count per time step. Chinese: 单个时间步展平后的元素数。
     :type ncl: int
@@ -59,11 +59,9 @@ def flexsn_backward_ncl_bucket(ncl: int) -> int:
 
     * **English**
 
-    TODO: add English description
+    Flexsn Backward Ncl Bucket function
 
-    :param ncl: EN: Flattened element count per time step. Chinese: 单个时间步展平后的元素数。
     :type ncl: int
-    :return: EN: Bucket index in ``[0, 4]``. Chinese: ``[0, 4]`` 范围内的分桶索引。
     :rtype: int
     """
     if ncl <= _BACKWARD_SMALL_MAX_NCL:
@@ -138,7 +136,7 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 
     * **中文**
 
-    TODO: add Chinese description
+    flexsn inference 函数
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -156,12 +154,8 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 
     * **English**
 
-    TODO: add English description
+    Flexsn Inference function
 
-    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
-    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
-    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
-    :return: EN: Output/state sequences. When ``T == 0``, returns empty tensors with the expected templates. Chinese: 输出/状态序列；当 ``T == 0`` 时, 返回符合模板的空张量。
     :rtype: tuple
     """
     x_example = args[0]
@@ -196,7 +190,7 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 
     * **中文**
 
-    TODO: add Chinese description
+    flexsn inference final state 函数
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -214,12 +208,8 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 
     * **English**
 
-    TODO: add English description
+    Flexsn Inference Final State function
 
-    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
-    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
-    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
-    :return: EN: Output sequences followed by final states. When ``T == 0``, output sequences are empty, provided initial states are cloned, and missing states are zero-filled. Chinese: 输出序列后接最终状态；当 ``T == 0`` 时, 输出序列为空, 已提供的初始状态会被克隆, 缺失状态会以零填充。
     :rtype: tuple
     """
     x_example = args[0]
@@ -268,7 +258,7 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
 
     * **中文**
 
-    TODO: add Chinese description
+    flexsn forward 函数
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -286,12 +276,8 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
 
     * **English**
 
-    TODO: add English description
+    Flexsn Forward function
 
-    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
-    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
-    :param args: EN: Input/state sequences accepted by the kernel. Chinese: kernel 接收的输入/状态序列。
-    :return: EN: Forward outputs plus any saved tensors required by backward. When ``T == 0``, returns empty tensors following the expected templates. Chinese: 前向输出以及 backward 所需的保存张量；当 ``T == 0`` 时, 返回符合模板的空张量。
     :rtype: tuple
     """
     x_example = args[0]
@@ -330,7 +316,7 @@ def flexsn_backward(
 
     * **中文**
 
-    TODO: add Chinese description
+    flexsn backward 函数
 
     :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
     :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
@@ -374,10 +360,8 @@ def flexsn_backward(
 
     * **English**
 
-    TODO: add English description
+    Flexsn Backward function
 
-    :param f: EN: Triton kernel callable. Chinese: Triton kernel 可调用对象。
-    :param info: EN: FlexSN metadata. Chinese: FlexSN 元信息。
     :param args: EN: Gradients followed by any saved tensors accepted by the kernel.
     :param input_templates: EN: Per-input-sequence templates used to allocate input
     :param state_templates: EN: Per-initial-state templates used to allocate initial

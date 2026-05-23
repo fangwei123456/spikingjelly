@@ -31,7 +31,7 @@ def create_fptt_kernel(decay_input: bool, hard_reset: bool, dtype: str):
 
     * **中文**
 
-    TODO: add Chinese description
+    创建前向传播CUDA kernel
 
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
@@ -46,7 +46,7 @@ def create_fptt_kernel(decay_input: bool, hard_reset: bool, dtype: str):
 
     * **English**
 
-    TODO: add English description
+    Create forward-pass CUDA kernel
 
     :param hard_reset: Whether to use hard reset mode
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
@@ -77,10 +77,10 @@ def create_bptt_kernel(
 
     * **中文**
 
-    TODO: add Chinese description
+    创建反向传播CUDA kernel
 
     :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
-    :type sg_cuda_code_fun: Callable
+    :type sg_cuda_code_fun: ``Callable``
     :param hard_reset: Whether to use hard reset mode
     :type hard_reset: bool
     :param detach_reset: Whether to detach the reset term in backward
@@ -96,13 +96,13 @@ def create_bptt_kernel(
 
     * **English**
 
-    TODO: add English description
+    Create backward-pass CUDA kernel
 
     :param sg_cuda_code_fun: Callable that generates surrogate gradient CUDA code
     :param hard_reset: Whether to use hard reset mode
     :param detach_reset: Whether to detach the reset term in backward
     :param dtype: Data type, ``\"fp32\"`` or ``\"fp16\"``
-    :type sg_cuda_code_fun: Callable
+    :type sg_cuda_code_fun: ``Callable``
     :type hard_reset: bool
     :type detach_reset: bool
     :type dtype: str
@@ -763,14 +763,14 @@ def multistep_plif_ptt(
 
     * **中文**
 
-    TODO: add Chinese description
+    多步PLIF神经元脉冲前向传播
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
-    :type x_seq: torch.Tensor
+    :type x_seq: ``torch.Tensor``
     :param v_init: Initial membrane potential
-    :type v_init: torch.Tensor
+    :type v_init: ``torch.Tensor``
     :param reciprocal_tau: Reciprocal of the learnable time constant
-    :type reciprocal_tau: torch.Tensor
+    :type reciprocal_tau: ``torch.Tensor``
     :param decay_input: Whether input participates in decay
     :type decay_input: bool
     :param v_threshold: Threshold voltage
@@ -780,7 +780,7 @@ def multistep_plif_ptt(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq, reciprocal_tau)
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
 
@@ -790,7 +790,7 @@ def multistep_plif_ptt(
 
     * **English**
 
-    TODO: add English description
+    Multi-step PLIF neuron spike forward
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :param v_init: Initial membrane potential
@@ -800,14 +800,14 @@ def multistep_plif_ptt(
     :param v_reset: Reset voltage (``None`` for soft reset)
     :param detach_reset: Whether to detach the reset term in backward
     :param surrogate_function: Surrogate gradient function
-    :type x_seq: torch.Tensor
-    :type v_init: torch.Tensor
-    :type reciprocal_tau: torch.Tensor
+    :type x_seq: ``torch.Tensor``
+    :type v_init: ``torch.Tensor``
+    :type reciprocal_tau: ``torch.Tensor``
     :type decay_input: bool
     :type v_threshold: float
     :type v_reset: Optional[float]
     :type detach_reset: bool
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq, reciprocal_tau)
     :rtype: Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
     """

@@ -148,7 +148,12 @@ class NeuroMCRuntimeEnergyReport:
 
     * **中文**
 
-    TODO: add Chinese description
+    NeuroMC 运行时能耗报告数据类。
+
+    记录一次能耗分析会话的完整结果，包括总能耗、计算能耗、内存能耗、
+    各阶段能耗分解、各算子类型的能耗分布以及内存访问位宽等详细信息。
+    可通过 :meth:`~NeuroMCRuntimeEnergyReport.summary` 方法获取
+    关键指标的字符串摘要，便于快速查看分析结果。
 
     :param energy_total_pj: Total energy consumption in picojoules
     :type energy_total_pj: float
@@ -157,15 +162,15 @@ class NeuroMCRuntimeEnergyReport:
     :param energy_memory_pj: Total memory access energy in picojoules
     :type energy_memory_pj: float
     :param energy_by_stage: Energy breakdown by execution stage
-    :type energy_by_stage: dict[str, float]
+    :type energy_by_stage: ``dict[str, float]``
     :param energy_by_op: Energy breakdown by operation type
-    :type energy_by_op: dict[str, float]
+    :type energy_by_op: ``dict[str, float]``
     :param primitive_counts: Raw primitive operation counts
-    :type primitive_counts: dict[str, Any]
+    :type primitive_counts: ``dict[str, Any]``
     :param memory_bits_by_level: Memory access bits by hierarchy level
-    :type memory_bits_by_level: dict[str, Any]
+    :type memory_bits_by_level: ``dict[str, Any]``
     :param warnings: List of warnings generated during profiling
-    :type warnings: list[str]
+    :type warnings: ``list[str]``
     :param energy_mac_pj: Energy of MAC operations in picojoules
     :type energy_mac_pj: float
     :param energy_base_memory_pj: Base memory energy in picojoules
@@ -184,7 +189,7 @@ class NeuroMCRuntimeEnergyReport:
 
     * **English**
 
-    TODO: add English description
+    Neuromcruntimeenergyreport function
 
     :param energy_total_pj: Total energy consumption in picojoules
     :param energy_compute_pj: Total compute energy in picojoules
@@ -201,11 +206,11 @@ class NeuroMCRuntimeEnergyReport:
     :type energy_total_pj: float
     :type energy_compute_pj: float
     :type energy_memory_pj: float
-    :type energy_by_stage: dict[str, float]
-    :type energy_by_op: dict[str, float]
-    :type primitive_counts: dict[str, Any]
-    :type memory_bits_by_level: dict[str, Any]
-    :type warnings: list[str]
+    :type energy_by_stage: ``dict[str, float]``
+    :type energy_by_op: ``dict[str, float]``
+    :type primitive_counts: ``dict[str, Any]``
+    :type memory_bits_by_level: ``dict[str, Any]``
+    :type warnings: ``list[str]``
     :type energy_mac_pj: float
     :type energy_base_memory_pj: float
     :type energy_extra_memory_pj: float
@@ -431,7 +436,7 @@ class NeuroMCEnergyProfiler:
 
     * **中文**
 
-    TODO: add Chinese description
+    NeuroMC能耗分析器
 
     :rtype: None
     Profiles the energy consumption of a model by tracking operation counts
@@ -443,7 +448,7 @@ class NeuroMCEnergyProfiler:
 
     * **English**
 
-    TODO: add English description
+    NeuroMC energy profiler
 
     :return: None
     :rtype: None
@@ -2121,10 +2126,10 @@ def estimate_neuromc_runtime_energy(
 
     * **中文**
 
-    TODO: add Chinese description
+    estimate neuromc runtime energy 函数
 
     :param model: The PyTorch model to profile
-    :type model: nn.Module
+    :type model: ``nn.Module``
     :param inputs: Input tensors for the forward pass
     :type inputs: Any
     :param target: Target tensors for loss computation
@@ -2163,7 +2168,7 @@ def estimate_neuromc_runtime_energy(
 
     * **English**
 
-    TODO: add English description
+    Estimate Neuromc Runtime Energy function
 
     :param model: The PyTorch model to profile
     :param inputs: Input tensors for the forward pass
@@ -2179,7 +2184,7 @@ def estimate_neuromc_runtime_energy(
     :param strict: If ``True``, raise on unknown operations instead of warning
     :param verbose: If ``True``, print progress information during profiling
     :param extra_ignore_modules: Additional module types to ignore during counting
-    :type model: nn.Module
+    :type model: ``nn.Module``
     :type inputs: Any
     :type target: torch.Tensor | None
     :type loss_fn: Callable | None

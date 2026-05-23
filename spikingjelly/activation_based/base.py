@@ -32,7 +32,6 @@ def check_backend_library(backend: str):
     ----
 
     .. _check_backend_library-cn:
-    * **中文**
 
     * **中文**
 
@@ -48,7 +47,6 @@ def check_backend_library(backend: str):
     ----
 
     .. _check_backend_library-en:
-    * **English**
 
     * **English**
 
@@ -94,7 +92,6 @@ class StepModule:
     ----
 
     .. _StepModule-cn:
-    * **中文**
 
     * **中文**
 
@@ -105,7 +102,6 @@ class StepModule:
     ----
 
     .. _StepModule-en:
-    * **English**
 
     * **English**
 
@@ -114,6 +110,7 @@ class StepModule:
     Modules implementing this interface distinguish single-step mode ``"s"``
     from multi-step mode ``"m"`` through ``step_mode``.
     """
+
     def supported_step_mode(self) -> Tuple[str]:
         r"""
         **API Language:**
@@ -175,7 +172,6 @@ class StepModule:
         ----
 
         .. _StepModule.step_mode-setter-cn:
-        * **中文**
 
         * **中文**
 
@@ -191,7 +187,6 @@ class StepModule:
         ----
 
         .. _StepModule.step_mode-setter-en:
-        * **English**
 
         * **English**
 
@@ -219,7 +214,6 @@ class SingleStepModule(StepModule):
     ----
 
     .. _SingleStepModule-cn:
-    * **中文**
 
     * **中文**
 
@@ -230,7 +224,6 @@ class SingleStepModule(StepModule):
     ----
 
     .. _SingleStepModule-en:
-    * **English**
 
     * **English**
 
@@ -247,7 +240,6 @@ class SingleStepModule(StepModule):
         ----
 
         .. _SingleStepModule.supported_step_mode-cn:
-        * **中文**
 
         * **中文**
 
@@ -257,7 +249,6 @@ class SingleStepModule(StepModule):
         ----
 
         .. _SingleStepModule.supported_step_mode-en:
-        * **English**
 
         * **English**
 
@@ -275,7 +266,6 @@ class MultiStepModule(StepModule):
     ----
 
     .. _MultiStepModule-cn:
-    * **中文**
 
     * **中文**
 
@@ -286,7 +276,6 @@ class MultiStepModule(StepModule):
     ----
 
     .. _MultiStepModule-en:
-    * **English**
 
     * **English**
 
@@ -303,7 +292,6 @@ class MultiStepModule(StepModule):
         ----
 
         .. _MultiStepModule.supported_step_mode-cn:
-        * **中文**
 
         * **中文**
 
@@ -313,7 +301,6 @@ class MultiStepModule(StepModule):
         ----
 
         .. _MultiStepModule.supported_step_mode-en:
-        * **English**
 
         * **English**
 
@@ -332,7 +319,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -344,7 +330,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.__init__-en:
-        * **English**
 
         * **English**
 
@@ -369,7 +354,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.supported_backends-cn:
-        * **中文**
 
         * **中文**
 
@@ -379,7 +363,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.supported_backends-en:
-        * **English**
 
         * **English**
 
@@ -397,7 +380,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.backend-cn:
-        * **中文**
 
         * **中文**
 
@@ -407,7 +389,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.backend-en:
-        * **English**
 
         * **English**
 
@@ -425,7 +406,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.backend-setter-cn:
-        * **中文**
 
         * **中文**
 
@@ -444,7 +424,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.backend-setter-en:
-        * **English**
 
         * **English**
 
@@ -477,7 +456,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.single_step_forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -492,7 +470,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.single_step_forward-en:
-        * **English**
 
         * **English**
 
@@ -514,7 +491,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.multi_step_forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -531,7 +507,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.multi_step_forward-en:
-        * **English**
 
         * **English**
 
@@ -562,7 +537,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -577,7 +551,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.forward-en:
-        * **English**
 
         * **English**
 
@@ -604,7 +577,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.extra_repr-cn:
-        * **中文**
 
         * **中文**
 
@@ -616,7 +588,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.extra_repr-en:
-        * **English**
 
         * **English**
 
@@ -635,7 +606,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.register_memory-cn:
-        * **中文**
 
         * **中文**
 
@@ -658,7 +628,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.register_memory-en:
-        * **English**
 
         * **English**
 
@@ -691,7 +660,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.reset-cn:
-        * **中文**
 
         * **中文**
 
@@ -706,7 +674,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.reset-en:
-        * **English**
 
         * **English**
 
@@ -826,7 +793,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.memories-cn:
-        * **中文**
 
         * **中文**
 
@@ -836,7 +802,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.memories-en:
-        * **English**
 
         * **English**
 
@@ -854,7 +819,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.named_memories-cn:
-        * **中文**
 
         * **中文**
 
@@ -864,7 +828,6 @@ class MemoryModule(nn.Module, StepModule):
         ----
 
         .. _MemoryModule.named_memories-en:
-        * **English**
 
         * **English**
 
@@ -934,7 +897,6 @@ def named_memories(module: nn.Module, prefix: str = "") -> Generator:
     ----
 
     .. _named_memories-cn:
-    * **中文**
 
     * **中文**
 
@@ -954,7 +916,6 @@ def named_memories(module: nn.Module, prefix: str = "") -> Generator:
     ----
 
     .. _named_memories-en:
-    * **English**
 
     * **English**
 
@@ -989,7 +950,6 @@ def memories(module: nn.Module) -> Generator:
     ----
 
     .. _memories-cn:
-    * **中文**
 
     * **中文**
 
@@ -1006,7 +966,6 @@ def memories(module: nn.Module) -> Generator:
     ----
 
     .. _memories-en:
-    * **English**
 
     * **English**
 
@@ -1032,7 +991,6 @@ def extract_memories(module: nn.Module) -> list:
     ----
 
     .. _extract_memories-cn:
-    * **中文**
 
     * **中文**
 
@@ -1049,7 +1007,6 @@ def extract_memories(module: nn.Module) -> list:
     ----
 
     .. _extract_memories-en:
-    * **English**
 
     * **English**
 
@@ -1161,7 +1118,6 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     ----
 
     .. _to_functional_forward-cn:
-    * **中文**
 
     * **中文**
 
@@ -1204,7 +1160,6 @@ def to_functional_forward(module: nn.Module, fn: Optional[Callable] = None):
     ----
 
     .. _to_functional_forward-en:
-    * **English**
 
     * **English**
 

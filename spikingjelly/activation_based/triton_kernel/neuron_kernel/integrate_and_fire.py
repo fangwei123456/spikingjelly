@@ -392,12 +392,12 @@ def multistep_if(
 
     * **中文**
 
-    TODO: add Chinese description
+    多步IF神经元Triton kernel前向传播
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
-    :type x_seq: torch.Tensor
+    :type x_seq: ``torch.Tensor``
     :param v_init: Initial membrane potential
-    :type v_init: torch.Tensor
+    :type v_init: ``torch.Tensor``
     :param v_threshold: Threshold voltage
     :type v_threshold: float
     :param v_reset: Reset voltage (``None`` for soft reset)
@@ -405,7 +405,7 @@ def multistep_if(
     :param detach_reset: Whether to detach the reset term in backward
     :type detach_reset: bool
     :param surrogate_function: Surrogate gradient function
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]
 
@@ -415,7 +415,7 @@ def multistep_if(
 
     * **English**
 
-    TODO: add English description
+    Multi-step IF neuron Triton kernel forward
 
     :param x_seq: Input sequence, shape ``[T, N, *]``
     :param v_init: Initial membrane potential
@@ -423,12 +423,12 @@ def multistep_if(
     :param v_reset: Reset voltage (``None`` for soft reset)
     :param detach_reset: Whether to detach the reset term in backward
     :param surrogate_function: Surrogate gradient function
-    :type x_seq: torch.Tensor
-    :type v_init: torch.Tensor
+    :type x_seq: ``torch.Tensor``
+    :type v_init: ``torch.Tensor``
     :type v_threshold: float
     :type v_reset: Optional[float]
     :type detach_reset: bool
-    :type surrogate_function: surrogate.SurrogateFunctionBase
+    :type surrogate_function: ``surrogate.SurrogateFunctionBase``
     :return: Tuple of (spike_seq, v_seq)
     :rtype: tuple[torch.Tensor, torch.Tensor]
     """

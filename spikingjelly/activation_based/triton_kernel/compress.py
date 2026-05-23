@@ -123,10 +123,10 @@ def bit_spike_compress(s_seq):
 
     * **中文**
 
-    TODO: add Chinese description
+    对脉冲张量进行位压缩
 
     :param s_seq: Spike sequence tensor of ``float32``
-    :type s_seq: torch.Tensor
+    :type s_seq: ``torch.Tensor``
     :return: Compressed uint8 tensor (8x smaller)
     :rtype: torch.Tensor
     Each element is rounded to 0 or 1 (by threshold 0.5) and packed as a single bit.
@@ -138,10 +138,10 @@ def bit_spike_compress(s_seq):
 
     * **English**
 
-    TODO: add English description
+    Bit-compress a spike tensor
 
     :param s_seq: Spike sequence tensor of ``float32``
-    :type s_seq: torch.Tensor
+    :type s_seq: ``torch.Tensor``
     :return: Compressed uint8 tensor (8x smaller)
     :rtype: torch.Tensor
     """
@@ -177,10 +177,10 @@ def bit_spike_decompress(s_seq_compressed, shape):
 
     * **中文**
 
-    TODO: add Chinese description
+    解压位压缩的脉冲张量
 
     :param s_seq_compressed: Compressed uint8 tensor from :func:`bit_spike_compress`
-    :type s_seq_compressed: torch.Tensor
+    :type s_seq_compressed: ``torch.Tensor``
     :param shape: Original shape of the uncompressed tensor
     :type shape: tuple
     :return: Decompressed float32 spike tensor (values are 0.0 or 1.0)
@@ -192,11 +192,11 @@ def bit_spike_decompress(s_seq_compressed, shape):
 
     * **English**
 
-    TODO: add English description
+    Decompress a bit-compressed spike tensor
 
     :param s_seq_compressed: Compressed uint8 tensor from :func:`bit_spike_compress`
     :param shape: Original shape of the uncompressed tensor
-    :type s_seq_compressed: torch.Tensor
+    :type s_seq_compressed: ``torch.Tensor``
     :type shape: tuple
     :return: Decompressed float32 spike tensor (values are 0.0 or 1.0)
     :rtype: torch.Tensor

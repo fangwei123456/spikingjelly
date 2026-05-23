@@ -337,7 +337,7 @@ def generate_triton_code_str(
 
     * **中文**
 
-    TODO: add Chinese description
+    生成Triton代码字符串
 
     :rtype: None
     Args:
@@ -353,7 +353,7 @@ def generate_triton_code_str(
 
     * **English**
 
-    TODO: add English description
+    Generate Triton code string
 
     :return: None
     :rtype: None
@@ -415,7 +415,7 @@ def compile_triton_code_str(
 
     * **中文**
 
-    TODO: add Chinese description
+    编译Triton代码字符串
 
     :rtype: None
     Materializes the Triton code under the persistent codegen cache, loads or
@@ -438,7 +438,7 @@ def compile_triton_code_str(
 
     * **English**
 
-    TODO: add English description
+    Compile Triton code string
 
     :return: None
     :rtype: None

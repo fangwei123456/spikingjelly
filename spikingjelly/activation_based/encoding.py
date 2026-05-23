@@ -181,7 +181,6 @@ class StatefulEncoder(base.MemoryModule):
         ----
 
         .. _StatefulEncoder.single_step_encode-cn:
-        * **中文**
 
         * **中文**
 
@@ -194,7 +193,6 @@ class StatefulEncoder(base.MemoryModule):
         ----
 
         .. _StatefulEncoder.single_step_encode-en:
-        * **English**
 
         * **English**
 
@@ -214,7 +212,6 @@ class StatefulEncoder(base.MemoryModule):
         ----
 
         .. _StatefulEncoder.extra_repr-cn:
-        * **中文**
 
         * **中文**
 
@@ -226,7 +223,6 @@ class StatefulEncoder(base.MemoryModule):
         ----
 
         .. _StatefulEncoder.extra_repr-en:
-        * **English**
 
         * **English**
 
@@ -247,7 +243,6 @@ class PeriodicEncoder(StatefulEncoder):
         ----
 
         .. _PeriodicEncoder.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -266,7 +261,6 @@ class PeriodicEncoder(StatefulEncoder):
         ----
 
         .. _PeriodicEncoder.__init__-en:
-        * **English**
 
         * **English**
 
@@ -293,7 +287,6 @@ class PeriodicEncoder(StatefulEncoder):
         ----
 
         .. _PeriodicEncoder.single_step_encode-cn:
-        * **中文**
 
         * **中文**
 
@@ -305,7 +298,6 @@ class PeriodicEncoder(StatefulEncoder):
         ----
 
         .. _PeriodicEncoder.single_step_encode-en:
-        * **English**
 
         * **English**
 
@@ -427,7 +419,6 @@ class LatencyEncoder(StatefulEncoder):
         ----
 
         .. _LatencyEncoder.single_step_encode-cn:
-        * **中文**
 
         * **中文**
 
@@ -439,7 +430,6 @@ class LatencyEncoder(StatefulEncoder):
         ----
 
         .. _LatencyEncoder.single_step_encode-en:
-        * **English**
 
         * **English**
 
@@ -470,7 +460,6 @@ class PoissonEncoder(StatelessEncoder):
         ----
 
         .. _PoissonEncoder.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -486,7 +475,6 @@ class PoissonEncoder(StatelessEncoder):
         ----
 
         .. _PoissonEncoder.__init__-en:
-        * **English**
 
         * **English**
 
@@ -510,7 +498,6 @@ class PoissonEncoder(StatelessEncoder):
         ----
 
         .. _PoissonEncoder.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -524,7 +511,6 @@ class PoissonEncoder(StatelessEncoder):
         ----
 
         .. _PoissonEncoder.forward-en:
-        * **English**
 
         * **English**
 
@@ -549,7 +535,6 @@ class WeightedPhaseEncoder(StatefulEncoder):
         ----
 
         .. _WeightedPhaseEncoder.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -588,7 +573,6 @@ class WeightedPhaseEncoder(StatefulEncoder):
         ----
 
         .. _WeightedPhaseEncoder.__init__-en:
-        * **English**
 
         * **English**
 
@@ -633,7 +617,6 @@ class WeightedPhaseEncoder(StatefulEncoder):
         ----
 
         .. _WeightedPhaseEncoder.single_step_encode-cn:
-        * **中文**
 
         * **中文**
 
@@ -646,7 +629,6 @@ class WeightedPhaseEncoder(StatefulEncoder):
         ----
 
         .. _WeightedPhaseEncoder.single_step_encode-en:
-        * **English**
 
         * **English**
 
@@ -756,7 +738,6 @@ class PopSpikeEncoderDeterministic(nn.Module):
         ----
 
         .. _PopSpikeEncoderDeterministic.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -770,7 +751,6 @@ class PopSpikeEncoderDeterministic(nn.Module):
         ----
 
         .. _PopSpikeEncoderDeterministic.forward-en:
-        * **English**
 
         * **English**
 
@@ -802,7 +782,6 @@ class PopSpikeEncoderRandom(nn.Module):
         ----
 
         .. _PopSpikeEncoderRandom.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -826,7 +805,6 @@ class PopSpikeEncoderRandom(nn.Module):
         ----
 
         .. _PopSpikeEncoderRandom.__init__-en:
-        * **English**
 
         * **English**
 
@@ -874,7 +852,6 @@ class PopSpikeEncoderRandom(nn.Module):
         ----
 
         .. _PopSpikeEncoderRandom.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -888,7 +865,6 @@ class PopSpikeEncoderRandom(nn.Module):
         ----
 
         .. _PopSpikeEncoderRandom.forward-en:
-        * **English**
 
         * **English**
 
@@ -927,7 +903,6 @@ class PopEncoder(nn.Module):
         ----
 
         .. _PopEncoder.__init__-cn:
-        * **中文**
 
         * **中文**
 
@@ -951,7 +926,6 @@ class PopEncoder(nn.Module):
         ----
 
         .. _PopEncoder.__init__-en:
-        * **English**
 
         * **English**
 
@@ -996,7 +970,6 @@ class PopEncoder(nn.Module):
         ----
 
         .. _PopEncoder.forward-cn:
-        * **中文**
 
         * **中文**
 
@@ -1010,7 +983,6 @@ class PopEncoder(nn.Module):
         ----
 
         .. _PopEncoder.forward-en:
-        * **English**
 
         * **English**
 

@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <model-cn>` | :ref:`English <model-en>`
 
 ----
 
-.. ___init__-cn:
+.. _model-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+预定义SNN模型模块，包含Spikformer、SEW ResNet等模型。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _model-en:
 
 * **English**
 
-TODO: add English module description for __init__
+Pre-defined SNN model module including Spikformer, SEW ResNet, and more.
 
 :return: None
 :rtype: None

@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <neuromc-cn>` | :ref:`English <neuromc-en>`
 
 ----
 
-.. ___init__-cn:
+.. _neuromc-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+NeuroMC能耗分析模块，包含内存和计算成本计数器。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _neuromc-en:
 
 * **English**
 
-TODO: add English module description for __init__
+NeuroMC energy profiling module with memory and computation cost counters.
 
 :return: None
 :rtype: None

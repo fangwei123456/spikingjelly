@@ -40,14 +40,14 @@ def compute_spikesim_event_energy_breakdown(
 
     * **中文**
 
-    TODO: add Chinese description
+    compute spikesim event energy breakdown 函数
 
     :param stats: Operation statistics from SpikeSim tracing
-    :type stats: Mapping[str, Any]
+    :type stats: ``Mapping[str, Any]``
     :param metadata: Layer metadata (channels, tile configuration)
-    :type metadata: Mapping[str, Any]
+    :type metadata: ``Mapping[str, Any]``
     :param config: SpikeSim energy configuration
-    :type config: SpikeSimEnergyConfig
+    :type config: ``SpikeSimEnergyConfig``
     :return: Dictionary of energy components in picojoules
     :rtype: dict[str, float]
     :raises ValueError: If ``active_row_count_by_tile`` and ``input_tile_channels`` are inconsistently specified
@@ -60,14 +60,14 @@ def compute_spikesim_event_energy_breakdown(
 
     * **English**
 
-    TODO: add English description
+    Compute Spikesim Event Energy Breakdown function
 
     :param stats: Operation statistics from SpikeSim tracing
     :param metadata: Layer metadata (channels, tile configuration)
     :param config: SpikeSim energy configuration
-    :type stats: Mapping[str, Any]
-    :type metadata: Mapping[str, Any]
-    :type config: SpikeSimEnergyConfig
+    :type stats: ``Mapping[str, Any]``
+    :type metadata: ``Mapping[str, Any]``
+    :type config: ``SpikeSimEnergyConfig``
     :raises ValueError: If ``active_row_count_by_tile`` and ``input_tile_channels`` are inconsistently specified
     :return: Dictionary of energy components in picojoules
     :rtype: dict[str, float]

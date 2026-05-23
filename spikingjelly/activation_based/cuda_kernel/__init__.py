@@ -1,25 +1,25 @@
 """
 **API Language:**
-:ref:`中文 <__init__-cn>` | :ref:`English <__init__-en>`
+:ref:`中文 <cuda_kernel-cn>` | :ref:`English <cuda_kernel-en>`
 
 ----
 
-.. ___init__-cn:
+.. _cuda_kernel-cn:
 
 * **中文**
 
-TODO: add Chinese module description for __init__
+CUDA kernel模块，提供GPU加速的神经元计算后端。
 
 :return: None
 :rtype: None
 
 ----
 
-.. ___init__-en:
+.. _cuda_kernel-en:
 
 * **English**
 
-TODO: add English module description for __init__
+CUDA kernel module providing GPU-accelerated neuron computation backends.
 
 :return: None
 :rtype: None
