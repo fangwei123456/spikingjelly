@@ -315,6 +315,15 @@ Compute-Only 示例
 这个例子刻意保持简单，因为当前验收目标只要求提供推理能耗估计示例。
 如果你需要更细致的前向 SNN 推理建模，可以把入口替换为 ``estimate_lemaire_energy``。
 
+如果你希望得到一个更丰富的仅前向推理估计，并且把访存、寻址和神经元状态效应也纳入进去，
+可以切换到 Lemaire 风格估计器：
+
+.. code-block:: python
+
+    lemaire_report = op_counter.estimate_lemaire_energy(model, x)
+    print("Lemaire total (pJ):", lemaire_report.total_pj)
+    print("Lemaire breakdown:", lemaire_report.breakdown_pj)
+
 实践建议
 +++++++++++++++++
 

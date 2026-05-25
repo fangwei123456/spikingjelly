@@ -318,6 +318,15 @@ If you want a different cost regime:
 This example is intentionally simple because the acceptance target requires an inference energy estimation example.
 For more detailed forward SNN inference modeling, replace the entry point with ``estimate_lemaire_energy``.
 
+If you want a richer forward-only inference estimate that also includes memory, addressing, and neuron-state effects,
+you can switch to the Lemaire-style estimator:
+
+.. code-block:: python
+
+    lemaire_report = op_counter.estimate_lemaire_energy(model, x)
+    print("Lemaire total (pJ):", lemaire_report.total_pj)
+    print("Lemaire breakdown:", lemaire_report.breakdown_pj)
+
 Practical Advice
 +++++++++++++++++
 
