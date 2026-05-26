@@ -9,8 +9,8 @@ This tutorial introduces the ``spikingjelly.activation_based.op_counter`` module
 
 The module serves two closely related goals:
 
-1. count model-side runtime costs such as FLOPs, memory accesses, SynOps, MACs, and ACs;
-2. build higher-level energy estimators on top of those counters.
+1. Count model-side runtime costs such as FLOPs, memory accesses, SynOps, MACs, and ACs;
+2. Build higher-level energy estimators on top of those counters.
 
 The examples in this tutorial are intentionally small so that they can be run on CPU in a few seconds.
 
@@ -58,6 +58,8 @@ The basic workflow is:
 1. instantiate one or more counters;
 2. run one real forward or forward-backward pass inside ``DispatchCounterMode``;
 3. read per-scope counts from ``get_counts()`` or the global total from ``get_total()``.
+
+For plain counting, ``train()`` and ``eval()`` are both usable. But if your model contains modules whose runtime behavior changes with mode, such as dropout or batch normalization, choose the mode that matches the scenario you actually want to profile.
 
 .. code-block:: python
 
@@ -142,7 +144,6 @@ If you only care about inference roofline, remove the ``backward()`` call.
 
     model = nn.Sequential(
         nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False),
-        nn.ReLU(),
         nn.Conv2d(4, 8, kernel_size=3, padding=1, bias=False),
     )
     for p in model.parameters():

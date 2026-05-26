@@ -58,6 +58,8 @@ English version: :doc:`../en/op_counter`
 2. 在 ``DispatchCounterMode`` 内执行一次真实前向或前向加反向；
 3. 用 ``get_counts()`` 读取按作用域划分的计数，或用 ``get_total()`` 读取全局总数。
 
+对于纯计数来说，``train()`` 和 ``eval()`` 都可以使用。但如果模型里包含 dropout、batch normalization 这类运行时行为会随 mode 改变的模块，就应该选择与你想 profiling 的场景一致的 mode。
+
 .. code-block:: python
 
     import torch
@@ -141,7 +143,6 @@ Roofline 分析示例
 
     model = nn.Sequential(
         nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False),
-        nn.ReLU(),
         nn.Conv2d(4, 8, kernel_size=3, padding=1, bias=False),
     )
     for p in model.parameters():
