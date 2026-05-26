@@ -343,7 +343,9 @@ Compute-Only 示例
 
 .. code-block:: python
 
-    from spikingjelly.activation_based import neuron
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import neuron, op_counter
 
     model_snn = nn.Sequential(
         nn.Linear(8, 16, bias=False),
