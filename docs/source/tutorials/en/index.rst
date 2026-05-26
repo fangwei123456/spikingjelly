@@ -31,6 +31,7 @@
     /tutorials/en/triton_backend
     /tutorials/en/flexsn
     /tutorials/en/memopt
+    /tutorials/en/op_counter
     /tutorials/en/distributed_training
     /tutorials/en/train_large_scale_snn
     /tutorials/en/spikformer
