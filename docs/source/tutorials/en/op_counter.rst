@@ -14,6 +14,9 @@ The module serves two closely related goals:
 
 The examples in this tutorial are intentionally small so that they can be run on CPU in a few seconds.
 
+When you profile your own model, always use representative input shapes and representative spike sparsity.
+``op_counter`` is runtime-driven, so changing the input can change the measured counts and the estimated energy.
+
 Overview
 ++++++++++++++++++++++++
 
@@ -54,7 +57,7 @@ The basic workflow is:
 
 1. instantiate one or more counters;
 2. run one real forward or forward-backward pass inside ``DispatchCounterMode``;
-3. read per-scope counts or the global total from the counters.
+3. read per-scope counts from ``get_counts()`` or the global total from ``get_total()``.
 
 .. code-block:: python
 
@@ -71,20 +74,23 @@ The basic workflow is:
 
     flop_counter = op_counter.FlopCounter()
     mem_counter = op_counter.MemoryAccessCounter()
-    synop_counter = op_counter.SynOpCounter()
 
     with op_counter.DispatchCounterMode(
-        [flop_counter, mem_counter, synop_counter],
+        [flop_counter, mem_counter],
         verbose=False,
-        strict=False,
+        strict=True,
     ):
         _ = model(x)
 
     print("FLOPs:", flop_counter.get_total())
     print("Memory access (bytes):", mem_counter.get_total())
-    print("SynOps:", synop_counter.get_total())
+    print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-Use ``strict=True`` when you want unsupported operators to raise immediately instead of being skipped by a given counter.
+For a first pass on a small supported model, ``strict=True`` is the safer default because it prevents silent under-counting.
+Use ``strict=False`` only when you intentionally want a partial report while exploring unsupported operators.
+
+Although this first example already uses an SNN-style block with ``IFNode``, it still focuses only on the generic counter workflow.
+The SNN-specific interpretation of spike-driven metrics such as ``SynOps`` is introduced separately below.
 
 Available Counters
 -------------------
@@ -104,10 +110,29 @@ The most commonly used counters are:
 
 These counters are complementary rather than interchangeable. For example, a spike-driven linear layer may have non-zero SynOps and ACs while having zero MACs.
 
+``SynOpCounter`` deserves one extra remark: it only becomes meaningful when the relevant layer really receives binary spike inputs.
+If the same layer receives dense floating-point activations, the SynOp count can legitimately be zero.
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import op_counter
+
+    model = nn.Linear(8, 4, bias=False)
+    spike_x = (torch.rand(2, 8) > 0.5).float()
+
+    synop_counter = op_counter.SynOpCounter()
+    with op_counter.DispatchCounterMode([synop_counter], strict=True):
+        _ = model(spike_x)
+
+    print("SynOps:", synop_counter.get_total())
+
 Roofline Analysis Example
 --------------------------
 
-The following example reproduces the basic roofline ingredients: FLOPs, memory access, and arithmetic intensity.
+The following example reproduces the basic roofline ingredients: FLOPs, memory access, and arithmetic intensity for one training step.
+If you only care about inference roofline, remove the ``backward()`` call.
 
 .. code-block:: python
 
@@ -283,20 +308,19 @@ Inference Energy Estimation Example
 Compute-Only Example
 ---------------------
 
+Before using an inference-oriented energy estimator, call ``model.eval()`` first.
+If you want to include backward or optimizer stages, switch to ``estimate_neuromc_runtime_energy`` instead.
+
 The following example uses the simplest energy model to estimate forward inference energy.
 
 .. code-block:: python
 
     import torch
     import torch.nn as nn
-    from spikingjelly.activation_based import neuron, op_counter
+    from spikingjelly.activation_based import op_counter
 
-    model = nn.Sequential(
-        nn.Linear(8, 16, bias=False),
-        neuron.IFNode(),
-        nn.Linear(16, 4, bias=False),
-    ).eval()
-    x = (torch.rand(2, 8) > 0.5).float()
+    model = nn.Linear(8, 4, bias=False).eval()
+    x = torch.rand(2, 8)
 
     report = op_counter.estimate_compute_energy(model, x)
 
@@ -323,7 +347,16 @@ you can switch to the Lemaire-style estimator:
 
 .. code-block:: python
 
-    lemaire_report = op_counter.estimate_lemaire_energy(model, x)
+    from spikingjelly.activation_based import neuron
+
+    model_snn = nn.Sequential(
+        nn.Linear(8, 16, bias=False),
+        neuron.IFNode(),
+        nn.Linear(16, 4, bias=False),
+    ).eval()
+    spike_x = (torch.rand(2, 8) > 0.5).float()
+
+    lemaire_report = op_counter.estimate_lemaire_energy(model_snn, spike_x)
     print("Lemaire total (pJ):", lemaire_report.total_pj)
     print("Lemaire breakdown:", lemaire_report.breakdown_pj)
 

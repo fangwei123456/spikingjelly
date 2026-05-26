@@ -14,6 +14,9 @@ English version: :doc:`../en/op_counter`
 
 本教程中的示例都刻意保持得较小，以便在 CPU 上也能在几秒内运行完成。
 
+当你对自己的模型做 profiling 时，要始终使用有代表性的输入形状和有代表性的脉冲稀疏度。
+``op_counter`` 是 runtime-driven 的，因此输入一变，计数结果和能耗估计也可能随之变化。
+
 概述
 ++++++++++++++++++++++++
 
@@ -53,7 +56,7 @@ English version: :doc:`../en/op_counter`
 
 1. 实例化一个或多个计数器；
 2. 在 ``DispatchCounterMode`` 内执行一次真实前向或前向加反向；
-3. 从计数器中读取按作用域划分的计数或全局总数。
+3. 用 ``get_counts()`` 读取按作用域划分的计数，或用 ``get_total()`` 读取全局总数。
 
 .. code-block:: python
 
@@ -70,20 +73,23 @@ English version: :doc:`../en/op_counter`
 
     flop_counter = op_counter.FlopCounter()
     mem_counter = op_counter.MemoryAccessCounter()
-    synop_counter = op_counter.SynOpCounter()
 
     with op_counter.DispatchCounterMode(
-        [flop_counter, mem_counter, synop_counter],
+        [flop_counter, mem_counter],
         verbose=False,
-        strict=False,
+        strict=True,
     ):
         _ = model(x)
 
     print("FLOPs:", flop_counter.get_total())
     print("Memory access (bytes):", mem_counter.get_total())
-    print("SynOps:", synop_counter.get_total())
+    print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-当你希望遇到不支持的算子时立即报错，而不是让某个计数器跳过它时，可以使用 ``strict=True``。
+对于第一次在小型受支持模型上上手，``strict=True`` 是更稳妥的默认值，因为它可以避免 silent under-counting。
+只有当你明确希望在探索 unsupported 算子时先拿到一份 partial report，才建议使用 ``strict=False``。
+
+虽然这个第一个例子已经使用了带 ``IFNode`` 的 SNN 风格模块，但它此处仍然只聚焦于通用的 counter workflow。
+像 ``SynOps`` 这类真正依赖脉冲语义的指标，会在下文单独解释。
 
 可用的计数器
 ----------------
@@ -103,10 +109,29 @@ English version: :doc:`../en/op_counter`
 
 这些计数器是互补的，而不是相互替代的。例如，某个脉冲驱动的线性层可能有非零 SynOps 和 ACs，但 MACs 为零。
 
+``SynOpCounter`` 还需要额外提醒一点：只有当相关层真正接收到二值脉冲输入时，它才有意义。
+如果同一层接收到的是稠密浮点激活，那么 SynOp 计数为 0 是完全正常的。
+
+.. code-block:: python
+
+    import torch
+    import torch.nn as nn
+    from spikingjelly.activation_based import op_counter
+
+    model = nn.Linear(8, 4, bias=False)
+    spike_x = (torch.rand(2, 8) > 0.5).float()
+
+    synop_counter = op_counter.SynOpCounter()
+    with op_counter.DispatchCounterMode([synop_counter], strict=True):
+        _ = model(spike_x)
+
+    print("SynOps:", synop_counter.get_total())
+
 Roofline 分析示例
 -------------------
 
-下面的示例复现了 roofline 分析所需的基本量：FLOPs、访存和 arithmetic intensity。
+下面的示例复现了一次训练步 roofline 分析所需的基本量：FLOPs、访存和 arithmetic intensity。
+如果你只关心推理 roofline，把 ``backward()`` 去掉即可。
 
 .. code-block:: python
 
@@ -280,20 +305,19 @@ SpikeSim 事件能耗
 Compute-Only 示例
 -------------------
 
+在使用面向推理的能耗估计器之前，先调用 ``model.eval()``。
+如果你想把反向或优化器阶段也纳入进来，应切换到 ``estimate_neuromc_runtime_energy``。
+
 下面的例子使用最简单的能耗模型估计一次前向推理能耗。
 
 .. code-block:: python
 
     import torch
     import torch.nn as nn
-    from spikingjelly.activation_based import neuron, op_counter
+    from spikingjelly.activation_based import op_counter
 
-    model = nn.Sequential(
-        nn.Linear(8, 16, bias=False),
-        neuron.IFNode(),
-        nn.Linear(16, 4, bias=False),
-    ).eval()
-    x = (torch.rand(2, 8) > 0.5).float()
+    model = nn.Linear(8, 4, bias=False).eval()
+    x = torch.rand(2, 8)
 
     report = op_counter.estimate_compute_energy(model, x)
 
@@ -320,7 +344,16 @@ Compute-Only 示例
 
 .. code-block:: python
 
-    lemaire_report = op_counter.estimate_lemaire_energy(model, x)
+    from spikingjelly.activation_based import neuron
+
+    model_snn = nn.Sequential(
+        nn.Linear(8, 16, bias=False),
+        neuron.IFNode(),
+        nn.Linear(16, 4, bias=False),
+    ).eval()
+    spike_x = (torch.rand(2, 8) > 0.5).float()
+
+    lemaire_report = op_counter.estimate_lemaire_energy(model_snn, spike_x)
     print("Lemaire total (pJ):", lemaire_report.total_pj)
     print("Lemaire breakdown:", lemaire_report.breakdown_pj)
 
