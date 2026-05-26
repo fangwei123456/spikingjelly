@@ -80,7 +80,7 @@ For plain counting, ``train()`` and ``eval()`` are both usable. But if your mode
     with op_counter.DispatchCounterMode(
         [flop_counter, mem_counter],
         verbose=False,
-        strict=True,
+        strict=False,
     ):
         _ = model(x)
 
@@ -88,8 +88,8 @@ For plain counting, ``train()`` and ``eval()`` are both usable. But if your mode
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-When you want unsupported operators to fail immediately instead of being skipped, use ``strict=True``.
-When you want to inspect a partially supported model without stopping at the first unsupported operator, use ``strict=False``.
+The examples in this tutorial use ``strict=False`` so that unsupported auxiliary operators do not stop execution immediately.
+When you want unsupported operators to fail immediately instead of being skipped, switch to ``strict=True`` after you have confirmed that the relevant operator path is fully covered by the counters you selected.
 
 Although this first example already uses an SNN-style block with ``IFNode``, it still focuses only on the generic counter workflow.
 The SNN-specific interpretation of spike-driven metrics such as ``SynOps`` is introduced separately below.
@@ -125,7 +125,7 @@ If the same layer receives dense floating-point activations, the SynOp count can
     spike_x = (torch.rand(2, 8) > 0.5).float()
 
     synop_counter = op_counter.SynOpCounter()
-    with op_counter.DispatchCounterMode([synop_counter], strict=True):
+    with op_counter.DispatchCounterMode([synop_counter], strict=False):
         _ = model(spike_x)
 
     print("SynOps:", synop_counter.get_total())
@@ -146,14 +146,12 @@ If you only care about inference roofline, remove the ``backward()`` call.
         nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False),
         nn.Conv2d(4, 8, kernel_size=3, padding=1, bias=False),
     )
-    for p in model.parameters():
-        p.requires_grad_(True)
     x = torch.rand(1, 2, 16, 16)
 
     flop_counter = op_counter.FlopCounter()
     mem_counter = op_counter.MemoryAccessCounter()
 
-    with op_counter.DispatchCounterMode([flop_counter, mem_counter], strict=True):
+    with op_counter.DispatchCounterMode([flop_counter, mem_counter], strict=False):
         y = model(x)
         y.sum().backward()
 

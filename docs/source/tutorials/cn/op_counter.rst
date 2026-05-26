@@ -79,7 +79,7 @@ English version: :doc:`../en/op_counter`
     with op_counter.DispatchCounterMode(
         [flop_counter, mem_counter],
         verbose=False,
-        strict=True,
+        strict=False,
     ):
         _ = model(x)
 
@@ -87,8 +87,8 @@ English version: :doc:`../en/op_counter`
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-如果你希望在遇到 unsupported 算子时立即报错，而不是把它们跳过，就使用 ``strict=True``。
-如果你希望先查看一个只被部分支持的模型，而不在第一个 unsupported 算子处停下，就使用 ``strict=False``。
+本教程中的示例统一使用 ``strict=False``，这样即使遇到不受支持的辅助算子，也不会立刻中断执行。
+如果你已经确认所选计数器完整覆盖了相关算子路径，并且希望在遇到 unsupported 算子时立即报错，再切换到 ``strict=True``。
 
 虽然这个第一个例子已经使用了带 ``IFNode`` 的 SNN 风格模块，但它此处仍然只聚焦于通用的 counter workflow。
 像 ``SynOps`` 这类真正依赖脉冲语义的指标，会在下文单独解释。
@@ -124,7 +124,7 @@ English version: :doc:`../en/op_counter`
     spike_x = (torch.rand(2, 8) > 0.5).float()
 
     synop_counter = op_counter.SynOpCounter()
-    with op_counter.DispatchCounterMode([synop_counter], strict=True):
+    with op_counter.DispatchCounterMode([synop_counter], strict=False):
         _ = model(spike_x)
 
     print("SynOps:", synop_counter.get_total())
@@ -145,14 +145,12 @@ Roofline 分析示例
         nn.Conv2d(2, 4, kernel_size=3, padding=1, bias=False),
         nn.Conv2d(4, 8, kernel_size=3, padding=1, bias=False),
     )
-    for p in model.parameters():
-        p.requires_grad_(True)
     x = torch.rand(1, 2, 16, 16)
 
     flop_counter = op_counter.FlopCounter()
     mem_counter = op_counter.MemoryAccessCounter()
 
-    with op_counter.DispatchCounterMode([flop_counter, mem_counter], strict=True):
+    with op_counter.DispatchCounterMode([flop_counter, mem_counter], strict=False):
         y = model(x)
         y.sum().backward()
 
