@@ -88,8 +88,8 @@ For plain counting, ``train()`` and ``eval()`` are both usable. But if your mode
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-For a first pass on a small supported model, ``strict=True`` is the safer default because it prevents silent under-counting.
-Use ``strict=False`` only when you intentionally want a partial report while exploring unsupported operators.
+When you want unsupported operators to fail immediately instead of being skipped, use ``strict=True``.
+When you want to inspect a partially supported model without stopping at the first unsupported operator, use ``strict=False``.
 
 Although this first example already uses an SNN-style block with ``IFNode``, it still focuses only on the generic counter workflow.
 The SNN-specific interpretation of spike-driven metrics such as ``SynOps`` is introduced separately below.
@@ -252,7 +252,7 @@ Its boundaries are:
 * memory cost is derived from the modeled buffer size, not from measured cache behavior on the host machine;
 * unsupported sparse cases may fall back to dense lower-bound memory accounting with warnings.
 
-This makes it a good choice when you want a richer forward SNN inference estimate than compute-only MAC/AC energy,
+Use this estimator when you need a richer forward SNN inference estimate than compute-only MAC/AC energy,
 but do not need backward or optimizer modeling.
 
 NeuroMC Runtime Energy
@@ -281,7 +281,7 @@ Its boundaries are:
 * stage naming carries semantics such as weight reuse across time or batch in manual profiling;
 * it is still a hardware-model-based estimate, not a measurement from a real chip.
 
-If you need training-stage energy or online-learning stage breakdowns, this is the right estimator to start with.
+Use this estimator when you need training-stage energy or online-learning stage breakdowns.
 
 SpikeSim Event Energy
 ----------------------
@@ -300,8 +300,8 @@ Its boundaries are strict:
 * when ``require_if_lif_neurons=True``, the model is expected to stay within IF/LIF-style neuron assumptions;
 * non-Conv2d work is outside the main energy path.
 
-If you specifically care about SpikeSim-style accelerator comparisons, use this estimator.
-Otherwise, ``estimate_lemaire_energy`` or ``estimate_neuromc_runtime_energy`` is usually a better starting point.
+Use this estimator when your target question is specifically about SpikeSim-style Conv2d accelerator energy.
+If your target is broader forward or training energy, consider ``estimate_lemaire_energy`` or ``estimate_neuromc_runtime_energy`` instead.
 
 Inference Energy Estimation Example
 +++++++++++++++++++++++++++++++++++
@@ -340,7 +340,7 @@ If you want a different cost regime:
     report_fp16 = op_counter.estimate_compute_energy(model, x, config=cfg)
     print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
 
-This example is intentionally simple because the acceptance target requires an inference energy estimation example.
+This example is intentionally kept simple so that it focuses on the basic energy-estimation workflow.
 For more detailed forward SNN inference modeling, replace the entry point with ``estimate_lemaire_energy``.
 
 If you want a richer forward-only inference estimate that also includes memory, addressing, and neuron-state effects,

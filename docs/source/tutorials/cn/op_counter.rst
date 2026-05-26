@@ -87,8 +87,8 @@ English version: :doc:`../en/op_counter`
     print("Memory access (bytes):", mem_counter.get_total())
     print("Global FLOP record:", flop_counter.get_counts()["Global"])
 
-对于第一次在小型受支持模型上上手，``strict=True`` 是更稳妥的默认值，因为它可以避免 silent under-counting。
-只有当你明确希望在探索 unsupported 算子时先拿到一份 partial report，才建议使用 ``strict=False``。
+如果你希望在遇到 unsupported 算子时立即报错，而不是把它们跳过，就使用 ``strict=True``。
+如果你希望先查看一个只被部分支持的模型，而不在第一个 unsupported 算子处停下，就使用 ``strict=False``。
 
 虽然这个第一个例子已经使用了带 ``IFNode`` 的 SNN 风格模块，但它此处仍然只聚焦于通用的 counter workflow。
 像 ``SynOps`` 这类真正依赖脉冲语义的指标，会在下文单独解释。
@@ -250,7 +250,7 @@ Lemaire 解析式推理能耗
 * 访存成本来自被建模的 buffer 尺寸，而不是宿主机真实 cache 行为；
 * 对某些不受支持的稀疏情况，可能会带 warning 地回退到稠密 lower bound 的访存统计。
 
-当你需要一个比 compute-only MAC/AC 能耗更丰富的前向 SNN 推理估计，但又不需要反向和优化器建模时，它是更合适的选择。
+当你需要一个比 compute-only MAC/AC 能耗更丰富的前向 SNN 推理估计，但又不需要反向和优化器建模时，就使用这个估计器。
 
 NeuroMC 运行时能耗
 --------------------
@@ -279,7 +279,7 @@ NeuroMC 运行时能耗
 * 在手工 profiling 时，stage 命名本身会携带诸如时间/批次复用等语义；
 * 它仍然是基于硬件模型的估计，而不是从真实芯片上测得的功耗。
 
-如果你需要训练阶段能耗，或者需要在线学习场景下的 stage breakdown，那么应优先从它开始。
+如果你需要训练阶段能耗，或者需要在线学习场景下的 stage breakdown，就使用这个估计器。
 
 SpikeSim 事件能耗
 -------------------
@@ -297,8 +297,8 @@ SpikeSim 事件能耗
 * 当 ``require_if_lif_neurons=True`` 时，模型应保持在 IF/LIF 风格神经元假设之内；
 * 非 Conv2d 的工作不在它的主要能耗路径中。
 
-如果你明确关心的是 SpikeSim 风格卷积加速器比较，就用它。
-否则，多数情况下应优先考虑 ``estimate_lemaire_energy`` 或 ``estimate_neuromc_runtime_energy``。
+如果你的目标问题明确是 SpikeSim 风格的 Conv2d 加速器能耗，就使用它。
+如果你的目标是更广义的前向或训练能耗，可以改用 ``estimate_lemaire_energy`` 或 ``estimate_neuromc_runtime_energy``。
 
 推理能耗估计示例
 ++++++++++++++++++++++++
@@ -337,7 +337,7 @@ Compute-Only 示例
     report_fp16 = op_counter.estimate_compute_energy(model, x, config=cfg)
     print("FP16-regime energy (pJ):", report_fp16.energy_total_pj)
 
-这个例子刻意保持简单，因为当前验收目标只要求提供推理能耗估计示例。
+这个例子刻意保持简单，是为了聚焦基础的能耗估计工作流。
 如果你需要更细致的前向 SNN 推理建模，可以把入口替换为 ``estimate_lemaire_energy``。
 
 如果你希望得到一个更丰富的仅前向推理估计，并且把访存、寻址和神经元状态效应也纳入进去，
