@@ -58,7 +58,7 @@ def create_fptt_kernel(hard_reset: bool, dtype: str):
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
     """
-        kernel_name = f"IFNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
+    kernel_name = f"IFNode_fptt_{'hard' if hard_reset else 'soft'}Reset_{dtype}"
 
     if dtype == "fp32":
         code = rf"""
@@ -221,7 +221,7 @@ def create_bptt_kernel(
     :return: CUDA kernel object with generated code
     :rtype: CKernel1D
     """
-        kernel_name = f"IFNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
+    kernel_name = f"IFNode_bptt_{'hard' if hard_reset else 'soft'}Reset_{'detachReset' if detach_reset else ''}_{dtype}"
 
     code_grad_s_to_h = sg_cuda_code_fun(x="over_th", y="grad_s_to_h", dtype=dtype)
 
