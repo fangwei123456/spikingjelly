@@ -328,6 +328,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
     def get_H_W(cls) -> Tuple:
         """
         :return: ``(256, 256)``
+        :rtype: Tuple[int, int]
         """
         return 256, 256
 
@@ -466,6 +467,7 @@ class ESImageNet(NeuromorphicDatasetFolder):
     def downloadable(cls) -> bool:
         """
         :return: ``True``
+        :rtype: bool
         """
         return True
 

@@ -154,8 +154,14 @@ def flexsn_inference(f, info: FlexSNInfo, *args) -> tuple:
 
     * **English**
 
-    Flexsn Inference function
+    Execute the FlexSN multi-step inference kernel.
 
+    :param f: Triton kernel callable
+    :type f: object
+    :param info: FlexSN metadata
+    :type info: FlexSNInfo
+    :param args: Input/state sequences accepted by the kernel
+    :return: Output/state sequences. When ``T == 0``, returns empty tensors with the expected templates.
     :rtype: tuple
     """
     x_example = args[0]
@@ -208,8 +214,14 @@ def flexsn_inference_final_state(f, info: FlexSNInfo, *args) -> tuple:
 
     * **English**
 
-    Flexsn Inference Final State function
+    Execute the FlexSN inference kernel and materialize final states.
 
+    :param f: Triton kernel callable
+    :type f: object
+    :param info: FlexSN metadata
+    :type info: FlexSNInfo
+    :param args: Input/state sequences accepted by the kernel
+    :return: Output sequences followed by final states. When ``T == 0``, output sequences are empty, provided initial states are cloned, and missing states are zero-filled.
     :rtype: tuple
     """
     x_example = args[0]
@@ -276,8 +288,14 @@ def flexsn_forward(f, info: FlexSNInfo, *args) -> tuple:
 
     * **English**
 
-    Flexsn Forward function
+    Execute the FlexSN training forward kernel.
 
+    :param f: Triton kernel callable
+    :type f: object
+    :param info: FlexSN metadata
+    :type info: FlexSNInfo
+    :param args: Input/state sequences accepted by the kernel
+    :return: Forward outputs plus any saved tensors required by backward. When ``T == 0``, returns empty tensors following the expected templates.
     :rtype: tuple
     """
     x_example = args[0]

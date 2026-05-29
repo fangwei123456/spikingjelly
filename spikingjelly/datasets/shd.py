@@ -463,10 +463,10 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
             #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of two ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
-        
+
         :return: None
         :rtype: None
-"""
+        """
         if train is None:
             raise ValueError("`train` must be `True` or `False`")
 
@@ -536,6 +536,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
     def get_H_W(cls) -> Tuple:
         """
         :return: ``(None, 700)`` (i.e., 700 channels)
+        :rtype: Tuple[None, int]
         """
         return None, 700
 
@@ -558,6 +559,7 @@ class SpikingHeidelbergDigits(NeuromorphicDatasetFolder):
     def downloadable(cls) -> bool:
         """
         :return: ``True``
+        :rtype: bool
         """
         return True
 
@@ -697,10 +699,10 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
             #. Events in this dataset are in the format of ``(x, t)`` rather than ``(x, y, t, p)``.
             #. The raw dataset replicates the extracted dataset (by symbolic links). The raw dataset consists of three ``.h5`` files instead of a series of ``.npz`` files.
             #. When ``data_type == "event"``, the data loading procedure of ``DatasetFolder`` will be bypassed. Instead, data will be loaded in ``Dataset`` style.
-        
+
         :return: None
         :rtype: None
-"""
+        """
         self.splits = ("train", "valid", "test")
         if split not in self.splits:
             raise ValueError(f"Invalid split: {split}; valid splits are {self.splits}")
@@ -794,6 +796,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def get_H_W(cls) -> Tuple:
         """
         :return: ``(None, 700)`` (i.e., 700 channels)
+        :rtype: Tuple[None, int]
         """
         return None, 700
 
@@ -816,6 +819,7 @@ class SpikingSpeechCommands(NeuromorphicDatasetFolder):
     def downloadable(cls) -> bool:
         """
         :return: ``True``
+        :rtype: bool
         """
         return True
 

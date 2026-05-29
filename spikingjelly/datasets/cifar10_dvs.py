@@ -330,6 +330,7 @@ class CIFAR10DVS(NeuromorphicDatasetFolder):
     def downloadable(cls) -> bool:
         """
         :return: ``True``
+        :rtype: bool
         """
         return True
 

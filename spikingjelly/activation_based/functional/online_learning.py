@@ -25,8 +25,6 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     .. _fptt_online_training_init_w_ra-cn:
     * **中文**
 
-    * **中文**
-
     初始化 :func:`fptt_online_training` 使用的 ``w_ra`` 列表。返回列表中的元素顺序与
     ``optimizer.param_groups`` 中参数的遍历顺序一致，列表元素是各参数当前的 ``w.data``。
 
@@ -41,8 +39,6 @@ def fptt_online_training_init_w_ra(optimizer: torch.optim.Optimizer) -> list:
     ----
 
     .. _fptt_online_training_init_w_ra-en:
-    * **English**
-
     * **English**
 
     Initialize the ``w_ra`` list used by :func:`fptt_online_training`. The

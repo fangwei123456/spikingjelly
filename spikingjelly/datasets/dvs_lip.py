@@ -93,7 +93,7 @@ class DVSLip(NeuromorphicDatasetFolder):
 
             :return: None
             :rtype: None
-    """
+        """
         if train is None:
             raise ValueError(
                 "The argument `train` must be specified as a boolean value."
@@ -113,8 +113,27 @@ class DVSLip(NeuromorphicDatasetFolder):
 
     @classmethod
     def get_H_W(cls) -> Tuple:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <DVSLip.get_H_W-cn>` | :ref:`English <DVSLip.get_H_W-en>`
+
+        ----
+
+        .. _DVSLip.get_H_W-cn:
+
+        * **中文**
+
         :return: ``(128, 128)``
+        :rtype: Tuple[int, int]
+
+        ----
+
+        .. _DVSLip.get_H_W-en:
+
+        * **English**
+
+        :return: ``(128, 128)``
+        :rtype: Tuple[int, int]
         """
         return 128, 128
 

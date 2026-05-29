@@ -131,7 +131,7 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
 
             :return: None
             :rtype: None
-    """
+        """
         if train is None:
             raise ValueError(
                 "The argument `train` must be specified as a boolean value."
@@ -151,8 +151,27 @@ class Bullying10kClassification(NeuromorphicDatasetFolder):
 
     @classmethod
     def get_H_W(cls) -> Tuple:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <Bullying10K.get_H_W-cn>` | :ref:`English <Bullying10K.get_H_W-en>`
+
+        ----
+
+        .. _Bullying10K.get_H_W-cn:
+
+        * **中文**
+
         :return: ``(260, 346)``
+        :rtype: Tuple[int, int]
+
+        ----
+
+        .. _Bullying10K.get_H_W-en:
+
+        * **English**
+
+        :return: ``(260, 346)``
+        :rtype: Tuple[int, int]
         """
         return 260, 346
 

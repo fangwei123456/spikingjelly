@@ -156,16 +156,12 @@ class ASLDVS(NeuromorphicDatasetFolder):
         .. _asl_dvs.get_H_W-cn:
         * **中文**
 
-        * **中文**
-
         :return: ``(180, 240)``
         :rtype: Tuple
 
         ----
 
         .. _asl_dvs.get_H_W-en:
-        * **English**
-
         * **English**
 
         :return: ``(180, 240)``
@@ -198,6 +194,7 @@ class ASLDVS(NeuromorphicDatasetFolder):
     def downloadable(cls) -> bool:
         """
         :return: ``False``
+        :rtype: bool
         """
         return False
 

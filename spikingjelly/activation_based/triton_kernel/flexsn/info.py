@@ -27,7 +27,7 @@ def extract_info(
     num_states: int = 0,
     num_outputs: int = 1,
 ) -> FlexSNInfo:
-    """Extract useful information from the forward graph.
+    r"""
     **API Language:**
     :ref:`中文 <extract_info-cn>` | :ref:`English <extract_info-en>`
 
@@ -37,32 +37,28 @@ def extract_info(
 
     * **中文**
 
-    从前向计算图中提取信息
-
-    :rtype: None
-    The forward graph should have the following signature:
+    从前向计算图中提取信息。前向图应具有以下签名：
     ``[*inputs, *states] -> [*outputs, *states, *intermediates]``
-    The following information will be extracted:
-    * fwd_core_args
-    * fwd_core_returns: the return value names of the forward graph. There might
-        be duplicated tensors in fwd_core_returns, but
-        fwd_core_returns[num_inputs+num_states:] are all unique!
-    * fwd_core_recipients: the names of the variables receiving the return
-        values of the forward core. Duplicated tensors are marked as `_`.
-    * fwd_kernel_returns: the return value names of the forward kernel; no
-        duplicated tensors!
-    * num_fwd_kernel_returns: the length of fwd_kernel_returns
-    * c2k_return_mapping: the mapping from the index i of
-        fwd_core_returns[num_inputs+num_states:] (a.k.a. the intermediate result
-        list) to the index j of fwd_kernel_returns. It can be used to retrieve
-        required intermediate states from the forward kernel's return values.
-    Args:
-        fwd_graph (fx.Graph): the forward computational graph.
-        num_inputs (int): Defaults to 1.
-        num_states (int): Defaults to 1.
-        num_outputs (int): Defaults to 1.
-    Returns:
-        FlexSNInfo
+
+    提取的信息包括：
+
+    * fwd_core_args: 核心参数
+    * fwd_core_returns: 前向图的返回值名称
+    * fwd_core_recipients: 接收核心返回值的变量名
+    * fwd_kernel_returns: 前向 kernel 的返回值名称（无重复）
+    * num_fwd_kernel_returns: fwd_kernel_returns 的长度
+    * c2k_return_mapping: 中间结果与 kernel 返回值之间的映射
+
+    :param fwd_graph: 前向计算图
+    :type fwd_graph: fx.Graph
+    :param num_inputs: 输入数量，默认为 1
+    :type num_inputs: int
+    :param num_states: 状态数量，默认为 0
+    :type num_states: int
+    :param num_outputs: 输出数量，默认为 1
+    :type num_outputs: int
+    :return: 提取的 FlexSN 元信息
+    :rtype: FlexSNInfo
 
     ----
 
@@ -70,10 +66,29 @@ def extract_info(
 
     * **English**
 
-    Extract information from forward graph
+    Extract useful information from the forward graph. The forward graph
+    should have the following signature:
+    ``[*inputs, *states] -> [*outputs, *states, *intermediates]``
 
-    :return: None
-    :rtype: None
+    The extracted information includes:
+
+    * fwd_core_args: the core input argument names
+    * fwd_core_returns: the return value names of the forward graph
+    * fwd_core_recipients: the variable names receiving the core return values
+    * fwd_kernel_returns: the forward kernel return value names (no duplicates)
+    * num_fwd_kernel_returns: the length of fwd_kernel_returns
+    * c2k_return_mapping: mapping from intermediate results to kernel returns
+
+    :param fwd_graph: The forward computational graph
+    :type fwd_graph: fx.Graph
+    :param num_inputs: Number of inputs. Default: 1
+    :type num_inputs: int
+    :param num_states: Number of states. Default: 0
+    :type num_states: int
+    :param num_outputs: Number of outputs. Default: 1
+    :type num_outputs: int
+    :return: The extracted FlexSN metadata
+    :rtype: FlexSNInfo
     """
     fwd_core_args = [n.name for n in fwd_graph.find_nodes(op="placeholder")]
     fwd_core_returns = []

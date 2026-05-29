@@ -180,10 +180,8 @@ class NeuroMCMulCounter(NeuroMCBaseCounter):
     包括矩阵乘法、逐元素乘法、卷积中的乘法等。已针对脉冲稀疏性进行优化：
     当输入为二值脉冲时，利用稀疏性加速计数。
 
+    :return: None
     :rtype: None
-    Tracks the number of multiplication operations performed during model
-    execution, including matrix multiplications, convolutions, and
-    element-wise multiplications.
 
     ----
 

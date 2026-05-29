@@ -110,8 +110,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         .. _NeuromorphicDatasetBuilder.__init__-cn:
         * **中文**
 
-        * **中文**
-
         神经形态数据集构建器的抽象基类。
 
         数据集构建器定义了原始事件数据如何转换为可以被 :class:`DatasetFolder <torchvision.datasets.DatasetFolder>` 加载的处理后的数据集。每个构建器封装了一种具体的预处理策略（例如：事件数据、固定帧数积分、固定时长积分）。
@@ -133,8 +131,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ----
 
         .. _NeuromorphicDatasetBuilder.__init__-en:
-        * **English**
-
         * **English**
 
         Abstract base class for neuromorphic dataset builders.
@@ -177,8 +173,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         .. _NeuromorphicDatasetBuilder.processed_root-cn:
         * **中文**
 
-        * **中文**
-
         处理后的数据集的根目录。
 
         该目录存储由构建器定义的预处理步骤的输出。
@@ -186,8 +180,6 @@ class NeuromorphicDatasetBuilder(abc.ABC):
         ----
 
         .. _NeuromorphicDatasetBuilder.processed_root-en:
-        * **English**
-
         * **English**
 
         Root directory of the processed dataset.
@@ -315,8 +307,6 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         .. _EventBuilder.__init__-cn:
         * **中文**
 
-        * **中文**
-
         原始事件数据的数据集构建器。
 
         此构建器不执行任何预处理，直接使用原始数据集作为处理后的数据集。每个样本通过 ``np.load`` 直接加载为原始事件文件（例如 ``.npz``），无需帧积分。
@@ -326,8 +316,6 @@ class EventBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _EventBuilder.__init__-en:
-        * **English**
-
         * **English**
 
         Dataset builder for raw event data.
@@ -406,8 +394,6 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         .. _FrameFixedNumberBuilder.__init__-cn:
         * **中文**
 
-        * **中文**
-
         固定帧数积分的数据集构建器。
 
         此构建器将原始事件数据转换为每个样本固定数量的帧。根据指定的策略（按时间或按事件计数）将事件分割并积分到帧中。
@@ -425,8 +411,6 @@ class FrameFixedNumberBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameFixedNumberBuilder.__init__-en:
-        * **English**
-
         * **English**
 
         Dataset builder for fixed-frame-number integration.
@@ -513,8 +497,6 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         .. _FrameFixedDurationBuilder.__init__-cn:
         * **中文**
 
-        * **中文**
-
         固定时长积分的数据集构建器。
 
         此构建器将原始事件数据转换为帧序列，其中每帧对应固定的时间时长。不同样本的长度可能不同。
@@ -532,8 +514,6 @@ class FrameFixedDurationBuilder(NeuromorphicDatasetBuilder):
         ----
 
         .. _FrameFixedDurationBuilder.__init__-en:
-        * **English**
-
         * **English**
 
         Dataset builder for fixed-duration integration.

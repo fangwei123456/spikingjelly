@@ -21,8 +21,6 @@ class ReplaceforGrad(torch.autograd.Function):
     .. _ReplaceforGrad-cn:
     * **中文**
 
-    * **中文**
-
     在 OTTT 在线训练中用于替换前向值与梯度路径的自定义自动求导函数。
     前向返回 ``x_r``，反向时梯度同时传播给 ``x`` 和 ``x_r``。
 
@@ -31,11 +29,10 @@ class ReplaceforGrad(torch.autograd.Function):
     .. _ReplaceforGrad-en:
     * **English**
 
-    * **English**
-
     Custom autograd Function for replacing forward values and gradient paths in OTTT online training.
     Forward returns ``x_r``, backward passes gradients to both ``x`` and ``x_r``.
     """
+
     @staticmethod
     def forward(ctx, x, x_r):
         return x_r
@@ -56,8 +53,6 @@ class GradwithTrace(nn.Module):
         .. _GradwithTrace.__init__-cn:
         * **中文**
 
-        * **中文**
-
         用于随时间在线训练时，根据神经元的迹计算梯度
         出处：'Online Training Through Time for Spiking Neural Networks <https://openreview.net/forum?id=Siv3nHYHheI>'
 
@@ -67,8 +62,6 @@ class GradwithTrace(nn.Module):
         ----
 
         .. _GradwithTrace.__init__-en:
-        * **English**
-
         * **English**
 
         Used for online training through time, calculate gradients by the traces of neurons
@@ -94,8 +87,6 @@ class GradwithTrace(nn.Module):
         .. _GradwithTrace.forward-cn:
         * **中文**
 
-        * **中文**
-
         :param x: ``[spike, trace]``，其中 ``spike`` 用于前向值，``trace`` 用于梯度路径
         :type x: torch.Tensor
         :return: 包装模块的输出，前向值来自 ``spike``，反向梯度来自 ``trace``
@@ -104,8 +95,6 @@ class GradwithTrace(nn.Module):
         ----
 
         .. _GradwithTrace.forward-en:
-        * **English**
-
         * **English**
 
         :param x: ``[spike, trace]`` where ``spike`` provides forward values and ``trace`` provides gradient paths
@@ -138,8 +127,6 @@ class SpikeTraceOp(nn.Module):
         .. _SpikeTraceOp.__init__-cn:
         * **中文**
 
-        * **中文**
-
         对脉冲和迹进行相同的运算，如Dropout，AvgPool等
 
         :param module: 需要包装的模块
@@ -148,8 +135,6 @@ class SpikeTraceOp(nn.Module):
         ----
 
         .. _SpikeTraceOp.__init__-en:
-        * **English**
-
         * **English**
 
         perform the same operations for spike and trace, such as Dropout, Avgpool, etc.
@@ -173,8 +158,6 @@ class SpikeTraceOp(nn.Module):
         .. _SpikeTraceOp.forward-cn:
         * **中文**
 
-        * **中文**
-
         :param x: ``[spike, trace]`` 输入对
         :type x: torch.Tensor
         :return: 对 ``spike`` 与 ``trace`` 施加相同算子后的结果 ``[spike, trace]``
@@ -183,8 +166,6 @@ class SpikeTraceOp(nn.Module):
         ----
 
         .. _SpikeTraceOp.forward-en:
-        * **English**
-
         * **English**
 
         :param x: ``[spike, trace]`` input pair
@@ -215,8 +196,6 @@ class OTTTSequential(nn.Sequential):
         .. _OTTTSequential.__init__-cn:
         * **中文**
 
-        * **中文**
-
         用于 OTTT（Online Training Through Time）的顺序容器，扩展自 ``nn.Sequential``。
         在 ``forward`` 中，若输入为 ``[spike, trace]`` 列表形式，则自动将有参数的模块包装为 :class:`GradwithTrace`，
         将无参数的模块包装为 :class:`SpikeTraceOp`，以实现在线训练中的梯度传递。
@@ -229,8 +208,6 @@ class OTTTSequential(nn.Sequential):
         ----
 
         .. _OTTTSequential.__init__-en:
-        * **English**
-
         * **English**
 
         Sequential container for OTTT (Online Training Through Time), extending ``nn.Sequential``.
@@ -255,8 +232,6 @@ class OTTTSequential(nn.Sequential):
         .. _OTTTSequential.forward-cn:
         * **中文**
 
-        * **中文**
-
         :param input: 常规张量输入，或 ``[spike, trace]`` 形式输入
         :type input: Union[torch.Tensor, list[torch.Tensor]]
         :return: 顺序执行后的输出
@@ -265,8 +240,6 @@ class OTTTSequential(nn.Sequential):
         ----
 
         .. _OTTTSequential.forward-en:
-        * **English**
-
         * **English**
 
         :param input: Regular tensor input, or ``[spike, trace]`` style input

@@ -57,7 +57,7 @@ class NCaltech101(NeuromorphicDatasetFolder):
         The N-Caltech101 dataset, which is proposed by
         `Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades <https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full>`_.
 
-        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` 
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
 
         :param root: 数据集的根路径
         :type root: Union[str, Path]
@@ -143,6 +143,28 @@ class NCaltech101(NeuromorphicDatasetFolder):
 
     @classmethod
     def resource_url_md5(cls) -> list:
+        r"""
+        **API Language:**
+        :ref:`中文 <n_caltech101.resource_url_md5-cn>` | :ref:`English <n_caltech101.resource_url_md5-en>`
+
+        ----
+
+        .. _n_caltech101.resource_url_md5-cn:
+
+        * **中文**
+
+        :return: N-Caltech101 数据集的下载链接与 MD5 校验值列表
+        :rtype: list
+
+        ----
+
+        .. _n_caltech101.resource_url_md5-en:
+
+        * **English**
+
+        :return: List of download URLs and MD5 checksums for the N-Caltech101 dataset
+        :rtype: list
+        """
         url = "https://www.garrickorchard.com/datasets/n-caltech101"
         return [
             ("Caltech101.zip", url, "66201824eabb0239c7ab992480b50ba3"),
@@ -157,19 +179,112 @@ class NCaltech101(NeuromorphicDatasetFolder):
 
     @classmethod
     def downloadable(cls) -> bool:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <n_caltech101.downloadable-cn>` | :ref:`English <n_caltech101.downloadable-en>`
+
+        ----
+
+        .. _n_caltech101.downloadable-cn:
+
+        * **中文**
+
+        由于数据集版权限制，N-Caltech101 不提供自动下载，用户需手动下载。
+
         :return: ``False``
+        :rtype: bool
+
+        ----
+
+        .. _n_caltech101.downloadable-en:
+
+        * **English**
+
+        The N-Caltech101 dataset does not provide automatic download due to copyright restrictions. Users need to download it manually.
+
+        :return: ``False``
+        :rtype: bool
         """
         return False
 
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        r"""
+        **API Language:**
+        :ref:`中文 <n_caltech101.extract_downloaded_files-cn>` | :ref:`English <n_caltech101.extract_downloaded_files-en>`
+
+        ----
+
+        .. _n_caltech101.extract_downloaded_files-cn:
+
+        * **中文**
+
+        从 ``download_root`` 中的 ``Caltech101.zip`` 提取文件到 ``extract_root``。
+
+        :param download_root: 下载文件所在目录
+        :type download_root: Path
+        :param extract_root: 提取目标目录
+        :type extract_root: Path
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _n_caltech101.extract_downloaded_files-en:
+
+        * **English**
+
+        Extract ``Caltech101.zip`` from ``download_root`` into ``extract_root``.
+
+        :param download_root: Directory containing the downloaded files
+        :type download_root: Path
+        :param extract_root: Directory to extract into
+        :type extract_root: Path
+        :return: None
+        :rtype: None
+        """
         zip_file = download_root / "Caltech101.zip"
         print(f"Extract [{zip_file}] to [{extract_root}].")
         extract_archive(zip_file, extract_root)
 
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
+        r"""
+        **API Language:**
+        :ref:`中文 <n_caltech101.create_raw_from_extracted-cn>` | :ref:`English <n_caltech101.create_raw_from_extracted-en>`
+
+        ----
+
+        .. _n_caltech101.create_raw_from_extracted-cn:
+
+        * **中文**
+
+        将提取后的 ATIS 二进制文件转换为 ``.npz`` 格式并保存到 ``raw_root``。
+        每个类别目录下的 ``.bin`` 文件会被并行转换为 ``.npz`` 文件。
+
+        :param extract_root: 包含已提取文件的目录
+        :type extract_root: Path
+        :param raw_root: 保存原始数据的目录
+        :type raw_root: Path
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _n_caltech101.create_raw_from_extracted-en:
+
+        * **English**
+
+        Convert extracted ATIS binary files to ``.npz`` format and save them to ``raw_root``.
+        Each ``.bin`` file under the class directories is converted to ``.npz`` in parallel.
+
+        :param extract_root: Directory containing the extracted files
+        :type extract_root: Path
+        :param raw_root: Directory to save the raw dataset
+        :type raw_root: Path
+        :return: None
+        :rtype: None
+        """
         t_ckp = time.time()
         extract_root = extract_root / "Caltech101"
         with ThreadPoolExecutor(

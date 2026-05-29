@@ -27,8 +27,6 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         .. _TemporalWiseAttention.__init__-cn:
         * **中文**
 
-        * **中文**
-
         `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_ 中提出
         的TemporalWiseAttention层。TemporalWiseAttention层必须放在二维卷积层之后脉冲神经元之前，例如：
 
@@ -52,8 +50,6 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
         .. _TemporalWiseAttention.__init__-en:
         * **English**
 
-        * **English**
-
         The TemporalWiseAttention layer is proposed in `Temporal-Wise Attention Spiking Neural Networks for Event Streams Classification <https://openaccess.thecvf.com/content/ICCV2021/html/Yao_Temporal-Wise_Attention_Spiking_Neural_Networks_for_Event_Streams_Classification_ICCV_2021_paper.html>`_.
 
         It should be placed after the convolution layer and before the spiking neurons, e.g.,
@@ -72,10 +68,10 @@ class TemporalWiseAttention(nn.Module, base.MultiStepModule):
 
         :param dimension: Dimensions of input. If the input dimension is [T, N, C, H, W], dimension = 4; when the input dimension is [T, N, L], dimension = 2.
         :type dimension: int
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.step_mode = "m"
         assert dimension == 4 or dimension == 2, "dimension must be 4 or 2"
@@ -150,6 +146,7 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
         输入的尺寸是 ``[T, N, C, H, W]`` ，经过MultiStepMultiDimensionalAttention层，输出为 ``[T, N, C, H, W]`` 。
 
         :param T: 输入数据的时间步长
+        :type T: int
 
         :param C: 输入数据的通道数
         :type C: int
@@ -192,10 +189,10 @@ class MultiDimensionalAttention(nn.Module, base.MultiStepModule):
 
         :param kernel_size: convolution kernel size of SpatialAttention
         :type kernel_size: int
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
 
         assert T >= reduction_t, "reduction_t cannot be greater than T"
@@ -286,8 +283,6 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         .. _SpikingSelfAttention.__init__-cn:
         * **中文**
 
-        * **中文**
-
         `Spikformer: When Spiking Neural Network Meets Transformer <https://openreview.net/forum?id=frE4fUwz_h>`_
         中提出的 Spiking Self Attention 层。本模块在 `Spikformer源代码 <https://github.com/ZK-Zhou/spikformer/blob/main/imagenet/model.py>`_
         的基础上做了改进，显著提高了运行效率。关于 Spikformer 和本模块实现方式的更多信息，
@@ -309,8 +304,6 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
         ----
 
         .. _SpikingSelfAttention.__init__-en:
-        * **English**
-
         * **English**
 
         Spiking Self-Attention layer proposed in
@@ -335,10 +328,10 @@ class SpikingSelfAttention(nn.Module, base.MultiStepModule):
 
         :param backend: backend used by the internal neurons of this module. Default: ``torch``
         :type backend: str
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         if dim % num_heads != 0:
             raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")
@@ -498,10 +491,10 @@ class QKAttention(nn.Module, base.MultiStepModule):
 
         :param backend: backend used by the internal neurons of this module. Default: ``torch``.
         :type backend: str
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         if dim % num_heads != 0:
             raise ValueError(f"dim {dim} should be divided by num_heads {num_heads}.")

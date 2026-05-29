@@ -237,7 +237,7 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         The Nav Gesture dataset, which is proposed by
         `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
 
-        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` 
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
 
         :param root: 数据集的根路径
         :type root: Union[str, Path]
@@ -304,8 +304,6 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         .. _NAVGesture.get_H_W-cn:
         * **中文**
 
-        * **中文**
-
         :return: ``(240, 304)``
         :rtype: Tuple
 
@@ -316,8 +314,6 @@ class NAVGestureWalk(NeuromorphicDatasetFolder):
         ----
 
         .. _NAVGesture.get_H_W-en:
-        * **English**
-
         * **English**
 
         :return: ``(240, 304)``
@@ -438,7 +434,7 @@ class NAVGestureSit(NAVGestureWalk):
         The Nav Gesture dataset, which is proposed by
         `Event-Based Gesture Recognition With Dynamic Background Suppression Using Smartphone Computational Capabilities <https://www.frontiersin.org/articles/10.3389/fnins.2020.00275/full>`_.
 
-        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` 
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
 
         :param root: 数据集的根路径
         :type root: Union[str, Path]

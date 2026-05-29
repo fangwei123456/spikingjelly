@@ -27,8 +27,6 @@ class SynapseFilter(base.MemoryModule):
         .. _SynapseFilter.__init__-cn:
         * **中文**
 
-        * **中文**
-
         具有滤波性质的突触。突触的输出电流满足，当没有脉冲输入时，输出电流指数衰减：
 
         .. math::
@@ -70,8 +68,6 @@ class SynapseFilter(base.MemoryModule):
         ----
 
         .. _SynapseFilter.__init__-en:
-        * **English**
-
         * **English**
 
         The synapse filter that can filter input current. The output current will decay when there is no input spike:
@@ -141,10 +137,10 @@ class SynapseFilter(base.MemoryModule):
             pyplot.show()
 
         .. image:: ../_static/API/activation_based/layer/SynapseFilter.png
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.step_mode = step_mode
         self.learnable = learnable
@@ -205,8 +201,6 @@ class PrintShapeModule(nn.Module):
         .. _PrintShapeModule.__init__-cn:
         * **中文**
 
-        * **中文**
-
         只打印 ``ext_str`` 和输入的 ``shape``，不进行任何操作的网络层，可以用于debug。
 
         :param ext_str: 额外打印的字符串
@@ -217,16 +211,14 @@ class PrintShapeModule(nn.Module):
         .. _PrintShapeModule.__init__-en:
         * **English**
 
-        * **English**
-
         This layer will not do any operation but print ``ext_str`` and the shape of input, which can be used for debugging.
 
         :param ext_str: extra strings for printing
         :type ext_str: str
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.ext_str = ext_str
 
@@ -246,8 +238,6 @@ class VotingLayer(nn.Module, base.StepModule):
         .. _VotingLayer.__init__-cn:
         * **中文**
 
-        * **中文**
-
         投票层，对 ``shape = [..., C * voting_size]`` 的输入在最后一维上做 ``kernel_size = voting_size, stride = voting_size`` 的平均池化
 
         :param voting_size: 决定一个类别的投票数量
@@ -261,8 +251,6 @@ class VotingLayer(nn.Module, base.StepModule):
         .. _VotingLayer.__init__-en:
         * **English**
 
-        * **English**
-
         Applies average pooling with ``kernel_size = voting_size, stride = voting_size`` on the last dimension of the input with ``shape = [..., C * voting_size]``
 
         :param voting_size: the voting numbers for determine a class
@@ -270,10 +258,10 @@ class VotingLayer(nn.Module, base.StepModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.voting_size = voting_size
         self.step_mode = step_mode
@@ -307,8 +295,6 @@ class Delay(base.MemoryModule):
         .. _Delay.__init__-cn:
         * **中文**
 
-        * **中文**
-
         延迟层，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
 
         :param delay_steps: 延迟的时间步数
@@ -322,8 +308,6 @@ class Delay(base.MemoryModule):
         ----
 
         .. _Delay.__init__-en:
-        * **English**
-
         * **English**
 
         A delay layer that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.
@@ -375,10 +359,10 @@ class Delay(base.MemoryModule):
                     [1., 1.],
                     [1., 1.],
                     [0., 0.]])
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         assert delay_steps >= 0 and isinstance(delay_steps, int)
         self._delay_steps = delay_steps

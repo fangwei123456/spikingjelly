@@ -58,7 +58,7 @@ class NMNIST(NeuromorphicDatasetFolder):
         The N-MNIST dataset, which is proposed by
         `Converting Static Image Datasets to Spiking Neuromorphic Datasets Using Saccades <https://www.frontiersin.org/articles/10.3389/fnins.2015.00437/full>`_.
 
-        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>` 
+        Refer to :class:`NeuromorphicDatasetFolder <spikingjelly.datasets.base.NeuromorphicDatasetFolder>`
 
         :param root: 数据集的根路径
         :type root: Union[str, Path]
@@ -131,25 +131,43 @@ class NMNIST(NeuromorphicDatasetFolder):
         .. _n_mnist.get_H_W-cn:
         * **中文**
 
-        * **中文**
-
         :return: ``(34, 34)``
-        :rtype: Tuple
+        :rtype: Tuple[int, int]
 
         ----
 
         .. _n_mnist.get_H_W-en:
         * **English**
 
-        * **English**
-
         :return: ``(34, 34)``
-        :rtype: Tuple
+        :rtype: Tuple[int, int]
         """
         return 34, 34
 
     @classmethod
     def resource_url_md5(cls) -> list:
+        r"""
+        **API Language:**
+        :ref:`中文 <n_mnist.resource_url_md5-cn>` | :ref:`English <n_mnist.resource_url_md5-en>`
+
+        ----
+
+        .. _n_mnist.resource_url_md5-cn:
+
+        * **中文**
+
+        :return: N-MNIST 数据集的下载链接与 MD5 校验值列表
+        :rtype: list
+
+        ----
+
+        .. _n_mnist.resource_url_md5-en:
+
+        * **English**
+
+        :return: List of download URLs and MD5 checksums for the N-MNIST dataset
+        :rtype: list
+        """
         url = "https://www.garrickorchard.com/datasets/n-mnist"
         return [
             ("Train.zip", url, "20959b8e626244a1b502305a9e6e2031"),
@@ -158,13 +176,70 @@ class NMNIST(NeuromorphicDatasetFolder):
 
     @classmethod
     def downloadable(cls) -> bool:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <n_mnist.downloadable-cn>` | :ref:`English <n_mnist.downloadable-en>`
+
+        ----
+
+        .. _n_mnist.downloadable-cn:
+
+        * **中文**
+
+        由于数据集版权限制，N-MNIST 不提供自动下载，用户需手动下载。
+
         :return: ``False``
+        :rtype: bool
+
+        ----
+
+        .. _n_mnist.downloadable-en:
+
+        * **English**
+
+        The N-MNIST dataset does not provide automatic download due to copyright restrictions. Users need to download it manually.
+
+        :return: ``False``
+        :rtype: bool
         """
         return False
 
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        r"""
+        **API Language:**
+        :ref:`中文 <n_mnist.extract_downloaded_files-cn>` | :ref:`English <n_mnist.extract_downloaded_files-en>`
+
+        ----
+
+        .. _n_mnist.extract_downloaded_files-cn:
+
+        * **中文**
+
+        从 ``download_root`` 中的所有 zip 文件提取到 ``extract_root``。
+
+        :param download_root: 下载文件所在目录
+        :type download_root: Path
+        :param extract_root: 提取目标目录
+        :type extract_root: Path
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _n_mnist.extract_downloaded_files-en:
+
+        * **English**
+
+        Extract all zip files from ``download_root`` into ``extract_root``.
+
+        :param download_root: Directory containing the downloaded files
+        :type download_root: Path
+        :param extract_root: Directory to extract into
+        :type extract_root: Path
+        :return: None
+        :rtype: None
+        """
         with ThreadPoolExecutor(max_workers=min(multiprocessing.cpu_count(), 2)) as tpe:
             futures = []
             for zip_file in os.listdir(download_root):
@@ -177,6 +252,42 @@ class NMNIST(NeuromorphicDatasetFolder):
 
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
+        r"""
+        **API Language:**
+        :ref:`中文 <n_mnist.create_raw_from_extracted-cn>` | :ref:`English <n_mnist.create_raw_from_extracted-en>`
+
+        ----
+
+        .. _n_mnist.create_raw_from_extracted-cn:
+
+        * **中文**
+
+        将提取后的 ATIS 二进制文件按训练/测试集转换为 ``.npz`` 格式并保存。
+        每个类别目录下的 ``.bin`` 文件会被并行转换为 ``.npz`` 文件。
+
+        :param extract_root: 包含已提取文件的目录
+        :type extract_root: Path
+        :param raw_root: 保存原始数据的目录
+        :type raw_root: Path
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _n_mnist.create_raw_from_extracted-en:
+
+        * **English**
+
+        Convert extracted ATIS binary files to ``.npz`` format by train/test split.
+        Each ``.bin`` file under the class directories is converted to ``.npz`` in parallel.
+
+        :param extract_root: Directory containing the extracted files
+        :type extract_root: Path
+        :param raw_root: Directory to save the raw dataset
+        :type raw_root: Path
+        :return: None
+        :rtype: None
+        """
         t_ckp = time.time()
         with ThreadPoolExecutor(
             max_workers=min(

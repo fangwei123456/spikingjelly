@@ -34,11 +34,16 @@ class NeuroMCCmpCounter(NeuroMCBaseCounter):
 
     * **中文**
 
-    TODO: add Chinese description
+    NeuroMC比较运算计数器，继承自 :class:`NeuroMCBaseCounter`。
 
+    专门用于在模型前向传播和反向传播过程中统计比较（Comparison）操作次数，
+    包括逐元素比较（eq、ne、lt、le、gt、ge）和最大池化索引操作。
+    覆盖的算子包括 ``aten.eq``、``aten.ne``、``aten.lt``、``aten.le``、``aten.gt``、
+    ``aten.ge``、``aten.logical_and``、``aten.logical_or``、``aten.logical_xor``、
+    ``aten.logical_not`` 以及 ``aten.max_pool2d_with_indices``。
+
+    :return: None
     :rtype: None
-    Tracks the number of scalar and tensor comparison operations, including
-    element-wise comparisons and max-pooling indexing operations.
 
     ----
 
@@ -46,7 +51,14 @@ class NeuroMCCmpCounter(NeuroMCBaseCounter):
 
     * **English**
 
-    TODO: add English description
+    Comparison operation counter, inheriting from :class:`NeuroMCBaseCounter`.
+
+    Counts comparison operations during model forward and backward passes,
+    including element-wise comparisons (eq, ne, lt, le, gt, ge) and max-pooling
+    indexing operations. Covers operators such as ``aten.eq``, ``aten.ne``,
+    ``aten.lt``, ``aten.le``, ``aten.gt``, ``aten.ge``, ``aten.logical_and``,
+    ``aten.logical_or``, ``aten.logical_xor``, ``aten.logical_not``, and
+    ``aten.max_pool2d_with_indices``.
 
     :return: None
     :rtype: None

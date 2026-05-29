@@ -21,9 +21,8 @@ class NeuroMCMemoryResidencyCounter(MemoryResidencyCounter):
 
     NeuroMC内存驻留计数器
 
+    :return: None
     :rtype: None
-    Tracks the memory residency (number of elements alive) at different
-    memory hierarchy levels during model execution.
 
     ----
 

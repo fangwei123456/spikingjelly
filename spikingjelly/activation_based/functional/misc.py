@@ -112,8 +112,6 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
     .. _redundant_one_hot-cn:
     * **中文**
 
-    * **中文**
-
     对数据进行冗余的one-hot编码，每一类用 ``n`` 个1和 ``(num_classes - 1) * n`` 个0来编码。
 
     :param labels: shape=[batch_size]的tensor，表示 ``batch_size`` 个标签
@@ -133,8 +131,6 @@ def redundant_one_hot(labels: Tensor, num_classes: int, n: int):
     ----
 
     .. _redundant_one_hot-en:
-    * **English**
-
     * **English**
 
     Redundant one-hot encoding for data. Each class is encoded to ``n`` 1's and  ``(num_classes - 1) * n`` 0's
@@ -188,8 +184,6 @@ def first_spike_index(spikes: Tensor):
     .. _first_spike_index-cn:
     * **中文**
 
-    * **中文**
-
     输入若干个神经元的输出脉冲，返回一个与输入相同shape的 ``bool`` 类型的index。
     index为 ``True`` 的位置，表示该神经元首次释放脉冲的时刻。
 
@@ -204,8 +198,6 @@ def first_spike_index(spikes: Tensor):
     ----
 
     .. _first_spike_index-en:
-    * **English**
-
     * **English**
 
     Return an ``index`` tensor of the same shape of input tensor, which is the output spike of some neurons. The location of ``True`` represents the moment of first spike.
@@ -257,8 +249,6 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     .. _kaiming_normal_conv_linear_weight-cn:
     * **中文**
 
-    * **中文**
-
     使用kaiming normal初始化 ``net`` 中的所有 :class:`torch.nn._ConvNd` 和 :class:`torch.nn.Linear` 的权重（不包括偏置项）。
     参见 :class:`torch.nn.init.kaiming_normal_`。
 
@@ -273,8 +263,6 @@ def kaiming_normal_conv_linear_weight(net: nn.Module):
     ----
 
     .. _kaiming_normal_conv_linear_weight-en:
-    * **English**
-
     * **English**
 
     Initialize all weights (not including bias) of :class:`torch.nn._ConvNd` and :class:`torch.nn.Linear` in ``net`` by the kaiming normal.
@@ -304,8 +292,6 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     .. _delay-cn:
     * **中文**
 
-    * **中文**
-
     延迟函数，可以用来延迟输入，使得 ``y[t] = x[t - delay_steps]``。缺失的数据用0填充。
 
     :param x_seq: 输入的序列，``shape = [T, *]``
@@ -322,8 +308,6 @@ def delay(x_seq: torch.Tensor, delay_steps: int):
     ----
 
     .. _delay-en:
-    * **English**
-
     * **English**
 
     A delay function that can delay inputs and makes ``y[t] = x[t - delay_steps]``. The nonexistent data will be regarded as 0.

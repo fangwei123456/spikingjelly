@@ -18,8 +18,6 @@ def reset_net(net: nn.Module):
     .. _reset_net-cn:
     * **中文**
 
-    * **中文**
-
     重置 ``net`` 中所有可重置模块的状态。
 
     该函数会遍历 ``net.modules()`` 中的所有子模块；若某个子模块实现了
@@ -38,8 +36,6 @@ def reset_net(net: nn.Module):
     ----
 
     .. _reset_net-en:
-    * **English**
-
     * **English**
 
     Reset the states of all resettable modules in ``net``.
@@ -77,8 +73,6 @@ def set_step_mode(net: nn.Module, step_mode: str):
     .. _set_step_mode-cn:
     * **中文**
 
-    * **中文**
-
     将 ``net`` 中所有具有 ``step_mode`` 属性的模块的步进模式设置为
     ``step_mode`` 。
 
@@ -107,8 +101,6 @@ def set_step_mode(net: nn.Module, step_mode: str):
     ----
 
     .. _set_step_mode-en:
-    * **English**
-
     * **English**
 
     Set ``step_mode`` to ``step_mode`` for all modules in ``net`` that expose a
@@ -271,8 +263,6 @@ def detach_net(net: nn.Module):
     .. _detach_net-cn:
     * **中文**
 
-    * **中文**
-
     将 ``net`` 中各有状态模块与之前时间步的计算图断开。
 
     该函数会遍历 ``net.modules()`` 中的所有子模块；若某个子模块实现了
@@ -291,8 +281,6 @@ def detach_net(net: nn.Module):
     ----
 
     .. _detach_net-en:
-    * **English**
-
     * **English**
 
     Detach stateful modules in ``net`` from the computation graphs of previous

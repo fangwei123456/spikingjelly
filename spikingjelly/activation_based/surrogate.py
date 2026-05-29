@@ -14,11 +14,11 @@ curly_bracket_r = "}"
 def heaviside(x: torch.Tensor):
     r"""
     **API Language:**
-    :ref:`中文 <heaviside.__init__-cn>` | :ref:`English <heaviside.__init__-en>`
+    :ref:`中文 <heaviside-cn>` | :ref:`English <heaviside-en>`
 
     ----
 
-    .. _heaviside.__init__-cn:
+    .. _heaviside-cn:
 
     * **中文**
 
@@ -40,7 +40,7 @@ def heaviside(x: torch.Tensor):
 
     ----
 
-    .. _heaviside.__init__-en:
+    .. _heaviside-en:
 
     * **English**
 
@@ -66,11 +66,11 @@ def heaviside(x: torch.Tensor):
 def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
     r"""
     **API Language:**
-    :ref:`中文 <check_manual_grad.__init__-cn>` | :ref:`English <check_manual_grad.__init__-en>`
+    :ref:`中文 <check_manual_grad-cn>` | :ref:`English <check_manual_grad-en>`
 
     ----
 
-    .. _check_manual_grad.__init__-cn:
+    .. _check_manual_grad-cn:
 
     * **中文**
 
@@ -87,7 +87,7 @@ def check_manual_grad(primitive_function, spiking_function, *args, **kwargs):
 
     ----
 
-    .. _check_manual_grad.__init__-en:
+    .. _check_manual_grad-en:
 
     * **English**
 

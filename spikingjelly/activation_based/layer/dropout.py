@@ -23,8 +23,6 @@ class Dropout(base.MemoryModule):
         .. _Dropout.__init__-cn:
         * **中文**
 
-        * **中文**
-
         与 ``torch.nn.Dropout`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\
         数后，才会按照概率去重新决定，哪些位置被置0。
 
@@ -55,8 +53,6 @@ class Dropout(base.MemoryModule):
         ----
 
         .. _Dropout.__init__-en:
-        * **English**
-
         * **English**
 
         This layer is almost same with ``torch.nn.Dropout``. The difference is that elements have been zeroed at first
@@ -133,8 +129,6 @@ class Dropout2d(Dropout):
         .. _Dropout2d.__init__-cn:
         * **中文**
 
-        * **中文**
-
         与 ``torch.nn.Dropout2d`` 的几乎相同。区别在于，在每一轮的仿真中，被设置成0的位置不会发生改变；直到下一轮运行，即网络调用reset()函\
         数后，才会按照概率去重新决定，哪些位置被置0。
 
@@ -149,8 +143,6 @@ class Dropout2d(Dropout):
         ----
 
         .. _Dropout2d.__init__-en:
-        * **English**
-
         * **English**
 
         This layer is almost same with ``torch.nn.Dropout2d``. The difference is that elements have been zeroed at first
@@ -278,10 +270,10 @@ class DropConnectLinear(base.MemoryModule):
 
         :param step_mode: the step mode, which can be `s` (single-step) or `m` (multi-step)
         :type step_mode: str
-        
+
         :return: None
         :rtype: None
-"""
+        """
         super().__init__()
         self.step_mode = step_mode
         self.in_features = in_features

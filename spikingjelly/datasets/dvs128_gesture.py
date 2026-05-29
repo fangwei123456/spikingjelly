@@ -416,6 +416,28 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
     @classmethod
     def resource_url_md5(cls) -> list:
+        r"""
+        **API Language:**
+        :ref:`中文 <dvs128_gesture.resource_url_md5-cn>` | :ref:`English <dvs128_gesture.resource_url_md5-en>`
+
+        ----
+
+        .. _dvs128_gesture.resource_url_md5-cn:
+
+        * **中文**
+
+        :return: DVS128 Gesture 数据集的下载链接与 MD5 校验值列表
+        :rtype: list
+
+        ----
+
+        .. _dvs128_gesture.resource_url_md5-en:
+
+        * **English**
+
+        :return: List of download URLs and MD5 checksums for the DVS128 Gesture dataset
+        :rtype: list
+        """
         url = "https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794"
         return [
             ("DvsGesture.tar.gz", url, "8a5c71fb11e24e5ca5b11866ca6c00a1"),
@@ -426,19 +448,113 @@ class DVS128Gesture(NeuromorphicDatasetFolder):
 
     @classmethod
     def downloadable(cls) -> bool:
-        """
+        r"""
+        **API Language:**
+        :ref:`中文 <dvs128_gesture.downloadable-cn>` | :ref:`English <dvs128_gesture.downloadable-en>`
+
+        ----
+
+        .. _dvs128_gesture.downloadable-cn:
+
+        * **中文**
+
+        由于数据集版权限制，DVS128 Gesture 不提供自动下载，用户需手动下载。
+
         :return: ``False``
+        :rtype: bool
+
+        ----
+
+        .. _dvs128_gesture.downloadable-en:
+
+        * **English**
+
+        The DVS128 Gesture dataset does not provide automatic download due to copyright restrictions. Users need to download it manually.
+
+        :return: ``False``
+        :rtype: bool
         """
         return False
 
     @classmethod
     def extract_downloaded_files(cls, download_root: Path, extract_root: Path):
+        r"""
+        **API Language:**
+        :ref:`中文 <dvs128_gesture.extract_downloaded_files-cn>` | :ref:`English <dvs128_gesture.extract_downloaded_files-en>`
+
+        ----
+
+        .. _dvs128_gesture.extract_downloaded_files-cn:
+
+        * **中文**
+
+        从 ``download_root`` 中的 ``DvsGesture.tar.gz`` 提取文件到 ``extract_root``。
+
+        :param download_root: 下载文件所在目录
+        :type download_root: Path
+        :param extract_root: 提取目标目录
+        :type extract_root: Path
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _dvs128_gesture.extract_downloaded_files-en:
+
+        * **English**
+
+        Extract ``DvsGesture.tar.gz`` from ``download_root`` into ``extract_root``.
+
+        :param download_root: Directory containing the downloaded files
+        :type download_root: Path
+        :param extract_root: Directory to extract into
+        :type extract_root: Path
+        :return: None
+        :rtype: None
+        """
         fpath = download_root / "DvsGesture.tar.gz"
         print(f"Extract [{fpath}] to [{extract_root}].")
         extract_archive(fpath, extract_root)
 
     @classmethod
     def create_raw_from_extracted(cls, extract_root: Path, raw_root: Path):
+        r"""
+        **API Language:**
+        :ref:`中文 <dvs128_gesture.create_raw_from_extracted-cn>` | :ref:`English <dvs128_gesture.create_raw_from_extracted-en>`
+
+        ----
+
+        .. _dvs128_gesture.create_raw_from_extracted-cn:
+
+        * **中文**
+
+        将提取后的 AEDAT 文件按标签和时间戳分割为 ``.npz`` 格式样本，
+        并根据 ``trials_to_train.txt`` / ``trials_to_test.txt`` 分配到训练集和测试集目录。
+
+        :param extract_root: 包含已提取文件的目录
+        :type extract_root: Path
+        :param raw_root: 保存原始数据的目录
+        :type raw_root: Path
+        :return: None
+        :rtype: None
+
+        ----
+
+        .. _dvs128_gesture.create_raw_from_extracted-en:
+
+        * **English**
+
+        Split extracted AEDAT files into ``.npz`` samples by label and timestamp,
+        then distribute them into train/test directories according to
+        ``trials_to_train.txt`` / ``trials_to_test.txt``.
+
+        :param extract_root: Directory containing the extracted files
+        :type extract_root: Path
+        :param raw_root: Directory to save the raw dataset
+        :type raw_root: Path
+        :return: None
+        :rtype: None
+        """
         aedat_dir = extract_root / "DvsGesture"
         train_dir = raw_root / "train"
         test_dir = raw_root / "test"
