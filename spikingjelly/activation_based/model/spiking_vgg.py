@@ -390,6 +390,7 @@ def spiking_vgg13(
     :type kwargs: dict
     :return: Spiking VGG-13
     :rtype: torch.nn.Module
+    """
     return _spiking_vgg(
         "vgg13", "B", False, pretrained, progress, None, spiking_neuron, **kwargs
     )
@@ -505,19 +506,6 @@ def spiking_vgg16(
     :return: Spiking VGG-16
     :rtype: torch.nn.Module
     """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-    :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
-    :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
-    :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
-    :type kwargs: dict
-    :return: Spiking VGG-16
-    :rtype: torch.nn.Module
-
-    A spiking version of VGG-16 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
-    """
 
     return _spiking_vgg(
         "vgg16", "D", False, pretrained, progress, None, spiking_neuron, **kwargs
@@ -577,21 +565,6 @@ def spiking_vgg16_bn(
     :return: Spiking VGG-16 with BatchNorm
     :rtype: torch.nn.Module
     """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-    :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
-    :type progress: bool
-    :param norm_layer: a batch norm layer
-    :type norm_layer: callable
-    :param spiking_neuron: a spiking neuron layer
-    :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
-    :type kwargs: dict
-    :return: Spiking VGG-16 with norm layer
-    :rtype: torch.nn.Module
-
-    A spiking version of VGG-16-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
-    """
 
     return _spiking_vgg(
         "vgg16_bn",
@@ -649,19 +622,6 @@ def spiking_vgg19(
     :type kwargs: dict
     :return: Spiking VGG-19
     :rtype: torch.nn.Module
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-    :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
-    :type progress: bool
-    :param spiking_neuron: a spiking neuron layer
-    :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
-    :type kwargs: dict
-    :return: Spiking VGG-19
-    :rtype: torch.nn.Module
-
-    A spiking version of VGG-19 model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
     return _spiking_vgg(
@@ -721,21 +681,6 @@ def spiking_vgg19_bn(
     :type kwargs: dict
     :return: Spiking VGG-19 with BatchNorm
     :rtype: torch.nn.Module
-    """
-    :param pretrained: If True, the SNN will load parameters from the ANN pre-trained on ImageNet
-    :type pretrained: bool
-    :param progress: If True, displays a progress bar of the download to stderr
-    :type progress: bool
-    :param norm_layer: a batch norm layer
-    :type norm_layer: callable
-    :param spiking_neuron: a spiking neuron layer
-    :type spiking_neuron: callable
-    :param kwargs: kwargs for `spiking_neuron`
-    :type kwargs: dict
-    :return: Spiking VGG-19 with norm layer
-    :rtype: torch.nn.Module
-
-    A spiking version of VGG-19-BN model from `"Very Deep Convolutional Networks for Large-Scale Image Recognition" <https://arxiv.org/pdf/1409.1556.pdf>`_
     """
 
     return _spiking_vgg(
