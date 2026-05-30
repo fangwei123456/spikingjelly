@@ -139,6 +139,7 @@ def test_convert_model_for_precision_preserves_shared_linear_module_identity():
     assert converted[0] is converted[1]
 
 
+@pytest.mark.skipif(not HAS_TORCHAO, reason="torchao not installed")
 def test_convert_model_for_precision_preserves_shared_linear_module_identity_fp8(
     monkeypatch,
 ):

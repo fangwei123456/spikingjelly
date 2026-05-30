@@ -78,6 +78,8 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
             if memo is None:
                 memo = {}
             for child_name, child in list(module._modules.items()):
+                if child is None:
+                    continue
                 child_fqn = f"{prefix}.{child_name}" if prefix else child_name
                 if isinstance(child, (nn.Linear, layer.Linear)):
                     if child in memo:
