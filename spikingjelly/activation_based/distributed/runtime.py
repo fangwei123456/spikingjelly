@@ -58,6 +58,16 @@ class SNNDistributedRuntime:
                         for idx, size in enumerate(dims)
                     }
                     topology = SNNDistributedTopology.from_mapping(mapping)
+        dp_mesh_dim = (
+            topology.ordered_dim_names.index("dp")
+            if "dp" in topology.ordered_dim_names
+            else None
+        )
+        tp_mesh_dim = (
+            topology.ordered_dim_names.index("tp")
+            if "tp" in topology.ordered_dim_names
+            else 0
+        )
         plan = SNNDistributedPlan(
             mode=mode,
             objective="legacy",
@@ -69,6 +79,9 @@ class SNNDistributedRuntime:
             memopt_level=0,
             rationale=(),
             notes=("Constructed from legacy runtime bridge.",),
+            mesh_shape=topology.mesh_shape,
+            tp_mesh_dim=tp_mesh_dim,
+            dp_mesh_dim=dp_mesh_dim,
             experimental_features=DistributedFeatureSet(),
         )
         return cls(
@@ -95,6 +108,10 @@ class SNNDistributedRuntime:
             names = ["dp", "tp"]
             names.extend(f"dim{idx}" for idx in range(2, ndim))
             return tuple(names)
+        if mode == "pp":
+            names = ["pp", "vpp"]
+            names.extend(f"dim{idx}" for idx in range(2, ndim))
+            return tuple(names[:ndim])
         preferred = ("dp", "tp", "pp", "vpp")
         names = list(preferred[:ndim])
         names.extend(f"dim{idx}" for idx in range(len(names), ndim))
@@ -164,14 +181,17 @@ class SNNDistributedRuntime:
         images: torch.Tensor,
         labels: torch.Tensor,
     ):
+        target = self.model
+        if self.kind == "pipeline" and self.pipeline_runtime is not None:
+            target = self.pipeline_runtime.stage_module
         try:
-            param = next(self.model.parameters())
+            param = next(target.parameters())
             dtype = param.dtype
             device = param.device
         except StopIteration:
             dtype = torch.float32
             device = torch.device("cpu")
-        outputs = self.model(images.to(device=device, dtype=dtype))
+        outputs = target(images.to(device=device, dtype=dtype))
         outputs, labels = self.prepare_classification_output(outputs, labels)
         loss = criterion(outputs, labels)
         return outputs, labels, loss

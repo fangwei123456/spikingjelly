@@ -95,6 +95,13 @@ def plan(
             )
     notes = list(analysis.notes)
     selected_mode = mode or recommendation.mode
+    if (
+        selected_mode in ("tp", "fsdp2_tp")
+        and not analysis.tensor_parallel_candidate_names
+    ):
+        raise ValueError(
+            f"mode='{selected_mode}' requires at least one tensor-parallel candidate, but analysis found none."
+        )
     optimizer_strategy = recommendation.optimizer_sharding
     if selected_mode != "dp" or not features.allow_zero_optimizer:
         optimizer_strategy = "none"
@@ -127,6 +134,7 @@ def plan(
         memopt_level=recommendation.memopt_level,
         rationale=tuple(recommendation.rationale),
         notes=tuple(notes),
+        tensor_parallel_roots=analysis.tensor_parallel_roots,
         mesh_shape=mesh_shape,
         tp_mesh_dim=tp_mesh_dim,
         dp_mesh_dim=dp_mesh_dim,
@@ -191,6 +199,7 @@ def apply(
         dp_mesh_dim=plan.dp_mesh_dim,
         enable_data_parallel=plan.mode == "dp",
         enable_fsdp2=plan.mode in ("fsdp2", "fsdp2_tp"),
+        tensor_parallel_roots=plan.tensor_parallel_roots,
         auto_tensor_parallel=plan.mode in ("tp", "fsdp2_tp"),
     )
     configured_model, mesh, analysis = configure_snn_distributed(model, config)

@@ -9,6 +9,9 @@ from spikingjelly.activation_based.op_counter.memory_residency import (
 from spikingjelly.activation_based.op_counter.neuromc.base_counter import (
     NeuroMCBaseCounter,
 )
+from spikingjelly.activation_based.op_counter.neuromc.core import (
+    NeuroMCRuntimeEnergyReport,
+)
 from spikingjelly.activation_based.op_counter.neuromc.memory_residency_counter import (
     NeuroMCMemoryResidencyCounter,
 )
@@ -36,6 +39,13 @@ def test_neuromc_exact_linear_report_fields():
     assert report.energy_by_core_type["fp_soma"] > 0.0
     assert report.counts_by_core_type["fp_soma"]["mac"] == 3 * 8 * 4
     assert report.primitive_counts["totals"]["mac"] == 3 * 8 * 4
+
+
+def test_neuromc_runtime_report_constructor_remains_backward_compatible():
+    report = NeuroMCRuntimeEnergyReport()
+    assert report.energy_total_pj == 0.0
+    assert report.energy_by_stage == {}
+    assert report.warnings == []
 
 
 def test_neuromc_exact_ifnode_supports_sg_breakdown():

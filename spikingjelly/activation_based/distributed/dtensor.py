@@ -286,6 +286,7 @@ class SNNDistributedAnalysis:
     tensor_parallel_candidate_names: Tuple[str, ...]
     unsupported_tensor_parallel_names: Tuple[str, ...]
     notes: Tuple[str, ...]
+    tensor_parallel_roots: Optional[Tuple[str, ...]] = None
 
 
 @dataclass
@@ -1734,6 +1735,9 @@ def analyze_snn_distributed_capability(
         tensor_parallel_candidate_names=tuple(tensor_parallel_candidates),
         unsupported_tensor_parallel_names=tuple(unsupported_tp),
         notes=tuple(notes),
+        tensor_parallel_roots=(
+            tuple(tensor_parallel_roots) if tensor_parallel_roots is not None else None
+        ),
     )
 
 

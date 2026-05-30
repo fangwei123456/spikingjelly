@@ -26,6 +26,7 @@ class SNNDistributedPlan:
     memopt_level: int
     rationale: Tuple[str, ...]
     notes: Tuple[str, ...]
+    tensor_parallel_roots: Optional[Tuple[str, ...]] = None
     mesh_shape: Optional[Tuple[int, ...]] = None
     tp_mesh_dim: int = 0
     dp_mesh_dim: Optional[int] = None

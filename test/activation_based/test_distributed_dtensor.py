@@ -285,6 +285,7 @@ def test_plan_returns_structured_plan_from_analysis():
     assert distributed_plan.objective == "speed"
     assert isinstance(distributed_plan.topology, SNNDistributedTopology)
     assert distributed_plan.topology.world_size == 1
+    assert distributed_plan.tensor_parallel_roots == ("features",)
 
 
 def test_plan_accepts_missing_model_family():
@@ -330,6 +331,20 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
     assert distributed_plan.mode == "tp"
     assert distributed_plan.optimizer_strategy == "none"
     assert distributed_plan.topology.mesh_shape == (2,)
+
+
+def test_plan_rejects_tensor_parallel_without_candidates():
+    model = nn.Sequential(neuron.IFNode(step_mode="m"))
+    analysis = analyze(model)
+    with pytest.raises(ValueError, match="requires at least one tensor-parallel candidate"):
+        plan(
+            analysis=analysis,
+            objective="memory",
+            topology={"tp": 2},
+            backend="inductor",
+            batch_size=8,
+            mode="tp",
+        )
 
 
 def test_plan_rejects_pipeline_when_feature_flag_disables_it():
@@ -502,6 +517,26 @@ def test_runtime_reset_state_uses_pipeline_stage_when_available():
     )
     runtime.reset_state()
     assert stage.reset_calls == 1
+
+
+def test_runtime_forward_loss_uses_pipeline_stage_module():
+    stage = nn.Linear(3, 2)
+    model = nn.Linear(5, 4)
+    runtime = SNNDistributedRuntime.from_legacy(
+        kind="pipeline",
+        model=model,
+        mesh=None,
+        analysis=None,
+        mode="pp",
+        pipeline_runtime=SimpleNamespace(stage_module=stage),
+    )
+    criterion = nn.CrossEntropyLoss()
+    x = torch.randn(4, 3)
+    y = torch.tensor([0, 1, 0, 1])
+    outputs, labels, loss = runtime.forward_loss(criterion, x, y)
+    assert outputs.shape == (4, 2)
+    assert torch.equal(labels, y)
+    assert torch.is_tensor(loss)
 
 
 def test_runtime_prepare_classification_output_can_return_metadata():

@@ -5,7 +5,7 @@ import warnings
 from collections import defaultdict
 from collections import deque
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
 import torch
@@ -218,24 +218,24 @@ class NeuroMCRuntimeEnergyReport:
     :return: None
     :rtype: None
     """
-    energy_total_pj: float
-    energy_compute_pj: float
-    energy_memory_pj: float
-    energy_by_stage: dict[str, float]
-    energy_by_op: dict[str, float]
-    primitive_counts: dict[str, Any]
-    memory_bits_by_level: dict[str, Any]
-    warnings: list[str]
-    energy_mac_pj: float
-    energy_base_memory_pj: float
-    energy_extra_memory_pj: float
-    energy_extra_compute_pj: float
-    energy_by_core_type: dict[str, float]
-    energy_by_process_key: dict[str, float]
-    energy_by_memory_level_dir: dict[str, dict[str, float]]
-    counts_by_core_type: dict[str, dict[str, int]]
-    counts_by_process_key: dict[str, dict[str, int]]
-    mapping_summary: list[dict[str, Any]]
+    energy_total_pj: float = 0.0
+    energy_compute_pj: float = 0.0
+    energy_memory_pj: float = 0.0
+    energy_by_stage: dict[str, float] = field(default_factory=dict)
+    energy_by_op: dict[str, float] = field(default_factory=dict)
+    primitive_counts: dict[str, Any] = field(default_factory=dict)
+    memory_bits_by_level: dict[str, Any] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    energy_mac_pj: float = 0.0
+    energy_base_memory_pj: float = 0.0
+    energy_extra_memory_pj: float = 0.0
+    energy_extra_compute_pj: float = 0.0
+    energy_by_core_type: dict[str, float] = field(default_factory=dict)
+    energy_by_process_key: dict[str, float] = field(default_factory=dict)
+    energy_by_memory_level_dir: dict[str, dict[str, float]] = field(default_factory=dict)
+    counts_by_core_type: dict[str, dict[str, int]] = field(default_factory=dict)
+    counts_by_process_key: dict[str, dict[str, int]] = field(default_factory=dict)
+    mapping_summary: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
