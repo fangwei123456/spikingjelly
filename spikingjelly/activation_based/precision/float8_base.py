@@ -11,8 +11,6 @@ class Float8LinearStepModule(nn.Module):
         super().__init__()
         self.wrapped = wrapped
         self.step_mode = step_mode
-        self._wrapped_load_from_state_dict = wrapped._load_from_state_dict
-        self.wrapped._load_from_state_dict = lambda *args, **kwargs: None
 
     def forward(self, x: torch.Tensor):
         if self.step_mode == "s":
@@ -25,12 +23,20 @@ class Float8LinearStepModule(nn.Module):
         try:
             return super().__getattr__(name)
         except AttributeError:
-            return getattr(self.wrapped, name)
+            wrapped = self.__dict__.get("_modules", {}).get("wrapped")
+            if wrapped is None:
+                raise AttributeError(
+                    f"'{type(self).__name__}' object has no attribute '{name}'"
+                )
+            return getattr(wrapped, name)
 
     def state_dict(self, destination=None, prefix="", keep_vars=False):
         return self.wrapped.state_dict(
             destination=destination, prefix=prefix, keep_vars=keep_vars
         )
+
+    def _save_to_state_dict(self, destination, prefix, keep_vars):
+        self.wrapped._save_to_state_dict(destination, prefix, keep_vars)
 
     def _load_from_state_dict(
         self,
@@ -42,9 +48,19 @@ class Float8LinearStepModule(nn.Module):
         unexpected_keys,
         error_msgs,
     ):
-        self._wrapped_load_from_state_dict(
+        wrapped_prefix = prefix + "wrapped."
+        keys_to_rename = [
+            k
+            for k in list(state_dict.keys())
+            if k.startswith(prefix) and not k.startswith(wrapped_prefix)
+        ]
+        for k in keys_to_rename:
+            suffix = k[len(prefix) :]
+            state_dict[wrapped_prefix + suffix] = state_dict.pop(k)
+        type(self.wrapped)._load_from_state_dict(
+            self.wrapped,
             state_dict,
-            prefix,
+            wrapped_prefix,
             local_metadata,
             strict,
             missing_keys,

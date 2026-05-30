@@ -87,7 +87,7 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
                 if isinstance(child, (nn.Linear, layer.Linear)):
                     if child in memo:
                         wrapped = memo[child]
-                        if isinstance(module, nn.ModuleList):
+                        if isinstance(module, (nn.ModuleList, nn.Sequential)):
                             module[int(child_name)] = wrapped
                         elif isinstance(module, nn.ModuleDict):
                             module[child_name] = wrapped
@@ -98,7 +98,7 @@ def convert_model_for_precision(model: nn.Module, policy) -> tuple[nn.Module, Co
                     converted = Float8Linear.from_float(child, config=fp8_config)
                     wrapped = wrap_float8_linear_module(child, converted)
                     memo[child] = wrapped
-                    if isinstance(module, nn.ModuleList):
+                    if isinstance(module, (nn.ModuleList, nn.Sequential)):
                         module[int(child_name)] = wrapped
                     elif isinstance(module, nn.ModuleDict):
                         module[child_name] = wrapped

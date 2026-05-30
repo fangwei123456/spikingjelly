@@ -57,6 +57,14 @@ def test_float8_linear_step_module_load_state_dict():
     wrapped.load_state_dict(state_dict, strict=True)
 
 
+def test_float8_linear_step_module_load_state_dict_from_parent():
+    base = torch.nn.Linear(8, 4)
+    parent = torch.nn.Sequential(Float8LinearStepModule(base, step_mode="s"))
+    state_dict = parent.state_dict()
+    assert all("wrapped" not in k for k in state_dict), state_dict.keys()
+    parent.load_state_dict(state_dict, strict=True)
+
+
 @pytest.mark.skipif(
     not HAS_TORCHAO
     or not torch.cuda.is_available()

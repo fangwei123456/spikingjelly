@@ -13,6 +13,12 @@ class PrecisionConfig:
     report: bool = True
     device: str | None = None
 
+    def __post_init__(self):
+        if self.mode is not None:
+            object.__setattr__(self, "mode", str(self.mode).lower())
+        if self.device is not None and not isinstance(self.device, str):
+            object.__setattr__(self, "device", str(self.device))
+
     @classmethod
     def from_any(
         cls,

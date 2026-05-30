@@ -38,8 +38,6 @@ class PrecisionArtifacts:
             loss.backward()
             grad_norm = None
             if clip_grad_norm is not None:
-                if parameters is None:
-                    raise ValueError("parameters must be provided when clip_grad_norm is set.")
                 grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
             if step_optimizer:
                 optimizer.step()
@@ -52,8 +50,6 @@ class PrecisionArtifacts:
                 raise ValueError(
                     "clip_grad_norm with step_optimizer=False is not supported when a grad scaler is active."
                 )
-            if parameters is None:
-                raise ValueError("parameters must be provided when clip_grad_norm is set.")
             self.scaler.unscale_(optimizer)
             grad_norm = torch.nn.utils.clip_grad_norm_(parameters, clip_grad_norm)
         if step_optimizer:
