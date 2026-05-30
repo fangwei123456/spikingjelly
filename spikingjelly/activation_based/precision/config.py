@@ -1,0 +1,54 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+
+@dataclass(frozen=True)
+class PrecisionConfig:
+    mode: str = "fp32"
+    strictness: str = "warn"
+    fp8_recipe: str = "auto"
+    report: bool = True
+    device: str | None = None
+
+    @classmethod
+    def from_any(
+        cls,
+        config: "PrecisionConfig | str | dict | Any",
+        default_device: str | None = None,
+    ) -> "PrecisionConfig":
+        if isinstance(config, cls):
+            return config
+        if isinstance(config, str):
+            return cls(mode=config.lower(), device=default_device)
+        if isinstance(config, dict):
+            data = dict(config)
+            if "device" not in data:
+                data["device"] = default_device
+            if "precision" in data and "mode" not in data:
+                data["mode"] = data.pop("precision")
+            return cls(**data)
+
+        precision = getattr(config, "precision", None)
+        if precision is not None:
+            return cls(
+                mode=str(precision).lower(),
+                strictness=getattr(config, "precision_strict", "warn"),
+                fp8_recipe=getattr(config, "fp8_recipe", "auto"),
+                report=getattr(config, "fp8_report", True),
+                device=getattr(config, "device", default_device),
+            )
+
+        if hasattr(config, "disable_amp") or hasattr(config, "device"):
+            if getattr(config, "disable_amp", False):
+                mode = "fp32"
+            else:
+                device = str(getattr(config, "device", default_device or "cpu"))
+                mode = "fp16" if device.startswith("cuda") else "fp32"
+            return cls(mode=mode, device=getattr(config, "device", default_device))
+
+        raise TypeError(
+            "PrecisionConfig.from_any() expects a PrecisionConfig, str, dict, or an object "
+            "with precision/disable_amp/device-style attributes."
+        )
