@@ -186,6 +186,11 @@ def test_topology_from_mapping_orders_named_dims():
     assert topology.mesh_shape == (2, 2)
 
 
+def test_topology_rejects_non_integer_dim_sizes():
+    with pytest.raises(TypeError, match="must be an integer"):
+        SNNDistributedTopology.from_mapping({"dp": 1.5, "tp": 2}, world_size=3)
+
+
 def test_adapter_registry_lists_known_families():
     names = list_adapters()
     assert "cifar10dvs_vgg" in names
@@ -262,6 +267,21 @@ def test_plan_allows_explicit_mode_override_for_advanced_users():
     assert distributed_plan.topology.mesh_shape == (2,)
 
 
+def test_plan_rejects_pipeline_when_feature_flag_disables_it():
+    model = ToyDistributedSNN()
+    analysis = analyze(model, roots=["features"])
+    distributed_plan = plan(
+        analysis=analysis,
+        objective="capacity",
+        topology={"pp": 2},
+        backend="inductor",
+        batch_size=8,
+        mode="pp",
+        features=DistributedFeatureSet(allow_pipeline=False),
+    )
+    assert distributed_plan.mode != "pp"
+
+
 @pytest.mark.skipif(
     not DTENSOR_AVAILABLE,
     reason="DTensor DeviceMesh APIs are unavailable in the current PyTorch build.",
@@ -283,6 +303,23 @@ def test_apply_returns_unified_runtime_single_rank():
         assert runtime.kind == "eager"
         assert runtime.mesh is not None
         assert runtime.plan.mode == distributed_plan.mode
+
+
+def test_configure_snn_distributed_noop_does_not_require_device_mesh():
+    model = ToyDistributedSNN()
+    configured_model, mesh, analysis = configure_snn_distributed(
+        model,
+        SNNDistributedConfig(
+            device_type="cpu",
+            mesh_shape=None,
+            auto_tensor_parallel=False,
+            enable_data_parallel=False,
+            enable_fsdp2=False,
+        ),
+    )
+    assert configured_model is model
+    assert mesh is None
+    assert isinstance(analysis, distributed_dtensor.SNNDistributedAnalysis)
 
 
 def test_apply_rejects_device_mesh_world_size_mismatch():
@@ -377,6 +414,17 @@ def test_runtime_prepare_classification_output_can_return_metadata():
     assert isinstance(prepared, PreparedModelOutput)
     assert prepared.logits.shape == (2, 4)
     assert prepared.target.shape == (2,)
+
+
+def test_prepare_metrics_classification_output_squeezes_singleton_label_dim():
+    logits = torch.randn(2, 4)
+    labels = torch.tensor([[1], [3]])
+    prepared = prepare_classification_output(
+        logits,
+        labels,
+        require_full_logits=True,
+    )
+    assert torch.equal(prepared.target, torch.tensor([1, 3]))
 
 
 def test_tp_communication_debug_stats_recorded_for_rowwise_conv(
@@ -1454,3 +1502,13 @@ def test_train_distributed_build_data_uses_shared_sampler_for_pipeline(monkeypat
     assert train_loader.sampler.rank == train_sampler.rank
     assert val_loader.sampler.num_replicas == train_sampler.num_replicas
     assert val_loader.sampler.rank == train_sampler.rank
+
+
+def test_train_distributed_setup_runtime_normalizes_local_auto(monkeypatch):
+    train_distributed = _load_train_distributed_module()
+    monkeypatch.delenv("RANK", raising=False)
+    monkeypatch.delenv("WORLD_SIZE", raising=False)
+    args = SimpleNamespace(distributed_mode="auto")
+    runtime = train_distributed.setup_runtime(args)
+    assert runtime.mode == "none"
+    assert runtime.is_distributed is False

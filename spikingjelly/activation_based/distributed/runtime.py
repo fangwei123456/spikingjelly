@@ -97,11 +97,12 @@ class SNNDistributedRuntime:
         outputs: torch.Tensor,
         labels: torch.Tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        if outputs.ndim >= 3:
-            outputs = outputs.mean(dim=0)
-        if labels.ndim > 1:
-            labels = labels.argmax(dim=1)
-        return outputs, labels
+        prepared = prepare_classification_output(
+            outputs,
+            labels,
+            require_full_logits=False,
+        )
+        return prepared.logits, prepared.target
 
     def prepare_classification_output(
         self,

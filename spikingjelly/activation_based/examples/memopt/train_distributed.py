@@ -112,7 +112,7 @@ def setup_runtime(args) -> DistributedRuntime:
     ):
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         return DistributedRuntime(
-            mode=args.distributed_mode,
+            mode="none",
             is_distributed=False,
             rank=0,
             world_size=1,

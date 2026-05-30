@@ -25,7 +25,9 @@ def prepare_classification_output(
     if output.ndim >= 3:
         output = output.mean(dim=0)
     if target.ndim > 1:
-        target = target.argmax(dim=1)
+        target = target.squeeze(-1)
+        if target.ndim > 1:
+            target = target.argmax(dim=1)
     materialized = False
     if require_full_logits:
         materialized_output = materialize_dtensor_output(output)

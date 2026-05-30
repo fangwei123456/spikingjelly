@@ -101,6 +101,11 @@ def plan(
             "Pipeline was disabled by DistributedFeatureSet; planner fell back to memory-oriented strategy."
         )
     selected_mode = mode or recommendation.mode
+    if selected_mode == "pp" and not features.allow_pipeline:
+        selected_mode = recommendation.mode
+        notes.append(
+            "Explicit mode='pp' was overridden because DistributedFeatureSet disabled pipeline."
+        )
     optimizer_strategy = recommendation.optimizer_sharding
     if selected_mode != "dp":
         optimizer_strategy = "none"
@@ -151,7 +156,7 @@ def apply(
     device_type: str = "cuda",
     device_mesh=None,
 ) -> SNNDistributedRuntime:
-    use_adapter = plan.mode == "pp" or (
+    use_adapter = plan.mode in ("tp", "fsdp2_tp", "pp") or (
         plan.experimental_features.allow_experimental_conv_tp
         or plan.experimental_features.allow_experimental_spikformer_tp
     )

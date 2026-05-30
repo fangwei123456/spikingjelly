@@ -3248,6 +3248,27 @@ def configure_snn_distributed(
 
     Configure SNN distributed training.
     """
+    should_apply_tp = (
+        config.tensor_parallel_plan is not None
+        or config.auto_tensor_parallel
+        or config.experimental_conv_tensor_parallel
+        or config.experimental_spikformer_tensor_parallel
+        or config.experimental_spikformer_patch_stem_tensor_parallel
+    )
+
+    analysis = analyze_snn_distributed_capability(
+        module, tensor_parallel_roots=config.tensor_parallel_roots
+    )
+
+    needs_device_mesh = (
+        config.device_mesh is not None
+        or config.enable_data_parallel
+        or config.enable_fsdp2
+        or should_apply_tp
+    )
+    if not needs_device_mesh:
+        return module, None, analysis
+
     if config.device_mesh is None:
         mesh_dim_names = None
         if config.mesh_shape is not None and len(config.mesh_shape) > 1:
@@ -3274,10 +3295,6 @@ def configure_snn_distributed(
         raise ValueError(
             "dp_mesh_dim must be specified when enable_data_parallel=True on a multi-dimensional DeviceMesh."
         )
-
-    analysis = analyze_snn_distributed_capability(
-        module, tensor_parallel_roots=config.tensor_parallel_roots
-    )
 
     if config.experimental_conv_tensor_parallel:
         if not config.conv_tensor_parallel_roots:
@@ -3316,13 +3333,6 @@ def configure_snn_distributed(
             tp_mesh_dim=config.tp_mesh_dim,
         )
 
-    should_apply_tp = (
-        config.tensor_parallel_plan is not None
-        or config.auto_tensor_parallel
-        or config.experimental_conv_tensor_parallel
-        or config.experimental_spikformer_tensor_parallel
-        or config.experimental_spikformer_patch_stem_tensor_parallel
-    )
     if should_apply_tp and config.enable_data_parallel and not config.enable_fsdp2:
         raise NotImplementedError(
             "Combining DDP-style data parallelism with DTensor tensor parallelism is not "
