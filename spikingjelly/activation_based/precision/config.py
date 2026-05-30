@@ -43,6 +43,10 @@ class PrecisionConfig:
                 data["device"] = str(data["device"])
             if "precision" in data and "mode" not in data:
                 data["mode"] = data.pop("precision")
+            if "precision_strict" in data and "strictness" not in data:
+                data["strictness"] = data.pop("precision_strict")
+            if "fp8_report" in data and "report" not in data:
+                data["report"] = data.pop("fp8_report")
             valid_fields = {f.name for f in dataclasses.fields(cls)}
             filtered_data = {k: v for k, v in data.items() if k in valid_fields}
             return cls(**filtered_data)

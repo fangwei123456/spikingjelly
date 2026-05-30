@@ -43,6 +43,20 @@ def test_precision_config_from_dict_aliases_precision_key():
     assert cfg.device == "cuda:0"
 
 
+def test_precision_config_from_dict_supports_precision_aliases():
+    cfg = PrecisionConfig.from_any(
+        {
+            "precision": "fp8-torchao",
+            "precision_strict": "strict",
+            "fp8_report": False,
+            "device": "cuda:0",
+        }
+    )
+    assert cfg.mode == "fp8-torchao"
+    assert cfg.strictness == "strict"
+    assert cfg.report is False
+
+
 def test_precision_config_from_object_with_precision_fields():
     obj = SimpleNamespace(
         precision="fp8-torchao",
@@ -88,6 +102,11 @@ def test_build_capability_report_cpu_fp32():
     assert report["device_type"] == "cpu"
     assert report["can_convert"] is True
     assert report["can_execute"] is True
+
+
+def test_build_capability_report_cpu_reports_bf16_autocast_support():
+    report = build_capability_report(torch.nn.Linear(4, 4), torch.device("cpu"), "bf16")
+    assert report["bf16_supported"] == report["cpu_bf16_autocast"]
 
 
 def test_build_capability_report_accepts_string_device():

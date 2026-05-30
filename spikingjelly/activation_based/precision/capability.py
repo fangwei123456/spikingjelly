@@ -66,7 +66,7 @@ def build_capability_report(model, device, mode: str) -> dict[str, Any]:
         "bf16_supported": (
             torch.cuda.is_available() and torch.cuda.is_bf16_supported()
             if is_cuda
-            else mps_bf16_supported
+            else (mps_bf16_supported if device_type == "mps" else cpu_bf16_autocast)
         ),
         "cpu_bf16_autocast": cpu_bf16_autocast if device_type == "cpu" else False,
         "mps_available": mps_available,
