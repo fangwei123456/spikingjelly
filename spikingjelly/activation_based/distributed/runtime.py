@@ -130,7 +130,11 @@ class SNNDistributedRuntime:
         images: torch.Tensor,
         labels: torch.Tensor,
     ):
-        outputs = self.model(images.float())
+        try:
+            dtype = next(self.model.parameters()).dtype
+        except StopIteration:
+            dtype = torch.float32
+        outputs = self.model(images.to(dtype=dtype))
         outputs, labels = self.prepare_classification_output(outputs, labels)
         loss = criterion(outputs, labels)
         return outputs, labels, loss

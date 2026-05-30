@@ -51,9 +51,20 @@ class SNNDistributedTopology:
         *,
         world_size: int | None = None,
     ) -> "SNNDistributedTopology":
+        normalized_dims = {}
+        for key, value in dims.items():
+            if isinstance(value, bool):
+                raise TypeError(
+                    f"Topology dimension '{key}' must be an integer, but got bool."
+                )
+            if isinstance(value, float) and not value.is_integer():
+                raise TypeError(
+                    f"Topology dimension '{key}' must be an integer, but got float."
+                )
+            normalized_dims[key] = int(value)
         if world_size is None:
             volume = 1
-            for size in dims.values():
-                volume *= int(size)
+            for size in normalized_dims.values():
+                volume *= size
             world_size = volume
-        return cls(world_size=int(world_size), dims=dict(dims))
+        return cls(world_size=int(world_size), dims=normalized_dims)

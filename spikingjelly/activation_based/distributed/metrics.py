@@ -28,6 +28,8 @@ def prepare_classification_output(
         target = target.squeeze(-1)
         if target.ndim > 1:
             target = target.argmax(dim=1)
+    if hasattr(output, "device") and target.device != output.device:
+        target = target.to(device=output.device)
     materialized = False
     if require_full_logits:
         materialized_output = materialize_dtensor_output(output)

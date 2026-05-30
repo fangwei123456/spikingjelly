@@ -207,6 +207,14 @@ def test_resolve_adapter_for_known_models():
     assert resolve_adapter(spikformer, None) is not None
 
 
+def test_infer_model_family_unwraps_module_attribute():
+    wrapped = SimpleNamespace(module=CIFAR10DVSVGG(dropout=0.0, backend="torch"))
+    assert distributed_dtensor is not None
+    from spikingjelly.activation_based.distributed.adapters.base import infer_model_family
+
+    assert infer_model_family(wrapped) == "cifar10dvs_vgg"
+
+
 def test_prepare_metrics_classification_output_reduces_time_major_logits():
     logits = torch.randn(5, 4, 10)
     labels = torch.eye(10)[torch.tensor([0, 1, 2, 3])]
@@ -231,6 +239,17 @@ def test_prepare_metrics_classification_output_preserves_singleton_index_targets
     assert isinstance(prepared, PreparedModelOutput)
     torch.testing.assert_close(prepared.logits, logits.mean(dim=0))
     assert torch.equal(prepared.target, torch.tensor([0, 1, 2, 3]))
+
+
+def test_prepare_metrics_classification_output_preserves_target_device():
+    logits = torch.randn(2, 4)
+    labels = torch.tensor([1, 3])
+    prepared = prepare_classification_output(
+        logits,
+        labels,
+        require_full_logits=True,
+    )
+    assert prepared.target.device == prepared.logits.device
 
 
 def test_plan_returns_structured_plan_from_analysis():
