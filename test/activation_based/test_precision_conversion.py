@@ -65,6 +65,15 @@ def test_float8_linear_step_module_load_state_dict_from_parent():
     parent.load_state_dict(state_dict, strict=True)
 
 
+def test_float8_linear_step_module_parent_load_state_dict_has_no_duplicate_errors():
+    base = torch.nn.Linear(8, 4)
+    parent = torch.nn.Sequential(Float8LinearStepModule(base, step_mode="s"))
+    state_dict = parent.state_dict()
+    incompatible = parent.load_state_dict(state_dict, strict=False)
+    assert incompatible.missing_keys == []
+    assert incompatible.unexpected_keys == []
+
+
 @pytest.mark.skipif(
     not HAS_TORCHAO
     or not torch.cuda.is_available()

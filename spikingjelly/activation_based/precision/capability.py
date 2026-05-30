@@ -124,6 +124,8 @@ def validate_capability(report: dict[str, Any]) -> None:
                 "precision='fp8-torchao' requires CUDA, but CUDA is not available."
             )
         capability = report.get("cuda_device_capability")
+        if capability is not None:
+            capability = tuple(capability)
         if capability is None or capability < (8, 9):
             raise RuntimeError(
                 "precision='fp8-torchao' requires compute capability >= 8.9; "
