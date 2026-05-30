@@ -180,3 +180,53 @@ def test_convert_model_for_precision_preserves_shared_linear_module_identity_fp8
     converted, report = convert_model_for_precision(model, policy)
     assert converted.first is converted.second
     assert len(report.converted_modules) == 2
+
+
+@pytest.mark.skipif(not HAS_TORCHAO, reason="torchao not installed")
+def test_convert_model_for_precision_skips_revisiting_shared_non_linear_modules(
+    monkeypatch,
+):
+    class DummyFloat8Linear(torch.nn.Module):
+        def __init__(self, base):
+            super().__init__()
+            self.base = base
+
+        @classmethod
+        def from_float(cls, base, config):
+            return cls(base)
+
+        def forward(self, x):
+            return self.base(x)
+
+    monkeypatch.setattr(
+        "torchao.float8.float8_linear.Float8Linear",
+        DummyFloat8Linear,
+        raising=False,
+    )
+
+    class SharedBlock(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.linear = torch.nn.Linear(8, 8)
+
+    shared = SharedBlock()
+
+    class Parent(torch.nn.Module):
+        def __init__(self, block):
+            super().__init__()
+            self.first = block
+            self.second = block
+
+    model = Parent(shared)
+    policy = type(
+        "DummyPolicy",
+        (),
+        {
+            "name": "fp8-torchao",
+            "float8_linear_config": object(),
+        },
+    )()
+    converted, report = convert_model_for_precision(model, policy)
+    assert converted.first is converted.second
+    assert converted.first.linear is converted.second.linear
+    assert report.converted_modules == ["first.linear"]
